@@ -70,3 +70,6 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# FBX Import Folder (User uploaded FBX files)
+/[Aa]ssets/[Rr]esources/Import_FBX/
