@@ -304,6 +304,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5718d7d489c9d9347aa34067efe72237, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  saveToImportFolder: 1
 --- !u!1 &765879829
 GameObject:
   m_ObjectHideFlags: 0

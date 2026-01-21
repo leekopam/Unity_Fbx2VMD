@@ -20,6 +20,9 @@ namespace Member_Han.Modules.FBXImporter
         #region Private 필드
         // 노드 이름으로 Transform을 찾기 위한 맵 (본 할당용)
         private Dictionary<string, Transform> _nodeMap = new Dictionary<string, Transform>();
+        
+        // 생성된 AnimationClip 저장 (외부 접근용)
+        private AnimationClip[] _animationClips;
         #endregion
 
         #region IModelImporterService 구현
@@ -56,6 +59,14 @@ namespace Member_Han.Modules.FBXImporter
             ProcessAnimations(scene, rootObject);
 
             return rootObject;
+        }
+        
+        /// <summary>
+        /// 생성된 AnimationClip 배열 반환
+        /// </summary>
+        public AnimationClip[] GetAnimationClips()
+        {
+            return _animationClips ?? new AnimationClip[0];
         }
         #endregion
 
@@ -289,9 +300,14 @@ namespace Member_Han.Modules.FBXImporter
         #region 애니메이션 처리
         private void ProcessAnimations(Scene scene, GameObject rootObject)
         {
-            if (!scene.HasAnimations) return;
+            if (!scene.HasAnimations)
+            {
+                _animationClips = new AnimationClip[0];
+                return;
+            }
 
             UnityEngine.Animation animComp = rootObject.AddComponent<UnityEngine.Animation>();
+            List<AnimationClip> clips = new List<AnimationClip>();
 
             foreach (var anim in scene.Animations)
             {
@@ -335,7 +351,14 @@ namespace Member_Han.Modules.FBXImporter
                 {
                     animComp.clip = clip; // 기본 클립 설정
                 }
+                
+                // 생성된 클립을 리스트에 추가
+                clips.Add(clip);
             }
+            
+            // 생성된 클립들을 필드에 저장
+            _animationClips = clips.ToArray();
+            Debug.Log($"[RuntimeFBXImporter] AnimationClip {_animationClips.Length}개 생성 완료");
         }
 
         private void SetPositionCurves(AnimationClip clip, string relativePath, List<VectorKey> positionKeys)

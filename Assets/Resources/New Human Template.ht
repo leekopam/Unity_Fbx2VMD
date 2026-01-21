@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1105 &110500000
+HumanTemplate:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: New Human Template
+  m_BoneTemplate:
+    Chest: Skeleton_Spine1
+    Head: Skeleton_Head
+    Hips: Skeleton_Hips
+    Left Index Distal: Skeleton_LeftHandIndex3
+    Left Index Intermediate: Skeleton_LeftHandIndex2
+    Left Index Proximal: Skeleton_LeftHandIndex1
+    Left Little Distal: Skeleton_LeftHandPinky3
+    Left Little Intermediate: Skeleton_LeftHandPinky2
+    Left Little Proximal: Skeleton_LeftHandPinky1
+    Left Middle Distal: Skeleton_LeftHandMiddle3
+    Left Middle Intermediate: Skeleton_LeftHandMiddle2
+    Left Middle Proximal: Skeleton_LeftHandMiddle1
+    Left Ring Distal: Skeleton_LeftHandRing3
+    Left Ring Intermediate: Skeleton_LeftHandRing2
+    Left Ring Proximal: Skeleton_LeftHandRing1
+    Left Thumb Distal: Skeleton_LeftHandThumb3
+    Left Thumb Intermediate: Skeleton_LeftHandThumb2
+    Left Thumb Proximal: Skeleton_LeftHandThumb1
+    LeftFoot: Skeleton_LeftFoot
+    LeftHand: Skeleton_LeftHand
+    LeftLowerArm: Skeleton_LeftForeArm
+    LeftLowerLeg: Skeleton_LeftLeg
+    LeftShoulder: Skeleton_LeftShoulder
+    LeftToes: Skeleton_LeftToeBase
+    LeftUpperArm: Skeleton_LeftArm
+    LeftUpperLeg: Skeleton_LeftUpLeg
+    Neck: Skeleton_Neck
+    Right Index Distal: Skeleton_RightHandIndex3
+    Right Index Intermediate: Skeleton_RightHandIndex2
+    Right Index Proximal: Skeleton_RightHandIndex1
+    Right Little Distal: Skeleton_RightHandPinky3
+    Right Little Intermediate: Skeleton_RightHandPinky2
+    Right Little Proximal: Skeleton_RightHandPinky1
+    Right Middle Distal: Skeleton_RightHandMiddle3
+    Right Middle Intermediate: Skeleton_RightHandMiddle2
+    Right Middle Proximal: Skeleton_RightHandMiddle1
+    Right Ring Distal: Skeleton_RightHandRing3
+    Right Ring Intermediate: Skeleton_RightHandRing2
+    Right Ring Proximal: Skeleton_RightHandRing1
+    Right Thumb Distal: Skeleton_RightHandThumb3
+    Right Thumb Intermediate: Skeleton_RightHandThumb2
+    Right Thumb Proximal: Skeleton_RightHandThumb1
+    RightFoot: Skeleton_RightFoot
+    RightHand: Skeleton_RightHand
+    RightLowerArm: Skeleton_RightForeArm
+    RightLowerLeg: Skeleton_RightLeg
+    RightShoulder: Skeleton_RightShoulder
+    RightToes: Skeleton_RightToeBase
+    RightUpperArm: Skeleton_RightArm
+    RightUpperLeg: Skeleton_RightUpLeg
+    Spine: Skeleton_Spine
