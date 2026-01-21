@@ -72,4 +72,10 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
 # FBX Import Folder (User uploaded FBX files)
-/[Aa]ssets/[Rr]esources/Import_FBX/
+Assets/Resources/Import_FBX/
+
+# MCP for Unity Package
+# Library 폴더는 이미 위에서 제외되므로 MCP 캐시도 자동으로 제외됨
+# 추가적으로 MCP 관련 생성 파일 명시적 제외
+/Library/MCPForUnity/
+/ProjectSettings/McpUnitySettings.json
