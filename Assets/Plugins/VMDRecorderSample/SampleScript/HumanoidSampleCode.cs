@@ -23,19 +23,22 @@ public class HumanoidSampleCode : MonoBehaviour
         // VMD 파일 저장 경로 설정
         humanoidVMDPath = Application.dataPath + "/VMDRecorderSample/" + HumanoidVMDName;
         
+        // [v22] FBX Import 테스트를 위해 자동 레코딩 비활성화
         // 0.1초 후 레코딩 시작 예약 (초기화 대기)
-        Invoke("StartRecording", StartRecordingTime);
+        // Invoke("StartRecording", StartRecordingTime);
 
-        // 애니메이션 클립 길이 자동 감지
-        Animator aniCtr = this.GetComponent<Animator>();
-        float clipLength = aniCtr.GetCurrentAnimatorClipInfo(0)[0].clip.length;
-        Debug.Log(clipLength);
+        // [v22] 클립 접근 시도도 비활성화 (Start 시점에 클립이 없을 수 있음)
+        // Animator aniCtr = this.GetComponent<Animator>();
+        // float clipLength = aniCtr.GetCurrentAnimatorClipInfo(0)[0].clip.length;
+        // Debug.Log(clipLength);
         
         // 종료 시간 설정 (0이면 클립 길이 사용, 아니면 지정된 시간 사용)
-        StopRecordingTime = StopRecordingTime == 0 ? clipLength : StopRecordingTime;
+        // StopRecordingTime = StopRecordingTime == 0 ? clipLength : StopRecordingTime;
         
         // 지정된 시간 후 저장 예약
-        Invoke("SaveRecord", StopRecordingTime);
+        // Invoke("SaveRecord", StopRecordingTime);
+        
+        Debug.Log("[HumanoidSampleCode] 자동 레코딩 비활성화됨 (v22 테스트 모드)");
     }
 
     // [실행 순서 1-2] 레코딩 시작 (0.1초 후 실행)

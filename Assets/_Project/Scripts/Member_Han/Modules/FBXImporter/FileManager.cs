@@ -22,6 +22,16 @@ namespace Member_Han.Modules.FBXImporter
         [Header("FBX 임포트 설정")]
         [Tooltip("체크 시 선택한 FBX 파일을 Import_FBX 폴더에 복사하여 저장")]
         public bool saveToImportFolder = true;
+        
+        [Header("Ghost Retargeting 설정")]
+        [Tooltip("애니메이션을 적용할 대상 캐릭터 (Humanoid Avatar 필요)")]
+        public GameObject targetCharacter;
+        
+        [Header("디버그 설정 (RuntimeRetargeter에 적용됨)")]
+        [Tooltip("본 매핑 관련 디버그 로그 출력")]
+        public bool showBoneMappingLog = true;
+        [Tooltip("런타임 애니메이션 디버그 로그 출력")]
+        public bool showRuntimeAnimationLog = false;
         #endregion
 
         #region Private 필드
@@ -149,28 +159,65 @@ namespace Member_Han.Modules.FBXImporter
                 {
                     Debug.Log($"[FileManager] FBX 로드 성공: {importedModel.name}");
                     
-                    // Hierarchy에 생성된 GameObject를 비활성화 (보이지 않게 처리)
-                    importedModel.SetActive(false);
+                    // [v9.1] Ghost GameObject는 활성화 유지 (AnimationClip.SampleAnimation()을 위해)
+                    // Renderer를 비활성화하여 보이지 않게 처리 (Destroy 대신 enabled = false 사용)
+                    foreach (var renderer in importedModel.GetComponentsInChildren<Renderer>())
+                    {
+                        renderer.enabled = false;
+                    }
+                    // MeshFilter는 굳이 제거하지 않아도 Renderer가 꺼지면 안 보임
+                    
+                    Debug.Log("[FileManager] Ghost Renderer 비활성화 완료 (Target만 보이도록 설정)");
                     
                     // 3. Humanoid Avatar 및 BoneMapping 적용
                     HumanoidAvatarBuilder.SetupHumanoid(importedModel);
                     
-                    // 4. AnimationClip 가져오기 및 검증
-                    AnimationClip[] clips = _fbxImporter.GetAnimationClips();
-                    if (clips != null && clips.Length > 0)
+                    // 4. [v23] Unity Sub-Asset AnimationClip 로드 (Assimp 클립 대신)
+                    // Unity가 FBX Import 시 생성한 Humanoid Muscle Curves 클립 사용
+                    string fbxFileName = System.IO.Path.GetFileNameWithoutExtension(targetPath);
+                    string resourcePath = "Import_FBX/" + fbxFileName;
+                    
+                    Debug.Log($"[FileManager] [v23] Unity Sub-Asset 클립 로드 시도: Resources/{resourcePath}");
+                    
+                    AnimationClip[] unityClips = Resources.LoadAll<AnimationClip>(resourcePath);
+                    AnimationClip unityClip = null;
+                    
+                    if (unityClips != null && unityClips.Length > 0)
                     {
-                        Debug.Log($"[FileManager] AnimationClip {clips.Length}개 로드 완료:");
-                        foreach (var clip in clips)
-                        {
-                            Debug.Log($"  - {clip.name} (길이: {clip.length}초, 프레임: {clip.frameRate}fps)");
-                        }
+                        unityClip = unityClips[0];
+                        Debug.Log($"[FileManager] ✅ [v23] Unity Sub-Asset 클립 로드 성공!");
+                        Debug.Log($"  - 클립 이름: {unityClip.name}");
+                        Debug.Log($"  - 길이: {unityClip.length}초");
+                        Debug.Log($"  - 프레임레이트: {unityClip.frameRate}fps");
+                        Debug.Log($"  - Humanoid: {unityClip.isHumanMotion}");
                     }
                     else
                     {
-                        Debug.LogWarning($"[FileManager] AnimationClip이 없거나 생성되지 않았습니다.");
+                        Debug.LogWarning($"[FileManager] ⚠️ [v23] Unity Sub-Asset 클립 로드 실패. Assimp 클립으로 폴백.");
+                        // Assimp 클립으로 폴백 (비상용)
+                        AnimationClip[] assimpClips = _fbxImporter.GetAnimationClips();
+                        if (assimpClips != null && assimpClips.Length > 0)
+                        {
+                            unityClip = assimpClips[0];
+                            Debug.Log($"[FileManager] Assimp 클립 사용 (폴백): {unityClip.name}");
+                        }
                     }
-                    
-                    // 5. (선택사항) 씬에 배치된 모델의 위치 초기화 등
+                             
+            // 5. Ghost Retargeting 설정 (Unity Sub-Asset 클립 사용)
+            if (targetCharacter != null && unityClip != null)
+            {
+                SetupGhostRetargeting(importedModel, unityClip, targetCharacter);
+            }
+            else if (targetCharacter == null)
+            {
+                Debug.LogWarning("[FileManager] ⚠️ targetCharacter가 할당되지 않았습니다. Ghost Retargeting을 건너뜁니다.");
+            }
+            else if (unityClip == null)
+            {
+                Debug.LogError("[FileManager] ❌ AnimationClip을 로드하지 못했습니다.");
+            }
+            
+            // 6. (선택사항) 씬에 배치된 모델의 위치 초기화 등
                     importedModel.transform.position = Vector3.zero;
                 }
                 else
@@ -181,6 +228,118 @@ namespace Member_Han.Modules.FBXImporter
             catch (System.Exception e)
             {
                 Debug.LogError($"파일 처리 실패: {e.Message}\n{e.StackTrace}");
+            }
+        }
+        
+        /// <summary>
+        /// [v22] Native AnimatorOverrideController를 사용한 정공법 리타겟팅
+        /// Unity 내장 Humanoid Retargeting을 사용하여 완벽한 애니메이션 재생
+        /// 핵심: Project_Info.md에 명시된 State 이름 "satisfaction_2_FBX"를 정확히 타겟팅
+        /// </summary>
+        private void SetupGhostRetargeting(GameObject ghostObject, AnimationClip ghostClip, GameObject targetPrefab)
+        {
+            Debug.Log("[FileManager] ========== [v22] Native AnimatorOverride 시작 ==========");
+            
+            // 1. Target Animator 확인
+            Animator targetAnimator = targetPrefab.GetComponent<Animator>();
+            if (targetAnimator == null)
+            {
+                Debug.LogError("[FileManager] ❌ Target에 Animator가 없습니다!");
+                return;
+            }
+            
+            if (targetAnimator.avatar == null || !targetAnimator.avatar.isValid)
+            {
+                Debug.LogError("[FileManager] ❌ Target Animator의 Avatar가 유효하지 않습니다!");
+                return;
+            }
+            
+            // 2. 기존 AnimatorController 확인
+            RuntimeAnimatorController baseController = targetAnimator.runtimeAnimatorController;
+            if (baseController == null)
+            {
+                Debug.LogError("[FileManager] ❌ Target에 AnimatorController가 없습니다! 기본 Controller를 할당해주세요.");
+                return;
+            }
+            Debug.Log($"[FileManager] ✅ Base Controller: {baseController.name}");
+            
+            // 3. AnimatorOverrideController 생성
+            AnimatorOverrideController overrideController = new AnimatorOverrideController(baseController);
+            
+            // 4. 기존 클립들 가져오기
+            var overrides = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<AnimationClip, AnimationClip>>();
+            overrideController.GetOverrides(overrides);
+            
+            Debug.Log($"[FileManager] Override 대상 클립 수: {overrides.Count}");
+            
+            // 5. 첫 번째 클립을 Import된 Clip으로 교체 (EmptyClip → ghostClip)
+            if (overrides.Count > 0)
+            {
+                AnimationClip originalClip = overrides[0].Key;
+                overrideController[originalClip] = ghostClip;
+                Debug.Log($"[FileManager] ✅ 클립 교체: [{originalClip.name}] → [{ghostClip.name}]");
+            }
+            else
+            {
+                Debug.LogWarning("[FileManager] ⚠️ Override할 클립이 없습니다. Controller에 State가 있는지 확인하세요.");
+            }
+            
+            // 6. Override Controller를 Animator에 할당
+            targetAnimator.runtimeAnimatorController = overrideController;
+            
+            // 7. Animator 활성화
+            targetAnimator.enabled = true;
+            
+            // 8. [v22 핵심] 정확한 State 이름으로 재생 - Project_Info.md에 명시된 이름 사용
+            // "satisfaction_2_FBX"는 testPrefab의 TestAnimator1 Controller의 Default State입니다.
+            string stateName = "satisfaction_2_FBX";
+            targetAnimator.Play(stateName, 0, 0f);
+            Debug.Log($"[FileManager] ✅ Animator.Play(\"{stateName}\") 호출됨");
+            
+            // 9. Ghost Object 제거 (Native Retargeting은 Ghost 불필요)
+            if (ghostObject != null)
+            {
+                Destroy(ghostObject);
+                Debug.Log("[FileManager] Ghost Object 제거됨 (Native Retargeting 사용)");
+            }
+            
+            Debug.Log("[FileManager] ✅ [v22] AnimatorOverrideController 적용 완료!");
+            Debug.Log($"  - 적용된 Clip: {ghostClip.name} ({ghostClip.length}초)");
+            Debug.Log($"  - Target: {targetAnimator.gameObject.name}");
+            Debug.Log($"  - State: {stateName}");
+            Debug.Log("[FileManager] ========== Native Retargeting v22 완료 ==========");
+        }
+        
+        /// <summary>
+        /// Ghost Animation 재생 상태 검증 코루틴
+        /// </summary>
+        private System.Collections.IEnumerator VerifyGhostPlayback(Animation animation)
+        {
+            // 5프레임 대기 (Animation 자동 시작 보장)
+            yield return null;
+            yield return null;
+            yield return null;
+            yield return null;
+            yield return null;
+            
+            string clipName = animation.clip != null ? animation.clip.name : "None";
+            bool isPlaying = animation.isPlaying;
+            
+            Debug.Log($"[FileManager] Ghost 재생 검증:");
+            Debug.Log($"  - Clip Name: {clipName}");
+            Debug.Log($"  - Is Playing: {(isPlaying ? "✅" : "❌")}");
+            Debug.Log($"  - Enabled: {animation.enabled}");
+            Debug.Log($"  - PlayAutomatically: {animation.playAutomatically}");
+            
+            if (animation.clip != null)
+            {
+                Debug.Log($"  - Clip Length: {animation.clip.length:F2}초");
+            }
+            
+            if (!isPlaying)
+            {
+                Debug.LogWarning($"[FileManager] ⚠️ Ghost Animation이 재생되지 않습니다!");
+                Debug.LogWarning($"    PlayAutomatically가 작동하지 않았을 수 있습니다.");
             }
         }
         #endregion

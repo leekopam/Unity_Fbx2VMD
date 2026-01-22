@@ -205,6 +205,166 @@ namespace Member_Han.Modules.FBXImporter
             }
             animator.avatar = avatar;
         }
+        
+        #region Ghost Retargeting 지원
+        
+        /// <summary>
+        /// Ghost GameObject용 Humanoid Avatar 자동 생성
+        /// BoneMapping 파일 없이 키워드 기반으로 본을 자동 매핑
+        /// </summary>
+        public static Avatar BuildGhostAvatar(GameObject ghostRoot)
+        {
+            Debug.Log($"[BuildGhostAvatar] Ghost Avatar 생성 시작: {ghostRoot.name}");
+            
+            // 1. Auto-Mapping으로 HumanDescription 생성
+            HumanDescription description = AutoMapBones(ghostRoot);
+            
+            // 2. Avatar 빌드
+            Avatar avatar = AvatarBuilder.BuildHumanAvatar(ghostRoot, description);
+            
+            if (avatar.isValid)
+            {
+                Debug.Log("[BuildGhostAvatar] ✅ Ghost Avatar 생성 성공");
+            }
+            else
+            {
+                Debug.LogError("[BuildGhostAvatar] ❌ Ghost Avatar 생성 실패. 본 매핑 확인 필요.");
+            }
+            
+            return avatar;
+        }
+        
+        /// <summary>
+        /// 키워드 기반 자동 본 매핑
+        /// Mixamo(mixamorig:Hips), Skeleton_(Skeleton_Hips) 등 다양한 형식 지원
+        /// </summary>
+        private static HumanDescription AutoMapBones(GameObject root)
+        {
+            // 매핑 규칙: [Humanoid 표준 이름] -> [검색 키워드 배열]
+            Dictionary<string, string[]> mappingRules = new Dictionary<string, string[]>
+            {
+                // 핵심 본 (필수)
+                { "Hips", new[] { "Hips", "Pelvis", "hip", "pelvis" } },
+                { "Spine", new[] { "Spine", "spine1", "spine" } },
+                { "Chest", new[] { "Chest", "Spine2", "chest", "spine2" } },
+                { "Neck", new[] { "Neck", "neck" } },
+                { "Head", new[] { "Head", "head" } },
+                
+                // 왼쪽 다리
+                { "LeftUpperLeg", new[] { "LeftUpLeg", "L_Thigh", "LeftThigh", "LeftLeg", "L_UpLeg" } },
+                { "LeftLowerLeg", new[] { "LeftLeg", "L_Calf", "LeftShin", "L_Leg", "LeftKnee" } },
+                { "LeftFoot", new[] { "LeftFoot", "L_Foot" } },
+                { "LeftToes", new[] { "LeftToe", "L_Toe", "LeftFoot_End" } },
+                
+                // 오른쪽 다리
+                { "RightUpperLeg", new[] { "RightUpLeg", "R_Thigh", "RightThigh", "RightLeg", "R_UpLeg" } },
+                { "RightLowerLeg", new[] { "RightLeg", "R_Calf", "RightShin", "R_Leg", "RightKnee" } },
+                { "RightFoot", new[] { "RightFoot", "R_Foot" } },
+                { "RightToes", new[] { "RightToe", "R_Toe", "RightFoot_End" } },
+                
+                // 왼쪽 팔
+                { "LeftShoulder", new[] { "LeftShoulder", "L_Shoulder" } },
+                { "LeftUpperArm", new[] { "LeftArm", "L_UpperArm", "LeftUpperArm", "L_Arm" } },
+                { "LeftLowerArm", new[] { "LeftForeArm", "L_Forearm", "LeftElbow", "L_ForeArm" } },
+                { "LeftHand", new[] { "LeftHand", "L_Hand" } },
+                
+                // 오른쪽 팔
+                { "RightShoulder", new[] { "RightShoulder", "R_Shoulder" } },
+                { "RightUpperArm", new[] { "RightArm", "R_UpperArm", "RightUpperArm", "R_Arm" } },
+                { "RightLowerArm", new[] { "RightForeArm", "R_Forearm", "RightElbow", "R_ForeArm" } },
+                { "RightHand", new[] { "RightHand", "R_Hand" } }
+            };
+            
+            // 모든 Transform 수집
+            Transform[] allBones = root.GetComponentsInChildren<Transform>();
+            Debug.Log($"[AutoMapBones] 전체 본 개수: {allBones.Length}");
+            
+            // 매핑 결과 저장
+            List<HumanBone> humanBones = new List<HumanBone>();
+            int successCount = 0;
+            int failCount = 0;
+            
+            foreach (var rule in mappingRules)
+            {
+                string humanName = rule.Key;
+                string[] keywords = rule.Value;
+                
+                // 키워드로 본 찾기
+                Transform found = FindBoneByKeywords(allBones, keywords);
+                if (found != null)
+                {
+                    HumanBone hb = new HumanBone();
+                    hb.humanName = humanName;
+                    hb.boneName = found.name;
+                    hb.limit.useDefaultValues = true;
+                    humanBones.Add(hb);
+                    
+                    successCount++;
+                    Debug.Log($"[AutoMap] ✅ {humanName} -> {found.name}");
+                }
+                else
+                {
+                    failCount++;
+                    // 필수 본(Hips, Spine 등)이 없으면 Warning
+                    if (humanName == "Hips" || humanName == "Spine" || humanName == "Head")
+                    {
+                        Debug.LogWarning($"[AutoMap] ⚠️ 필수 본 매핑 실패: {humanName}");
+                    }
+                }
+            }
+            
+            Debug.Log($"[AutoMapBones] 매핑 결과: 성공 {successCount}개 / 실패 {failCount}개");
+            
+            // SkeletonBone 수집 (기존 메서드 재사용)
+            List<SkeletonBone> skeletonBonesList = new List<SkeletonBone>();
+            CollectSkeleton(root.transform, skeletonBonesList);
+            SkeletonBone[] skeletonBones = skeletonBonesList.ToArray();
+            
+            // HumanDescription 생성
+            HumanDescription description = new HumanDescription();
+            description.human = humanBones.ToArray();
+            description.skeleton = skeletonBones;
+            description.upperArmTwist = DEFAULT_ARM_TWIST;
+            description.lowerArmTwist = DEFAULT_ARM_TWIST;
+            description.upperLegTwist = DEFAULT_LEG_TWIST;
+            description.lowerLegTwist = DEFAULT_LEG_TWIST;
+            description.armStretch = DEFAULT_ARM_STRETCH;
+            description.legStretch = DEFAULT_LEG_STRETCH;
+            description.feetSpacing = DEFAULT_FEET_SPACING;
+            description.hasTranslationDoF = false;
+            
+            return description;
+        }
+        
+        /// <summary>
+        /// 키워드 배열로 본 찾기 (대소문자 무시, 부분 일치)
+        /// </summary>
+        private static Transform FindBoneByKeywords(Transform[] bones, string[] keywords)
+        {
+            foreach (string keyword in keywords)
+            {
+                foreach (Transform bone in bones)
+                {
+                    // 정확히 일치하는 경우 우선 반환
+                    if (bone.name.Equals(keyword, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        return bone;
+                    }
+                }
+                
+                // 부분 일치 검색 (접두사/접미사 포함)
+                foreach (Transform bone in bones)
+                {
+                    if (bone.name.IndexOf(keyword, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return bone;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        #endregion
         #endregion
     }
 }

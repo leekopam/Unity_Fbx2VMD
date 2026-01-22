@@ -306,7 +306,8 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            UnityEngine.Animation animComp = rootObject.AddComponent<UnityEngine.Animation>();
+            // Ghost Retargeting을 위해 Animator 사용 (Legacy Animation 대신)
+            Animator animator = rootObject.AddComponent<Animator>();
             List<AnimationClip> clips = new List<AnimationClip>();
 
             foreach (var anim in scene.Animations)
@@ -318,8 +319,8 @@ namespace Member_Han.Modules.FBXImporter
                     clip.name = "Animation_" + scene.Animations.IndexOf(anim);
                 }
 
-                // 런타임 용이성을 위해 Legacy로 설정
-                clip.legacy = true;
+                // Animator 호환을 위해 Non-Legacy로 설정 (Ghost Retargeting용)
+                clip.legacy = false;
 
                 foreach (var channel in anim.NodeAnimationChannels)
                 {
@@ -346,11 +347,34 @@ namespace Member_Han.Modules.FBXImporter
                     }
                 }
 
-                animComp.AddClip(clip, clip.name);
-                if (animComp.clip == null)
+                // Animator는 AnimatorController를 통해 재생하므로 여기서는 클립만 저장
+                // (FileManager에서 AnimatorOverrideController로 할당 예정)
+                
+                // WrapMode 설정: 한 번만 재생 (사용자 요구사항)
+                clip.wrapMode = WrapMode.Once;
+                // [NEW] Legacy Animation 사용을 위해 true 설정
+                clip.legacy = true;
+                
+                // 애니메이션 길이 보정 (Assimp TicksPerSecond 오류 대응)
+                double duration = anim.DurationInTicks / anim.TicksPerSecond;
+                
+                // 비정상적으로 긴 경우 보정 (10분 이상)
+                if (duration > 600)
                 {
-                    animComp.clip = clip; // 기본 클립 설정
+                    Debug.LogWarning($"[RuntimeFBXImporter] ⚠️ 비정상적으로 긴 애니메이션 감지: {duration}초");
+                    Debug.LogWarning($"  - DurationInTicks: {anim.DurationInTicks}");
+                    Debug.LogWarning($"  - TicksPerSecond: {anim.TicksPerSecond}");
+                    
+                    // TicksPerSecond가 0 또는 1인 경우 60fps로 재계산
+                    if (anim.TicksPerSecond == 0 || anim.TicksPerSecond == 1)
+                    {
+                        duration = anim.DurationInTicks / 60.0;
+                        Debug.LogWarning($"  - 보정된 Duration: {duration}초 (60fps 기준)");
+                    }
                 }
+                
+                // frameRate 명시적 설정
+                clip.frameRate = 60;
                 
                 // 생성된 클립을 리스트에 추가
                 clips.Add(clip);
