@@ -305,6 +305,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   saveToImportFolder: 1
+  targetCharacter: {fileID: 1178930453}
+  showBoneMappingLog: 0
+  showRuntimeAnimationLog: 1
 --- !u!1 &765879829
 GameObject:
   m_ObjectHideFlags: 0
@@ -1167,7 +1170,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 240061973030223375, guid: cbbe675d429fd1e48afe756b6e97c91b, type: 3}
       propertyPath: UseAbsoluteCoordinateSystem
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6726102989094768490, guid: cbbe675d429fd1e48afe756b6e97c91b, type: 3}
       propertyPath: ModelName

@@ -4,6 +4,7 @@
     "com.antigravity.ide": "https://github.com/prithvi-bharadwaj/Antigravity-IDE.git",
     "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity",
     "com.unity.ai.navigation": "1.1.4",
+    "com.unity.animation.rigging": "1.2.1",
     "com.unity.collab-proxy": "2.2.0",
     "com.unity.formats.fbx": "4.2.1",
     "com.unity.ide.rider": "3.0.27",
