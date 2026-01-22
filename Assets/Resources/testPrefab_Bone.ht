@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1105 &110500000
+HumanTemplate:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: testPrefab_Bone
+  m_BoneTemplate:
+    Chest: 36.joint_Torso2
+    Head: 91.joint_Head
+    Hips: 7.!joint_HipMaster
+    Left Index Distal: 86.joint_LeftIndex3
+    Left Index Intermediate: 85.joint_LeftIndex2
+    Left Index Proximal: 84.joint_LeftIndex1
+    Left Little Distal: 82.joint_LeftPinky3
+    Left Little Intermediate: 81.joint_LeftPinky2
+    Left Little Proximal: 80.joint_LeftPinky1
+    Left Middle Distal: 78.joint_LeftMiddle3
+    Left Middle Intermediate: 77.joint_LeftMiddle2
+    Left Middle Proximal: 76.joint_LeftMiddle1
+    Left Ring Distal: 74.joint_LeftRing3
+    Left Ring Intermediate: 73.joint_LeftRing2
+    Left Ring Proximal: 72.joint_LeftRing1
+    Left Thumb Distal: 70.joint_LeftThumb2
+    Left Thumb Intermediate: 69.joint_LeftThumb1
+    Left Thumb Proximal: 112.!joint_LeftThumb0M
+    LeftEye: 94.joint_J_Adj_L_FaceEyeSet
+    LeftFoot: 24.joint_LeftFoot
+    LeftHand: 67.joint_LeftWrist
+    LeftLowerArm: 66.joint_LeftElbow
+    LeftLowerLeg: 23.joint_LeftKnee
+    LeftShoulder: 64.joint_LeftShoulder
+    LeftToes: 25.joint_LeftToe
+    LeftUpperArm: 65.joint_LeftArm
+    LeftUpperLeg: 22.joint_LeftHip
+    Neck: 90.joint_Neck
+    Right Index Distal: 60.joint_RightIndex3
+    Right Index Intermediate: 59.joint_RightIndex2
+    Right Index Proximal: 58.joint_RightIndex1
+    Right Little Distal: 56.joint_RightPinky3
+    Right Little Intermediate: 55.joint_RightPinky2
+    Right Little Proximal: 54.joint_RightPinky1
+    Right Middle Distal: 52.joint_RightMiddle3
+    Right Middle Intermediate: 51.joint_RightMiddle2
+    Right Middle Proximal: 50.joint_RightMiddle1
+    Right Ring Distal: 48.joint_RightRing3
+    Right Ring Intermediate: 47.joint_RightRing2
+    Right Ring Proximal: 46.joint_RightRing1
+    Right Thumb Distal: 44.joint_RightThumb2
+    Right Thumb Intermediate: 43.joint_RightThumb1
+    Right Thumb Proximal: 113.!joint_RightThumb0M
+    RightEye: 92.joint_J_Adj_R_FaceEyeSet
+    RightFoot: 11.joint_RightFoot
+    RightHand: 41.joint_RightWrist
+    RightLowerArm: 40.joint_RightElbow
+    RightLowerLeg: 10.joint_RightKnee
+    RightShoulder: 38.joint_RightShoulder
+    RightToes: 12.joint_RightToe
+    RightUpperArm: 39.joint_RightArm
+    RightUpperLeg: 9.joint_RightHip
+    Spine: 35.joint_Torso

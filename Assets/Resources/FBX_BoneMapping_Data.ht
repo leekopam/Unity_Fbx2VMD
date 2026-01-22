@@ -6,7 +6,7 @@ HumanTemplate:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: New Human Template
+  m_Name: FBX_BoneMapping_Data
   m_BoneTemplate:
     Chest: Skeleton_Spine1
     Head: Skeleton_Head
