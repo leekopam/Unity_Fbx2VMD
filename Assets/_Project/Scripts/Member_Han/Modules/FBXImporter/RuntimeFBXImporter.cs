@@ -58,6 +58,11 @@ namespace Member_Han.Modules.FBXImporter
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
 
+            // [FIX 1] 좌표계 변환으로 인해 뒤를 보는 현상 보정 (180도 회전)
+            // MakeLeftHanded로 인해 Z축이 반전되었으므로, 다시 180도 돌려 앞을 보게 함
+            rootObject.transform.rotation = UnityEngine.Quaternion.Euler(0, 180f, 0);
+            Debug.Log("[RuntimeFBXImporter] 🔄 모델 방향 180도 보정 완료 (Back -> Front)");
+
             return rootObject;
         }
         
@@ -306,8 +311,17 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            // Ghost Retargeting을 위해 Animator 사용 (Legacy Animation 대신)
-            Animator animator = rootObject.AddComponent<Animator>();
+            // [변경] Ghost Retargeting을 위해 Legacy Animation 컴포넌트 사용
+            // Ghost가 '가방' 역할과 '재생기' 역할을 동시에 하도록 생산 즉시 부착
+            UnityEngine.Animation animComp = rootObject.GetComponent<UnityEngine.Animation>();
+            if (animComp == null) animComp = rootObject.AddComponent<UnityEngine.Animation>();
+
+            // Animator는 구조적 필요에 의해 남겨두거나 삭제 가능하나, 
+            // 리타겟팅 로직에서 Animator를 끄고 Animation을 쓰기로 했으므로 
+            // 호환성을 위해 Animator 추가 코드는 유지하되, 리타겟터가 이를 제어함.
+            // 단, 데이터 전달을 위해 Animation 컴포넌트가 필수.
+            // Animator animator = rootObject.AddComponent<Animator>(); (선택사항, 일단 유지)
+
             List<AnimationClip> clips = new List<AnimationClip>();
 
             foreach (var anim in scene.Animations)
@@ -319,8 +333,18 @@ namespace Member_Han.Modules.FBXImporter
                     clip.name = "Animation_" + scene.Animations.IndexOf(anim);
                 }
 
-                // Animator 호환을 위해 Non-Legacy로 설정 (Ghost Retargeting용)
-                clip.legacy = false;
+                // [중요] 런타임 Legacy 재생을 위해 true 설정
+                clip.legacy = true;
+                clip.wrapMode = WrapMode.Loop; // 기본 반복 재생
+
+                // 애니메이션 길이 보정
+                double ticksPerSecond = anim.TicksPerSecond;
+                if (ticksPerSecond <= 1.0)
+                {
+                    ticksPerSecond = 60.0;
+                    Debug.LogWarning($"[RuntimeFBXImporter] ⚠️ TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 강제합니다.");
+                }
+                float timeScale = 1.0f / (float)ticksPerSecond;
 
                 foreach (var channel in anim.NodeAnimationChannels)
                 {
@@ -331,61 +355,53 @@ namespace Member_Han.Modules.FBXImporter
                     // 위치 애니메이션
                     if (channel.HasPositionKeys)
                     {
-                        SetPositionCurves(clip, relativePath, channel.PositionKeys);
+                        SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
                     }
 
                     // 회전 애니메이션
                     if (channel.HasRotationKeys)
                     {
-                        SetRotationCurves(clip, relativePath, channel.RotationKeys);
+                        SetRotationCurves(clip, relativePath, channel.RotationKeys, timeScale);
                     }
 
                     // 스케일 애니메이션
                     if (channel.HasScalingKeys)
                     {
-                        SetScaleCurves(clip, relativePath, channel.ScalingKeys);
+                        SetScaleCurves(clip, relativePath, channel.ScalingKeys, timeScale);
                     }
                 }
-
-                // Animator는 AnimatorController를 통해 재생하므로 여기서는 클립만 저장
-                // (FileManager에서 AnimatorOverrideController로 할당 예정)
                 
-                // WrapMode 설정: 한 번만 재생 (사용자 요구사항)
-                clip.wrapMode = WrapMode.Once;
-                // [NEW] Legacy Animation 사용을 위해 true 설정
-                clip.legacy = true;
-                
-                // 애니메이션 길이 보정 (Assimp TicksPerSecond 오류 대응)
+                // 애니메이션 길이 보정
                 double duration = anim.DurationInTicks / anim.TicksPerSecond;
-                
-                // 비정상적으로 긴 경우 보정 (10분 이상)
                 if (duration > 600)
                 {
-                    Debug.LogWarning($"[RuntimeFBXImporter] ⚠️ 비정상적으로 긴 애니메이션 감지: {duration}초");
-                    Debug.LogWarning($"  - DurationInTicks: {anim.DurationInTicks}");
-                    Debug.LogWarning($"  - TicksPerSecond: {anim.TicksPerSecond}");
-                    
-                    // TicksPerSecond가 0 또는 1인 경우 60fps로 재계산
                     if (anim.TicksPerSecond == 0 || anim.TicksPerSecond == 1)
-                    {
                         duration = anim.DurationInTicks / 60.0;
-                        Debug.LogWarning($"  - 보정된 Duration: {duration}초 (60fps 기준)");
-                    }
                 }
-                
-                // frameRate 명시적 설정
                 clip.frameRate = 60;
                 
-                // 생성된 클립을 리스트에 추가
+                // [납품] 컴포넌트에 클립 등록
+                animComp.AddClip(clip, clip.name);
                 clips.Add(clip);
             }
             
             // 생성된 클립들을 필드에 저장
             _animationClips = clips.ToArray();
-            Debug.Log($"[RuntimeFBXImporter] AnimationClip {_animationClips.Length}개 생성 완료");
+            
+            // [FIX 3] 클립 강제 납품 및 로깅
+            if (clips.Count > 0)
+            {
+                animComp.clip = clips[0]; // 기본 클립 설정
+                // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
+                Debug.Log($"[RuntimeFBXImporter] ✅ 클립 {clips.Count}개 생성 및 바인딩 완료. (TimeScale 적용됨, Legacy={clips[0].legacy})");
+            }
+            else
+            {
+                Debug.LogWarning("[RuntimeFBXImporter] ⚠️ 생성된 애니메이션 클립이 없습니다.");
+            }
         }
 
-        private void SetPositionCurves(AnimationClip clip, string relativePath, List<VectorKey> positionKeys)
+        private void SetPositionCurves(AnimationClip clip, string relativePath, List<VectorKey> positionKeys, float timeScale)
         {
             var curveX = new AnimationCurve();
             var curveY = new AnimationCurve();
@@ -393,9 +409,10 @@ namespace Member_Han.Modules.FBXImporter
 
             foreach (var key in positionKeys)
             {
-                curveX.AddKey((float)key.Time, key.Value.X);
-                curveY.AddKey((float)key.Time, key.Value.Y);
-                curveZ.AddKey((float)key.Time, key.Value.Z);
+                float time = (float)key.Time * timeScale;
+                curveX.AddKey(time, key.Value.X);
+                curveY.AddKey(time, key.Value.Y);
+                curveZ.AddKey(time, key.Value.Z);
             }
 
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.x", curveX);
@@ -403,7 +420,7 @@ namespace Member_Han.Modules.FBXImporter
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.z", curveZ);
         }
 
-        private void SetRotationCurves(AnimationClip clip, string relativePath, List<QuaternionKey> rotationKeys)
+        private void SetRotationCurves(AnimationClip clip, string relativePath, List<QuaternionKey> rotationKeys, float timeScale)
         {
             var curveX = new AnimationCurve();
             var curveY = new AnimationCurve();
@@ -412,10 +429,11 @@ namespace Member_Han.Modules.FBXImporter
 
             foreach (var key in rotationKeys)
             {
-                curveX.AddKey((float)key.Time, key.Value.X);
-                curveY.AddKey((float)key.Time, key.Value.Y);
-                curveZ.AddKey((float)key.Time, key.Value.Z);
-                curveW.AddKey((float)key.Time, key.Value.W);
+                float time = (float)key.Time * timeScale;
+                curveX.AddKey(time, key.Value.X);
+                curveY.AddKey(time, key.Value.Y);
+                curveZ.AddKey(time, key.Value.Z);
+                curveW.AddKey(time, key.Value.W);
             }
 
             clip.SetCurve(relativePath, typeof(Transform), "localRotation.x", curveX);
@@ -424,7 +442,7 @@ namespace Member_Han.Modules.FBXImporter
             clip.SetCurve(relativePath, typeof(Transform), "localRotation.w", curveW);
         }
 
-        private void SetScaleCurves(AnimationClip clip, string relativePath, List<VectorKey> scaleKeys)
+        private void SetScaleCurves(AnimationClip clip, string relativePath, List<VectorKey> scaleKeys, float timeScale)
         {
             var curveX = new AnimationCurve();
             var curveY = new AnimationCurve();
@@ -432,9 +450,10 @@ namespace Member_Han.Modules.FBXImporter
 
             foreach (var key in scaleKeys)
             {
-                curveX.AddKey((float)key.Time, key.Value.X);
-                curveY.AddKey((float)key.Time, key.Value.Y);
-                curveZ.AddKey((float)key.Time, key.Value.Z);
+                float time = (float)key.Time * timeScale;
+                curveX.AddKey(time, key.Value.X);
+                curveY.AddKey(time, key.Value.Y);
+                curveZ.AddKey(time, key.Value.Z);
             }
 
             clip.SetCurve(relativePath, typeof(Transform), "localScale.x", curveX);
