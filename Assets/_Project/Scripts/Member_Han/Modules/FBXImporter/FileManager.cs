@@ -32,6 +32,38 @@ namespace Member_Han.Modules.FBXImporter
         public bool showBoneMappingLog = true;
         [Tooltip("런타임 애니메이션 디버그 로그 출력")]
         public bool showRuntimeAnimationLog = false;
+
+        [Header("Golden Hand Settings")]
+        [Tooltip("Finger Stretch Scale (Default 1.0)")]
+        [Range(0.0f, 1.0f)] public float FingerStretchScale = 1.0f;
+        [Tooltip("Finger Spread Scale (Default 1.0)")]
+        [Range(0.0f, 1.0f)] public float FingerSpreadScale = 1.0f;
+        
+        [Space(5)]
+        [Tooltip("Thumb Stretch Scale (Default 1.0)")]
+        [Range(0.0f, 1.0f)] public float ThumbStretchScale = 1.0f;
+        [Tooltip("Thumb Spread Scale (Default 1.0)")]
+        [Range(0.0f, 1.0f)] public float ThumbSpreadScale = 1.0f;
+
+        [Header("Thumb Digital Orthopedics (Offset)")]
+        [Tooltip("Rotation Offset (X: Press, Y: Angle, Z: Roll). Default: (-10, -30, 0)")]
+        public Vector3 ThumbRotationOffset = new Vector3(-10f, -30f, 0f);
+        
+        [Tooltip("Muscle Offset (Stretch). Default: -0.1")]
+        [Range(-0.5f, 0.5f)] public float ThumbStretchOffset = -0.1f;
+
+        [Header("Smart Curve (Dynamics)")]
+        public bool EnableSmartCurve = true;
+        [Tooltip("Standard Finger Dampen Strength (0.1 ~ 0.5)")]
+        [Range(0.0f, 1.0f)] public float SmartCurveStrength = 0.5f; // Mapped to Dampen
+        public float StretchThreshold = 0.7f; // Keeping this for logic stability
+
+        public bool EnableThumbSmartCurve = true;
+        [Range(0.0f, 1.0f)] public float ThumbSmartCurveStrength = 0.5f; // Mapped to Dampen
+        
+        [Space(10)]
+        public bool FaceCamera = true;
+        public bool ApplyRootMotion = true;
         #endregion
 
         #region Private 필드
@@ -42,7 +74,7 @@ namespace Member_Han.Modules.FBXImporter
         #region Unity 생명주기
         private void Awake()
         {
-            InitializeServices();
+            InitializeServices(); // Verified Clean Build
         }
         #endregion
 
@@ -197,7 +229,8 @@ namespace Member_Han.Modules.FBXImporter
                         var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
                         
                         // [중요] 발견한 클립을 인자로 전달하여 강제 재생 유도
-                        retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip);
+                        // [수정] FileManager 자신(this)을 넘겨서 설정을 공유함
+                        retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
                         
                         Debug.Log("[FileManager] 🚀 Retargeting Sequence Started.");
                     }
@@ -254,8 +287,8 @@ namespace Member_Han.Modules.FBXImporter
                         int colonIndex = trimmedLine.IndexOf(':');
                         if (colonIndex > 0)
                         {
-                            string key = trimmedLine.Substring(0, colonIndex).Trim();
-                            string value = trimmedLine.Substring(colonIndex + 1).Trim();
+                            string key = trimmedLine[..colonIndex].Trim();
+                            string value = trimmedLine[(colonIndex + 1)..].Trim();
                             if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
                             {
                                 mapping[key] = value;
@@ -306,7 +339,7 @@ namespace Member_Han.Modules.FBXImporter
             if (ghostObject != null) Destroy(ghostObject);
         }
 
-        private System.Collections.IEnumerator VerifyGhostPlayback(Animation animation)
+        private System.Collections.IEnumerator VerifyGhostPlayback()
         {
              yield return null;
         }
@@ -332,7 +365,7 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            string relativePath = "Assets" + standardizedFilePath.Substring(standardizedDataPath.Length);
+            string relativePath = "Assets" + standardizedFilePath[standardizedDataPath.Length..];
             
             // ===== 1단계: FBX 파일 Import (기본 설정으로) =====
             Debug.Log($"[1단계] FBX Import 시작: {relativePath}");
@@ -436,9 +469,11 @@ namespace Member_Han.Modules.FBXImporter
                     List<HumanBone> humanBones = new List<HumanBone>();
                     foreach (var kvp in mappingDict)
                     {
-                        HumanBone bone = new HumanBone();
-                        bone.humanName = kvp.Key;
-                        bone.boneName = kvp.Value;
+                        HumanBone bone = new HumanBone
+                        {
+                            humanName = kvp.Key,
+                            boneName = kvp.Value
+                        };
                         bone.limit.useDefaultValues = true;
                         humanBones.Add(bone);
                     }
@@ -454,11 +489,13 @@ namespace Member_Han.Modules.FBXImporter
                     {
                         if (transform != null)
                         {
-                            SkeletonBone skelBone = new SkeletonBone();
-                            skelBone.name = transform.name;
-                            skelBone.position = transform.localPosition;
-                            skelBone.rotation = transform.localRotation;
-                            skelBone.scale = transform.localScale;
+                            SkeletonBone skelBone = new SkeletonBone
+                            {
+                                name = transform.name,
+                                position = transform.localPosition,
+                                rotation = transform.localRotation,
+                                scale = transform.localScale
+                            };
                             skeletonBones.Add(skelBone);
                         }
                     }
@@ -503,12 +540,15 @@ namespace Member_Han.Modules.FBXImporter
                 // 기본 클립이 없으면 Take 001로 생성 시도
                 Debug.LogWarning($"[3단계] defaultClipAnimations가 비어있음. 수동으로 클립 생성 시도...");
                 
-                UnityEditor.ModelImporterClipAnimation[] clipAnimations = new UnityEditor.ModelImporterClipAnimation[1];
-                clipAnimations[0] = new UnityEditor.ModelImporterClipAnimation();
-                clipAnimations[0].name = "Take 001";
-                clipAnimations[0].takeName = "Take 001";
-                clipAnimations[0].firstFrame = 0;
-                clipAnimations[0].lastFrame = 100;
+                UnityEditor.ModelImporterClipAnimation[] clipAnimations = new UnityEditor.ModelImporterClipAnimation[] {
+                    new UnityEditor.ModelImporterClipAnimation
+                    {
+                        name = "Take 001",
+                        takeName = "Take 001",
+                        firstFrame = 0,
+                        lastFrame = 100
+                    }
+                };
                 
                 importer.clipAnimations = clipAnimations;
                 Debug.Log($"[3단계] 수동 Animation Clip 생성: Take 001");
@@ -563,9 +603,11 @@ namespace Member_Han.Modules.FBXImporter
                 List<HumanBone> humanBones = new List<HumanBone>();
                 foreach (var kvp in mappingDict)
                 {
-                    HumanBone bone = new HumanBone();
-                    bone.humanName = kvp.Key;      // Unity Humanoid bone name (e.g., "Hips")
-                    bone.boneName = kvp.Value;     // Actual bone name in FBX (e.g., "Skeleton_Hips")
+                    HumanBone bone = new HumanBone
+                    {
+                        humanName = kvp.Key,      // Unity Humanoid bone name (e.g., "Hips")
+                        boneName = kvp.Value      // Actual bone name in FBX (e.g., "Skeleton_Hips")
+                    };
                     
                     // Limit 설정은 기본값 사용
                     bone.limit.useDefaultValues = true;
@@ -626,8 +668,8 @@ namespace Member_Han.Modules.FBXImporter
                     int colonIndex = trimmedLine.IndexOf(':');
                     if (colonIndex > 0)
                     {
-                        string key = trimmedLine.Substring(0, colonIndex).Trim();
-                        string value = trimmedLine.Substring(colonIndex + 1).Trim();
+                        string key = trimmedLine[..colonIndex].Trim();
+                        string value = trimmedLine[(colonIndex + 1)..].Trim();
                         
                         // 값이 비어있지 않은 경우에만 추가
                         if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
