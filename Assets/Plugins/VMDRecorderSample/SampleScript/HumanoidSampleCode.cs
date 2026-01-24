@@ -1,189 +1,198 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI; // Slider용
+using TMPro;          // TextMeshPro용
 
 // ============================================
-// [실행 순서 1] 휴머노이드 레코딩 제어 스크립트
-// 역할: VMD 레코딩 시작/종료 타이밍 제어
-// 실행 시점: 씬 시작 시 (Start)
+// [실행 순서 1] 휴머노이드 레코딩 제어 스크립트 (Automation Upgrade)
+// 역할: VMD 레코딩 시작/종료 타이밍 제어 및 UI 업데이트
 // ============================================
 public class HumanoidSampleCode : MonoBehaviour
 {
-    [Header("기본 설정")]
-    public string ModelName;           // VMD 파일에 기록될 모델명 (예: "MyCharacter")
-    public string HumanoidVMDName;     // 생성될 VMD 파일명 (예: "motion.vmd")
+    [Header("Core References")]
+    public UnityHumanoidVMDRecorder vmdRecorder;
 
-    [Header("v27 자동 녹화 설정")]
-    [Tooltip("체크 시 Play 버튼을 누르면 즉시 현재 클립으로 녹화를 시작합니다.\n체크 해제 시 FBX Import 또는 수동 버튼으로만 녹화가 시작됩니다.")]
-    public bool AutoStartRecording = false;
+    [Header("UI References")]
+    [SerializeField] private Slider _progressSlider;
+    [SerializeField] private TextMeshProUGUI _progressText; // 또는 Text
 
-    private float StartRecordingTime = 0.1f;  // 레코딩 시작 대기 시간 (초기화 대기)
-    public float StopRecordingTime = 30f;     // 레코딩 종료 시간 (0이면 애니메이션 클립 길이 자동 사용)
+    [Header("Recording Settings")]
+    public string ModelName = "fbxToVMD";
+    public string HumanoidVMDName = "fbxToVMD.vmd";
 
-    string humanoidVMDPath = "";  // VMD 파일 저장 경로
+    // [중요] 기존 AutoStartRecording 변수는 인스펙터에서 끄거나, 코드에서 무시합니다.
+    [HideInInspector] public int StopRecordingTime = 0; // 자동으로 설정될 것임
+
+    // Legacy fields preservation to avoid missing field serialization errors if any
+    [HideInInspector] public bool AutoStartRecording = false;
+
+    private bool _isRecordingSessionActive = false;
+    private float _totalDuration = 0f;
+    private float _currentTimer = 0f;
+
 
     // [실행 순서 1-1] 씬 시작 시 초기화
     void Start()
     {
-        // VMD 파일 저장 경로 설정
-        humanoidVMDPath = Application.dataPath + "/VMDRecorderSample/" + HumanoidVMDName;
-        
-        // [v22] FBX Import 테스트를 위해 자동 레코딩 비활성화
-        // 0.1초 후 레코딩 시작 예약 (초기화 대기)
-        // Invoke("StartRecording", StartRecordingTime);
-
-        // [v22] 클립 접근 시도도 비활성화 (Start 시점에 클립이 없을 수 있음)
-        // Animator aniCtr = this.GetComponent<Animator>();
-        // float clipLength = aniCtr.GetCurrentAnimatorClipInfo(0)[0].clip.length;
-        // Debug.Log(clipLength);
-        
-        // 종료 시간 설정 (0이면 클립 길이 사용, 아니면 지정된 시간 사용)
-        // StopRecordingTime = StopRecordingTime == 0 ? clipLength : StopRecordingTime;
-        
-        // 지정된 시간 후 저장 예약
-        // Invoke("SaveRecord", StopRecordingTime);
-        
-        // [v27] AutoStartRecording 옵션에 따라 자동 녹화 시작
-        if (AutoStartRecording)
+        // [FIX] 기존 자동 시작 로직 무력화
+        // 앱 실행 시 1초짜리 빈 파일이 생성되는 것을 방지합니다.
+        if (vmdRecorder == null)
         {
-            Debug.Log("[HumanoidSampleCode] ⚡ AutoStartRecording 옵션이 켜져 있습니다. 즉시 녹화를 시작합니다.");
-            // 약간의 초기화 시간을 위해 0.1초 지연 호출
-            Invoke("OnManualRecordButtonClick", StartRecordingTime);
+            vmdRecorder = GetComponent<UnityHumanoidVMDRecorder>();
         }
-        else
+
+        if (vmdRecorder != null)
         {
-            Debug.Log("[HumanoidSampleCode] AutoStartRecording이 꺼져 있습니다. FBX Import 또는 수동 버튼을 사용하세요.");
+            vmdRecorder.StopRecording(); // Ensure it's stopped initially
+        }
+        
+        UpdateUI(0, 0, "Ready to Load");
+    }
+
+    // [핵심] 외부(FileManager)에서 호출하는 녹화 시작 함수
+    // [v28] Added fileName parameter for safer and clearer UI updates (Optional for backward compatibility)
+    public void StartAutoRecording(float clipLength, string fileName = "")
+    {
+        if (vmdRecorder == null)
+        {
+            vmdRecorder = GetComponent<UnityHumanoidVMDRecorder>();
+            if (vmdRecorder == null)
+            {
+                Debug.LogError("[HumanoidSampleCode] ❌ UnityHumanoidVMDRecorder Missing!");
+                return;
+            }
+        }
+
+        // 1. 이름 및 경로 설정 (Encapsulated Safety)
+        if (!string.IsNullOrEmpty(fileName))
+        {
+            ModelName = fileName;
+            HumanoidVMDName = fileName + ".vmd";
+        }
+
+        // 2. 시간 설정 (소수점 올림 처리)
+        _totalDuration = clipLength;
+        StopRecordingTime = Mathf.CeilToInt(clipLength);
+        
+        Debug.Log($"[Recorder] 🎬 녹화 시퀀스 시작! 파일: {fileName}, 길이: {_totalDuration:F2}초");
+
+        // 3. 레코더 초기화 및 시작
+        _currentTimer = 0f;
+        vmdRecorder.StopRecording(); // 안전하게 정지 후
+        vmdRecorder.StartRecording(); // 녹화 시작
+
+        _isRecordingSessionActive = true;
+    }
+
+    void Update()
+    {
+        if (!_isRecordingSessionActive || vmdRecorder == null) return;
+
+        // 1. 진행 시간 업데이트
+        _currentTimer += Time.deltaTime;
+
+        // 2. UI 갱신 (ModelName을 사용하여 현재 녹화중인 파일명 표시)
+        float progress = Mathf.Clamp01(_currentTimer / _totalDuration);
+        string statusText = $"[{ModelName}]";
+        UpdateUI(progress, _currentTimer, statusText);
+
+        // 3. 종료 조건 체크 (시간 도달)
+        if (_currentTimer >= _totalDuration)
+        {
+            FinishRecording();
         }
     }
 
-    // [실행 순서 1-2] 레코딩 시작 (0.1초 후 실행)
-    void StartRecording()
+    // [FIX] 녹화 종료 및 저장 로직 완전 수정
+    private void FinishRecording()
     {
-        // UnityHumanoidVMDRecorder의 레코딩 시작
-        GetComponent<UnityHumanoidVMDRecorder>().StartRecording();
-    }
+        // 1. 중복 실행 방지
+        if (!_isRecordingSessionActive) return;
+        _isRecordingSessionActive = false;
 
-    // [실행 순서 1-3] 레코딩 종료 및 저장 (StopRecordingTime초 후 실행)
-    void SaveRecord()
-    {
-        // 레코딩 중지
-        GetComponent<UnityHumanoidVMDRecorder>().StopRecording();
-        
-        // VMD 파일 생성 및 저장
-        GetComponent<UnityHumanoidVMDRecorder>().SaveVMD(ModelName, humanoidVMDPath);
-        
-        // 저장 폴더 자동 열기
-        Application.OpenURL(Application.dataPath + "/VMDRecorderSample/");
-    }
+        Debug.Log("녹화 종료 시간 도달. 저장 프로세스 시작...");
 
-    // ============================================
-    // [v25] 외부에서 호출 가능한 통합 처리 함수
-    // FBX Import 완료 후 FileManager가 호출
-    // ============================================
-    /// <summary>
-    /// [v25] 애니메이션 재생과 VMD 레코딩을 동시에 시작
-    /// Project_Info.md 요구사항 준수:
-    /// 1. Length 올림 처리하여 StopRecordingTime에 할당
-    /// 2. VMD 레코딩 시작과 동시에 애니메이션 재생
-    /// </summary>
-    /// <param name="clip">재생할 AnimationClip (Unity Import된 클립)</param>
-    public void StartProcessing(AnimationClip clip)
-    {
-        if (clip == null)
+        // 2. 녹화 중지 (버퍼 플러시)
+        if (vmdRecorder != null)
         {
-            Debug.LogError("[HumanoidSampleCode] ❌ AnimationClip이 null입니다!");
-            return;
+            vmdRecorder.StopRecording();
         }
 
-        // 1. [요구사항] Length 올림하여 StopRecordingTime 할당
-        StopRecordingTime = Mathf.Ceil(clip.length);
-        Debug.Log($"[HumanoidSampleCode] [v25] 레코딩 시간 설정: {StopRecordingTime}초 (올림 처리: {clip.length} → {StopRecordingTime})");
+        // 3. 저장 경로 생성 (절대 경로 보장)
+        // Application.dataPath는 에디터에서는 "Assets", 빌드에서는 "Game_Data" 폴더를 가리킴
+        string folderName = "VMDRecorderSample";
+        string folderPath = System.IO.Path.Combine(Application.dataPath, folderName);
 
-        // [v25 Fix] 지정된 폴더가 없으면 생성하여 DirectoryNotFoundException 방지
-        string folderPath = Application.dataPath + "/VMDRecorderSample";
+        // 폴더가 없으면 생성 (이것 때문에 저장이 안 됐을 수 있음)
         if (!System.IO.Directory.Exists(folderPath))
         {
             System.IO.Directory.CreateDirectory(folderPath);
-            Debug.Log($"[HumanoidSampleCode] 폴더가 없어 새로 생성했습니다: {folderPath}");
         }
 
-        // VMD 경로 재설정 (클립 이름 기반)
-        humanoidVMDPath = folderPath + "/" + clip.name + ".vmd";
-        Debug.Log($"[HumanoidSampleCode] VMD 저장 경로: {humanoidVMDPath}");
+        // 전체 파일 경로 조합 (예: C:/Project/Assets/VMDRecorderSample/fbxToVMD.vmd)
+        // 파일명에 확장자가 없으면 붙여줌
+        string fileName = HumanoidVMDName;
+        if (!fileName.EndsWith(".vmd")) fileName += ".vmd";
+        
+        string fullFilePath = System.IO.Path.Combine(folderPath, fileName);
 
-        // 2. [요구사항] VMD 레코딩 시작
-        var vmdRecorder = GetComponent<UnityHumanoidVMDRecorder>();
+        // 4. VMD 파일 저장 수행
         if (vmdRecorder != null)
         {
-            vmdRecorder.StartRecording();
-            Debug.Log("[HumanoidSampleCode] ✅ VMD 레코딩 시작");
-        }
-        else
-        {
-            Debug.LogError("[HumanoidSampleCode] ❌ UnityHumanoidVMDRecorder 컴포넌트가 없습니다!");
-            return;
+            // 모델 이름과 전체 경로를 넘겨줍니다.
+            vmdRecorder.SaveVMD(ModelName, fullFilePath);
+            Debug.Log($"[Recorder] 💾 파일 저장 완료: {fullFilePath}");
         }
 
-        // 3. [요구사항] 동시에 애니메이션 재생 시작
-        /*
-        Animator ani = GetComponent<Animator>();
-        if (ani != null)
-        {
-            ani.enabled = true;
-            // Project_Info.md에 명시된 State 이름 "satisfaction_2_FBX"
-            ani.Play("satisfaction_2_FBX", 0, 0f);
-            ani.Update(0f); // 즉시 갱신하여 첫 프레임 보장
-            Debug.Log("[HumanoidSampleCode] ✅ 애니메이션 재생 시작 (satisfaction_2_FBX)");
-        }
-        else
-        {
-            Debug.LogError("[HumanoidSampleCode] ❌ Animator 컴포넌트가 없습니다!");
-        }
-        */
+        // 5. UI 업데이트 (100% 달성)
+        UpdateUI(1.0f, StopRecordingTime, "✅ Saved!");
 
-        // 4. 저장 예약
-        Invoke("SaveRecord", StopRecordingTime);
-        Debug.Log($"[HumanoidSampleCode] ✅ {StopRecordingTime}초 후 VMD 저장 예약됨");
+        // 6. [핵심] 폴더 열기 (복구된 기능)
+        // 약간의 지연 시간을 두어 파일 시스템이 쓰기를 마칠 시간을 줌 (선택 사항이나 권장)
+        Invoke("OpenTargetFolder", 0.5f);
     }
 
-    // ============================================
-    // [v26] 수동 VMD 녹화 버튼용 public 메서드
-    // Canvas Button의 OnClick() 이벤트에 할당하여 사용
-    // ============================================
-    /// <summary>
-    /// Canvas Button의 OnClick에 할당하여 수동으로 VMD 녹화를 시작합니다.
-    /// 현재 Animator에 할당된 첫 번째 클립을 기준으로 녹화 시간을 자동 계산합니다.
-    /// </summary>
+    // 폴더 열기 헬퍼 함수
+    private void OpenTargetFolder()
+    {
+        string folderName = "VMDRecorderSample";
+        string folderPath = System.IO.Path.Combine(Application.dataPath, folderName);
+        
+        // 경로 구분자 통일 (윈도우/맥 호환성)
+        folderPath = folderPath.Replace("/", "\\"); 
+
+        Debug.Log($"[Recorder] 📂 탐색기 열기: {folderPath}");
+        Application.OpenURL(folderPath);
+    }
+
+    private void UpdateUI(float progress, float currentTime, string status)
+    {
+        if (_progressSlider != null) _progressSlider.value = progress;
+        
+        if (_progressText != null)
+        {
+            _progressText.text = $"{status} {currentTime:F1}s / {StopRecordingTime}s";
+        }
+    }
+
+    // Legacy method support if needed, or redirect to new method
+    public void StartProcessing(AnimationClip clip)
+    {
+        if (clip != null)
+        {
+            HumanoidVMDName = clip.name + ".vmd"; // Update name based on clip
+            StartAutoRecording(clip.length);
+        }
+    }
+
     public void OnManualRecordButtonClick()
     {
-        Debug.Log("[HumanoidSampleCode] 🔴 수동 녹화 버튼 클릭됨");
-        
-        Animator animator = GetComponent<Animator>();
-        if (animator == null)
-        {
-            Debug.LogError("[HumanoidSampleCode] ❌ Animator 컴포넌트가 없습니다!");
-            return;
-        }
-        
-        if (animator.runtimeAnimatorController == null)
-        {
-            Debug.LogError("[HumanoidSampleCode] ❌ Animator에 Controller가 할당되지 않았습니다!");
-            return;
-        }
-        
-        // 현재 Controller에 할당된 클립들 가져오기
-        var clips = animator.runtimeAnimatorController.animationClips;
-        if (clips == null || clips.Length == 0)
-        {
-            Debug.LogError("[HumanoidSampleCode] ❌ Animator에 AnimationClip이 없습니다!");
-            return;
-        }
-        
-        // 첫 번째 클립으로 녹화 시작
-        AnimationClip targetClip = clips[0];
-        Debug.Log($"[HumanoidSampleCode] 사용할 클립: {targetClip.name} ({targetClip.length}초)");
-        
-        // 기존 StartProcessing 로직 재사용
-        StartProcessing(targetClip);
+         Animator animator = GetComponent<Animator>();
+         if (animator != null && animator.runtimeAnimatorController != null && animator.runtimeAnimatorController.animationClips.Length > 0)
+         {
+             var clip = animator.runtimeAnimatorController.animationClips[0];
+             StartProcessing(clip);
+         }
     }
 }
