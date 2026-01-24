@@ -33,6 +33,11 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("런타임 애니메이션 디버그 로그 출력")]
         public bool showRuntimeAnimationLog = false;
 
+        [Space(20)]
+        [Header("Animation Playback Control")]
+        [Tooltip("체크하면 무한 반복, 체크 해제하면 1번 재생 후 마지막 자세 유지")]
+        public bool IsLooping = false; // [핵심] 기본값을 false로 설정
+
         [Header("Golden Hand Settings")]
         [Tooltip("Finger Stretch Scale (Default 1.0)")]
         [Range(0.0f, 1.0f)] public float FingerStretchScale = 1.0f;
@@ -233,6 +238,22 @@ namespace Member_Han.Modules.FBXImporter
                         retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
                         
                         Debug.Log("[FileManager] 🚀 Retargeting Sequence Started.");
+
+                        // [FIX] 녹화기 연결 및 자동 시작 명령
+                        var recorderController = targetObject.GetComponent<HumanoidSampleCode>();
+                        if (recorderController != null)
+                        {
+                            float clipLen = targetClip.length;
+                            // [v28] FBX 클립 길이와 이름을 안전하게 전달
+                            // 기존의 직접 프로퍼티 할당 방식보다 메서드 인자로 전달하는 것이 더 안전함 (Encapsulation)
+                            recorderController.StartAutoRecording(clipLen, targetClip.name);
+                        }
+                        else
+                        {
+                            Debug.LogError("[FileManager] ❌ 'testPrefab'에 HumanoidSampleCode 컴포넌트가 없습니다!");
+                        }
+                        
+                        Debug.Log("[FileManager] 🚀 모든 프로세스 가동 완료.");
                     }
 
                     // 4. [제거됨] Ghost 애니메이션 재생은 Retargeter가 담당

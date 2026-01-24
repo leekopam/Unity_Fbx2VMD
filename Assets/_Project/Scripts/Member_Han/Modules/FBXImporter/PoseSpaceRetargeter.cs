@@ -108,7 +108,20 @@ namespace Member_Han.Modules.FBXImporter
             if (clip != null)
             {
                 clip.legacy = true;
-                clip.wrapMode = WrapMode.Loop;
+                // ---------------------------------------------------------
+                // [핵심 변경] Loop vs ClampForever
+                // ---------------------------------------------------------
+                if (_settings.IsLooping)
+                {
+                    clip.wrapMode = WrapMode.Loop; // 무한 반복
+                }
+                else
+                {
+                    // ClampForever: 1회 재생 후 '마지막 프레임'에 멈춤 (자연스러움)
+                    // Once: 1회 재생 후 '초기화(T-Pose)' 될 수 있음 (부자연스러움)
+                    clip.wrapMode = WrapMode.ClampForever; 
+                }
+
                 ghostLegacy.AddClip(clip, clip.name);
                 ghostLegacy.clip = clip;
                 ghostLegacy.Play(clip.name);
