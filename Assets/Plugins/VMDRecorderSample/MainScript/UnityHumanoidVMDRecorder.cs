@@ -549,9 +549,13 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     /// </summary>
     /// [한글] 레코딩 종료 (데이터 백업 및 초기화)
     // [한글] [실행 순서 2-5] HumanoidSampleCode에서 호출 - 레코딩 중지 및 데이터 백업
+    // [한글] [실행 순서 2-5] HumanoidSampleCode에서 호출 - 레코딩 중지 및 데이터 백업
     public void StopRecording()
     {
         IsRecording = false;  // 레코딩 중지
+        
+        // [Safety Check] 초기화 전에 Stop이 호출될 경우 방어
+        if (BoneDictionary == null) return;
         
         // 현재 레코딩 데이터를 "Saved" 버전으로 백업
         frameNumberSaved = FrameNumber;
