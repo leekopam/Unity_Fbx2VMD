@@ -308,6 +308,19 @@ MonoBehaviour:
   targetCharacter: {fileID: 1178930453}
   showBoneMappingLog: 1
   showRuntimeAnimationLog: 1
+  FingerStretchScale: 1
+  FingerSpreadScale: 1
+  ThumbStretchScale: 1
+  ThumbSpreadScale: 1
+  ThumbRotationOffset: {x: -10, y: -30, z: 0}
+  ThumbStretchOffset: 0
+  EnableSmartCurve: 1
+  SmartCurveStrength: 0.5
+  StretchThreshold: 0.7
+  EnableThumbSmartCurve: 1
+  ThumbSmartCurveStrength: 0.5
+  FaceCamera: 1
+  ApplyRootMotion: 1
 --- !u!1 &765879829
 GameObject:
   m_ObjectHideFlags: 0
