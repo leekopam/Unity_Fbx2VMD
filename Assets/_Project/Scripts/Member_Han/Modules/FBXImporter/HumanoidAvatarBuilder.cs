@@ -12,14 +12,15 @@ namespace Member_Han.Modules.FBXImporter
             Animator animator = targetRoot.GetComponent<Animator>();
             if (animator == null) animator = targetRoot.AddComponent<Animator>();
 
-            // [변경] 수동 교정 없이 순수 데이터로 아바타 생성
+            // 수동 교정 없이 순수 데이터로 아바타 생성
             Avatar newAvatar = CreatePureAvatar(targetRoot, explicitMapping);
             
             animator.avatar = newAvatar;
             animator.applyRootMotion = false;
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             
-            Debug.Log($"[HumanoidBuilder] 🌿 Pure Avatar Created for {targetRoot.name} (No Manual Corrections)");
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         }
 
         private static Avatar CreatePureAvatar(GameObject root, Dictionary<string, string> mappingData)
@@ -28,7 +29,7 @@ namespace Member_Han.Modules.FBXImporter
             var boneMap = SmartMapTransforms(root.transform, mappingData);
             if (boneMap.Count == 0) Debug.LogError("❌ 매핑 실패!");
 
-            // 2. [핵심 변경] 수동 자세 교정(EnforceTPose 등) 삭제!
+            // 2. HumanDescription 생성
             // Assimp의 MakeLeftHanded가 이미 좌표계를 맞췄으므로, 
             // 현재 상태(Bind Pose)를 그대로 신뢰합니다.
 
@@ -67,7 +68,7 @@ namespace Member_Han.Modules.FBXImporter
             bones.Add(new SkeletonBone {
                 name = t.name,
                 position = t.localPosition,
-                rotation = t.localRotation, // [중요] 원본 데이터 그대로 사용
+                rotation = t.localRotation, // 원본 데이터 그대로 사용
                 scale = t.localScale
             });
             foreach (Transform child in t) AddBonesRecursive(child, bones);
