@@ -60,7 +60,7 @@ namespace Member_Han.Modules.FBXImporter
                 }
                 else if (mName.Contains("Stretched") || mName.Contains("Open"))
                 {
-                    if (isFinger) _fingerStretchIndices.Add(i); // 네 손가락
+                    if (isFinger) _fingerStretchIndices.Add(i); // 소지~약지
                     else if (isThumb) _thumbStretchIndices.Add(i); // 엄지
                 }
             }
@@ -68,7 +68,6 @@ namespace Member_Han.Modules.FBXImporter
 
         private IEnumerator InitializeRoutine(GameObject ghostRoot, GameObject targetRoot, Dictionary<string, string> mappingData, AnimationClip clip)
         {
-            Debug.Log("[PoseSpaceRetargeter] ⏳ 초기화 및 정렬 시퀀스 시작...");
             
             var targetAnimator = targetRoot.GetComponent<Animator>();
             if (targetAnimator != null) 
@@ -103,24 +102,14 @@ namespace Member_Han.Modules.FBXImporter
             _humanPose = new HumanPose();
 
             _isInitialized = true;
-            Debug.Log($"[PoseSpaceRetargeter] ✅ 엔진 가동 완료.");
 
             if (clip != null)
             {
                 clip.legacy = true;
-                // ---------------------------------------------------------
-                // [핵심 변경] Loop vs ClampForever
-                // ---------------------------------------------------------
-                if (_settings.IsLooping)
-                {
-                    clip.wrapMode = WrapMode.Loop; // 무한 반복
-                }
-                else
-                {
-                    // ClampForever: 1회 재생 후 '마지막 프레임'에 멈춤 (자연스러움)
-                    // Once: 1회 재생 후 '초기화(T-Pose)' 될 수 있음 (부자연스러움)
-                    clip.wrapMode = WrapMode.ClampForever; 
-                }
+
+                // ClampForever: 1회 재생 후 '마지막 프레임'에 멈춤 (자연스러움)
+                // Once: 1회 재생 후 '초기화(T-Pose)' 될 수 있음 (부자연스러움)
+                clip.wrapMode = WrapMode.ClampForever; 
 
                 ghostLegacy.AddClip(clip, clip.name);
                 ghostLegacy.clip = clip;
@@ -160,9 +149,7 @@ namespace Member_Han.Modules.FBXImporter
         {
             // Golden Settings Mapping
             float threshold = _settings.StretchThreshold; 
-            float dampen = _settings.EnableSmartCurve ? _settings.SmartCurveStrength : 1.0f; // 1.0 means no dampening if formulation is Overflow * Dampen? Wait.
-            // If logic is: Threshold + (Overflow * Dampen), then Dampen=1.0 means full overflow pass-through (Linear). Correct.
-            // If Enabled=False, we want Linear 1.0. If Enabled=True, we want Dampen (e.g. 0.5).
+            float dampen = _settings.EnableSmartCurve ? _settings.SmartCurveStrength : 1.0f; 
             
             float thumbDampen = _settings.EnableThumbSmartCurve ? _settings.ThumbSmartCurveStrength : 1.0f;
 
