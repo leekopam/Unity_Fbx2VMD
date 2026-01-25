@@ -11,17 +11,15 @@ namespace Member_Han.Modules.FBXImporter
     /// </summary>
     public class FileManager : MonoBehaviour
     {
-        #region 상수
         private const string IMPORT_FBX_FOLDER = "Import_FBX";
         private const string FBX_EXTENSION = "fbx";
         private const string BONE_MAPPING_FILE = "BoneMapping_Data.txt";
-        private const string BONE_MAPPING_FALLBACK = "BoneMapping_Data.ht";
-        #endregion
+        
 
         #region Public 필드
         [Header("FBX 임포트 설정")]
         [Tooltip("체크 시 선택한 FBX 파일을 Import_FBX 폴더에 복사하여 저장")]
-        public bool saveToImportFolder = true;
+        public bool saveToImportFolder = false;
         
         [Header("Ghost Retargeting 설정")]
         [Tooltip("애니메이션을 적용할 대상 캐릭터 (Humanoid Avatar 필요)")]
@@ -29,14 +27,9 @@ namespace Member_Han.Modules.FBXImporter
         
         [Header("디버그 설정 (RuntimeRetargeter에 적용됨)")]
         [Tooltip("본 매핑 관련 디버그 로그 출력")]
-        public bool showBoneMappingLog = true;
+        public bool showBoneMappingLog = false;
         [Tooltip("런타임 애니메이션 디버그 로그 출력")]
         public bool showRuntimeAnimationLog = false;
-
-        [Space(20)]
-        [Header("Animation Playback Control")]
-        [Tooltip("체크하면 무한 반복, 체크 해제하면 1번 재생 후 마지막 자세 유지")]
-        public bool IsLooping = false; // [핵심] 기본값을 false로 설정
 
         [Header("Golden Hand Settings")]
         [Tooltip("Finger Stretch Scale (Default 1.0)")]
@@ -161,7 +154,6 @@ namespace Member_Han.Modules.FBXImporter
                     {
                         File.Copy(sourcePath, potentialTargetPath, true);
                         targetPath = potentialTargetPath;
-                        Debug.Log($"파일 복사 완료: {targetPath}");
                     }
                     else
                     {
@@ -183,85 +175,65 @@ namespace Member_Han.Modules.FBXImporter
                 
                 if (importedModel != null)
                 {
-                    Debug.Log($"[FileManager] FBX 로드 성공: {importedModel.name}");
-                    
                     // Ghost Renderer 비활성화
                     foreach (var renderer in importedModel.GetComponentsInChildren<Renderer>())
                     {
                         renderer.enabled = false;
                     }
 
-                    // 1. Scale Normalization (Missing in project, commented out)
-                    // ScaleNormalizer.Normalize(importedModel);
-
-                    // 2. 매핑 데이터 로드 & Ghost 아바타 생성 (T-Pose 강제)
+                    // 1. 매핑 데이터 로드 & Ghost 아바타 생성 (T-Pose 강제)
                     var boneMapping = LoadBoneMappingRuntime();
                     HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
 
-                    // 3. [핵심] Ghost 뱃속에서 애니메이션 클립 꺼내기
+                    // 2. Ghost에서 애니메이션 클립 추출
                     AnimationClip targetClip = null;
                     var animComp = importedModel.GetComponent<Animation>();
                     
                     if (animComp != null && animComp.clip != null)
                     {
                         targetClip = animComp.clip;
-                        Debug.Log($"[FileManager] 📦 Ghost에서 클립 수령 성공: {targetClip.name}");
-                        Debug.Log($"[FileManager] ⏱️ 재생 시간: {targetClip.length:F2}초 (FrameRate: {targetClip.frameRate})");
     
-                        // 검증 로직: 만약 여전히 1000초가 넘어가면 경고
                         if (targetClip.length > 1000f)
                         {
-                            Debug.LogError("❌ [Critical] 애니메이션 시간이 비정상적으로 깁니다. RuntimeFBXImporter의 timeScale을 확인하세요.");
+                            Debug.LogError("[Critical] 애니메이션 시간이 비정상적으로 깁니다. RuntimeFBXImporter의 timeScale을 확인하세요.");
                         }
                     }
                     else
                     {
-                        Debug.LogError("❌ [Critical] Ghost에 Animation 컴포넌트가 없거나 클립이 없습니다!");
-                        return; // [FIX 6] 클립 없으면 즉시 중단
+                        Debug.LogError("[Critical] Ghost에 Animation 컴포넌트가 없거나 클립이 없습니다!");
+                        return;
                     }
 
-                    // 4. Target 찾기
+                    // 3. Target 찾기
                     GameObject targetObject = GameObject.Find("testPrefab");
                     if (targetObject == null)
                     {
-                        Debug.LogError("[FileManager] ❌ 'testPrefab'을 찾을 수 없습니다. 리타겟팅을 중단합니다.");
+                        Debug.LogError("[FileManager] 'testPrefab'을 찾을 수 없습니다. 리타겟팅을 중단합니다.");
                     }
                     else
                     {
                         // --------------------------------------------------------
-                        // [FINAL PIPELINE] 포즈 공간 리타겟터 부착 및 초기화 (코루틴 시작)
+                        // 포즈 공간 리타겟터 부착 및 초기화
                         // --------------------------------------------------------
                         var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
                         
-                        // [중요] 발견한 클립을 인자로 전달하여 강제 재생 유도
-                        // [수정] FileManager 자신(this)을 넘겨서 설정을 공유함
+                        // FileManager 자신(this)을 넘겨서 설정을 공유함
                         retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
                         
-                        Debug.Log("[FileManager] 🚀 Retargeting Sequence Started.");
-
-                        // [FIX] 녹화기 연결 및 자동 시작 명령
+                        // 녹화기 연결 및 자동 시작 명령
                         var recorderController = targetObject.GetComponent<HumanoidSampleCode>();
                         if (recorderController != null)
                         {
                             float clipLen = targetClip.length;
-                            // [v28] FBX 클립 길이와 이름을 안전하게 전달
-                            // 기존의 직접 프로퍼티 할당 방식보다 메서드 인자로 전달하는 것이 더 안전함 (Encapsulation)
+                            // FBX 클립 길이와 이름을 안전하게 전달
                             recorderController.StartAutoRecording(clipLen, targetClip.name);
                         }
                         else
                         {
-                            Debug.LogError("[FileManager] ❌ 'testPrefab'에 HumanoidSampleCode 컴포넌트가 없습니다!");
+                            Debug.LogError("[FileManager] 'testPrefab'에 HumanoidSampleCode 컴포넌트가 없습니다!");
                         }
-                        
-                        Debug.Log("[FileManager] 🚀 모든 프로세스 가동 완료.");
                     }
-
-                    // 4. [제거됨] Ghost 애니메이션 재생은 Retargeter가 담당
-                    /*
-                    var anim = importedModel.GetComponent<Animation>();
-                    if (anim != null && anim.clip != null) anim.Play();
-                    */
-
+                        
                     importedModel.transform.position = Vector3.zero;
                 }
                 else
@@ -289,6 +261,7 @@ namespace Member_Han.Modules.FBXImporter
 
             if (mappingAsset != null)
             {
+                Debug.Log($"[FileManager] BoneMapping 로드 성공 (Resources/{loadName})");
                 string[] lines = mappingAsset.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
                 bool insideBoneTemplate = false;
 
@@ -317,20 +290,17 @@ namespace Member_Han.Modules.FBXImporter
                         }
                     }
                 }
-                Debug.Log($"[FileManager] Loaded {mapping.Count} mappings from Resources/{loadName}");
             }
             else
             {
-                Debug.LogError($"[FileManager] Failed to load BoneMapping from Resources/{loadName}");
+                Debug.LogError($"[FileManager] ❌ BoneMapping 로드 실패! 경로: Resources/{loadName}. (빌드에 포함되었는지 확인하세요)");
             }
 
             return mapping;
         }
 
-        // ... 기존 SetupGhostRetargeting 및 VerifyGhostPlayback 등은 유지 ...
         private void SetupGhostRetargeting(GameObject ghostObject, AnimationClip ghostClip, GameObject targetPrefab)
         {
-            // (기존 코드 유지)
             Debug.Log("[FileManager] Native AnimatorOverride Setup...");
              Animator targetAnimator = targetPrefab.GetComponent<Animator>();
             if (targetAnimator == null || targetAnimator.runtimeAnimatorController == null) return;
@@ -358,11 +328,6 @@ namespace Member_Han.Modules.FBXImporter
             }
              
             if (ghostObject != null) Destroy(ghostObject);
-        }
-
-        private System.Collections.IEnumerator VerifyGhostPlayback()
-        {
-             yield return null;
         }
         #endregion
 
@@ -404,7 +369,7 @@ namespace Member_Han.Modules.FBXImporter
             Debug.Log($"[2단계 완료] ModelImporter 정보:");
             Debug.Log($"  - 현재 Animation Type: {importer.animationType}");
             Debug.Log($"  - 현재 Import Animation: {importer.importAnimation}");
-            Debug.Log($"  - 현재 Optimize Game Objects: {importer.optimizeGameObjects}");
+            Debug.Log($"  - 현재 Optimize Bones: {importer.optimizeBones}");
             
             // ===== 3단계: Rig 설정 (Humanoid, Strip Bones = False) =====
             Debug.Log($"[3단계] Rig 설정 적용 중...");
@@ -416,18 +381,13 @@ namespace Member_Han.Modules.FBXImporter
             // 3-2. Animation Type = Humanoid
             importer.animationType = UnityEditor.ModelImporterAnimationType.Human;
             
-            // 3-3. Avatar Definition = "Create From This Model" (중요!)
-            // Avatar를 모델에서 생성하도록 명시적 설정 (AnimationClip 보존을 위해 필수!)
+            // 3-3. Avatar Definition = "Create From This Model" (중요)
+            // Avatar를 모델에서 생성하도록 명시적 설정 (AnimationClip 보존을 위해 필수)
             importer.avatarSetup = UnityEditor.ModelImporterAvatarSetup.CreateFromThisModel;
-            // 3-4. Strip Bones 해제 (Optimize Game Objects와 별개)
-            // 사용자 요청: importer.optimizeBones = false 적용
+            // 3-4. Strip Bones 해제 (Optimize Game Objects 아님)
+            importer.optimizeBones = false;
             try 
             {
-                // Unity API (Deprecated but might still work internally via property)
-                #pragma warning disable 618
-                // importer.optimizeBones = false; // 직접 호출은 컴파일 에러 가능성 있음
-                #pragma warning restore 618
-
                 // SerializedObject를 사용하여 "optimizeBones" 또는 관련 속성 해제
                 UnityEditor.SerializedObject serializedImporter = new UnityEditor.SerializedObject(importer);
                 serializedImporter.Update();
@@ -461,11 +421,8 @@ namespace Member_Han.Modules.FBXImporter
                 Debug.LogError($"[Strip Bones Fix] Error: {e.Message}");
             }
             
-            // "Optimize Game Objects"는 사용자가 원치 않으므로 건드리지 않음 (혹은 기본값 유지)
-            // importer.optimizeGameObjects = false; // 삭제
-            
             // AnimationCompression 추가 설정
-            importer.animationWrapMode = WrapMode.Loop; // 기본 Loop 설정
+            importer.animationWrapMode = WrapMode.ClampForever; // Once: 재생 후 초기화, ClampForever: 마지막 프레임 유지
             
             //3-5. 기타 설정
             importer.importBlendShapes = true;
