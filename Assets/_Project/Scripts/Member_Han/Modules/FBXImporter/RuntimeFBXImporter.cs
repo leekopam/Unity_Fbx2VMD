@@ -41,7 +41,6 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             // 1. 백그라운드 스레드에서 Assimp 임포트 실행
-            Debug.Log($"[RuntimeFBXImporter] Assimp 임포트 시작: {path}");
             Scene scene = await Task.Run(() => ImportWithAssimp(path));
 
             if (scene == null)
@@ -58,10 +57,9 @@ namespace Member_Han.Modules.FBXImporter
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
 
-            // [FIX 1] 좌표계 변환으로 인해 뒤를 보는 현상 보정 (180도 회전)
+            // [FIX] 좌표계 변환으로 인해 뒤를 보는 현상 보정 (180도 회전)
             // MakeLeftHanded로 인해 Z축이 반전되었으므로, 다시 180도 돌려 앞을 보게 함
             rootObject.transform.rotation = UnityEngine.Quaternion.Euler(0, 180f, 0);
-            Debug.Log("[RuntimeFBXImporter] 🔄 모델 방향 180도 보정 완료 (Back -> Front)");
 
             return rootObject;
         }
@@ -93,7 +91,6 @@ namespace Member_Han.Modules.FBXImporter
 
             try
             {
-                Debug.Log("[RuntimeFBXImporter] importer.ImportFile 호출 중...");
                 Scene scene = importer.ImportFile(path, steps);
                 
                 if (scene == null)
@@ -102,7 +99,6 @@ namespace Member_Han.Modules.FBXImporter
                 }
                 else
                 {
-                    Debug.Log($"[RuntimeFBXImporter] 임포트 성공. 메시 수: {scene.MeshCount}, 애니메이션 수: {scene.AnimationCount}");
                 }
                 
                 return scene;
@@ -311,16 +307,10 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            // [변경] Ghost Retargeting을 위해 Legacy Animation 컴포넌트 사용
+            // Ghost Retargeting을 위해 Legacy Animation 컴포넌트 사용
             // Ghost가 '가방' 역할과 '재생기' 역할을 동시에 하도록 생산 즉시 부착
             UnityEngine.Animation animComp = rootObject.GetComponent<UnityEngine.Animation>();
             if (animComp == null) animComp = rootObject.AddComponent<UnityEngine.Animation>();
-
-            // Animator는 구조적 필요에 의해 남겨두거나 삭제 가능하나, 
-            // 리타겟팅 로직에서 Animator를 끄고 Animation을 쓰기로 했으므로 
-            // 호환성을 위해 Animator 추가 코드는 유지하되, 리타겟터가 이를 제어함.
-            // 단, 데이터 전달을 위해 Animation 컴포넌트가 필수.
-            // Animator animator = rootObject.AddComponent<Animator>(); (선택사항, 일단 유지)
 
             List<AnimationClip> clips = new List<AnimationClip>();
 
@@ -333,7 +323,7 @@ namespace Member_Han.Modules.FBXImporter
                     clip.name = "Animation_" + scene.Animations.IndexOf(anim);
                 }
 
-                // [중요] 런타임 Legacy 재생을 위해 true 설정
+                // 런타임 Legacy 재생을 위해 true 설정
                 clip.legacy = true;
                 clip.wrapMode = WrapMode.Loop; // 기본 반복 재생
 
@@ -342,7 +332,7 @@ namespace Member_Han.Modules.FBXImporter
                 if (ticksPerSecond <= 1.0)
                 {
                     ticksPerSecond = 60.0;
-                    Debug.LogWarning($"[RuntimeFBXImporter] ⚠️ TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 강제합니다.");
+                    Debug.LogWarning($"[RuntimeFBXImporter] TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 강제합니다.");
                 }
                 float timeScale = 1.0f / (float)ticksPerSecond;
 
@@ -388,16 +378,21 @@ namespace Member_Han.Modules.FBXImporter
             // 생성된 클립들을 필드에 저장
             _animationClips = clips.ToArray();
             
-            // [FIX 3] 클립 강제 납품 및 로깅
+            // 클립 강제 납품 및 로깅
             if (clips.Count > 0)
             {
                 animComp.clip = clips[0]; // 기본 클립 설정
                 // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
-                Debug.Log($"[RuntimeFBXImporter] ✅ 클립 {clips.Count}개 생성 및 바인딩 완료. (TimeScale 적용됨, Legacy={clips[0].legacy})");
+            if (clips.Count > 0)
+            {
+                animComp.clip = clips[0]; // 기본 클립 설정
+                // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
+                Debug.Log($"[RuntimeFBXImporter] 클립 {clips.Count}개 생성 완료");
+            }
             }
             else
             {
-                Debug.LogWarning("[RuntimeFBXImporter] ⚠️ 생성된 애니메이션 클립이 없습니다.");
+                Debug.LogWarning("[RuntimeFBXImporter] 생성된 애니메이션 클립이 없습니다.");
             }
         }
 
@@ -513,25 +508,49 @@ namespace Member_Han.Modules.FBXImporter
         {
             if (IsLoaded) return;
 
-            string pluginsPath = Path.Combine(Application.dataPath, "Plugins", ASSIMP_PLUGIN_FOLDER, ASSIMP_DLL_NAME);
-
-            if (!File.Exists(pluginsPath))
+            // 빌드 환경 및 에디터 환경을 모두 고려한 검색 경로 목록
+            string[] possiblePaths = new string[]
             {
-                Debug.LogWarning($"[AssimpLibraryLoader] assimp.dll을 찾을 수 없음: {pluginsPath}. 일반 조회 시도 중.");
+                // 1. 에디터 기본 경로 (Assets/Plugins/Assimp-net/assimp.dll)
+                Path.Combine(Application.dataPath, "Plugins", ASSIMP_PLUGIN_FOLDER, ASSIMP_DLL_NAME),
+                
+                // 2. 빌드: 실행 파일 옆 Plugins 폴더 (Standard)
+                Path.Combine(Application.dataPath, "Plugins", ASSIMP_DLL_NAME),
+
+                // 3. 빌드: x86_64 서브폴더 (Unity 2019+ 기본 빌드 구조)
+                Path.Combine(Application.dataPath, "Plugins", "x86_64", ASSIMP_DLL_NAME),
+
+                // 4. 빌드: Assimp-net 서브폴더 보존 시
+                Path.Combine(Application.dataPath, "Plugins", ASSIMP_PLUGIN_FOLDER, ASSIMP_DLL_NAME)
+            };
+
+            string validPath = null;
+            foreach (var path in possiblePaths)
+            {
+                if (File.Exists(path))
+                {
+                    validPath = path;
+                    break;
+                }
+            }
+
+            if (validPath == null)
+            {
+                Debug.LogError($"[AssimpLibraryLoader] assimp.dll을 찾을 수 없습니다. 검색된 경로:\n{string.Join("\n", possiblePaths)}");
                 return;
             }
 
-            Debug.Log($"[AssimpLibraryLoader] 네이티브 라이브러리 로드 중: {pluginsPath}");
-            System.IntPtr handle = LoadLibrary(pluginsPath);
+            Debug.Log($"[AssimpLibraryLoader] 네이티브 라이브러리 발견: {validPath}");
+            System.IntPtr handle = LoadLibrary(validPath);
             
             if (handle == System.IntPtr.Zero)
             {
                 int errorCode = Marshal.GetLastWin32Error();
-                Debug.LogError($"[AssimpLibraryLoader] assimp.dll 로드 실패. 오류 코드: {errorCode}");
+                Debug.LogError($"[AssimpLibraryLoader] 로드 실패. Error Code: {errorCode}, Path: {validPath}");
             }
             else
             {
-                Debug.Log($"[AssimpLibraryLoader] assimp.dll 로드 성공 핸들: {handle}");
+                Debug.Log($"[AssimpLibraryLoader] 로드 성공. Handle: {handle}");
                 IsLoaded = true;
             }
         }

@@ -1,249 +1,190 @@
 using UnityEngine;
-using System.Collections;
+using UnityEngine.Playables;
+using UnityEngine.Animations;
 using System.Collections.Generic;
 
 namespace Member_Han.Modules.FBXImporter
 {
+    /// <summary>
+    /// ⭐ MASTER STAGE 35-36: Total Sync + Smart Grounding
+    /// - 1. Container Pattern: Ghost의 거대화(250배)를 부모(0.01)로 상쇄 -> Scale Ratio 정상화(1.2)
+    /// - 2. Raycast Grounding: 물리 엔진 없이 발바닥 최저점(World)을 레이캐스트로 찾아서 "양방향" 접지 (Floating/Sinking 해결)
+    /// - 3. Forward Correction: 180도 회전 보정
+    /// </summary>
     public class PoseSpaceRetargeter : MonoBehaviour
     {
-        private HumanPoseHandler _srcHandler; 
-        private HumanPoseHandler _destHandler; 
+        [Header("--- CORE COMPONENTS ---")]
+        public Animator ghostAnimator;  // (Container 내부의 모델)
+        public Animator targetAnimator; // 내 캐릭터
+
+        [Header("--- FINAL TUNING ---")]
+        [Tooltip("캐릭터가 뒤를 보고 있다면 체크 (180도 회전)")]
+        public bool fixReverseRotation = true;
+
+        [Tooltip("체크 시 공중 부양/박힘을 모두 해결 (Raycast 사용)")]
+        public bool useSmartGrounding = true;
+
+        [Tooltip("발바닥 높이 미세 조절 (양수: 띄움, 음수: 박음)")]
+        [Range(-0.1f, 0.1f)]
+        public float groundOffset = 0.0f;
+
+        // --- 내부 변수 ---
+        private HumanPoseHandler _ghostHandler;
+        private HumanPoseHandler _targetHandler;
         private HumanPose _humanPose;
+        
+        private Vector3 _prevGhostPos;
+        private Quaternion _facingCorrection = Quaternion.Euler(0, 180, 0); // 180도 회전값
+        private float _scaleRatio = 1.0f; // 체형 차이 비율
+
+        // --- 초기화 ---
         private bool _isInitialized = false;
-        
-        // [수정] 설정값을 가진 매니저 참조
-        private FileManager _settings; 
+        private Animation _legacyAnim;
 
-        // 캐싱용 인덱스
-        private List<int> _fingerStretchIndices = new List<int>();
-        private List<int> _fingerSpreadIndices = new List<int>();
-        private List<int> _thumbStretchIndices = new List<int>();
-        private List<int> _thumbSpreadIndices = new List<int>();
-        
-        // [New] Thumb Transforms for Post-Correction
-        private Transform _leftThumbProximal;
-        private Transform _rightThumbProximal;
-
-        // [수정] Initialize에서 settings(FileManager)를 받음
-        public void Initialize(GameObject ghostRoot, GameObject targetRoot, Dictionary<string, string> mappingData, AnimationClip clipToPlay, FileManager settings)
+        public void Initialize(GameObject ghostRoot, GameObject targetRoot, Dictionary<string, string> mappingData, AnimationClip clip, FileManager settings)
         {
-            _settings = settings; // 참조 저장
-            CacheFingerIndices();
-            StartCoroutine(InitializeRoutine(ghostRoot, targetRoot, mappingData, clipToPlay));
-        }
+            ghostAnimator = ghostRoot.GetComponent<Animator>();
+            targetAnimator = targetRoot.GetComponent<Animator>();
 
-        private void CacheFingerIndices()
-        {
-            _fingerStretchIndices.Clear();
-            _thumbStretchIndices.Clear();
-            _fingerSpreadIndices.Clear();
-            _thumbSpreadIndices.Clear();
+            // 1. Ghost Animator 끄기 (Legacy 구동용)
+            if (ghostAnimator != null) ghostAnimator.enabled = false;
+
+            // 2. Legacy Animation 재생
+            _legacyAnim = ghostRoot.GetComponent<Animation>();
+            if (_legacyAnim == null) _legacyAnim = ghostRoot.AddComponent<Animation>();
             
-            // [New] Cache Thumb Transforms from Target Animator
-            if (_destHandler != null) { /* Moved to Initialize where Animator is available */ } 
-            
-            string[] muscleNames = HumanTrait.MuscleName;
-            for (int i = 0; i < muscleNames.Length; i++)
-            {
-                string mName = muscleNames[i];
-                // 손가락 관련만 필터링
-                if (!mName.Contains("Left") && !mName.Contains("Right")) continue;
-                bool isFinger = mName.Contains("Index") || mName.Contains("Middle") || mName.Contains("Ring") || mName.Contains("Little");
-                bool isThumb = mName.Contains("Thumb");
+            clip.legacy = true;
+            clip.wrapMode = WrapMode.Once; // [User Request] Loop 방지: 한 번만 재생
+            _legacyAnim.AddClip(clip, clip.name);
+            _legacyAnim.clip = clip;
+            _legacyAnim.Play();
 
-                if (!isFinger && !isThumb) continue;
-
-                if (mName.Contains("Spread"))
-                {
-                    if (isFinger) _fingerSpreadIndices.Add(i);
-                    else if (isThumb) _thumbSpreadIndices.Add(i);
-                }
-                else if (mName.Contains("Stretched") || mName.Contains("Open"))
-                {
-                    if (isFinger) _fingerStretchIndices.Add(i); // 네 손가락
-                    else if (isThumb) _thumbStretchIndices.Add(i); // 엄지
-                }
-            }
-        }
-
-        private IEnumerator InitializeRoutine(GameObject ghostRoot, GameObject targetRoot, Dictionary<string, string> mappingData, AnimationClip clip)
-        {
-            Debug.Log("[PoseSpaceRetargeter] ⏳ 초기화 및 정렬 시퀀스 시작...");
-            
-            var targetAnimator = targetRoot.GetComponent<Animator>();
-            if (targetAnimator != null) 
-            { 
-                 targetAnimator.runtimeAnimatorController = null; 
-                 targetAnimator.Rebind(); 
-                 targetAnimator.Update(0f);
-                 
-                 // [New] Find Thumb Transforms
-                 _leftThumbProximal = targetAnimator.GetBoneTransform(HumanBodyBones.LeftThumbProximal);
-                 _rightThumbProximal = targetAnimator.GetBoneTransform(HumanBodyBones.RightThumbProximal);
-                 if (_leftThumbProximal == null) Debug.LogWarning("Left Thumb Proximal not found");
-                 if (_rightThumbProximal == null) Debug.LogWarning("Right Thumb Proximal not found");
-            }
-
-            var ghostLegacy = ghostRoot.GetComponent<Animation>();
-            if (ghostLegacy == null) ghostLegacy = ghostRoot.AddComponent<Animation>();
-            ghostLegacy.Stop();
-
-            var ghostAnimator = ghostRoot.GetComponent<Animator>();
-            if (ghostAnimator == null) ghostAnimator = ghostRoot.AddComponent<Animator>();
-
-            ghostRoot.transform.rotation = targetRoot.transform.rotation;
-            ghostRoot.transform.position = targetRoot.transform.position;
-
-            yield return new WaitForEndOfFrame();
-
-            if (ghostAnimator.avatar == null || !ghostAnimator.avatar.isValid || targetAnimator.avatar == null) yield break;
-
-            _srcHandler = new HumanPoseHandler(ghostAnimator.avatar, ghostRoot.transform);
-            _destHandler = new HumanPoseHandler(targetAnimator.avatar, targetRoot.transform);
+            // 3. 포즈 핸들러 초기화
+            if (!ghostAnimator.avatar || !targetAnimator.avatar) return;
+            _ghostHandler = new HumanPoseHandler(ghostAnimator.avatar, ghostAnimator.transform);
+            _targetHandler = new HumanPoseHandler(targetAnimator.avatar, targetAnimator.transform);
             _humanPose = new HumanPose();
 
+            // 4. 초기 위치 저장
+            _prevGhostPos = ghostAnimator.transform.position;
+
             _isInitialized = true;
-            Debug.Log($"[PoseSpaceRetargeter] ✅ 엔진 가동 완료.");
-
-            if (clip != null)
-            {
-                clip.legacy = true;
-                // ---------------------------------------------------------
-                // [핵심 변경] Loop vs ClampForever
-                // ---------------------------------------------------------
-                if (_settings.IsLooping)
-                {
-                    clip.wrapMode = WrapMode.Loop; // 무한 반복
-                }
-                else
-                {
-                    // ClampForever: 1회 재생 후 '마지막 프레임'에 멈춤 (자연스러움)
-                    // Once: 1회 재생 후 '초기화(T-Pose)' 될 수 있음 (부자연스러움)
-                    clip.wrapMode = WrapMode.ClampForever; 
-                }
-
-                ghostLegacy.AddClip(clip, clip.name);
-                ghostLegacy.clip = clip;
-                ghostLegacy.Play(clip.name);
-            }
+            Debug.Log("[Master Stage] System Initialized. Waiting for First Update...");
         }
 
         void LateUpdate()
         {
-            if (!_isInitialized || _settings == null) return;
+            if (!_isInitialized || ghostAnimator == null || targetAnimator == null) return;
 
-            _srcHandler.GetHumanPose(ref _humanPose);
+            // 0. 스케일 비율 계산 (매 프레임 체크하여 안정성 확보)
+            // Container가 작동 중이라면 ghostHip.position.y는 ~0.8m 수준이어야 함.
+            Transform ghostHip = ghostAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform targetHip = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+
+            if (ghostHip != null && targetHip != null && ghostHip.position.y > 0.01f)
+            {
+                // 비율 = 내 골반 높이 / 원본 골반 높이
+                _scaleRatio = targetHip.position.y / ghostHip.position.y;
+            }
+
+            // =========================================================
+            // A. 포즈(근육) 동기화
+            // =========================================================
+            _ghostHandler.GetHumanPose(ref _humanPose);
             
-            // -------------------------------------------------------------
-            // [FIX] 스마트 핸드 로직 적용
-            // -------------------------------------------------------------
-            ApplySmartHand(ref _humanPose);
+            // 골반 높이(Y)는 비율에 맞춰 재조정 (나머지는 Root Motion이 담당)
+            Vector3 bodyPos = _humanPose.bodyPosition;
+            bodyPos.y *= _scaleRatio;
+            _humanPose.bodyPosition = bodyPos;
 
-            if (_settings.FaceCamera)
+            _targetHandler.SetHumanPose(ref _humanPose);
+
+            // =========================================================
+            // B. 월드 회전 동기화 (180도 문제 해결)
+            // =========================================================
+            if (fixReverseRotation)
             {
-                Quaternion turnAround = Quaternion.Euler(0, 180f, 0);
-                _humanPose.bodyRotation = turnAround * _humanPose.bodyRotation;
+                // Ghost 회전 * 180도 보정
+                targetAnimator.transform.rotation = ghostAnimator.transform.rotation * _facingCorrection;
             }
+            else
+            {
+                targetAnimator.transform.rotation = ghostAnimator.transform.rotation;
+            }
+
+            // =========================================================
+            // C. 루트 모션 동기화 (호 그리기 방지)
+            // =========================================================
+            // Ghost 이동량 계산
+            Vector3 ghostDelta = ghostAnimator.transform.position - _prevGhostPos;
             
-            if (!_settings.ApplyRootMotion)
-            {
-                _humanPose.bodyPosition = new Vector3(0, _humanPose.bodyPosition.y, 0);
-            }
+            // 내 캐릭터 크기에 맞춰 이동량 스케일링
+            Vector3 targetDelta = ghostDelta * _scaleRatio;
 
-            _destHandler.SetHumanPose(ref _humanPose);
+            // 이동 적용
+            targetAnimator.transform.position += targetDelta;
             
-            // [FIX] Post-Pose Correction (Digital Orthopedics)
-            ApplyThumbPostCorrection();
-        }
+            // 위치 갱신
+            _prevGhostPos = ghostAnimator.transform.position;
 
-        private void ApplySmartHand(ref HumanPose pose)
-        {
-            // Golden Settings Mapping
-            float threshold = _settings.StretchThreshold; 
-            float dampen = _settings.EnableSmartCurve ? _settings.SmartCurveStrength : 1.0f; // 1.0 means no dampening if formulation is Overflow * Dampen? Wait.
-            // If logic is: Threshold + (Overflow * Dampen), then Dampen=1.0 means full overflow pass-through (Linear). Correct.
-            // If Enabled=False, we want Linear 1.0. If Enabled=True, we want Dampen (e.g. 0.5).
-            
-            float thumbDampen = _settings.EnableThumbSmartCurve ? _settings.ThumbSmartCurveStrength : 1.0f;
-
-            // 1. 네 손가락 벌림
-            foreach (int idx in _fingerSpreadIndices)
+            // =========================================================
+            // D. 스마트 접지 (Raycast Grounding) - 공중 부양 해결
+            // =========================================================
+            if (useSmartGrounding)
             {
-                pose.muscles[idx] *= _settings.FingerSpreadScale; 
-            }
-
-            // 2. 네 손가락 굽힘 (Smart Curve)
-            foreach (int idx in _fingerStretchIndices)
-            {
-                float inputVal = pose.muscles[idx];
-                // Apply Scale First? Usually Scale is 1.0 in Golden Mode.
-                inputVal *= _settings.FingerStretchScale;
-
-                if (inputVal > threshold) 
-                {
-                    float overflow = inputVal - threshold;
-                    pose.muscles[idx] = threshold + (overflow * dampen);
-                }
-                else
-                {
-                    pose.muscles[idx] = inputVal;
-                }
-            }
-
-            // 3. 엄지 (Isolated)
-           // Note: Spread is handled mostly by Rotation Offset now, but muscle scale helps dynamics.
-            foreach (int idx in _thumbSpreadIndices)
-            {
-                float val = pose.muscles[idx];
-                pose.muscles[idx] = val * _settings.ThumbSpreadScale;
-            }
-
-            foreach (int idx in _thumbStretchIndices)
-            {
-                float val = pose.muscles[idx];
-                // Offset (Muscle)
-                float offsetVal = val + _settings.ThumbStretchOffset;
-                float scaledVal = offsetVal * _settings.ThumbStretchScale;
-                
-                // Smart Curve for Thumb
-                if (scaledVal > threshold)
-                {
-                    float overflow = scaledVal - threshold;
-                    pose.muscles[idx] = threshold + (overflow * thumbDampen);
-                }
-                else
-                {
-                     pose.muscles[idx] = scaledVal;
-                }
-                
-                // Clamp Safety
-                pose.muscles[idx] = Mathf.Clamp(pose.muscles[idx], -1.0f, 0.8f);
+                ApplyRaycastGrounding();
             }
         }
 
-        // [New] Post-Pose Transform Correction
-        private void ApplyThumbPostCorrection()
+        void ApplyRaycastGrounding()
         {
-            if (_settings == null) return;
-            Vector3 offset = _settings.ThumbRotationOffset;
+            // 1. 양발 위치 확보 (발목)
+            Transform lFoot = targetAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rFoot = targetAnimator.GetBoneTransform(HumanBodyBones.RightFoot);
             
-            // Left Thumb
-            if (_leftThumbProximal != null)
-            {
-                // Local Rotation Accumulation
-                // X: Flex correction, Y: Abduction correction, Z: Roll
-                _leftThumbProximal.localRotation *= Quaternion.Euler(offset);
-            }
+            if (lFoot == null || rFoot == null) return;
 
-            // Right Thumb (Mirroring)
-            if (_rightThumbProximal != null)
-            {
-                // Symmetry: usually Y and Z need flipping for opposing hands depending on axis definition.
-                // Standard Unity Humanoid: X is flex.
-                // Trying symmetric offset:
-                Vector3 mirrorOffset = new Vector3(offset.x, -offset.y, -offset.z); 
-                _rightThumbProximal.localRotation *= Quaternion.Euler(mirrorOffset);
+            // 2. 발바닥 위치 (발목 - 반지름)
+            float footRadius = 0.04f; // 약간 여유 있게
+            float lBottom = lFoot.position.y - footRadius;
+            float rBottom = rFoot.position.y - footRadius;
+
+            // 3. 현재 가장 낮은 발바닥 높이
+            float lowestFootCurrentY = Mathf.Min(lBottom, rBottom);
+
+            // 4. 목표는 지면(0) + Offset
+            // Raycast를 사용하여 실제 지면을 찾을 수도 있으나, 현재는 평면(Plane) 위라고 가정하고 0.0f 사용
+            // 만약 계단이나 경사면이라면 Physics.Raycast로 hit.point.y를 구해야 함.
+            float targetGroundY = 0.0f; // 평면 가정
+            
+            // Physics.Raycast 로직 (옵션)
+            /*
+            RaycastHit hit;
+            if (Physics.Raycast(targetAnimator.transform.position + Vector3.up, Vector3.down, out hit, 2f)) {
+                targetGroundY = hit.point.y;
             }
+            */
+
+            float targetHeight = targetGroundY + groundOffset;
+
+            // 5. 보정값 계산 (목표 - 현재)
+            // 양수면 들어 올리고, 음수면 내림 (양방향)
+            float adjustment = targetHeight - lowestFootCurrentY;
+
+            // 6. 감쇠 적용 (Damping) - 급격한 튐 방지
+            // 너무 큰 보정은 부드럽게, 작은 보정은 즉시
+            float damping = 0.5f; 
+            if (Mathf.Abs(adjustment) > 0.5f) damping = 0.1f; // 너무 멀면 천천히
+            
+            Vector3 currentPos = targetAnimator.transform.position;
+            
+            // *핵심*: 이 부분이 "내리기(Pull)"와 "올리기(Push)"를 모두 수행함
+            currentPos.y += adjustment * damping; 
+            
+            // 최소 안전장치 (땅 밑으로 영원히 꺼지지 않게)
+            if (currentPos.y < targetGroundY) currentPos.y = targetHeight;
+
+            targetAnimator.transform.position = currentPos;
         }
     }
 }
