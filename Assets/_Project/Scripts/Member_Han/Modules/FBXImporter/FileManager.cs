@@ -30,6 +30,9 @@ namespace Member_Han.Modules.FBXImporter
         public bool showBoneMappingLog = false;
         [Tooltip("런타임 애니메이션 디버그 로그 출력")]
         public bool showRuntimeAnimationLog = false;
+        
+        [Tooltip("Ghost 모델 보이기 (디버깅용)")]
+        public bool showGhostModel = false;
 
         [Header("Golden Hand Settings")]
         [Tooltip("Finger Stretch Scale (Default 1.0)")]
@@ -42,6 +45,13 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0.0f, 1.0f)] public float ThumbStretchScale = 1.0f;
         [Tooltip("Thumb Spread Scale (Default 1.0)")]
         [Range(0.0f, 1.0f)] public float ThumbSpreadScale = 1.0f;
+
+        [Header("Final Tuning")]
+        [Tooltip("높이 보정 (미터 단위). 0.02 = 2cm 올림")]
+        [Range(-0.5f, 0.5f)] public float HeightOffset = 0.02f; 
+
+        [Tooltip("보폭 비율 (1.0 = 자동, 미끄러지면 조절)")]
+        [Range(0.8f, 1.2f)] public float MovementScaleMultiplier = 1.0f;
 
         [Header("Thumb Digital Orthopedics (Offset)")]
         [Tooltip("Rotation Offset (X: Press, Y: Angle, Z: Roll). Default: (-10, -30, 0)")]
@@ -60,8 +70,7 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0.0f, 1.0f)] public float ThumbSmartCurveStrength = 0.5f; // Mapped to Dampen
         
         [Space(10)]
-        public bool FaceCamera = true;
-        public bool ApplyRootMotion = true;
+
         #endregion
 
         #region Private 필드
@@ -175,17 +184,34 @@ namespace Member_Han.Modules.FBXImporter
                 
                 if (importedModel != null)
                 {
-                    // Ghost Renderer 비활성화
+                    // Ghost Renderer 제어
                     foreach (var renderer in importedModel.GetComponentsInChildren<Renderer>())
                     {
-                        renderer.enabled = false;
+                        renderer.enabled = showGhostModel; // Ghost 모델 보이기/숨기기
                     }
 
-                    // 1. 매핑 데이터 로드 & Ghost 아바타 생성 (T-Pose 강제)
+                    // 1. Ghost Container Pattern (스케일 방어막)
+                    // Legacy Animation이 실행되면 자식(importedModel)의 Scale은 무조건 1.0으로 강제 원복됩니다.
+                    // 이를 방어하기 위해 부모(Container)에서 0.01로 눌러버리는 구조가 필수적입니다.
+                    Debug.Log($"[System] 🛡️ Activating Ghost Container... (Scale Lock: 0.01)");
+                    
+                    // A. 컨테이너 생성
+                    GameObject ghostContainer = new GameObject($"GhostContainer_{importedModel.name}");
+                    ghostContainer.transform.position = Vector3.zero;
+                    ghostContainer.transform.rotation = Quaternion.identity;
+                    
+                    // B. 컨테이너 스케일 고정 (0.01)
+                    ghostContainer.transform.localScale = Vector3.one * 0.01f;
+                    
+                    // C. 모델 종속시키기
+                    importedModel.transform.SetParent(ghostContainer.transform, false);
+
+                    // 2. 매핑 데이터 로드 & Ghost 아바타 생성
+                    // *중요*: Avatar는 자식(importedModel)을 기준으로 굽습니다.
                     var boneMapping = LoadBoneMappingRuntime();
                     HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
 
-                    // 2. Ghost에서 애니메이션 클립 추출
+                    // 3. Ghost에서 애니메이션 클립 추출
                     AnimationClip targetClip = null;
                     var animComp = importedModel.GetComponent<Animation>();
                     
@@ -204,16 +230,34 @@ namespace Member_Han.Modules.FBXImporter
                         return;
                     }
 
+
                     // 3. Target 찾기
                     GameObject targetObject = GameObject.Find("testPrefab");
                     if (targetObject == null)
                     {
                         Debug.LogError("[FileManager] 'testPrefab'을 찾을 수 없습니다. 리타겟팅을 중단합니다.");
                     }
-                    else
                     {
+                        // [RESET] 완전 초기화 (원점, 회전 0)
+                        targetObject.transform.position = Vector3.zero; 
+                        targetObject.transform.rotation = Quaternion.identity; 
+
+                        // 중요: Animator의 Root Motion 옵션은 끕니다. 
+                        // 우리가 수동으로 제어하기 때문입니다.
+                        Animator anim = targetObject.GetComponent<Animator>();
+                        if (anim != null) anim.applyRootMotion = false; 
+
+                        // [STAGE 28] IKControl 간섭 제거
+                        // 외부 IK 스크립트가 있다면 제거하여 물리 충돌을 방지합니다.
+                        var ikControl = targetObject.GetComponent<IKControl>();
+                        if (ikControl != null)
+                        {
+                            Debug.Log("[FileManager] ⚠️ Hostile IKControl detected. Destroying...");
+                            Destroy(ikControl);
+                        }
+
                         // --------------------------------------------------------
-                        // 포즈 공간 리타겟터 부착 및 초기화
+                        // 포즈 공간 리타겟터 부착 및 초기화 (STAGE 28)
                         // --------------------------------------------------------
                         var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
                         
@@ -662,5 +706,23 @@ namespace Member_Han.Modules.FBXImporter
         #endregion
 #endif
 
+        // [헬퍼 함수] 힙 높이 측정 (STAGE 32)
+        private float GetHipsHeight(GameObject model)
+        {
+            Animator anim = model.GetComponent<Animator>();
+            if (anim == null) anim = model.AddComponent<Animator>();
+            
+            // Hips 찾기 (이름 기반)
+            Transform hips = model.transform.Find("Hips"); 
+            if (hips == null) hips = model.transform.Find("mixamorig:Hips");
+            if (hips == null) 
+            {
+                // 깊이 탐색
+                foreach(var t in model.GetComponentsInChildren<Transform>()) 
+                    if(t.name.Contains("Hips") || t.name.Contains("Pelvis")) { hips = t; break; }
+            }
+
+            return (hips != null) ? hips.position.y : 0f;
+        }
     }
 }
