@@ -57,8 +57,6 @@ namespace Member_Han.Modules.FBXImporter
 
             // 2. Ghost 애니메이션 샘플링 - Ghost 스켈레톤에 직접 적용
             ghostClip.SampleAnimation(ghostObject, _currentTime);
-            
-            // VRIK가 자동으로 Target을 Ghost 위치로 따라가게 함
         }
         #endregion
 
@@ -90,7 +88,6 @@ namespace Member_Han.Modules.FBXImporter
             
             if (showDebugLog)
             {
-                Debug.Log("[FinalIKRetargeter] ✅ v21 초기화 완료!");
             }
         }
 
@@ -113,10 +110,6 @@ namespace Member_Han.Modules.FBXImporter
 
             if (showDebugLog)
             {
-                Debug.Log($"[FinalIKRetargeter] 스케일 정규화 완료:");
-                Debug.Log($"  - Target 높이: {targetHeight:F4}");
-                Debug.Log($"  - Ghost 높이: {ghostHeight:F4}");
-                Debug.Log($"  - 적용 비율: {ratio:F4}");
             }
         }
 
@@ -181,14 +174,6 @@ namespace Member_Han.Modules.FBXImporter
                 if (_ghostRightHand != null) mappedCount++;
                 if (_ghostLeftFoot != null) mappedCount++;
                 if (_ghostRightFoot != null) mappedCount++;
-
-                Debug.Log($"[FinalIKRetargeter] Ghost 뼈 캐싱 완료: {mappedCount}/6");
-                Debug.Log($"  - Head: {(_ghostHead != null ? _ghostHead.name : "NULL")}");
-                Debug.Log($"  - Hips: {(_ghostHips != null ? _ghostHips.name : "NULL")}");
-                Debug.Log($"  - LeftHand: {(_ghostLeftHand != null ? _ghostLeftHand.name : "NULL")}");
-                Debug.Log($"  - RightHand: {(_ghostRightHand != null ? _ghostRightHand.name : "NULL")}");
-                Debug.Log($"  - LeftFoot: {(_ghostLeftFoot != null ? _ghostLeftFoot.name : "NULL")}");
-                Debug.Log($"  - RightFoot: {(_ghostRightFoot != null ? _ghostRightFoot.name : "NULL")}");
             }
         }
 
@@ -246,7 +231,6 @@ namespace Member_Han.Modules.FBXImporter
                 _vrik = targetAnimator.gameObject.AddComponent<VRIK>();
                 if (showDebugLog)
                 {
-                    Debug.Log("[FinalIKRetargeter] VRIK 컴포넌트 추가됨.");
                 }
             }
 
@@ -304,7 +288,6 @@ namespace Member_Han.Modules.FBXImporter
 
             if (showDebugLog)
             {
-                Debug.Log("[FinalIKRetargeter] ✅ VRIK Solver Targets 바인딩 완료!");
             }
         }
         #endregion
