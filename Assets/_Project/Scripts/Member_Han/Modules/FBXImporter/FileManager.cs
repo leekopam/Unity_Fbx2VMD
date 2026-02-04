@@ -232,51 +232,51 @@ namespace Member_Han.Modules.FBXImporter
 
 
                     // 3. Target 찾기
-                    GameObject targetObject = GameObject.Find("testPrefab");
+                    // [FIX] 하드코딩된 "testPrefab" 제거 및 인스펙터 할당 변수(targetCharacter) 사용
+                    GameObject targetObject = this.targetCharacter;
+                    
                     if (targetObject == null)
                     {
-                        Debug.LogError("[FileManager] 'testPrefab'을 찾을 수 없습니다. 리타겟팅을 중단합니다.");
+                        Debug.LogError("[FileManager] Target Character가 할당되지 않았습니다! 인스펙터에서 'Target Character' 슬롯을 확인하세요.");
+                        return; // 실행 중단
                     }
+
+                    // [RESET] 완전 초기화 (원점, 회전 0)
+                    targetObject.transform.position = Vector3.zero; 
+                    targetObject.transform.rotation = Quaternion.identity; 
+
+                    // 중요: Animator의 Root Motion 옵션은 끕니다. 
+                    // 우리가 수동으로 제어하기 때문입니다.
+                    Animator anim = targetObject.GetComponent<Animator>();
+                    if (anim != null) anim.applyRootMotion = false; 
+
+                    // [STAGE 28] IKControl 간섭 제거
+                    // 외부 IK 스크립트가 있다면 제거하여 물리 충돌을 방지합니다.
+                    var ikControl = targetObject.GetComponent<IKControl>();
+                    if (ikControl != null)
                     {
-                        // [RESET] 완전 초기화 (원점, 회전 0)
-                        targetObject.transform.position = Vector3.zero; 
-                        targetObject.transform.rotation = Quaternion.identity; 
-
-                        // 중요: Animator의 Root Motion 옵션은 끕니다. 
-                        // 우리가 수동으로 제어하기 때문입니다.
-                        Animator anim = targetObject.GetComponent<Animator>();
-                        if (anim != null) anim.applyRootMotion = false; 
-
-                        // [STAGE 28] IKControl 간섭 제거
-                        // 외부 IK 스크립트가 있다면 제거하여 물리 충돌을 방지합니다.
-                        var ikControl = targetObject.GetComponent<IKControl>();
-                        if (ikControl != null)
-                        {
-                            Debug.Log("[FileManager] ⚠️ Hostile IKControl detected. Destroying...");
-                            Destroy(ikControl);
-                        }
-
-                        // --------------------------------------------------------
-                        // 포즈 공간 리타겟터 부착 및 초기화 (STAGE 28)
-                        // --------------------------------------------------------
-                        var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
-                        
-                        // FileManager 자신(this)을 넘겨서 설정을 공유함
-                        retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
-                        
-                        // 녹화기 연결 및 자동 시작 명령
-                        var recorderController = targetObject.GetComponent<HumanoidSampleCode>();
-                        if (recorderController != null)
-                        {
-                            float clipLen = targetClip.length;
-                            // FBX 클립 길이와 이름을 안전하게 전달
-                            recorderController.StartAutoRecording(clipLen, targetClip.name);
-                        }
-                        else
-                        {
-                            Debug.LogError("[FileManager] 'testPrefab'에 HumanoidSampleCode 컴포넌트가 없습니다!");
-                        }
+                        Debug.Log("[FileManager] ⚠️ Hostile IKControl detected. Destroying...");
+                        Destroy(ikControl);
                     }
+
+                    // --------------------------------------------------------
+                    // 포즈 공간 리타겟터 부착 및 초기화 (STAGE 28)
+                    // --------------------------------------------------------
+                    var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
+                    
+                    // FileManager 자신(this)을 넘겨서 설정을 공유함
+                    retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
+                    
+                    // [선택적] 녹화기 연결 - 컴포넌트가 있으면 자동 시작
+                    var recorderController = targetObject.GetComponent<HumanoidSampleCode>();
+                    if (recorderController != null)
+                    {
+                        float clipLen = targetClip.length;
+                        // FBX 클립 길이와 이름을 안전하게 전달
+                        recorderController.StartAutoRecording(clipLen, targetClip.name);
+                        Debug.Log($"[FileManager] ✅ VMD 녹화 자동 시작 (길이: {clipLen}초)");
+                    }
+                    // 컴포넌트가 없어도 에러 없이 진행 (선택적 기능)
                         
                     importedModel.transform.position = Vector3.zero;
                 }
