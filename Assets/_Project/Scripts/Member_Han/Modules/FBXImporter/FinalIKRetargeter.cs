@@ -3,12 +3,6 @@ using RootMotion.FinalIK;
 
 namespace Member_Han.Modules.FBXImporter
 {
-    /// <summary>
-    /// [v21] Final IK 하이브리드 리타겟팅
-    /// - Ghost에서 SampleAnimation() 재생
-    /// - VRIK를 사용하여 Target이 Ghost를 따라가도록 설정
-    /// - 이중 안전장치: GetBoneTransform() + 이름 기반 폴백
-    /// </summary>
     public class FinalIKRetargeter : MonoBehaviour
     {
         #region Public Fields
@@ -48,14 +42,14 @@ namespace Member_Han.Modules.FBXImporter
         {
             if (!_isInitialized || ghostClip == null || ghostObject == null) return;
 
-            // 1. 애니메이션 시간 업데이트 (루프)
+            // 애니메이션 시간 업데이트 (루프)
             _currentTime += Time.deltaTime;
             if (_currentTime > ghostClip.length)
             {
                 _currentTime = 0f;
             }
 
-            // 2. Ghost 애니메이션 샘플링 - Ghost 스켈레톤에 직접 적용
+            // Ghost 애니메이션 샘플링 - Ghost 스켈레톤에 직접 적용
             ghostClip.SampleAnimation(ghostObject, _currentTime);
         }
         #endregion
@@ -69,19 +63,19 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            // Ghost Animator 확인 (없으면 이름 기반만 사용)
+            // Ghost Animator 확인
             if (ghostAnimator == null)
             {
                 ghostAnimator = ghostObject.GetComponent<Animator>();
             }
 
-            // 1. Ghost 스케일 정규화
+            // Ghost 스케일 정규화
             NormalizeGhostScale();
 
-            // 2. Ghost 뼈 캐싱 (이중 안전장치)
+            // Ghost 뼈 캐싱
             CacheGhostBones();
 
-            // 3. VRIK 설정
+            // VRIK 설정
             SetupVRIK();
 
             _isInitialized = true;
@@ -118,7 +112,7 @@ namespace Member_Han.Modules.FBXImporter
         /// </summary>
         private float GetCharacterHeight(GameObject character)
         {
-            // 1차: Animator에서 Head 찾기
+            // Animator에서 Head 찾기
             Animator anim = character.GetComponent<Animator>();
             if (anim != null && anim.avatar != null && anim.avatar.isHuman)
             {
@@ -129,7 +123,7 @@ namespace Member_Han.Modules.FBXImporter
                 }
             }
 
-            // 2차: 이름으로 Head 찾기
+            // 이름으로 Head 찾기
             Transform headByName = FindDeepChild(character.transform, "Head");
             if (headByName == null) headByName = FindDeepChild(character.transform, "mixamorig:Head");
             if (headByName != null)
@@ -137,7 +131,7 @@ namespace Member_Han.Modules.FBXImporter
                 return headByName.position.y - character.transform.position.y;
             }
 
-            // 3차: Bounds 사용
+            // Bounds 사용
             Renderer[] renderers = character.GetComponentsInChildren<Renderer>();
             if (renderers.Length > 0)
             {
@@ -154,7 +148,7 @@ namespace Member_Han.Modules.FBXImporter
         }
 
         /// <summary>
-        /// Ghost의 주요 뼈들을 캐싱 (이중 안전장치)
+        /// Ghost의 주요 뼈들을 캐싱
         /// </summary>
         private void CacheGhostBones()
         {
@@ -178,18 +172,18 @@ namespace Member_Han.Modules.FBXImporter
         }
 
         /// <summary>
-        /// Ghost 뼈 찾기 (이중 안전장치)
+        /// Ghost 뼈 찾기
         /// </summary>
         private Transform GetGhostBone(HumanBodyBones bone, params string[] fallbackNames)
         {
-            // 1차: Humanoid Avatar (가장 정확)
+            // Humanoid Avatar
             if (ghostAnimator != null && ghostAnimator.avatar != null && ghostAnimator.avatar.isHuman)
             {
                 Transform t = ghostAnimator.GetBoneTransform(bone);
                 if (t != null) return t;
             }
             
-            // 2차: 이름 기반 폴백
+            // 이름 기반 폴백
             foreach (string name in fallbackNames)
             {
                 Transform found = FindDeepChild(ghostObject.transform, name);
@@ -224,7 +218,7 @@ namespace Member_Han.Modules.FBXImporter
         /// </summary>
         private void SetupVRIK()
         {
-            // 1. VRIK 컴포넌트 확인 또는 추가
+            // VRIK 컴포넌트 확인 또는 추가
             _vrik = targetAnimator.GetComponent<VRIK>();
             if (_vrik == null)
             {
@@ -234,10 +228,10 @@ namespace Member_Han.Modules.FBXImporter
                 }
             }
 
-            // 2. VRIK References 자동 감지
+            // VRIK References 자동 감지
             _vrik.AutoDetectReferences();
 
-            // 3. Solver Targets 할당
+            // Solver Targets 할당
             // Head
             if (_ghostHead != null)
             {
