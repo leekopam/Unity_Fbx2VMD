@@ -3,18 +3,12 @@ using System;
 using System.Collections;
 
 [RequireComponent(typeof(Animator))] // Animator 컴포넌트 필수
-
-// ============================================
-// [실행 순서 3] IK 보정 시스템
-// 역할: 발이 지면에 정확히 붙도록 IK 보정
-// 실행 시점: Animator 업데이트 후 (OnAnimatorIK)
-// ============================================
 public class IKControl : MonoBehaviour
 {
     public Animator animator;          // 애니메이터 참조
     public LayerMask groundLayer;      // 지면 레이어 (레이캐스트 대상)
 
-    // [실행 순서 3-1] Animator IK Pass 진입 (매 프레임, Animator 업데이트 직후)
+    // Animator IK Pass 진입 (매 프레임, Animator 업데이트 직후)
     void OnAnimatorIK(int layerIndex)
     {
         if (animator)
@@ -31,7 +25,7 @@ public class IKControl : MonoBehaviour
         }
     }
 
-    // [실행 순서 3-2] 발 위치/회전 조정 (Raycast로 지면 감지)
+    // 발 위치/회전 조정 (Raycast로 지면 감지)
     void AdjustFoot(AvatarIKGoal foot)
     {
         // 현재 발 위치 가져오기
