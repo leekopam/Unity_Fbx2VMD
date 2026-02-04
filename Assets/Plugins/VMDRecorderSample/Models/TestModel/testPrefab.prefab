@@ -481,7 +481,7 @@ GameObject:
   m_Component:
   - component: {fileID: 240061972463066284}
   - component: {fileID: 240061972453487272}
-  - component: {fileID: 240061973030223375}
+  - component: {fileID: 8967171853968295450}
   - component: {fileID: 6726102989094768490}
   - component: {fileID: 887718048778166346}
   m_Layer: 0
@@ -490,7 +490,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &240061972463066284
 Transform:
   m_ObjectHideFlags: 0
@@ -529,7 +529,7 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
---- !u!114 &240061973030223375
+--- !u!114 &8967171853968295450
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -568,7 +568,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0bf1e550773f04541abd1cc49b5bff75, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  vmdRecorder: {fileID: 240061973030223375}
+  vmdRecorder: {fileID: 0}
   _progressSlider: {fileID: 0}
   _progressText: {fileID: 0}
   ModelName: fbxToVMD

@@ -1,0 +1,34 @@
+[Info]
+Version = 3
+
+[Effect]
+Obj = none
+Obj.show = true
+Obj[0] = none
+Obj[1] = none
+Obj[2] = none
+Obj[3] = none
+Obj[4] = none
+Obj[29] = fx\sleeve.fx
+Obj[30] = fx\sleeve.fx
+Obj[32] = fx\sleeve.fx
+Obj[33] = fx\skirt.fx
+Obj[34] = fx\skirt.fx
+Obj[35] = fx\skirt.fx
+Obj[36] = fx\skirt.fx
+Obj[37] = fx\skirt.fx
+Obj[38] = fx\skirt.fx
+Obj[39] = fx\skirt.fx
+Obj[40] = fx\Boots necktie.fx
+Obj[41] = fx\Boots necktie.fx
+Obj[42] = fx\Boots necktie.fx
+Obj[43] = fx\Boots necktie.fx
+Obj[44] = fx\Boots necktie.fx
+Obj[45] = fx\Boots necktie.fx
+Obj[46] = fx\clothes.fx
+Obj[47] = fx\clothes.fx
+Obj[48] = fx\clothes.fx
+Obj[49] = fx\clothes.fx
+Obj[50] = fx\clothes.fx
+Obj[51] = fx\clothes.fx
+

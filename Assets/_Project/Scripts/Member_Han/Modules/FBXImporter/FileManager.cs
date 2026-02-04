@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.IO;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Member_Han.Modules.FileSystem;
@@ -45,6 +46,10 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0.0f, 1.0f)] public float ThumbStretchScale = 1.0f;
         [Tooltip("Thumb Spread Scale (Default 1.0)")]
         [Range(0.0f, 1.0f)] public float ThumbSpreadScale = 1.0f;
+
+        [Header("Recording Orchestration")]
+        [Tooltip("FBX 로드 후 녹화 시작까지의 대기 시간 (초)")]
+        [Range(0f, 10f)] public float startDelay = 3.0f;
 
         [Header("Final Tuning")]
         [Tooltip("높이 보정 (미터 단위). 0.02 = 2cm 올림")]
@@ -232,51 +237,53 @@ namespace Member_Han.Modules.FBXImporter
 
 
                     // 3. Target 찾기
-                    GameObject targetObject = GameObject.Find("testPrefab");
+                    // [FIX] 하드코딩된 "testPrefab" 제거 및 인스펙터 할당 변수(targetCharacter) 사용
+                    GameObject targetObject = this.targetCharacter;
+                    
                     if (targetObject == null)
                     {
-                        Debug.LogError("[FileManager] 'testPrefab'을 찾을 수 없습니다. 리타겟팅을 중단합니다.");
+                        Debug.LogError("[FileManager] Target Character가 할당되지 않았습니다! 인스펙터에서 'Target Character' 슬롯을 확인하세요.");
+                        return; // 실행 중단
                     }
+
+                    // [RESET] 완전 초기화 (원점, 회전 0)
+                    targetObject.transform.position = Vector3.zero; 
+                    targetObject.transform.rotation = Quaternion.identity; 
+
+                    // 중요: Animator의 Root Motion 옵션은 끕니다. 
+                    // 우리가 수동으로 제어하기 때문입니다.
+                    Animator anim = targetObject.GetComponent<Animator>();
+                    if (anim != null) anim.applyRootMotion = false; 
+
+                    // [STAGE 28] IKControl 간섭 제거
+                    // 외부 IK 스크립트가 있다면 제거하여 물리 충돌을 방지합니다.
+                    var ikControl = targetObject.GetComponent<IKControl>();
+                    if (ikControl != null)
                     {
-                        // [RESET] 완전 초기화 (원점, 회전 0)
-                        targetObject.transform.position = Vector3.zero; 
-                        targetObject.transform.rotation = Quaternion.identity; 
-
-                        // 중요: Animator의 Root Motion 옵션은 끕니다. 
-                        // 우리가 수동으로 제어하기 때문입니다.
-                        Animator anim = targetObject.GetComponent<Animator>();
-                        if (anim != null) anim.applyRootMotion = false; 
-
-                        // [STAGE 28] IKControl 간섭 제거
-                        // 외부 IK 스크립트가 있다면 제거하여 물리 충돌을 방지합니다.
-                        var ikControl = targetObject.GetComponent<IKControl>();
-                        if (ikControl != null)
-                        {
-                            Debug.Log("[FileManager] ⚠️ Hostile IKControl detected. Destroying...");
-                            Destroy(ikControl);
-                        }
-
-                        // --------------------------------------------------------
-                        // 포즈 공간 리타겟터 부착 및 초기화 (STAGE 28)
-                        // --------------------------------------------------------
-                        var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
-                        
-                        // FileManager 자신(this)을 넘겨서 설정을 공유함
-                        retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
-                        
-                        // 녹화기 연결 및 자동 시작 명령
-                        var recorderController = targetObject.GetComponent<HumanoidSampleCode>();
-                        if (recorderController != null)
-                        {
-                            float clipLen = targetClip.length;
-                            // FBX 클립 길이와 이름을 안전하게 전달
-                            recorderController.StartAutoRecording(clipLen, targetClip.name);
-                        }
-                        else
-                        {
-                            Debug.LogError("[FileManager] 'testPrefab'에 HumanoidSampleCode 컴포넌트가 없습니다!");
-                        }
+                        Debug.Log("[FileManager] ⚠️ Hostile IKControl detected. Destroying...");
+                        Destroy(ikControl);
                     }
+
+                    // --------------------------------------------------------
+                    // 포즈 공간 리타겟터 부착 및 초기화 (STAGE 28)
+                    // --------------------------------------------------------
+                    var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
+                    
+                    // FileManager 자신(this)을 넘겨서 설정을 공유함
+                    retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
+                    
+                    // [STAGE 29] 지연 녹화 시퀀스 시작
+                    // retargeter 초기화 직후 바로 재생하지 않고, 코루틴을 통해 지연 시작합니다.
+                    var ghostAnim = importedModel.GetComponent<Animation>();
+                    if (ghostAnim != null) ghostAnim.Stop(); // 즉시 재생 방지
+                    
+                    StartCoroutine(StartRecordingSequence(
+                        importedModel, 
+                        ghostAnim, 
+                        targetObject, 
+                        targetClip,
+                        retargeter
+                    ));
                         
                     importedModel.transform.position = Vector3.zero;
                 }
@@ -288,6 +295,49 @@ namespace Member_Han.Modules.FBXImporter
             catch (System.Exception e)
             {
                 Debug.LogError($"파일 처리 실패: {e.Message}\n{e.StackTrace}");
+            }
+        }
+        
+        /// <summary>
+        /// [STAGE 29] 지연 후 애니메이션 재생 및 VMD 녹화를 동기화하는 코루틴
+        /// </summary>
+        /// <param name="ghostModel">임포트된 Ghost 모델</param>
+        /// <param name="ghostAnim">Ghost의 Animation 컴포넌트</param>
+        /// <param name="targetCharacter">리타겟 대상 캐릭터</param>
+        /// <param name="clip">재생할 AnimationClip</param>
+        /// <param name="retargeter">Pose Space Retargeter 컴포넌트</param>
+        private IEnumerator StartRecordingSequence(
+            GameObject ghostModel,
+            Animation ghostAnim,
+            GameObject targetCharacter,
+            AnimationClip clip,
+            PoseSpaceRetargeter retargeter)
+        {
+            // 1. 카운트다운 로그 (사용자 피드백)
+            Debug.Log($"[FileManager] ⏳ 녹화 시작까지 {startDelay}초 대기 중...");
+            
+            // 2. 지연 대기
+            yield return new WaitForSeconds(startDelay);
+            
+            // 3. Ghost 애니메이션 재생 시작 (이 시점에 Retargeter가 동작하기 시작)
+            if (ghostAnim != null && clip != null)
+            {
+                ghostAnim.clip = clip;
+                ghostAnim.Play();
+                Debug.Log($"[FileManager] ▶️ Ghost 애니메이션 재생 시작: {clip.name}");
+            }
+            
+            // 4. VMD 녹화 시작 (동일 프레임)
+            var recorderController = targetCharacter.GetComponent<HumanoidSampleCode>();
+            if (recorderController != null)
+            {
+                float clipLen = clip.length;
+                recorderController.StartAutoRecording(clipLen, clip.name);
+                Debug.Log($"[FileManager] 🔴 VMD 녹화 동시 시작! (길이: {clipLen:F2}초)");
+            }
+            else
+            {
+                Debug.LogWarning("[FileManager] ⚠️ HumanoidSampleCode 컴포넌트가 Target에 없습니다. 녹화 건너뜀.");
             }
         }
         
