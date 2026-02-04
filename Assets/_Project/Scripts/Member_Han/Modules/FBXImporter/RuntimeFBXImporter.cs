@@ -40,7 +40,7 @@ namespace Member_Han.Modules.FBXImporter
                 AssimpLibraryLoader.LoadLibrary();
             }
 
-            // 1. 백그라운드 스레드에서 Assimp 임포트 실행
+            // 백그라운드 스레드에서 Assimp 임포트 실행
             Scene scene = await Task.Run(() => ImportWithAssimp(path));
 
             if (scene == null)
@@ -49,7 +49,7 @@ namespace Member_Han.Modules.FBXImporter
                 return null;
             }
 
-            // 2. 메인 스레드에서 GameObject 생성
+            // 메인 스레드에서 GameObject 생성
             GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
 
             _nodeMap.Clear();
@@ -57,7 +57,7 @@ namespace Member_Han.Modules.FBXImporter
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
 
-            // [FIX] 좌표계 변환으로 인해 뒤를 보는 현상 보정 (180도 회전)
+            // 좌표계 변환으로 인해 뒤를 보는 현상 보정 (180도 회전)
             // MakeLeftHanded로 인해 Z축이 반전되었으므로, 다시 180도 돌려 앞을 보게 함
             rootObject.transform.rotation = UnityEngine.Quaternion.Euler(0, 180f, 0);
 
@@ -332,7 +332,7 @@ namespace Member_Han.Modules.FBXImporter
                 if (ticksPerSecond <= 1.0)
                 {
                     ticksPerSecond = 60.0;
-                    Debug.LogWarning($"[RuntimeFBXImporter] TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 강제합니다.");
+                    Debug.LogWarning($"TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 강제합니다.");
                 }
                 float timeScale = 1.0f / (float)ticksPerSecond;
 
@@ -370,7 +370,7 @@ namespace Member_Han.Modules.FBXImporter
                 }
                 clip.frameRate = 60;
                 
-                // [납품] 컴포넌트에 클립 등록
+                // 컴포넌트에 클립 등록
                 animComp.AddClip(clip, clip.name);
                 clips.Add(clip);
             }
@@ -387,12 +387,12 @@ namespace Member_Han.Modules.FBXImporter
             {
                 animComp.clip = clips[0]; // 기본 클립 설정
                 // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
-                Debug.Log($"[RuntimeFBXImporter] 클립 {clips.Count}개 생성 완료");
+                Debug.Log($"클립 {clips.Count}개 생성 완료");
             }
             }
             else
             {
-                Debug.LogWarning("[RuntimeFBXImporter] 생성된 애니메이션 클립이 없습니다.");
+                Debug.LogWarning("생성된 애니메이션 클립이 없습니다.");
             }
         }
 
@@ -511,16 +511,16 @@ namespace Member_Han.Modules.FBXImporter
             // 빌드 환경 및 에디터 환경을 모두 고려한 검색 경로 목록
             string[] possiblePaths = new string[]
             {
-                // 1. 에디터 기본 경로 (Assets/Plugins/Assimp-net/assimp.dll)
+                // 에디터 기본 경로 (Assets/Plugins/Assimp-net/assimp.dll)
                 Path.Combine(Application.dataPath, "Plugins", ASSIMP_PLUGIN_FOLDER, ASSIMP_DLL_NAME),
                 
-                // 2. 빌드: 실행 파일 옆 Plugins 폴더 (Standard)
+                // 빌드: 실행 파일 옆 Plugins 폴더
                 Path.Combine(Application.dataPath, "Plugins", ASSIMP_DLL_NAME),
 
-                // 3. 빌드: x86_64 서브폴더 (Unity 2019+ 기본 빌드 구조)
+                // 빌드: x86_64 서브폴더
                 Path.Combine(Application.dataPath, "Plugins", "x86_64", ASSIMP_DLL_NAME),
 
-                // 4. 빌드: Assimp-net 서브폴더 보존 시
+                // 빌드: Assimp-net 서브폴더 보존 시
                 Path.Combine(Application.dataPath, "Plugins", ASSIMP_PLUGIN_FOLDER, ASSIMP_DLL_NAME)
             };
 
@@ -536,21 +536,21 @@ namespace Member_Han.Modules.FBXImporter
 
             if (validPath == null)
             {
-                Debug.LogError($"[AssimpLibraryLoader] assimp.dll을 찾을 수 없습니다. 검색된 경로:\n{string.Join("\n", possiblePaths)}");
+                Debug.LogError($"assimp.dll을 찾을 수 없습니다. 검색된 경로:\n{string.Join("\n", possiblePaths)}");
                 return;
             }
 
-            Debug.Log($"[AssimpLibraryLoader] 네이티브 라이브러리 발견: {validPath}");
+            Debug.Log($"네이티브 라이브러리 발견: {validPath}");
             System.IntPtr handle = LoadLibrary(validPath);
             
             if (handle == System.IntPtr.Zero)
             {
                 int errorCode = Marshal.GetLastWin32Error();
-                Debug.LogError($"[AssimpLibraryLoader] 로드 실패. Error Code: {errorCode}, Path: {validPath}");
+                Debug.LogError($"로드 실패. Error Code: {errorCode}, Path: {validPath}");
             }
             else
             {
-                Debug.Log($"[AssimpLibraryLoader] 로드 성공. Handle: {handle}");
+                Debug.Log($"로드 성공. Handle: {handle}");
                 IsLoaded = true;
             }
         }

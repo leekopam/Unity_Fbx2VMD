@@ -25,15 +25,15 @@ namespace Member_Han.Modules.FBXImporter
 
         private static Avatar CreatePureAvatar(GameObject root, Dictionary<string, string> mappingData)
         {
-            // 1. 스마트 매핑
+            // 스마트 매핑
             var boneMap = SmartMapTransforms(root.transform, mappingData);
-            if (boneMap.Count == 0) Debug.LogError("❌ 매핑 실패!");
+            if (boneMap.Count == 0) Debug.LogError("매핑 실패");
 
-            // 2. HumanDescription 생성
+            // HumanDescription 생성
             // Assimp의 MakeLeftHanded가 이미 좌표계를 맞췄으므로, 
             // 현재 상태(Bind Pose)를 그대로 신뢰합니다.
 
-            // 3. HumanDescription 생성
+            // HumanDescription 생성
             HumanDescription description = new HumanDescription
             {
                 // 현재 트랜스폼 상태 그대로 스켈레톤 생성
@@ -80,9 +80,9 @@ namespace Member_Han.Modules.FBXImporter
             var result = new Dictionary<string, Transform>();
             var allTransforms = root.GetComponentsInChildren<Transform>();
             
-            // 1. 정확한 이름 매칭을 위한 딕셔너리
+            // 정확한 이름 매칭을 위한 딕셔너리
             var exactNameMap = new Dictionary<string, Transform>();
-            // 2. Normalized 이름 매칭을 위한 딕셔너리 (fallback)
+            // Normalized 이름 매칭을 위한 딕셔너리 (fallback)
             var normalizedMap = new Dictionary<string, Transform>();
             
             foreach (var t in allTransforms)
@@ -104,24 +104,24 @@ namespace Member_Han.Modules.FBXImporter
                 
                 Transform foundBone = null;
                 
-                // [우선순위 1] 정확한 이름 매칭
+                // 정확한 이름 매칭
                 if (exactNameMap.TryGetValue(targetBoneName, out foundBone))
                 {
                     result[humanBoneName] = foundBone;
                     continue;
                 }
                 
-                // [우선순위 2] Normalized 매칭 (fallback)
+                // Normalized 매칭 (fallback)
                 string cleanTarget = Regex.Replace(targetBoneName.ToLower(), "[^a-z0-9]", "");
                 if (normalizedMap.TryGetValue(cleanTarget, out foundBone))
                 {
                     result[humanBoneName] = foundBone;
-                    Debug.Log($"[AvatarBuilder] ✅ Fallback 매칭 성공: {humanBoneName} -> {foundBone.name} (원본: {targetBoneName})");
+                    Debug.Log($"Fallback 매칭 성공: {humanBoneName} -> {foundBone.name} (원본: {targetBoneName})");
                     continue;
                 }
                 
                 // 매칭 실패 로그
-                Debug.LogWarning($"[AvatarBuilder] ⚠️ 본 매핑 실패: {humanBoneName} (대상: {targetBoneName})");
+                Debug.LogWarning($"본 매핑 실패: {humanBoneName} (대상: {targetBoneName})");
             }
             
             // 필수 본 체크 및 로그
@@ -131,7 +131,7 @@ namespace Member_Han.Modules.FBXImporter
             {
                 if (!result.ContainsKey(bone))
                 {
-                    Debug.LogError($"[AvatarBuilder] ❌ 필수 본 누락: {bone}");
+                    Debug.LogError($"필수 본 누락: {bone}");
                     hasCriticalMissing = true;
                 }
             }
