@@ -1,14 +1,12 @@
 using UnityEngine;
 using System.IO;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Member_Han.Modules.FileSystem;
 
 namespace Member_Han.Modules.FBXImporter
 {
-    /// <summary>
-    /// FBX 파일 선택 및 관리를 담당하는 매니저 클래스
-    /// </summary>
     public class FileManager : MonoBehaviour
     {
         private const string IMPORT_FBX_FOLDER = "Import_FBX";
@@ -46,6 +44,10 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Thumb Spread Scale (Default 1.0)")]
         [Range(0.0f, 1.0f)] public float ThumbSpreadScale = 1.0f;
 
+        [Header("Recording Orchestration")]
+        [Tooltip("FBX 로드 후 녹화 시작까지의 대기 시간 (초)")]
+        [Range(0f, 10f)] public float startDelay = 3.0f;
+
         [Header("Final Tuning")]
         [Tooltip("높이 보정 (미터 단위). 0.02 = 2cm 올림")]
         [Range(-0.5f, 0.5f)] public float HeightOffset = 0.02f; 
@@ -63,11 +65,11 @@ namespace Member_Han.Modules.FBXImporter
         [Header("Smart Curve (Dynamics)")]
         public bool EnableSmartCurve = true;
         [Tooltip("Standard Finger Dampen Strength (0.1 ~ 0.5)")]
-        [Range(0.0f, 1.0f)] public float SmartCurveStrength = 0.5f; // Mapped to Dampen
-        public float StretchThreshold = 0.7f; // Keeping this for logic stability
+        [Range(0.0f, 1.0f)] public float SmartCurveStrength = 0.5f;
+        public float StretchThreshold = 0.7f;
 
         public bool EnableThumbSmartCurve = true;
-        [Range(0.0f, 1.0f)] public float ThumbSmartCurveStrength = 0.5f; // Mapped to Dampen
+        [Range(0.0f, 1.0f)] public float ThumbSmartCurveStrength = 0.5f;
         
         [Space(10)]
 
@@ -81,17 +83,17 @@ namespace Member_Han.Modules.FBXImporter
         #region Unity 생명주기
         private void Awake()
         {
-            InitializeServices(); // Verified Clean Build
+            InitializeServices();
         }
         #endregion
 
         #region 초기화
         private void InitializeServices()
         {
-            // 1. 파일 브라우저 서비스 초기화 (StandaloneFileBrowser 사용)
+            // 파일 브라우저 서비스 초기화 (StandaloneFileBrowser 사용)
             _fileBrowserService = new RuntimeFileBrowserService();
             
-            // 2. 런타임 FBX 임포터 초기화 (Assimp 사용)
+            // 런타임 FBX 임포터 초기화 (Assimp 사용)
             _fbxImporter = new RuntimeFBXImporter();
         }
         #endregion
@@ -106,7 +108,7 @@ namespace Member_Han.Modules.FBXImporter
                 string sourcePath = paths[0];
                 Debug.Log($"선택된 파일: {sourcePath}");
                 
-                // 비동기 실행 (Fire-and-forget)
+                // 비동기 실행
                 ProcessFBXAsync(sourcePath);
             }
         }
@@ -150,7 +152,7 @@ namespace Member_Han.Modules.FBXImporter
                 string fileName = Path.GetFileName(sourcePath);
                 string targetPath = sourcePath; // 기본값: 원본 경로 사용
                 
-                // 1. 파일 복사 Check
+                // 파일 복사
                 if (saveToImportFolder)
                 {
                     string targetDir = Path.Combine(Application.dataPath, "Resources", IMPORT_FBX_FOLDER);
@@ -178,7 +180,7 @@ namespace Member_Han.Modules.FBXImporter
 #endif
                 }
                 
-                // 2. Assimp-net을 사용하여 FBX 로드
+                // Assimp-net을 사용하여 FBX 로드
                 Debug.Log($"[FileManager] FBX 로드 시작: {targetPath}");
                 GameObject importedModel = await _fbxImporter.ImportAsync(targetPath);
                 
@@ -190,28 +192,28 @@ namespace Member_Han.Modules.FBXImporter
                         renderer.enabled = showGhostModel; // Ghost 모델 보이기/숨기기
                     }
 
-                    // 1. Ghost Container Pattern (스케일 방어막)
-                    // Legacy Animation이 실행되면 자식(importedModel)의 Scale은 무조건 1.0으로 강제 원복됩니다.
-                    // 이를 방어하기 위해 부모(Container)에서 0.01로 눌러버리는 구조가 필수적입니다.
+                    // Ghost Container Pattern (스케일 방어막)
+                    // Legacy Animation이 실행되면 자식(importedModel)의 Scale은 무조건 1.0으로 강제 원복
+                    // 이를 방어하기 위해 부모(Container)에서 0.01로 눌러버리는 구조가 필수
                     Debug.Log($"[System] 🛡️ Activating Ghost Container... (Scale Lock: 0.01)");
                     
-                    // A. 컨테이너 생성
+                    // 컨테이너 생성
                     GameObject ghostContainer = new GameObject($"GhostContainer_{importedModel.name}");
                     ghostContainer.transform.position = Vector3.zero;
                     ghostContainer.transform.rotation = Quaternion.identity;
                     
-                    // B. 컨테이너 스케일 고정 (0.01)
+                    // 컨테이너 스케일 고정 (0.01)
                     ghostContainer.transform.localScale = Vector3.one * 0.01f;
                     
-                    // C. 모델 종속시키기
+                    // 모델 종속시키기
                     importedModel.transform.SetParent(ghostContainer.transform, false);
 
-                    // 2. 매핑 데이터 로드 & Ghost 아바타 생성
-                    // *중요*: Avatar는 자식(importedModel)을 기준으로 굽습니다.
+                    // 매핑 데이터 로드 & Ghost 아바타 생성
+                    // Avatar는 자식(importedModel)을 기준으로 bake.
                     var boneMapping = LoadBoneMappingRuntime();
                     HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
 
-                    // 3. Ghost에서 애니메이션 클립 추출
+                    // Ghost에서 애니메이션 클립 추출
                     AnimationClip targetClip = null;
                     var animComp = importedModel.GetComponent<Animation>();
                     
@@ -221,73 +223,111 @@ namespace Member_Han.Modules.FBXImporter
     
                         if (targetClip.length > 1000f)
                         {
-                            Debug.LogError("[Critical] 애니메이션 시간이 비정상적으로 깁니다. RuntimeFBXImporter의 timeScale을 확인하세요.");
+                            Debug.LogError("애니메이션 시간이 비정상적으로 깁니다. RuntimeFBXImporter의 timeScale을 확인하세요.");
                         }
                     }
                     else
                     {
-                        Debug.LogError("[Critical] Ghost에 Animation 컴포넌트가 없거나 클립이 없습니다!");
+                        Debug.LogError("Ghost에 Animation 컴포넌트가 없거나 클립이 없습니다!");
                         return;
                     }
 
 
-                    // 3. Target 찾기
-                    GameObject targetObject = GameObject.Find("testPrefab");
+                    // Target 찾기
+                    GameObject targetObject = this.targetCharacter;
+                    
                     if (targetObject == null)
                     {
-                        Debug.LogError("[FileManager] 'testPrefab'을 찾을 수 없습니다. 리타겟팅을 중단합니다.");
+                        Debug.LogError("Target Character가 할당되지 않았습니다! 인스펙터에서 'Target Character' 슬롯을 확인하세요.");
+                        return; // 실행 중단
                     }
+
+                    // 완전 초기화 (원점, 회전 0)
+                    targetObject.transform.position = Vector3.zero; 
+                    targetObject.transform.rotation = Quaternion.identity; 
+
+                    // Animator의 Root Motion 옵션은 끕니다. 
+                    Animator anim = targetObject.GetComponent<Animator>();
+                    if (anim != null) anim.applyRootMotion = false; 
+
+                    // IKControl 간섭 제거
+                    var ikControl = targetObject.GetComponent<IKControl>();
+                    if (ikControl != null)
                     {
-                        // [RESET] 완전 초기화 (원점, 회전 0)
-                        targetObject.transform.position = Vector3.zero; 
-                        targetObject.transform.rotation = Quaternion.identity; 
-
-                        // 중요: Animator의 Root Motion 옵션은 끕니다. 
-                        // 우리가 수동으로 제어하기 때문입니다.
-                        Animator anim = targetObject.GetComponent<Animator>();
-                        if (anim != null) anim.applyRootMotion = false; 
-
-                        // [STAGE 28] IKControl 간섭 제거
-                        // 외부 IK 스크립트가 있다면 제거하여 물리 충돌을 방지합니다.
-                        var ikControl = targetObject.GetComponent<IKControl>();
-                        if (ikControl != null)
-                        {
-                            Debug.Log("[FileManager] ⚠️ Hostile IKControl detected. Destroying...");
-                            Destroy(ikControl);
-                        }
-
-                        // --------------------------------------------------------
-                        // 포즈 공간 리타겟터 부착 및 초기화 (STAGE 28)
-                        // --------------------------------------------------------
-                        var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
-                        
-                        // FileManager 자신(this)을 넘겨서 설정을 공유함
-                        retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
-                        
-                        // 녹화기 연결 및 자동 시작 명령
-                        var recorderController = targetObject.GetComponent<HumanoidSampleCode>();
-                        if (recorderController != null)
-                        {
-                            float clipLen = targetClip.length;
-                            // FBX 클립 길이와 이름을 안전하게 전달
-                            recorderController.StartAutoRecording(clipLen, targetClip.name);
-                        }
-                        else
-                        {
-                            Debug.LogError("[FileManager] 'testPrefab'에 HumanoidSampleCode 컴포넌트가 없습니다!");
-                        }
+                        Debug.Log("Hostile IKControl detected. Destroying...");
+                        Destroy(ikControl);
                     }
+
+                    // 포즈 공간 리타겟터 부착 및 초기화
+                    var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
+                    
+                    // FileManager 자신(this)을 넘겨서 설정을 공유함
+                    retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
+                    
+                    // 지연 녹화 시퀀스 시작
+                    var ghostAnim = importedModel.GetComponent<Animation>();
+                    if (ghostAnim != null) ghostAnim.Stop(); // 즉시 재생 방지
+                    
+                    StartCoroutine(StartRecordingSequence(
+                        importedModel, 
+                        ghostAnim, 
+                        targetObject, 
+                        targetClip,
+                        retargeter
+                    ));
                         
                     importedModel.transform.position = Vector3.zero;
                 }
                 else
                 {
-                    Debug.LogError("[FileManager] FBX 로드 실패");
+                    Debug.LogError("FBX 로드 실패");
                 }
             }
             catch (System.Exception e)
             {
                 Debug.LogError($"파일 처리 실패: {e.Message}\n{e.StackTrace}");
+            }
+        }
+        
+        /// <summary>
+        /// 지연 후 애니메이션 재생 및 VMD 녹화를 동기화하는 코루틴
+        /// </summary>
+        /// <param name="ghostModel">임포트된 Ghost 모델</param>
+        /// <param name="ghostAnim">Ghost의 Animation 컴포넌트</param>
+        /// <param name="targetCharacter">리타겟 대상 캐릭터</param>
+        /// <param name="clip">재생할 AnimationClip</param>
+        /// <param name="retargeter">Pose Space Retargeter 컴포넌트</param>
+        private IEnumerator StartRecordingSequence(
+            GameObject ghostModel,
+            Animation ghostAnim,
+            GameObject targetCharacter,
+            AnimationClip clip,
+            PoseSpaceRetargeter retargeter)
+        {
+            Debug.Log($"[FileManager]  녹화 시작까지 {startDelay}초 대기 중...");
+            
+            // 지연 대기
+            yield return new WaitForSeconds(startDelay);
+            
+            // Ghost 애니메이션 재생 시작
+            if (ghostAnim != null && clip != null)
+            {
+                ghostAnim.clip = clip;
+                ghostAnim.Play();
+                Debug.Log($"[FileManager]  Ghost 애니메이션 재생 시작: {clip.name}");
+            }
+            
+            // VMD 녹화 시작
+            var recorderController = targetCharacter.GetComponent<HumanoidSampleCode>();
+            if (recorderController != null)
+            {
+                float clipLen = clip.length;
+                recorderController.StartAutoRecording(clipLen, clip.name);
+                Debug.Log($"[FileManager]  VMD 녹화 동시 시작! (길이: {clipLen:F2}초)");
+            }
+            else
+            {
+                Debug.LogWarning("[FileManager]  HumanoidSampleCode 컴포넌트가 Target에 없습니다. 녹화 건너뜀.");
             }
         }
         
@@ -299,7 +339,6 @@ namespace Member_Han.Modules.FBXImporter
             var mapping = new Dictionary<string, string>();
             
             // Resources 폴더에서 로드 (확장자 .txt 제외)
-            // 파일명: "BoneMapping_Data.txt" -> 로드명: "BoneMapping_Data"
             string loadName = Path.GetFileNameWithoutExtension(BONE_MAPPING_FILE);
             TextAsset mappingAsset = Resources.Load<TextAsset>(loadName);
 
@@ -376,13 +415,6 @@ namespace Member_Han.Modules.FBXImporter
         #endregion
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// 에디터 전용: 단계별 Import 설정 적용
-        /// 1단계: FBX Import (기본 설정)
-        /// 2단계: FBX 정보 가져오기
-        /// 3단계: Rig 설정 (Humanoid, Strip Bones = False)
-        /// 4단계: Bone Mapping 적용
-        /// </summary>
         private void ConfigureImportSettings(string filePath)
         {
             // 절대 경로를 "Assets/..." 상대 경로로 변환
@@ -397,11 +429,11 @@ namespace Member_Han.Modules.FBXImporter
 
             string relativePath = "Assets" + standardizedFilePath[standardizedDataPath.Length..];
             
-            // ===== 1단계: FBX 파일 Import (기본 설정으로) =====
+            // FBX 파일 Import (기본 설정으로)
             Debug.Log($"[1단계] FBX Import 시작: {relativePath}");
             UnityEditor.AssetDatabase.ImportAsset(relativePath, UnityEditor.ImportAssetOptions.ForceUpdate);
             
-            // ===== 2단계: FBX 정보 가져오기 =====
+            // FBX 정보 가져오기
             Debug.Log($"[2단계] FBX 정보 가져오기");
             UnityEditor.ModelImporter importer = UnityEditor.AssetImporter.GetAtPath(relativePath) as UnityEditor.ModelImporter;
             if (importer == null)
@@ -415,20 +447,20 @@ namespace Member_Han.Modules.FBXImporter
             Debug.Log($"  - 현재 Import Animation: {importer.importAnimation}");
             Debug.Log($"  - 현재 Optimize Bones: {importer.optimizeBones}");
             
-            // ===== 3단계: Rig 설정 (Humanoid, Strip Bones = False) =====
             Debug.Log($"[3단계] Rig 설정 적용 중...");
             
-            // 3-1. Animation Import 활성화 (반드시 true)
+            // Animation Import 활성화
             importer.importAnimation = true;
             importer.animationCompression = UnityEditor.ModelImporterAnimationCompression.Off;
             
-            // 3-2. Animation Type = Humanoid
+            // Animation Type = Humanoid
             importer.animationType = UnityEditor.ModelImporterAnimationType.Human;
             
-            // 3-3. Avatar Definition = "Create From This Model" (중요)
+            // Avatar Definition = "Create From This Model"
             // Avatar를 모델에서 생성하도록 명시적 설정 (AnimationClip 보존을 위해 필수)
             importer.avatarSetup = UnityEditor.ModelImporterAvatarSetup.CreateFromThisModel;
-            // 3-4. Strip Bones 해제 (Optimize Game Objects 아님)
+            
+            // Strip Bones 해제 (Optimize Game Objects 아님)
             importer.optimizeBones = false;
             try 
             {
@@ -467,14 +499,12 @@ namespace Member_Han.Modules.FBXImporter
             
             // AnimationCompression 추가 설정
             importer.animationWrapMode = WrapMode.ClampForever; // Once: 재생 후 초기화, ClampForever: 마지막 프레임 유지
-            
-            //3-5. 기타 설정
             importer.importBlendShapes = true;
             importer.importVisibility = true;
             importer.importCameras = false;
             importer.importLights = false;
             
-            // ===== 3-6. Bone Mapping 적용 (먼저!) =====
+            // Bone Mapping 적용
             Debug.Log($"[3단계] Bone Mapping 적용 시작");
             
             string mappingFilePath = Path.Combine(Application.dataPath, "Resources", BONE_MAPPING_FILE);
@@ -501,8 +531,7 @@ namespace Member_Han.Modules.FBXImporter
                     }
                     description.human = humanBones.ToArray();
                     
-                    // 중요! Skeleton 배열도 설정해야 함!
-                    // FBX의 모든 Transform을 skeleton으로 등록
+                    // Skeleton 배열도 설정
                     List<SkeletonBone> skeletonBones = new List<SkeletonBone>();
                     var allTransformPaths = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(relativePath)
                         .OfType<UnityEngine.Transform>();
@@ -542,8 +571,7 @@ namespace Member_Han.Modules.FBXImporter
                 Debug.LogWarning($"[3단계] Bone Mapping 파일을 찾을 수 없습니다: {mappingFilePath}");
             }
             
-            // ===== 3-7. Animation Clip 추출 설정 (BoneMapping 다음에!) =====
-            // Bone Mapping 적용 후에 clipAnimations 설정
+            // Animation Clip 추출 설정
             Debug.Log($"[3단계] Animation Clip 추출 시작");
             
             if (importer.defaultClipAnimations != null && importer.defaultClipAnimations.Length > 0)
@@ -681,7 +709,7 @@ namespace Member_Han.Modules.FBXImporter
                     continue;
                 }
 
-                // 섹션이 끝나거나 다른 속성이 나오면 중단 (들여쓰기로 판단 가능하지만 간단히 :)
+                // 섹션이 끝나거나 다른 속성이 나오면 중단
                 if (insideBoneTemplate)
                 {
                     if (trimmedLine.StartsWith("m_")) break; // 다른 속성 시작
@@ -706,7 +734,7 @@ namespace Member_Han.Modules.FBXImporter
         #endregion
 #endif
 
-        // [헬퍼 함수] 힙 높이 측정 (STAGE 32)
+        // 힙 높이 측정
         private float GetHipsHeight(GameObject model)
         {
             Animator anim = model.GetComponent<Animator>();
