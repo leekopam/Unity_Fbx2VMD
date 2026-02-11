@@ -8,54 +8,57 @@ HumanTemplate:
   m_PrefabAsset: {fileID: 0}
   m_Name: FBX_BoneMapping_Data
   m_BoneTemplate:
-    Chest: Skeleton_Spine1
-    Head: Skeleton_Head
-    Hips: Skeleton_Hips
-    Left Index Distal: Skeleton_LeftHandIndex3
-    Left Index Intermediate: Skeleton_LeftHandIndex2
-    Left Index Proximal: Skeleton_LeftHandIndex1
-    Left Little Distal: Skeleton_LeftHandPinky3
-    Left Little Intermediate: Skeleton_LeftHandPinky2
-    Left Little Proximal: Skeleton_LeftHandPinky1
-    Left Middle Distal: Skeleton_LeftHandMiddle3
-    Left Middle Intermediate: Skeleton_LeftHandMiddle2
-    Left Middle Proximal: Skeleton_LeftHandMiddle1
-    Left Ring Distal: Skeleton_LeftHandRing3
-    Left Ring Intermediate: Skeleton_LeftHandRing2
-    Left Ring Proximal: Skeleton_LeftHandRing1
-    Left Thumb Distal: Skeleton_LeftHandThumb3
-    Left Thumb Intermediate: Skeleton_LeftHandThumb2
-    Left Thumb Proximal: Skeleton_LeftHandThumb1
-    LeftFoot: Skeleton_LeftFoot
-    LeftHand: Skeleton_LeftHand
-    LeftLowerArm: Skeleton_LeftForeArm
-    LeftLowerLeg: Skeleton_LeftLeg
-    LeftShoulder: Skeleton_LeftShoulder
-    LeftToes: Skeleton_LeftToeBase
-    LeftUpperArm: Skeleton_LeftArm
-    LeftUpperLeg: Skeleton_LeftUpLeg
-    Neck: Skeleton_Neck
-    Right Index Distal: Skeleton_RightHandIndex3
-    Right Index Intermediate: Skeleton_RightHandIndex2
-    Right Index Proximal: Skeleton_RightHandIndex1
-    Right Little Distal: Skeleton_RightHandPinky3
-    Right Little Intermediate: Skeleton_RightHandPinky2
-    Right Little Proximal: Skeleton_RightHandPinky1
-    Right Middle Distal: Skeleton_RightHandMiddle3
-    Right Middle Intermediate: Skeleton_RightHandMiddle2
-    Right Middle Proximal: Skeleton_RightHandMiddle1
-    Right Ring Distal: Skeleton_RightHandRing3
-    Right Ring Intermediate: Skeleton_RightHandRing2
-    Right Ring Proximal: Skeleton_RightHandRing1
-    Right Thumb Distal: Skeleton_RightHandThumb3
-    Right Thumb Intermediate: Skeleton_RightHandThumb2
-    Right Thumb Proximal: Skeleton_RightHandThumb1
-    RightFoot: Skeleton_RightFoot
-    RightHand: Skeleton_RightHand
-    RightLowerArm: Skeleton_RightForeArm
-    RightLowerLeg: Skeleton_RightLeg
-    RightShoulder: Skeleton_RightShoulder
-    RightToes: Skeleton_RightToeBase
-    RightUpperArm: Skeleton_RightArm
-    RightUpperLeg: Skeleton_RightUpLeg
-    Spine: Skeleton_Spine
+    Chest: 12.joint_Torso2
+    Head: 15.joint_Head
+    Hips: 13.joint_HipMaster
+    Jaw: 211.joint_LowerTooth
+    Left Index Distal: 103.joint_LeftIndex3
+    Left Index Intermediate: 102.joint_LeftIndex2
+    Left Index Proximal: 101.joint_LeftIndex1
+    Left Little Distal: 88.joint_LeftPinky3
+    Left Little Intermediate: 87.joint_LeftPinky2
+    Left Little Proximal: 86.joint_LeftPinky1
+    Left Middle Distal: 98.joint_LeftMiddle3
+    Left Middle Intermediate: 97.joint_LeftMiddle2
+    Left Middle Proximal: 96.joint_LeftMiddle1
+    Left Ring Distal: 93.joint_LeftRing3
+    Left Ring Intermediate: 92.joint_LeftRing2
+    Left Ring Proximal: 91.joint_LeftRing1
+    Left Thumb Distal: 83.joint_LeftThumb2
+    Left Thumb Intermediate: 82.joint_LeftThumb1
+    Left Thumb Proximal: 462.!joint_LeftThumb0M
+    LeftEye: 17.joint_LeftEye
+    LeftFoot: 120.joint_LeftFootD
+    LeftHand: 78.joint_LeftWrist
+    LeftLowerArm: 70.joint_LeftElbow
+    LeftLowerLeg: 119.joint_LeftKneeD
+    LeftShoulder: 64.joint_LeftShoulder
+    LeftToes: 122.joint_hidariashisakiEX
+    LeftUpperArm: 66.!joint_LeftArm
+    LeftUpperLeg: 118.joint_LeftHipD
+    Neck: 14.joint_Neck
+    Right Index Distal: 61.joint_RightIndex3
+    Right Index Intermediate: 60.joint_RightIndex2
+    Right Index Proximal: 59.joint_RightIndex1
+    Right Little Distal: 46.joint_RightPinky3
+    Right Little Intermediate: 45.joint_RightPinky2
+    Right Little Proximal: 44.joint_RightPinky1
+    Right Middle Distal: 56.joint_RightMiddle3
+    Right Middle Intermediate: 55.joint_RightMiddle2
+    Right Middle Proximal: 54.joint_RightMiddle1
+    Right Ring Distal: 51.joint_RightRing3
+    Right Ring Intermediate: 50.joint_RightRing2
+    Right Ring Proximal: 49.joint_RightRing1
+    Right Thumb Distal: 41.joint_RightThumb2
+    Right Thumb Intermediate: 40.joint_RightThumb1
+    Right Thumb Proximal: 463.!joint_RightThumb0M
+    RightEye: 16.joint_RightEye
+    RightFoot: 117.joint_RightFootD
+    RightHand: 36.joint_RightWrist
+    RightLowerArm: 28.joint_RightElbow
+    RightLowerLeg: 116.joint_RightKneeD
+    RightShoulder: 22.joint_RightShoulder
+    RightToes: 121.joint_migiashisakiEX
+    RightUpperArm: 24.!joint_RightArm
+    RightUpperLeg: 115.joint_RightHipD
+    Spine: 11.joint_Torso
