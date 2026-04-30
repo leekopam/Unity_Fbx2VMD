@@ -1,8 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+using System;
+using System.Collections;
+using System.IO;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UI; // Slider용
-using TMPro;          // TextMeshPro용
+using UnityEngine.UI;
 
 public class HumanoidSampleCode : MonoBehaviour
 {
@@ -12,174 +13,401 @@ public class HumanoidSampleCode : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private Slider _progressSlider;
     [SerializeField] private TextMeshProUGUI _progressText;
+
     [Header("Recording Settings")]
     public string ModelName = "fbxToVMD";
     public string HumanoidVMDName = "fbxToVMD.vmd";
 
-    // 기존 AutoStartRecording 변수는 인스펙터에서 끄거나, 코드에서 무시
-    [HideInInspector] public int StopRecordingTime = 0; // 자동으로 설정될 것임
+    [SerializeField, Min(0f)] private float StartRecordingTime = 0.1f;
+    [SerializeField] private bool resetAnimatorOnManualStart = true;
+    [SerializeField] private bool finishByRecordedFrameCount = true;
+    [SerializeField] private bool enableMotionComparisonProbe = true;
+    [SerializeField] private bool probeFingerCloseups = true;
+
+    [HideInInspector] public int StopRecordingTime = 0;
     [HideInInspector] public bool AutoStartRecording = false;
 
+    public event Action<VmdSaveResult> RecordingFinished;
+
+    public bool IsRecordingSessionActive => _isRecordingSessionActive || _isSaving;
+    public string LastSavedFilePath => _lastSavedFilePath;
+
     private bool _isRecordingSessionActive = false;
+    private bool _isSaving = false;
     private float _totalDuration = 0f;
     private float _currentTimer = 0f;
+    private int _targetFrameCount = 0;
+    private string _outputFolderPath = "";
+    private string _outputFilePath = "";
+    private string _lastSavedFilePath = "";
+    private Coroutine _manualRecordingCoroutine;
 
-    void Start()
+    private const float RecordingFrameRate = 30f;
+
+    private void Start()
     {
-        // 앱 실행 시 1초짜리 빈 파일이 생성되는 것을 방지
-        if (vmdRecorder == null)
+        EnsureRecorder();
+
+        if (vmdRecorder != null && vmdRecorder.IsRecording)
         {
-            vmdRecorder = GetComponent<UnityHumanoidVMDRecorder>();
+            vmdRecorder.StopRecording();
         }
 
-        if (vmdRecorder != null)
+        SetReady("FBX를 선택하세요");
+
+        if (AutoStartRecording && HasAnimatorClip())
         {
-            vmdRecorder.StopRecording(); // Ensure it's stopped initially
+            _manualRecordingCoroutine = StartCoroutine(StartManualRecordingSequence());
         }
-        
-        UpdateUI(0, 0, "Ready to Load");
     }
 
-    // 외부(FileManager)에서 호출하는 녹화 시작 함수
-    public void StartAutoRecording(float clipLength, string fileName = "")
+    public bool StartAutoRecording(
+        float clipLength,
+        string fileName = "",
+        string outputDirectory = null,
+        int targetFrameCount = 0,
+        string comparisonLabel = "",
+        bool overwriteExistingOutput = false)
     {
-        if (vmdRecorder == null)
+        if (!EnsureRecorder())
         {
-            vmdRecorder = GetComponent<UnityHumanoidVMDRecorder>();
-            if (vmdRecorder == null)
-            {
-                Debug.LogError("[HumanoidSampleCode] ❌ UnityHumanoidVMDRecorder Missing!");
-                return;
-            }
+            SetError("VMD 레코더가 없습니다.");
+            return false;
         }
 
-        // 이름 및 경로 설정
-        if (!string.IsNullOrEmpty(fileName))
+        if (_isRecordingSessionActive || _isSaving)
         {
-            ModelName = fileName;
-            HumanoidVMDName = fileName + ".vmd";
+            SetError("이전 녹화가 아직 끝나지 않았습니다.");
+            return false;
         }
 
-        // 시간 설정 (소수점 반올림)
+        if (clipLength <= 0f || float.IsNaN(clipLength) || float.IsInfinity(clipLength))
+        {
+            SetError("애니메이션 길이가 올바르지 않습니다.");
+            return false;
+        }
+
+        string outputBaseName = SanitizeFileName(string.IsNullOrWhiteSpace(fileName) ? "fbxToVMD" : fileName);
+        ModelName = outputBaseName;
+        HumanoidVMDName = EnsureVmdExtension(outputBaseName);
+        _outputFolderPath = ResolveOutputFolder(outputDirectory);
+        _outputFilePath = overwriteExistingOutput
+            ? BuildExactOutputPath(_outputFolderPath, HumanoidVMDName)
+            : BuildUniqueOutputPath(_outputFolderPath, HumanoidVMDName);
+
         _totalDuration = clipLength;
-        StopRecordingTime = Mathf.CeilToInt(clipLength);
-        
-        Debug.Log($"[Recorder] 🎬 녹화 시퀀스 시작! 파일: {fileName}, 길이: {_totalDuration:F2}초");
-
-        // 레코더 초기화 및 시작
         _currentTimer = 0f;
-        vmdRecorder.StopRecording(); // 안전하게 정지 후
-        vmdRecorder.StartRecording(); // 녹화 시작
+        _targetFrameCount = targetFrameCount > 0 ? targetFrameCount : Mathf.CeilToInt(clipLength * RecordingFrameRate);
+        StopRecordingTime = Mathf.CeilToInt(clipLength);
 
+        string labelText = string.IsNullOrWhiteSpace(comparisonLabel) ? "(파일명과 동일)" : comparisonLabel;
+        Debug.Log($"[Recorder] 녹화 시작: VMD={Path.GetFileName(_outputFilePath)}, 비교라벨={labelText}, 덮어쓰기={overwriteExistingOutput}, 길이 {_totalDuration:F2}초, 목표 {_targetFrameCount}프레임");
+
+        vmdRecorder.StopRecording();
+        vmdRecorder.ResetRecordingBuffersForNewSession();
+        vmdRecorder.StartRecording();
         _isRecordingSessionActive = true;
+        StartComparisonProbe(comparisonLabel);
+        UpdateUI(0f, 0f, $"녹화 중: {ModelName}");
+        return true;
     }
 
-    void Update()
+    public void SetReady(string message)
+    {
+        _isRecordingSessionActive = false;
+        _isSaving = false;
+        UpdateUI(0f, 0f, message);
+    }
+
+    public void SetLoading(string message)
+    {
+        UpdateUI(0f, 0f, message);
+    }
+
+    public void SetProcessingStatus(string message, float progress = 0f)
+    {
+        UpdateUI(Mathf.Clamp01(progress), 0f, message);
+    }
+
+    public void SetError(string message)
+    {
+        _isRecordingSessionActive = false;
+        _isSaving = false;
+        Debug.LogError($"[Recorder] {message}");
+        UpdateUI(0f, 0f, $"오류: {message}");
+    }
+
+    private void Update()
     {
         if (!_isRecordingSessionActive || vmdRecorder == null) return;
 
-        // 진행 시간 업데이트
         _currentTimer += Time.deltaTime;
 
-        // UI 갱신 (ModelName을 사용하여 현재 녹화중인 파일명 표시)
-        float progress = Mathf.Clamp01(_currentTimer / _totalDuration);
-        string statusText = $"[{ModelName}]";
-        UpdateUI(progress, _currentTimer, statusText);
+        float displayTime = finishByRecordedFrameCount && _targetFrameCount > 0
+            ? vmdRecorder.FrameNumber / RecordingFrameRate
+            : _currentTimer;
+        float progress = finishByRecordedFrameCount && _targetFrameCount > 0
+            ? Mathf.Clamp01((float)vmdRecorder.FrameNumber / _targetFrameCount)
+            : (_totalDuration > 0f ? Mathf.Clamp01(_currentTimer / _totalDuration) : 0f);
+        UpdateUI(progress, displayTime, $"녹화 중: {ModelName}");
 
-        // 종료 조건 체크 (시간 도달)
-        if (_currentTimer >= _totalDuration)
+        if (finishByRecordedFrameCount && _targetFrameCount > 0)
+        {
+            if (vmdRecorder.FrameNumber >= _targetFrameCount)
+            {
+                FinishRecording();
+            }
+        }
+        else if (_currentTimer >= _totalDuration)
         {
             FinishRecording();
         }
     }
 
-    // 녹화 종료 및 저장 로직 완전 수정
-    private void FinishRecording()
+    private async void FinishRecording()
     {
-        // 중복 실행 방지
-        if (!_isRecordingSessionActive) return;
+        if (!_isRecordingSessionActive || _isSaving) return;
+
         _isRecordingSessionActive = false;
+        _isSaving = true;
+        _manualRecordingCoroutine = null;
 
-        Debug.Log("녹화 종료 시간 도달. 저장 프로세스 시작...");
+        Debug.Log("[Recorder] 녹화 시간 도달. 저장을 시작합니다.");
+        UpdateUI(1f, _totalDuration, "VMD 저장 중");
 
-        // 녹화 중지 (버퍼 플러시)
-        if (vmdRecorder != null)
+        StopComparisonProbe(resultReason: "finish");
+        vmdRecorder.StopRecording();
+        VmdSaveResult result = await vmdRecorder.SaveVMDAsync(ModelName, _outputFilePath);
+
+        _isSaving = false;
+
+        if (result.Success)
         {
-            vmdRecorder.StopRecording();
+            _lastSavedFilePath = result.FilePath;
+            Debug.Log($"[Recorder] 저장 완료: {result.FilePath} ({result.FileSizeBytes} bytes, {result.FrameCount} frames)");
+            UpdateUI(1f, _totalDuration, $"저장 완료: {Path.GetFileName(result.FilePath)}");
+            Invoke(nameof(OpenTargetFolder), 0.5f);
+        }
+        else
+        {
+            string error = string.IsNullOrEmpty(result.ErrorMessage) ? "알 수 없는 저장 오류" : result.ErrorMessage;
+            Debug.LogError($"[Recorder] 저장 실패: {error}");
+            UpdateUI(0f, _currentTimer, $"저장 실패: {error}");
         }
 
-        // 저장 경로 생성 (절대 경로 보장)
-        // Application.dataPath는 에디터에서는 "Assets", 빌드에서는 "Game_Data" 폴더를 가리킴
-        string folderName = "VMDRecorderSample";
-        string folderPath = System.IO.Path.Combine(Application.dataPath, folderName);
-
-        // 폴더가 없으면 생성
-        if (!System.IO.Directory.Exists(folderPath))
-        {
-            System.IO.Directory.CreateDirectory(folderPath);
-        }
-
-        // 전체 파일 경로 조합 (예: C:/Project/Assets/VMDRecorderSample/fbxToVMD.vmd)
-        // 파일명에 확장자가 없으면 붙여줌
-        string fileName = HumanoidVMDName;
-        if (!fileName.EndsWith(".vmd")) fileName += ".vmd";
-        
-        string fullFilePath = System.IO.Path.Combine(folderPath, fileName);
-
-        // VMD 파일 저장 수행
-        if (vmdRecorder != null)
-        {
-            // 모델 이름과 전체 경로를 넘겨줍니다.
-            vmdRecorder.SaveVMD(ModelName, fullFilePath);
-            Debug.Log($"파일 저장 완료: {fullFilePath}");
-        }
-
-        // UI 업데이트
-        UpdateUI(1.0f, StopRecordingTime, "Saved");
-
-        // 폴더 열기
-        // 약간의 지연 시간을 두어 파일 시스템이 쓰기를 마칠 시간을 줌
-        Invoke("OpenTargetFolder", 0.5f);
+        RecordingFinished?.Invoke(result);
     }
 
-    // 폴더 열기 헬퍼 함수
+    private bool EnsureRecorder()
+    {
+        if (vmdRecorder == null)
+        {
+            vmdRecorder = GetComponent<UnityHumanoidVMDRecorder>();
+        }
+
+        return vmdRecorder != null;
+    }
+
+    private void StartComparisonProbe(string label)
+    {
+        if (!enableMotionComparisonProbe)
+        {
+            return;
+        }
+
+        MotionComparisonProbe probe = GetComponent<MotionComparisonProbe>();
+        if (probe == null)
+        {
+            probe = gameObject.AddComponent<MotionComparisonProbe>();
+        }
+
+        string probeLabel = string.IsNullOrWhiteSpace(label) ? ModelName : label;
+        probe.SetFingerCloseups(probeFingerCloseups);
+        probe.StartSampling(probeLabel);
+    }
+
+    private void StopComparisonProbe(string resultReason)
+    {
+        MotionComparisonProbe probe = GetComponent<MotionComparisonProbe>();
+        if (probe != null && probe.IsSampling)
+        {
+            probe.StopSampling(resultReason);
+        }
+    }
+
+    private static string ResolveOutputFolder(string outputDirectory)
+    {
+        string folderPath = string.IsNullOrWhiteSpace(outputDirectory)
+            ? GetDefaultOutputFolder()
+            : outputDirectory;
+
+        Directory.CreateDirectory(folderPath);
+        return folderPath;
+    }
+
+    private static string GetDefaultOutputFolder()
+    {
+        return Path.Combine(Application.dataPath, "VMDRecorderSample");
+    }
+
+    private static string BuildExactOutputPath(string folderPath, string fileName)
+    {
+        return Path.Combine(folderPath, EnsureVmdExtension(fileName));
+    }
+
+    private static string BuildUniqueOutputPath(string folderPath, string fileName)
+    {
+        string baseName = Path.GetFileNameWithoutExtension(fileName);
+        string extension = Path.GetExtension(fileName);
+        string candidate = Path.Combine(folderPath, fileName);
+        int index = 1;
+
+        while (File.Exists(candidate))
+        {
+            candidate = Path.Combine(folderPath, $"{baseName}_{index:000}{extension}");
+            index++;
+        }
+
+        return candidate;
+    }
+
+    private static string EnsureVmdExtension(string fileName)
+    {
+        string cleanName = SanitizeFileName(Path.GetFileNameWithoutExtension(fileName));
+        if (string.IsNullOrWhiteSpace(cleanName))
+        {
+            cleanName = "fbxToVMD";
+        }
+
+        return cleanName + ".vmd";
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        string cleanName = string.IsNullOrWhiteSpace(fileName) ? "fbxToVMD" : fileName.Trim();
+        foreach (char invalidChar in Path.GetInvalidFileNameChars())
+        {
+            cleanName = cleanName.Replace(invalidChar, '_');
+        }
+
+        return cleanName;
+    }
+
     private void OpenTargetFolder()
     {
-        string folderName = "VMDRecorderSample";
-        string folderPath = System.IO.Path.Combine(Application.dataPath, folderName);
-        
-        // 경로 구분자 통일 (윈도우/맥 호환성)
-        folderPath = folderPath.Replace("/", "\\"); 
+        if (string.IsNullOrWhiteSpace(_outputFolderPath) || !Directory.Exists(_outputFolderPath))
+        {
+            return;
+        }
 
-        Debug.Log($"탐색기 열기: {folderPath}");
+        string folderPath = _outputFolderPath.Replace("/", "\\");
+        Debug.Log($"[Recorder] 탐색기 열기: {folderPath}");
         Application.OpenURL(folderPath);
     }
 
     private void UpdateUI(float progress, float currentTime, string status)
     {
-        if (_progressSlider != null) _progressSlider.value = progress;
-        
+        if (_progressSlider != null)
+        {
+            _progressSlider.value = Mathf.Clamp01(progress);
+        }
+
         if (_progressText != null)
         {
-            _progressText.text = $"{status} {currentTime:F1}s / {StopRecordingTime}s";
+            string totalText = StopRecordingTime > 0 ? StopRecordingTime.ToString() : "-";
+            _progressText.text = $"{status} {currentTime:F1}s / {totalText}s";
         }
     }
+
     public void StartProcessing(AnimationClip clip)
     {
         if (clip != null)
         {
-            HumanoidVMDName = clip.name + ".vmd";
-            StartAutoRecording(clip.length);
+            StartAutoRecording(clip.length, clip.name, null, Mathf.CeilToInt(clip.length * RecordingFrameRate), BuildComparisonLabel("manual", clip.name));
+        }
+        else
+        {
+            SetError("재생할 애니메이션 클립이 없습니다.");
         }
     }
 
     public void OnManualRecordButtonClick()
     {
-         Animator animator = GetComponent<Animator>();
-         if (animator != null && animator.runtimeAnimatorController != null && animator.runtimeAnimatorController.animationClips.Length > 0)
-         {
-             var clip = animator.runtimeAnimatorController.animationClips[0];
-             StartProcessing(clip);
-         }
+        if (_manualRecordingCoroutine != null)
+        {
+            return;
+        }
+
+        _manualRecordingCoroutine = StartCoroutine(StartManualRecordingSequence());
+    }
+
+    private bool HasAnimatorClip()
+    {
+        Animator animator = GetComponent<Animator>();
+        return animator != null
+            && animator.runtimeAnimatorController != null
+            && animator.runtimeAnimatorController.animationClips.Length > 0;
+    }
+
+    private IEnumerator StartManualRecordingSequence()
+    {
+        Animator animator = GetComponent<Animator>();
+        if (animator == null || animator.runtimeAnimatorController == null || animator.runtimeAnimatorController.animationClips.Length == 0)
+        {
+            SetError("수동 녹화에 사용할 애니메이션 클립이 없습니다.");
+            _manualRecordingCoroutine = null;
+            yield break;
+        }
+
+        if (_isRecordingSessionActive || _isSaving)
+        {
+            SetError("이전 녹화가 아직 끝나지 않았습니다.");
+            _manualRecordingCoroutine = null;
+            yield break;
+        }
+
+        AnimationClip clip = animator.runtimeAnimatorController.animationClips[0];
+        float originalSpeed = Mathf.Approximately(animator.speed, 0f) ? 1f : animator.speed;
+        if (resetAnimatorOnManualStart)
+        {
+            animator.speed = 0f;
+            animator.Rebind();
+            animator.Update(0f);
+        }
+
+        if (StartRecordingTime > 0f)
+        {
+            SetLoading($"수동 녹화 대기: {clip.name}");
+            yield return new WaitForSeconds(StartRecordingTime);
+        }
+
+        yield return null;
+
+        string outputName = !string.IsNullOrWhiteSpace(HumanoidVMDName)
+            ? Path.GetFileNameWithoutExtension(HumanoidVMDName)
+            : (!string.IsNullOrWhiteSpace(ModelName) ? ModelName : clip.name);
+        int targetFrameCount = Mathf.CeilToInt(clip.length * RecordingFrameRate);
+        if (StartAutoRecording(clip.length, outputName, null, targetFrameCount, BuildComparisonLabel("manual", outputName)))
+        {
+            animator.speed = originalSpeed;
+            Debug.Log($"[Recorder] 수동 기준 녹화 시작: {clip.name}, 목표 {targetFrameCount}프레임");
+        }
+        else
+        {
+            animator.speed = originalSpeed;
+            _manualRecordingCoroutine = null;
+        }
+    }
+
+    private static string BuildComparisonLabel(string prefix, string baseName)
+    {
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            return prefix;
+        }
+
+        return baseName.StartsWith(prefix + "_", StringComparison.OrdinalIgnoreCase)
+            ? baseName
+            : $"{prefix}_{baseName}";
     }
 }
