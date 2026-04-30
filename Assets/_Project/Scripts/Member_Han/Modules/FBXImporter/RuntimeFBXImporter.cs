@@ -20,10 +20,15 @@ namespace Member_Han.Modules.FBXImporter
         #region Private 필드
         // 노드 이름으로 Transform을 찾기 위한 맵 (본 할당용)
         private Dictionary<string, Transform> _nodeMap = new Dictionary<string, Transform>();
+        private bool _loggedSkippedScaleCurves;
+        private bool _loggedSkippedNonRootPositionCurves;
         
         // 생성된 AnimationClip 저장 (외부 접근용)
         private AnimationClip[] _animationClips;
         #endregion
+
+        public bool ImportScaleCurves { get; set; } = false;
+        public bool ImportNonRootPositionCurves { get; set; } = false;
 
         #region IModelImporterService 구현
         public async Task<GameObject> ImportAsync(string path)
@@ -53,6 +58,8 @@ namespace Member_Han.Modules.FBXImporter
             GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
 
             _nodeMap.Clear();
+            _loggedSkippedScaleCurves = false;
+            _loggedSkippedNonRootPositionCurves = false;
             BuildHierarchy(scene.RootNode, rootObject.transform, scene);
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
@@ -345,7 +352,15 @@ namespace Member_Han.Modules.FBXImporter
                     // 위치 애니메이션
                     if (channel.HasPositionKeys)
                     {
-                        SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
+                        if (ImportNonRootPositionCurves || ShouldImportPositionCurves(relativePath, targetNode))
+                        {
+                            SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
+                        }
+                        else if (!_loggedSkippedNonRootPositionCurves)
+                        {
+                            Debug.Log("[RuntimeFBXImporter] Non-root FBX position animation curves were skipped to prevent humanoid arm/leg length deformation during retargeting.");
+                            _loggedSkippedNonRootPositionCurves = true;
+                        }
                     }
 
                     // 회전 애니메이션
@@ -357,10 +372,18 @@ namespace Member_Han.Modules.FBXImporter
                     // 스케일 애니메이션
                     if (channel.HasScalingKeys)
                     {
-                        SetScaleCurves(clip, relativePath, channel.ScalingKeys, timeScale);
+                        if (ImportScaleCurves)
+                        {
+                            SetScaleCurves(clip, relativePath, channel.ScalingKeys, timeScale);
+                        }
+                        else if (!_loggedSkippedScaleCurves)
+                        {
+                            Debug.Log("[RuntimeFBXImporter] FBX scale animation curves were skipped to prevent target model deformation during humanoid retargeting.");
+                            _loggedSkippedScaleCurves = true;
+                        }
                     }
                 }
-                
+
                 // 애니메이션 길이 보정
                 double duration = anim.DurationInTicks / anim.TicksPerSecond;
                 if (duration > 600)
@@ -413,6 +436,27 @@ namespace Member_Han.Modules.FBXImporter
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.x", curveX);
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.y", curveY);
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.z", curveZ);
+        }
+
+        private static bool ShouldImportPositionCurves(string relativePath, Transform targetNode)
+        {
+            if (string.IsNullOrEmpty(relativePath))
+            {
+                return true;
+            }
+
+            string nodeName = targetNode != null ? targetNode.name : Path.GetFileName(relativePath);
+            if (string.IsNullOrEmpty(nodeName))
+            {
+                return false;
+            }
+
+            string normalizedName = nodeName.Replace(" ", "").Replace("_", "").Replace(":", "").ToLowerInvariant();
+            return normalizedName.Contains("root")
+                || normalizedName.Contains("hips")
+                || normalizedName.Contains("pelvis")
+                || normalizedName.Contains("center")
+                || normalizedName.Contains("groove");
         }
 
         private void SetRotationCurves(AnimationClip clip, string relativePath, List<QuaternionKey> rotationKeys, float timeScale)

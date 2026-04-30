@@ -40,7 +40,7 @@ namespace Member_Han.Modules.FBXImporter
                 skeleton = CreateSkeleton(root.transform), 
                 
                 human = boneMap.Select(kvp => new HumanBone { 
-                    humanName = kvp.Key, 
+                    humanName = NormalizeHumanBoneName(kvp.Key),
                     boneName = kvp.Value.name,
                     limit = new HumanLimit { useDefaultValues = true } 
                 }).ToArray(),
@@ -53,6 +53,31 @@ namespace Member_Han.Modules.FBXImporter
             };
 
             return AvatarBuilder.BuildHumanAvatar(root, description);
+        }
+
+        public static string NormalizeHumanBoneName(string humanName)
+        {
+            if (string.IsNullOrWhiteSpace(humanName))
+            {
+                return humanName;
+            }
+
+            string normalizedInput = NormalizeBoneName(humanName);
+            for (int i = 0; i < HumanTrait.BoneCount; i++)
+            {
+                string unityBoneName = HumanTrait.BoneName[i];
+                if (unityBoneName == humanName || NormalizeBoneName(unityBoneName) == normalizedInput)
+                {
+                    return unityBoneName;
+                }
+            }
+
+            return humanName;
+        }
+
+        private static string NormalizeBoneName(string value)
+        {
+            return Regex.Replace(value.ToLowerInvariant(), "[^a-z0-9]", "");
         }
 
         // 트랜스폼 계층구조를 그대로 가져오는 함수
