@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
@@ -7,14 +7,48 @@ using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine.Serialization;
 
+public struct VmdSaveResult
+{
+    public bool Success;
+    public string FilePath;
+    public string ErrorMessage;
+    public int FrameCount;
+    public long FileSizeBytes;
+
+    public static VmdSaveResult Ok(string filePath, int frameCount, long fileSizeBytes)
+    {
+        return new VmdSaveResult
+        {
+            Success = true,
+            FilePath = filePath,
+            ErrorMessage = "",
+            FrameCount = frameCount,
+            FileSizeBytes = fileSizeBytes
+        };
+    }
+
+    public static VmdSaveResult Fail(string filePath, string errorMessage)
+    {
+        return new VmdSaveResult
+        {
+            Success = false,
+            FilePath = filePath,
+            ErrorMessage = errorMessage,
+            FrameCount = 0,
+            FileSizeBytes = 0
+        };
+    }
+}
+
 // ============================================
 // [실행 순서 2] VMD 레코딩 메인 엔진
 // 역할: FBX 애니메이션 → VMD 파일 변환 핵심 로직
-// 실행 시점: Start에서 초기화, FixedUpdate에서 레코딩
+// 실행 시점: Start에서 초기화, LateUpdate 후반에서 레코딩
 // ============================================
 
 //初期ポーズ(T,Aポーズ)の時点でアタッチ、有効化されている必要がある
 // [한글] 초기 포즈(T포즈, A포즈) 상태에서 컴포넌트가 부착되고 활성화되어 있어야 함
+[DefaultExecutionOrder(29980)]
 public class UnityHumanoidVMDRecorder : MonoBehaviour
 {
     // === VMD 변환 설정 옵션 ===
@@ -43,6 +77,29 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     /// </summary>
     /// [한글] Unity 모프 이름에 "1.まばたき" 같은 번호가 있으면 제거
     public bool TrimMorphNumber = true;
+
+    [Header("Deformation Guard")]
+    [Tooltip("센터/전체부모/IK를 제외한 일반 본의 위치 키를 0으로 저장해 MMD 모델 팔/몸통 변형을 방지합니다.")]
+    public bool ZeroNonRootBonePositions = true;
+
+    [Tooltip("레코더 시작 시 Avatar 기준 초기 포즈를 실제 모델 Transform에 강제 적용합니다. YYB/MMD 모델은 기본 꺼짐을 권장합니다.")]
+    public bool ApplyRecorderInitialPose = false;
+
+    [Tooltip("초기 포즈 강제 적용 시 팔을 A 포즈로 추가 회전합니다.")]
+    public bool ApplyRecorderAPose = false;
+
+    [Header("Recording Timing")]
+    [Tooltip("최종 retarget/grounding LateUpdate가 끝난 뒤 VMD 프레임을 저장합니다. Main_Auto YYB 자동 경로의 끊김/이전 포즈 저장을 줄이기 위해 기본 활성화합니다.")]
+    public bool RecordAfterLateVisualPose = true;
+
+    [Tooltip("테스트/회귀 검증 전용입니다. 켜면 녹화 중 Unity 시간을 VMD 기준 fps로 고정합니다. 일반 GameView 재생에서는 배속/멈칫 체감이 생길 수 있어 기본값은 끕니다.")]
+    public bool UseCaptureFramerateDuringRecording = false;
+
+    [Tooltip("한 LateUpdate에서 저장할 수 있는 최대 VMD 프레임 수입니다. 일반 재생에서는 1로 두어 저장 burst로 인한 미세 멈춤을 줄입니다.")]
+    [Range(1, 8)] public int MaxRecordedFramesPerLateUpdate = 2;
+
+    [Tooltip("captureFramerate를 쓰지 않는 일반 재생에서 렌더 프레임이 밀렸을 때 backlog를 버려 저장 burst를 막습니다. 테스트용 결정론 녹화에서는 끄거나 captureFramerate를 켭니다.")]
+    public bool DropLateFrameBacklogWhenNotUsingCaptureFramerate = true;
     
     public int KeyReductionLevel = 3;                     // 키 리덕션 레벨 (파일 크기 감소)
     // === 레코딩 상태 변수 ===
@@ -142,16 +199,39 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     BoneGhost boneGhost;           // 정규화된 본 구조 (가상 스켈레톤)
     MorphRecorder morphRecorder;   // 모프 레코더 (현재 레코딩용)
     MorphRecorder morphRecorderSaved;  // 모프 레코더 (저장용)
+    bool recorderInitializationWarningLogged;
+    float recordingFrameAccumulator;
+    int lastSavedUnityFrame = -1;
+    int sameUnityFrameSaveCount;
+    int maxFramesSavedInSingleLateUpdate;
+    int droppedLateFrameBacklogCount;
+    int previousCaptureFramerate;
+    bool captureFramerateApplied;
+
+    public int SameUnityFrameSaveCount => sameUnityFrameSaveCount;
+    public int MaxFramesSavedInSingleLateUpdate => maxFramesSavedInSingleLateUpdate;
+    public int DroppedLateFrameBacklogCount => droppedLateFrameBacklogCount;
 
     // [Start is called before the first frame update]
     // [한글] [실행 순서 2-1] 첫 프레임 전에 호출 - 본 매핑 및 초기화
     void Start()
     {
+        if (BoneDictionary != null && animator != null && positionDictionary != null && rotationDictionary != null)
+        {
+            return;
+        }
+
         // FPS 설정 (30fps = 0.03333초마다 FixedUpdate 호출)
         Time.fixedDeltaTime = FPSs;
         
         // Animator 컴포넌트 가져오기
         animator = GetComponent<Animator>();
+        if (animator == null || animator.avatar == null || !animator.avatar.isHuman)
+        {
+            Debug.LogError("[UnityHumanoidVMDRecorder] Humanoid Animator가 없어 VMD 녹화 본 매핑을 초기화할 수 없습니다.");
+            return;
+        }
+
         var wit = animator.GetBoneTransform(HumanBodyBones.LeftToes);
         
         // Unity HumanBodyBones → VMD BoneNames 매핑 (모든 본 등록)
@@ -230,7 +310,10 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
             }
         }
 
-        EnforceInitialPose(animator, true);
+        if (ApplyRecorderInitialPose)
+        {
+            EnforceInitialPose(animator, ApplyRecorderAPose);
+        }
 
         SetInitialPositionAndRotation();
 
@@ -309,20 +392,82 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     }
 
 
-    // [한글] [실행 순서 2-2] 30fps로 매 프레임 실행 - 레코딩 중일 때만 동작
+    // [한글] [실행 순서 2-2] 레거시 호환 경로. 기본 자동 경로는 LateUpdate 저장을 사용한다.
     private void FixedUpdate()
     {
-        if (IsRecording)  // 레코딩 중일 때만
+        if (IsRecording && !RecordAfterLateVisualPose)  // 레코딩 중일 때만
         {
-            SaveFrame();      // 현재 프레임 데이터 저장
-            FrameNumber++;    // 프레임 번호 증가
+            SaveRecordingFrame();      // 현재 프레임 데이터 저장
         }
+    }
+
+    // [한글] [실행 순서 2-2B] retarget/grounding LateUpdate가 끝난 뒤 30fps 간격으로 저장한다.
+    private void LateUpdate()
+    {
+        if (!IsRecording || !RecordAfterLateVisualPose)
+        {
+            return;
+        }
+
+        int framesSavedThisLateUpdate = 0;
+        bool shouldRecordFirstFrame = FrameNumber == 0;
+
+        if (shouldRecordFirstFrame)
+        {
+            SaveRecordingFrame();
+            framesSavedThisLateUpdate++;
+            recordingFrameAccumulator = 0f;
+            maxFramesSavedInSingleLateUpdate = Mathf.Max(maxFramesSavedInSingleLateUpdate, framesSavedThisLateUpdate);
+            return;
+        }
+
+        recordingFrameAccumulator += Time.deltaTime;
+        int maxFramesThisLateUpdate = Mathf.Max(1, MaxRecordedFramesPerLateUpdate);
+        while (recordingFrameAccumulator + 0.0001f >= FPSs && framesSavedThisLateUpdate < maxFramesThisLateUpdate)
+        {
+            recordingFrameAccumulator = Mathf.Max(0f, recordingFrameAccumulator - FPSs);
+            SaveRecordingFrame();
+            framesSavedThisLateUpdate++;
+        }
+
+        if (recordingFrameAccumulator + 0.0001f >= FPSs &&
+            DropLateFrameBacklogWhenNotUsingCaptureFramerate &&
+            !UseCaptureFramerateDuringRecording)
+        {
+            recordingFrameAccumulator = Mathf.Min(recordingFrameAccumulator, FPSs - 0.0001f);
+            droppedLateFrameBacklogCount++;
+        }
+
+        maxFramesSavedInSingleLateUpdate = Mathf.Max(maxFramesSavedInSingleLateUpdate, framesSavedThisLateUpdate);
+    }
+
+    private void SaveRecordingFrame()
+    {
+        SaveFrame();
+        if (!IsRecording)
+        {
+            return;
+        }
+
+        if (lastSavedUnityFrame == Time.frameCount)
+        {
+            sameUnityFrameSaveCount++;
+        }
+
+        lastSavedUnityFrame = Time.frameCount;
+        FrameNumber++;    // 프레임 번호 증가
     }
 
 
     // [한글] [실행 순서 2-3] 현재 프레임의 본/IK/모프 데이터 저장
     void SaveFrame()
     {
+        if (!EnsureRecorderInitialized())
+        {
+            IsRecording = false;
+            return;
+        }
+
         // BoneGhost: 정규화된 본 구조 업데이트 (Unity 본 → VMD 본 변환)
         if (boneGhost != null) { boneGhost.GhostAll(); }
         
@@ -432,22 +577,23 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
                 continue;
             }
 
-            if (boneGhost != null && boneGhost.GhostDictionary.Keys.Contains(boneName))
+            if (boneGhost != null && boneGhost.GhostDictionary.TryGetValue(boneName, out var ghostEntry))
             {
-                if (boneGhost.GhostDictionary[boneName].ghost == null || !boneGhost.GhostDictionary[boneName].enabled)
+                if (ghostEntry.ghost == null || !ghostEntry.enabled)
                 {
                     rotationDictionary[boneName].Add(Quaternion.identity);
                     positionDictionary[boneName].Add(Vector3.zero);
                     continue;
                 }
 
-                Vector3 boneVector = boneGhost.GhostDictionary[boneName].ghost.localPosition;
-                Quaternion boneQuatenion = boneGhost.GhostDictionary[boneName].ghost.localRotation;
+                Vector3 boneVector = ghostEntry.ghost.localPosition;
+                Quaternion boneQuatenion = ghostEntry.ghost.localRotation;
                 rotationDictionary[boneName].Add(new Quaternion(-boneQuatenion.x, boneQuatenion.y, -boneQuatenion.z, boneQuatenion.w));
 
                 boneVector -= boneGhost.GhostOriginalLocalPositionDictionary[boneName];
 
-                positionDictionary[boneName].Add(new Vector3(-boneVector.x, boneVector.y, -boneVector.z) * DefaultBoneAmplifier);
+                Vector3 ghostPosition = new Vector3(-boneVector.x, boneVector.y, -boneVector.z) * DefaultBoneAmplifier;
+                positionDictionary[boneName].Add(ShouldWriteLocalPosition(boneName) ? ghostPosition : Vector3.zero);
                 continue;
             }
 
@@ -497,9 +643,19 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
             }
             else
             {
-                positionDictionary[boneName].Add(vmdPosition * DefaultBoneAmplifier);
+                positionDictionary[boneName].Add(ShouldWriteLocalPosition(boneName) ? vmdPosition * DefaultBoneAmplifier : Vector3.zero);
             }
         }
+    }
+
+    private bool ShouldWriteLocalPosition(BoneNames boneName)
+    {
+        if (!ZeroNonRootBonePositions)
+        {
+            return true;
+        }
+
+        return boneName == BoneNames.全ての親 || boneName == BoneNames.センター;
     }
 
     // [한글] 초기 위치/회전 저장 (레코딩 시작 시 기준점 설정)
@@ -532,8 +688,102 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     // [한글] [실행 순서 2-4] HumanoidSampleCode에서 호출 - 레코딩 활성화
     public void StartRecording()
     {
+        if (!EnsureRecorderInitialized())
+        {
+            IsRecording = false;
+            return;
+        }
+
         SetInitialPositionAndRotation();  // 현재 위치를 기준점으로 설정
+        ResetRecordingCadenceStats();
+        ApplyRecordingCaptureFramerate();
         IsRecording = true;                // 레코딩 플래그 활성화
+    }
+
+    private bool EnsureRecorderInitialized()
+    {
+        if (BoneDictionary != null && animator != null && positionDictionary != null && rotationDictionary != null)
+        {
+            return true;
+        }
+
+        Start();
+
+        bool ready = BoneDictionary != null && animator != null && positionDictionary != null && rotationDictionary != null;
+        if (!ready && !recorderInitializationWarningLogged)
+        {
+            Debug.LogError("[UnityHumanoidVMDRecorder] 녹화 본 딕셔너리가 초기화되지 않아 현재 프레임 저장을 건너뜁니다.");
+            recorderInitializationWarningLogged = true;
+        }
+
+        return ready;
+    }
+
+    /// <summary>
+    /// 새 녹화 세션을 시작하기 전에 활성 녹화 버퍼와 프레임 번호를 초기화한다.
+    /// StopRecording은 저장용 백업을 만들기 때문에, 비교 QA처럼 같은 프레임 기준이 중요한 새 세션에서는
+    /// StartRecording 직전에 이 메서드로 활성 버퍼가 반드시 0프레임에서 시작하도록 보장한다.
+    /// </summary>
+    public void ResetRecordingBuffersForNewSession(int expectedFrameCapacity = 0)
+    {
+        EnsureRecorderInitialized();
+
+        FrameNumber = 0;
+        ResetRecordingCadenceStats();
+        positionDictionary = new Dictionary<BoneNames, List<Vector3>>();
+        rotationDictionary = new Dictionary<BoneNames, List<Quaternion>>();
+        int listCapacity = Mathf.Max(0, expectedFrameCapacity);
+
+        if (BoneDictionary != null)
+        {
+            foreach (BoneNames boneName in BoneDictionary.Keys)
+            {
+                if (BoneDictionary[boneName] == null)
+                {
+                    continue;
+                }
+
+                positionDictionary[boneName] = listCapacity > 0 ? new List<Vector3>(listCapacity) : new List<Vector3>();
+                rotationDictionary[boneName] = listCapacity > 0 ? new List<Quaternion>(listCapacity) : new List<Quaternion>();
+            }
+        }
+
+        if (transform != null)
+        {
+            morphRecorder = new MorphRecorder(transform, listCapacity);
+        }
+    }
+
+    private void ResetRecordingCadenceStats()
+    {
+        recordingFrameAccumulator = 0f;
+        lastSavedUnityFrame = -1;
+        sameUnityFrameSaveCount = 0;
+        maxFramesSavedInSingleLateUpdate = 0;
+        droppedLateFrameBacklogCount = 0;
+    }
+
+    private void ApplyRecordingCaptureFramerate()
+    {
+        if (!RecordAfterLateVisualPose || !UseCaptureFramerateDuringRecording || captureFramerateApplied)
+        {
+            return;
+        }
+
+        previousCaptureFramerate = Time.captureFramerate;
+        Time.captureFramerate = Mathf.RoundToInt(1f / FPSs);
+        captureFramerateApplied = true;
+    }
+
+    private void RestoreRecordingCaptureFramerate()
+    {
+        if (!captureFramerateApplied)
+        {
+            return;
+        }
+
+        Time.captureFramerate = previousCaptureFramerate;
+        captureFramerateApplied = false;
     }
 
 
@@ -553,14 +803,17 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     public void StopRecording()
     {
         IsRecording = false;  // 레코딩 중지
+        RestoreRecordingCaptureFramerate();
         
         // [Safety Check] 초기화 전에 Stop이 호출될 경우 방어
         if (BoneDictionary == null) return;
         
         // 현재 레코딩 데이터를 "Saved" 버전으로 백업
         frameNumberSaved = FrameNumber;
+        Debug.Log($"[VMDRecorder] 녹화 종료: frames={frameNumberSaved}, afterLate={RecordAfterLateVisualPose}, captureFps={UseCaptureFramerateDuringRecording}, sameUnityFrameSaves={sameUnityFrameSaveCount}, maxLateBurst={maxFramesSavedInSingleLateUpdate}, droppedBacklog={droppedLateFrameBacklogCount}");
         morphRecorderSaved = morphRecorder;
         FrameNumber = 0;
+        ResetRecordingCadenceStats();
         positionDictionarySaved = positionDictionary;
         positionDictionary = new Dictionary<BoneNames, List<Vector3>>();
         rotationDictionarySaved = rotationDictionary;
@@ -578,230 +831,307 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     }
 
 
-    /// <summary>
-    /// VMDを作成する
-    /// 呼び出す際は先にStopRecordingを呼び出すこと
-    /// </summary>
-    /// <param name="modelName">VMDファイルに記載される専用モデル名</param>
-    /// <param name="filePath">保存先の絶対ファイルパス</param>
-    /// [한글] VMD 파일 생성 (호출 전 StopRecording 필수)
-    /// [한글] [실행 순서 2-6] HumanoidSampleCode에서 호출 - VMD 파일 생성
-    public async void SaveVMD(string modelName, string filePath)
+    public async Task<VmdSaveResult> SaveVMDAsync(string modelName, string filePath)
     {
         if (IsRecording)
         {
-            Debug.Log(transform.name + "VMD保存前にレコーディングをストップしてください。");
-            // [한글] VMD 저장 전에 레코딩을 중지해주세요
+            return VmdSaveResult.Fail(filePath, "VMD 저장 전에 녹화를 먼저 중지해야 합니다.");
+        }
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return VmdSaveResult.Fail(filePath, "저장 경로가 비어 있습니다.");
+        }
+
+        string directory = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return VmdSaveResult.Fail(filePath, "저장 폴더를 확인할 수 없습니다.");
+        }
+
+        if (frameNumberSaved <= 0)
+        {
+            return VmdSaveResult.Fail(filePath, "저장할 녹화 프레임이 없습니다.");
+        }
+
+        if (positionDictionarySaved == null || rotationDictionarySaved == null || BoneDictionary == null)
+        {
+            return VmdSaveResult.Fail(filePath, "녹화 데이터가 초기화되지 않았습니다.");
+        }
+
+        int keyReductionLevel = Mathf.Max(1, KeyReductionLevel);
+        List<BoneNames> activeBones = GetActiveRecordedBones();
+        if (activeBones.Count == 0)
+        {
+            return VmdSaveResult.Fail(filePath, "유효한 본 프레임 데이터가 없습니다.");
+        }
+
+        int safeFrameCount = CalculateSafeFrameCount(activeBones);
+        if (safeFrameCount <= 0)
+        {
+            return VmdSaveResult.Fail(filePath, "유효한 본 프레임 데이터가 없습니다.");
+        }
+
+        MorphRecorder morphSnapshot = morphRecorderSaved;
+        if (morphSnapshot != null)
+        {
+            morphSnapshot.DisableIntron();
+            if (TrimMorphNumber)
+            {
+                morphSnapshot.TrimMorphNumber();
+            }
+        }
+
+        Directory.CreateDirectory(directory);
+        string safeModelName = string.IsNullOrWhiteSpace(modelName) ? "fbxToVMD" : modelName;
+
+        try
+        {
+            Debug.Log($"{transform.name} VMD 파일 생성 시작: {filePath}");
+            await Task.Run(() => WriteVMDFile(safeModelName, filePath, activeBones, safeFrameCount, keyReductionLevel, morphSnapshot));
+
+            FileInfo fileInfo = new FileInfo(filePath);
+            if (!fileInfo.Exists || fileInfo.Length <= 0)
+            {
+                return VmdSaveResult.Fail(filePath, "VMD 파일이 생성되지 않았거나 비어 있습니다.");
+            }
+
+            Debug.Log($"{transform.name} VMD 파일 생성 완료: {filePath}");
+            return VmdSaveResult.Ok(filePath, safeFrameCount, fileInfo.Length);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"VMD 쓰기 오류: {ex.Message}\n{ex.StackTrace}");
+            return VmdSaveResult.Fail(filePath, ex.Message);
+        }
+    }
+
+    public async void SaveVMD(string modelName, string filePath)
+    {
+        VmdSaveResult result = await SaveVMDAsync(modelName, filePath);
+        if (!result.Success)
+        {
+            Debug.LogError($"VMD 저장 실패: {result.ErrorMessage}");
+        }
+    }
+
+    public async void SaveVMD(string modelName, string filePath, int keyReductionLevel)
+    {
+        KeyReductionLevel = keyReductionLevel;
+        VmdSaveResult result = await SaveVMDAsync(modelName, filePath);
+        if (!result.Success)
+        {
+            Debug.LogError($"VMD 저장 실패: {result.ErrorMessage}");
+        }
+    }
+
+    private List<BoneNames> GetActiveRecordedBones()
+    {
+        List<BoneNames> activeBones = new List<BoneNames>();
+        foreach (BoneNames boneName in Enum.GetValues(typeof(BoneNames)))
+        {
+            if (!BoneDictionary.Keys.Contains(boneName)) { continue; }
+            if (BoneDictionary[boneName] == null) { continue; }
+            if (!UseParentOfAll && boneName == BoneNames.全ての親) { continue; }
+            if (!positionDictionarySaved.ContainsKey(boneName)) { continue; }
+            if (!rotationDictionarySaved.ContainsKey(boneName)) { continue; }
+
+            activeBones.Add(boneName);
+        }
+
+        return activeBones;
+    }
+
+    private int CalculateSafeFrameCount(List<BoneNames> activeBones)
+    {
+        if (activeBones == null || activeBones.Count == 0)
+        {
+            return 0;
+        }
+
+        int safeFrameCount = frameNumberSaved;
+        foreach (BoneNames boneName in activeBones)
+        {
+            safeFrameCount = Math.Min(safeFrameCount, positionDictionarySaved[boneName].Count);
+            safeFrameCount = Math.Min(safeFrameCount, rotationDictionarySaved[boneName].Count);
+        }
+
+        if (safeFrameCount < frameNumberSaved)
+        {
+            Debug.LogWarning($"[VMDRecorder] 프레임 수가 일부 본 데이터와 맞지 않아 {frameNumberSaved} -> {safeFrameCount}로 저장합니다.");
+        }
+
+        return safeFrameCount;
+    }
+
+    private void WriteVMDFile(
+        string modelName,
+        string filePath,
+        List<BoneNames> activeBones,
+        int frameCount,
+        int keyReductionLevel,
+        MorphRecorder morphSnapshot)
+    {
+        const string ShiftJIS = "shift_jis";
+        const int intByteLength = 4;
+
+        using FileStream fileStream = new FileStream(filePath, FileMode.Create);
+        using BinaryWriter binaryWriter = new BinaryWriter(fileStream);
+
+        const int fileTypeLength = 30;
+        const string rightFileType = "Vocaloid Motion Data 0002";
+        byte[] fileTypeBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(rightFileType);
+        binaryWriter.Write(fileTypeBytes, 0, fileTypeBytes.Length);
+        binaryWriter.Write(new byte[fileTypeLength - fileTypeBytes.Length], 0, fileTypeLength - fileTypeBytes.Length);
+
+        const int modelNameLength = 20;
+        byte[] modelNameBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(modelName);
+        modelNameBytes = modelNameBytes.Take(Math.Min(modelNameLength, modelNameBytes.Length)).ToArray();
+        binaryWriter.Write(modelNameBytes, 0, modelNameBytes.Length);
+        binaryWriter.Write(new byte[modelNameLength - modelNameBytes.Length], 0, modelNameLength - modelNameBytes.Length);
+
+        void LoopWithBoneCondition(Action<BoneNames, int> action)
+        {
+            for (int i = 0; i < frameCount; i++)
+            {
+                if ((i % keyReductionLevel) != 0) { continue; }
+                foreach (BoneNames boneName in activeBones)
+                {
+                    action(boneName, i);
+                }
+            }
+        }
+
+        uint allKeyFrameNumber = 0;
+        LoopWithBoneCondition((a, b) => { allKeyFrameNumber++; });
+        byte[] allKeyFrameNumberByte = BitConverter.GetBytes(allKeyFrameNumber);
+        binaryWriter.Write(allKeyFrameNumberByte, 0, intByteLength);
+
+        LoopWithBoneCondition((boneName, i) =>
+        {
+            const int boneNameLength = 15;
+            string boneNameString = boneName.ToString();
+            if (boneName == BoneNames.全ての親 && UseCenterAsParentOfAll)
+            {
+                boneNameString = CenterNameString;
+            }
+            if (boneName == BoneNames.センター && UseCenterAsParentOfAll)
+            {
+                boneNameString = GrooveNameString;
+            }
+
+            byte[] boneNameBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(boneNameString);
+            binaryWriter.Write(boneNameBytes, 0, boneNameBytes.Length);
+            binaryWriter.Write(new byte[boneNameLength - boneNameBytes.Length], 0, boneNameLength - boneNameBytes.Length);
+
+            byte[] frameNumberByte = BitConverter.GetBytes((ulong)i);
+            binaryWriter.Write(frameNumberByte, 0, intByteLength);
+
+            Vector3 position = positionDictionarySaved[boneName][i];
+            binaryWriter.Write(BitConverter.GetBytes(position.x), 0, intByteLength);
+            binaryWriter.Write(BitConverter.GetBytes(position.y), 0, intByteLength);
+            binaryWriter.Write(BitConverter.GetBytes(position.z), 0, intByteLength);
+
+            Quaternion rotation = rotationDictionarySaved[boneName][i];
+            binaryWriter.Write(BitConverter.GetBytes(rotation.x), 0, intByteLength);
+            binaryWriter.Write(BitConverter.GetBytes(rotation.y), 0, intByteLength);
+            binaryWriter.Write(BitConverter.GetBytes(rotation.z), 0, intByteLength);
+            binaryWriter.Write(BitConverter.GetBytes(rotation.w), 0, intByteLength);
+
+            byte[] interpolateBytes = new byte[64];
+            binaryWriter.Write(interpolateBytes, 0, interpolateBytes.Length);
+        });
+
+        WriteMorphFrames(binaryWriter, morphSnapshot, frameCount, ShiftJIS, intByteLength);
+
+        byte[] cameraFrameCount = BitConverter.GetBytes(0);
+        binaryWriter.Write(cameraFrameCount, 0, intByteLength);
+
+        byte[] lightFrameCount = BitConverter.GetBytes(0);
+        binaryWriter.Write(lightFrameCount, 0, intByteLength);
+
+        byte[] selfShadowCount = BitConverter.GetBytes(0);
+        binaryWriter.Write(selfShadowCount, 0, intByteLength);
+
+        WriteIkFooter(binaryWriter, ShiftJIS, intByteLength);
+    }
+
+    private static void WriteMorphFrames(BinaryWriter binaryWriter, MorphRecorder morphSnapshot, int frameCount, string shiftJis, int intByteLength)
+    {
+        const int morphNameLength = 15;
+        if (morphSnapshot == null)
+        {
+            binaryWriter.Write(BitConverter.GetBytes(0), 0, intByteLength);
             return;
         }
 
-        if (KeyReductionLevel <= 0) { KeyReductionLevel = 1; }  // 최소값 1
-
-        Debug.Log(transform.name + "VMDファイル作成開始");  // [한글] VMD 파일 생성 시작
-        await Task.Run(() =>  // 백그라운드 스레드에서 실행 (Unity 메인 스레드 블록킹 방지)
+        void LoopWithMorphCondition(Action<string, int> action)
         {
-            //ファイルの書き込み  // [한글] 파일 쓰기
-            using (FileStream fileStream = new FileStream(filePath, FileMode.Create))
-            using (BinaryWriter binaryWriter = new BinaryWriter(fileStream))
+            for (int i = 0; i < frameCount; i++)
             {
-                try
+                foreach (string morphName in morphSnapshot.MorphDrivers.Keys)
                 {
-                    const string ShiftJIS = "shift_jis";  // 일본어 인코딩
-                    const int intByteLength = 4;          // int = 4바이트
+                    MorphRecorder.MorphDriver driver = morphSnapshot.MorphDrivers[morphName];
+                    if (driver.ValueList.Count == 0) { continue; }
+                    if (i >= driver.ValueList.Count) { continue; }
+                    if (!driver.ValueList[i].enabled) { continue; }
 
-                    //ファイルタイプの書き込み  // [한글] 파일 타입 쓰기
-                    const int fileTypeLength = 30;
-                    const string RightFileType = "Vocaloid Motion Data 0002";  // VMD 헤더
-                    byte[] fileTypeBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(RightFileType);
-                    binaryWriter.Write(fileTypeBytes, 0, fileTypeBytes.Length);
-                    binaryWriter.Write(new byte[fileTypeLength - fileTypeBytes.Length], 0, fileTypeLength - fileTypeBytes.Length);
+                    byte[] morphNameBytes = System.Text.Encoding.GetEncoding(shiftJis).GetBytes(morphName);
+                    if (morphNameLength - morphNameBytes.Length < 0) { continue; }
 
-
-                    //モデル名の書き込み、Shift_JISで保存  // [한글] 모델명 쓰기 (Shift-JIS 저장)
-                    const int modelNameLength = 20;
-                    byte[] modelNameBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(modelName);
-                    //モデル名が長すぎたとき  // [한글] 모델명이 너무 길 때 (20바이트 제한)
-                    modelNameBytes = modelNameBytes.Take(Mathf.Min(modelNameLength, modelNameBytes.Length)).ToArray();
-                    binaryWriter.Write(modelNameBytes, 0, modelNameBytes.Length);
-                    binaryWriter.Write(new byte[modelNameLength - modelNameBytes.Length], 0, modelNameLength - modelNameBytes.Length);
-
-
-                    //全ボーンフレーム数の書き込み  // [한글] 전체 본 프레임 개수 쓰기
-                    void LoopWithBoneCondition(Action<BoneNames, int> action)
-                    {
-                        for (int i = 0; i < frameNumberSaved; i++)
-                        {
-                            if ((i % KeyReductionLevel) != 0) { continue; }  // 키 리덕션 적용
-
-                            foreach (BoneNames boneName in Enum.GetValues(typeof(BoneNames)))
-                            {
-                                if (!BoneDictionary.Keys.Contains(boneName)) { continue; }
-                                if (BoneDictionary[boneName] == null) { continue; }
-                                if (!UseParentOfAll && boneName == BoneNames.全ての親) { continue; }
-
-                                action(boneName, i);
-                            }
-                        }
-                    }
-                    uint allKeyFrameNumber = 0;
-                    LoopWithBoneCondition((a, b) => { allKeyFrameNumber++; });
-                    byte[] allKeyFrameNumberByte = BitConverter.GetBytes(allKeyFrameNumber);
-                    binaryWriter.Write(allKeyFrameNumberByte, 0, intByteLength);
-
-                    //人ボーンの書き込み
-                    LoopWithBoneCondition((boneName, i) =>
-                    {
-                        const int boneNameLength = 15;
-                        string boneNameString = boneName.ToString();
-                        if (boneName == BoneNames.全ての親 && UseCenterAsParentOfAll)
-                        {
-                            boneNameString = CenterNameString;
-                        }
-                        if (boneName == BoneNames.センター && UseCenterAsParentOfAll)
-                        {
-                            boneNameString = GrooveNameString;
-                        }
-
-                        byte[] boneNameBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(boneNameString);
-                        binaryWriter.Write(boneNameBytes, 0, boneNameBytes.Length);
-                        binaryWriter.Write(new byte[boneNameLength - boneNameBytes.Length], 0, boneNameLength - boneNameBytes.Length);
-
-                        byte[] frameNumberByte = BitConverter.GetBytes((ulong)i);
-                        binaryWriter.Write(frameNumberByte, 0, intByteLength);
-
-                        Vector3 position = positionDictionarySaved[boneName][i];
-                        byte[] positionX = BitConverter.GetBytes(position.x);
-                        binaryWriter.Write(positionX, 0, intByteLength);
-                        byte[] positionY = BitConverter.GetBytes(position.y);
-                        binaryWriter.Write(positionY, 0, intByteLength);
-                        byte[] positionZ = BitConverter.GetBytes(position.z);
-                        binaryWriter.Write(positionZ, 0, intByteLength);
-                        Quaternion rotation = rotationDictionarySaved[boneName][i];
-                        byte[] rotationX = BitConverter.GetBytes(rotation.x);
-                        binaryWriter.Write(rotationX, 0, intByteLength);
-                        byte[] rotationY = BitConverter.GetBytes(rotation.y);
-                        binaryWriter.Write(rotationY, 0, intByteLength);
-                        byte[] rotationZ = BitConverter.GetBytes(rotation.z);
-                        binaryWriter.Write(rotationZ, 0, intByteLength);
-                        byte[] rotationW = BitConverter.GetBytes(rotation.w);
-                        binaryWriter.Write(rotationW, 0, intByteLength);
-
-                        byte[] interpolateBytes = new byte[64];
-                        binaryWriter.Write(interpolateBytes, 0, 64);
-                    });
-
-                    //全モーフフレーム数の書き込み
-                    morphRecorderSaved.DisableIntron();
-                    if (TrimMorphNumber) { morphRecorderSaved.TrimMorphNumber(); }
-                    void LoopWithMorphCondition(Action<string, int> action)
-                    {
-                        for (int i = 0; i < frameNumberSaved; i++)
-                        {
-                            foreach (string morphName in morphRecorderSaved.MorphDrivers.Keys)
-                            {
-                                if (morphRecorderSaved.MorphDrivers[morphName].ValueList.Count == 0) { continue; }
-                                if (i > morphRecorderSaved.MorphDrivers[morphName].ValueList.Count) { continue; }
-                                //変化のない部分は省く
-                                if (!morphRecorderSaved.MorphDrivers[morphName].ValueList[i].enabled) { continue; }
-                                const int boneNameLength = 15;
-                                string morphNameString = morphName.ToString();
-                                byte[] morphNameBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(morphNameString);
-                                //名前が長過ぎた場合書き込まない
-                                if (boneNameLength - morphNameBytes.Length < 0) { continue; }
-
-                                action(morphName, i);
-                            }
-                        }
-                    }
-                    uint allMorphNumber = 0;
-                    LoopWithMorphCondition((a, b) => { allMorphNumber++; });
-                    byte[] faceFrameCount = BitConverter.GetBytes(allMorphNumber);
-                    binaryWriter.Write(faceFrameCount, 0, intByteLength);
-
-                    //モーフの書き込み
-                    LoopWithMorphCondition((morphName, i) =>
-                    {
-                        const int boneNameLength = 15;
-                        string morphNameString = morphName.ToString();
-                        byte[] morphNameBytes = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes(morphNameString);
-
-                        binaryWriter.Write(morphNameBytes, 0, morphNameBytes.Length);
-                        binaryWriter.Write(new byte[boneNameLength - morphNameBytes.Length], 0, boneNameLength - morphNameBytes.Length);
-
-                        byte[] frameNumberByte = BitConverter.GetBytes((ulong)i);
-                        binaryWriter.Write(frameNumberByte, 0, intByteLength);
-
-                        byte[] valueByte = BitConverter.GetBytes(morphRecorderSaved.MorphDrivers[morphName].ValueList[i].value);
-                        binaryWriter.Write(valueByte, 0, intByteLength);
-                    });
-
-                    //カメラの書き込み
-                    byte[] cameraFrameCount = BitConverter.GetBytes(0);
-                    binaryWriter.Write(cameraFrameCount, 0, intByteLength);
-
-                    //照明の書き込み
-                    byte[] lightFrameCount = BitConverter.GetBytes(0);
-                    binaryWriter.Write(lightFrameCount, 0, intByteLength);
-
-                    //セルフシャドウの書き込み
-                    byte[] selfShadowCount = BitConverter.GetBytes(0);
-                    binaryWriter.Write(selfShadowCount, 0, intByteLength);
-
-                    //IKの書き込み
-                    //0フレームにキーフレーム一つだけ置く
-                    byte[] ikCount = BitConverter.GetBytes(1);
-                    byte[] ikFrameNumber = BitConverter.GetBytes(0);
-                    byte modelDisplay = Convert.ToByte(1);
-                    //右足IKと左足IKと右足つま先IKと左足つま先IKの4つ
-                    byte[] ikNumber = BitConverter.GetBytes(4);
-                    const int IKNameLength = 20;
-                    byte[] leftIKName = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes("左足ＩＫ");
-                    byte[] rightIKName = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes("右足ＩＫ");
-                    byte[] leftToeIKName = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes("左つま先ＩＫ");
-                    byte[] rightToeIKName = System.Text.Encoding.GetEncoding(ShiftJIS).GetBytes("右つま先ＩＫ");
-                    byte ikOn = Convert.ToByte(1);
-                    byte ikOff = Convert.ToByte(0);
-                    binaryWriter.Write(ikCount, 0, intByteLength);
-                    binaryWriter.Write(ikFrameNumber, 0, intByteLength);
-                    binaryWriter.Write(modelDisplay);
-                    binaryWriter.Write(ikNumber, 0, intByteLength);
-                    binaryWriter.Write(leftIKName, 0, leftIKName.Length);
-                    binaryWriter.Write(new byte[IKNameLength - leftIKName.Length], 0, IKNameLength - leftIKName.Length);
-                    binaryWriter.Write(ikOn);
-                    binaryWriter.Write(leftToeIKName, 0, leftToeIKName.Length);
-                    binaryWriter.Write(new byte[IKNameLength - leftToeIKName.Length], 0, IKNameLength - leftToeIKName.Length);
-                    binaryWriter.Write(ikOn);
-                    binaryWriter.Write(rightIKName, 0, rightIKName.Length);
-                    binaryWriter.Write(new byte[IKNameLength - rightIKName.Length], 0, IKNameLength - rightIKName.Length);
-                    binaryWriter.Write(ikOn);
-                    binaryWriter.Write(rightToeIKName, 0, rightToeIKName.Length);
-                    binaryWriter.Write(new byte[IKNameLength - rightToeIKName.Length], 0, IKNameLength - rightToeIKName.Length);
-                    binaryWriter.Write(ikOn);
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log("VMD書き込みエラー" + ex.Message);
-                }
-                finally
-                {
-                    binaryWriter.Close();
+                    action(morphName, i);
                 }
             }
+        }
+
+        uint allMorphNumber = 0;
+        LoopWithMorphCondition((a, b) => { allMorphNumber++; });
+        byte[] faceFrameCount = BitConverter.GetBytes(allMorphNumber);
+        binaryWriter.Write(faceFrameCount, 0, intByteLength);
+
+        LoopWithMorphCondition((morphName, i) =>
+        {
+            byte[] morphNameBytes = System.Text.Encoding.GetEncoding(shiftJis).GetBytes(morphName);
+            binaryWriter.Write(morphNameBytes, 0, morphNameBytes.Length);
+            binaryWriter.Write(new byte[morphNameLength - morphNameBytes.Length], 0, morphNameLength - morphNameBytes.Length);
+
+            byte[] frameNumberByte = BitConverter.GetBytes((ulong)i);
+            binaryWriter.Write(frameNumberByte, 0, intByteLength);
+
+            byte[] valueByte = BitConverter.GetBytes(morphSnapshot.MorphDrivers[morphName].ValueList[i].value);
+            binaryWriter.Write(valueByte, 0, intByteLength);
         });
-        Debug.Log(transform.name + "VMDファイル作成終了");
     }
 
-    /// <summary>
-    /// VMDを作成する
-    /// 呼び出す際は先にStopRecordingを呼び出すこと
-    /// </summary>
-    /// <param name="modelName">VMDファイルに記載される専用モデル名</param>
-    /// <param name="filePath">保存先の絶対ファイルパス</param>
-    /// <param name="keyReductionLevel">キーの書き込み頻度を減らして容量を減らす</param>
-    public void SaveVMD(string modelName, string filePath, int keyReductionLevel)
+    private static void WriteIkFooter(BinaryWriter binaryWriter, string shiftJis, int intByteLength)
     {
-        KeyReductionLevel = keyReductionLevel;
-        SaveVMD(modelName, filePath);
+        byte[] ikCount = BitConverter.GetBytes(1);
+        byte[] ikFrameNumber = BitConverter.GetBytes(0);
+        byte modelDisplay = Convert.ToByte(1);
+        byte[] ikNumber = BitConverter.GetBytes(4);
+        const int IKNameLength = 20;
+        byte[] leftIKName = System.Text.Encoding.GetEncoding(shiftJis).GetBytes("左足ＩＫ");
+        byte[] rightIKName = System.Text.Encoding.GetEncoding(shiftJis).GetBytes("右足ＩＫ");
+        byte[] leftToeIKName = System.Text.Encoding.GetEncoding(shiftJis).GetBytes("左つま先ＩＫ");
+        byte[] rightToeIKName = System.Text.Encoding.GetEncoding(shiftJis).GetBytes("右つま先ＩＫ");
+        byte ikOn = Convert.ToByte(1);
+
+        binaryWriter.Write(ikCount, 0, intByteLength);
+        binaryWriter.Write(ikFrameNumber, 0, intByteLength);
+        binaryWriter.Write(modelDisplay);
+        binaryWriter.Write(ikNumber, 0, intByteLength);
+        binaryWriter.Write(leftIKName, 0, leftIKName.Length);
+        binaryWriter.Write(new byte[IKNameLength - leftIKName.Length], 0, IKNameLength - leftIKName.Length);
+        binaryWriter.Write(ikOn);
+        binaryWriter.Write(leftToeIKName, 0, leftToeIKName.Length);
+        binaryWriter.Write(new byte[IKNameLength - leftToeIKName.Length], 0, IKNameLength - leftToeIKName.Length);
+        binaryWriter.Write(ikOn);
+        binaryWriter.Write(rightIKName, 0, rightIKName.Length);
+        binaryWriter.Write(new byte[IKNameLength - rightIKName.Length], 0, IKNameLength - rightIKName.Length);
+        binaryWriter.Write(ikOn);
+        binaryWriter.Write(rightToeIKName, 0, rightToeIKName.Length);
+        binaryWriter.Write(new byte[IKNameLength - rightToeIKName.Length], 0, IKNameLength - rightToeIKName.Length);
+        binaryWriter.Write(ikOn);
     }
 
     //裏で正規化されたモデル
@@ -997,7 +1327,7 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
         //キーはunity上のモーフ名
         public Dictionary<string, MorphDriver> MorphDrivers { get; private set; } = new Dictionary<string, MorphDriver>();
 
-        public MorphRecorder(Transform model)
+        public MorphRecorder(Transform model, int expectedFrameCapacity = 0)
         {
             List<SkinnedMeshRenderer> searchBlendShapeSkins(Transform t)
             {
@@ -1030,8 +1360,8 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
                 {
                     string morphName = skinnedMeshRenderer.sharedMesh.GetBlendShapeName(i);
                     ////モーフ名に重複があれば2コ目以降は無視
-                    if (MorphDrivers.Keys.Contains(morphName)) { continue; }
-                    MorphDrivers.Add(morphName, new MorphDriver(skinnedMeshRenderer, i));
+                    if (MorphDrivers.ContainsKey(morphName)) { continue; }
+                    MorphDrivers.Add(morphName, new MorphDriver(skinnedMeshRenderer, i, expectedFrameCapacity));
                 }
             }
         }
@@ -1050,13 +1380,19 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
             Dictionary<string, MorphDriver> morphDriversTemp = new Dictionary<string, MorphDriver>();
             foreach (string morphName in MorphDrivers.Keys)
             {
+                string outputName = morphName;
                 //正規表現使うより、dot探して整数か見る
                 if (morphName.Contains(dot) && int.TryParse(morphName.Substring(0, morphName.IndexOf(dot)), out int dummy))
                 {
-                    morphDriversTemp.Add(morphName.Substring(morphName.IndexOf(dot) + 1), MorphDrivers[morphName]);
+                    outputName = morphName.Substring(morphName.IndexOf(dot) + 1);
+                }
+
+                if (morphDriversTemp.ContainsKey(outputName))
+                {
                     continue;
                 }
-                morphDriversTemp.Add(morphName, MorphDrivers[morphName]);
+
+                morphDriversTemp.Add(outputName, MorphDrivers[morphName]);
             }
             MorphDrivers = morphDriversTemp;
         }
@@ -1087,12 +1423,15 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
             public SkinnedMeshRenderer SkinnedMeshRenderer { get; private set; } = new SkinnedMeshRenderer();
             public int MorphIndex { get; private set; }
 
-            public List<(float value, bool enabled)> ValueList { get; private set; } = new List<(float value, bool enabled)>();
+            public List<(float value, bool enabled)> ValueList { get; private set; }
 
-            public MorphDriver(SkinnedMeshRenderer skinnedMeshRenderer, int morphIndex)
+            public MorphDriver(SkinnedMeshRenderer skinnedMeshRenderer, int morphIndex, int expectedFrameCapacity = 0)
             {
                 SkinnedMeshRenderer = skinnedMeshRenderer;
                 MorphIndex = morphIndex;
+                ValueList = expectedFrameCapacity > 0
+                    ? new List<(float value, bool enabled)>(expectedFrameCapacity)
+                    : new List<(float value, bool enabled)>();
             }
 
             public void RecordMorph()
