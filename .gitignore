@@ -17,6 +17,20 @@
 # Recordings can get excessive in size
 /[Rr]ecordings/
 
+# Unity/MCP capture outputs are QA artifacts.
+# Keep screenshots/videos under Docs/Machine_Spirit/Local instead.
+/[Ss]creenshots/
+/[Cc]aptures/
+/[Vv]ideos/
+/[Aa]ssets/[Ss]creenshots/
+/[Aa]ssets/[Ss]creenshots.meta
+/[Aa]ssets/[Cc]aptures/
+/[Aa]ssets/[Cc]aptures.meta
+/[Aa]ssets/[Rr]ecordings/
+/[Aa]ssets/[Rr]ecordings.meta
+/[Aa]ssets/[Vv]ideos/
+/[Aa]ssets/[Vv]ideos.meta
+
 # Uncomment this line if you wish to ignore the asset store tools plugin
 # /[Aa]ssets/AssetStoreTools*
 
@@ -83,3 +97,154 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /ProjectSettings/McpUnitySettings.json
 
 /Memo/
+
+# BEGIN LOCAL PRIVATE WORKFLOW FILES
+/DOCS/Machine_Spirit.md
+/DOCS/Machine_Spirit/Machine_Spirit.md
+/DOCS/Machine_Spirit/
+/DOCS/Machine_Spirit
+/DOCS/Machine_Spirit/Share/
+/DOCS/Machine_Spirit/Tools/
+/DOCS/Machine_Spirit/Share/README.md
+/DOCS/Machine_Spirit/Local/
+/DOCS/Machine_Spirit/Local/README.md
+/DOCS/Machine Spirit.md
+/DOCS/Machine Spirit
+/DOCS/Share.md
+/DOCS/Machine_Spirit/Share.md
+/DOCS/Share
+/DOCS/Local.md
+/DOCS/Machine_Spirit/Local.md
+/DOCS/Local
+/DOCS/Modfiy_Log.md
+/DOCS/CheckList.md
+/DOCS/Machine_Spirit/Modfiy_Log.md
+/DOCS/Machine_Spirit/CheckList.md
+/DOCS/Machine_Spirit/Local/Modfiy_Log.md
+/DOCS/Machine_Spirit/Local/CheckList.md
+/Docs/Machine_Spirit.md
+/Docs/Machine_Spirit/Machine_Spirit.md
+/Docs/Machine_Spirit/
+/Docs/Machine_Spirit
+/Docs/Machine_Spirit/Share/
+/Docs/Machine_Spirit/Tools/
+/Docs/Machine_Spirit/Share/README.md
+/Docs/Machine_Spirit/Local/
+/Docs/Machine_Spirit/Local/README.md
+/Docs/Machine Spirit.md
+/Docs/Machine Spirit
+/Docs/Share.md
+/Docs/Machine_Spirit/Share.md
+/Docs/Share
+/Docs/Local.md
+/Docs/Machine_Spirit/Local.md
+/Docs/Local
+/Docs/Modfiy_Log.md
+/Docs/CheckList.md
+/Docs/Machine_Spirit/Modfiy_Log.md
+/Docs/Machine_Spirit/CheckList.md
+/Docs/Machine_Spirit/Local/Modfiy_Log.md
+/Docs/Machine_Spirit/Local/CheckList.md
+/Machine Spirit.md
+/Machine Spirit
+/Machine_Spirit.md
+/Machine_Spirit
+/machine_sprit/
+/machine_sprit/Local/
+/machine_sprit/Local
+
+# Generated motion/model outputs
+*.vmd
+*.vmd.meta
+*.vrm
+*.vrm.meta
+/Assets/VMDRecorderSample/
+/.claude/
+/.cluade/
+/.codex/
+/.openai/
+/.cursor/
+/.continue/
+/.windsurf/
+/.aider*
+/GEMINI.md
+/Share.md
+/Share
+/Local.md
+/Local
+/LOCAL_WORKFLOW.md
+/AGENTS.md
+/AGENTS.override.md
+/CLAUDE.md
+/codex.md
+/CODEX.md
+/Codex.md
+/.agents/
+/.vscode/tasks.json
+/.vscode/mcp.json
+/DOCS/capture/
+/DOCS/ref/
+/DOCS/progress/
+/DOCS/qa/
+/DOCS/tasks/
+/DOCS/ai-worklog/
+/DOCS/Machine_Spirit/capture/
+/DOCS/Machine_Spirit/progress/
+/DOCS/Machine_Spirit/qa/
+/DOCS/Machine_Spirit/tasks/
+/DOCS/Machine_Spirit/ai-worklog/
+/DOCS/Machine_Spirit/Share/capture/
+/DOCS/Machine_Spirit/Local/progress/
+/DOCS/Machine_Spirit/Share/qa/
+/DOCS/Machine_Spirit/Share/tasks/
+/DOCS/Machine_Spirit/Local/ai-worklog/
+/DOCS/Machine_Spirit/Local/AI_history/
+/Docs/capture/
+/Docs/ref/
+/Docs/progress/
+/Docs/qa/
+/Docs/tasks/
+/Docs/ai-worklog/
+/Docs/Machine_Spirit/capture/
+/Docs/Machine_Spirit/progress/
+/Docs/Machine_Spirit/qa/
+/Docs/Machine_Spirit/tasks/
+/Docs/Machine_Spirit/ai-worklog/
+/Docs/Machine_Spirit/Share/capture/
+/Docs/Machine_Spirit/Local/progress/
+/Docs/Machine_Spirit/Share/qa/
+/Docs/Machine_Spirit/Share/tasks/
+/Docs/Machine_Spirit/Local/ai-worklog/
+/Docs/Machine_Spirit/Local/AI_history/
+/docs/capture/
+/docs/ref/
+/docs/progress/
+/docs/qa/
+/docs/tasks/
+/docs/ai-worklog/
+/docs/Machine_Spirit/
+/docs/Machine_Spirit/Tools/
+/docs/Machine_Spirit/capture/
+/docs/Machine_Spirit/progress/
+/docs/Machine_Spirit/qa/
+/docs/Machine_Spirit/tasks/
+/docs/Machine_Spirit/ai-worklog/
+/docs/Machine_Spirit/Local/AI_history/
+/Modfiy_Log.md
+/CheckList.md
+/CheckMachine.bat
+/CheckTextIntegrity.bat
+/scripts/harness/
+/artifacts/
+/DOCS/Machine_Spirit/Tools/Share/scripts/harness/
+/Docs/Machine_Spirit/Tools/Share/scripts/harness/
+/docs/Machine_Spirit/Tools/Share/scripts/harness/
+/DOCS/Machine_Spirit/artifacts/
+/Docs/Machine_Spirit/artifacts/
+/docs/Machine_Spirit/artifacts/
+/DOCS/Machine_Spirit/Local/artifacts/
+/Docs/Machine_Spirit/Local/artifacts/
+/Docs/portable-*-workflow-tmp/
+/Docs/snippets/
+/Docs/archive/conflicting-or-obsolete/
+# END LOCAL PRIVATE WORKFLOW FILES
