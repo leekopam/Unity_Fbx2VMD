@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   # push / pull_request 트리거는 UNITY_LICENSE secret 확인 및 수동 실행 성공 후 추가한다
 
+permissions:
+  checks: write
+  contents: read
+
 jobs:
   editmode-test:
     name: EditMode Tests (Unity 2022.3)
