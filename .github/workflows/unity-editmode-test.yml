@@ -2,7 +2,10 @@ name: Unity EditMode Tests
 
 on:
   workflow_dispatch:
-  # push / pull_request 트리거는 UNITY_LICENSE secret 확인 및 수동 실행 성공 후 추가한다
+  push:
+    branches: [ main, prototype/Ricopam ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   checks: write
