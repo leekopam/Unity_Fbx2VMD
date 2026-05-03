@@ -20,10 +20,98 @@ namespace Member_Han.Modules.FBXImporter
         #region Private 필드
         // 노드 이름으로 Transform을 찾기 위한 맵 (본 할당용)
         private Dictionary<string, Transform> _nodeMap = new Dictionary<string, Transform>();
+        private bool _loggedSkippedScaleCurves;
+        private bool _loggedSkippedNonRootPositionCurves;
         
         // 생성된 AnimationClip 저장 (외부 접근용)
         private AnimationClip[] _animationClips;
         #endregion
+
+        public bool ImportScaleCurves { get; set; } = false;
+        public bool ImportNonRootPositionCurves { get; set; } = false;
+
+        public sealed class AnimationInspectionReport
+        {
+            public bool FileReadable;
+            public bool ImportSucceeded;
+            public string ErrorMessage = "";
+            public int AnimationCount;
+            public int NodeAnimationChannelCount;
+            public int PositionKeyCount;
+            public int RotationKeyCount;
+            public int ScaleKeyCount;
+            public string AnimationNames = "";
+            public string AnimationLengthsSeconds = "";
+            public float MaxAnimationLengthSeconds;
+        }
+
+        public static AnimationInspectionReport InspectAnimationFile(string path)
+        {
+            var report = new AnimationInspectionReport
+            {
+                FileReadable = !string.IsNullOrEmpty(path) && File.Exists(path)
+            };
+
+            if (!report.FileReadable)
+            {
+                report.ErrorMessage = $"FBX file not found: {path}";
+                return report;
+            }
+
+            if (!AssimpLibraryLoader.IsLoaded)
+            {
+                AssimpLibraryLoader.LoadLibrary();
+            }
+
+            try
+            {
+                using (AssimpContext importer = new AssimpContext())
+                {
+                    importer.SetConfig(new Assimp.Configs.FBXPreservePivotsConfig(false));
+
+                    Scene scene = importer.ImportFile(path, BuildAssimpPostProcessSteps());
+                    if (scene == null)
+                    {
+                        report.ErrorMessage = "Assimp returned a null scene.";
+                        return report;
+                    }
+
+                    report.ImportSucceeded = true;
+                    report.AnimationCount = scene.AnimationCount;
+
+                    var names = new List<string>();
+                    var lengths = new List<string>();
+                    foreach (var animation in scene.Animations)
+                    {
+                        string animationName = string.IsNullOrWhiteSpace(animation.Name)
+                            ? $"Animation_{names.Count}"
+                            : animation.Name;
+                        names.Add(animationName);
+
+                        float duration = CalculateAnimationDurationSeconds(animation);
+                        report.MaxAnimationLengthSeconds = Mathf.Max(report.MaxAnimationLengthSeconds, duration);
+                        lengths.Add(duration.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+
+                        report.NodeAnimationChannelCount += animation.NodeAnimationChannelCount;
+                        foreach (var channel in animation.NodeAnimationChannels)
+                        {
+                            report.PositionKeyCount += channel.PositionKeyCount;
+                            report.RotationKeyCount += channel.RotationKeyCount;
+                            report.ScaleKeyCount += channel.ScalingKeyCount;
+                        }
+                    }
+
+                    report.AnimationNames = string.Join("|", names);
+                    report.AnimationLengthsSeconds = string.Join("|", lengths);
+                    return report;
+                }
+            }
+            catch (System.Exception e)
+            {
+                report.ErrorMessage = e.Message.Replace('\r', ' ').Replace('\n', ' ');
+                return report;
+            }
+        }
 
         #region IModelImporterService 구현
         public async Task<GameObject> ImportAsync(string path)
@@ -53,6 +141,8 @@ namespace Member_Han.Modules.FBXImporter
             GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
 
             _nodeMap.Clear();
+            _loggedSkippedScaleCurves = false;
+            _loggedSkippedNonRootPositionCurves = false;
             BuildHierarchy(scene.RootNode, rootObject.transform, scene);
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
@@ -81,13 +171,7 @@ namespace Member_Han.Modules.FBXImporter
             // FBX 피벗 보존 설정 (본 정확도를 위해)
             importer.SetConfig(new Assimp.Configs.FBXPreservePivotsConfig(false));
 
-            PostProcessSteps steps = PostProcessSteps.Triangulate |
-                                     PostProcessSteps.FlipUVs |
-                                     PostProcessSteps.LimitBoneWeights |
-                                     PostProcessSteps.GenerateNormals |
-                                     PostProcessSteps.CalculateTangentSpace |
-                                     PostProcessSteps.MakeLeftHanded |
-                                     PostProcessSteps.FlipWindingOrder;
+            PostProcessSteps steps = BuildAssimpPostProcessSteps();
 
             try
             {
@@ -108,6 +192,44 @@ namespace Member_Han.Modules.FBXImporter
                 Debug.LogError($"[RuntimeFBXImporter] Assimp 예외: {e.Message}\n{e.StackTrace}");
                 return null;
             }
+        }
+
+        private static PostProcessSteps BuildAssimpPostProcessSteps()
+        {
+            return PostProcessSteps.Triangulate |
+                   PostProcessSteps.FlipUVs |
+                   PostProcessSteps.LimitBoneWeights |
+                   PostProcessSteps.GenerateNormals |
+                   PostProcessSteps.CalculateTangentSpace |
+                   PostProcessSteps.MakeLeftHanded |
+                   PostProcessSteps.FlipWindingOrder;
+        }
+
+        private static float CalculateAnimationDurationSeconds(Assimp.Animation animation)
+        {
+            if (animation == null)
+            {
+                return 0f;
+            }
+
+            double ticksPerSecond = animation.TicksPerSecond;
+            if (ticksPerSecond <= 1.0)
+            {
+                ticksPerSecond = 60.0;
+            }
+
+            if (ticksPerSecond <= 0.0)
+            {
+                return 0f;
+            }
+
+            double duration = animation.DurationInTicks / ticksPerSecond;
+            if (double.IsNaN(duration) || double.IsInfinity(duration) || duration < 0.0)
+            {
+                return 0f;
+            }
+
+            return (float)duration;
         }
         #endregion
 
@@ -345,7 +467,15 @@ namespace Member_Han.Modules.FBXImporter
                     // 위치 애니메이션
                     if (channel.HasPositionKeys)
                     {
-                        SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
+                        if (ImportNonRootPositionCurves || ShouldImportPositionCurves(relativePath, targetNode))
+                        {
+                            SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
+                        }
+                        else if (!_loggedSkippedNonRootPositionCurves)
+                        {
+                            Debug.Log("[RuntimeFBXImporter] Non-root FBX position animation curves were skipped to prevent humanoid arm/leg length deformation during retargeting.");
+                            _loggedSkippedNonRootPositionCurves = true;
+                        }
                     }
 
                     // 회전 애니메이션
@@ -357,10 +487,18 @@ namespace Member_Han.Modules.FBXImporter
                     // 스케일 애니메이션
                     if (channel.HasScalingKeys)
                     {
-                        SetScaleCurves(clip, relativePath, channel.ScalingKeys, timeScale);
+                        if (ImportScaleCurves)
+                        {
+                            SetScaleCurves(clip, relativePath, channel.ScalingKeys, timeScale);
+                        }
+                        else if (!_loggedSkippedScaleCurves)
+                        {
+                            Debug.Log("[RuntimeFBXImporter] FBX scale animation curves were skipped to prevent target model deformation during humanoid retargeting.");
+                            _loggedSkippedScaleCurves = true;
+                        }
                     }
                 }
-                
+
                 // 애니메이션 길이 보정
                 double duration = anim.DurationInTicks / anim.TicksPerSecond;
                 if (duration > 600)
@@ -413,6 +551,27 @@ namespace Member_Han.Modules.FBXImporter
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.x", curveX);
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.y", curveY);
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.z", curveZ);
+        }
+
+        private static bool ShouldImportPositionCurves(string relativePath, Transform targetNode)
+        {
+            if (string.IsNullOrEmpty(relativePath))
+            {
+                return true;
+            }
+
+            string nodeName = targetNode != null ? targetNode.name : Path.GetFileName(relativePath);
+            if (string.IsNullOrEmpty(nodeName))
+            {
+                return false;
+            }
+
+            string normalizedName = nodeName.Replace(" ", "").Replace("_", "").Replace(":", "").ToLowerInvariant();
+            return normalizedName.Contains("root")
+                || normalizedName.Contains("hips")
+                || normalizedName.Contains("pelvis")
+                || normalizedName.Contains("center")
+                || normalizedName.Contains("groove");
         }
 
         private void SetRotationCurves(AnimationClip clip, string relativePath, List<QuaternionKey> rotationKeys, float timeScale)
