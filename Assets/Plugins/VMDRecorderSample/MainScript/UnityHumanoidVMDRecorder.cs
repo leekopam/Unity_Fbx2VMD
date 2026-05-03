@@ -43,11 +43,12 @@ public struct VmdSaveResult
 // ============================================
 // [실행 순서 2] VMD 레코딩 메인 엔진
 // 역할: FBX 애니메이션 → VMD 파일 변환 핵심 로직
-// 실행 시점: Start에서 초기화, FixedUpdate에서 레코딩
+// 실행 시점: Start에서 초기화, LateUpdate 후반에서 레코딩
 // ============================================
 
 //初期ポーズ(T,Aポーズ)の時点でアタッチ、有効化されている必要がある
 // [한글] 초기 포즈(T포즈, A포즈) 상태에서 컴포넌트가 부착되고 활성화되어 있어야 함
+[DefaultExecutionOrder(29980)]
 public class UnityHumanoidVMDRecorder : MonoBehaviour
 {
     // === VMD 변환 설정 옵션 ===
@@ -86,6 +87,19 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
 
     [Tooltip("초기 포즈 강제 적용 시 팔을 A 포즈로 추가 회전합니다.")]
     public bool ApplyRecorderAPose = false;
+
+    [Header("Recording Timing")]
+    [Tooltip("최종 retarget/grounding LateUpdate가 끝난 뒤 VMD 프레임을 저장합니다. Main_Auto YYB 자동 경로의 끊김/이전 포즈 저장을 줄이기 위해 기본 활성화합니다.")]
+    public bool RecordAfterLateVisualPose = true;
+
+    [Tooltip("테스트/회귀 검증 전용입니다. 켜면 녹화 중 Unity 시간을 VMD 기준 fps로 고정합니다. 일반 GameView 재생에서는 배속/멈칫 체감이 생길 수 있어 기본값은 끕니다.")]
+    public bool UseCaptureFramerateDuringRecording = false;
+
+    [Tooltip("한 LateUpdate에서 저장할 수 있는 최대 VMD 프레임 수입니다. 일반 재생에서는 1로 두어 저장 burst로 인한 미세 멈춤을 줄입니다.")]
+    [Range(1, 8)] public int MaxRecordedFramesPerLateUpdate = 2;
+
+    [Tooltip("captureFramerate를 쓰지 않는 일반 재생에서 렌더 프레임이 밀렸을 때 backlog를 버려 저장 burst를 막습니다. 테스트용 결정론 녹화에서는 끄거나 captureFramerate를 켭니다.")]
+    public bool DropLateFrameBacklogWhenNotUsingCaptureFramerate = true;
     
     public int KeyReductionLevel = 3;                     // 키 리덕션 레벨 (파일 크기 감소)
     // === 레코딩 상태 변수 ===
@@ -186,6 +200,17 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     MorphRecorder morphRecorder;   // 모프 레코더 (현재 레코딩용)
     MorphRecorder morphRecorderSaved;  // 모프 레코더 (저장용)
     bool recorderInitializationWarningLogged;
+    float recordingFrameAccumulator;
+    int lastSavedUnityFrame = -1;
+    int sameUnityFrameSaveCount;
+    int maxFramesSavedInSingleLateUpdate;
+    int droppedLateFrameBacklogCount;
+    int previousCaptureFramerate;
+    bool captureFramerateApplied;
+
+    public int SameUnityFrameSaveCount => sameUnityFrameSaveCount;
+    public int MaxFramesSavedInSingleLateUpdate => maxFramesSavedInSingleLateUpdate;
+    public int DroppedLateFrameBacklogCount => droppedLateFrameBacklogCount;
 
     // [Start is called before the first frame update]
     // [한글] [실행 순서 2-1] 첫 프레임 전에 호출 - 본 매핑 및 초기화
@@ -367,14 +392,70 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     }
 
 
-    // [한글] [실행 순서 2-2] 30fps로 매 프레임 실행 - 레코딩 중일 때만 동작
+    // [한글] [실행 순서 2-2] 레거시 호환 경로. 기본 자동 경로는 LateUpdate 저장을 사용한다.
     private void FixedUpdate()
     {
-        if (IsRecording)  // 레코딩 중일 때만
+        if (IsRecording && !RecordAfterLateVisualPose)  // 레코딩 중일 때만
         {
-            SaveFrame();      // 현재 프레임 데이터 저장
-            FrameNumber++;    // 프레임 번호 증가
+            SaveRecordingFrame();      // 현재 프레임 데이터 저장
         }
+    }
+
+    // [한글] [실행 순서 2-2B] retarget/grounding LateUpdate가 끝난 뒤 30fps 간격으로 저장한다.
+    private void LateUpdate()
+    {
+        if (!IsRecording || !RecordAfterLateVisualPose)
+        {
+            return;
+        }
+
+        int framesSavedThisLateUpdate = 0;
+        bool shouldRecordFirstFrame = FrameNumber == 0;
+
+        if (shouldRecordFirstFrame)
+        {
+            SaveRecordingFrame();
+            framesSavedThisLateUpdate++;
+            recordingFrameAccumulator = 0f;
+            maxFramesSavedInSingleLateUpdate = Mathf.Max(maxFramesSavedInSingleLateUpdate, framesSavedThisLateUpdate);
+            return;
+        }
+
+        recordingFrameAccumulator += Time.deltaTime;
+        int maxFramesThisLateUpdate = Mathf.Max(1, MaxRecordedFramesPerLateUpdate);
+        while (recordingFrameAccumulator + 0.0001f >= FPSs && framesSavedThisLateUpdate < maxFramesThisLateUpdate)
+        {
+            recordingFrameAccumulator = Mathf.Max(0f, recordingFrameAccumulator - FPSs);
+            SaveRecordingFrame();
+            framesSavedThisLateUpdate++;
+        }
+
+        if (recordingFrameAccumulator + 0.0001f >= FPSs &&
+            DropLateFrameBacklogWhenNotUsingCaptureFramerate &&
+            !UseCaptureFramerateDuringRecording)
+        {
+            recordingFrameAccumulator = Mathf.Min(recordingFrameAccumulator, FPSs - 0.0001f);
+            droppedLateFrameBacklogCount++;
+        }
+
+        maxFramesSavedInSingleLateUpdate = Mathf.Max(maxFramesSavedInSingleLateUpdate, framesSavedThisLateUpdate);
+    }
+
+    private void SaveRecordingFrame()
+    {
+        SaveFrame();
+        if (!IsRecording)
+        {
+            return;
+        }
+
+        if (lastSavedUnityFrame == Time.frameCount)
+        {
+            sameUnityFrameSaveCount++;
+        }
+
+        lastSavedUnityFrame = Time.frameCount;
+        FrameNumber++;    // 프레임 번호 증가
     }
 
 
@@ -496,17 +577,17 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
                 continue;
             }
 
-            if (boneGhost != null && boneGhost.GhostDictionary.Keys.Contains(boneName))
+            if (boneGhost != null && boneGhost.GhostDictionary.TryGetValue(boneName, out var ghostEntry))
             {
-                if (boneGhost.GhostDictionary[boneName].ghost == null || !boneGhost.GhostDictionary[boneName].enabled)
+                if (ghostEntry.ghost == null || !ghostEntry.enabled)
                 {
                     rotationDictionary[boneName].Add(Quaternion.identity);
                     positionDictionary[boneName].Add(Vector3.zero);
                     continue;
                 }
 
-                Vector3 boneVector = boneGhost.GhostDictionary[boneName].ghost.localPosition;
-                Quaternion boneQuatenion = boneGhost.GhostDictionary[boneName].ghost.localRotation;
+                Vector3 boneVector = ghostEntry.ghost.localPosition;
+                Quaternion boneQuatenion = ghostEntry.ghost.localRotation;
                 rotationDictionary[boneName].Add(new Quaternion(-boneQuatenion.x, boneQuatenion.y, -boneQuatenion.z, boneQuatenion.w));
 
                 boneVector -= boneGhost.GhostOriginalLocalPositionDictionary[boneName];
@@ -614,6 +695,8 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
         }
 
         SetInitialPositionAndRotation();  // 현재 위치를 기준점으로 설정
+        ResetRecordingCadenceStats();
+        ApplyRecordingCaptureFramerate();
         IsRecording = true;                // 레코딩 플래그 활성화
     }
 
@@ -641,13 +724,15 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     /// StopRecording은 저장용 백업을 만들기 때문에, 비교 QA처럼 같은 프레임 기준이 중요한 새 세션에서는
     /// StartRecording 직전에 이 메서드로 활성 버퍼가 반드시 0프레임에서 시작하도록 보장한다.
     /// </summary>
-    public void ResetRecordingBuffersForNewSession()
+    public void ResetRecordingBuffersForNewSession(int expectedFrameCapacity = 0)
     {
         EnsureRecorderInitialized();
 
         FrameNumber = 0;
+        ResetRecordingCadenceStats();
         positionDictionary = new Dictionary<BoneNames, List<Vector3>>();
         rotationDictionary = new Dictionary<BoneNames, List<Quaternion>>();
+        int listCapacity = Mathf.Max(0, expectedFrameCapacity);
 
         if (BoneDictionary != null)
         {
@@ -658,15 +743,47 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
                     continue;
                 }
 
-                positionDictionary[boneName] = new List<Vector3>();
-                rotationDictionary[boneName] = new List<Quaternion>();
+                positionDictionary[boneName] = listCapacity > 0 ? new List<Vector3>(listCapacity) : new List<Vector3>();
+                rotationDictionary[boneName] = listCapacity > 0 ? new List<Quaternion>(listCapacity) : new List<Quaternion>();
             }
         }
 
         if (transform != null)
         {
-            morphRecorder = new MorphRecorder(transform);
+            morphRecorder = new MorphRecorder(transform, listCapacity);
         }
+    }
+
+    private void ResetRecordingCadenceStats()
+    {
+        recordingFrameAccumulator = 0f;
+        lastSavedUnityFrame = -1;
+        sameUnityFrameSaveCount = 0;
+        maxFramesSavedInSingleLateUpdate = 0;
+        droppedLateFrameBacklogCount = 0;
+    }
+
+    private void ApplyRecordingCaptureFramerate()
+    {
+        if (!RecordAfterLateVisualPose || !UseCaptureFramerateDuringRecording || captureFramerateApplied)
+        {
+            return;
+        }
+
+        previousCaptureFramerate = Time.captureFramerate;
+        Time.captureFramerate = Mathf.RoundToInt(1f / FPSs);
+        captureFramerateApplied = true;
+    }
+
+    private void RestoreRecordingCaptureFramerate()
+    {
+        if (!captureFramerateApplied)
+        {
+            return;
+        }
+
+        Time.captureFramerate = previousCaptureFramerate;
+        captureFramerateApplied = false;
     }
 
 
@@ -686,14 +803,17 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
     public void StopRecording()
     {
         IsRecording = false;  // 레코딩 중지
+        RestoreRecordingCaptureFramerate();
         
         // [Safety Check] 초기화 전에 Stop이 호출될 경우 방어
         if (BoneDictionary == null) return;
         
         // 현재 레코딩 데이터를 "Saved" 버전으로 백업
         frameNumberSaved = FrameNumber;
+        Debug.Log($"[VMDRecorder] 녹화 종료: frames={frameNumberSaved}, afterLate={RecordAfterLateVisualPose}, captureFps={UseCaptureFramerateDuringRecording}, sameUnityFrameSaves={sameUnityFrameSaveCount}, maxLateBurst={maxFramesSavedInSingleLateUpdate}, droppedBacklog={droppedLateFrameBacklogCount}");
         morphRecorderSaved = morphRecorder;
         FrameNumber = 0;
+        ResetRecordingCadenceStats();
         positionDictionarySaved = positionDictionary;
         positionDictionary = new Dictionary<BoneNames, List<Vector3>>();
         rotationDictionarySaved = rotationDictionary;
@@ -1207,7 +1327,7 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
         //キーはunity上のモーフ名
         public Dictionary<string, MorphDriver> MorphDrivers { get; private set; } = new Dictionary<string, MorphDriver>();
 
-        public MorphRecorder(Transform model)
+        public MorphRecorder(Transform model, int expectedFrameCapacity = 0)
         {
             List<SkinnedMeshRenderer> searchBlendShapeSkins(Transform t)
             {
@@ -1240,8 +1360,8 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
                 {
                     string morphName = skinnedMeshRenderer.sharedMesh.GetBlendShapeName(i);
                     ////モーフ名に重複があれば2コ目以降は無視
-                    if (MorphDrivers.Keys.Contains(morphName)) { continue; }
-                    MorphDrivers.Add(morphName, new MorphDriver(skinnedMeshRenderer, i));
+                    if (MorphDrivers.ContainsKey(morphName)) { continue; }
+                    MorphDrivers.Add(morphName, new MorphDriver(skinnedMeshRenderer, i, expectedFrameCapacity));
                 }
             }
         }
@@ -1303,12 +1423,15 @@ public class UnityHumanoidVMDRecorder : MonoBehaviour
             public SkinnedMeshRenderer SkinnedMeshRenderer { get; private set; } = new SkinnedMeshRenderer();
             public int MorphIndex { get; private set; }
 
-            public List<(float value, bool enabled)> ValueList { get; private set; } = new List<(float value, bool enabled)>();
+            public List<(float value, bool enabled)> ValueList { get; private set; }
 
-            public MorphDriver(SkinnedMeshRenderer skinnedMeshRenderer, int morphIndex)
+            public MorphDriver(SkinnedMeshRenderer skinnedMeshRenderer, int morphIndex, int expectedFrameCapacity = 0)
             {
                 SkinnedMeshRenderer = skinnedMeshRenderer;
                 MorphIndex = morphIndex;
+                ValueList = expectedFrameCapacity > 0
+                    ? new List<(float value, bool enabled)>(expectedFrameCapacity)
+                    : new List<(float value, bool enabled)>();
             }
 
             public void RecordMorph()

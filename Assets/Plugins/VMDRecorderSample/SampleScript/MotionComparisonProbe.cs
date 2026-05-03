@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -11,11 +12,12 @@ using UnityEngine.SceneManagement;
 public class MotionComparisonProbe : MonoBehaviour
 {
     [SerializeField] private string comparisonLabel = "";
-    [SerializeField] private float[] sampleTimes = { 0f, 3f, 10f, 30f, 60f, 120f };
+    [SerializeField] private float[] sampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
     [SerializeField] private bool sampleByAnimationClipTime = true;
     [SerializeField] private bool logSamples = true;
     [SerializeField] private bool captureSampleScreenshots = true;
     [SerializeField] private bool captureFingerCloseups = true;
+    [SerializeField] private bool captureYybDiagnosticOnlyMetrics = true;
     [SerializeField, Min(128)] private int screenshotWidth = 960;
     [SerializeField, Min(128)] private int screenshotHeight = 960;
     [SerializeField, Range(1f, 2f)] private float screenshotPadding = 1.2f;
@@ -30,6 +32,21 @@ public class MotionComparisonProbe : MonoBehaviour
     private const string SessionManifestFileName = "index.md";
     private const string FrameSessionIndexFileName = "session_index.md";
     private const int EvidenceFileNamePartMaxLength = 48;
+    private const float DiagnosticFootRadius = 0.04f;
+    private const float DiagnosticThumbIndexMaxSpreadAngle = 42f;
+    private const float DiagnosticThumbIndexFullRiskAngle = 72f;
+    private const float DiagnosticThumbPalmProjectionMin = 0.36f;
+    private const float DiagnosticThumbPalmProjectionMax = 0.5f;
+    private const float DiagnosticThumbHelperDistanceDeltaWarning = 0.003f;
+    private const float DiagnosticThumbHelperDistanceDeltaFullRisk = 0.008f;
+    private const float DiagnosticThumbHelperRotationWarning = 28f;
+    private const float DiagnosticThumbHelperRotationFullRisk = 70f;
+    private const float DiagnosticThumbWebbingRotationWarning = 18f;
+    private const float DiagnosticThumbWebbingRotationFullRisk = 45f;
+    private const float DiagnosticArmTwistWarningMuscle = 1.2f;
+    private const float DiagnosticArmTwistFullRiskMuscle = 1.6f;
+    private const float DiagnosticSleeveAnchorWarningDegrees = 85f;
+    private const float DiagnosticSleeveAnchorFullRiskDegrees = 120f;
     private static readonly HumanBodyBones[] LeftFingerBones =
     {
         HumanBodyBones.LeftHand,
@@ -89,6 +106,10 @@ public class MotionComparisonProbe : MonoBehaviour
     private HumanPoseHandler _poseHandler;
     private HumanPose _humanPose;
     private bool _poseWarningLogged;
+    private readonly Dictionary<string, Transform> _diagnosticTransformCache = new Dictionary<string, Transform>(StringComparer.Ordinal);
+    private readonly Dictionary<string, float> _diagnosticInitialDistances = new Dictionary<string, float>(StringComparer.Ordinal);
+    private readonly Dictionary<string, Quaternion> _diagnosticInitialRelativeRotations = new Dictionary<string, Quaternion>(StringComparer.Ordinal);
+    private bool _isYybDiagnosticTarget;
 
     public string LastCsvPath => _csvPath;
     public string LastScreenshotFolder => _screenshotFolder;
@@ -102,6 +123,7 @@ public class MotionComparisonProbe : MonoBehaviour
         _animator = GetComponent<Animator>();
         _recorder = GetComponent<UnityHumanoidVMDRecorder>();
         _camera = Camera.main;
+        _isYybDiagnosticTarget = IsYybDiagnosticTarget();
 
         if (_animator == null)
         {
@@ -110,6 +132,7 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         PrepareHumanPoseCapture();
+        ResetDiagnosticBaselines();
 
         comparisonLabel = string.IsNullOrWhiteSpace(labelOverride)
             ? SanitizeFileName(string.IsNullOrWhiteSpace(comparisonLabel) ? gameObject.name : comparisonLabel)
@@ -162,7 +185,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
         if (logSamples)
         {
-            Debug.Log($"[MotionComparisonProbe] {comparisonLabel} {reason} t={metrics.Elapsed:F2}s clip={metrics.AnimationClipTime:F3}s frame={metrics.RecorderFrame} hipsY={metrics.HipsY:F3} facing={metrics.CameraFacingDot:F3} scaleDelta={metrics.MaxScaleDelta:F4}");
+            Debug.Log($"[MotionComparisonProbe] {comparisonLabel} {reason} t={metrics.Elapsed:F2}s clip={metrics.AnimationClipTime:F3}s frame={metrics.RecorderFrame} hipsY={metrics.HipsY:F3} facing={metrics.CameraFacingDot:F3} scaleDelta={metrics.MaxScaleDelta:F4} yybRisk={metrics.YybDiagnostics.MaxDeformationRisk:F3}");
         }
     }
 
@@ -258,6 +281,20 @@ public class MotionComparisonProbe : MonoBehaviour
         ArmMuscleMetrics armMuscles = CaptureArmMuscles();
         FingerMetrics fingers = CaptureFingerMetrics();
         AnimationTimeMetrics animationTime = CaptureAnimationTimeMetrics();
+        RootSpikeMetrics rootSpikeMetrics = CaptureRootSpikeMetrics();
+        float lowestFootBottomY = float.IsNaN(lowestFootY) ? float.NaN : lowestFootY - DiagnosticFootRadius;
+        float groundY = float.IsNaN(rootSpikeMetrics.LastGroundingTargetY) ? 0f : rootSpikeMetrics.LastGroundingTargetY;
+        float meshBoundsMinY = float.NaN;
+        float meshBoundsMaxY = float.NaN;
+        if (TryGetRendererBounds(out Bounds rendererBounds))
+        {
+            meshBoundsMinY = rendererBounds.min.y;
+            meshBoundsMaxY = rendererBounds.max.y;
+        }
+
+        YybDiagnosticMetrics yybDiagnostics = captureYybDiagnosticOnlyMetrics
+            ? CaptureYybDiagnosticMetrics(armMuscles)
+            : YybDiagnosticMetrics.Empty;
 
         return new PoseMetrics
         {
@@ -275,8 +312,14 @@ public class MotionComparisonProbe : MonoBehaviour
             AnimationNormalizedTime = animationTime.NormalizedTime,
             RootPosition = root.position,
             RootYaw = root.eulerAngles.y,
+            RootSpike = rootSpikeMetrics,
             HipsY = hips != null ? hips.position.y : float.NaN,
             LowestFootY = lowestFootY,
+            LowestFootBottomY = lowestFootBottomY,
+            MeshBoundsMinY = meshBoundsMinY,
+            MeshBoundsMaxY = meshBoundsMaxY,
+            FootBottomGroundGap = float.IsNaN(lowestFootBottomY) ? float.NaN : lowestFootBottomY - groundY,
+            MeshBoundsGroundGap = float.IsNaN(meshBoundsMinY) ? float.NaN : meshBoundsMinY - groundY,
             CameraFacingDot = CalculateCameraFacingDot(root),
             MaxScaleDelta = CalculateMaxScaleDelta(),
             LeftUpperArmScale = GetLocalScale(HumanBodyBones.LeftUpperArm),
@@ -359,7 +402,8 @@ public class MotionComparisonProbe : MonoBehaviour
             RightRing1StretchMuscle = fingers.RightRing1Stretch,
             RightRingSpreadMuscle = fingers.RightRingSpread,
             RightLittle1StretchMuscle = fingers.RightLittle1Stretch,
-            RightLittleSpreadMuscle = fingers.RightLittleSpread
+            RightLittleSpreadMuscle = fingers.RightLittleSpread,
+            YybDiagnostics = yybDiagnostics
         };
     }
 
@@ -479,6 +523,70 @@ public class MotionComparisonProbe : MonoBehaviour
             NormalizedTime = stateInfo.normalizedTime
         };
         return true;
+    }
+
+    private RootSpikeMetrics CaptureRootSpikeMetrics()
+    {
+        Component retargeter = FindRetargeterForCurrentAnimator();
+        if (retargeter == null)
+        {
+            return RootSpikeMetrics.Empty;
+        }
+
+        Type type = retargeter.GetType();
+        return new RootSpikeMetrics
+        {
+            LastRootDeltaMagnitude = ReadFloatProperty(type, retargeter, "LastRootDeltaMagnitude"),
+            MaxRootDeltaMagnitude = ReadFloatProperty(type, retargeter, "MaxRootDeltaMagnitude"),
+            RootDeltaSpikeSkippedCount = ReadIntProperty(type, retargeter, "RootDeltaSpikeSkippedCount"),
+            LastRootPositionPoseDeltaMagnitude = ReadFloatProperty(type, retargeter, "LastRootPositionPoseDeltaMagnitude"),
+            MaxRootPositionPoseDeltaMagnitude = ReadFloatProperty(type, retargeter, "MaxRootPositionPoseDeltaMagnitude"),
+            RootPositionSpikeClampedCount = ReadIntProperty(type, retargeter, "RootPositionSpikeClampedCount"),
+            LastGroundingAdjustment = ReadFloatProperty(type, retargeter, "LastGroundingAdjustment"),
+            MaxGroundingAdjustment = ReadFloatProperty(type, retargeter, "MaxGroundingAdjustment"),
+            GroundingStepClampedCount = ReadIntProperty(type, retargeter, "GroundingStepClampedCount"),
+            GroundingSmoothedCount = ReadIntProperty(type, retargeter, "GroundingSmoothedCount"),
+            LastGroundingVerticalStep = ReadFloatProperty(type, retargeter, "LastGroundingVerticalStep"),
+            MaxGroundingVerticalStep = ReadFloatProperty(type, retargeter, "MaxGroundingVerticalStep"),
+            InitialGroundingVerticalStep = ReadFloatProperty(type, retargeter, "InitialGroundingVerticalStep"),
+            MaxGroundingVerticalStepAfterInitial = ReadFloatProperty(type, retargeter, "MaxGroundingVerticalStepAfterInitial"),
+            LastGroundingTargetY = ReadFloatProperty(type, retargeter, "LastGroundingTargetY"),
+            LastGroundingLowestFootBottomY = ReadFloatProperty(type, retargeter, "LastGroundingLowestFootBottomY")
+        };
+    }
+
+    private static float ReadFloatProperty(Type type, object instance, string propertyName)
+    {
+        PropertyInfo property = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property == null)
+        {
+            return float.NaN;
+        }
+
+        object value = property.GetValue(instance);
+        if (value is float floatValue)
+        {
+            return floatValue;
+        }
+
+        if (value is double doubleValue)
+        {
+            return (float)doubleValue;
+        }
+
+        return float.NaN;
+    }
+
+    private static int ReadIntProperty(Type type, object instance, string propertyName)
+    {
+        PropertyInfo property = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property == null)
+        {
+            return -1;
+        }
+
+        object value = property.GetValue(instance);
+        return value is int intValue ? intValue : -1;
     }
 
     private AnimationClip ResolveCurrentAnimatorClip(int layerIndex)
@@ -604,6 +712,496 @@ public class MotionComparisonProbe : MonoBehaviour
         return metrics;
     }
 
+    private YybDiagnosticMetrics CaptureYybDiagnosticMetrics(ArmMuscleMetrics armMuscles)
+    {
+        YybSideDiagnosticMetrics left = CaptureYybSideDiagnosticMetrics(false);
+        YybSideDiagnosticMetrics right = CaptureYybSideDiagnosticMetrics(true);
+
+        if (!_isYybDiagnosticTarget)
+        {
+            left.ClearRiskScores();
+            right.ClearRiskScores();
+            return new YybDiagnosticMetrics
+            {
+                Left = left,
+                Right = right,
+                MaxDeformationRisk = float.NaN
+            };
+        }
+
+        left.ArmTwistRisk = CalculateArmTwistRisk(armMuscles.LeftArmTwist, armMuscles.LeftForearmTwist);
+        right.ArmTwistRisk = CalculateArmTwistRisk(armMuscles.RightArmTwist, armMuscles.RightForearmTwist);
+        left.SleeveAnchorRisk = CalculateSleeveAnchorRisk(false);
+        right.SleeveAnchorRisk = CalculateSleeveAnchorRisk(true);
+        float leftArmSleeveRisk = CalculateArmSleeveDeformationRisk(left.ArmTwistRisk, left.SleeveAnchorRisk);
+        float rightArmSleeveRisk = CalculateArmSleeveDeformationRisk(right.ArmTwistRisk, right.SleeveAnchorRisk);
+        left.DeformationRisk = MaxFinite(
+            left.ThumbSpreadRisk,
+            left.ThumbProjectionRisk,
+            left.ThumbHelperSeparationRisk,
+            left.WebbingRisk,
+            leftArmSleeveRisk);
+        right.DeformationRisk = MaxFinite(
+            right.ThumbSpreadRisk,
+            right.ThumbProjectionRisk,
+            right.ThumbHelperSeparationRisk,
+            right.WebbingRisk,
+            rightArmSleeveRisk);
+
+        return new YybDiagnosticMetrics
+        {
+            Left = left,
+            Right = right,
+            MaxDeformationRisk = MaxFinite(left.DeformationRisk, right.DeformationRisk)
+        };
+    }
+
+    private YybSideDiagnosticMetrics CaptureYybSideDiagnosticMetrics(bool isRightSide)
+    {
+        YybSideDiagnosticMetrics metrics = YybSideDiagnosticMetrics.Empty;
+
+        if (TryCalculateThumbAndIndexDirections(isRightSide, out Vector3 thumbDirection, out Vector3 indexDirection))
+        {
+            metrics.ThumbIndexSpreadAngle = Vector3.Angle(thumbDirection, indexDirection);
+            metrics.ThumbSpreadRisk = RiskAbove(
+                metrics.ThumbIndexSpreadAngle,
+                DiagnosticThumbIndexMaxSpreadAngle,
+                DiagnosticThumbIndexFullRiskAngle);
+
+            if (TryBuildDiagnosticPalmFrame(isRightSide, out _, out Vector3 palmNormal, out _))
+            {
+                metrics.ThumbPalmProjection = Vector3.Dot(thumbDirection, palmNormal);
+                metrics.ThumbProjectionRisk = RiskOutsideRange(
+                    metrics.ThumbPalmProjection,
+                    DiagnosticThumbPalmProjectionMin,
+                    DiagnosticThumbPalmProjectionMax,
+                    1f);
+            }
+        }
+
+        Transform helper = FindThumbBaseHelper(isRightSide);
+        Transform source = FindThumbBaseSource(isRightSide);
+        if (helper != null && source != null)
+        {
+            string sideName = isRightSide ? "right" : "left";
+            string distanceKey = BuildPairKey($"thumb-helper-distance-{sideName}", helper, source);
+            metrics.ThumbHelperSourceDistanceDelta = CalculateDistanceDeltaFromInitial(helper, source, distanceKey, out float distance);
+            metrics.ThumbHelperSourceDistance = distance;
+
+            string rotationKey = BuildPairKey($"thumb-helper-rotation-{sideName}", source, helper);
+            metrics.ThumbHelperSourceRotationDelta = CalculateRelativeRotationDeltaFromInitial(source, helper, rotationKey);
+
+            metrics.ThumbHelperSeparationRisk = MaxFinite(
+                RiskAbove(
+                    metrics.ThumbHelperSourceDistanceDelta,
+                    DiagnosticThumbHelperDistanceDeltaWarning,
+                    DiagnosticThumbHelperDistanceDeltaFullRisk),
+                RiskAbove(
+                    metrics.ThumbHelperSourceRotationDelta,
+                    DiagnosticThumbHelperRotationWarning,
+                    DiagnosticThumbHelperRotationFullRisk));
+        }
+
+        metrics.WebbingRisk = MaxFinite(
+            metrics.ThumbProjectionRisk,
+            metrics.ThumbSpreadRisk,
+            RiskAbove(
+                metrics.ThumbHelperSourceDistanceDelta,
+                DiagnosticThumbHelperDistanceDeltaWarning,
+                DiagnosticThumbHelperDistanceDeltaFullRisk),
+            RiskAbove(
+                metrics.ThumbHelperSourceRotationDelta,
+                DiagnosticThumbWebbingRotationWarning,
+                DiagnosticThumbWebbingRotationFullRisk));
+
+        return metrics;
+    }
+
+    private bool IsYybDiagnosticTarget()
+    {
+        return NameSuggestsYybModel(gameObject.name) || NameSuggestsYybModel(comparisonLabel);
+    }
+
+    private static bool NameSuggestsYybModel(string value)
+    {
+        return NormalizeTransformName(value).Contains("yyb");
+    }
+
+    private bool TryCalculateThumbAndIndexDirections(
+        bool isRightSide,
+        out Vector3 thumbDirection,
+        out Vector3 indexDirection)
+    {
+        thumbDirection = Vector3.zero;
+        indexDirection = Vector3.zero;
+
+        Transform hand = GetBone(isRightSide ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
+        Transform thumbProximal = GetBone(isRightSide ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal);
+        Transform thumbIntermediate = GetBone(isRightSide ? HumanBodyBones.RightThumbIntermediate : HumanBodyBones.LeftThumbIntermediate);
+        Transform indexProximal = GetBone(isRightSide ? HumanBodyBones.RightIndexProximal : HumanBodyBones.LeftIndexProximal);
+        Transform indexIntermediate = GetBone(isRightSide ? HumanBodyBones.RightIndexIntermediate : HumanBodyBones.LeftIndexIntermediate);
+
+        if (thumbProximal != null && thumbIntermediate != null)
+        {
+            thumbDirection = thumbIntermediate.position - thumbProximal.position;
+        }
+        else if (hand != null && thumbProximal != null)
+        {
+            thumbDirection = thumbProximal.position - hand.position;
+        }
+
+        if (hand != null && indexProximal != null)
+        {
+            indexDirection = indexProximal.position - hand.position;
+        }
+        else if (indexProximal != null && indexIntermediate != null)
+        {
+            indexDirection = indexIntermediate.position - indexProximal.position;
+        }
+
+        return TryNormalize(thumbDirection, out thumbDirection) &&
+            TryNormalize(indexDirection, out indexDirection);
+    }
+
+    private bool TryBuildDiagnosticPalmFrame(
+        bool isRightSide,
+        out Vector3 sideAxis,
+        out Vector3 palmNormal,
+        out Vector3 forwardAxis)
+    {
+        sideAxis = Vector3.zero;
+        palmNormal = Vector3.zero;
+        forwardAxis = Vector3.zero;
+
+        Transform hand = GetBone(isRightSide ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
+        Transform index = GetBone(isRightSide ? HumanBodyBones.RightIndexProximal : HumanBodyBones.LeftIndexProximal);
+        Transform middle = GetBone(isRightSide ? HumanBodyBones.RightMiddleProximal : HumanBodyBones.LeftMiddleProximal);
+        Transform little = GetBone(isRightSide ? HumanBodyBones.RightLittleProximal : HumanBodyBones.LeftLittleProximal);
+        if (hand == null || index == null || middle == null || little == null)
+        {
+            return false;
+        }
+
+        Vector3 rawSide = index.position - little.position;
+        if (isRightSide)
+        {
+            rawSide = -rawSide;
+        }
+
+        Vector3 rawForward = ((index.position + middle.position + little.position) / 3f) - hand.position;
+        return TryNormalize(rawSide, out sideAxis) &&
+            TryNormalize(rawForward, out forwardAxis) &&
+            TryNormalize(Vector3.Cross(sideAxis, forwardAxis), out palmNormal) &&
+            TryNormalize(Vector3.Cross(palmNormal, sideAxis), out forwardAxis);
+    }
+
+    private Transform FindThumbBaseHelper(bool isRightSide)
+    {
+        string sideToken = isRightSide ? "right" : "left";
+        return FindDiagnosticTransform($"thumb-helper-{sideToken}", candidate =>
+        {
+            string normalizedName = NormalizeTransformName(candidate.name);
+            return normalizedName.Contains(sideToken) && IsDetachedThumbBaseHelperName(normalizedName);
+        });
+    }
+
+    private Transform FindThumbBaseSource(bool isRightSide)
+    {
+        string sideToken = isRightSide ? "right" : "left";
+        Transform source = FindDiagnosticTransform($"thumb-source-{sideToken}", candidate =>
+        {
+            string normalizedName = NormalizeTransformName(candidate.name);
+            return normalizedName.Contains(sideToken) && IsActiveThumbBaseSourceName(normalizedName);
+        });
+
+        if (source != null)
+        {
+            return source;
+        }
+
+        return GetBone(isRightSide ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal);
+    }
+
+    private Transform FindSleeveAnchor(bool isRightSide)
+    {
+        string suffix = isRightSide ? "joint_RightArmM" : "joint_LeftArmM";
+        return FindDiagnosticTransform($"sleeve-anchor-{suffix}", candidate =>
+            MatchesTransformNameSuffix(candidate.name, suffix));
+    }
+
+    private Transform FindDiagnosticTransform(string cacheKey, Func<Transform, bool> predicate)
+    {
+        if (_animator == null || _animator.gameObject == null || string.IsNullOrEmpty(cacheKey) || predicate == null)
+        {
+            return null;
+        }
+
+        if (_diagnosticTransformCache.TryGetValue(cacheKey, out Transform cachedTransform))
+        {
+            return cachedTransform;
+        }
+
+        foreach (Transform candidate in _animator.gameObject.GetComponentsInChildren<Transform>(true))
+        {
+            if (candidate != null && predicate(candidate))
+            {
+                _diagnosticTransformCache[cacheKey] = candidate;
+                return candidate;
+            }
+        }
+
+        _diagnosticTransformCache[cacheKey] = null;
+        return null;
+    }
+
+    private float CalculateArmTwistRisk(float armTwistMuscle, float forearmTwistMuscle)
+    {
+        return MaxFinite(
+            RiskMagnitude(
+                armTwistMuscle,
+                DiagnosticArmTwistWarningMuscle,
+                DiagnosticArmTwistFullRiskMuscle),
+            RiskMagnitude(
+                forearmTwistMuscle,
+                DiagnosticArmTwistWarningMuscle,
+                DiagnosticArmTwistFullRiskMuscle));
+    }
+
+    private static float CalculateArmSleeveDeformationRisk(float armTwistRisk, float sleeveAnchorRisk)
+    {
+        if (!IsFinite(armTwistRisk))
+        {
+            return sleeveAnchorRisk;
+        }
+
+        if (!IsFinite(sleeveAnchorRisk))
+        {
+            return armTwistRisk;
+        }
+
+        return Mathf.Clamp01(sleeveAnchorRisk + (sleeveAnchorRisk * armTwistRisk));
+    }
+
+    private float CalculateSleeveAnchorRisk(bool isRightSide)
+    {
+        Transform source = GetBone(isRightSide ? HumanBodyBones.RightUpperArm : HumanBodyBones.LeftUpperArm);
+        Transform anchor = FindSleeveAnchor(isRightSide);
+        if (source == null || anchor == null)
+        {
+            return float.NaN;
+        }
+
+        string sideName = isRightSide ? "right" : "left";
+        string key = BuildPairKey($"sleeve-anchor-rotation-{sideName}", source, anchor);
+        float rotationDelta = CalculateRelativeRotationDeltaFromInitial(source, anchor, key);
+        return RiskAbove(
+            rotationDelta,
+            DiagnosticSleeveAnchorWarningDegrees,
+            DiagnosticSleeveAnchorFullRiskDegrees);
+    }
+
+    private float CalculateDistanceDeltaFromInitial(Transform a, Transform b, string key, out float distance)
+    {
+        distance = float.NaN;
+        if (a == null || b == null || string.IsNullOrEmpty(key))
+        {
+            return float.NaN;
+        }
+
+        distance = Vector3.Distance(a.position, b.position);
+        if (!IsFinite(distance))
+        {
+            return float.NaN;
+        }
+
+        if (!_diagnosticInitialDistances.TryGetValue(key, out float initialDistance))
+        {
+            _diagnosticInitialDistances[key] = distance;
+            return 0f;
+        }
+
+        return Mathf.Abs(distance - initialDistance);
+    }
+
+    private float CalculateRelativeRotationDeltaFromInitial(Transform source, Transform target, string key)
+    {
+        if (source == null || target == null || string.IsNullOrEmpty(key))
+        {
+            return float.NaN;
+        }
+
+        Quaternion relativeRotation = Quaternion.Inverse(source.rotation) * target.rotation;
+        if (!IsFinite(relativeRotation))
+        {
+            return float.NaN;
+        }
+
+        if (!_diagnosticInitialRelativeRotations.TryGetValue(key, out Quaternion initialRelativeRotation))
+        {
+            _diagnosticInitialRelativeRotations[key] = relativeRotation;
+            return 0f;
+        }
+
+        return Quaternion.Angle(initialRelativeRotation, relativeRotation);
+    }
+
+    private void ResetDiagnosticBaselines()
+    {
+        _diagnosticTransformCache.Clear();
+        _diagnosticInitialDistances.Clear();
+        _diagnosticInitialRelativeRotations.Clear();
+    }
+
+    private static string BuildPairKey(string label, Transform a, Transform b)
+    {
+        return string.Join(":",
+            label,
+            a != null ? a.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0",
+            b != null ? b.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
+    }
+
+    private static bool IsDetachedThumbBaseHelperName(string normalizedName)
+    {
+        if (string.IsNullOrEmpty(normalizedName) ||
+            normalizedName.Contains("!") ||
+            normalizedName.Contains("ghost") ||
+            normalizedName.Contains("thumb0m"))
+        {
+            return false;
+        }
+
+        return IsThumbBaseName(normalizedName);
+    }
+
+    private static bool IsActiveThumbBaseSourceName(string normalizedName)
+    {
+        return !string.IsNullOrEmpty(normalizedName) &&
+            normalizedName.Contains("thumb0m") &&
+            !normalizedName.Contains("ghost") &&
+            !normalizedName.Contains("thumb1") &&
+            !normalizedName.Contains("thumb2") &&
+            !normalizedName.Contains("thumbtip");
+    }
+
+    private static bool IsThumbBaseName(string normalizedName)
+    {
+        return !string.IsNullOrEmpty(normalizedName) &&
+            normalizedName.Contains("thumb0") &&
+            !normalizedName.Contains("thumb1") &&
+            !normalizedName.Contains("thumb2") &&
+            !normalizedName.Contains("thumbtip");
+    }
+
+    private static bool MatchesTransformNameSuffix(string transformName, string targetName)
+    {
+        if (string.IsNullOrEmpty(transformName) || string.IsNullOrEmpty(targetName))
+        {
+            return false;
+        }
+
+        return transformName == targetName ||
+            transformName.EndsWith("." + targetName, StringComparison.Ordinal) ||
+            transformName.EndsWith(targetName, StringComparison.Ordinal);
+    }
+
+    private static string NormalizeTransformName(string value)
+    {
+        return string.IsNullOrEmpty(value) ? "" : value.ToLowerInvariant();
+    }
+
+    private static bool TryNormalize(Vector3 value, out Vector3 normalized)
+    {
+        normalized = Vector3.zero;
+        if (!IsFinite(value) || value.sqrMagnitude <= 0.000001f)
+        {
+            return false;
+        }
+
+        normalized = value.normalized;
+        return IsFinite(normalized);
+    }
+
+    private static float RiskAbove(float value, float warningValue, float fullRiskValue)
+    {
+        if (!IsFinite(value))
+        {
+            return float.NaN;
+        }
+
+        if (value <= warningValue)
+        {
+            return 0f;
+        }
+
+        if (fullRiskValue <= warningValue)
+        {
+            return 1f;
+        }
+
+        return Mathf.Clamp01((value - warningValue) / (fullRiskValue - warningValue));
+    }
+
+    private static float RiskMagnitude(float value, float warningValue, float fullRiskValue)
+    {
+        return RiskAbove(Mathf.Abs(value), warningValue, fullRiskValue);
+    }
+
+    private static float RiskOutsideRange(float value, float minValue, float maxValue, float fullRiskDistance)
+    {
+        if (!IsFinite(value))
+        {
+            return float.NaN;
+        }
+
+        if (value < minValue)
+        {
+            return RiskAbove(minValue - value, 0f, fullRiskDistance);
+        }
+
+        if (value > maxValue)
+        {
+            return RiskAbove(value - maxValue, 0f, fullRiskDistance);
+        }
+
+        return 0f;
+    }
+
+    private static float MaxFinite(params float[] values)
+    {
+        float result = float.NaN;
+        if (values == null)
+        {
+            return result;
+        }
+
+        foreach (float value in values)
+        {
+            if (!IsFinite(value))
+            {
+                continue;
+            }
+
+            result = IsFinite(result) ? Mathf.Max(result, value) : value;
+        }
+
+        return result;
+    }
+
+    private static bool IsFinite(float value)
+    {
+        return !float.IsNaN(value) && !float.IsInfinity(value);
+    }
+
+    private static bool IsFinite(Vector3 value)
+    {
+        return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    }
+
+    private static bool IsFinite(Quaternion value)
+    {
+        return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+    }
+
     private float GetMuscleValue(HumanPose pose, params string[] tokens)
     {
         int index = FindMuscleIndex(tokens);
@@ -700,6 +1298,32 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         return maxDelta;
+    }
+
+    private bool TryGetRendererBounds(out Bounds bounds)
+    {
+        bounds = new Bounds(transform.position, Vector3.zero);
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        bool hasBounds = false;
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null || !renderer.enabled)
+            {
+                continue;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        return hasBounds;
     }
 
     private Vector3 GetLocalScale(HumanBodyBones bone)
@@ -1264,6 +1888,7 @@ public class MotionComparisonProbe : MonoBehaviour
         builder.AppendLine($"- screenshots enabled: `{captureSampleScreenshots}`");
         builder.AppendLine($"- sample clock: `{(sampleByAnimationClipTime ? "animationClipTime" : "elapsed")}`");
         builder.AppendLine($"- sample times: `{EscapeMarkdown(FormatSampleTimes())}`");
+        builder.AppendLine($"- yyb diagnostic only metrics: `{captureYybDiagnosticOnlyMetrics}`");
         builder.AppendLine();
         builder.AppendLine("## 산출물");
         builder.AppendLine();
@@ -1415,8 +2040,9 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private static void WriteHeader(string path)
     {
-        const string header = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,hipsY,lowestFootY,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
-        File.WriteAllText(path, header + Environment.NewLine, Encoding.UTF8);
+        const string header = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,retargetRootDeltaLast,retargetRootDeltaMax,retargetRootDeltaSkippedCount,retargetPoseRootDeltaLast,retargetPoseRootDeltaMax,retargetPoseRootClampCount,retargetGroundingAdjustmentLast,retargetGroundingAdjustmentMax,retargetGroundingStepClampCount,retargetGroundingSmoothedCount,retargetGroundingVerticalStepLast,retargetGroundingVerticalStepMax,retargetGroundingInitialVerticalStep,retargetGroundingVerticalStepAfterInitialMax,retargetGroundingTargetY,retargetGroundingLowestFootBottomY,hipsY,lowestFootY,lowestFootBottomY,meshBoundsMinY,meshBoundsMaxY,footBottomGroundGap,meshBoundsGroundGap,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
+        const string yybDiagnosticHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk";
+        File.WriteAllText(path, header + "," + yybDiagnosticHeader + Environment.NewLine, Encoding.UTF8);
     }
 
     private static string EscapeCsv(string value)
@@ -1532,6 +2158,103 @@ public class MotionComparisonProbe : MonoBehaviour
         };
     }
 
+    private struct YybDiagnosticMetrics
+    {
+        public YybSideDiagnosticMetrics Left;
+        public YybSideDiagnosticMetrics Right;
+        public float MaxDeformationRisk;
+
+        public static YybDiagnosticMetrics Empty => new YybDiagnosticMetrics
+        {
+            Left = YybSideDiagnosticMetrics.Empty,
+            Right = YybSideDiagnosticMetrics.Empty,
+            MaxDeformationRisk = float.NaN
+        };
+    }
+
+    private struct RootSpikeMetrics
+    {
+        public float LastRootDeltaMagnitude;
+        public float MaxRootDeltaMagnitude;
+        public int RootDeltaSpikeSkippedCount;
+        public float LastRootPositionPoseDeltaMagnitude;
+        public float MaxRootPositionPoseDeltaMagnitude;
+        public int RootPositionSpikeClampedCount;
+        public float LastGroundingAdjustment;
+        public float MaxGroundingAdjustment;
+        public int GroundingStepClampedCount;
+        public int GroundingSmoothedCount;
+        public float LastGroundingVerticalStep;
+        public float MaxGroundingVerticalStep;
+        public float InitialGroundingVerticalStep;
+        public float MaxGroundingVerticalStepAfterInitial;
+        public float LastGroundingTargetY;
+        public float LastGroundingLowestFootBottomY;
+
+        public static RootSpikeMetrics Empty => new RootSpikeMetrics
+        {
+            LastRootDeltaMagnitude = float.NaN,
+            MaxRootDeltaMagnitude = float.NaN,
+            RootDeltaSpikeSkippedCount = -1,
+            LastRootPositionPoseDeltaMagnitude = float.NaN,
+            MaxRootPositionPoseDeltaMagnitude = float.NaN,
+            RootPositionSpikeClampedCount = -1,
+            LastGroundingAdjustment = float.NaN,
+            MaxGroundingAdjustment = float.NaN,
+            GroundingStepClampedCount = -1,
+            GroundingSmoothedCount = -1,
+            LastGroundingVerticalStep = float.NaN,
+            MaxGroundingVerticalStep = float.NaN,
+            InitialGroundingVerticalStep = float.NaN,
+            MaxGroundingVerticalStepAfterInitial = float.NaN,
+            LastGroundingTargetY = float.NaN,
+            LastGroundingLowestFootBottomY = float.NaN
+        };
+    }
+
+    private struct YybSideDiagnosticMetrics
+    {
+        public float ThumbIndexSpreadAngle;
+        public float ThumbPalmProjection;
+        public float ThumbSpreadRisk;
+        public float ThumbProjectionRisk;
+        public float ThumbHelperSourceDistance;
+        public float ThumbHelperSourceDistanceDelta;
+        public float ThumbHelperSourceRotationDelta;
+        public float ThumbHelperSeparationRisk;
+        public float WebbingRisk;
+        public float ArmTwistRisk;
+        public float SleeveAnchorRisk;
+        public float DeformationRisk;
+
+        public static YybSideDiagnosticMetrics Empty => new YybSideDiagnosticMetrics
+        {
+            ThumbIndexSpreadAngle = float.NaN,
+            ThumbPalmProjection = float.NaN,
+            ThumbSpreadRisk = float.NaN,
+            ThumbProjectionRisk = float.NaN,
+            ThumbHelperSourceDistance = float.NaN,
+            ThumbHelperSourceDistanceDelta = float.NaN,
+            ThumbHelperSourceRotationDelta = float.NaN,
+            ThumbHelperSeparationRisk = float.NaN,
+            WebbingRisk = float.NaN,
+            ArmTwistRisk = float.NaN,
+            SleeveAnchorRisk = float.NaN,
+            DeformationRisk = float.NaN
+        };
+
+        public void ClearRiskScores()
+        {
+            ThumbSpreadRisk = float.NaN;
+            ThumbProjectionRisk = float.NaN;
+            ThumbHelperSeparationRisk = float.NaN;
+            WebbingRisk = float.NaN;
+            ArmTwistRisk = float.NaN;
+            SleeveAnchorRisk = float.NaN;
+            DeformationRisk = float.NaN;
+        }
+    }
+
     private struct PoseMetrics
     {
         public string Label;
@@ -1548,8 +2271,14 @@ public class MotionComparisonProbe : MonoBehaviour
         public float AnimationNormalizedTime;
         public Vector3 RootPosition;
         public float RootYaw;
+        public RootSpikeMetrics RootSpike;
         public float HipsY;
         public float LowestFootY;
+        public float LowestFootBottomY;
+        public float MeshBoundsMinY;
+        public float MeshBoundsMaxY;
+        public float FootBottomGroundGap;
+        public float MeshBoundsGroundGap;
         public float CameraFacingDot;
         public float MaxScaleDelta;
         public Vector3 LeftUpperArmScale;
@@ -1633,6 +2362,7 @@ public class MotionComparisonProbe : MonoBehaviour
         public float RightRingSpreadMuscle;
         public float RightLittle1StretchMuscle;
         public float RightLittleSpreadMuscle;
+        public YybDiagnosticMetrics YybDiagnostics;
 
         public string ToCsvLine()
         {
@@ -1653,8 +2383,29 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(RootPosition.y),
                 F(RootPosition.z),
                 F(RootYaw),
+                F(RootSpike.LastRootDeltaMagnitude),
+                F(RootSpike.MaxRootDeltaMagnitude),
+                RootSpike.RootDeltaSpikeSkippedCount.ToString(CultureInfo.InvariantCulture),
+                F(RootSpike.LastRootPositionPoseDeltaMagnitude),
+                F(RootSpike.MaxRootPositionPoseDeltaMagnitude),
+                RootSpike.RootPositionSpikeClampedCount.ToString(CultureInfo.InvariantCulture),
+                F(RootSpike.LastGroundingAdjustment),
+                F(RootSpike.MaxGroundingAdjustment),
+                RootSpike.GroundingStepClampedCount.ToString(CultureInfo.InvariantCulture),
+                RootSpike.GroundingSmoothedCount.ToString(CultureInfo.InvariantCulture),
+                F(RootSpike.LastGroundingVerticalStep),
+                F(RootSpike.MaxGroundingVerticalStep),
+                F(RootSpike.InitialGroundingVerticalStep),
+                F(RootSpike.MaxGroundingVerticalStepAfterInitial),
+                F(RootSpike.LastGroundingTargetY),
+                F(RootSpike.LastGroundingLowestFootBottomY),
                 F(HipsY),
                 F(LowestFootY),
+                F(LowestFootBottomY),
+                F(MeshBoundsMinY),
+                F(MeshBoundsMaxY),
+                F(FootBottomGroundGap),
+                F(MeshBoundsGroundGap),
                 F(CameraFacingDot),
                 F(MaxScaleDelta),
                 V(LeftUpperArmScale),
@@ -1737,7 +2488,32 @@ public class MotionComparisonProbe : MonoBehaviour
                 V(RightIndexProximalLocalEuler),
                 V(RightMiddleProximalLocalEuler),
                 V(RightRingProximalLocalEuler),
-                V(RightLittleProximalLocalEuler));
+                V(RightLittleProximalLocalEuler),
+                F(YybDiagnostics.Left.ThumbIndexSpreadAngle),
+                F(YybDiagnostics.Right.ThumbIndexSpreadAngle),
+                F(YybDiagnostics.Left.ThumbPalmProjection),
+                F(YybDiagnostics.Right.ThumbPalmProjection),
+                F(YybDiagnostics.Left.ThumbSpreadRisk),
+                F(YybDiagnostics.Right.ThumbSpreadRisk),
+                F(YybDiagnostics.Left.ThumbProjectionRisk),
+                F(YybDiagnostics.Right.ThumbProjectionRisk),
+                F(YybDiagnostics.Left.ThumbHelperSourceDistance),
+                F(YybDiagnostics.Right.ThumbHelperSourceDistance),
+                F(YybDiagnostics.Left.ThumbHelperSourceDistanceDelta),
+                F(YybDiagnostics.Right.ThumbHelperSourceDistanceDelta),
+                F(YybDiagnostics.Left.ThumbHelperSourceRotationDelta),
+                F(YybDiagnostics.Right.ThumbHelperSourceRotationDelta),
+                F(YybDiagnostics.Left.ThumbHelperSeparationRisk),
+                F(YybDiagnostics.Right.ThumbHelperSeparationRisk),
+                F(YybDiagnostics.Left.WebbingRisk),
+                F(YybDiagnostics.Right.WebbingRisk),
+                F(YybDiagnostics.Left.ArmTwistRisk),
+                F(YybDiagnostics.Right.ArmTwistRisk),
+                F(YybDiagnostics.Left.SleeveAnchorRisk),
+                F(YybDiagnostics.Right.SleeveAnchorRisk),
+                F(YybDiagnostics.Left.DeformationRisk),
+                F(YybDiagnostics.Right.DeformationRisk),
+                F(YybDiagnostics.MaxDeformationRisk));
         }
 
         private static string F(float value)

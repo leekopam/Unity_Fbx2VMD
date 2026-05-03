@@ -82,13 +82,25 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     MessageType.Info);
 
                 EditorGUI.indentLevel++;
+                DrawProperty("useEditorHumanoidRootTranslationReference", "Editor Humanoid RootT 이동 기준 사용");
                 DrawProperty("useManualAnimatorFingerPoseReference", "수동 Animator 손가락 기준 사용");
+                DrawProperty("useManualAnimatorBodyRotationReference", "수동 Animator bodyRotation 기준 사용");
+                DrawProperty("useManualAnimatorHipsLocalPositionReference", "수동 Animator Hips localPosition 기준 사용");
+                if (GetBool("useManualAnimatorHipsLocalPositionReference"))
+                {
+                    EditorGUILayout.HelpBox(
+                        "Sub_Manual/testPrefab Animator의 Hips localPosition 경로를 Main_Auto target Hips에 선택 적용합니다. visual_body_arc_jitter A/B 검증 전용으로 사용합니다.",
+                        MessageType.Info);
+                    DrawProperty("manualAnimatorHipsLocalPositionWeight", "Hips localPosition 보정 강도");
+                    DrawProperty("manualAnimatorHipsLocalPositionMaxOffset", "Hips localPosition 최대 보정");
+                }
                 if (GetBool("useManualAnimatorFingerPoseReference"))
                 {
                     EditorGUILayout.HelpBox(
                         "손가락은 Sub_Manual/testPrefab Animator가 같은 FBX clip을 평가한 HumanPose 값을 기준으로 덮어씁니다. 비워두면 기본 testPrefab과 TestAnimator1_Manual을 자동으로 찾습니다.",
                         MessageType.Info);
                     DrawProperty("useManualAnimatorThumbLocalRotationReference", "엄지 localRotation도 수동 기준 적용");
+                    DrawProperty("useManualAnimatorHandLocalRotationReference", "손목 localRotation도 수동 기준 적용");
                     DrawProperty("useManualAnimatorThumbSegmentDirectionReference", "엄지 세그먼트 방향도 수동 기준 적용");
                     if (GetBool("useManualAnimatorThumbSegmentDirectionReference"))
                     {
@@ -282,6 +294,36 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             DrawProperty("startDelay", "녹화 시작 대기 시간");
+            DrawProperty("RetargetPrewarmFrameCount", "시작 포즈 prewarm 프레임");
+            DrawProperty("enableRecordingDiagnostics", "녹화 진단/캡처 사용");
+            DrawProperty("clampRetargetVisualClipStep", "Ghost clip time step 제한");
+            if (GetBool("clampRetargetVisualClipStep"))
+            {
+                EditorGUILayout.HelpBox("이 옵션은 테스트 전용입니다. 실제 clip time을 제한하므로 프레임 드랍 때 재생이 느려질 수 있습니다.", MessageType.Warning);
+                EditorGUI.indentLevel++;
+                DrawProperty("RetargetVisualClipFrameRate", "시각 재생 기준 FPS");
+                EditorGUI.indentLevel--;
+            }
+
+            DrawProperty("smoothRetargetPoseOnVisualStepSpike", "pose spike smoothing");
+            if (GetBool("smoothRetargetPoseOnVisualStepSpike"))
+            {
+                EditorGUI.indentLevel++;
+                DrawProperty("RetargetPoseVisualSpikeCurrentWeight", "현재 pose 반영 비율");
+                DrawProperty("RetargetPoseVisualMuscleDeltaThreshold", "muscle delta 기준");
+                EditorGUI.indentLevel--;
+            }
+
+            if (GetBool("enableRecordingDiagnostics"))
+            {
+                EditorGUILayout.HelpBox(
+                    "CSV/프레임 캡처와 결정론 녹화는 회귀 테스트용입니다. 일반 변환에서 켜면 GameView가 살짝 멈추거나 배속처럼 보일 수 있습니다.",
+                    MessageType.Warning);
+                EditorGUI.indentLevel++;
+                DrawProperty("useDeterministicCaptureFramerateForDiagnostics", "테스트용 30fps 시간 고정");
+                DrawProperty("enableDiagnosticFingerCloseups", "손 close-up 캡처");
+                EditorGUI.indentLevel--;
+            }
 
             EndFoldout(true);
         }
@@ -303,6 +345,33 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 EditorGUI.indentLevel++;
                 DrawProperty("MaxRetargetRootDeltaPerFrame", "프레임당 Root 이동 제한");
                 DrawProperty("logRetargetRootDeltaSpikes", "Root 튐 진단 로그");
+                EditorGUI.indentLevel--;
+            }
+
+            DrawProperty("smoothRetargetGrounding", "접지 보정 안정화");
+            if (GetBool("smoothRetargetGrounding"))
+            {
+                EditorGUI.indentLevel++;
+                DrawProperty("MaxGroundingVerticalStepPerFrame", "프레임당 접지 보정 제한");
+                DrawProperty("GroundingSmoothing", "접지 보정 반영 비율");
+                DrawProperty("GroundingDeadZone", "접지 보정 데드존");
+                DrawProperty("FreezeRootYAfterInitialGrounding", "초기 접지 뒤 root Y 고정");
+                DrawProperty("rejectRendererGroundingOutliers", "renderer 접지 outlier 제외");
+                if (GetBool("rejectRendererGroundingOutliers"))
+                {
+                    EditorGUI.indentLevel++;
+                    DrawProperty("MaxRendererFootGroundingSeparation", "renderer-foot 허용 거리");
+                    EditorGUI.indentLevel--;
+                }
+                DrawProperty("smoothLateVisualGroundingCorrection", "최종 접지 미세 떨림 완화");
+                if (GetBool("smoothLateVisualGroundingCorrection"))
+                {
+                    EditorGUI.indentLevel++;
+                    DrawProperty("LateVisualGroundingSnapThreshold", "큰 오차 즉시 보정 기준");
+                    DrawProperty("LateVisualGroundingSmoothing", "최종 접지 smoothing");
+                    DrawProperty("MaxLateVisualGroundingStepPerFrame", "최종 접지 프레임당 제한");
+                    EditorGUI.indentLevel--;
+                }
                 EditorGUI.indentLevel--;
             }
 
