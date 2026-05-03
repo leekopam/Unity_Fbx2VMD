@@ -18,6 +18,9 @@ namespace Member_Han.Modules.FBXImporter
         private const float GHOST_CONTAINER_SCALE = 0.01f;
         private const float THUMB_PROXIMAL_SAFE_MAX_LOCAL_ANGLE = 10f;
         private const float DEFAULT_THUMB_STRETCH_OFFSET = -0.1f;
+#if UNITY_EDITOR
+        private const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
+#endif
 
         private enum FBXSessionState
         {
@@ -51,14 +54,53 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Main_Auto가 Sub_Manual 직접 Animator 재생처럼 FBX의 body/root 회전을 따르도록 합니다. 끄면 기존처럼 Ghost Transform 기준 회전 보정을 강제합니다.")]
         public bool preserveFbxRootRotation = false;
 
+        [Tooltip("HumanPose bodyPosition copied from FBX can jump on some clips. Keep the target body position stable like the manual Animator path.")]
+        public bool preserveRetargetBodyPosition = true;
+
+        [Tooltip("Use FBX HumanPose bodyPosition X/Z delta as target root motion to reduce foot sliding.")]
+        public bool useRetargetBodyPositionXZRootMotion = false;
+
+        [Tooltip("When a foot is visually grounded, add a small X/Z root correction to reduce skating.")]
+        public bool stabilizeGroundedFootXZ = false;
+
+        [Tooltip("Foot-lock correction strength. Lower values preserve dance motion, higher values reduce skating.")]
+        [Range(0f, 1f)] public float GroundedFootLockWeight = 0.45f;
+
+        [Tooltip("Maximum X/Z root correction per frame for grounded foot lock.")]
+        [Range(0.001f, 0.1f)] public float MaxGroundedFootLockStep = 0.025f;
+
         [Tooltip("Editor 자동 경로에서 Unity가 임포트한 Humanoid clip의 muscle curve를 기준으로 사용합니다. Assimp Ghost 회전 curve가 수동 기준과 다를 때 팔/상체 포즈 차이를 줄이기 위한 안전 경로입니다.")]
         public bool useEditorHumanoidClipMuscleReference = true;
+
+        [Tooltip("Editor-only experimental RootT X/Z root motion reference. Keep disabled until visual_body_arc_jitter passes without increasing jitter.")]
+        public bool useEditorHumanoidRootTranslationReference = false;
+
+        [Tooltip("Weight for Editor Humanoid RootT translation reference.")]
+        [Range(0f, 1f)] public float editorHumanoidRootTranslationWeight = 0.25f;
+
+        [Tooltip("Current-frame blend for smoothed Editor Humanoid RootT translation delta.")]
+        [Range(0.05f, 1f)] public float editorHumanoidRootTranslationCurrentWeight = 0.35f;
 
         [Tooltip("손가락은 Sub_Manual/testPrefab Animator가 평가한 HumanPose 값을 기준으로 덮어씁니다.")]
         public bool useManualAnimatorFingerPoseReference = true;
 
+        [Tooltip("Sub_Manual/testPrefab Animator의 HumanPose bodyRotation을 retarget pose 기준으로 사용해 팔꿈치 bend plane 기준축 차이를 줄입니다.")]
+        public bool useManualAnimatorBodyRotationReference = true;
+
+        [Tooltip("수동 기준 Animator의 Hips localPosition을 target Hips에 선택적으로 적용해 Main_Auto의 몸통 경로 편차를 A/B 검증합니다.")]
+        public bool useManualAnimatorHipsLocalPositionReference = true;
+
+        [Tooltip("수동 기준 Hips localPosition 보정 강도입니다.")]
+        [Range(0f, 1f)] public float manualAnimatorHipsLocalPositionWeight = 1f;
+
+        [Tooltip("프레임당 수동 기준 Hips localPosition으로 이동할 수 있는 최대 보정 거리입니다.")]
+        [Range(0.001f, 0.2f)] public float manualAnimatorHipsLocalPositionMaxOffset = 0.12f;
+
         [Tooltip("엄지 체인의 localRotation도 Sub_Manual/testPrefab Animator가 같은 FBX clip에서 평가한 값을 기준으로 덮어씁니다. YYB와 testPrefab의 Humanoid muscle은 같지만 엄지 로컬 축 해석이 달라 보일 때 사용합니다.")]
         public bool useManualAnimatorThumbLocalRotationReference = true;
+
+        [Tooltip("손목 localRotation을 Sub_Manual/testPrefab Animator가 같은 FBX clip에서 평가한 값을 기준으로 덮어씁니다. t13.2 hand pose parity 회귀 보호용입니다.")]
+        public bool useManualAnimatorHandLocalRotationReference = true;
 
         [Tooltip("엄지 세그먼트 방향을 Sub_Manual/testPrefab의 손 기준 방향에 맞춥니다. 모델별 bind axis 차이 때문에 localRotation 숫자가 같아도 손 모양이 달라질 때 사용합니다.")]
         public bool useManualAnimatorThumbSegmentDirectionReference = true;
@@ -347,6 +389,18 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("FBX 로드 후 녹화 시작까지의 대기 시간 (초)")]
         [Range(0f, 10f)] public float startDelay = 3.0f;
 
+        [Tooltip("녹화 시작 직전에 clip time 0을 고정 샘플링해 retarget/grounding 첫 프레임을 안정화하는 프레임 수입니다.")]
+        [Range(0, 10)] public int RetargetPrewarmFrameCount = 6;
+
+        [Tooltip("비교 CSV/프레임 캡처 Probe를 켭니다. 일반 변환에서는 미세 멈춤을 줄이기 위해 끄고, 회귀 테스트 때만 켭니다.")]
+        public bool enableRecordingDiagnostics = false;
+
+        [Tooltip("회귀 테스트 때 녹화 중 Unity 시간을 30fps로 고정합니다. 일반 GameView 재생에서는 배속/멈칫 체감이 생길 수 있어 끕니다.")]
+        public bool useDeterministicCaptureFramerateForDiagnostics = false;
+
+        [Tooltip("Recording Diagnostics를 켰을 때 손 close-up 캡처도 함께 남깁니다.")]
+        public bool enableDiagnosticFingerCloseups = true;
+
         [Header("Target Idle Pose Guard")]
         [Tooltip("Play 진입과 FBX 선택 전 대기 상태에서 타깃 캐릭터가 카메라를 바라보도록 고정합니다.")]
         public bool faceTargetToCameraOnIdle = true;
@@ -357,9 +411,25 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("FBX가 들어오기 전 타깃 캐릭터의 시작 자세를 매 프레임 복구합니다.")]
         public bool lockTargetPoseUntilImport = true;
 
+        [Header("Visual Jitter Guard")]
+        [Tooltip("Editor/GameView 프레임이 밀려도 Ghost clip time이 한 프레임에 크게 건너뛰지 않게 제한합니다.")]
+        public bool clampRetargetVisualClipStep = false;
+
+        [Tooltip("Ghost clip time이 한 렌더 프레임에 전진할 수 있는 기준 FPS입니다. 30이면 한 번에 1/30초 이상 건너뛰지 않습니다.")]
+        [Range(15f, 120f)] public float RetargetVisualClipFrameRate = 30f;
+
+        [Tooltip("프레임 지연으로 retarget pose가 한 번에 크게 바뀔 때 애니메이션 시간은 보존하고 target pose만 부드럽게 따라가게 합니다.")]
+        public bool smoothRetargetPoseOnVisualStepSpike = true;
+
+        [Tooltip("pose spike smoothing 때 현재 FBX pose를 반영하는 비율입니다. 1에 가까울수록 원본 모션을 더 보존하고, 낮을수록 pop을 더 줄입니다.")]
+        [Range(0.1f, 1f)] public float RetargetPoseVisualSpikeCurrentWeight = 0.65f;
+
+        [Tooltip("이 값보다 큰 muscle delta가 발생하면 frame-time spike가 아니어도 pose smoothing을 적용합니다.")]
+        [Range(0.05f, 1f)] public float RetargetPoseVisualMuscleDeltaThreshold = 0.35f;
+
         [Header("Final Tuning")]
         [Tooltip("높이 보정 (미터 단위). 0.02 = 2cm 올림")]
-        [Range(-0.5f, 0.5f)] public float HeightOffset = 0.02f;
+        [Range(-0.5f, 0.5f)] public float HeightOffset = 0.0f;
 
         [Tooltip("보폭 비율 (1.0 = 자동, 미끄러지면 조절)")]
         [Range(0.8f, 1.2f)] public float MovementScaleMultiplier = 1.0f;
@@ -373,6 +443,40 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("root delta spike를 무시했을 때 최초 1회 진단 로그를 출력합니다.")]
         public bool logRetargetRootDeltaSpikes = false;
+
+        [Header("Grounding Stability Guard")]
+        [Tooltip("발바닥 접지 보정이 한 프레임에 크게 튀지 않도록 부드럽게 반영합니다.")]
+        public bool smoothRetargetGrounding = true;
+
+        [Tooltip("한 프레임에 허용할 최대 수직 접지 보정값입니다.")]
+        [Range(0.001f, 0.2f)] public float MaxGroundingVerticalStepPerFrame = 0.01f;
+
+        [Tooltip("접지 보정 목표값을 현재 위치에 반영하는 비율입니다.")]
+        [Range(0f, 1f)] public float GroundingSmoothing = 0.25f;
+
+        [Tooltip("이 값보다 작은 발바닥 떨림은 무시합니다.")]
+        [Range(0f, 0.05f)] public float GroundingDeadZone = 0.005f;
+
+        [Tooltip("초기 접지 확정 뒤에는 타깃 root Y를 고정해 매 프레임 접지 추종으로 생기는 화면 떨림을 제거합니다.")]
+        public bool FreezeRootYAfterInitialGrounding = true;
+
+        [Tooltip("전체 renderer bounds 하단이 발바닥 추정치에서 과하게 멀어지면 옷/머리카락/소매 outlier로 보고 접지 기준에서 제외합니다.")]
+        public bool rejectRendererGroundingOutliers = true;
+
+        [Tooltip("renderer bounds 하단과 발바닥 추정치 사이에 허용할 최대 거리입니다. 이 값을 넘으면 foot 기준 접지로 되돌립니다.")]
+        [Range(0.02f, 0.3f)] public float MaxRendererFootGroundingSeparation = 0.12f;
+
+        [Tooltip("최종 메시 bounds 접지 보정의 작은 잔여 오차를 부드럽게 반영해 모델 전체 떨림을 줄입니다.")]
+        public bool smoothLateVisualGroundingCorrection = true;
+
+        [Tooltip("Late visual grounding 잔여 오차가 이 값보다 작으면 smoothing 대상으로 봅니다. 큰 오차는 공중 부유 방지를 위해 즉시 보정합니다.")]
+        [Range(0.005f, 0.1f)] public float LateVisualGroundingSnapThreshold = 0.03f;
+
+        [Tooltip("작은 late visual grounding 잔여 오차를 현재 위치에 반영하는 비율입니다.")]
+        [Range(0f, 1f)] public float LateVisualGroundingSmoothing = 0.25f;
+
+        [Tooltip("작은 late visual grounding smoothing 보정이 한 프레임에 움직일 수 있는 최대 Y 이동량입니다.")]
+        [Range(0.001f, 0.05f)] public float MaxLateVisualGroundingStepPerFrame = 0.003f;
 
         [Header("Thumb Digital Orthopedics (Offset)")]
         [Tooltip("양손 공통 엄지 회전 Offset입니다. YYB 엄지 기준축이 수동 기준과 다를 때 최종 렌더 포즈의 엄지 첫 관절 기준축을 보정합니다.")]
@@ -412,12 +516,37 @@ namespace Member_Han.Modules.FBXImporter
         private bool _isProcessing;
         private GameObject _activeGhostContainer;
         private HumanoidSampleCode _activeRecorderController;
+        private PoseSpaceRetargeter _activeRetargeter;
         private readonly List<TransformSnapshot> _targetIdlePose = new List<TransformSnapshot>();
         private readonly List<BooleanFieldSnapshot> _retargetBooleanSnapshots = new List<BooleanFieldSnapshot>();
         private RuntimeAnimatorController _cachedTargetController;
         private bool _hasCachedTargetController;
         private bool _idlePoseInitialized;
+#if UNITY_EDITOR
+        private bool _editorSmokeRecordingOverrideActive;
+        private int _editorSmokeTargetFrameCount;
+        private float _editorSmokeDurationSeconds;
+        private bool _editorSmokeRestoreSettingsActive;
+        private bool _editorSmokePreviousEnableRecordingDiagnostics;
+        private bool _editorSmokePreviousEnableDiagnosticFingerCloseups;
+        private bool _editorSmokePreviousUseDeterministicCaptureFramerate;
+        private float _editorSmokePreviousStartDelay;
+        private EditorDiagnosticSmokeSegment _editorSmokeSegment;
+        private string _editorSmokeCurrentFbxFileName;
+#endif
         #endregion
+
+#if UNITY_EDITOR
+        public enum EditorDiagnosticSmokeSegment
+        {
+            Head,
+            Middle,
+            Tail
+        }
+
+        public bool IsProcessing => _isProcessing;
+        public event Action<string, VmdSaveResult> EditorDiagnosticSmokeFinished;
+#endif
 
         public float EffectiveThumbProximalMaxLocalAngle
         {
@@ -445,6 +574,166 @@ namespace Member_Han.Modules.FBXImporter
                 return ThumbStretchOffset;
             }
         }
+
+#if UNITY_EDITOR
+        public bool StartEditorDiagnosticSmoke(
+            string fbxFileName,
+            float durationSeconds,
+            int targetFrameCount,
+            bool enableDiagnostics,
+            bool enableFingerCloseups,
+            bool useDeterministicCaptureFramerate,
+            float diagnosticStartDelay,
+            EditorDiagnosticSmokeSegment segment = EditorDiagnosticSmokeSegment.Head)
+        {
+            if (_isProcessing)
+            {
+                Debug.LogWarning("[FileManager] 다른 FBX 처리가 진행 중이라 smoke 진단을 시작하지 않았습니다.");
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(fbxFileName))
+            {
+                Debug.LogError("[FileManager] smoke 진단 FBX 파일명이 비어 있습니다.");
+                return false;
+            }
+
+            string sourcePath = ResolveEditorSmokeFbxPath(fbxFileName);
+            if (!File.Exists(sourcePath))
+            {
+                Debug.LogError($"[FileManager] smoke 진단 FBX를 찾을 수 없습니다: {sourcePath}");
+                return false;
+            }
+
+            float safeDuration = Mathf.Max(0.1f, durationSeconds);
+            int safeTargetFrameCount = targetFrameCount > 0
+                ? targetFrameCount
+                : Mathf.CeilToInt(safeDuration * EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE);
+
+            CaptureEditorSmokeSettings();
+            enableRecordingDiagnostics = enableDiagnostics;
+            enableDiagnosticFingerCloseups = enableFingerCloseups;
+            useDeterministicCaptureFramerateForDiagnostics = useDeterministicCaptureFramerate;
+            startDelay = Mathf.Clamp(diagnosticStartDelay, 0f, 10f);
+
+            _editorSmokeRecordingOverrideActive = true;
+            _editorSmokeDurationSeconds = safeDuration;
+            _editorSmokeTargetFrameCount = safeTargetFrameCount;
+            _editorSmokeSegment = segment;
+            _editorSmokeCurrentFbxFileName = Path.GetFileName(sourcePath);
+
+            Debug.Log(
+                $"[FileManager] Editor smoke 진단 시작: FBX={Path.GetFileName(sourcePath)}, " +
+                $"duration={safeDuration:F2}s, targetFrameCount={safeTargetFrameCount}, " +
+                $"segment={GetEditorSmokeSegmentLabel(segment)}, diagnostics={enableDiagnostics}");
+
+            ProcessFBXAsync(sourcePath);
+            return true;
+        }
+
+        private string ResolveEditorSmokeFbxPath(string fbxFileName)
+        {
+            string normalizedFileName = fbxFileName.Trim();
+            if (!string.Equals(Path.GetExtension(normalizedFileName), ".fbx", StringComparison.OrdinalIgnoreCase))
+            {
+                normalizedFileName += ".fbx";
+            }
+
+            return Path.Combine(GetControlledImportDirectory(), normalizedFileName);
+        }
+
+        private static string BuildEditorSmokeOutputBaseName(string outputBaseName, float durationSeconds, EditorDiagnosticSmokeSegment segment)
+        {
+            string cleanBaseName = SanitizeFileName(
+                string.IsNullOrWhiteSpace(outputBaseName) ? "fbxToVMD" : outputBaseName);
+            int roundedSeconds = Mathf.Max(1, Mathf.CeilToInt(durationSeconds));
+            string prefix;
+            switch (segment)
+            {
+                case EditorDiagnosticSmokeSegment.Middle:
+                    prefix = "smoke_middle";
+                    break;
+                case EditorDiagnosticSmokeSegment.Tail:
+                    prefix = "smoke_tail";
+                    break;
+                default:
+                    prefix = "smoke";
+                    break;
+            }
+
+            return $"{prefix}_{cleanBaseName}_{roundedSeconds}s";
+        }
+
+        private static float CalculateEditorSmokeStartTime(AnimationClip clip, float requestedDuration, EditorDiagnosticSmokeSegment segment)
+        {
+            if (clip == null)
+            {
+                return 0f;
+            }
+
+            float clipLength = Mathf.Max(0f, clip.length);
+            float safeDuration = Mathf.Max(0.1f, requestedDuration);
+            switch (segment)
+            {
+                case EditorDiagnosticSmokeSegment.Middle:
+                    return Mathf.Max(0f, (clipLength - safeDuration) * 0.5f);
+                case EditorDiagnosticSmokeSegment.Tail:
+                    return Mathf.Max(0f, clipLength - safeDuration);
+                default:
+                    return 0f;
+            }
+        }
+
+        private static string GetEditorSmokeSegmentLabel(EditorDiagnosticSmokeSegment segment)
+        {
+            switch (segment)
+            {
+                case EditorDiagnosticSmokeSegment.Middle:
+                    return "middle";
+                case EditorDiagnosticSmokeSegment.Tail:
+                    return "tail";
+                default:
+                    return "head";
+            }
+        }
+
+        private void CaptureEditorSmokeSettings()
+        {
+            _editorSmokePreviousEnableRecordingDiagnostics = enableRecordingDiagnostics;
+            _editorSmokePreviousEnableDiagnosticFingerCloseups = enableDiagnosticFingerCloseups;
+            _editorSmokePreviousUseDeterministicCaptureFramerate = useDeterministicCaptureFramerateForDiagnostics;
+            _editorSmokePreviousStartDelay = startDelay;
+            _editorSmokeRestoreSettingsActive = true;
+        }
+
+        private void ClearEditorSmokeOverride()
+        {
+            if (_editorSmokeRestoreSettingsActive)
+            {
+                enableRecordingDiagnostics = _editorSmokePreviousEnableRecordingDiagnostics;
+                enableDiagnosticFingerCloseups = _editorSmokePreviousEnableDiagnosticFingerCloseups;
+                useDeterministicCaptureFramerateForDiagnostics = _editorSmokePreviousUseDeterministicCaptureFramerate;
+                startDelay = _editorSmokePreviousStartDelay;
+            }
+
+            _editorSmokeRecordingOverrideActive = false;
+            _editorSmokeTargetFrameCount = 0;
+            _editorSmokeDurationSeconds = 0f;
+            _editorSmokeRestoreSettingsActive = false;
+            _editorSmokeSegment = EditorDiagnosticSmokeSegment.Head;
+            _editorSmokeCurrentFbxFileName = null;
+        }
+
+        private void NotifyEditorSmokeFinished(VmdSaveResult result)
+        {
+            if (string.IsNullOrEmpty(_editorSmokeCurrentFbxFileName))
+            {
+                return;
+            }
+
+            EditorDiagnosticSmokeFinished?.Invoke(_editorSmokeCurrentFbxFileName, result);
+        }
+#endif
 
         private struct TransformSnapshot
         {
@@ -859,6 +1148,7 @@ namespace Member_Han.Modules.FBXImporter
 
                     // 포즈 공간 리타겟터 부착 및 초기화
                     var retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
+                    _activeRetargeter = retargeter;
 
                     // FileManager 자신(this)을 넘겨서 설정을 공유함
                     retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
@@ -982,6 +1272,7 @@ namespace Member_Han.Modules.FBXImporter
                 PrepareTargetCharacter(targetObject, targetAnimator, ghostAnimator);
 
                 PoseSpaceRetargeter retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
+                _activeRetargeter = retargeter;
                 retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
 #if UNITY_EDITOR
                 ConfigureEditorHumanoidMuscleReference(retargeter, targetPath, sourcePath);
@@ -995,6 +1286,7 @@ namespace Member_Han.Modules.FBXImporter
 
                 StartCoroutine(StartRecordingSequenceStable(
                     ghostAnim,
+                    retargeter,
                     targetObject,
                     targetClip,
                     outputBaseName
@@ -1011,6 +1303,7 @@ namespace Member_Han.Modules.FBXImporter
 
         private IEnumerator StartRecordingSequenceStable(
             Animation ghostAnim,
+            PoseSpaceRetargeter retargeter,
             GameObject targetObject,
             AnimationClip clip,
             string outputBaseName)
@@ -1033,21 +1326,47 @@ namespace Member_Han.Modules.FBXImporter
 
             _activeRecorderController = recorderController;
             _activeRecorderController.RecordingFinished += OnRecordingFinished;
+            _activeRecorderController.SetRecordingDiagnostics(
+                enableRecordingDiagnostics,
+                enableRecordingDiagnostics && enableDiagnosticFingerCloseups,
+                enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics);
 
-            ghostAnim.clip = clip;
-            ghostAnim.Play();
+            float recordingStartTime = 0f;
+            float recordingLength = clip.length;
+            int recordingTargetFrameCount = 0;
+            string recordingOutputBaseName = outputBaseName;
+            string comparisonLabel = $"auto_{recordingOutputBaseName}";
+#if UNITY_EDITOR
+            if (_editorSmokeRecordingOverrideActive)
+            {
+                float requestedDuration = Mathf.Max(0.1f, _editorSmokeDurationSeconds);
+                recordingStartTime = CalculateEditorSmokeStartTime(clip, requestedDuration, _editorSmokeSegment);
+                float remainingLength = Mathf.Max(0.1f, clip.length - recordingStartTime);
+                recordingLength = Mathf.Min(requestedDuration, remainingLength);
+                recordingTargetFrameCount = Mathf.Min(
+                    Mathf.Max(1, _editorSmokeTargetFrameCount),
+                    Mathf.CeilToInt(recordingLength * EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
+                recordingOutputBaseName = BuildEditorSmokeOutputBaseName(outputBaseName, recordingLength, _editorSmokeSegment);
+                comparisonLabel = $"auto_{recordingOutputBaseName}";
+                Debug.Log(
+                    $"[FileManager] Editor smoke cap 적용: VMD={recordingOutputBaseName}.vmd, " +
+                    $"segment={GetEditorSmokeSegmentLabel(_editorSmokeSegment)}, " +
+                    $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
+                    $"targetFrameCount={recordingTargetFrameCount}");
+            }
+#endif
 
-            // Retargeter의 LateUpdate와 렌더 포즈가 한 번 적용된 뒤 녹화를 시작한다.
-            yield return new WaitForEndOfFrame();
+            yield return PrewarmRetargetStartPose(ghostAnim, clip, retargeter, recordingStartTime);
+            retargeter?.ResetPlaybackStabilityMetrics();
 
-            SetSessionState(FBXSessionState.Recording, $"녹화 중: {outputBaseName}", 0.75f);
-            Debug.Log($"[FileManager] 자동 녹화 시작: VMD={outputBaseName}.vmd, 비교라벨=auto_{outputBaseName}");
+            SetSessionState(FBXSessionState.Recording, $"녹화 중: {recordingOutputBaseName}", 0.75f);
+            Debug.Log($"[FileManager] 자동 녹화 시작: VMD={recordingOutputBaseName}.vmd, 비교라벨={comparisonLabel}");
             bool started = recorderController.StartAutoRecording(
-                clip.length,
-                outputBaseName,
+                recordingLength,
+                recordingOutputBaseName,
                 null,
-                0,
-                comparisonLabel: $"auto_{outputBaseName}",
+                recordingTargetFrameCount,
+                comparisonLabel: comparisonLabel,
                 overwriteExistingOutput: true);
             if (!started)
             {
@@ -1055,9 +1374,60 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
+        private IEnumerator PrewarmRetargetStartPose(Animation ghostAnim, AnimationClip clip, PoseSpaceRetargeter retargeter, float startTimeSeconds)
+        {
+            ghostAnim.clip = clip;
+            if (ghostAnim.GetClip(clip.name) == null)
+            {
+                ghostAnim.AddClip(clip, clip.name);
+            }
+
+            ghostAnim.Play(clip.name);
+            AnimationState state = ghostAnim[clip.name];
+            if (state == null)
+            {
+                yield return new WaitForEndOfFrame();
+                yield break;
+            }
+
+            float sampleTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, state.length));
+            int prewarmFrames = Mathf.Clamp(RetargetPrewarmFrameCount, 0, 10);
+            if (prewarmFrames <= 0)
+            {
+                state.time = sampleTime;
+                state.speed = 1f;
+                ghostAnim.Sample();
+                retargeter?.ApplyLateVisualGroundingCorrection();
+                yield return new WaitForEndOfFrame();
+                yield break;
+            }
+
+            state.enabled = true;
+            state.wrapMode = WrapMode.Once;
+            state.time = sampleTime;
+            state.speed = 0f;
+            for (int i = 0; i < prewarmFrames; i++)
+            {
+                state.time = sampleTime;
+                ghostAnim.Sample();
+                yield return new WaitForEndOfFrame();
+            }
+
+            state.time = sampleTime;
+            state.speed = 1f;
+            ghostAnim.Sample();
+            ghostAnim.Play(clip.name);
+            state.time = sampleTime;
+            state.speed = 1f;
+            ghostAnim.Sample();
+            retargeter?.ApplyLateVisualGroundingCorrection();
+            Debug.Log($"[FileManager] Retarget prewarm 완료: {prewarmFrames} frame(s) at clip time {sampleTime:F2}.");
+        }
+
         private void OnRecordingFinished(VmdSaveResult result)
         {
             ClearActiveRecordingSubscription();
+            LogRetargetPlaybackStabilitySummary();
 
             if (result.Success)
             {
@@ -1071,6 +1441,10 @@ namespace Member_Han.Modules.FBXImporter
 
             CleanupActiveGhost();
             RestoreMmdPostPoseCorrectionForRetarget();
+#if UNITY_EDITOR
+            NotifyEditorSmokeFinished(result);
+            ClearEditorSmokeOverride();
+#endif
             _isProcessing = false;
         }
 
@@ -1704,7 +2078,28 @@ namespace Member_Han.Modules.FBXImporter
             ClearActiveRecordingSubscription();
             CleanupActiveGhost();
             RestoreMmdPostPoseCorrectionForRetarget();
+#if UNITY_EDITOR
+            NotifyEditorSmokeFinished(VmdSaveResult.Fail("", message));
+            ClearEditorSmokeOverride();
+#endif
             _isProcessing = false;
+        }
+
+        private void LogRetargetPlaybackStabilitySummary()
+        {
+            if (_activeRetargeter == null)
+            {
+                return;
+            }
+
+            Debug.Log(
+                $"[FileManager] Retarget playback stability: " +
+                $"clipTimeClamp={_activeRetargeter.clampLegacyAnimationVisualStep}, " +
+                $"maxClipStep={_activeRetargeter.MaxLegacyAnimationStep:F4}s, " +
+                $"stepSpikes={_activeRetargeter.LegacyAnimationStepSpikeCount}, " +
+                $"poseSmooth={_activeRetargeter.PoseVisualSmoothingCount}, " +
+                $"muscleOnlySmoothSkipped={_activeRetargeter.PoseVisualMuscleDeltaOnlySkippedCount}, " +
+                $"maxPoseMuscleDelta={_activeRetargeter.MaxPoseVisualMaxMuscleDelta:F4}");
         }
 
         private void SetSessionState(FBXSessionState state, string message, float progress)
@@ -1742,11 +2137,13 @@ namespace Member_Han.Modules.FBXImporter
         {
             if (_activeGhostContainer == null)
             {
+                _activeRetargeter = null;
                 return;
             }
 
             Destroy(_activeGhostContainer);
             _activeGhostContainer = null;
+            _activeRetargeter = null;
         }
 
         private void ClearActiveRecordingSubscription()
@@ -1913,12 +2310,21 @@ namespace Member_Han.Modules.FBXImporter
 
             Debug.Log($"[FileManager] Editor Humanoid muscle 기준 clip: {relativePath}/{referenceClip.name}");
             retargeter.ConfigureEditorHumanoidMuscleReference(referenceClip);
+            if (useEditorHumanoidRootTranslationReference)
+            {
+                retargeter.ConfigureEditorHumanoidRootTranslationReference(referenceClip);
+            }
             ConfigureEditorManualFingerPoseReference(retargeter, referenceClip);
         }
 
         private void ConfigureEditorManualFingerPoseReference(PoseSpaceRetargeter retargeter, AnimationClip referenceClip)
         {
-            if (!useManualAnimatorFingerPoseReference || retargeter == null || referenceClip == null)
+            if ((!useManualAnimatorFingerPoseReference &&
+                    !useManualAnimatorHipsLocalPositionReference &&
+                    !useManualAnimatorBodyRotationReference &&
+                    !useManualAnimatorHandLocalRotationReference) ||
+                retargeter == null ||
+                referenceClip == null)
             {
                 return;
             }
@@ -1949,7 +2355,11 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            retargeter.ConfigureEditorHumanoidFingerPoseReference(referencePrefab, referenceController, referenceClip);
+            retargeter.ConfigureEditorHumanoidFingerPoseReference(
+                referencePrefab,
+                referenceController,
+                referenceClip,
+                useManualAnimatorFingerPoseReference);
         }
 
         private static string ResolveEditorHumanoidReferencePath(string importedFilePath, string sourceFilePath)

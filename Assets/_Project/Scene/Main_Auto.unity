@@ -158,36 +158,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!21 &303378227
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
-  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1 &351100807
 GameObject:
   m_ObjectHideFlags: 0
@@ -318,11 +288,11 @@ PrefabInstance:
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: nextEdgeMaterial_Pass4
       value: 
-      objectReference: {fileID: 1687037999}
+      objectReference: {fileID: 0}
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: nextEdgeMaterial_Pass8
       value: 
-      objectReference: {fileID: 303378227}
+      objectReference: {fileID: 0}
     - target: {fileID: 6818878734488371576, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: m_Name
       value: YYB Hatsune Miku
@@ -335,6 +305,10 @@ PrefabInstance:
       propertyPath: _progressSlider
       value: 
       objectReference: {fileID: 1850806469}
+    - target: {fileID: 8151235911576539714, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
+      propertyPath: AutoStartRecording
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -527,9 +501,22 @@ MonoBehaviour:
   targetCharacter: {fileID: 643269947}
   useLegacyPoseSpaceFacingCorrection: 0
   preserveFbxRootRotation: 0
+  preserveRetargetBodyPosition: 1
+  useRetargetBodyPositionXZRootMotion: 0
+  stabilizeGroundedFootXZ: 0
+  GroundedFootLockWeight: 0.45
+  MaxGroundedFootLockStep: 0.025
   useEditorHumanoidClipMuscleReference: 1
+  useEditorHumanoidRootTranslationReference: 0
+  editorHumanoidRootTranslationWeight: 0.25
+  editorHumanoidRootTranslationCurrentWeight: 0.35
   useManualAnimatorFingerPoseReference: 1
+  useManualAnimatorBodyRotationReference: 1
+  useManualAnimatorHipsLocalPositionReference: 1
+  manualAnimatorHipsLocalPositionWeight: 1
+  manualAnimatorHipsLocalPositionMaxOffset: 0.12
   useManualAnimatorThumbLocalRotationReference: 1
+  useManualAnimatorHandLocalRotationReference: 1
   useManualAnimatorThumbSegmentDirectionReference: 1
   manualAnimatorThumbSegmentDirectionWeight: 1
   useManualAnimatorThumbHandDirectionReference: 1
@@ -623,14 +610,34 @@ MonoBehaviour:
   ThumbMaxSegmentBendAngle: 10
   ThumbSegmentStraightenWeight: 0.9
   startDelay: 1
+  RetargetPrewarmFrameCount: 6
+  enableRecordingDiagnostics: 0
+  useDeterministicCaptureFramerateForDiagnostics: 0
+  enableDiagnosticFingerCloseups: 1
   faceTargetToCameraOnIdle: 1
   detachTargetAnimatorControllerOnIdle: 1
   lockTargetPoseUntilImport: 1
-  HeightOffset: 0.1
+  clampRetargetVisualClipStep: 0
+  RetargetVisualClipFrameRate: 30
+  smoothRetargetPoseOnVisualStepSpike: 1
+  RetargetPoseVisualSpikeCurrentWeight: 0.65
+  RetargetPoseVisualMuscleDeltaThreshold: 0.35
+  HeightOffset: 0
   MovementScaleMultiplier: 1
   clampRetargetRootDeltaSpikes: 1
   MaxRetargetRootDeltaPerFrame: 0.25
   logRetargetRootDeltaSpikes: 0
+  smoothRetargetGrounding: 1
+  MaxGroundingVerticalStepPerFrame: 0.01
+  GroundingSmoothing: 0.25
+  GroundingDeadZone: 0.005
+  FreezeRootYAfterInitialGrounding: 1
+  rejectRendererGroundingOutliers: 1
+  MaxRendererFootGroundingSeparation: 0.12
+  smoothLateVisualGroundingCorrection: 1
+  LateVisualGroundingSnapThreshold: 0.03
+  LateVisualGroundingSmoothing: 0.25
+  MaxLateVisualGroundingStepPerFrame: 0.003
   ThumbRotationOffset: {x: -10, y: -30, z: 0}
   mirrorRightThumbRotationOffset: 1
   LeftThumbRotationOffset: {x: 0, y: 0, z: 0}
@@ -1413,36 +1420,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1630944889}
   m_CullTransparentMesh: 1
---- !u!21 &1687037999
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
-  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1 &1801870904
 GameObject:
   m_ObjectHideFlags: 0
@@ -1638,6 +1615,36 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
+--- !u!21 &1999153911
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
+  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!1 &2002197810
 GameObject:
   m_ObjectHideFlags: 0
@@ -1706,6 +1713,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!21 &2093471344
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
+  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!1001 &240061973030223373
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1770,6 +1807,10 @@ PrefabInstance:
       propertyPath: _progressSlider
       value: 
       objectReference: {fileID: 1850806469}
+    - target: {fileID: 6726102989094768490, guid: cbbe675d429fd1e48afe756b6e97c91b, type: 3}
+      propertyPath: AutoStartRecording
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

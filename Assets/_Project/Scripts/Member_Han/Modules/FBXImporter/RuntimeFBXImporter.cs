@@ -30,6 +30,89 @@ namespace Member_Han.Modules.FBXImporter
         public bool ImportScaleCurves { get; set; } = false;
         public bool ImportNonRootPositionCurves { get; set; } = false;
 
+        public sealed class AnimationInspectionReport
+        {
+            public bool FileReadable;
+            public bool ImportSucceeded;
+            public string ErrorMessage = "";
+            public int AnimationCount;
+            public int NodeAnimationChannelCount;
+            public int PositionKeyCount;
+            public int RotationKeyCount;
+            public int ScaleKeyCount;
+            public string AnimationNames = "";
+            public string AnimationLengthsSeconds = "";
+            public float MaxAnimationLengthSeconds;
+        }
+
+        public static AnimationInspectionReport InspectAnimationFile(string path)
+        {
+            var report = new AnimationInspectionReport
+            {
+                FileReadable = !string.IsNullOrEmpty(path) && File.Exists(path)
+            };
+
+            if (!report.FileReadable)
+            {
+                report.ErrorMessage = $"FBX file not found: {path}";
+                return report;
+            }
+
+            if (!AssimpLibraryLoader.IsLoaded)
+            {
+                AssimpLibraryLoader.LoadLibrary();
+            }
+
+            try
+            {
+                using (AssimpContext importer = new AssimpContext())
+                {
+                    importer.SetConfig(new Assimp.Configs.FBXPreservePivotsConfig(false));
+
+                    Scene scene = importer.ImportFile(path, BuildAssimpPostProcessSteps());
+                    if (scene == null)
+                    {
+                        report.ErrorMessage = "Assimp returned a null scene.";
+                        return report;
+                    }
+
+                    report.ImportSucceeded = true;
+                    report.AnimationCount = scene.AnimationCount;
+
+                    var names = new List<string>();
+                    var lengths = new List<string>();
+                    foreach (var animation in scene.Animations)
+                    {
+                        string animationName = string.IsNullOrWhiteSpace(animation.Name)
+                            ? $"Animation_{names.Count}"
+                            : animation.Name;
+                        names.Add(animationName);
+
+                        float duration = CalculateAnimationDurationSeconds(animation);
+                        report.MaxAnimationLengthSeconds = Mathf.Max(report.MaxAnimationLengthSeconds, duration);
+                        lengths.Add(duration.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+
+                        report.NodeAnimationChannelCount += animation.NodeAnimationChannelCount;
+                        foreach (var channel in animation.NodeAnimationChannels)
+                        {
+                            report.PositionKeyCount += channel.PositionKeyCount;
+                            report.RotationKeyCount += channel.RotationKeyCount;
+                            report.ScaleKeyCount += channel.ScalingKeyCount;
+                        }
+                    }
+
+                    report.AnimationNames = string.Join("|", names);
+                    report.AnimationLengthsSeconds = string.Join("|", lengths);
+                    return report;
+                }
+            }
+            catch (System.Exception e)
+            {
+                report.ErrorMessage = e.Message.Replace('\r', ' ').Replace('\n', ' ');
+                return report;
+            }
+        }
+
         #region IModelImporterService 구현
         public async Task<GameObject> ImportAsync(string path)
         {
@@ -88,13 +171,7 @@ namespace Member_Han.Modules.FBXImporter
             // FBX 피벗 보존 설정 (본 정확도를 위해)
             importer.SetConfig(new Assimp.Configs.FBXPreservePivotsConfig(false));
 
-            PostProcessSteps steps = PostProcessSteps.Triangulate |
-                                     PostProcessSteps.FlipUVs |
-                                     PostProcessSteps.LimitBoneWeights |
-                                     PostProcessSteps.GenerateNormals |
-                                     PostProcessSteps.CalculateTangentSpace |
-                                     PostProcessSteps.MakeLeftHanded |
-                                     PostProcessSteps.FlipWindingOrder;
+            PostProcessSteps steps = BuildAssimpPostProcessSteps();
 
             try
             {
@@ -115,6 +192,44 @@ namespace Member_Han.Modules.FBXImporter
                 Debug.LogError($"[RuntimeFBXImporter] Assimp 예외: {e.Message}\n{e.StackTrace}");
                 return null;
             }
+        }
+
+        private static PostProcessSteps BuildAssimpPostProcessSteps()
+        {
+            return PostProcessSteps.Triangulate |
+                   PostProcessSteps.FlipUVs |
+                   PostProcessSteps.LimitBoneWeights |
+                   PostProcessSteps.GenerateNormals |
+                   PostProcessSteps.CalculateTangentSpace |
+                   PostProcessSteps.MakeLeftHanded |
+                   PostProcessSteps.FlipWindingOrder;
+        }
+
+        private static float CalculateAnimationDurationSeconds(Assimp.Animation animation)
+        {
+            if (animation == null)
+            {
+                return 0f;
+            }
+
+            double ticksPerSecond = animation.TicksPerSecond;
+            if (ticksPerSecond <= 1.0)
+            {
+                ticksPerSecond = 60.0;
+            }
+
+            if (ticksPerSecond <= 0.0)
+            {
+                return 0f;
+            }
+
+            double duration = animation.DurationInTicks / ticksPerSecond;
+            if (double.IsNaN(duration) || double.IsInfinity(duration) || duration < 0.0)
+            {
+                return 0f;
+            }
+
+            return (float)duration;
         }
         #endregion
 

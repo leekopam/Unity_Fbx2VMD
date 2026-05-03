@@ -104,6 +104,7 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /DOCS/Machine_Spirit/
 /DOCS/Machine_Spirit
 /DOCS/Machine_Spirit/Share/
+/DOCS/Machine_Spirit/Tools/
 /DOCS/Machine_Spirit/Share/README.md
 /DOCS/Machine_Spirit/Local/
 /DOCS/Machine_Spirit/Local/README.md
@@ -126,6 +127,7 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /Docs/Machine_Spirit/
 /Docs/Machine_Spirit
 /Docs/Machine_Spirit/Share/
+/Docs/Machine_Spirit/Tools/
 /Docs/Machine_Spirit/Share/README.md
 /Docs/Machine_Spirit/Local/
 /Docs/Machine_Spirit/Local/README.md
@@ -174,6 +176,9 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /AGENTS.md
 /AGENTS.override.md
 /CLAUDE.md
+/codex.md
+/CODEX.md
+/Codex.md
 /.agents/
 /.vscode/tasks.json
 /.vscode/mcp.json
@@ -218,6 +223,7 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /docs/tasks/
 /docs/ai-worklog/
 /docs/Machine_Spirit/
+/docs/Machine_Spirit/Tools/
 /docs/Machine_Spirit/capture/
 /docs/Machine_Spirit/progress/
 /docs/Machine_Spirit/qa/
@@ -227,13 +233,12 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /Modfiy_Log.md
 /CheckList.md
 /CheckMachine.bat
+/CheckTextIntegrity.bat
 /scripts/harness/
 /artifacts/
-/DOCS/Machine_Spirit/scripts/harness/
-/Docs/Machine_Spirit/scripts/harness/
-/docs/Machine_Spirit/scripts/harness/
-/DOCS/Machine_Spirit/Share/scripts/harness/
-/Docs/Machine_Spirit/Share/scripts/harness/
+/DOCS/Machine_Spirit/Tools/Share/scripts/harness/
+/Docs/Machine_Spirit/Tools/Share/scripts/harness/
+/docs/Machine_Spirit/Tools/Share/scripts/harness/
 /DOCS/Machine_Spirit/artifacts/
 /Docs/Machine_Spirit/artifacts/
 /docs/Machine_Spirit/artifacts/
