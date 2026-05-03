@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           lfs: false  # FBX/VMD는 gitignore 처리됨
 
       - name: Cache Library
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: Library
           key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
@@ -33,6 +33,8 @@ jobs:
             Library-
 
       - name: Run EditMode Tests
+        # game-ci/unity-test-runner@v4 는 아직 Node.js 24 버전이 없다 (최신 v4.3.1).
+        # v5 출시 시 업그레이드한다. (ML-0124 잔여)
         uses: game-ci/unity-test-runner@v4
         id: tests
         env:
@@ -48,7 +50,7 @@ jobs:
           # PlayMode/Smoke 테스트는 FBX가 필요하므로 로컬에서만 실행한다
 
       - name: Upload Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: EditMode-Test-Results
