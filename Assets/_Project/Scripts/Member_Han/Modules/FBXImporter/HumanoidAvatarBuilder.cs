@@ -7,6 +7,66 @@ namespace Member_Han.Modules.FBXImporter
 {
     public static class HumanoidAvatarBuilder
     {
+        private static readonly string[] RequiredBones = { "Hips", "Spine", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg" };
+
+        private static readonly string[] FingerBones =
+        {
+            "LeftThumbProximal",
+            "LeftThumbIntermediate",
+            "LeftThumbDistal",
+            "LeftIndexProximal",
+            "LeftIndexIntermediate",
+            "LeftIndexDistal",
+            "LeftMiddleProximal",
+            "LeftMiddleIntermediate",
+            "LeftMiddleDistal",
+            "LeftRingProximal",
+            "LeftRingIntermediate",
+            "LeftRingDistal",
+            "LeftLittleProximal",
+            "LeftLittleIntermediate",
+            "LeftLittleDistal",
+            "RightThumbProximal",
+            "RightThumbIntermediate",
+            "RightThumbDistal",
+            "RightIndexProximal",
+            "RightIndexIntermediate",
+            "RightIndexDistal",
+            "RightMiddleProximal",
+            "RightMiddleIntermediate",
+            "RightMiddleDistal",
+            "RightRingProximal",
+            "RightRingIntermediate",
+            "RightRingDistal",
+            "RightLittleProximal",
+            "RightLittleIntermediate",
+            "RightLittleDistal"
+        };
+
+        public sealed class BoneMappingDiagnostic
+        {
+            public int MappingCount;
+            public int MatchedCount;
+            public int ExactMatchCount;
+            public int NormalizedMatchCount;
+            public int AliasMatchCount;
+            public int RequiredTotal;
+            public int RequiredMatchedCount;
+            public int FingerTotal;
+            public int FingerMatchedCount;
+            public List<string> MissingRequiredBones = new List<string>();
+            public List<string> MissingFingerBones = new List<string>();
+            public List<BoneMappingMatch> Matches = new List<BoneMappingMatch>();
+        }
+
+        public sealed class BoneMappingMatch
+        {
+            public string HumanBoneName;
+            public string TargetBoneName;
+            public string MatchedBoneName;
+            public string MatchKind;
+        }
+
         public static void SetupHumanoid(GameObject targetRoot, Dictionary<string, string> explicitMapping)
         {
             Animator animator = targetRoot.GetComponent<Animator>();
@@ -21,6 +81,82 @@ namespace Member_Han.Modules.FBXImporter
             
             animator.applyRootMotion = false;
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        }
+
+        public static BoneMappingDiagnostic AnalyzeMapping(GameObject targetRoot, Dictionary<string, string> explicitMapping)
+        {
+            var diagnostic = new BoneMappingDiagnostic();
+            if (targetRoot == null || explicitMapping == null)
+            {
+                return diagnostic;
+            }
+
+            TransformNameLookup lookup = BuildTransformNameLookup(targetRoot.transform);
+            diagnostic.MappingCount = explicitMapping.Count;
+            diagnostic.RequiredTotal = RequiredBones.Length;
+            diagnostic.FingerTotal = FingerBones.Length;
+
+            foreach (var kvp in explicitMapping)
+            {
+                string humanBoneName = kvp.Key;
+                string targetBoneName = kvp.Value;
+                Transform foundBone;
+                string matchKind;
+                bool matched = TryFindMappedTransform(lookup, targetBoneName, out foundBone, out matchKind);
+
+                diagnostic.Matches.Add(new BoneMappingMatch
+                {
+                    HumanBoneName = humanBoneName,
+                    TargetBoneName = targetBoneName,
+                    MatchedBoneName = matched && foundBone != null ? foundBone.name : "",
+                    MatchKind = matchKind
+                });
+
+                if (matched)
+                {
+                    diagnostic.MatchedCount++;
+                    if (matchKind == "exact")
+                    {
+                        diagnostic.ExactMatchCount++;
+                    }
+                    else if (matchKind == "normalized")
+                    {
+                        diagnostic.NormalizedMatchCount++;
+                    }
+                    else if (matchKind == "alias")
+                    {
+                        diagnostic.AliasMatchCount++;
+                    }
+                }
+            }
+
+            foreach (string bone in RequiredBones)
+            {
+                bool matched = diagnostic.Matches.Any(match => match.HumanBoneName == bone && match.MatchKind != "missing");
+                if (matched)
+                {
+                    diagnostic.RequiredMatchedCount++;
+                }
+                else
+                {
+                    diagnostic.MissingRequiredBones.Add(bone);
+                }
+            }
+
+            foreach (string bone in FingerBones)
+            {
+                bool matched = diagnostic.Matches.Any(match => match.HumanBoneName == bone && match.MatchKind != "missing");
+                if (matched)
+                {
+                    diagnostic.FingerMatchedCount++;
+                }
+                else
+                {
+                    diagnostic.MissingFingerBones.Add(bone);
+                }
+            }
+
+            return diagnostic;
         }
 
         private static Avatar CreatePureAvatar(GameObject root, Dictionary<string, string> mappingData)
@@ -103,45 +239,26 @@ namespace Member_Han.Modules.FBXImporter
         private static Dictionary<string, Transform> SmartMapTransforms(Transform root, Dictionary<string, string> nameData)
         {
             var result = new Dictionary<string, Transform>();
-            var allTransforms = root.GetComponentsInChildren<Transform>();
-            
-            // 정확한 이름 매칭을 위한 딕셔너리
-            var exactNameMap = new Dictionary<string, Transform>();
-            // Normalized 이름 매칭을 위한 딕셔너리 (fallback)
-            var normalizedMap = new Dictionary<string, Transform>();
-            
-            foreach (var t in allTransforms)
-            {
-                // 정확한 이름으로 저장
-                if (!exactNameMap.ContainsKey(t.name))
-                    exactNameMap[t.name] = t;
-                
-                // Normalized 이름으로 저장 (기존 로직)
-                string cleanName = Regex.Replace(t.name.ToLower(), "[^a-z0-9]", "");
-                if (!normalizedMap.ContainsKey(cleanName))
-                    normalizedMap[cleanName] = t;
-            }
+            TransformNameLookup lookup = BuildTransformNameLookup(root);
 
             foreach (var kvp in nameData)
             {
                 string humanBoneName = kvp.Key;   // 예: "Hips"
                 string targetBoneName = kvp.Value; // 예: "13.joint_HipMaster"
-                
-                Transform foundBone = null;
-                
-                // 정확한 이름 매칭
-                if (exactNameMap.TryGetValue(targetBoneName, out foundBone))
+                Transform foundBone;
+                string matchKind;
+
+                if (TryFindMappedTransform(lookup, targetBoneName, out foundBone, out matchKind))
                 {
                     result[humanBoneName] = foundBone;
-                    continue;
-                }
-                
-                // Normalized 매칭 (fallback)
-                string cleanTarget = Regex.Replace(targetBoneName.ToLower(), "[^a-z0-9]", "");
-                if (normalizedMap.TryGetValue(cleanTarget, out foundBone))
-                {
-                    result[humanBoneName] = foundBone;
-                    Debug.Log($"Fallback 매칭 성공: {humanBoneName} -> {foundBone.name} (원본: {targetBoneName})");
+                    if (matchKind == "normalized")
+                    {
+                        Debug.Log($"Fallback 매칭 성공: {humanBoneName} -> {foundBone.name} (원본: {targetBoneName})");
+                    }
+                    else if (matchKind == "alias")
+                    {
+                        Debug.Log($"Rig 별칭 매칭 성공: {humanBoneName} -> {foundBone.name} (원본: {targetBoneName})");
+                    }
                     continue;
                 }
                 
@@ -150,9 +267,8 @@ namespace Member_Han.Modules.FBXImporter
             }
             
             // 필수 본 체크 및 로그
-            string[] requiredBones = { "Hips", "Spine", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg" };
             bool hasCriticalMissing = false;
-            foreach (var bone in requiredBones)
+            foreach (var bone in RequiredBones)
             {
                 if (!result.ContainsKey(bone))
                 {
@@ -171,6 +287,151 @@ namespace Member_Han.Modules.FBXImporter
             
             Debug.Log($"[AvatarBuilder] 매핑 완료: {result.Count}/{nameData.Count} 본 발견");
             return result;
+        }
+
+        private sealed class TransformNameLookup
+        {
+            public Dictionary<string, Transform> ExactNameMap = new Dictionary<string, Transform>();
+            public Dictionary<string, Transform> NormalizedMap = new Dictionary<string, Transform>();
+            public Dictionary<string, Transform> NormalizedAliasMap = new Dictionary<string, Transform>();
+        }
+
+        private static TransformNameLookup BuildTransformNameLookup(Transform root)
+        {
+            var lookup = new TransformNameLookup();
+            var allTransforms = root.GetComponentsInChildren<Transform>();
+
+            foreach (var t in allTransforms)
+            {
+                if (!lookup.ExactNameMap.ContainsKey(t.name))
+                {
+                    lookup.ExactNameMap[t.name] = t;
+                }
+
+                string cleanName = NormalizeBoneName(t.name);
+                if (!lookup.NormalizedMap.ContainsKey(cleanName))
+                {
+                    lookup.NormalizedMap[cleanName] = t;
+                }
+
+                foreach (string alias in BuildBoneNameAliases(t.name))
+                {
+                    if (!lookup.NormalizedAliasMap.ContainsKey(alias))
+                    {
+                        lookup.NormalizedAliasMap[alias] = t;
+                    }
+                }
+            }
+
+            return lookup;
+        }
+
+        private static bool TryFindMappedTransform(
+            TransformNameLookup lookup,
+            string targetBoneName,
+            out Transform foundBone,
+            out string matchKind)
+        {
+            if (lookup.ExactNameMap.TryGetValue(targetBoneName, out foundBone))
+            {
+                matchKind = "exact";
+                return true;
+            }
+
+            string cleanTarget = NormalizeBoneName(targetBoneName);
+            if (lookup.NormalizedMap.TryGetValue(cleanTarget, out foundBone))
+            {
+                matchKind = "normalized";
+                return true;
+            }
+
+            if (TryFindAliasMatch(lookup.NormalizedAliasMap, targetBoneName, out foundBone))
+            {
+                matchKind = "alias";
+                return true;
+            }
+
+            foundBone = null;
+            matchKind = "missing";
+            return false;
+        }
+
+        private static bool TryFindAliasMatch(
+            Dictionary<string, Transform> normalizedAliasMap,
+            string targetBoneName,
+            out Transform foundBone)
+        {
+            foreach (string alias in BuildBoneNameAliases(targetBoneName))
+            {
+                if (normalizedAliasMap.TryGetValue(alias, out foundBone))
+                {
+                    return true;
+                }
+            }
+
+            foundBone = null;
+            return false;
+        }
+
+        private static IEnumerable<string> BuildBoneNameAliases(string boneName)
+        {
+            if (string.IsNullOrWhiteSpace(boneName))
+            {
+                yield break;
+            }
+
+            var aliases = new HashSet<string>();
+            AddAlias(aliases, boneName);
+
+            string withoutNamespace = StripNamespace(boneName);
+            AddAlias(aliases, withoutNamespace);
+
+            string withoutRigPrefix = StripKnownRigPrefix(withoutNamespace);
+            AddAlias(aliases, withoutRigPrefix);
+
+            foreach (string alias in aliases)
+            {
+                yield return alias;
+            }
+        }
+
+        private static void AddAlias(HashSet<string> aliases, string value)
+        {
+            string normalized = NormalizeBoneName(value);
+            if (!string.IsNullOrEmpty(normalized))
+            {
+                aliases.Add(normalized);
+            }
+        }
+
+        private static string StripNamespace(string value)
+        {
+            int namespaceIndex = value.LastIndexOf(':');
+            return namespaceIndex >= 0 && namespaceIndex < value.Length - 1
+                ? value[(namespaceIndex + 1)..]
+                : value;
+        }
+
+        private static string StripKnownRigPrefix(string value)
+        {
+            string[] prefixes =
+            {
+                "Skeleton_",
+                "Skeleton",
+                "mixamorig:",
+                "mixamorig_",
+                "mixamorig"
+            };
+
+            foreach (string prefix in prefixes)
+            {
+                if (value.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return value[prefix.Length..].TrimStart('_', ':', ' ');
+                }
+            }
+
+            return value;
         }
         
         /// <summary>
