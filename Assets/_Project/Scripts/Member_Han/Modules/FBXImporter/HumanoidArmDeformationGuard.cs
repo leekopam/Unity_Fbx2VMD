@@ -548,7 +548,8 @@ namespace Member_Han.Modules.FBXImporter
     public class HumanoidThumbDeformationGuard : MonoBehaviour
     {
         [SerializeField] private Animator targetAnimator;
-        [SerializeField, Range(0f, 90f)] private float proximalMaxLocalAngle = 10f;
+        [SerializeField] private PoseSpaceRetargeter linkedPoseSpaceRetargeter;
+        [SerializeField, Range(0f, 90f)] private float proximalMaxLocalAngle = 28f;
         [SerializeField, Range(0f, 120f)] private float intermediateMaxLocalAngle = 55f;
         [SerializeField, Range(0f, 120f)] private float distalMaxLocalAngle = 55f;
         [SerializeField] private Vector3 proximalLocalRotationOffset;
@@ -561,6 +562,11 @@ namespace Member_Han.Modules.FBXImporter
         [SerializeField] private bool syncDetachedThumbBaseHelperPositions = true;
         [SerializeField, Range(0f, 1f)] private float detachedThumbBaseHelperSyncWeight = 0.8f;
         [SerializeField, Range(0f, 45f)] private float detachedThumbBaseHelperMaxLocalAngle = 28f;
+        [SerializeField, Range(0f, 0.02f)] private float detachedThumbBaseHelperMaxPositionOffset = 0.008f;
+        [SerializeField] private Vector3 leftDetachedThumbBaseHelperDeltaAxisOffset;
+        [SerializeField] private Vector3 rightDetachedThumbBaseHelperDeltaAxisOffset;
+        [SerializeField] private Vector3 leftDetachedThumbBaseHelperTargetRotationOffset;
+        [SerializeField] private Vector3 rightDetachedThumbBaseHelperTargetRotationOffset;
         [SerializeField] private bool stabilizeDetachedThumbBasePalm = false;
         [SerializeField, Range(0f, 1f)] private float detachedThumbBasePalmStabilizeWeight = 0f;
         [SerializeField, Range(0f, 45f)] private float detachedThumbBasePalmMaxLocalAngle = 45f;
@@ -569,25 +575,37 @@ namespace Member_Han.Modules.FBXImporter
         [SerializeField, Range(0f, 45f)] private float thumbWebbingCreaseMaxLocalAngle = 18f;
         [SerializeField, Range(0f, 0.02f)] private float thumbWebbingCreaseMaxPositionOffset = 0.005f;
         [SerializeField] private bool enableThumbVisualLengthGuard = true;
-        [SerializeField, Range(0f, 1f)] private float thumbProjectionMinPalmNormal = 0.36f;
-        [SerializeField, Range(0f, 1f)] private float thumbProjectionMaxPalmNormal = 0.5f;
+        [SerializeField, Range(0f, 1f)] private float thumbProjectionMinPalmNormal = 0.358f;
+        [SerializeField, Range(0f, 1f)] private float thumbProjectionMaxPalmNormal = 0.58f;
         [SerializeField, Range(0f, 1f)] private float thumbProjectionGuardWeight = 1f;
-        [SerializeField, Range(0f, 90f)] private float thumbIndexMaxSpreadAngle = 42f;
+        [SerializeField, Range(0f, 90f)] private float thumbIndexMaxSpreadAngle = 70f;
         [SerializeField, Range(0f, 1f)] private float thumbIndexSpreadGuardWeight = 1f;
         [SerializeField, Range(0f, 60f)] private float thumbMaxSegmentBendAngle = 10f;
         [SerializeField, Range(0f, 1f)] private float thumbSegmentStraightenWeight = 0.9f;
+        [SerializeField] private bool suppressPoseShapingWithManualThumbReference = false;
 
         private readonly Dictionary<Transform, Quaternion> _initialLocalRotations = new Dictionary<Transform, Quaternion>();
         private readonly Dictionary<Transform, Vector3> _initialLocalPositions = new Dictionary<Transform, Vector3>();
         private readonly HashSet<Transform> _thumbBaseHelperTransforms = new HashSet<Transform>();
         private readonly Dictionary<Transform, Transform> _detachedThumbBaseHelperSources = new Dictionary<Transform, Transform>();
         private readonly Dictionary<Transform, Quaternion> _detachedThumbBaseSourceInitialLocalRotations = new Dictionary<Transform, Quaternion>();
+        private readonly Dictionary<Transform, Quaternion> _detachedThumbBaseInitialRelativeRotations = new Dictionary<Transform, Quaternion>();
+        private readonly Dictionary<Transform, float> _detachedThumbBaseInitialDistances = new Dictionary<Transform, float>();
         private readonly Dictionary<Transform, Quaternion> _lastRawLocalRotations = new Dictionary<Transform, Quaternion>();
         private readonly Dictionary<Transform, Quaternion> _lastCorrectedLocalRotations = new Dictionary<Transform, Quaternion>();
+        private readonly Dictionary<Transform, bool> _cachedThumbSides = new Dictionary<Transform, bool>();
         private bool _warningLogged;
         private const float LocalRotationOvershootRatio = 0.35f;
         private const float LocalRotationHardOvershootDegrees = 8f;
-        private const float DetachedThumbBaseHelperMaxPositionOffset = 0.008f;
+        private const float ThumbWebbingSpreadFullRiskAngle = 72f;
+        private const float ThumbWebbingProjectionFullRiskDistance = 1f;
+        private const float ThumbWebbingHelperDistanceWarning = 0.003f;
+        private const float ThumbWebbingHelperDistanceFullRisk = 0.008f;
+        private const float ThumbWebbingHelperRotationWarning = 18f;
+        private const float ThumbWebbingHelperRotationFullRisk = 45f;
+        private const float ThumbWebbingDynamicMinLocalAngle = 4f;
+        private const float ThumbWebbingDynamicMinPositionOffset = 0.0015f;
+        private const float ManualThumbReferenceMinProximalMaxLocalAngle = 28f;
 
         private static readonly HumanBodyBones[] ThumbBones =
         {
@@ -687,6 +705,7 @@ namespace Member_Han.Modules.FBXImporter
 
         public void Configure(
             Animator animator,
+            PoseSpaceRetargeter poseSpaceRetargeter,
             float proximalLimit,
             float intermediateLimit,
             float distalLimit,
@@ -700,24 +719,36 @@ namespace Member_Han.Modules.FBXImporter
             bool syncDetachedBaseHelperPositions = true,
             float detachedBaseHelperSyncWeight = 1f,
             float detachedBaseHelperMaxLocalAngle = 45f,
+            float detachedBaseHelperMaxPositionOffset = 0.008f,
+            Vector3 leftDetachedBaseHelperDeltaAxisOffset = default,
+            Vector3 rightDetachedBaseHelperDeltaAxisOffset = default,
+            Vector3 leftDetachedBaseHelperTargetRotationOffset = default,
+            Vector3 rightDetachedBaseHelperTargetRotationOffset = default,
             bool stabilizeDetachedBasePalm = false,
             float detachedBasePalmStabilizeWeight = 0f,
             float detachedBasePalmMaxLocalAngle = 45f,
             bool enableVisualLengthGuard = true,
             float projectionMinPalmNormal = 0.32f,
-            float projectionMaxPalmNormal = 0.5f,
+            float projectionMaxPalmNormal = 0.58f,
             float projectionGuardWeight = 0.9f,
-            float indexMaxSpreadAngle = 44f,
+            float indexMaxSpreadAngle = 70f,
             float indexSpreadGuardWeight = 0.9f,
             float maxSegmentBendAngle = 10f,
             float segmentStraightenWeight = 0.9f,
+            bool suppressPoseShapingWithManualReference = false,
             bool stabilizeWebbingCrease = true,
             float webbingCreaseStabilizeWeight = 0.35f,
             float webbingCreaseMaxLocalAngle = 18f,
             float webbingCreaseMaxPositionOffset = 0.005f)
         {
             targetAnimator = animator;
-            proximalMaxLocalAngle = Mathf.Clamp(proximalLimit, 0f, 90f);
+            linkedPoseSpaceRetargeter = poseSpaceRetargeter;
+            proximalMaxLocalAngle = Mathf.Clamp(
+                suppressPoseShapingWithManualReference
+                    ? Mathf.Max(proximalLimit, ManualThumbReferenceMinProximalMaxLocalAngle)
+                    : proximalLimit,
+                0f,
+                90f);
             intermediateMaxLocalAngle = Mathf.Clamp(intermediateLimit, 0f, 120f);
             distalMaxLocalAngle = Mathf.Clamp(distalLimit, 0f, 120f);
             proximalLocalRotationOffset = proximalOffset;
@@ -730,6 +761,11 @@ namespace Member_Han.Modules.FBXImporter
             syncDetachedThumbBaseHelperPositions = syncDetachedBaseHelperPositions;
             detachedThumbBaseHelperSyncWeight = Mathf.Clamp01(detachedBaseHelperSyncWeight);
             detachedThumbBaseHelperMaxLocalAngle = Mathf.Clamp(detachedBaseHelperMaxLocalAngle, 0f, 45f);
+            detachedThumbBaseHelperMaxPositionOffset = Mathf.Clamp(detachedBaseHelperMaxPositionOffset, 0f, 0.02f);
+            leftDetachedThumbBaseHelperDeltaAxisOffset = leftDetachedBaseHelperDeltaAxisOffset;
+            rightDetachedThumbBaseHelperDeltaAxisOffset = rightDetachedBaseHelperDeltaAxisOffset;
+            leftDetachedThumbBaseHelperTargetRotationOffset = leftDetachedBaseHelperTargetRotationOffset;
+            rightDetachedThumbBaseHelperTargetRotationOffset = rightDetachedBaseHelperTargetRotationOffset;
             stabilizeDetachedThumbBasePalm = stabilizeDetachedBasePalm;
             detachedThumbBasePalmStabilizeWeight = Mathf.Clamp01(detachedBasePalmStabilizeWeight);
             detachedThumbBasePalmMaxLocalAngle = Mathf.Clamp(detachedBasePalmMaxLocalAngle, 0f, 45f);
@@ -745,6 +781,7 @@ namespace Member_Han.Modules.FBXImporter
             thumbIndexSpreadGuardWeight = Mathf.Clamp01(indexSpreadGuardWeight);
             thumbMaxSegmentBendAngle = Mathf.Clamp(maxSegmentBendAngle, 0f, 60f);
             thumbSegmentStraightenWeight = Mathf.Clamp01(segmentStraightenWeight);
+            suppressPoseShapingWithManualThumbReference = suppressPoseShapingWithManualReference;
             RecaptureBaseline();
         }
 
@@ -755,8 +792,11 @@ namespace Member_Han.Modules.FBXImporter
             _thumbBaseHelperTransforms.Clear();
             _detachedThumbBaseHelperSources.Clear();
             _detachedThumbBaseSourceInitialLocalRotations.Clear();
+            _detachedThumbBaseInitialRelativeRotations.Clear();
+            _detachedThumbBaseInitialDistances.Clear();
             _lastRawLocalRotations.Clear();
             _lastCorrectedLocalRotations.Clear();
+            _cachedThumbSides.Clear();
             _warningLogged = false;
 
             if (!InitializeIfNeeded())
@@ -774,10 +814,60 @@ namespace Member_Han.Modules.FBXImporter
 
                 _initialLocalRotations[thumbTransform] = thumbTransform.localRotation;
                 _initialLocalPositions[thumbTransform] = thumbTransform.localPosition;
+                CacheThumbSide(thumbTransform, IsRightHumanThumbBone(thumbBone));
             }
 
             CaptureThumbBaseHelperRotations();
             CaptureDetachedThumbBaseHelperSources();
+        }
+
+        public string BuildThumbHelperDebugSummary(bool isRightThumb)
+        {
+            string sideLabel = isRightThumb ? "R" : "L";
+            Transform helperTransform = FindThumbBaseHelperTransformForSide(isRightThumb);
+            if (helperTransform == null)
+            {
+                return $"side={sideLabel}, helper=<none>, source=<none>, state=missing";
+            }
+
+            _detachedThumbBaseHelperSources.TryGetValue(helperTransform, out Transform sourceTransform);
+
+            float initialDistance = float.NaN;
+            float currentDistance = float.NaN;
+            float distanceDelta = float.NaN;
+            if (sourceTransform != null &&
+                _detachedThumbBaseInitialDistances.TryGetValue(helperTransform, out float storedDistance))
+            {
+                initialDistance = storedDistance;
+                currentDistance = Vector3.Distance(helperTransform.position, sourceTransform.position);
+                distanceDelta = Mathf.Abs(currentDistance - initialDistance);
+            }
+
+            float relativeRotationDelta = float.NaN;
+            if (sourceTransform != null &&
+                _detachedThumbBaseInitialRelativeRotations.TryGetValue(helperTransform, out Quaternion initialRelativeRotation))
+            {
+                Quaternion currentRelativeRotation = Quaternion.Inverse(sourceTransform.rotation) * helperTransform.rotation;
+                relativeRotationDelta = Quaternion.Angle(initialRelativeRotation, currentRelativeRotation);
+            }
+
+            float helperLocalPositionDelta = float.NaN;
+            if (_initialLocalPositions.TryGetValue(helperTransform, out Vector3 initialLocalPosition))
+            {
+                helperLocalPositionDelta = Vector3.Distance(initialLocalPosition, helperTransform.localPosition);
+            }
+
+            float helperLocalRotationDelta = float.NaN;
+            if (_initialLocalRotations.TryGetValue(helperTransform, out Quaternion initialLocalRotation))
+            {
+                helperLocalRotationDelta = Quaternion.Angle(initialLocalRotation, helperTransform.localRotation);
+            }
+
+            return
+                $"side={sideLabel}, helper={GetTransformPath(helperTransform)}, source={GetTransformPath(sourceTransform)}, " +
+                $"initDist={FormatDebugFloat(initialDistance)}, currDist={FormatDebugFloat(currentDistance)}, distDelta={FormatDebugFloat(distanceDelta)}, " +
+                $"relRotDelta={FormatDebugFloat(relativeRotationDelta)}, localPosDelta={FormatDebugFloat(helperLocalPositionDelta)}, " +
+                $"localRotDelta={FormatDebugFloat(helperLocalRotationDelta)}, linkedRetargeter={GetTransformPath(linkedPoseSpaceRetargeter != null ? linkedPoseSpaceRetargeter.transform : null)}";
         }
 
         private bool InitializeIfNeeded()
@@ -787,10 +877,188 @@ namespace Member_Han.Modules.FBXImporter
                 targetAnimator = GetComponent<Animator>();
             }
 
+            ResolveLinkedPoseSpaceRetargeter();
+
             return targetAnimator != null &&
                 targetAnimator.avatar != null &&
                 targetAnimator.avatar.isValid &&
                 targetAnimator.avatar.isHuman;
+        }
+
+        private bool ShouldSuppressPoseShapingWithManualThumbReference(bool isRightThumb)
+        {
+            ResolveLinkedPoseSpaceRetargeter();
+            return suppressPoseShapingWithManualThumbReference &&
+                linkedPoseSpaceRetargeter != null &&
+                linkedPoseSpaceRetargeter.ShouldSuppressThumbPoseShapingGuardForHand(!isRightThumb);
+        }
+
+        private PoseSpaceRetargeter ResolveLinkedPoseSpaceRetargeter()
+        {
+            if (linkedPoseSpaceRetargeter != null &&
+                (targetAnimator == null || linkedPoseSpaceRetargeter.targetAnimator == targetAnimator))
+            {
+                return linkedPoseSpaceRetargeter;
+            }
+
+            if (targetAnimator != null)
+            {
+                PoseSpaceRetargeter[] retargeters = FindObjectsOfType<PoseSpaceRetargeter>();
+                foreach (PoseSpaceRetargeter candidate in retargeters)
+                {
+                    if (candidate != null && candidate.targetAnimator == targetAnimator)
+                    {
+                        linkedPoseSpaceRetargeter = candidate;
+                        return linkedPoseSpaceRetargeter;
+                    }
+                }
+            }
+
+            if (linkedPoseSpaceRetargeter == null)
+            {
+                linkedPoseSpaceRetargeter = GetComponent<PoseSpaceRetargeter>();
+            }
+
+            return linkedPoseSpaceRetargeter;
+        }
+
+        private float GetEffectiveThumbProjectionGuardWeight(bool isRightThumb)
+        {
+            return ShouldSuppressPoseShapingWithManualThumbReference(isRightThumb) ? 0f : thumbProjectionGuardWeight;
+        }
+
+        private float EffectiveThumbProjectionGuardWeight
+        {
+            get
+            {
+                return Mathf.Max(
+                    GetEffectiveThumbProjectionGuardWeight(false),
+                    GetEffectiveThumbProjectionGuardWeight(true));
+            }
+        }
+
+        private float EffectiveLeftThumbProjectionGuardWeight => GetEffectiveThumbProjectionGuardWeight(false);
+
+        private float EffectiveRightThumbProjectionGuardWeight => GetEffectiveThumbProjectionGuardWeight(true);
+
+        private float GetEffectiveThumbIndexSpreadGuardWeight(bool isRightThumb)
+        {
+            return ShouldSuppressPoseShapingWithManualThumbReference(isRightThumb) ? 0f : thumbIndexSpreadGuardWeight;
+        }
+
+        private float EffectiveThumbIndexSpreadGuardWeight
+        {
+            get
+            {
+                return Mathf.Max(
+                    GetEffectiveThumbIndexSpreadGuardWeight(false),
+                    GetEffectiveThumbIndexSpreadGuardWeight(true));
+            }
+        }
+
+        private float EffectiveLeftThumbIndexSpreadGuardWeight => GetEffectiveThumbIndexSpreadGuardWeight(false);
+
+        private float EffectiveRightThumbIndexSpreadGuardWeight => GetEffectiveThumbIndexSpreadGuardWeight(true);
+
+        private float GetEffectiveThumbSegmentStraightenWeight(bool isRightThumb)
+        {
+            return ShouldSuppressPoseShapingWithManualThumbReference(isRightThumb) ? 0f : thumbSegmentStraightenWeight;
+        }
+
+        private float EffectiveThumbSegmentStraightenWeight
+        {
+            get
+            {
+                return Mathf.Max(
+                    GetEffectiveThumbSegmentStraightenWeight(false),
+                    GetEffectiveThumbSegmentStraightenWeight(true));
+            }
+        }
+
+        private float EffectiveLeftThumbSegmentStraightenWeight => GetEffectiveThumbSegmentStraightenWeight(false);
+
+        private float EffectiveRightThumbSegmentStraightenWeight => GetEffectiveThumbSegmentStraightenWeight(true);
+
+        private int LastLeftThumbProjectionCorrectionApplyCount { get; set; }
+
+        private int LastRightThumbProjectionCorrectionApplyCount { get; set; }
+
+        private int LastLeftThumbProjectionCorrectionPreserveCount { get; set; }
+
+        private int LastRightThumbProjectionCorrectionPreserveCount { get; set; }
+
+        private int LastLeftThumbSegmentStraightenApplyCount { get; set; }
+
+        private int LastRightThumbSegmentStraightenApplyCount { get; set; }
+
+        private int LastLeftThumbSegmentStraightenPreserveCount { get; set; }
+
+        private int LastRightThumbSegmentStraightenPreserveCount { get; set; }
+
+        private void ResetThumbPoseShapingDiagnostics()
+        {
+            LastLeftThumbProjectionCorrectionApplyCount = 0;
+            LastRightThumbProjectionCorrectionApplyCount = 0;
+            LastLeftThumbProjectionCorrectionPreserveCount = 0;
+            LastRightThumbProjectionCorrectionPreserveCount = 0;
+            LastLeftThumbSegmentStraightenApplyCount = 0;
+            LastRightThumbSegmentStraightenApplyCount = 0;
+            LastLeftThumbSegmentStraightenPreserveCount = 0;
+            LastRightThumbSegmentStraightenPreserveCount = 0;
+            ResolveLinkedPoseSpaceRetargeter();
+            linkedPoseSpaceRetargeter?.ResetThumbWorldRotationPreserveDiagnostics();
+        }
+
+        private void RecordThumbProjectionCorrection(bool isRightThumb, bool preserved)
+        {
+            if (isRightThumb)
+            {
+                if (preserved)
+                {
+                    LastRightThumbProjectionCorrectionPreserveCount++;
+                }
+                else
+                {
+                    LastRightThumbProjectionCorrectionApplyCount++;
+                }
+            }
+            else
+            {
+                if (preserved)
+                {
+                    LastLeftThumbProjectionCorrectionPreserveCount++;
+                }
+                else
+                {
+                    LastLeftThumbProjectionCorrectionApplyCount++;
+                }
+            }
+        }
+
+        private void RecordThumbSegmentStraightenCorrection(bool isRightThumb, bool preserved)
+        {
+            if (isRightThumb)
+            {
+                if (preserved)
+                {
+                    LastRightThumbSegmentStraightenPreserveCount++;
+                }
+                else
+                {
+                    LastRightThumbSegmentStraightenApplyCount++;
+                }
+            }
+            else
+            {
+                if (preserved)
+                {
+                    LastLeftThumbSegmentStraightenPreserveCount++;
+                }
+                else
+                {
+                    LastLeftThumbSegmentStraightenApplyCount++;
+                }
+            }
         }
 
         private float GetLimit(HumanBodyBones thumbBone)
@@ -867,9 +1135,18 @@ namespace Member_Han.Modules.FBXImporter
 
         private int PreserveThumbVisualLength()
         {
-            if ((thumbProjectionGuardWeight <= 0f || (thumbProjectionMinPalmNormal <= 0.001f && thumbProjectionMaxPalmNormal >= 0.999f)) &&
-                (thumbIndexSpreadGuardWeight <= 0f || thumbIndexMaxSpreadAngle >= 89.999f) &&
-                (thumbSegmentStraightenWeight <= 0f || thumbMaxSegmentBendAngle >= 59.999f))
+            ResetThumbPoseShapingDiagnostics();
+
+            bool leftInactive =
+                (GetEffectiveThumbProjectionGuardWeight(false) <= 0f || (thumbProjectionMinPalmNormal <= 0.001f && thumbProjectionMaxPalmNormal >= 0.999f)) &&
+                (GetEffectiveThumbIndexSpreadGuardWeight(false) <= 0f || thumbIndexMaxSpreadAngle >= 89.999f) &&
+                (GetEffectiveThumbSegmentStraightenWeight(false) <= 0f || thumbMaxSegmentBendAngle >= 59.999f);
+            bool rightInactive =
+                (GetEffectiveThumbProjectionGuardWeight(true) <= 0f || (thumbProjectionMinPalmNormal <= 0.001f && thumbProjectionMaxPalmNormal >= 0.999f)) &&
+                (GetEffectiveThumbIndexSpreadGuardWeight(true) <= 0f || thumbIndexMaxSpreadAngle >= 89.999f) &&
+                (GetEffectiveThumbSegmentStraightenWeight(true) <= 0f || thumbMaxSegmentBendAngle >= 59.999f);
+
+            if (leftInactive && rightInactive)
             {
                 return 0;
             }
@@ -894,7 +1171,7 @@ namespace Member_Han.Modules.FBXImporter
             int changed = ProjectThumbProximalIntoPalmFrame(proximal, intermediate, isRightThumb);
             if (distal != null)
             {
-                changed += StraightenThumbSegmentBend(proximal, intermediate, distal);
+                changed += StraightenThumbSegmentBend(proximal, intermediate, distal, isRightThumb);
             }
 
             return changed;
@@ -907,6 +1184,24 @@ namespace Member_Han.Modules.FBXImporter
                 return 0;
             }
 
+            float minNormal = Mathf.Clamp01(thumbProjectionMinPalmNormal);
+            float maxNormal = Mathf.Clamp(Mathf.Max(thumbProjectionMaxPalmNormal, minNormal), 0f, 1f);
+            float maxSpreadAngle = Mathf.Clamp(thumbIndexMaxSpreadAngle, 0f, 90f);
+            bool useHighRiskManualOverride = false;
+            ResolveLinkedPoseSpaceRetargeter();
+            if (linkedPoseSpaceRetargeter != null &&
+                linkedPoseSpaceRetargeter.TryGetHighRiskManualThumbPoseConstraintOverrides(
+                    !isRightThumb,
+                    out float overrideMinNormal,
+                    out float overrideMaxNormal,
+                    out float overrideMaxSpreadAngle))
+            {
+                useHighRiskManualOverride = true;
+                minNormal = Mathf.Clamp01(overrideMinNormal);
+                maxNormal = Mathf.Clamp(Mathf.Max(overrideMaxNormal, minNormal), 0f, 1f);
+                maxSpreadAngle = Mathf.Clamp(overrideMaxSpreadAngle, 0f, 90f);
+            }
+
             Transform hand = targetAnimator.GetBoneTransform(isRightThumb ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
             Transform index = targetAnimator.GetBoneTransform(isRightThumb ? HumanBodyBones.RightIndexProximal : HumanBodyBones.LeftIndexProximal);
             Vector3 direction = intermediate.position - proximal.position;
@@ -917,43 +1212,96 @@ namespace Member_Han.Modules.FBXImporter
 
             Vector3 targetDirection = direction;
             float correctionWeight = 0f;
-
-            if (hand != null &&
-                index != null &&
-                thumbIndexSpreadGuardWeight > 0f &&
-                thumbIndexMaxSpreadAngle < 89.999f &&
-                TryNormalize(index.position - hand.position, out Vector3 indexDirection))
+            float indexSpreadGuardWeight = GetEffectiveThumbIndexSpreadGuardWeight(isRightThumb);
+            float projectionGuardWeight = GetEffectiveThumbProjectionGuardWeight(isRightThumb);
+            if (useHighRiskManualOverride)
             {
-                float spreadAngle = Vector3.Angle(targetDirection, indexDirection);
-                if (spreadAngle > thumbIndexMaxSpreadAngle)
+                indexSpreadGuardWeight = Mathf.Max(indexSpreadGuardWeight, 1f);
+                projectionGuardWeight = Mathf.Max(projectionGuardWeight, 1f);
+            }
+            Vector3 indexDirection = Vector3.zero;
+            bool hasIndexDirection =
+                hand != null &&
+                index != null &&
+                TryNormalize(index.position - hand.position, out indexDirection);
+
+            bool ApplySpreadConstraint(ref Vector3 candidateDirection)
+            {
+                if (!hasIndexDirection ||
+                    indexSpreadGuardWeight <= 0f ||
+                    maxSpreadAngle >= 89.999f)
                 {
-                    targetDirection = Vector3.RotateTowards(
-                        targetDirection,
-                        indexDirection,
-                        (spreadAngle - thumbIndexMaxSpreadAngle) * Mathf.Deg2Rad,
-                        0f);
-                    correctionWeight = Mathf.Max(correctionWeight, Mathf.Clamp01(thumbIndexSpreadGuardWeight));
+                    return false;
                 }
+
+                float spreadAngle = Vector3.Angle(candidateDirection, indexDirection);
+                if (spreadAngle <= maxSpreadAngle + 0.001f)
+                {
+                    return false;
+                }
+
+                Vector3 spreadCorrectedDirection = Vector3.RotateTowards(
+                    candidateDirection,
+                    indexDirection,
+                    (spreadAngle - maxSpreadAngle) * Mathf.Deg2Rad,
+                    0f);
+                if (!TryNormalize(spreadCorrectedDirection, out spreadCorrectedDirection))
+                {
+                    return false;
+                }
+
+                candidateDirection = spreadCorrectedDirection;
+                correctionWeight = Mathf.Max(correctionWeight, Mathf.Clamp01(indexSpreadGuardWeight));
+                return true;
             }
 
-            float side = Vector3.Dot(targetDirection, sideAxis);
-            float normal = Vector3.Dot(targetDirection, palmNormal);
-            float forward = Vector3.Dot(targetDirection, forwardAxis);
-            float minNormal = Mathf.Clamp01(thumbProjectionMinPalmNormal);
-            float maxNormal = Mathf.Clamp(Mathf.Max(thumbProjectionMaxPalmNormal, minNormal), 0f, 1f);
-            float clampedNormal = Mathf.Clamp(normal, minNormal, maxNormal);
-            if (Mathf.Abs(clampedNormal - normal) > 0.001f)
+            bool ApplyProjectionConstraint(ref Vector3 candidateDirection)
             {
-                targetDirection =
+                if (projectionGuardWeight <= 0f)
+                {
+                    return false;
+                }
+
+                float side = Vector3.Dot(candidateDirection, sideAxis);
+                float normal = Vector3.Dot(candidateDirection, palmNormal);
+                float forward = Vector3.Dot(candidateDirection, forwardAxis);
+                float clampedNormal = Mathf.Clamp(normal, minNormal, maxNormal);
+                if (Mathf.Abs(clampedNormal - normal) <= 0.001f)
+                {
+                    return false;
+                }
+
+                Vector3 projectionCorrectedDirection =
                     sideAxis * side +
                     palmNormal * clampedNormal +
                     forwardAxis * forward;
-                correctionWeight = Mathf.Max(correctionWeight, Mathf.Clamp01(thumbProjectionGuardWeight));
+                if (!TryNormalize(projectionCorrectedDirection, out projectionCorrectedDirection))
+                {
+                    return false;
+                }
+
+                candidateDirection = projectionCorrectedDirection;
+                correctionWeight = Mathf.Max(correctionWeight, Mathf.Clamp01(projectionGuardWeight));
+                return true;
             }
 
-            if (!TryNormalize(targetDirection, out targetDirection))
+            // Spread and palm-projection constraints can re-open each other.
+            // Iterate a few times so the final proximal direction honors both.
+            for (int pass = 0; pass < 3; pass++)
             {
-                return 0;
+                bool changed = false;
+                changed |= ApplySpreadConstraint(ref targetDirection);
+                changed |= ApplyProjectionConstraint(ref targetDirection);
+                changed |= ApplySpreadConstraint(ref targetDirection);
+                if (!TryNormalize(targetDirection, out targetDirection))
+                {
+                    return 0;
+                }
+
+                if (!changed)
+                {
+                    break;
+                }
             }
 
             if (correctionWeight <= 0f)
@@ -968,13 +1316,23 @@ namespace Member_Han.Modules.FBXImporter
                 return 0;
             }
 
-            ApplyWorldRotationCorrection(proximal, Quaternion.FromToRotation(direction, targetDirection) * proximal.rotation);
+            Quaternion correctedWorldRotation = Quaternion.FromToRotation(direction, targetDirection) * proximal.rotation;
+            HumanBodyBones proximalBone = isRightThumb ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal;
+            if (ShouldPreserveManualThumbWorldRotationCorrection(proximalBone, proximal, correctedWorldRotation))
+            {
+                RecordThumbProjectionCorrection(isRightThumb, true);
+                return 0;
+            }
+
+            ApplyWorldRotationCorrection(proximal, correctedWorldRotation);
+            RecordThumbProjectionCorrection(isRightThumb, false);
             return 1;
         }
 
-        private int StraightenThumbSegmentBend(Transform proximal, Transform intermediate, Transform distal)
+        private int StraightenThumbSegmentBend(Transform proximal, Transform intermediate, Transform distal, bool isRightThumb)
         {
-            if (thumbSegmentStraightenWeight <= 0f || thumbMaxSegmentBendAngle >= 59.999f)
+            float segmentStraightenWeight = GetEffectiveThumbSegmentStraightenWeight(isRightThumb);
+            if (segmentStraightenWeight <= 0f || thumbMaxSegmentBendAngle >= 59.999f)
             {
                 return 0;
             }
@@ -996,7 +1354,7 @@ namespace Member_Han.Modules.FBXImporter
             Vector3 targetDirection = Vector3.Slerp(
                 intermediateDirection,
                 proximalDirection,
-                Mathf.Clamp01(thumbSegmentStraightenWeight));
+                Mathf.Clamp01(segmentStraightenWeight));
 
             if (!TryNormalize(targetDirection, out targetDirection) ||
                 Vector3.Angle(intermediateDirection, targetDirection) <= 0.1f)
@@ -1004,8 +1362,70 @@ namespace Member_Han.Modules.FBXImporter
                 return 0;
             }
 
-            ApplyWorldRotationCorrection(intermediate, Quaternion.FromToRotation(intermediateDirection, targetDirection) * intermediate.rotation);
+            Quaternion correctedWorldRotation = Quaternion.FromToRotation(intermediateDirection, targetDirection) * intermediate.rotation;
+            HumanBodyBones intermediateBone = isRightThumb ? HumanBodyBones.RightThumbIntermediate : HumanBodyBones.LeftThumbIntermediate;
+            if (ShouldPreserveManualThumbWorldRotationCorrection(intermediateBone, intermediate, correctedWorldRotation))
+            {
+                RecordThumbSegmentStraightenCorrection(isRightThumb, true);
+                return 0;
+            }
+
+            ApplyWorldRotationCorrection(intermediate, correctedWorldRotation);
+            RecordThumbSegmentStraightenCorrection(isRightThumb, false);
             return 1;
+        }
+
+        private bool ShouldPreserveManualThumbWorldRotationCorrection(
+            HumanBodyBones thumbBone,
+            Transform targetTransform,
+            Quaternion correctedWorldRotation)
+        {
+            ResolveLinkedPoseSpaceRetargeter();
+            return linkedPoseSpaceRetargeter != null &&
+                linkedPoseSpaceRetargeter.ShouldPreserveManualThumbWorldRotationCorrection(
+                    thumbBone,
+                    targetTransform,
+                    correctedWorldRotation);
+        }
+
+        private bool TryCalculateThumbAndIndexDirections(
+            bool isRightThumb,
+            out Vector3 thumbDirection,
+            out Vector3 indexDirection)
+        {
+            thumbDirection = Vector3.zero;
+            indexDirection = Vector3.zero;
+
+            Transform hand = targetAnimator.GetBoneTransform(isRightThumb ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
+            Transform thumbProximal = targetAnimator.GetBoneTransform(
+                isRightThumb ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal);
+            Transform thumbIntermediate = targetAnimator.GetBoneTransform(
+                isRightThumb ? HumanBodyBones.RightThumbIntermediate : HumanBodyBones.LeftThumbIntermediate);
+            Transform indexProximal = targetAnimator.GetBoneTransform(
+                isRightThumb ? HumanBodyBones.RightIndexProximal : HumanBodyBones.LeftIndexProximal);
+            Transform indexIntermediate = targetAnimator.GetBoneTransform(
+                isRightThumb ? HumanBodyBones.RightIndexIntermediate : HumanBodyBones.LeftIndexIntermediate);
+
+            if (thumbProximal != null && thumbIntermediate != null)
+            {
+                thumbDirection = thumbIntermediate.position - thumbProximal.position;
+            }
+            else if (hand != null && thumbProximal != null)
+            {
+                thumbDirection = thumbProximal.position - hand.position;
+            }
+
+            if (hand != null && indexProximal != null)
+            {
+                indexDirection = indexProximal.position - hand.position;
+            }
+            else if (indexProximal != null && indexIntermediate != null)
+            {
+                indexDirection = indexIntermediate.position - indexProximal.position;
+            }
+
+            return TryNormalize(thumbDirection, out thumbDirection) &&
+                TryNormalize(indexDirection, out indexDirection);
         }
 
         private bool TryBuildPalmFrame(bool isRightThumb, out Vector3 sideAxis, out Vector3 palmNormal, out Vector3 forwardAxis)
@@ -1106,12 +1526,12 @@ namespace Member_Han.Modules.FBXImporter
                 {
                     targetPosition = initialPosition + Vector3.ClampMagnitude(
                         targetPosition - initialPosition,
-                        DetachedThumbBaseHelperMaxPositionOffset);
+                        detachedThumbBaseHelperMaxPositionOffset);
                 }
 
                 if (useWebbingGuard)
                 {
-                    targetPosition = ConstrainThumbWebbingHelperPosition(helperTransform, targetPosition);
+                    targetPosition = ConstrainThumbWebbingHelperPosition(helperTransform, sourceTransform, targetPosition);
                 }
 
                 if ((helperTransform.localPosition - targetPosition).sqrMagnitude <= 0.00000001f)
@@ -1141,6 +1561,12 @@ namespace Member_Han.Modules.FBXImporter
                 if (_detachedThumbBaseSourceInitialLocalRotations.TryGetValue(sourceTransform, out Quaternion sourceInitialRotation))
                 {
                     Quaternion sourceDelta = Quaternion.Inverse(sourceInitialRotation) * sourceRotation;
+                    Quaternion deltaAxisRemap = GetDetachedThumbBaseHelperDeltaAxisRemap(sourceTransform);
+                    if (deltaAxisRemap != Quaternion.identity)
+                    {
+                        sourceDelta = deltaAxisRemap * sourceDelta * Quaternion.Inverse(deltaAxisRemap);
+                    }
+
                     targetRotation = helperInitialRotation * sourceDelta;
                 }
 
@@ -1150,6 +1576,14 @@ namespace Member_Han.Modules.FBXImporter
                 }
             }
 
+            Quaternion targetRotationOffset = GetDetachedThumbBaseHelperTargetRotationOffset(sourceTransform);
+            if (targetRotationOffset != Quaternion.identity)
+            {
+                // YYB Thumb0 helper는 기준축 자체는 맞아도 기본 skin helper pose가 손바닥 쪽으로 덜 접혀 있어
+                // webbing이 벌어져 보일 수 있다. 모델별 정적 보정은 sync된 목표 회전 위에 직접 얹는다.
+                targetRotation *= targetRotationOffset;
+            }
+
             if (stabilizeDetachedThumbBasePalm && detachedThumbBasePalmStabilizeWeight > 0f)
             {
                 // YYB 손꿈치 스킨은 joint_*Thumb0 회전에 강하게 끌린다.
@@ -1157,11 +1591,22 @@ namespace Member_Han.Modules.FBXImporter
                 targetRotation = Quaternion.Slerp(targetRotation, helperInitialRotation, detachedThumbBasePalmStabilizeWeight);
             }
 
+            float effectiveWebbingWeight = 0f;
+            float effectiveWebbingMaxLocalAngle = thumbWebbingCreaseMaxLocalAngle;
             if (stabilizeThumbWebbingCrease && thumbWebbingCreaseStabilizeWeight > 0f)
             {
+                GetEffectiveThumbWebbingCorrectiveSettings(
+                    helperTransform,
+                    sourceTransform,
+                    targetRotation,
+                    helperTransform.localPosition,
+                    out effectiveWebbingWeight,
+                    out effectiveWebbingMaxLocalAngle,
+                    out _);
+
                 // 엄지 웹빙 경계는 joint_*Thumb0 보조본의 작은 회전 차이에도 선처럼 접혀 보인다.
                 // 엄지 구동본 자체는 유지하고, 스킨용 보조본만 초기 손바닥 경계 형태 쪽으로 약하게 되돌린다.
-                targetRotation = Quaternion.Slerp(targetRotation, helperInitialRotation, thumbWebbingCreaseStabilizeWeight);
+                targetRotation = Quaternion.Slerp(targetRotation, helperInitialRotation, effectiveWebbingWeight);
             }
 
             float maxLocalAngle = Mathf.Clamp(detachedThumbBaseHelperMaxLocalAngle, 0f, 45f);
@@ -1170,9 +1615,9 @@ namespace Member_Han.Modules.FBXImporter
                 maxLocalAngle = Mathf.Min(maxLocalAngle, Mathf.Clamp(detachedThumbBasePalmMaxLocalAngle, 0f, 45f));
             }
 
-            if (stabilizeThumbWebbingCrease && thumbWebbingCreaseStabilizeWeight > 0f)
+            if (stabilizeThumbWebbingCrease && effectiveWebbingWeight > 0f)
             {
-                maxLocalAngle = Mathf.Min(maxLocalAngle, Mathf.Clamp(thumbWebbingCreaseMaxLocalAngle, 0f, 45f));
+                maxLocalAngle = Mathf.Min(maxLocalAngle, Mathf.Clamp(effectiveWebbingMaxLocalAngle, 0f, 45f));
             }
 
             if (maxLocalAngle <= 0.001f)
@@ -1185,7 +1630,50 @@ namespace Member_Han.Modules.FBXImporter
                 : targetRotation;
         }
 
-        private Vector3 ConstrainThumbWebbingHelperPosition(Transform helperTransform, Vector3 targetPosition)
+        private Quaternion GetDetachedThumbBaseHelperDeltaAxisRemap(Transform sourceTransform)
+        {
+            if (!IsExplicitDetachedThumbBaseSource(sourceTransform))
+            {
+                return Quaternion.identity;
+            }
+
+            Vector3 offset = Vector3.zero;
+            if (TryResolveThumbSide(sourceTransform, out bool isRightThumb))
+            {
+                offset = isRightThumb
+                    ? rightDetachedThumbBaseHelperDeltaAxisOffset
+                    : leftDetachedThumbBaseHelperDeltaAxisOffset;
+            }
+
+            return offset.sqrMagnitude <= 0.000001f
+                ? Quaternion.identity
+                : Quaternion.Euler(offset);
+        }
+
+        private Quaternion GetDetachedThumbBaseHelperTargetRotationOffset(Transform sourceTransform)
+        {
+            if (!IsExplicitDetachedThumbBaseSource(sourceTransform))
+            {
+                return Quaternion.identity;
+            }
+
+            Vector3 offset = Vector3.zero;
+            if (TryResolveThumbSide(sourceTransform, out bool isRightThumb))
+            {
+                offset = isRightThumb
+                    ? rightDetachedThumbBaseHelperTargetRotationOffset
+                    : leftDetachedThumbBaseHelperTargetRotationOffset;
+            }
+
+            return offset.sqrMagnitude <= 0.000001f
+                ? Quaternion.identity
+                : Quaternion.Euler(offset);
+        }
+
+        private Vector3 ConstrainThumbWebbingHelperPosition(
+            Transform helperTransform,
+            Transform sourceTransform,
+            Vector3 targetPosition)
         {
             if (helperTransform == null ||
                 !_initialLocalPositions.TryGetValue(helperTransform, out Vector3 initialPosition))
@@ -1193,19 +1681,145 @@ namespace Member_Han.Modules.FBXImporter
                 return targetPosition;
             }
 
-            float weight = Mathf.Clamp01(thumbWebbingCreaseStabilizeWeight);
+            GetEffectiveThumbWebbingCorrectiveSettings(
+                helperTransform,
+                sourceTransform,
+                helperTransform.localRotation,
+                targetPosition,
+                out float weight,
+                out _,
+                out float maxOffset);
+
             if (weight > 0f)
             {
                 targetPosition = Vector3.Lerp(targetPosition, initialPosition, weight);
             }
 
-            float maxOffset = Mathf.Clamp(thumbWebbingCreaseMaxPositionOffset, 0f, 0.02f);
+            maxOffset = Mathf.Clamp(maxOffset, 0f, 0.02f);
             if (maxOffset <= 0.000001f)
             {
                 return initialPosition;
             }
 
             return initialPosition + Vector3.ClampMagnitude(targetPosition - initialPosition, maxOffset);
+        }
+
+        private void GetEffectiveThumbWebbingCorrectiveSettings(
+            Transform helperTransform,
+            Transform sourceTransform,
+            Quaternion targetLocalRotation,
+            Vector3 targetLocalPosition,
+            out float weight,
+            out float maxLocalAngle,
+            out float maxPositionOffset)
+        {
+            float configuredWeight = Mathf.Clamp01(thumbWebbingCreaseStabilizeWeight);
+            float configuredMaxLocalAngle = Mathf.Clamp(thumbWebbingCreaseMaxLocalAngle, 0f, 45f);
+            float configuredMaxPositionOffset = Mathf.Clamp(thumbWebbingCreaseMaxPositionOffset, 0f, 0.02f);
+            weight = 0f;
+            maxLocalAngle = Mathf.Clamp(detachedThumbBaseHelperMaxLocalAngle, 0f, 45f);
+            maxPositionOffset = Mathf.Clamp(detachedThumbBaseHelperMaxPositionOffset, 0f, 0.02f);
+
+            float poseRisk = CalculateThumbWebbingPoseRisk(
+                helperTransform,
+                sourceTransform,
+                targetLocalRotation,
+                targetLocalPosition);
+            if (!IsFinite(poseRisk) || poseRisk <= 0f)
+            {
+                return;
+            }
+
+            // Webbing correction should activate only when the pose actually enters a risky shape.
+            // Otherwise YYB Thumb0 helpers get pinned to the initial palm silhouette and the
+            // thumb-index gap stays wider than the reference even though helper/source separation is clean.
+            weight = Mathf.Lerp(0f, configuredWeight, poseRisk);
+            maxLocalAngle = Mathf.Lerp(
+                maxLocalAngle,
+                Mathf.Min(configuredMaxLocalAngle, ThumbWebbingDynamicMinLocalAngle),
+                poseRisk);
+            maxPositionOffset = Mathf.Lerp(
+                maxPositionOffset,
+                Mathf.Min(configuredMaxPositionOffset, ThumbWebbingDynamicMinPositionOffset),
+                poseRisk);
+        }
+
+        private float CalculateThumbWebbingPoseRisk(
+            Transform helperTransform,
+            Transform sourceTransform,
+            Quaternion targetLocalRotation,
+            Vector3 targetLocalPosition)
+        {
+            float spreadRisk = float.NaN;
+            float projectionRisk = float.NaN;
+            float helperDistanceRisk = CalculateThumbWebbingHelperDistanceRisk(helperTransform, sourceTransform, targetLocalPosition);
+            float helperRotationRisk = CalculateThumbWebbingHelperRotationRisk(helperTransform, sourceTransform, targetLocalRotation);
+
+            Transform thumbSideReference = helperTransform != null ? helperTransform : sourceTransform;
+            if (TryResolveThumbSide(thumbSideReference, out bool isRightThumb) &&
+                TryCalculateThumbAndIndexDirections(isRightThumb, out Vector3 thumbDirection, out Vector3 indexDirection))
+            {
+                spreadRisk = RiskAbove(
+                    Vector3.Angle(thumbDirection, indexDirection),
+                    Mathf.Clamp(thumbIndexMaxSpreadAngle, 0f, 90f),
+                    ThumbWebbingSpreadFullRiskAngle);
+
+                if (TryBuildPalmFrame(isRightThumb, out _, out Vector3 palmNormal, out _))
+                {
+                    projectionRisk = RiskOutsideRange(
+                        Vector3.Dot(thumbDirection, palmNormal),
+                        Mathf.Clamp01(thumbProjectionMinPalmNormal),
+                        Mathf.Clamp(Mathf.Max(thumbProjectionMaxPalmNormal, thumbProjectionMinPalmNormal), 0f, 1f),
+                        ThumbWebbingProjectionFullRiskDistance);
+                }
+            }
+
+            return MaxFinite(spreadRisk, projectionRisk, helperDistanceRisk, helperRotationRisk);
+        }
+
+        private float CalculateThumbWebbingHelperDistanceRisk(
+            Transform helperTransform,
+            Transform sourceTransform,
+            Vector3 targetLocalPosition)
+        {
+            if (helperTransform == null ||
+                sourceTransform == null ||
+                !_detachedThumbBaseInitialDistances.TryGetValue(helperTransform, out float initialDistance))
+            {
+                return float.NaN;
+            }
+
+            Vector3 helperWorldPosition = helperTransform.parent != null
+                ? helperTransform.parent.TransformPoint(targetLocalPosition)
+                : targetLocalPosition;
+            float distanceDelta = Mathf.Abs(Vector3.Distance(helperWorldPosition, sourceTransform.position) - initialDistance);
+            return RiskAbove(
+                distanceDelta,
+                ThumbWebbingHelperDistanceWarning,
+                ThumbWebbingHelperDistanceFullRisk);
+        }
+
+        private float CalculateThumbWebbingHelperRotationRisk(
+            Transform helperTransform,
+            Transform sourceTransform,
+            Quaternion targetLocalRotation)
+        {
+            if (helperTransform == null ||
+                sourceTransform == null ||
+                !_detachedThumbBaseInitialRelativeRotations.TryGetValue(helperTransform, out Quaternion initialRelativeRotation))
+            {
+                return float.NaN;
+            }
+
+            Quaternion helperWorldRotation = helperTransform.parent != null
+                ? helperTransform.parent.rotation * targetLocalRotation
+                : targetLocalRotation;
+            Quaternion currentRelativeRotation = Quaternion.Inverse(sourceTransform.rotation) * helperWorldRotation;
+            float rotationDelta = Quaternion.Angle(initialRelativeRotation, currentRelativeRotation);
+            return RiskAbove(
+                rotationDelta,
+                ThumbWebbingHelperRotationWarning,
+                ThumbWebbingHelperRotationFullRisk);
         }
 
         private static Vector3 GetSourcePositionInHelperParentSpace(Transform helperTransform, Transform sourceTransform)
@@ -1234,7 +1848,7 @@ namespace Member_Han.Modules.FBXImporter
 
             foreach (Transform candidate in targetAnimator.GetComponentsInChildren<Transform>(true))
             {
-                if (candidate == null || !IsThumbBaseHelperName(candidate.name))
+                if (!IsThumbBaseHelperTransform(candidate))
                 {
                     continue;
                 }
@@ -1247,7 +1861,50 @@ namespace Member_Han.Modules.FBXImporter
                 _initialLocalRotations[candidate] = candidate.localRotation;
                 _initialLocalPositions[candidate] = candidate.localPosition;
                 _thumbBaseHelperTransforms.Add(candidate);
+                CacheThumbSide(candidate);
             }
+        }
+
+        private Transform FindThumbBaseHelperTransformForSide(bool isRightThumb)
+        {
+            foreach (Transform helperTransform in _thumbBaseHelperTransforms)
+            {
+                if (helperTransform == null)
+                {
+                    continue;
+                }
+
+                if (TryResolveThumbSide(helperTransform, out bool helperIsRightThumb) &&
+                    helperIsRightThumb == isRightThumb)
+                {
+                    return helperTransform;
+                }
+            }
+
+            return null;
+        }
+
+        private static string FormatDebugFloat(float value)
+        {
+            return IsFinite(value) ? value.ToString("F4") : "NaN";
+        }
+
+        private static string GetTransformPath(Transform transform)
+        {
+            if (transform == null)
+            {
+                return "<none>";
+            }
+
+            System.Text.StringBuilder builder = new System.Text.StringBuilder(transform.name);
+            Transform current = transform.parent;
+            while (current != null)
+            {
+                builder.Insert(0, current.name + "/");
+                current = current.parent;
+            }
+
+            return builder.ToString();
         }
 
         private void CaptureDetachedThumbBaseHelperSources()
@@ -1259,7 +1916,7 @@ namespace Member_Han.Modules.FBXImporter
 
             foreach (Transform helperTransform in targetAnimator.GetComponentsInChildren<Transform>(true))
             {
-                if (helperTransform == null || !IsDetachedThumbBaseHelperName(helperTransform.name))
+                if (!IsDetachedThumbBaseHelperTransform(helperTransform))
                 {
                     continue;
                 }
@@ -1270,17 +1927,33 @@ namespace Member_Han.Modules.FBXImporter
                     continue;
                 }
 
+                CacheThumbSide(helperTransform);
+                CacheThumbSide(sourceTransform);
                 _detachedThumbBaseHelperSources[helperTransform] = sourceTransform;
                 if (!_detachedThumbBaseSourceInitialLocalRotations.ContainsKey(sourceTransform))
                 {
                     _detachedThumbBaseSourceInitialLocalRotations[sourceTransform] = sourceTransform.localRotation;
                 }
+
+                _detachedThumbBaseInitialRelativeRotations[helperTransform] =
+                    Quaternion.Inverse(sourceTransform.rotation) * helperTransform.rotation;
+                _detachedThumbBaseInitialDistances[helperTransform] =
+                    Vector3.Distance(helperTransform.position, sourceTransform.position);
             }
         }
 
         private Transform FindMatchingActiveThumbBaseSource(Transform helperTransform)
         {
-            bool isRightThumb = IsRightThumbTransform(helperTransform);
+            if (helperTransform == null)
+            {
+                return null;
+            }
+
+            if (!TryResolveThumbSide(helperTransform, out bool isRightThumb))
+            {
+                return GetClosestMappedThumbProximal(helperTransform);
+            }
+
             foreach (Transform candidate in targetAnimator.GetComponentsInChildren<Transform>(true))
             {
                 if (candidate == null || candidate == helperTransform)
@@ -1288,7 +1961,9 @@ namespace Member_Han.Modules.FBXImporter
                     continue;
                 }
 
-                if (!IsActiveThumbBaseSourceName(candidate.name) || IsRightThumbTransform(candidate) != isRightThumb)
+                if (!IsActiveThumbBaseSourceName(candidate.name) ||
+                    !TryResolveThumbSide(candidate, out bool candidateIsRightThumb) ||
+                    candidateIsRightThumb != isRightThumb)
                 {
                     continue;
                 }
@@ -1296,7 +1971,250 @@ namespace Member_Han.Modules.FBXImporter
                 return candidate;
             }
 
-            return null;
+            Transform mappedThumbProximal = GetMappedThumbProximal(isRightThumb);
+            return mappedThumbProximal != helperTransform ? mappedThumbProximal : null;
+        }
+
+        private void CacheThumbSide(Transform thumbTransform, bool? knownIsRightThumb = null)
+        {
+            if (thumbTransform == null || _cachedThumbSides.ContainsKey(thumbTransform))
+            {
+                return;
+            }
+
+            if (knownIsRightThumb.HasValue)
+            {
+                _cachedThumbSides[thumbTransform] = knownIsRightThumb.Value;
+                return;
+            }
+
+            if (TryResolveThumbSideFromHumanMapping(thumbTransform, out bool isRightThumb) ||
+                TryResolveThumbSideFromName(thumbTransform, out isRightThumb) ||
+                TryResolveThumbSideByReferenceDistance(thumbTransform, out isRightThumb))
+            {
+                _cachedThumbSides[thumbTransform] = isRightThumb;
+            }
+        }
+
+        private bool IsThumbBaseHelperTransform(Transform candidate)
+        {
+            return candidate != null &&
+                !IsMappedHumanThumbBone(candidate) &&
+                IsThumbBaseHelperName(candidate.name);
+        }
+
+        private bool IsDetachedThumbBaseHelperTransform(Transform candidate)
+        {
+            if (!IsThumbBaseHelperTransform(candidate))
+            {
+                return false;
+            }
+
+            string normalizedName = candidate.name.ToLowerInvariant();
+            return !normalizedName.Contains("!") &&
+                !normalizedName.Contains("ghost");
+        }
+
+        private bool IsMappedHumanThumbBone(Transform candidate)
+        {
+            if (candidate == null || targetAnimator == null)
+            {
+                return false;
+            }
+
+            foreach (HumanBodyBones thumbBone in ThumbBones)
+            {
+                if (targetAnimator.GetBoneTransform(thumbBone) == candidate)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private Transform GetMappedThumbProximal(bool isRightThumb)
+        {
+            if (targetAnimator == null)
+            {
+                return null;
+            }
+
+            return targetAnimator.GetBoneTransform(
+                isRightThumb ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal);
+        }
+
+        private Transform GetClosestMappedThumbProximal(Transform referenceTransform)
+        {
+            if (referenceTransform == null)
+            {
+                return null;
+            }
+
+            Transform leftThumbProximal = GetMappedThumbProximal(false);
+            Transform rightThumbProximal = GetMappedThumbProximal(true);
+            if (leftThumbProximal == null)
+            {
+                return rightThumbProximal != referenceTransform ? rightThumbProximal : null;
+            }
+
+            if (rightThumbProximal == null)
+            {
+                return leftThumbProximal != referenceTransform ? leftThumbProximal : null;
+            }
+
+            float leftDistance = (referenceTransform.position - leftThumbProximal.position).sqrMagnitude;
+            float rightDistance = (referenceTransform.position - rightThumbProximal.position).sqrMagnitude;
+            Transform closest = rightDistance < leftDistance ? rightThumbProximal : leftThumbProximal;
+            return closest != referenceTransform ? closest : null;
+        }
+
+        private bool TryResolveThumbSide(Transform thumbTransform, out bool isRightThumb)
+        {
+            if (thumbTransform != null && _cachedThumbSides.TryGetValue(thumbTransform, out isRightThumb))
+            {
+                return true;
+            }
+
+            if (TryResolveThumbSideFromHumanMapping(thumbTransform, out isRightThumb) ||
+                TryResolveThumbSideFromName(thumbTransform, out isRightThumb) ||
+                TryResolveThumbSideByReferenceDistance(thumbTransform, out isRightThumb))
+            {
+                if (thumbTransform != null)
+                {
+                    _cachedThumbSides[thumbTransform] = isRightThumb;
+                }
+
+                return true;
+            }
+
+            isRightThumb = false;
+            return false;
+        }
+
+        private bool TryResolveThumbSideFromHumanMapping(Transform thumbTransform, out bool isRightThumb)
+        {
+            if (thumbTransform != null && targetAnimator != null)
+            {
+                foreach (HumanBodyBones thumbBone in ThumbBones)
+                {
+                    if (targetAnimator.GetBoneTransform(thumbBone) == thumbTransform)
+                    {
+                        isRightThumb = IsRightHumanThumbBone(thumbBone);
+                        return true;
+                    }
+                }
+
+                if (targetAnimator.GetBoneTransform(HumanBodyBones.LeftHand) == thumbTransform)
+                {
+                    isRightThumb = false;
+                    return true;
+                }
+
+                if (targetAnimator.GetBoneTransform(HumanBodyBones.RightHand) == thumbTransform)
+                {
+                    isRightThumb = true;
+                    return true;
+                }
+            }
+
+            isRightThumb = false;
+            return false;
+        }
+
+        private bool IsRightThumbTransform(Transform thumbTransform)
+        {
+            return TryResolveThumbSide(thumbTransform, out bool isRightThumb) && isRightThumb;
+        }
+
+        private static bool TryResolveThumbSideFromName(Transform thumbTransform, out bool isRightThumb)
+        {
+            if (thumbTransform != null)
+            {
+                string normalizedName = thumbTransform.name.ToLowerInvariant();
+                if (normalizedName.Contains("right") ||
+                    normalizedName.Contains("_r") ||
+                    normalizedName.Contains(".r") ||
+                    normalizedName.Contains("rthumb") ||
+                    normalizedName.Contains("thumb_r"))
+                {
+                    isRightThumb = true;
+                    return true;
+                }
+
+                if (normalizedName.Contains("left") ||
+                    normalizedName.Contains("_l") ||
+                    normalizedName.Contains(".l") ||
+                    normalizedName.Contains("lthumb") ||
+                    normalizedName.Contains("thumb_l"))
+                {
+                    isRightThumb = false;
+                    return true;
+                }
+            }
+
+            isRightThumb = false;
+            return false;
+        }
+
+        private bool TryResolveThumbSideByReferenceDistance(Transform thumbTransform, out bool isRightThumb)
+        {
+            if (thumbTransform != null && targetAnimator != null)
+            {
+                float leftDistance = GetThumbSideReferenceDistance(
+                    thumbTransform,
+                    targetAnimator.GetBoneTransform(HumanBodyBones.LeftHand),
+                    GetMappedThumbProximal(false));
+                float rightDistance = GetThumbSideReferenceDistance(
+                    thumbTransform,
+                    targetAnimator.GetBoneTransform(HumanBodyBones.RightHand),
+                    GetMappedThumbProximal(true));
+                if (IsFinite(leftDistance) || IsFinite(rightDistance))
+                {
+                    if (!IsFinite(leftDistance))
+                    {
+                        isRightThumb = true;
+                        return true;
+                    }
+
+                    if (!IsFinite(rightDistance))
+                    {
+                        isRightThumb = false;
+                        return true;
+                    }
+
+                    isRightThumb = rightDistance < leftDistance;
+                    return true;
+                }
+            }
+
+            isRightThumb = false;
+            return false;
+        }
+
+        private static float GetThumbSideReferenceDistance(
+            Transform thumbTransform,
+            Transform handTransform,
+            Transform thumbProximalTransform)
+        {
+            float handDistance = handTransform != null
+                ? (thumbTransform.position - handTransform.position).sqrMagnitude
+                : float.NaN;
+            float thumbDistance = thumbProximalTransform != null
+                ? (thumbTransform.position - thumbProximalTransform.position).sqrMagnitude
+                : float.NaN;
+
+            if (!IsFinite(handDistance))
+            {
+                return thumbDistance;
+            }
+
+            if (!IsFinite(thumbDistance))
+            {
+                return handDistance;
+            }
+
+            return Mathf.Min(handDistance, thumbDistance);
         }
 
         private static bool IsThumbBaseHelperName(string transformName)
@@ -1307,30 +2225,28 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             string normalizedName = transformName.ToLowerInvariant();
-            if (!normalizedName.Contains("thumb0"))
+            string compactName = normalizedName
+                .Replace("_", string.Empty)
+                .Replace("-", string.Empty)
+                .Replace(".", string.Empty)
+                .Replace(" ", string.Empty);
+            if (!compactName.Contains("thumb0"))
             {
                 return false;
             }
 
             return !normalizedName.Contains("thumb1") &&
                 !normalizedName.Contains("thumb2") &&
+                !normalizedName.Contains("thumb3") &&
+                !normalizedName.Contains("proximal") &&
+                !normalizedName.Contains("intermediate") &&
+                !normalizedName.Contains("distal") &&
                 !normalizedName.Contains("thumbtip");
         }
 
-        private static bool IsDetachedThumbBaseHelperName(string transformName)
+        private static bool IsExplicitDetachedThumbBaseSource(Transform sourceTransform)
         {
-            if (string.IsNullOrEmpty(transformName))
-            {
-                return false;
-            }
-
-            string normalizedName = transformName.ToLowerInvariant();
-            if (normalizedName.Contains("!") || normalizedName.Contains("ghost"))
-            {
-                return false;
-            }
-
-            return IsThumbBaseHelperName(transformName);
+            return sourceTransform != null && IsActiveThumbBaseSourceName(sourceTransform.name);
         }
 
         private static bool IsActiveThumbBaseSourceName(string transformName)
@@ -1363,7 +2279,7 @@ namespace Member_Han.Modules.FBXImporter
 
         private Quaternion GetProximalRotationOffsetRotation(Transform thumbTransform)
         {
-            return GetProximalRotationOffsetRotation(IsRightThumbTransform(thumbTransform));
+            return GetProximalRotationOffsetRotation(TryResolveThumbSide(thumbTransform, out bool isRightThumb) && isRightThumb);
         }
 
         private Quaternion GetProximalRotationOffsetRotation(bool isRightThumb)
@@ -1398,15 +2314,17 @@ namespace Member_Han.Modules.FBXImporter
             return offset + (isRightThumb ? rightProximalLocalRotationOffset : leftProximalLocalRotationOffset);
         }
 
-        private static bool IsRightThumbTransform(Transform thumbTransform)
+        private static bool IsRightHumanThumbBone(HumanBodyBones thumbBone)
         {
-            if (thumbTransform == null)
+            switch (thumbBone)
             {
-                return false;
+                case HumanBodyBones.RightThumbProximal:
+                case HumanBodyBones.RightThumbIntermediate:
+                case HumanBodyBones.RightThumbDistal:
+                    return true;
+                default:
+                    return false;
             }
-
-            string normalizedName = thumbTransform.name.ToLowerInvariant();
-            return normalizedName.Contains("right") || normalizedName.Contains("_r") || normalizedName.Contains("rthumb");
         }
 
         private Quaternion GetCurrentRawLocalRotation(Transform targetTransform)
@@ -1435,6 +2353,70 @@ namespace Member_Han.Modules.FBXImporter
             float hardLimit = softLimit + LocalRotationHardOvershootDegrees;
             float targetAngle = Mathf.Min(hardLimit, softLimit + (angle - softLimit) * LocalRotationOvershootRatio);
             return Quaternion.RotateTowards(initialRotation, currentRotation, targetAngle);
+        }
+
+        private static float MaxFinite(params float[] values)
+        {
+            if (values == null || values.Length == 0)
+            {
+                return float.NaN;
+            }
+
+            float maxValue = float.NaN;
+            foreach (float value in values)
+            {
+                if (!IsFinite(value))
+                {
+                    continue;
+                }
+
+                if (!IsFinite(maxValue) || value > maxValue)
+                {
+                    maxValue = value;
+                }
+            }
+
+            return maxValue;
+        }
+
+        private static float RiskAbove(float value, float warningValue, float fullRiskValue)
+        {
+            if (!IsFinite(value) || !IsFinite(warningValue) || !IsFinite(fullRiskValue))
+            {
+                return float.NaN;
+            }
+
+            if (fullRiskValue <= warningValue)
+            {
+                return value > warningValue ? 1f : 0f;
+            }
+
+            if (value <= warningValue)
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp01((value - warningValue) / (fullRiskValue - warningValue));
+        }
+
+        private static float RiskOutsideRange(float value, float minValue, float maxValue, float fullRiskDistance)
+        {
+            if (!IsFinite(value) || !IsFinite(minValue) || !IsFinite(maxValue) || !IsFinite(fullRiskDistance))
+            {
+                return float.NaN;
+            }
+
+            if (value < minValue)
+            {
+                return RiskAbove(minValue - value, 0f, fullRiskDistance);
+            }
+
+            if (value > maxValue)
+            {
+                return RiskAbove(value - maxValue, 0f, fullRiskDistance);
+            }
+
+            return 0f;
         }
 
         private static bool TryNormalize(Vector3 value, out Vector3 normalized)

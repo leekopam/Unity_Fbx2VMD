@@ -512,7 +512,8 @@ MonoBehaviour:
   editorHumanoidRootTranslationCurrentWeight: 0.35
   useManualAnimatorFingerPoseReference: 1
   useManualAnimatorBodyRotationReference: 1
-  useManualAnimatorHipsLocalPositionReference: 1
+  useManualAnimatorBodyPositionYReference: 1
+  useManualAnimatorHipsLocalPositionReference: 0
   manualAnimatorHipsLocalPositionWeight: 1
   manualAnimatorHipsLocalPositionMaxOffset: 0.12
   useManualAnimatorThumbLocalRotationReference: 1
@@ -520,12 +521,12 @@ MonoBehaviour:
   useManualAnimatorThumbSegmentDirectionReference: 1
   manualAnimatorThumbSegmentDirectionWeight: 1
   useManualAnimatorThumbHandDirectionReference: 1
-  manualAnimatorThumbHandDirectionWeight: 1
+  manualAnimatorThumbHandDirectionWeight: 0.5
   useManualAnimatorHandPalmFrameReference: 1
   manualAnimatorHandPalmFrameWeight: 1
   useManualAnimatorThumbBasePositionReference: 1
   manualAnimatorThumbBasePositionWeight: 1
-  manualAnimatorThumbBasePositionMaxOffset: 0.03
+  manualAnimatorThumbBasePositionMaxOffset: 0.04
   manualFingerReferencePrefab: {fileID: 0}
   manualFingerReferenceController: {fileID: 0}
   disableMmdShoulderPostPoseDuringRetarget: 0
@@ -586,7 +587,7 @@ MonoBehaviour:
   logThumbAnatomicalGuardCorrections: 0
   enableThumbLocalRotationGuard: 1
   disableThumbLocalRotationGuardWithManualFingerReference: 1
-  ThumbProximalMaxLocalAngle: 10
+  ThumbProximalMaxLocalAngle: 28
   ThumbIntermediateMaxLocalAngle: 55
   ThumbDistalMaxLocalAngle: 55
   logThumbLocalRotationGuardCorrections: 0
@@ -594,18 +595,23 @@ MonoBehaviour:
   syncDetachedThumbBaseHelperPositions: 1
   detachedThumbBaseHelperSyncWeight: 0.8
   detachedThumbBaseHelperMaxLocalAngle: 28
+  detachedThumbBaseHelperMaxPositionOffset: 0.01
+  LeftDetachedThumbBaseHelperDeltaAxisOffset: {x: -6, y: -18, z: 10}
+  RightDetachedThumbBaseHelperDeltaAxisOffset: {x: -6, y: 18, z: -10}
+  LeftDetachedThumbBaseHelperTargetRotationOffset: {x: -3, y: -9, z: 5}
+  RightDetachedThumbBaseHelperTargetRotationOffset: {x: -3, y: 9, z: -5}
   stabilizeDetachedThumbBasePalm: 0
   detachedThumbBasePalmStabilizeWeight: 0
   detachedThumbBasePalmMaxLocalAngle: 45
   stabilizeThumbWebbingCrease: 1
-  thumbWebbingCreaseStabilizeWeight: 0.35
-  thumbWebbingCreaseMaxLocalAngle: 18
-  thumbWebbingCreaseMaxPositionOffset: 0.005
+  thumbWebbingCreaseStabilizeWeight: 1
+  thumbWebbingCreaseMaxLocalAngle: 6
+  thumbWebbingCreaseMaxPositionOffset: 0.0012
   enableThumbVisualLengthGuard: 1
-  ThumbProjectionMinPalmNormal: 0.36
-  ThumbProjectionMaxPalmNormal: 0.5
+  ThumbProjectionMinPalmNormal: 0.358
+  ThumbProjectionMaxPalmNormal: 0.58
   ThumbProjectionGuardWeight: 1
-  ThumbIndexMaxSpreadAngle: 42
+  ThumbIndexMaxSpreadAngle: 70
   ThumbIndexSpreadGuardWeight: 1
   ThumbMaxSegmentBendAngle: 10
   ThumbSegmentStraightenWeight: 0.9
@@ -614,6 +620,9 @@ MonoBehaviour:
   enableRecordingDiagnostics: 0
   useDeterministicCaptureFramerateForDiagnostics: 0
   enableDiagnosticFingerCloseups: 1
+  failEditorSmokeOnThumbRisk: 1
+  editorSmokeMaxGenericThumbAnatomyRisk: 0.4
+  editorSmokeMaxYybDeformationRisk: 0.35
   faceTargetToCameraOnIdle: 1
   detachTargetAnimatorControllerOnIdle: 1
   lockTargetPoseUntilImport: 1
@@ -1241,6 +1250,66 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1247656476}
   m_CullTransparentMesh: 1
+--- !u!21 &1539664181
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
+  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties:
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
+--- !u!21 &1594416176
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
+  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties:
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!1 &1601283678
 GameObject:
   m_ObjectHideFlags: 0
@@ -1615,36 +1684,6 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
---- !u!21 &1999153911
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
-  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1 &2002197810
 GameObject:
   m_ObjectHideFlags: 0
@@ -1713,36 +1752,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!21 &2093471344
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
-  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1001 &240061973030223373
 PrefabInstance:
   m_ObjectHideFlags: 0
