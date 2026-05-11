@@ -11,6 +11,8 @@ using UnityEngine.SceneManagement;
 [DefaultExecutionOrder(30000)]
 public class MotionComparisonProbe : MonoBehaviour
 {
+    private static readonly float[] DefaultSampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
+
     [SerializeField] private string comparisonLabel = "";
     [SerializeField] private float[] sampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
     [SerializeField] private bool sampleByAnimationClipTime = true;
@@ -35,7 +37,8 @@ public class MotionComparisonProbe : MonoBehaviour
     private const float DiagnosticFootRadius = 0.04f;
     private const float DiagnosticThumbIndexMaxSpreadAngle = 42f;
     private const float DiagnosticThumbIndexFullRiskAngle = 72f;
-    private const float DiagnosticThumbPalmProjectionMin = 0.36f;
+    // Keep probe thresholds aligned with the runtime thumb guard defaults.
+    private const float DiagnosticThumbPalmProjectionMin = 0.358f;
     private const float DiagnosticThumbPalmProjectionMax = 0.5f;
     private const float DiagnosticThumbHelperDistanceDeltaWarning = 0.003f;
     private const float DiagnosticThumbHelperDistanceDeltaFullRisk = 0.008f;
@@ -110,13 +113,88 @@ public class MotionComparisonProbe : MonoBehaviour
     private readonly Dictionary<string, float> _diagnosticInitialDistances = new Dictionary<string, float>(StringComparer.Ordinal);
     private readonly Dictionary<string, Quaternion> _diagnosticInitialRelativeRotations = new Dictionary<string, Quaternion>(StringComparer.Ordinal);
     private bool _isYybDiagnosticTarget;
+    private float _maxThumbSpreadRisk = float.NaN;
+    private float _maxThumbProjectionRisk = float.NaN;
+    private float _maxThumbHelperSeparationRisk = float.NaN;
+    private float _maxThumbWebbingRisk = float.NaN;
+    private float _maxGenericThumbAnatomyRisk = float.NaN;
+    private float _maxYybDeformationRisk = float.NaN;
+    private float _maxGenericThumbAnatomyRiskClipTime = float.NaN;
+    private float _maxYybDeformationRiskClipTime = float.NaN;
+    private int _maxGenericThumbAnatomyRiskRecorderFrame = -1;
+    private int _maxYybDeformationRiskRecorderFrame = -1;
+    private string _maxGenericThumbAnatomyRiskReason = "";
+    private string _maxYybDeformationRiskReason = "";
+    private int _riskEvaluationFrameCount;
+    private int _leftCoreThumbDiagnosticFrameCount;
+    private int _rightCoreThumbDiagnosticFrameCount;
+    private int _leftHelperRelationshipFrameCount;
+    private int _rightHelperRelationshipFrameCount;
+    private bool _leftHelperCoverageRequired;
+    private bool _rightHelperCoverageRequired;
 
     public string LastCsvPath => _csvPath;
     public string LastScreenshotFolder => _screenshotFolder;
     public string LastSessionManifestPath => _sessionManifestPath;
     public bool IsSampling => _isSampling;
+    public float MaxThumbSpreadRisk => _maxThumbSpreadRisk;
+    public float MaxThumbProjectionRisk => _maxThumbProjectionRisk;
+    public float MaxThumbHelperSeparationRisk => _maxThumbHelperSeparationRisk;
+    public float MaxThumbWebbingRisk => _maxThumbWebbingRisk;
+    public float MaxGenericThumbAnatomyRisk => _maxGenericThumbAnatomyRisk;
+    public float MaxYybDeformationRisk => _maxYybDeformationRisk;
+    public bool RiskDiagnosticsEnabled => captureYybDiagnosticOnlyMetrics;
+    public int RiskEvaluationFrameCount => _riskEvaluationFrameCount;
+    public bool LeftThumbCoreAnatomyObserved => _leftCoreThumbDiagnosticFrameCount > 0;
+    public bool RightThumbCoreAnatomyObserved => _rightCoreThumbDiagnosticFrameCount > 0;
+    public bool HasFullThumbAnatomyCoverage => LeftThumbCoreAnatomyObserved && RightThumbCoreAnatomyObserved;
+    public bool LeftThumbHelperCoverageRequired => _leftHelperCoverageRequired;
+    public bool RightThumbHelperCoverageRequired => _rightHelperCoverageRequired;
+    public bool LeftThumbHelperCoverageSatisfied => !_leftHelperCoverageRequired || _leftHelperRelationshipFrameCount > 0;
+    public bool RightThumbHelperCoverageSatisfied => !_rightHelperCoverageRequired || _rightHelperRelationshipFrameCount > 0;
+    public bool HasResolvedThumbHelperCoverage => LeftThumbHelperCoverageSatisfied && RightThumbHelperCoverageSatisfied;
 
     public void SetFingerCloseups(bool enabled) => captureFingerCloseups = enabled;
+    public void ResetSampleTimesToDefault() => sampleTimes = (float[])DefaultSampleTimes.Clone();
+    public void SetSampleTimes(float[] customSampleTimes) => sampleTimes = NormalizeSampleTimes(customSampleTimes);
+
+    private static float[] NormalizeSampleTimes(IEnumerable<float> customSampleTimes)
+    {
+        if (customSampleTimes == null)
+        {
+            return (float[])DefaultSampleTimes.Clone();
+        }
+
+        List<float> normalized = new List<float>();
+        foreach (float sampleTime in customSampleTimes)
+        {
+            if (float.IsNaN(sampleTime) || float.IsInfinity(sampleTime) || sampleTime < 0f)
+            {
+                continue;
+            }
+
+            normalized.Add(sampleTime);
+        }
+
+        if (normalized.Count == 0)
+        {
+            return (float[])DefaultSampleTimes.Clone();
+        }
+
+        normalized.Sort();
+        List<float> deduplicated = new List<float>(normalized.Count);
+        for (int i = 0; i < normalized.Count; i++)
+        {
+            if (deduplicated.Count > 0 && Mathf.Abs(deduplicated[deduplicated.Count - 1] - normalized[i]) <= 0.0001f)
+            {
+                continue;
+            }
+
+            deduplicated.Add(normalized[i]);
+        }
+
+        return deduplicated.ToArray();
+    }
 
     public void StartSampling(string labelOverride = "")
     {
@@ -133,6 +211,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
         PrepareHumanPoseCapture();
         ResetDiagnosticBaselines();
+        ResetRiskSummary();
 
         comparisonLabel = string.IsNullOrWhiteSpace(labelOverride)
             ? SanitizeFileName(string.IsNullOrWhiteSpace(comparisonLabel) ? gameObject.name : comparisonLabel)
@@ -179,6 +258,7 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         PoseMetrics metrics = CaptureMetrics(reason);
+        UpdateRiskSummary(metrics.YybDiagnostics, false, reason, metrics.AnimationClipTime, metrics.RecorderFrame);
         File.AppendAllText(_csvPath, metrics.ToCsvLine() + Environment.NewLine, Encoding.UTF8);
         CaptureSampleScreenshots(reason, metrics);
         WriteSessionManifest(reason);
@@ -191,7 +271,14 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (!_isSampling || sampleTimes == null || sampleTimes.Length == 0)
+        if (!_isSampling)
+        {
+            return;
+        }
+
+        UpdateRealtimeRiskSummary();
+
+        if (sampleTimes == null || sampleTimes.Length == 0)
         {
             return;
         }
@@ -292,6 +379,7 @@ public class MotionComparisonProbe : MonoBehaviour
             meshBoundsMaxY = rendererBounds.max.y;
         }
 
+        ThumbGuardDiagnostics thumbGuardDiagnostics = CaptureThumbGuardDiagnostics();
         YybDiagnosticMetrics yybDiagnostics = captureYybDiagnosticOnlyMetrics
             ? CaptureYybDiagnosticMetrics(armMuscles)
             : YybDiagnosticMetrics.Empty;
@@ -403,6 +491,7 @@ public class MotionComparisonProbe : MonoBehaviour
             RightRingSpreadMuscle = fingers.RightRingSpread,
             RightLittle1StretchMuscle = fingers.RightLittle1Stretch,
             RightLittleSpreadMuscle = fingers.RightLittleSpread,
+            ThumbGuard = thumbGuardDiagnostics,
             YybDiagnostics = yybDiagnostics
         };
     }
@@ -555,6 +644,322 @@ public class MotionComparisonProbe : MonoBehaviour
         };
     }
 
+    private ThumbGuardDiagnostics CaptureThumbGuardDiagnostics()
+    {
+        ThumbGuardDiagnostics metrics = ThumbGuardDiagnostics.Empty;
+        Component thumbGuard = FindThumbDeformationGuardForCurrentAnimator();
+        if (thumbGuard == null)
+        {
+            return metrics;
+        }
+
+        Type guardType = thumbGuard.GetType();
+        metrics.ManualThumbReferenceConfigured = ReadBoolMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "suppressPoseShapingWithManualThumbReference");
+        metrics.ProjectionGuardWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveThumbProjectionGuardWeight");
+        metrics.LeftProjectionGuardWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveLeftThumbProjectionGuardWeight");
+        metrics.RightProjectionGuardWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveRightThumbProjectionGuardWeight");
+        metrics.IndexSpreadGuardWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveThumbIndexSpreadGuardWeight");
+        metrics.LeftIndexSpreadGuardWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveLeftThumbIndexSpreadGuardWeight");
+        metrics.RightIndexSpreadGuardWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveRightThumbIndexSpreadGuardWeight");
+        metrics.SegmentStraightenWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveThumbSegmentStraightenWeight");
+        metrics.LeftSegmentStraightenWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveLeftThumbSegmentStraightenWeight");
+        metrics.RightSegmentStraightenWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "EffectiveRightThumbSegmentStraightenWeight");
+        metrics.LeftProjectionCorrectionApplyCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastLeftThumbProjectionCorrectionApplyCount");
+        metrics.RightProjectionCorrectionApplyCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastRightThumbProjectionCorrectionApplyCount");
+        metrics.LeftProjectionCorrectionPreserveCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastLeftThumbProjectionCorrectionPreserveCount");
+        metrics.RightProjectionCorrectionPreserveCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastRightThumbProjectionCorrectionPreserveCount");
+        metrics.LeftSegmentStraightenApplyCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastLeftThumbSegmentStraightenApplyCount");
+        metrics.RightSegmentStraightenApplyCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastRightThumbSegmentStraightenApplyCount");
+        metrics.LeftSegmentStraightenPreserveCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastLeftThumbSegmentStraightenPreserveCount");
+        metrics.RightSegmentStraightenPreserveCount = ReadIntMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "LastRightThumbSegmentStraightenPreserveCount");
+        metrics.HelperSyncEnabled = ReadBoolMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "syncDetachedThumbBaseHelpers");
+        metrics.HelperPositionSyncEnabled = ReadBoolMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "syncDetachedThumbBaseHelperPositions");
+        metrics.HelperSyncWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "detachedThumbBaseHelperSyncWeight");
+        metrics.HelperMaxLocalAngle = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "detachedThumbBaseHelperMaxLocalAngle");
+        metrics.PalmStabilizeEnabled = ReadBoolMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "stabilizeDetachedThumbBasePalm");
+        metrics.PalmStabilizeWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "detachedThumbBasePalmStabilizeWeight");
+        metrics.PalmStabilizeMaxLocalAngle = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "detachedThumbBasePalmMaxLocalAngle");
+        metrics.WebbingStabilizeEnabled = ReadBoolMemberAsFloat(
+            guardType,
+            thumbGuard,
+            "stabilizeThumbWebbingCrease");
+        metrics.WebbingStabilizeWeight = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "thumbWebbingCreaseStabilizeWeight");
+        metrics.WebbingMaxLocalAngle = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "thumbWebbingCreaseMaxLocalAngle");
+        metrics.WebbingMaxPositionOffset = ReadFloatMember(
+            guardType,
+            thumbGuard,
+            "thumbWebbingCreaseMaxPositionOffset");
+
+        Component retargeter = FindRetargeterForCurrentAnimator();
+        if (retargeter == null)
+        {
+            return metrics;
+        }
+
+        Type retargeterType = retargeter.GetType();
+        metrics.ManualThumbReferenceActive = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "IsManualThumbLocalRotationReferenceActive");
+        metrics.PoseShapingSuppressed = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "ShouldSuppressThumbPoseShapingGuard");
+        metrics.LeftPoseShapingSuppressed = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "ShouldSuppressLeftThumbPoseShapingGuard");
+        metrics.RightPoseShapingSuppressed = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "ShouldSuppressRightThumbPoseShapingGuard");
+        metrics.LeftLocalRotationGuardClampCount = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbLocalRotationGuardClampCount");
+        metrics.RightLocalRotationGuardClampCount = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastRightThumbLocalRotationGuardClampCount");
+        metrics.LeftLocalRotationGuardPreserveCount = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbLocalRotationGuardPreserveCount");
+        metrics.RightLocalRotationGuardPreserveCount = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastRightThumbLocalRotationGuardPreserveCount");
+        metrics.LeftLocalRotationGuardCurrentRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbLocalRotationGuardCurrentRisk");
+        metrics.RightLocalRotationGuardCurrentRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbLocalRotationGuardCurrentRisk");
+        metrics.LeftLocalRotationGuardLimitedRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbLocalRotationGuardLimitedRisk");
+        metrics.RightLocalRotationGuardLimitedRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbLocalRotationGuardLimitedRisk");
+        metrics.LeftWorldRotationSuppressCompetingOverride = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbWorldRotationSuppressCompetingOverride");
+        metrics.RightWorldRotationSuppressCompetingOverride = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastRightThumbWorldRotationSuppressCompetingOverride");
+        metrics.LeftWorldRotationKeepDetachedHelperOverride = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbWorldRotationKeepDetachedHelperOverride");
+        metrics.RightWorldRotationKeepDetachedHelperOverride = ReadBoolMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastRightThumbWorldRotationKeepDetachedHelperOverride");
+        metrics.LeftWorldRotationCurrentReferenceFrameDeviation = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbWorldRotationCurrentReferenceFrameDeviation");
+        metrics.RightWorldRotationCurrentReferenceFrameDeviation = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbWorldRotationCurrentReferenceFrameDeviation");
+        metrics.LeftWorldRotationCandidateReferenceFrameDeviation = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbWorldRotationCandidateReferenceFrameDeviation");
+        metrics.RightWorldRotationCandidateReferenceFrameDeviation = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbWorldRotationCandidateReferenceFrameDeviation");
+        metrics.LeftProximalWorldRotationPreserveReason = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbProximalWorldRotationPreserveReason");
+        metrics.RightProximalWorldRotationPreserveReason = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastRightThumbProximalWorldRotationPreserveReason");
+        metrics.LeftIntermediateWorldRotationPreserveReason = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbIntermediateWorldRotationPreserveReason");
+        metrics.RightIntermediateWorldRotationPreserveReason = ReadIntMemberAsFloat(
+            retargeterType,
+            retargeter,
+            "LastRightThumbIntermediateWorldRotationPreserveReason");
+        metrics.LeftProximalWorldRotationCurrentReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbProximalWorldRotationCurrentReferenceAngle");
+        metrics.RightProximalWorldRotationCurrentReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbProximalWorldRotationCurrentReferenceAngle");
+        metrics.LeftIntermediateWorldRotationCurrentReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbIntermediateWorldRotationCurrentReferenceAngle");
+        metrics.RightIntermediateWorldRotationCurrentReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbIntermediateWorldRotationCurrentReferenceAngle");
+        metrics.LeftProximalWorldRotationCandidateReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbProximalWorldRotationCandidateReferenceAngle");
+        metrics.RightProximalWorldRotationCandidateReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbProximalWorldRotationCandidateReferenceAngle");
+        metrics.LeftIntermediateWorldRotationCandidateReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbIntermediateWorldRotationCandidateReferenceAngle");
+        metrics.RightIntermediateWorldRotationCandidateReferenceAngle = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbIntermediateWorldRotationCandidateReferenceAngle");
+        metrics.LeftProximalWorldRotationPreserveCurrentRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbProximalWorldRotationPreserveCurrentRisk");
+        metrics.RightProximalWorldRotationPreserveCurrentRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbProximalWorldRotationPreserveCurrentRisk");
+        metrics.LeftIntermediateWorldRotationPreserveCurrentRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbIntermediateWorldRotationPreserveCurrentRisk");
+        metrics.RightIntermediateWorldRotationPreserveCurrentRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbIntermediateWorldRotationPreserveCurrentRisk");
+        metrics.LeftProximalWorldRotationPreserveLimitedRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbProximalWorldRotationPreserveLimitedRisk");
+        metrics.RightProximalWorldRotationPreserveLimitedRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbProximalWorldRotationPreserveLimitedRisk");
+        metrics.LeftIntermediateWorldRotationPreserveLimitedRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastLeftThumbIntermediateWorldRotationPreserveLimitedRisk");
+        metrics.RightIntermediateWorldRotationPreserveLimitedRisk = ReadFloatMember(
+            retargeterType,
+            retargeter,
+            "LastRightThumbIntermediateWorldRotationPreserveLimitedRisk");
+        return metrics;
+    }
+
+    private Component FindThumbDeformationGuardForCurrentAnimator()
+    {
+        if (_animator == null)
+        {
+            return null;
+        }
+
+        Component[] components = _animator.gameObject.GetComponents<Component>();
+        foreach (Component component in components)
+        {
+            if (component != null && component.GetType().Name == "HumanoidThumbDeformationGuard")
+            {
+                return component;
+            }
+        }
+
+        return null;
+    }
+
     private static float ReadFloatProperty(Type type, object instance, string propertyName)
     {
         PropertyInfo property = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -575,6 +980,66 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         return float.NaN;
+    }
+
+    private static float ReadFloatMember(Type type, object instance, string memberName)
+    {
+        object value = ReadMemberValue(type, instance, memberName);
+        if (value is float floatValue)
+        {
+            return floatValue;
+        }
+
+        if (value is double doubleValue)
+        {
+            return (float)doubleValue;
+        }
+
+        if (value is int intValue)
+        {
+            return intValue;
+        }
+
+        return float.NaN;
+    }
+
+    private static float ReadBoolMemberAsFloat(Type type, object instance, string memberName)
+    {
+        object value = ReadMemberValue(type, instance, memberName);
+        if (value is bool boolValue)
+        {
+            return boolValue ? 1f : 0f;
+        }
+
+        return float.NaN;
+    }
+
+    private static float ReadIntMemberAsFloat(Type type, object instance, string memberName)
+    {
+        object value = ReadMemberValue(type, instance, memberName);
+        if (value is int intValue)
+        {
+            return intValue;
+        }
+
+        return float.NaN;
+    }
+
+    private static object ReadMemberValue(Type type, object instance, string memberName)
+    {
+        PropertyInfo property = type.GetProperty(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property != null)
+        {
+            return property.GetValue(instance);
+        }
+
+        FieldInfo field = type.GetField(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (field != null)
+        {
+            return field.GetValue(instance);
+        }
+
+        return null;
     }
 
     private static int ReadIntProperty(Type type, object instance, string propertyName)
@@ -719,8 +1184,8 @@ public class MotionComparisonProbe : MonoBehaviour
 
         if (!_isYybDiagnosticTarget)
         {
-            left.ClearRiskScores();
-            right.ClearRiskScores();
+            left.ClearYybOnlyRiskScores();
+            right.ClearYybOnlyRiskScores();
             return new YybDiagnosticMetrics
             {
                 Left = left,
@@ -759,9 +1224,11 @@ public class MotionComparisonProbe : MonoBehaviour
     private YybSideDiagnosticMetrics CaptureYybSideDiagnosticMetrics(bool isRightSide)
     {
         YybSideDiagnosticMetrics metrics = YybSideDiagnosticMetrics.Empty;
+        metrics.HelperCoverageRequired = RequiresExplicitThumbBaseHelperCoverage(isRightSide);
 
         if (TryCalculateThumbAndIndexDirections(isRightSide, out Vector3 thumbDirection, out Vector3 indexDirection))
         {
+            metrics.ThumbDirectionAvailable = true;
             metrics.ThumbIndexSpreadAngle = Vector3.Angle(thumbDirection, indexDirection);
             metrics.ThumbSpreadRisk = RiskAbove(
                 metrics.ThumbIndexSpreadAngle,
@@ -770,6 +1237,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
             if (TryBuildDiagnosticPalmFrame(isRightSide, out _, out Vector3 palmNormal, out _))
             {
+                metrics.PalmFrameAvailable = true;
                 metrics.ThumbPalmProjection = Vector3.Dot(thumbDirection, palmNormal);
                 metrics.ThumbProjectionRisk = RiskOutsideRange(
                     metrics.ThumbPalmProjection,
@@ -779,10 +1247,9 @@ public class MotionComparisonProbe : MonoBehaviour
             }
         }
 
-        Transform helper = FindThumbBaseHelper(isRightSide);
-        Transform source = FindThumbBaseSource(isRightSide);
-        if (helper != null && source != null)
+        if (TryResolveExplicitThumbBaseHelperRelationship(isRightSide, out Transform helper, out Transform source))
         {
+            metrics.HelperRelationshipAvailable = true;
             string sideName = isRightSide ? "right" : "left";
             string distanceKey = BuildPairKey($"thumb-helper-distance-{sideName}", helper, source);
             metrics.ThumbHelperSourceDistanceDelta = CalculateDistanceDeltaFromInitial(helper, source, distanceKey, out float distance);
@@ -815,6 +1282,279 @@ public class MotionComparisonProbe : MonoBehaviour
                 DiagnosticThumbWebbingRotationFullRisk));
 
         return metrics;
+    }
+
+    private bool TryResolveExplicitThumbBaseHelperRelationship(
+        bool isRightSide,
+        out Transform helper,
+        out Transform source)
+    {
+        helper = null;
+        source = null;
+
+        if (!TryFindExplicitThumbBaseSource(isRightSide, out Transform explicitSource))
+        {
+            return false;
+        }
+
+        if (!TryFindThumbBaseHelperCandidate(isRightSide, out Transform helperCandidate))
+        {
+            return false;
+        }
+
+        if (helperCandidate == explicitSource)
+        {
+            return false;
+        }
+
+        helper = helperCandidate;
+        source = explicitSource;
+        return true;
+    }
+
+    private bool RequiresExplicitThumbBaseHelperCoverage(bool isRightSide)
+    {
+        return TryFindThumbBaseHelperCandidate(isRightSide, out _);
+    }
+
+    private bool TryFindExplicitThumbBaseSource(bool isRightSide, out Transform source)
+    {
+        string sideToken = isRightSide ? "right" : "left";
+        source = FindDiagnosticTransform($"thumb-explicit-source-{sideToken}", candidate =>
+        {
+            string normalizedName = NormalizeTransformName(candidate.name);
+            return normalizedName.Contains(sideToken) && IsActiveThumbBaseSourceName(normalizedName);
+        });
+        return source != null;
+    }
+
+    private bool TryFindThumbBaseHelperCandidate(bool isRightSide, out Transform helper)
+    {
+        helper = FindThumbBaseHelper(isRightSide);
+        if (helper != null)
+        {
+            return true;
+        }
+
+        Transform hand = GetBone(isRightSide ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
+        if (hand == null)
+        {
+            return false;
+        }
+
+        Transform thumbProximal = GetBone(isRightSide ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal);
+        Transform thumbIntermediate = GetBone(isRightSide ? HumanBodyBones.RightThumbIntermediate : HumanBodyBones.LeftThumbIntermediate);
+        Transform thumbDistal = GetBone(isRightSide ? HumanBodyBones.RightThumbDistal : HumanBodyBones.LeftThumbDistal);
+        Transform explicitSource = null;
+        TryFindExplicitThumbBaseSource(isRightSide, out explicitSource);
+
+        float bestDistance = float.PositiveInfinity;
+        foreach (Transform candidate in hand.GetComponentsInChildren<Transform>(true))
+        {
+            if (!IsAmbiguousThumbExtraTransformCandidate(candidate, hand, thumbProximal, thumbIntermediate, thumbDistal))
+            {
+                continue;
+            }
+
+            float distance = explicitSource != null
+                ? (candidate.position - explicitSource.position).sqrMagnitude
+                : thumbProximal != null
+                    ? (candidate.position - thumbProximal.position).sqrMagnitude
+                    : (candidate.position - hand.position).sqrMagnitude;
+            if (distance >= bestDistance)
+            {
+                continue;
+            }
+
+            bestDistance = distance;
+            helper = candidate;
+        }
+
+        return helper != null;
+    }
+
+    private bool IsAmbiguousThumbExtraTransformCandidate(
+        Transform candidate,
+        Transform hand,
+        Transform thumbProximal,
+        Transform thumbIntermediate,
+        Transform thumbDistal)
+    {
+        if (candidate == null || candidate == hand || candidate == thumbProximal || candidate == thumbIntermediate || candidate == thumbDistal)
+        {
+            return false;
+        }
+
+        string normalizedName = NormalizeTransformName(candidate.name);
+        if (string.IsNullOrEmpty(normalizedName) ||
+            !normalizedName.Contains("thumb") ||
+            normalizedName.Contains("ghost") ||
+            IsActiveThumbBaseSourceName(normalizedName))
+        {
+            return false;
+        }
+
+        if (normalizedName.Contains("thumb1") ||
+            normalizedName.Contains("thumb2") ||
+            normalizedName.Contains("thumb3") ||
+            normalizedName.Contains("proximal") ||
+            normalizedName.Contains("intermediate") ||
+            normalizedName.Contains("distal") ||
+            normalizedName.Contains("thumbtip"))
+        {
+            return false;
+        }
+
+        if (IsAncestorWithinHand(candidate, thumbProximal, hand) ||
+            IsAncestorWithinHand(candidate, thumbIntermediate, hand) ||
+            IsAncestorWithinHand(candidate, thumbDistal, hand) ||
+            IsAncestorWithinHand(thumbProximal, candidate, hand) ||
+            IsAncestorWithinHand(thumbIntermediate, candidate, hand) ||
+            IsAncestorWithinHand(thumbDistal, candidate, hand))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsAncestorWithinHand(Transform ancestor, Transform descendant, Transform hand)
+    {
+        if (ancestor == null || descendant == null || hand == null || ancestor == descendant)
+        {
+            return false;
+        }
+
+        Transform current = descendant.parent;
+        while (current != null)
+        {
+            if (current == ancestor)
+            {
+                return true;
+            }
+
+            if (current == hand)
+            {
+                break;
+            }
+
+            current = current.parent;
+        }
+
+        return false;
+    }
+
+    private void UpdateRealtimeRiskSummary()
+    {
+        AnimationTimeMetrics animationTime = CaptureAnimationTimeMetrics();
+        int recorderFrame = _recorder != null ? _recorder.FrameNumber : -1;
+        YybDiagnosticMetrics diagnostics = captureYybDiagnosticOnlyMetrics
+            ? CaptureYybDiagnosticMetrics(CaptureArmMuscles())
+            : YybDiagnosticMetrics.Empty;
+        UpdateRiskSummary(diagnostics, true, "realtime", animationTime.ClipTime, recorderFrame);
+    }
+
+    private void ResetRiskSummary()
+    {
+        _maxThumbSpreadRisk = float.NaN;
+        _maxThumbProjectionRisk = float.NaN;
+        _maxThumbHelperSeparationRisk = float.NaN;
+        _maxThumbWebbingRisk = float.NaN;
+        _maxGenericThumbAnatomyRisk = float.NaN;
+        _maxYybDeformationRisk = float.NaN;
+        _maxGenericThumbAnatomyRiskClipTime = float.NaN;
+        _maxYybDeformationRiskClipTime = float.NaN;
+        _maxGenericThumbAnatomyRiskRecorderFrame = -1;
+        _maxYybDeformationRiskRecorderFrame = -1;
+        _maxGenericThumbAnatomyRiskReason = "";
+        _maxYybDeformationRiskReason = "";
+        _riskEvaluationFrameCount = 0;
+        _leftCoreThumbDiagnosticFrameCount = 0;
+        _rightCoreThumbDiagnosticFrameCount = 0;
+        _leftHelperRelationshipFrameCount = 0;
+        _rightHelperRelationshipFrameCount = 0;
+        _leftHelperCoverageRequired = false;
+        _rightHelperCoverageRequired = false;
+    }
+
+    private void UpdateRiskSummary(
+        YybDiagnosticMetrics diagnostics,
+        bool countEvaluationFrame,
+        string reason,
+        float animationClipTime,
+        int recorderFrame)
+    {
+        if (countEvaluationFrame)
+        {
+            _riskEvaluationFrameCount++;
+            if (diagnostics.Left.HasCoreThumbAnatomy)
+            {
+                _leftCoreThumbDiagnosticFrameCount++;
+            }
+
+            if (diagnostics.Right.HasCoreThumbAnatomy)
+            {
+                _rightCoreThumbDiagnosticFrameCount++;
+            }
+
+            if (diagnostics.Left.HelperRelationshipAvailable)
+            {
+                _leftHelperRelationshipFrameCount++;
+            }
+
+            if (diagnostics.Right.HelperRelationshipAvailable)
+            {
+                _rightHelperRelationshipFrameCount++;
+            }
+
+            _leftHelperCoverageRequired |= diagnostics.Left.HelperCoverageRequired;
+            _rightHelperCoverageRequired |= diagnostics.Right.HelperCoverageRequired;
+        }
+
+        float genericThumbRisk = MaxFinite(
+            diagnostics.Left.ThumbSpreadRisk,
+            diagnostics.Right.ThumbSpreadRisk,
+            diagnostics.Left.ThumbProjectionRisk,
+            diagnostics.Right.ThumbProjectionRisk,
+            diagnostics.Left.ThumbHelperSeparationRisk,
+            diagnostics.Right.ThumbHelperSeparationRisk,
+            diagnostics.Left.WebbingRisk,
+            diagnostics.Right.WebbingRisk);
+
+        _maxThumbSpreadRisk = MaxFinite(
+            _maxThumbSpreadRisk,
+            diagnostics.Left.ThumbSpreadRisk,
+            diagnostics.Right.ThumbSpreadRisk);
+        _maxThumbProjectionRisk = MaxFinite(
+            _maxThumbProjectionRisk,
+            diagnostics.Left.ThumbProjectionRisk,
+            diagnostics.Right.ThumbProjectionRisk);
+        _maxThumbHelperSeparationRisk = MaxFinite(
+            _maxThumbHelperSeparationRisk,
+            diagnostics.Left.ThumbHelperSeparationRisk,
+            diagnostics.Right.ThumbHelperSeparationRisk);
+        _maxThumbWebbingRisk = MaxFinite(
+            _maxThumbWebbingRisk,
+            diagnostics.Left.WebbingRisk,
+            diagnostics.Right.WebbingRisk);
+        if (IsFinite(genericThumbRisk) &&
+            (!IsFinite(_maxGenericThumbAnatomyRisk) || genericThumbRisk >= _maxGenericThumbAnatomyRisk))
+        {
+            _maxGenericThumbAnatomyRiskClipTime = animationClipTime;
+            _maxGenericThumbAnatomyRiskRecorderFrame = recorderFrame;
+            _maxGenericThumbAnatomyRiskReason = reason ?? "";
+        }
+
+        _maxGenericThumbAnatomyRisk = MaxFinite(_maxGenericThumbAnatomyRisk, genericThumbRisk);
+        if (IsFinite(diagnostics.MaxDeformationRisk) &&
+            (!IsFinite(_maxYybDeformationRisk) || diagnostics.MaxDeformationRisk >= _maxYybDeformationRisk))
+        {
+            _maxYybDeformationRiskClipTime = animationClipTime;
+            _maxYybDeformationRiskRecorderFrame = recorderFrame;
+            _maxYybDeformationRiskReason = reason ?? "";
+        }
+
+        _maxYybDeformationRisk = MaxFinite(_maxYybDeformationRisk, diagnostics.MaxDeformationRisk);
     }
 
     private bool IsYybDiagnosticTarget()
@@ -1875,6 +2615,7 @@ public class MotionComparisonProbe : MonoBehaviour
         string relativeScreenshotFolder = MakeProjectRelativePath(_screenshotFolder);
         string relativeScreenshotIndexPath = MakeProjectRelativePath(_screenshotIndexPath);
         string relativeFrameSessionIndexPath = MakeProjectRelativePath(_screenshotSessionIndexPath);
+        ThumbGuardDiagnostics thumbGuardDiagnostics = CaptureThumbGuardDiagnostics();
 
         StringBuilder builder = new StringBuilder();
         builder.AppendLine("# MotionComparisonProbe 세션");
@@ -1889,6 +2630,35 @@ public class MotionComparisonProbe : MonoBehaviour
         builder.AppendLine($"- sample clock: `{(sampleByAnimationClipTime ? "animationClipTime" : "elapsed")}`");
         builder.AppendLine($"- sample times: `{EscapeMarkdown(FormatSampleTimes())}`");
         builder.AppendLine($"- yyb diagnostic only metrics: `{captureYybDiagnosticOnlyMetrics}`");
+        builder.AppendLine();
+        builder.AppendLine("## 엄지 리스크 요약");
+        builder.AppendLine();
+        builder.AppendLine($"- risk diagnostics enabled: `{captureYybDiagnosticOnlyMetrics}`");
+        builder.AppendLine($"- risk evaluation frames: `{_riskEvaluationFrameCount}`");
+        builder.AppendLine($"- left thumb core coverage frames: `{_leftCoreThumbDiagnosticFrameCount}`");
+        builder.AppendLine($"- right thumb core coverage frames: `{_rightCoreThumbDiagnosticFrameCount}`");
+        builder.AppendLine($"- left thumb helper coverage required: `{_leftHelperCoverageRequired}`");
+        builder.AppendLine($"- right thumb helper coverage required: `{_rightHelperCoverageRequired}`");
+        builder.AppendLine($"- left thumb helper coverage frames: `{_leftHelperRelationshipFrameCount}`");
+        builder.AppendLine($"- right thumb helper coverage frames: `{_rightHelperRelationshipFrameCount}`");
+        builder.AppendLine($"- max generic thumb anatomy risk: `{FormatManifestFloat(_maxGenericThumbAnatomyRisk)}`");
+        builder.AppendLine($"- max generic thumb anatomy risk reason: `{EscapeMarkdown(_maxGenericThumbAnatomyRiskReason)}`");
+        builder.AppendLine($"- max generic thumb anatomy risk clip time: `{FormatManifestFloat(_maxGenericThumbAnatomyRiskClipTime)}`");
+        builder.AppendLine($"- max generic thumb anatomy risk recorder frame: `{_maxGenericThumbAnatomyRiskRecorderFrame}`");
+        builder.AppendLine($"- max thumb spread risk: `{FormatManifestFloat(_maxThumbSpreadRisk)}`");
+        builder.AppendLine($"- max thumb projection risk: `{FormatManifestFloat(_maxThumbProjectionRisk)}`");
+        builder.AppendLine($"- max thumb helper separation risk: `{FormatManifestFloat(_maxThumbHelperSeparationRisk)}`");
+        builder.AppendLine($"- max thumb webbing risk: `{FormatManifestFloat(_maxThumbWebbingRisk)}`");
+        builder.AppendLine($"- max yyb deformation risk: `{FormatManifestFloat(_maxYybDeformationRisk)}`");
+        builder.AppendLine($"- max yyb deformation risk reason: `{EscapeMarkdown(_maxYybDeformationRiskReason)}`");
+        builder.AppendLine($"- max yyb deformation risk clip time: `{FormatManifestFloat(_maxYybDeformationRiskClipTime)}`");
+        builder.AppendLine($"- max yyb deformation risk recorder frame: `{_maxYybDeformationRiskRecorderFrame}`");
+        builder.AppendLine($"- left thumb projection guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.LeftProjectionGuardWeight)}`");
+        builder.AppendLine($"- right thumb projection guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.RightProjectionGuardWeight)}`");
+        builder.AppendLine($"- left thumb index-spread guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.LeftIndexSpreadGuardWeight)}`");
+        builder.AppendLine($"- right thumb index-spread guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.RightIndexSpreadGuardWeight)}`");
+        builder.AppendLine($"- left thumb segment-straighten guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.LeftSegmentStraightenWeight)}`");
+        builder.AppendLine($"- right thumb segment-straighten guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.RightSegmentStraightenWeight)}`");
         builder.AppendLine();
         builder.AppendLine("## 산출물");
         builder.AppendLine();
@@ -2038,10 +2808,17 @@ public class MotionComparisonProbe : MonoBehaviour
         return value.Replace("`", "'").Replace("|", "\\|");
     }
 
+    private static string FormatManifestFloat(float value)
+    {
+        return IsFinite(value)
+            ? value.ToString("0.###", CultureInfo.InvariantCulture)
+            : "n/a";
+    }
+
     private static void WriteHeader(string path)
     {
         const string header = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,retargetRootDeltaLast,retargetRootDeltaMax,retargetRootDeltaSkippedCount,retargetPoseRootDeltaLast,retargetPoseRootDeltaMax,retargetPoseRootClampCount,retargetGroundingAdjustmentLast,retargetGroundingAdjustmentMax,retargetGroundingStepClampCount,retargetGroundingSmoothedCount,retargetGroundingVerticalStepLast,retargetGroundingVerticalStepMax,retargetGroundingInitialVerticalStep,retargetGroundingVerticalStepAfterInitialMax,retargetGroundingTargetY,retargetGroundingLowestFootBottomY,hipsY,lowestFootY,lowestFootBottomY,meshBoundsMinY,meshBoundsMaxY,footBottomGroundGap,meshBoundsGroundGap,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
-        const string yybDiagnosticHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk";
+        const string yybDiagnosticHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk,thumbGuardManualReferenceConfigured,thumbGuardManualReferenceActive,thumbGuardPoseShapingSuppressed,thumbGuardLeftPoseShapingSuppressed,thumbGuardRightPoseShapingSuppressed,thumbGuardProjectionWeight,thumbGuardLeftProjectionWeight,thumbGuardRightProjectionWeight,thumbGuardIndexSpreadWeight,thumbGuardLeftIndexSpreadWeight,thumbGuardRightIndexSpreadWeight,thumbGuardSegmentStraightenWeight,thumbGuardLeftSegmentStraightenWeight,thumbGuardRightSegmentStraightenWeight,thumbGuardLeftProjectionCorrectionApplyCount,thumbGuardRightProjectionCorrectionApplyCount,thumbGuardLeftProjectionCorrectionPreserveCount,thumbGuardRightProjectionCorrectionPreserveCount,thumbGuardLeftSegmentStraightenApplyCount,thumbGuardRightSegmentStraightenApplyCount,thumbGuardLeftSegmentStraightenPreserveCount,thumbGuardRightSegmentStraightenPreserveCount,thumbGuardLeftLocalRotationGuardClampCount,thumbGuardRightLocalRotationGuardClampCount,thumbGuardLeftLocalRotationGuardPreserveCount,thumbGuardRightLocalRotationGuardPreserveCount,thumbGuardLeftLocalRotationGuardCurrentRisk,thumbGuardRightLocalRotationGuardCurrentRisk,thumbGuardLeftLocalRotationGuardLimitedRisk,thumbGuardRightLocalRotationGuardLimitedRisk,thumbGuardLeftWorldRotationSuppressCompetingOverride,thumbGuardRightWorldRotationSuppressCompetingOverride,thumbGuardLeftWorldRotationKeepDetachedHelperOverride,thumbGuardRightWorldRotationKeepDetachedHelperOverride,thumbGuardLeftWorldRotationCurrentReferenceFrameDeviation,thumbGuardRightWorldRotationCurrentReferenceFrameDeviation,thumbGuardLeftWorldRotationCandidateReferenceFrameDeviation,thumbGuardRightWorldRotationCandidateReferenceFrameDeviation,thumbGuardLeftProximalWorldRotationPreserveReason,thumbGuardRightProximalWorldRotationPreserveReason,thumbGuardLeftIntermediateWorldRotationPreserveReason,thumbGuardRightIntermediateWorldRotationPreserveReason,thumbGuardLeftProximalWorldRotationCurrentReferenceAngle,thumbGuardRightProximalWorldRotationCurrentReferenceAngle,thumbGuardLeftIntermediateWorldRotationCurrentReferenceAngle,thumbGuardRightIntermediateWorldRotationCurrentReferenceAngle,thumbGuardLeftProximalWorldRotationCandidateReferenceAngle,thumbGuardRightProximalWorldRotationCandidateReferenceAngle,thumbGuardLeftIntermediateWorldRotationCandidateReferenceAngle,thumbGuardRightIntermediateWorldRotationCandidateReferenceAngle,thumbGuardLeftProximalWorldRotationPreserveCurrentRisk,thumbGuardRightProximalWorldRotationPreserveCurrentRisk,thumbGuardLeftIntermediateWorldRotationPreserveCurrentRisk,thumbGuardRightIntermediateWorldRotationPreserveCurrentRisk,thumbGuardLeftProximalWorldRotationPreserveLimitedRisk,thumbGuardRightProximalWorldRotationPreserveLimitedRisk,thumbGuardLeftIntermediateWorldRotationPreserveLimitedRisk,thumbGuardRightIntermediateWorldRotationPreserveLimitedRisk,thumbGuardHelperSyncEnabled,thumbGuardHelperPositionSyncEnabled,thumbGuardHelperSyncWeight,thumbGuardHelperMaxLocalAngle,thumbGuardPalmStabilizeEnabled,thumbGuardPalmStabilizeWeight,thumbGuardPalmStabilizeMaxLocalAngle,thumbGuardWebbingStabilizeEnabled,thumbGuardWebbingStabilizeWeight,thumbGuardWebbingMaxLocalAngle,thumbGuardWebbingMaxPositionOffset";
         File.WriteAllText(path, header + "," + yybDiagnosticHeader + Environment.NewLine, Encoding.UTF8);
     }
 
@@ -2172,6 +2949,152 @@ public class MotionComparisonProbe : MonoBehaviour
         };
     }
 
+    private struct ThumbGuardDiagnostics
+    {
+        public float ManualThumbReferenceConfigured;
+        public float ManualThumbReferenceActive;
+        public float PoseShapingSuppressed;
+        public float LeftPoseShapingSuppressed;
+        public float RightPoseShapingSuppressed;
+        public float ProjectionGuardWeight;
+        public float LeftProjectionGuardWeight;
+        public float RightProjectionGuardWeight;
+        public float IndexSpreadGuardWeight;
+        public float LeftIndexSpreadGuardWeight;
+        public float RightIndexSpreadGuardWeight;
+        public float SegmentStraightenWeight;
+        public float LeftSegmentStraightenWeight;
+        public float RightSegmentStraightenWeight;
+        public float LeftProjectionCorrectionApplyCount;
+        public float RightProjectionCorrectionApplyCount;
+        public float LeftProjectionCorrectionPreserveCount;
+        public float RightProjectionCorrectionPreserveCount;
+        public float LeftSegmentStraightenApplyCount;
+        public float RightSegmentStraightenApplyCount;
+        public float LeftSegmentStraightenPreserveCount;
+        public float RightSegmentStraightenPreserveCount;
+        public float LeftLocalRotationGuardClampCount;
+        public float RightLocalRotationGuardClampCount;
+        public float LeftLocalRotationGuardPreserveCount;
+        public float RightLocalRotationGuardPreserveCount;
+        public float LeftLocalRotationGuardCurrentRisk;
+        public float RightLocalRotationGuardCurrentRisk;
+        public float LeftLocalRotationGuardLimitedRisk;
+        public float RightLocalRotationGuardLimitedRisk;
+        public float LeftWorldRotationSuppressCompetingOverride;
+        public float RightWorldRotationSuppressCompetingOverride;
+        public float LeftWorldRotationKeepDetachedHelperOverride;
+        public float RightWorldRotationKeepDetachedHelperOverride;
+        public float LeftWorldRotationCurrentReferenceFrameDeviation;
+        public float RightWorldRotationCurrentReferenceFrameDeviation;
+        public float LeftWorldRotationCandidateReferenceFrameDeviation;
+        public float RightWorldRotationCandidateReferenceFrameDeviation;
+        public float LeftProximalWorldRotationPreserveReason;
+        public float RightProximalWorldRotationPreserveReason;
+        public float LeftIntermediateWorldRotationPreserveReason;
+        public float RightIntermediateWorldRotationPreserveReason;
+        public float LeftProximalWorldRotationCurrentReferenceAngle;
+        public float RightProximalWorldRotationCurrentReferenceAngle;
+        public float LeftIntermediateWorldRotationCurrentReferenceAngle;
+        public float RightIntermediateWorldRotationCurrentReferenceAngle;
+        public float LeftProximalWorldRotationCandidateReferenceAngle;
+        public float RightProximalWorldRotationCandidateReferenceAngle;
+        public float LeftIntermediateWorldRotationCandidateReferenceAngle;
+        public float RightIntermediateWorldRotationCandidateReferenceAngle;
+        public float LeftProximalWorldRotationPreserveCurrentRisk;
+        public float RightProximalWorldRotationPreserveCurrentRisk;
+        public float LeftIntermediateWorldRotationPreserveCurrentRisk;
+        public float RightIntermediateWorldRotationPreserveCurrentRisk;
+        public float LeftProximalWorldRotationPreserveLimitedRisk;
+        public float RightProximalWorldRotationPreserveLimitedRisk;
+        public float LeftIntermediateWorldRotationPreserveLimitedRisk;
+        public float RightIntermediateWorldRotationPreserveLimitedRisk;
+        public float HelperSyncEnabled;
+        public float HelperPositionSyncEnabled;
+        public float HelperSyncWeight;
+        public float HelperMaxLocalAngle;
+        public float PalmStabilizeEnabled;
+        public float PalmStabilizeWeight;
+        public float PalmStabilizeMaxLocalAngle;
+        public float WebbingStabilizeEnabled;
+        public float WebbingStabilizeWeight;
+        public float WebbingMaxLocalAngle;
+        public float WebbingMaxPositionOffset;
+
+        public static ThumbGuardDiagnostics Empty => new ThumbGuardDiagnostics
+        {
+            ManualThumbReferenceConfigured = float.NaN,
+            ManualThumbReferenceActive = float.NaN,
+            PoseShapingSuppressed = float.NaN,
+            LeftPoseShapingSuppressed = float.NaN,
+            RightPoseShapingSuppressed = float.NaN,
+            ProjectionGuardWeight = float.NaN,
+            LeftProjectionGuardWeight = float.NaN,
+            RightProjectionGuardWeight = float.NaN,
+            IndexSpreadGuardWeight = float.NaN,
+            LeftIndexSpreadGuardWeight = float.NaN,
+            RightIndexSpreadGuardWeight = float.NaN,
+            SegmentStraightenWeight = float.NaN,
+            LeftSegmentStraightenWeight = float.NaN,
+            RightSegmentStraightenWeight = float.NaN,
+            LeftProjectionCorrectionApplyCount = float.NaN,
+            RightProjectionCorrectionApplyCount = float.NaN,
+            LeftProjectionCorrectionPreserveCount = float.NaN,
+            RightProjectionCorrectionPreserveCount = float.NaN,
+            LeftSegmentStraightenApplyCount = float.NaN,
+            RightSegmentStraightenApplyCount = float.NaN,
+            LeftSegmentStraightenPreserveCount = float.NaN,
+            RightSegmentStraightenPreserveCount = float.NaN,
+            LeftLocalRotationGuardClampCount = float.NaN,
+            RightLocalRotationGuardClampCount = float.NaN,
+            LeftLocalRotationGuardPreserveCount = float.NaN,
+            RightLocalRotationGuardPreserveCount = float.NaN,
+            LeftLocalRotationGuardCurrentRisk = float.NaN,
+            RightLocalRotationGuardCurrentRisk = float.NaN,
+            LeftLocalRotationGuardLimitedRisk = float.NaN,
+            RightLocalRotationGuardLimitedRisk = float.NaN,
+            LeftWorldRotationSuppressCompetingOverride = float.NaN,
+            RightWorldRotationSuppressCompetingOverride = float.NaN,
+            LeftWorldRotationKeepDetachedHelperOverride = float.NaN,
+            RightWorldRotationKeepDetachedHelperOverride = float.NaN,
+            LeftWorldRotationCurrentReferenceFrameDeviation = float.NaN,
+            RightWorldRotationCurrentReferenceFrameDeviation = float.NaN,
+            LeftWorldRotationCandidateReferenceFrameDeviation = float.NaN,
+            RightWorldRotationCandidateReferenceFrameDeviation = float.NaN,
+            LeftProximalWorldRotationPreserveReason = float.NaN,
+            RightProximalWorldRotationPreserveReason = float.NaN,
+            LeftIntermediateWorldRotationPreserveReason = float.NaN,
+            RightIntermediateWorldRotationPreserveReason = float.NaN,
+            LeftProximalWorldRotationCurrentReferenceAngle = float.NaN,
+            RightProximalWorldRotationCurrentReferenceAngle = float.NaN,
+            LeftIntermediateWorldRotationCurrentReferenceAngle = float.NaN,
+            RightIntermediateWorldRotationCurrentReferenceAngle = float.NaN,
+            LeftProximalWorldRotationCandidateReferenceAngle = float.NaN,
+            RightProximalWorldRotationCandidateReferenceAngle = float.NaN,
+            LeftIntermediateWorldRotationCandidateReferenceAngle = float.NaN,
+            RightIntermediateWorldRotationCandidateReferenceAngle = float.NaN,
+            LeftProximalWorldRotationPreserveCurrentRisk = float.NaN,
+            RightProximalWorldRotationPreserveCurrentRisk = float.NaN,
+            LeftIntermediateWorldRotationPreserveCurrentRisk = float.NaN,
+            RightIntermediateWorldRotationPreserveCurrentRisk = float.NaN,
+            LeftProximalWorldRotationPreserveLimitedRisk = float.NaN,
+            RightProximalWorldRotationPreserveLimitedRisk = float.NaN,
+            LeftIntermediateWorldRotationPreserveLimitedRisk = float.NaN,
+            RightIntermediateWorldRotationPreserveLimitedRisk = float.NaN,
+            HelperSyncEnabled = float.NaN,
+            HelperPositionSyncEnabled = float.NaN,
+            HelperSyncWeight = float.NaN,
+            HelperMaxLocalAngle = float.NaN,
+            PalmStabilizeEnabled = float.NaN,
+            PalmStabilizeWeight = float.NaN,
+            PalmStabilizeMaxLocalAngle = float.NaN,
+            WebbingStabilizeEnabled = float.NaN,
+            WebbingStabilizeWeight = float.NaN,
+            WebbingMaxLocalAngle = float.NaN,
+            WebbingMaxPositionOffset = float.NaN
+        };
+    }
+
     private struct RootSpikeMetrics
     {
         public float LastRootDeltaMagnitude;
@@ -2214,6 +3137,10 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private struct YybSideDiagnosticMetrics
     {
+        public bool ThumbDirectionAvailable;
+        public bool PalmFrameAvailable;
+        public bool HelperCoverageRequired;
+        public bool HelperRelationshipAvailable;
         public float ThumbIndexSpreadAngle;
         public float ThumbPalmProjection;
         public float ThumbSpreadRisk;
@@ -2226,9 +3153,14 @@ public class MotionComparisonProbe : MonoBehaviour
         public float ArmTwistRisk;
         public float SleeveAnchorRisk;
         public float DeformationRisk;
+        public bool HasCoreThumbAnatomy => ThumbDirectionAvailable && PalmFrameAvailable;
 
         public static YybSideDiagnosticMetrics Empty => new YybSideDiagnosticMetrics
         {
+            ThumbDirectionAvailable = false,
+            PalmFrameAvailable = false,
+            HelperCoverageRequired = false,
+            HelperRelationshipAvailable = false,
             ThumbIndexSpreadAngle = float.NaN,
             ThumbPalmProjection = float.NaN,
             ThumbSpreadRisk = float.NaN,
@@ -2243,12 +3175,8 @@ public class MotionComparisonProbe : MonoBehaviour
             DeformationRisk = float.NaN
         };
 
-        public void ClearRiskScores()
+        public void ClearYybOnlyRiskScores()
         {
-            ThumbSpreadRisk = float.NaN;
-            ThumbProjectionRisk = float.NaN;
-            ThumbHelperSeparationRisk = float.NaN;
-            WebbingRisk = float.NaN;
             ArmTwistRisk = float.NaN;
             SleeveAnchorRisk = float.NaN;
             DeformationRisk = float.NaN;
@@ -2362,6 +3290,7 @@ public class MotionComparisonProbe : MonoBehaviour
         public float RightRingSpreadMuscle;
         public float RightLittle1StretchMuscle;
         public float RightLittleSpreadMuscle;
+        public ThumbGuardDiagnostics ThumbGuard;
         public YybDiagnosticMetrics YybDiagnostics;
 
         public string ToCsvLine()
@@ -2513,7 +3442,76 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(YybDiagnostics.Right.SleeveAnchorRisk),
                 F(YybDiagnostics.Left.DeformationRisk),
                 F(YybDiagnostics.Right.DeformationRisk),
-                F(YybDiagnostics.MaxDeformationRisk));
+                F(YybDiagnostics.MaxDeformationRisk),
+                F(ThumbGuard.ManualThumbReferenceConfigured),
+                F(ThumbGuard.ManualThumbReferenceActive),
+                F(ThumbGuard.PoseShapingSuppressed),
+                F(ThumbGuard.LeftPoseShapingSuppressed),
+                F(ThumbGuard.RightPoseShapingSuppressed),
+                F(ThumbGuard.ProjectionGuardWeight),
+                F(ThumbGuard.LeftProjectionGuardWeight),
+                F(ThumbGuard.RightProjectionGuardWeight),
+                F(ThumbGuard.IndexSpreadGuardWeight),
+                F(ThumbGuard.LeftIndexSpreadGuardWeight),
+                F(ThumbGuard.RightIndexSpreadGuardWeight),
+                F(ThumbGuard.SegmentStraightenWeight),
+                F(ThumbGuard.LeftSegmentStraightenWeight),
+                F(ThumbGuard.RightSegmentStraightenWeight),
+                F(ThumbGuard.LeftProjectionCorrectionApplyCount),
+                F(ThumbGuard.RightProjectionCorrectionApplyCount),
+                F(ThumbGuard.LeftProjectionCorrectionPreserveCount),
+                F(ThumbGuard.RightProjectionCorrectionPreserveCount),
+                F(ThumbGuard.LeftSegmentStraightenApplyCount),
+                F(ThumbGuard.RightSegmentStraightenApplyCount),
+                F(ThumbGuard.LeftSegmentStraightenPreserveCount),
+                F(ThumbGuard.RightSegmentStraightenPreserveCount),
+                F(ThumbGuard.LeftLocalRotationGuardClampCount),
+                F(ThumbGuard.RightLocalRotationGuardClampCount),
+                F(ThumbGuard.LeftLocalRotationGuardPreserveCount),
+                F(ThumbGuard.RightLocalRotationGuardPreserveCount),
+                F(ThumbGuard.LeftLocalRotationGuardCurrentRisk),
+                F(ThumbGuard.RightLocalRotationGuardCurrentRisk),
+                F(ThumbGuard.LeftLocalRotationGuardLimitedRisk),
+                F(ThumbGuard.RightLocalRotationGuardLimitedRisk),
+                F(ThumbGuard.LeftWorldRotationSuppressCompetingOverride),
+                F(ThumbGuard.RightWorldRotationSuppressCompetingOverride),
+                F(ThumbGuard.LeftWorldRotationKeepDetachedHelperOverride),
+                F(ThumbGuard.RightWorldRotationKeepDetachedHelperOverride),
+                F(ThumbGuard.LeftWorldRotationCurrentReferenceFrameDeviation),
+                F(ThumbGuard.RightWorldRotationCurrentReferenceFrameDeviation),
+                F(ThumbGuard.LeftWorldRotationCandidateReferenceFrameDeviation),
+                F(ThumbGuard.RightWorldRotationCandidateReferenceFrameDeviation),
+                F(ThumbGuard.LeftProximalWorldRotationPreserveReason),
+                F(ThumbGuard.RightProximalWorldRotationPreserveReason),
+                F(ThumbGuard.LeftIntermediateWorldRotationPreserveReason),
+                F(ThumbGuard.RightIntermediateWorldRotationPreserveReason),
+                F(ThumbGuard.LeftProximalWorldRotationCurrentReferenceAngle),
+                F(ThumbGuard.RightProximalWorldRotationCurrentReferenceAngle),
+                F(ThumbGuard.LeftIntermediateWorldRotationCurrentReferenceAngle),
+                F(ThumbGuard.RightIntermediateWorldRotationCurrentReferenceAngle),
+                F(ThumbGuard.LeftProximalWorldRotationCandidateReferenceAngle),
+                F(ThumbGuard.RightProximalWorldRotationCandidateReferenceAngle),
+                F(ThumbGuard.LeftIntermediateWorldRotationCandidateReferenceAngle),
+                F(ThumbGuard.RightIntermediateWorldRotationCandidateReferenceAngle),
+                F(ThumbGuard.LeftProximalWorldRotationPreserveCurrentRisk),
+                F(ThumbGuard.RightProximalWorldRotationPreserveCurrentRisk),
+                F(ThumbGuard.LeftIntermediateWorldRotationPreserveCurrentRisk),
+                F(ThumbGuard.RightIntermediateWorldRotationPreserveCurrentRisk),
+                F(ThumbGuard.LeftProximalWorldRotationPreserveLimitedRisk),
+                F(ThumbGuard.RightProximalWorldRotationPreserveLimitedRisk),
+                F(ThumbGuard.LeftIntermediateWorldRotationPreserveLimitedRisk),
+                F(ThumbGuard.RightIntermediateWorldRotationPreserveLimitedRisk),
+                F(ThumbGuard.HelperSyncEnabled),
+                F(ThumbGuard.HelperPositionSyncEnabled),
+                F(ThumbGuard.HelperSyncWeight),
+                F(ThumbGuard.HelperMaxLocalAngle),
+                F(ThumbGuard.PalmStabilizeEnabled),
+                F(ThumbGuard.PalmStabilizeWeight),
+                F(ThumbGuard.PalmStabilizeMaxLocalAngle),
+                F(ThumbGuard.WebbingStabilizeEnabled),
+                F(ThumbGuard.WebbingStabilizeWeight),
+                F(ThumbGuard.WebbingMaxLocalAngle),
+                F(ThumbGuard.WebbingMaxPositionOffset));
         }
 
         private static string F(float value)

@@ -8,6 +8,9 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class HumanoidSampleCode : MonoBehaviour
 {
@@ -45,6 +48,7 @@ public class HumanoidSampleCode : MonoBehaviour
     private string _outputFolderPath = "";
     private string _outputFilePath = "";
     private string _lastSavedFilePath = "";
+    private float[] _probeSampleTimesOverride;
     private Coroutine _manualRecordingCoroutine;
     private TransformJitterProbe _jitterProbe;
     private float _nextUiUpdateTime;
@@ -69,6 +73,7 @@ public class HumanoidSampleCode : MonoBehaviour
     private static TMP_FontAsset _cachedKoreanUiFont;
     private static Font _cachedKoreanLegacyUiFont;
     private bool _progressTextFontChecked;
+    private const string EditorAutoStartSuppressionKey = "Member_Han.YybVisualComparison.SuppressManualAutoStart";
 
     private void Start()
     {
@@ -82,10 +87,28 @@ public class HumanoidSampleCode : MonoBehaviour
 
         SetReady("FBX를 선택하세요");
 
-        if (AutoStartRecording && HasAnimatorClip())
+        if (ShouldAutoStartRecording() && HasAnimatorClip())
         {
             _manualRecordingCoroutine = StartCoroutine(StartManualRecordingSequence());
         }
+    }
+
+#if UNITY_EDITOR
+    public static void SetEditorAutoStartSuppressed(bool suppressed)
+    {
+        SessionState.SetBool(EditorAutoStartSuppressionKey, suppressed);
+    }
+#endif
+
+    private bool ShouldAutoStartRecording()
+    {
+#if UNITY_EDITOR
+        if (SessionState.GetBool(EditorAutoStartSuppressionKey, false))
+        {
+            return false;
+        }
+#endif
+        return AutoStartRecording;
     }
 
     public bool StartAutoRecording(
@@ -239,10 +262,14 @@ public class HumanoidSampleCode : MonoBehaviour
     public void SetRecordingDiagnostics(
         bool enableProbe,
         bool enableFingerCloseups,
-        bool useCaptureFramerateForRegression)
+        bool useCaptureFramerateForRegression,
+        float[] sampleTimesOverride = null)
     {
         enableMotionComparisonProbe = enableProbe;
         probeFingerCloseups = enableFingerCloseups;
+        _probeSampleTimesOverride = sampleTimesOverride != null && sampleTimesOverride.Length > 0
+            ? (float[])sampleTimesOverride.Clone()
+            : null;
 
         if (EnsureRecorder())
         {
@@ -285,6 +312,15 @@ public class HumanoidSampleCode : MonoBehaviour
 
         string probeLabel = string.IsNullOrWhiteSpace(label) ? ModelName : label;
         probe.SetFingerCloseups(probeFingerCloseups);
+        if (_probeSampleTimesOverride != null && _probeSampleTimesOverride.Length > 0)
+        {
+            probe.SetSampleTimes(_probeSampleTimesOverride);
+        }
+        else
+        {
+            probe.ResetSampleTimesToDefault();
+        }
+
         probe.StartSampling(probeLabel);
         StartJitterProbe(probeLabel);
     }
