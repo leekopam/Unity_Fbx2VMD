@@ -16,8 +16,10 @@ namespace Member_Han.Modules.FBXImporter
         private const string FBX_EXTENSION = "fbx";
         private const string BONE_MAPPING_FILE = "BoneMapping_Data.txt";
         private const float GHOST_CONTAINER_SCALE = 0.01f;
-        private const float THUMB_PROXIMAL_SAFE_MAX_LOCAL_ANGLE = 10f;
+        private const float THUMB_PROXIMAL_SAFE_MAX_LOCAL_ANGLE = 30f;
         private const float DEFAULT_THUMB_STRETCH_OFFSET = -0.1f;
+        private const float LEGACY_THUMB_PROJECTION_MIN_PALM_NORMAL = 0.36f;
+        private const float DEFAULT_THUMB_PROJECTION_MIN_PALM_NORMAL = 0.358f;
 #if UNITY_EDITOR
         private const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
 #endif
@@ -87,8 +89,11 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Sub_Manual/testPrefab Animator의 HumanPose bodyRotation을 retarget pose 기준으로 사용해 팔꿈치 bend plane 기준축 차이를 줄입니다.")]
         public bool useManualAnimatorBodyRotationReference = true;
 
-        [Tooltip("수동 기준 Animator의 Hips localPosition을 target Hips에 선택적으로 적용해 Main_Auto의 몸통 경로 편차를 A/B 검증합니다.")]
-        public bool useManualAnimatorHipsLocalPositionReference = true;
+        [Tooltip("preserveRetargetBodyPosition=true 일 때 body Y를 수동 기준 Animator bodyPosition.y로 대체합니다. ghost Legacy-animation bodyPos.y 스파이크 없이 상체 높이를 애니메이션에 맞게 따라가도록 합니다.")]
+        public bool useManualAnimatorBodyPositionYReference = true;
+
+        [Tooltip("수동 기준 Animator의 Hips localPosition을 target Hips에 선택적으로 적용해 Main_Auto의 몸통 경로 편차를 A/B 검증합니다. 활성 시 testprefab Hips delta가 YYB에 전달되어 오히려 발 호 궤적이 심해지므로 기본 비활성화합니다.")]
+        public bool useManualAnimatorHipsLocalPositionReference = false;
 
         [Tooltip("수동 기준 Hips localPosition 보정 강도입니다.")]
         [Range(0f, 1f)] public float manualAnimatorHipsLocalPositionWeight = 1f;
@@ -316,8 +321,8 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Manual Animator finger reference를 사용할 때는 최종 엄지 localRotation 가드를 끄고 수동 기준 손 모양을 우선합니다.")]
         public bool disableThumbLocalRotationGuardWithManualFingerReference = true;
 
-        [Tooltip("엄지 첫 번째 관절이 기준 자세에서 벗어날 수 있는 최대 각도입니다. 낮을수록 골절처럼 보이는 엄지 base 꺾임을 강하게 막습니다.")]
-        [Range(0f, 90f)] public float ThumbProximalMaxLocalAngle = 10f;
+        [Tooltip("엄지 첫 번째 관절이 기준 자세에서 벗어날 수 있는 최대 각도입니다. 너무 낮으면 정상적인 엄지 벌림까지 잘려 reference보다 엄지가 덜 펼쳐질 수 있습니다.")]
+        [Range(0f, 90f)] public float ThumbProximalMaxLocalAngle = 28f;
 
         [Tooltip("엄지 두 번째 관절이 기준 자세에서 벗어날 수 있는 최대 각도입니다.")]
         [Range(0f, 120f)] public float ThumbIntermediateMaxLocalAngle = 55f;
@@ -339,6 +344,21 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Thumb0 보조본이 실제 엄지 구동본을 따라갈 수 있는 최대 각도입니다. 낮출수록 손꿈치 스킨을 덜 움직입니다.")]
         [Range(0f, 45f)] public float detachedThumbBaseHelperMaxLocalAngle = 28f;
+
+        [Tooltip("Thumb0 보조본 위치가 기본 손바닥 앵커에서 벗어날 수 있는 최대 거리입니다. 높이면 실제 엄지 구동본 위치를 더 따르고, 낮추면 손바닥 실루엣을 더 보존합니다.")]
+        [Range(0f, 0.02f)] public float detachedThumbBaseHelperMaxPositionOffset = 0.008f;
+
+        [Tooltip("YYB처럼 joint_*Thumb0 보조본과 !joint_*Thumb0M 실제 엄지 구동본의 로컬 기준축이 어긋난 모델에서, 왼손 Thumb0 보조본이 source delta를 자기 축에 맞게 다시 해석하도록 추가 축 보정을 적용합니다.")]
+        public Vector3 LeftDetachedThumbBaseHelperDeltaAxisOffset = Vector3.zero;
+
+        [Tooltip("YYB처럼 joint_*Thumb0 보조본과 !joint_*Thumb0M 실제 엄지 구동본의 로컬 기준축이 어긋난 모델에서, 오른손 Thumb0 보조본이 source delta를 자기 축에 맞게 다시 해석하도록 추가 축 보정을 적용합니다.")]
+        public Vector3 RightDetachedThumbBaseHelperDeltaAxisOffset = Vector3.zero;
+
+        [Tooltip("YYB처럼 Thumb0 보조본 기본 자세가 넓게 벌어진 모델에서, 왼손 Thumb0 helper 목표 회전에 정적 보정치를 직접 더해 webbing 벌어짐/각짐을 줄입니다.")]
+        public Vector3 LeftDetachedThumbBaseHelperTargetRotationOffset = Vector3.zero;
+
+        [Tooltip("YYB처럼 Thumb0 보조본 기본 자세가 넓게 벌어진 모델에서, 오른손 Thumb0 helper 목표 회전에 정적 보정치를 직접 더해 webbing 벌어짐/각짐을 줄입니다.")]
+        public Vector3 RightDetachedThumbBaseHelperTargetRotationOffset = Vector3.zero;
 
         [Tooltip("YYB 손꿈치/엄지 뿌리 스킨용 Thumb0 보조본을 기본 손바닥 자세 쪽으로 안정화합니다. 엄지 움직임보다 손바닥 실루엣 보존을 우선합니다.")]
         public bool stabilizeDetachedThumbBasePalm = false;
@@ -365,16 +385,16 @@ namespace Member_Han.Modules.FBXImporter
         public bool enableThumbVisualLengthGuard = true;
 
         [Tooltip("엄지 첫 마디가 손바닥 normal 방향으로 최소한 앞으로 나와야 하는 성분입니다. 너무 낮으면 엄지가 손바닥 뒤로 누운 것처럼 보입니다.")]
-        [Range(0f, 1f)] public float ThumbProjectionMinPalmNormal = 0.36f;
+        [Range(0f, 1f)] public float ThumbProjectionMinPalmNormal = DEFAULT_THUMB_PROJECTION_MIN_PALM_NORMAL;
 
         [Tooltip("엄지 첫 마디가 손바닥 normal 방향으로 나갈 수 있는 최대 성분입니다. 너무 높으면 카메라 정면에서 엄지가 짧게 보입니다.")]
-        [Range(0f, 1f)] public float ThumbProjectionMaxPalmNormal = 0.5f;
+        [Range(0f, 1f)] public float ThumbProjectionMaxPalmNormal = 0.58f;
 
         [Tooltip("엄지 첫 마디 투영 보정 강도입니다.")]
         [Range(0f, 1f)] public float ThumbProjectionGuardWeight = 1f;
 
         [Tooltip("엄지 첫 마디와 검지 시작 방향 사이의 최대 벌어짐 각도입니다. 높으면 엄지가 손바닥 바깥으로 과하게 벌어질 수 있습니다.")]
-        [Range(0f, 90f)] public float ThumbIndexMaxSpreadAngle = 42f;
+        [Range(0f, 90f)] public float ThumbIndexMaxSpreadAngle = 70f;
 
         [Tooltip("엄지-검지 벌어짐 제한 강도입니다.")]
         [Range(0f, 1f)] public float ThumbIndexSpreadGuardWeight = 1f;
@@ -400,6 +420,15 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Recording Diagnostics를 켰을 때 손 close-up 캡처도 함께 남깁니다.")]
         public bool enableDiagnosticFingerCloseups = true;
+
+        [Tooltip("Editor smoke에서 MotionComparisonProbe 엄지 리스크가 임계치를 넘으면 VMD 저장 성공도 smoke 실패로 승격합니다.")]
+        public bool failEditorSmokeOnThumbRisk = true;
+
+        [Tooltip("Editor smoke에서 일반 FBX용 엄지 해부학 리스크의 허용 최대값입니다. 이 값을 넘으면 smoke를 실패로 봅니다.")]
+        [Range(0f, 1f)] public float editorSmokeMaxGenericThumbAnatomyRisk = 0.4f;
+
+        [Tooltip("Editor smoke에서 YYB 전용 변형 리스크의 허용 최대값입니다. YYB 타깃일 때만 사용합니다.")]
+        [Range(0f, 1f)] public float editorSmokeMaxYybDeformationRisk = 0.35f;
 
         [Header("Target Idle Pose Guard")]
         [Tooltip("Play 진입과 FBX 선택 전 대기 상태에서 타깃 캐릭터가 카메라를 바라보도록 고정합니다.")]
@@ -505,7 +534,7 @@ namespace Member_Han.Modules.FBXImporter
 
         public bool EnableThumbSmartCurve = true;
         [Range(0.0f, 1.0f)] public float ThumbSmartCurveStrength = 0.5f;
-        
+
         [Space(10)]
 
         #endregion
@@ -526,6 +555,7 @@ namespace Member_Han.Modules.FBXImporter
         private bool _editorSmokeRecordingOverrideActive;
         private int _editorSmokeTargetFrameCount;
         private float _editorSmokeDurationSeconds;
+        private float[] _editorSmokeSampleTimesOverride;
         private bool _editorSmokeRestoreSettingsActive;
         private bool _editorSmokePreviousEnableRecordingDiagnostics;
         private bool _editorSmokePreviousEnableDiagnosticFingerCloseups;
@@ -533,6 +563,7 @@ namespace Member_Han.Modules.FBXImporter
         private float _editorSmokePreviousStartDelay;
         private EditorDiagnosticSmokeSegment _editorSmokeSegment;
         private string _editorSmokeCurrentFbxFileName;
+        private Coroutine _editorDiagnosticBatchAdvanceCoroutine;
 #endif
         #endregion
 
@@ -558,7 +589,46 @@ namespace Member_Han.Modules.FBXImporter
             get
             {
                 return enableThumbLocalRotationGuard &&
-                    !(useManualAnimatorFingerPoseReference && disableThumbLocalRotationGuardWithManualFingerReference);
+                    (!ShouldSuppressFinalThumbGuardsWithManualReference ||
+                     !disableThumbLocalRotationGuardWithManualFingerReference);
+            }
+        }
+
+        public bool PreserveManualThumbPoseWithReference
+        {
+            get
+            {
+                return useManualAnimatorFingerPoseReference &&
+                    useManualAnimatorThumbLocalRotationReference &&
+                    preserveManualFingerReferenceThumbMuscles &&
+                    ShouldSuppressFinalThumbGuardsWithManualReference;
+            }
+        }
+
+        private bool ShouldSuppressFinalThumbGuardsWithManualReference
+        {
+            get
+            {
+                if (!useManualAnimatorFingerPoseReference)
+                {
+                    return false;
+                }
+
+                bool helperSyncActive = syncDetachedThumbBaseHelpers &&
+                                        detachedThumbBaseHelperSyncWeight > 0f;
+                bool palmStabilizeActive = stabilizeDetachedThumbBasePalm &&
+                                           detachedThumbBasePalmStabilizeWeight > 0f;
+                bool webbingStabilizeActive = stabilizeThumbWebbingCrease &&
+                                              thumbWebbingCreaseStabilizeWeight > 0f;
+                bool visualLengthGuardActive = enableThumbVisualLengthGuard &&
+                                               (ThumbProjectionGuardWeight > 0f ||
+                                                ThumbIndexSpreadGuardWeight > 0f ||
+                                                ThumbSegmentStraightenWeight > 0f);
+
+                return !(helperSyncActive ||
+                         palmStabilizeActive ||
+                         webbingStabilizeActive ||
+                         visualLengthGuardActive);
             }
         }
 
@@ -575,6 +645,19 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
+        public float EffectiveThumbProjectionMinPalmNormal
+        {
+            get
+            {
+                if (Mathf.Approximately(ThumbProjectionMinPalmNormal, LEGACY_THUMB_PROJECTION_MIN_PALM_NORMAL))
+                {
+                    return DEFAULT_THUMB_PROJECTION_MIN_PALM_NORMAL;
+                }
+
+                return Mathf.Clamp01(ThumbProjectionMinPalmNormal);
+            }
+        }
+
 #if UNITY_EDITOR
         public bool StartEditorDiagnosticSmoke(
             string fbxFileName,
@@ -584,7 +667,8 @@ namespace Member_Han.Modules.FBXImporter
             bool enableFingerCloseups,
             bool useDeterministicCaptureFramerate,
             float diagnosticStartDelay,
-            EditorDiagnosticSmokeSegment segment = EditorDiagnosticSmokeSegment.Head)
+            EditorDiagnosticSmokeSegment segment = EditorDiagnosticSmokeSegment.Head,
+            float[] sampleTimesOverride = null)
         {
             if (_isProcessing)
             {
@@ -619,6 +703,7 @@ namespace Member_Han.Modules.FBXImporter
             _editorSmokeRecordingOverrideActive = true;
             _editorSmokeDurationSeconds = safeDuration;
             _editorSmokeTargetFrameCount = safeTargetFrameCount;
+            _editorSmokeSampleTimesOverride = CloneEditorSmokeSampleTimes(sampleTimesOverride);
             _editorSmokeSegment = segment;
             _editorSmokeCurrentFbxFileName = Path.GetFileName(sourcePath);
 
@@ -626,6 +711,7 @@ namespace Member_Han.Modules.FBXImporter
                 $"[FileManager] Editor smoke 진단 시작: FBX={Path.GetFileName(sourcePath)}, " +
                 $"duration={safeDuration:F2}s, targetFrameCount={safeTargetFrameCount}, " +
                 $"segment={GetEditorSmokeSegmentLabel(segment)}, diagnostics={enableDiagnostics}");
+            LogEditorSmokeThumbState("smoke-start-before-process");
 
             ProcessFBXAsync(sourcePath);
             return true;
@@ -697,6 +783,13 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
+        private static float[] CloneEditorSmokeSampleTimes(float[] sampleTimesOverride)
+        {
+            return sampleTimesOverride != null && sampleTimesOverride.Length > 0
+                ? (float[])sampleTimesOverride.Clone()
+                : null;
+        }
+
         private void CaptureEditorSmokeSettings()
         {
             _editorSmokePreviousEnableRecordingDiagnostics = enableRecordingDiagnostics;
@@ -719,9 +812,42 @@ namespace Member_Han.Modules.FBXImporter
             _editorSmokeRecordingOverrideActive = false;
             _editorSmokeTargetFrameCount = 0;
             _editorSmokeDurationSeconds = 0f;
+            _editorSmokeSampleTimesOverride = null;
             _editorSmokeRestoreSettingsActive = false;
             _editorSmokeSegment = EditorDiagnosticSmokeSegment.Head;
             _editorSmokeCurrentFbxFileName = null;
+        }
+
+        public void ScheduleEditorDiagnosticBatchAdvance(Action continuation)
+        {
+            if (_editorDiagnosticBatchAdvanceCoroutine != null)
+            {
+                StopCoroutine(_editorDiagnosticBatchAdvanceCoroutine);
+                _editorDiagnosticBatchAdvanceCoroutine = null;
+            }
+
+            if (!Application.isPlaying || !isActiveAndEnabled)
+            {
+                ResetTargetStateAfterSession(recaptureGuardBaselines: false);
+                continuation?.Invoke();
+                return;
+            }
+
+            _editorDiagnosticBatchAdvanceCoroutine = StartCoroutine(EditorDiagnosticBatchAdvanceRoutine(continuation));
+        }
+
+        private IEnumerator EditorDiagnosticBatchAdvanceRoutine(Action continuation)
+        {
+            Debug.Log("[FileManager] Editor smoke batch advance reset: target idle 상태를 다음 FBX 시작 전 다시 고정합니다.");
+            LogEditorSmokeThumbState("batch-advance-before-reset");
+            ResetTargetStateAfterSession(recaptureGuardBaselines: false);
+            yield return null;
+            ResetTargetStateAfterSession(recaptureGuardBaselines: false);
+            yield return null;
+            ResetTargetStateAfterSession(recaptureGuardBaselines: false);
+            LogEditorSmokeThumbState("batch-advance-after-reset");
+            _editorDiagnosticBatchAdvanceCoroutine = null;
+            continuation?.Invoke();
         }
 
         private void NotifyEditorSmokeFinished(VmdSaveResult result)
@@ -768,7 +894,7 @@ namespace Member_Han.Modules.FBXImporter
         #region Unity 생명주기
         private void Awake()
         {
-            InitializeServices();
+            EnsureServicesInitialized();
             InitializeTargetIdlePoseGuard();
         }
 
@@ -795,6 +921,14 @@ namespace Member_Han.Modules.FBXImporter
 
             // 런타임 FBX 임포터 초기화 (Assimp 사용)
             _fbxImporter = new RuntimeFBXImporter();
+        }
+
+        private void EnsureServicesInitialized()
+        {
+            if (_fileBrowserService == null || _fbxImporter == null)
+            {
+                InitializeServices();
+            }
         }
         #endregion
 
@@ -1152,6 +1286,10 @@ namespace Member_Han.Modules.FBXImporter
 
                     // FileManager 자신(this)을 넘겨서 설정을 공유함
                     retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
+                    if (anim != null)
+                    {
+                        ConfigureTargetThumbDeformationGuard(targetObject, anim, retargeter);
+                    }
 
                     // 지연 녹화 시퀀스 시작
                     var ghostAnim = importedModel.GetComponent<Animation>();
@@ -1189,6 +1327,7 @@ namespace Member_Han.Modules.FBXImporter
         /// <param name="retargeter">Pose Space Retargeter 컴포넌트</param>
         private async Task<bool> ProcessFBXSessionAsync(string sourcePath)
         {
+            EnsureServicesInitialized();
             ApplyTargetIdlePoseGuard();
             _isProcessing = true;
             ClearActiveRecordingSubscription();
@@ -1274,6 +1413,7 @@ namespace Member_Han.Modules.FBXImporter
                 PoseSpaceRetargeter retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
                 _activeRetargeter = retargeter;
                 retargeter.Initialize(importedModel, targetObject, boneMapping, targetClip, this);
+                ConfigureTargetThumbDeformationGuard(targetObject, targetAnimator, retargeter);
 #if UNITY_EDITOR
                 ConfigureEditorHumanoidMuscleReference(retargeter, targetPath, sourcePath);
 #endif
@@ -1329,7 +1469,8 @@ namespace Member_Han.Modules.FBXImporter
             _activeRecorderController.SetRecordingDiagnostics(
                 enableRecordingDiagnostics,
                 enableRecordingDiagnostics && enableDiagnosticFingerCloseups,
-                enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics);
+                enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics,
+                _editorSmokeSampleTimesOverride);
 
             float recordingStartTime = 0f;
             float recordingLength = clip.length;
@@ -1398,7 +1539,7 @@ namespace Member_Han.Modules.FBXImporter
                 state.speed = 1f;
                 ghostAnim.Sample();
                 retargeter?.ApplyLateVisualGroundingCorrection();
-                yield return new WaitForEndOfFrame();
+                yield return YieldRetargetPrewarmFrame();
                 yield break;
             }
 
@@ -1410,7 +1551,7 @@ namespace Member_Han.Modules.FBXImporter
             {
                 state.time = sampleTime;
                 ghostAnim.Sample();
-                yield return new WaitForEndOfFrame();
+                yield return YieldRetargetPrewarmFrame();
             }
 
             state.time = sampleTime;
@@ -1424,28 +1565,154 @@ namespace Member_Han.Modules.FBXImporter
             Debug.Log($"[FileManager] Retarget prewarm 완료: {prewarmFrames} frame(s) at clip time {sampleTime:F2}.");
         }
 
+        private static object YieldRetargetPrewarmFrame()
+        {
+#if UNITY_EDITOR
+            if (Application.isBatchMode)
+            {
+                // WaitForEndOfFrame can stall in batchmode because no render loop is advancing.
+                return null;
+            }
+#endif
+            return new WaitForEndOfFrame();
+        }
+
         private void OnRecordingFinished(VmdSaveResult result)
         {
+            MotionComparisonProbe probe = _activeRecorderController != null
+                ? _activeRecorderController.GetComponent<MotionComparisonProbe>()
+                : null;
+            VmdSaveResult effectiveResult = ApplyEditorSmokeThumbRiskFailure(result, probe);
             ClearActiveRecordingSubscription();
             LogRetargetPlaybackStabilitySummary();
 
-            if (result.Success)
+            if (effectiveResult.Success)
             {
-                SetSessionState(FBXSessionState.Success, $"VMD 저장 완료: {Path.GetFileName(result.FilePath)}", 1f);
+                SetSessionState(FBXSessionState.Success, $"VMD 저장 완료: {Path.GetFileName(effectiveResult.FilePath)}", 1f);
             }
             else
             {
-                string errorMessage = string.IsNullOrWhiteSpace(result.ErrorMessage) ? "VMD 저장 실패" : result.ErrorMessage;
+                string errorMessage = string.IsNullOrWhiteSpace(effectiveResult.ErrorMessage) ? "VMD 저장 실패" : effectiveResult.ErrorMessage;
                 SetSessionState(FBXSessionState.Failed, errorMessage, 0f);
             }
 
             CleanupActiveGhost();
-            RestoreMmdPostPoseCorrectionForRetarget();
+            ResetTargetStateAfterSession(recaptureGuardBaselines: false);
 #if UNITY_EDITOR
-            NotifyEditorSmokeFinished(result);
+            NotifyEditorSmokeFinished(effectiveResult);
             ClearEditorSmokeOverride();
 #endif
             _isProcessing = false;
+        }
+
+        private VmdSaveResult ApplyEditorSmokeThumbRiskFailure(VmdSaveResult result, MotionComparisonProbe probe)
+        {
+#if UNITY_EDITOR
+            if (!_editorSmokeRecordingOverrideActive || !result.Success || !failEditorSmokeOnThumbRisk)
+            {
+                return result;
+            }
+
+            if (probe == null)
+            {
+                return BuildEditorSmokeFailureResult(
+                    result,
+                    $"Editor smoke 실패: {GetEditorSmokeFbxName()} - MotionComparisonProbe가 없어 엄지 리스크 검증을 수행하지 못했습니다.");
+            }
+
+            if (!probe.RiskDiagnosticsEnabled ||
+                probe.RiskEvaluationFrameCount <= 0 ||
+                !probe.HasFullThumbAnatomyCoverage ||
+                !probe.HasResolvedThumbHelperCoverage)
+            {
+                return BuildEditorSmokeFailureResult(
+                    result,
+                    BuildEditorSmokeThumbDiagnosticUnavailableMessage(probe));
+            }
+
+            float maxGenericRisk = probe.MaxGenericThumbAnatomyRisk;
+            float maxYybRisk = probe.MaxYybDeformationRisk;
+            bool genericExceeded = IsFiniteDiagnosticRisk(maxGenericRisk) &&
+                                   maxGenericRisk > editorSmokeMaxGenericThumbAnatomyRisk;
+            bool yybExceeded = IsFiniteDiagnosticRisk(maxYybRisk) &&
+                               maxYybRisk > editorSmokeMaxYybDeformationRisk;
+            if (!genericExceeded && !yybExceeded)
+            {
+                return result;
+            }
+
+            string errorMessage = BuildEditorSmokeThumbRiskFailureMessage(probe, genericExceeded, yybExceeded);
+            return BuildEditorSmokeFailureResult(result, errorMessage);
+#else
+            return result;
+#endif
+        }
+
+        private VmdSaveResult BuildEditorSmokeFailureResult(VmdSaveResult result, string errorMessage)
+        {
+            Debug.LogWarning($"[FileManager] {errorMessage}");
+            return new VmdSaveResult
+            {
+                Success = false,
+                FilePath = result.FilePath,
+                ErrorMessage = errorMessage,
+                FrameCount = result.FrameCount,
+                FileSizeBytes = result.FileSizeBytes
+            };
+        }
+
+        private string BuildEditorSmokeThumbDiagnosticUnavailableMessage(MotionComparisonProbe probe)
+        {
+            string fbxName = GetEditorSmokeFbxName();
+            return
+                $"Editor smoke 실패: {fbxName} - 엄지 리스크 진단 범위가 부족합니다 " +
+                $"(enabled={probe.RiskDiagnosticsEnabled}, frames={probe.RiskEvaluationFrameCount}, " +
+                $"leftCore={probe.LeftThumbCoreAnatomyObserved}, rightCore={probe.RightThumbCoreAnatomyObserved}, " +
+                $"leftHelperRequired={probe.LeftThumbHelperCoverageRequired}, rightHelperRequired={probe.RightThumbHelperCoverageRequired}, " +
+                $"leftHelperOk={probe.LeftThumbHelperCoverageSatisfied}, rightHelperOk={probe.RightThumbHelperCoverageSatisfied})";
+        }
+
+        private string BuildEditorSmokeThumbRiskFailureMessage(
+            MotionComparisonProbe probe,
+            bool genericExceeded,
+            bool yybExceeded)
+        {
+            List<string> reasons = new List<string>();
+            if (genericExceeded)
+            {
+                reasons.Add(
+                    $"thumb anatomy risk {FormatDiagnosticRisk(probe.MaxGenericThumbAnatomyRisk)} > {FormatDiagnosticRisk(editorSmokeMaxGenericThumbAnatomyRisk)} " +
+                    $"(spread={FormatDiagnosticRisk(probe.MaxThumbSpreadRisk)}, projection={FormatDiagnosticRisk(probe.MaxThumbProjectionRisk)}, " +
+                    $"helper={FormatDiagnosticRisk(probe.MaxThumbHelperSeparationRisk)}, webbing={FormatDiagnosticRisk(probe.MaxThumbWebbingRisk)})");
+            }
+
+            if (yybExceeded)
+            {
+                reasons.Add(
+                    $"YYB deformation risk {FormatDiagnosticRisk(probe.MaxYybDeformationRisk)} > {FormatDiagnosticRisk(editorSmokeMaxYybDeformationRisk)}");
+            }
+
+            string fbxName = GetEditorSmokeFbxName();
+            return $"Editor smoke 실패: {fbxName} - {string.Join("; ", reasons)}";
+        }
+
+        private string GetEditorSmokeFbxName()
+        {
+            return string.IsNullOrWhiteSpace(_editorSmokeCurrentFbxFileName)
+                ? "unknown.fbx"
+                : _editorSmokeCurrentFbxFileName;
+        }
+
+        private static bool IsFiniteDiagnosticRisk(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static string FormatDiagnosticRisk(float value)
+        {
+            return IsFiniteDiagnosticRisk(value)
+                ? value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
+                : "n/a";
         }
 
         private string CopyToControlledImportFolder(string sourcePath)
@@ -1482,6 +1749,29 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return safeName;
+        }
+
+        private void ResetTargetStateAfterSession(bool recaptureGuardBaselines)
+        {
+            RestoreMmdPostPoseCorrectionForRetarget();
+            ApplyTargetIdlePoseGuard();
+
+            if (!recaptureGuardBaselines || targetCharacter == null)
+            {
+                return;
+            }
+
+            HumanoidArmDeformationGuard armGuard = targetCharacter.GetComponent<HumanoidArmDeformationGuard>();
+            if (armGuard != null && armGuard.enabled)
+            {
+                armGuard.RecaptureBaseline();
+            }
+
+            HumanoidThumbDeformationGuard thumbGuard = targetCharacter.GetComponent<HumanoidThumbDeformationGuard>();
+            if (thumbGuard != null && thumbGuard.enabled)
+            {
+                thumbGuard.RecaptureBaseline();
+            }
         }
 
         private GameObject CreateGhostContainer(GameObject importedModel)
@@ -1612,7 +1902,15 @@ namespace Member_Han.Modules.FBXImporter
             HumanoidArmSleeveAnchorGuard sleeveAnchorGuard = ConfigureTargetArmSleeveAnchorCorrection(targetObject, targetAnimator);
             HumanoidArmVisualTwistGuard visualTwistGuard = ConfigureTargetArmVisualTwistCorrection(targetObject, targetAnimator);
             ConfigureTargetArmDeformationGuard(targetObject, BuildLimbChildRotationExclusions(twistRiggingGuard, sleeveAnchorGuard, visualTwistGuard));
-            ConfigureTargetThumbDeformationGuard(targetObject, targetAnimator);
+
+            // Batch smoke can leave detached thumb helpers visually drifted until the next frame.
+            // Restore the captured target idle pose immediately before the next session captures
+            // retargeter/thumb-guard baselines so every FBX starts from the same common pose.
+            ApplyTargetIdlePoseGuard();
+            if (_editorSmokeRecordingOverrideActive)
+            {
+                LogEditorSmokeThumbState("prepare-target-after-idle-restore");
+            }
 
             IKControl ikControl = targetObject.GetComponent<IKControl>();
             if (ikControl != null)
@@ -1711,9 +2009,20 @@ namespace Member_Han.Modules.FBXImporter
             guard.RecaptureBaseline();
         }
 
-        private void ConfigureTargetThumbDeformationGuard(GameObject targetObject, Animator targetAnimator)
+        private void ConfigureTargetThumbDeformationGuard(
+            GameObject targetObject,
+            Animator targetAnimator,
+            PoseSpaceRetargeter linkedRetargeter)
         {
             if (targetObject == null)
+            {
+                return;
+            }
+
+            // The thumb guard must be bound after the current session retargeter exists.
+            // During batched smokes the previous ghost can survive until end-of-frame, so
+            // resolving by FindObjectsOfType here can accidentally reuse the last session.
+            if (targetAnimator == null)
             {
                 return;
             }
@@ -1723,6 +2032,7 @@ namespace Member_Han.Modules.FBXImporter
             bool syncThumbBaseHelpers = syncDetachedThumbBaseHelpers && detachedThumbBaseHelperSyncWeight > 0f;
             bool stabilizeThumbBasePalm = stabilizeDetachedThumbBasePalm && detachedThumbBasePalmStabilizeWeight > 0f;
             bool stabilizeThumbWebbing = stabilizeThumbWebbingCrease && thumbWebbingCreaseStabilizeWeight > 0f;
+            bool preserveManualThumbPose = PreserveManualThumbPoseWithReference;
             if (!clampHumanoidThumbRotations && !syncThumbBaseHelpers && !stabilizeThumbBasePalm && !stabilizeThumbWebbing)
             {
                 if (thumbGuard != null)
@@ -1740,6 +2050,7 @@ namespace Member_Han.Modules.FBXImporter
 
             thumbGuard.Configure(
                 targetAnimator,
+                linkedRetargeter,
                 EffectiveThumbProximalMaxLocalAngle,
                 ThumbIntermediateMaxLocalAngle,
                 ThumbDistalMaxLocalAngle,
@@ -1753,23 +2064,33 @@ namespace Member_Han.Modules.FBXImporter
                 EffectiveDetachedThumbBaseHelperPositionSync,
                 detachedThumbBaseHelperSyncWeight,
                 detachedThumbBaseHelperMaxLocalAngle,
+                detachedThumbBaseHelperMaxPositionOffset,
+                LeftDetachedThumbBaseHelperDeltaAxisOffset,
+                RightDetachedThumbBaseHelperDeltaAxisOffset,
+                LeftDetachedThumbBaseHelperTargetRotationOffset,
+                RightDetachedThumbBaseHelperTargetRotationOffset,
                 stabilizeThumbBasePalm,
                 detachedThumbBasePalmStabilizeWeight,
                 detachedThumbBasePalmMaxLocalAngle,
                 enableThumbVisualLengthGuard,
-                ThumbProjectionMinPalmNormal,
+                EffectiveThumbProjectionMinPalmNormal,
                 ThumbProjectionMaxPalmNormal,
                 ThumbProjectionGuardWeight,
                 ThumbIndexMaxSpreadAngle,
                 ThumbIndexSpreadGuardWeight,
                 ThumbMaxSegmentBendAngle,
                 ThumbSegmentStraightenWeight,
+                preserveManualThumbPose,
                 stabilizeThumbWebbing,
                 thumbWebbingCreaseStabilizeWeight,
                 thumbWebbingCreaseMaxLocalAngle,
                 thumbWebbingCreaseMaxPositionOffset);
             thumbGuard.enabled = true;
             thumbGuard.RecaptureBaseline();
+            if (_editorSmokeRecordingOverrideActive)
+            {
+                LogEditorSmokeThumbState("thumb-guard-bound");
+            }
         }
 
         private bool EffectiveDetachedThumbBaseHelperPositionSync
@@ -2077,7 +2398,7 @@ namespace Member_Han.Modules.FBXImporter
             SetSessionState(FBXSessionState.Failed, message, 0f);
             ClearActiveRecordingSubscription();
             CleanupActiveGhost();
-            RestoreMmdPostPoseCorrectionForRetarget();
+            ResetTargetStateAfterSession(recaptureGuardBaselines: false);
 #if UNITY_EDITOR
             NotifyEditorSmokeFinished(VmdSaveResult.Fail("", message));
             ClearEditorSmokeOverride();
@@ -2099,7 +2420,92 @@ namespace Member_Han.Modules.FBXImporter
                 $"stepSpikes={_activeRetargeter.LegacyAnimationStepSpikeCount}, " +
                 $"poseSmooth={_activeRetargeter.PoseVisualSmoothingCount}, " +
                 $"muscleOnlySmoothSkipped={_activeRetargeter.PoseVisualMuscleDeltaOnlySkippedCount}, " +
-                $"maxPoseMuscleDelta={_activeRetargeter.MaxPoseVisualMaxMuscleDelta:F4}");
+                $"maxPoseMuscleDelta={_activeRetargeter.MaxPoseVisualMaxMuscleDelta:F4}, " +
+                $"thumbReference[{BuildActiveRetargeterThumbReferenceSummary()}]");
+        }
+
+        private void LogEditorSmokeThumbState(string stage)
+        {
+            if (!_editorSmokeRecordingOverrideActive || targetCharacter == null)
+            {
+                return;
+            }
+
+            HumanoidThumbDeformationGuard thumbGuard = targetCharacter.GetComponent<HumanoidThumbDeformationGuard>();
+            string leftGuard = thumbGuard != null ? thumbGuard.BuildThumbHelperDebugSummary(false) : "thumbGuard=<none>";
+            string rightGuard = thumbGuard != null ? thumbGuard.BuildThumbHelperDebugSummary(true) : "thumbGuard=<none>";
+            string leftRetargeter = _activeRetargeter != null ? _activeRetargeter.BuildThumbHelperRelationshipDebugSummary(true) : "retargeter=<none>";
+            string rightRetargeter = _activeRetargeter != null ? _activeRetargeter.BuildThumbHelperRelationshipDebugSummary(false) : "retargeter=<none>";
+
+            Debug.Log(
+                $"[FileManager] Editor smoke thumb state ({stage}): " +
+                $"fbx={_editorSmokeCurrentFbxFileName ?? "<none>"}, " +
+                $"segment={GetEditorSmokeSegmentLabel(_editorSmokeSegment)}, " +
+                $"projectionMin={EffectiveThumbProjectionMinPalmNormal:F3}, " +
+                $"thumbReference[{BuildActiveRetargeterThumbReferenceSummary()}], " +
+                $"guardLeft[{leftGuard}], guardRight[{rightGuard}], " +
+                $"retargeterLeft[{leftRetargeter}], retargeterRight[{rightRetargeter}]");
+        }
+
+        private string BuildActiveRetargeterThumbReferenceSummary()
+        {
+            if (_activeRetargeter == null)
+            {
+                return "retargeter=<none>";
+            }
+
+            Animator referenceAnimator = ReadRetargeterPrivateField<Animator>(_activeRetargeter, "_editorFingerReferenceAnimator");
+            bool editorFingerRuntime = ReadRetargeterPrivateField<bool>(_activeRetargeter, "_useEditorFingerPoseReference");
+            return
+                $"retargeter={GetHierarchyPath(_activeRetargeter.transform)}, " +
+                $"targetAnimator={GetHierarchyPath(_activeRetargeter.targetAnimator != null ? _activeRetargeter.targetAnimator.transform : null)}, " +
+                $"thumbLocalRefConfig={_activeRetargeter.useManualAnimatorThumbLocalRotationReference}, " +
+                $"preserveThumbMuscles={_activeRetargeter.preserveManualFingerReferenceThumbMuscles}, " +
+                $"editorFingerRuntime={editorFingerRuntime}, " +
+                $"referenceAnimator={GetHierarchyPath(referenceAnimator != null ? referenceAnimator.transform : null)}, " +
+                $"manualThumbActive={_activeRetargeter.IsManualThumbLocalRotationReferenceActive}, " +
+                $"suppressLeft={_activeRetargeter.ShouldSuppressLeftThumbPoseShapingGuard}, " +
+                $"suppressRight={_activeRetargeter.ShouldSuppressRightThumbPoseShapingGuard}, " +
+                $"leftLocalGuardClamp={_activeRetargeter.LastLeftThumbLocalRotationGuardClampCount}, " +
+                $"rightLocalGuardClamp={_activeRetargeter.LastRightThumbLocalRotationGuardClampCount}, " +
+                $"leftLocalGuardPreserve={_activeRetargeter.LastLeftThumbLocalRotationGuardPreserveCount}, " +
+                $"rightLocalGuardPreserve={_activeRetargeter.LastRightThumbLocalRotationGuardPreserveCount}";
+        }
+
+        private static T ReadRetargeterPrivateField<T>(PoseSpaceRetargeter retargeter, string fieldName)
+        {
+            if (retargeter == null)
+            {
+                return default;
+            }
+
+            FieldInfo field = typeof(PoseSpaceRetargeter).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            if (field == null)
+            {
+                return default;
+            }
+
+            object value = field.GetValue(retargeter);
+            return value is T typedValue ? typedValue : default;
+        }
+
+        private static string GetHierarchyPath(Transform target)
+        {
+            if (target == null)
+            {
+                return "<null>";
+            }
+
+            List<string> parts = new List<string>();
+            Transform current = target;
+            while (current != null)
+            {
+                parts.Add(current.name);
+                current = current.parent;
+            }
+
+            parts.Reverse();
+            return string.Join("/", parts);
         }
 
         private void SetSessionState(FBXSessionState state, string message, float progress)
@@ -2141,7 +2547,22 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            Destroy(_activeGhostContainer);
+            bool destroyImmediately = false;
+#if UNITY_EDITOR
+            // Diagnostic smokes chain multiple sessions in one play session. Deferred
+            // destroy leaves the previous ghost alive until end-of-frame, which can
+            // contaminate the next session's thumb/helper baselines.
+            destroyImmediately = _editorSmokeRecordingOverrideActive;
+#endif
+
+            if (destroyImmediately)
+            {
+                DestroyImmediate(_activeGhostContainer);
+            }
+            else
+            {
+                Destroy(_activeGhostContainer);
+            }
             _activeGhostContainer = null;
             _activeRetargeter = null;
         }
