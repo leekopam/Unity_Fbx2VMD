@@ -12,6 +12,7 @@ using UnityEngine.SceneManagement;
 public class MotionComparisonProbe : MonoBehaviour
 {
     private static readonly float[] DefaultSampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
+    private const string PoseSpaceRetargeterLegacyClipStateName = "__PoseSpaceRetargeter_GhostClip";
 
     [SerializeField] private string comparisonLabel = "";
     [SerializeField] private float[] sampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
@@ -529,7 +530,7 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         AnimationClip clip = legacyAnimation.clip;
-        AnimationState state = legacyAnimation[clip.name];
+        AnimationState state = legacyAnimation[PoseSpaceRetargeterLegacyClipStateName] ?? legacyAnimation[clip.name];
         float clipLength = state != null ? state.length : clip.length;
         if (clipLength <= 0f || float.IsNaN(clipLength) || float.IsInfinity(clipLength))
         {
