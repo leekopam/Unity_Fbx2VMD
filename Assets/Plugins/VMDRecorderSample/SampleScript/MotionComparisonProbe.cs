@@ -2257,29 +2257,32 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private static string GetComparisonOutputFolder()
     {
-        DirectoryInfo projectRoot = Directory.GetParent(Application.dataPath);
-        string rootPath = projectRoot != null ? projectRoot.FullName : Application.dataPath;
-        string folder = Path.Combine(rootPath, OutputDocsFolderName, OutputRootFolderName, OutputLocalFolderName, ComparisonFolderName);
-        Directory.CreateDirectory(folder);
-        return folder;
+        return MotionComparisonProbeOutputPaths.GetOrCreateFolderFromDataPath(
+            Application.dataPath,
+            OutputDocsFolderName,
+            OutputRootFolderName,
+            OutputLocalFolderName,
+            ComparisonFolderName);
     }
 
     private static string GetComparisonFrameRootFolder()
     {
-        DirectoryInfo projectRoot = Directory.GetParent(Application.dataPath);
-        string rootPath = projectRoot != null ? projectRoot.FullName : Application.dataPath;
-        string folder = Path.Combine(rootPath, OutputDocsFolderName, OutputRootFolderName, OutputLocalFolderName, ComparisonFramesFolderName);
-        Directory.CreateDirectory(folder);
-        return folder;
+        return MotionComparisonProbeOutputPaths.GetOrCreateFolderFromDataPath(
+            Application.dataPath,
+            OutputDocsFolderName,
+            OutputRootFolderName,
+            OutputLocalFolderName,
+            ComparisonFramesFolderName);
     }
 
     private static string GetComparisonSessionRootFolder()
     {
-        DirectoryInfo projectRoot = Directory.GetParent(Application.dataPath);
-        string rootPath = projectRoot != null ? projectRoot.FullName : Application.dataPath;
-        string folder = Path.Combine(rootPath, OutputDocsFolderName, OutputRootFolderName, OutputLocalFolderName, ComparisonSessionsFolderName);
-        Directory.CreateDirectory(folder);
-        return folder;
+        return MotionComparisonProbeOutputPaths.GetOrCreateFolderFromDataPath(
+            Application.dataPath,
+            OutputDocsFolderName,
+            OutputRootFolderName,
+            OutputLocalFolderName,
+            ComparisonSessionsFolderName);
     }
 
     private void PrepareSessionOutput()
