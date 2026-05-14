@@ -57,6 +57,7 @@ public class HumanoidSampleCode : MonoBehaviour
     private string _lastUiStatus = "";
     private Text _progressFallbackText;
     private bool _usingLegacyProgressText;
+    private HumanoidRecordingSession _recordingSession;
 
     private const float RecordingFrameRate = 30f;
     private const float UiUpdateInterval = 0.1f;
@@ -77,6 +78,7 @@ public class HumanoidSampleCode : MonoBehaviour
 
     private void Start()
     {
+        _recordingSession ??= new HumanoidRecordingSession(RecordingFrameRate);
         EnsureRecorder();
         EnsureProgressTextKoreanFont();
 
@@ -146,9 +148,11 @@ public class HumanoidSampleCode : MonoBehaviour
             : BuildUniqueOutputPath(_outputFolderPath, HumanoidVMDName);
 
         _totalDuration = clipLength;
-        _currentTimer = 0f;
         _targetFrameCount = targetFrameCount > 0 ? targetFrameCount : Mathf.CeilToInt(clipLength * RecordingFrameRate);
         _finishCurrentSessionByRecordedFrameCount = ShouldFinishCurrentSessionByRecordedFrameCount();
+        _recordingSession ??= new HumanoidRecordingSession(RecordingFrameRate);
+        _recordingSession.Start(_totalDuration, _targetFrameCount, _finishCurrentSessionByRecordedFrameCount);
+        _currentTimer = 0f;
         StopRecordingTime = Mathf.CeilToInt(clipLength);
 
         string labelText = string.IsNullOrWhiteSpace(comparisonLabel) ? "(파일명과 동일)" : comparisonLabel;
@@ -192,24 +196,14 @@ public class HumanoidSampleCode : MonoBehaviour
     {
         if (!_isRecordingSessionActive || vmdRecorder == null) return;
 
-        _currentTimer += Time.deltaTime;
+        HumanoidRecordingTick tick = _recordingSession.Tick(Time.deltaTime, vmdRecorder.FrameNumber);
+        _currentTimer = _recordingSession.CurrentTimerSeconds;
 
-        float displayTime = _finishCurrentSessionByRecordedFrameCount && _targetFrameCount > 0
-            ? vmdRecorder.FrameNumber / RecordingFrameRate
-            : _currentTimer;
-        float progress = _finishCurrentSessionByRecordedFrameCount && _targetFrameCount > 0
-            ? Mathf.Clamp01((float)vmdRecorder.FrameNumber / _targetFrameCount)
-            : (_totalDuration > 0f ? Mathf.Clamp01(_currentTimer / _totalDuration) : 0f);
+        float displayTime = tick.DisplayTimeSeconds;
+        float progress = tick.Progress01;
         UpdateUI(progress, displayTime, $"녹화 중: {ModelName}");
 
-        if (_finishCurrentSessionByRecordedFrameCount && _targetFrameCount > 0)
-        {
-            if (vmdRecorder.FrameNumber >= _targetFrameCount)
-            {
-                FinishRecording();
-            }
-        }
-        else if (_currentTimer >= _totalDuration)
+        if (tick.ShouldFinish)
         {
             FinishRecording();
         }
@@ -222,6 +216,7 @@ public class HumanoidSampleCode : MonoBehaviour
         _isRecordingSessionActive = false;
         _isSaving = true;
         _manualRecordingCoroutine = null;
+        _recordingSession?.Stop();
 
         Debug.Log("[Recorder] 녹화 시간 도달. 저장을 시작합니다.");
         UpdateUI(1f, _totalDuration, "VMD 저장 중");
