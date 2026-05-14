@@ -2575,35 +2575,26 @@ public class MotionComparisonProbe : MonoBehaviour
             return;
         }
 
-        string relativePath = MakeProjectRelativePath(path);
-        string line = string.Join(",",
-            EscapeCsv(comparisonLabel),
-            EscapeCsv(SceneManager.GetActiveScene().name),
-            EscapeCsv(reason),
-            metrics.RecorderFrame.ToString(CultureInfo.InvariantCulture),
-            EscapeCsv(viewName),
-            EscapeCsv(relativePath));
-        File.AppendAllText(_screenshotIndexPath, line + Environment.NewLine, Encoding.UTF8);
+        MotionComparisonProbeReportWriter.AppendScreenshotIndexRow(
+            _screenshotIndexPath,
+            new MotionComparisonProbeScreenshotIndexRow(
+                comparisonLabel: comparisonLabel,
+                sceneName: SceneManager.GetActiveScene().name,
+                reason: reason,
+                recorderFrame: metrics.RecorderFrame,
+                viewName: viewName,
+                relativePath: MakeProjectRelativePath(path)));
     }
 
     private void WriteFrameSessionIndex()
     {
-        if (string.IsNullOrEmpty(_screenshotSessionIndexPath))
-        {
-            return;
-        }
-
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("# 비교 프레임 세션 연결");
-        builder.AppendLine();
-        builder.AppendLine($"- session id: `{EscapeMarkdown(_sessionId)}`");
-        builder.AppendLine($"- session manifest: `{EscapeMarkdown(MakeProjectRelativePath(_sessionManifestPath))}`");
-        builder.AppendLine($"- metrics csv: `{EscapeMarkdown(MakeProjectRelativePath(_csvPath))}`");
-        builder.AppendLine($"- frame index: `{EscapeMarkdown(MakeProjectRelativePath(_screenshotIndexPath))}`");
-        builder.AppendLine();
-        builder.AppendLine("이 파일은 `ComparisonFrames`에 분리 저장된 PNG가 어떤 CSV 로그와 같은 실행에서 생성됐는지 추적하기 위한 역참조다.");
-
-        File.WriteAllText(_screenshotSessionIndexPath, builder.ToString(), Encoding.UTF8);
+        MotionComparisonProbeReportWriter.WriteFrameSessionIndexMarkdown(
+            _screenshotSessionIndexPath,
+            new MotionComparisonProbeFrameSessionIndexData(
+                sessionId: _sessionId,
+                sessionManifestRelativePath: MakeProjectRelativePath(_sessionManifestPath),
+                metricsCsvRelativePath: MakeProjectRelativePath(_csvPath),
+                frameIndexCsvRelativePath: MakeProjectRelativePath(_screenshotIndexPath)));
     }
 
     private void WriteSessionManifest(string stateReason)
@@ -2620,66 +2611,48 @@ public class MotionComparisonProbe : MonoBehaviour
         string relativeScreenshotIndexPath = MakeProjectRelativePath(_screenshotIndexPath);
         string relativeFrameSessionIndexPath = MakeProjectRelativePath(_screenshotSessionIndexPath);
         ThumbGuardDiagnostics thumbGuardDiagnostics = CaptureThumbGuardDiagnostics();
-
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("# MotionComparisonProbe 세션");
-        builder.AppendLine();
-        builder.AppendLine($"- session id: `{EscapeMarkdown(_sessionId)}`");
-        builder.AppendLine($"- label: `{EscapeMarkdown(comparisonLabel)}`");
-        builder.AppendLine($"- scene: `{EscapeMarkdown(sceneName)}`");
-        builder.AppendLine($"- last state/reason: `{EscapeMarkdown(stateReason)}`");
-        builder.AppendLine($"- created at: `{EscapeMarkdown(_sessionStamp)}`");
-        builder.AppendLine($"- updated at: `{EscapeMarkdown(updatedAt)}`");
-        builder.AppendLine($"- screenshots enabled: `{captureSampleScreenshots}`");
-        builder.AppendLine($"- sample clock: `{(sampleByAnimationClipTime ? "animationClipTime" : "elapsed")}`");
-        builder.AppendLine($"- sample times: `{EscapeMarkdown(FormatSampleTimes())}`");
-        builder.AppendLine($"- yyb diagnostic only metrics: `{captureYybDiagnosticOnlyMetrics}`");
-        builder.AppendLine();
-        builder.AppendLine("## 엄지 리스크 요약");
-        builder.AppendLine();
-        builder.AppendLine($"- risk diagnostics enabled: `{captureYybDiagnosticOnlyMetrics}`");
-        builder.AppendLine($"- risk evaluation frames: `{_riskEvaluationFrameCount}`");
-        builder.AppendLine($"- left thumb core coverage frames: `{_leftCoreThumbDiagnosticFrameCount}`");
-        builder.AppendLine($"- right thumb core coverage frames: `{_rightCoreThumbDiagnosticFrameCount}`");
-        builder.AppendLine($"- left thumb helper coverage required: `{_leftHelperCoverageRequired}`");
-        builder.AppendLine($"- right thumb helper coverage required: `{_rightHelperCoverageRequired}`");
-        builder.AppendLine($"- left thumb helper coverage frames: `{_leftHelperRelationshipFrameCount}`");
-        builder.AppendLine($"- right thumb helper coverage frames: `{_rightHelperRelationshipFrameCount}`");
-        builder.AppendLine($"- max generic thumb anatomy risk: `{FormatManifestFloat(_maxGenericThumbAnatomyRisk)}`");
-        builder.AppendLine($"- max generic thumb anatomy risk reason: `{EscapeMarkdown(_maxGenericThumbAnatomyRiskReason)}`");
-        builder.AppendLine($"- max generic thumb anatomy risk clip time: `{FormatManifestFloat(_maxGenericThumbAnatomyRiskClipTime)}`");
-        builder.AppendLine($"- max generic thumb anatomy risk recorder frame: `{_maxGenericThumbAnatomyRiskRecorderFrame}`");
-        builder.AppendLine($"- max thumb spread risk: `{FormatManifestFloat(_maxThumbSpreadRisk)}`");
-        builder.AppendLine($"- max thumb projection risk: `{FormatManifestFloat(_maxThumbProjectionRisk)}`");
-        builder.AppendLine($"- max thumb helper separation risk: `{FormatManifestFloat(_maxThumbHelperSeparationRisk)}`");
-        builder.AppendLine($"- max thumb webbing risk: `{FormatManifestFloat(_maxThumbWebbingRisk)}`");
-        builder.AppendLine($"- max yyb deformation risk: `{FormatManifestFloat(_maxYybDeformationRisk)}`");
-        builder.AppendLine($"- max yyb deformation risk reason: `{EscapeMarkdown(_maxYybDeformationRiskReason)}`");
-        builder.AppendLine($"- max yyb deformation risk clip time: `{FormatManifestFloat(_maxYybDeformationRiskClipTime)}`");
-        builder.AppendLine($"- max yyb deformation risk recorder frame: `{_maxYybDeformationRiskRecorderFrame}`");
-        builder.AppendLine($"- left thumb projection guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.LeftProjectionGuardWeight)}`");
-        builder.AppendLine($"- right thumb projection guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.RightProjectionGuardWeight)}`");
-        builder.AppendLine($"- left thumb index-spread guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.LeftIndexSpreadGuardWeight)}`");
-        builder.AppendLine($"- right thumb index-spread guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.RightIndexSpreadGuardWeight)}`");
-        builder.AppendLine($"- left thumb segment-straighten guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.LeftSegmentStraightenWeight)}`");
-        builder.AppendLine($"- right thumb segment-straighten guard weight: `{FormatManifestFloat(thumbGuardDiagnostics.RightSegmentStraightenWeight)}`");
-        builder.AppendLine();
-        builder.AppendLine("## 산출물");
-        builder.AppendLine();
-        builder.AppendLine("| 역할 | 경로 |");
-        builder.AppendLine("|---|---|");
-        builder.AppendLine($"| metrics csv | `{EscapeMarkdown(relativeCsvPath)}` |");
-        builder.AppendLine($"| frame folder | `{EscapeMarkdown(relativeScreenshotFolder)}` |");
-        builder.AppendLine($"| frame index csv | `{EscapeMarkdown(relativeScreenshotIndexPath)}` |");
-        builder.AppendLine($"| frame session index | `{EscapeMarkdown(relativeFrameSessionIndexPath)}` |");
-        builder.AppendLine();
-        builder.AppendLine("## 사용 방법");
-        builder.AppendLine();
-        builder.AppendLine("- 이 `index.md`를 세션 기준점으로 사용한다.");
-        builder.AppendLine("- CSV 로그와 PNG 프레임은 기존 폴더 구조를 유지하되, 이 파일과 프레임 폴더의 `session_index.md`로 서로 연결한다.");
-        builder.AppendLine("- 분석 문서, contact sheet, 비교 이미지를 추가로 만들면 이 세션 폴더 또는 이 manifest에 경로를 추가한다.");
-
-        File.WriteAllText(_sessionManifestPath, builder.ToString(), Encoding.UTF8);
+        MotionComparisonProbeReportWriter.WriteSessionManifestMarkdown(
+            _sessionManifestPath,
+            new MotionComparisonProbeSessionManifestData(
+                sessionId: _sessionId,
+                comparisonLabel: comparisonLabel,
+                sceneName: sceneName,
+                stateReason: stateReason,
+                createdAt: _sessionStamp,
+                updatedAt: updatedAt,
+                screenshotsEnabled: captureSampleScreenshots,
+                sampleClock: sampleByAnimationClipTime ? "animationClipTime" : "elapsed",
+                sampleTimes: FormatSampleTimes(),
+                yybDiagnosticOnlyMetrics: captureYybDiagnosticOnlyMetrics,
+                riskEvaluationFrameCount: _riskEvaluationFrameCount,
+                leftThumbCoreCoverageFrameCount: _leftCoreThumbDiagnosticFrameCount,
+                rightThumbCoreCoverageFrameCount: _rightCoreThumbDiagnosticFrameCount,
+                leftThumbHelperCoverageRequired: _leftHelperCoverageRequired,
+                rightThumbHelperCoverageRequired: _rightHelperCoverageRequired,
+                leftThumbHelperCoverageFrameCount: _leftHelperRelationshipFrameCount,
+                rightThumbHelperCoverageFrameCount: _rightHelperRelationshipFrameCount,
+                maxGenericThumbAnatomyRisk: _maxGenericThumbAnatomyRisk,
+                maxGenericThumbAnatomyRiskReason: _maxGenericThumbAnatomyRiskReason,
+                maxGenericThumbAnatomyRiskClipTime: _maxGenericThumbAnatomyRiskClipTime,
+                maxGenericThumbAnatomyRiskRecorderFrame: _maxGenericThumbAnatomyRiskRecorderFrame,
+                maxThumbSpreadRisk: _maxThumbSpreadRisk,
+                maxThumbProjectionRisk: _maxThumbProjectionRisk,
+                maxThumbHelperSeparationRisk: _maxThumbHelperSeparationRisk,
+                maxThumbWebbingRisk: _maxThumbWebbingRisk,
+                maxYybDeformationRisk: _maxYybDeformationRisk,
+                maxYybDeformationRiskReason: _maxYybDeformationRiskReason,
+                maxYybDeformationRiskClipTime: _maxYybDeformationRiskClipTime,
+                maxYybDeformationRiskRecorderFrame: _maxYybDeformationRiskRecorderFrame,
+                leftThumbProjectionGuardWeight: thumbGuardDiagnostics.LeftProjectionGuardWeight,
+                rightThumbProjectionGuardWeight: thumbGuardDiagnostics.RightProjectionGuardWeight,
+                leftThumbIndexSpreadGuardWeight: thumbGuardDiagnostics.LeftIndexSpreadGuardWeight,
+                rightThumbIndexSpreadGuardWeight: thumbGuardDiagnostics.RightIndexSpreadGuardWeight,
+                leftThumbSegmentStraightenGuardWeight: thumbGuardDiagnostics.LeftSegmentStraightenWeight,
+                rightThumbSegmentStraightenGuardWeight: thumbGuardDiagnostics.RightSegmentStraightenWeight,
+                metricsCsvRelativePath: relativeCsvPath,
+                frameFolderRelativePath: relativeScreenshotFolder,
+                frameIndexCsvRelativePath: relativeScreenshotIndexPath,
+                frameSessionIndexRelativePath: relativeFrameSessionIndexPath));
     }
 
     private static string BuildUniqueDirectoryPath(string rootFolder, string folderName)
@@ -2802,39 +2775,11 @@ public class MotionComparisonProbe : MonoBehaviour
         return builder.ToString();
     }
 
-    private static string EscapeMarkdown(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return "";
-        }
-
-        return value.Replace("`", "'").Replace("|", "\\|");
-    }
-
-    private static string FormatManifestFloat(float value)
-    {
-        return IsFinite(value)
-            ? value.ToString("0.###", CultureInfo.InvariantCulture)
-            : "n/a";
-    }
-
     private static void WriteHeader(string path)
     {
         const string header = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,retargetRootDeltaLast,retargetRootDeltaMax,retargetRootDeltaSkippedCount,retargetPoseRootDeltaLast,retargetPoseRootDeltaMax,retargetPoseRootClampCount,retargetGroundingAdjustmentLast,retargetGroundingAdjustmentMax,retargetGroundingStepClampCount,retargetGroundingSmoothedCount,retargetGroundingVerticalStepLast,retargetGroundingVerticalStepMax,retargetGroundingInitialVerticalStep,retargetGroundingVerticalStepAfterInitialMax,retargetGroundingTargetY,retargetGroundingLowestFootBottomY,hipsY,lowestFootY,lowestFootBottomY,meshBoundsMinY,meshBoundsMaxY,footBottomGroundGap,meshBoundsGroundGap,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
         const string yybDiagnosticHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk,thumbGuardManualReferenceConfigured,thumbGuardManualReferenceActive,thumbGuardPoseShapingSuppressed,thumbGuardLeftPoseShapingSuppressed,thumbGuardRightPoseShapingSuppressed,thumbGuardProjectionWeight,thumbGuardLeftProjectionWeight,thumbGuardRightProjectionWeight,thumbGuardIndexSpreadWeight,thumbGuardLeftIndexSpreadWeight,thumbGuardRightIndexSpreadWeight,thumbGuardSegmentStraightenWeight,thumbGuardLeftSegmentStraightenWeight,thumbGuardRightSegmentStraightenWeight,thumbGuardLeftProjectionCorrectionApplyCount,thumbGuardRightProjectionCorrectionApplyCount,thumbGuardLeftProjectionCorrectionPreserveCount,thumbGuardRightProjectionCorrectionPreserveCount,thumbGuardLeftSegmentStraightenApplyCount,thumbGuardRightSegmentStraightenApplyCount,thumbGuardLeftSegmentStraightenPreserveCount,thumbGuardRightSegmentStraightenPreserveCount,thumbGuardLeftLocalRotationGuardClampCount,thumbGuardRightLocalRotationGuardClampCount,thumbGuardLeftLocalRotationGuardPreserveCount,thumbGuardRightLocalRotationGuardPreserveCount,thumbGuardLeftLocalRotationGuardCurrentRisk,thumbGuardRightLocalRotationGuardCurrentRisk,thumbGuardLeftLocalRotationGuardLimitedRisk,thumbGuardRightLocalRotationGuardLimitedRisk,thumbGuardLeftWorldRotationSuppressCompetingOverride,thumbGuardRightWorldRotationSuppressCompetingOverride,thumbGuardLeftWorldRotationKeepDetachedHelperOverride,thumbGuardRightWorldRotationKeepDetachedHelperOverride,thumbGuardLeftWorldRotationCurrentReferenceFrameDeviation,thumbGuardRightWorldRotationCurrentReferenceFrameDeviation,thumbGuardLeftWorldRotationCandidateReferenceFrameDeviation,thumbGuardRightWorldRotationCandidateReferenceFrameDeviation,thumbGuardLeftProximalWorldRotationPreserveReason,thumbGuardRightProximalWorldRotationPreserveReason,thumbGuardLeftIntermediateWorldRotationPreserveReason,thumbGuardRightIntermediateWorldRotationPreserveReason,thumbGuardLeftProximalWorldRotationCurrentReferenceAngle,thumbGuardRightProximalWorldRotationCurrentReferenceAngle,thumbGuardLeftIntermediateWorldRotationCurrentReferenceAngle,thumbGuardRightIntermediateWorldRotationCurrentReferenceAngle,thumbGuardLeftProximalWorldRotationCandidateReferenceAngle,thumbGuardRightProximalWorldRotationCandidateReferenceAngle,thumbGuardLeftIntermediateWorldRotationCandidateReferenceAngle,thumbGuardRightIntermediateWorldRotationCandidateReferenceAngle,thumbGuardLeftProximalWorldRotationPreserveCurrentRisk,thumbGuardRightProximalWorldRotationPreserveCurrentRisk,thumbGuardLeftIntermediateWorldRotationPreserveCurrentRisk,thumbGuardRightIntermediateWorldRotationPreserveCurrentRisk,thumbGuardLeftProximalWorldRotationPreserveLimitedRisk,thumbGuardRightProximalWorldRotationPreserveLimitedRisk,thumbGuardLeftIntermediateWorldRotationPreserveLimitedRisk,thumbGuardRightIntermediateWorldRotationPreserveLimitedRisk,thumbGuardHelperSyncEnabled,thumbGuardHelperPositionSyncEnabled,thumbGuardHelperSyncWeight,thumbGuardHelperMaxLocalAngle,thumbGuardPalmStabilizeEnabled,thumbGuardPalmStabilizeWeight,thumbGuardPalmStabilizeMaxLocalAngle,thumbGuardWebbingStabilizeEnabled,thumbGuardWebbingStabilizeWeight,thumbGuardWebbingMaxLocalAngle,thumbGuardWebbingMaxPositionOffset";
         File.WriteAllText(path, header + "," + yybDiagnosticHeader + Environment.NewLine, Encoding.UTF8);
-    }
-
-    private static string EscapeCsv(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return "";
-        }
-
-        string escaped = value.Replace("\"", "\"\"");
-        return escaped.IndexOfAny(new[] { ',', '"', '\r', '\n' }) >= 0 ? $"\"{escaped}\"" : escaped;
     }
 
     private struct ArmMuscleMetrics
