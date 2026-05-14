@@ -4,20 +4,38 @@
     configuration. A plain `dotnet build -c Release` then runs without `UNITY_EDITOR` / `UNITY_*`
     defines and can fail compilation.
 
-    This file injects a minimal set of Unity editor/version/platform defines into Release builds,
-    but only when `UNITY_EDITOR` isn't already present.
+    Fix strategy:
+    - Use the Unity-generated Debug `DefineConstants` from the current `.csproj` as the source of truth.
+    - Apply it to Release builds, removing `DEBUG` and ensuring `RELEASE` exists.
+
+    This avoids hardcoding Unity version/platform symbols and preserves the full Unity-generated define set.
   -->
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <_UnityReleaseDefineConstants>UNITY_EDITOR;UNITY_2022_3_62;UNITY_2022_3;UNITY_2022;UNITY_5_3_OR_NEWER;UNITY_5_4_OR_NEWER;UNITY_5_5_OR_NEWER;UNITY_5_6_OR_NEWER;UNITY_2017_1_OR_NEWER;UNITY_2017_2_OR_NEWER;UNITY_2017_3_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_2018_1_OR_NEWER;UNITY_2018_2_OR_NEWER;UNITY_2018_3_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2019_1_OR_NEWER;UNITY_2019_2_OR_NEWER;UNITY_2019_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2020_1_OR_NEWER;UNITY_2020_2_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_3_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2022_2_OR_NEWER;UNITY_2022_3_OR_NEWER;PLATFORM_ARCH_64;UNITY_64;PLATFORM_STANDALONE;PLATFORM_STANDALONE_WIN;UNITY_STANDALONE;UNITY_STANDALONE_WIN;UNITY_EDITOR_64;UNITY_EDITOR_WIN</_UnityReleaseDefineConstants>
-    <_DefineConstantsWrapped>;$(DefineConstants);</_DefineConstantsWrapped>
-  </PropertyGroup>
+  <Target
+    Name="CodexUnityPropagateDebugDefineConstantsToRelease"
+    BeforeTargets="CoreCompile"
+    Condition="'$(Configuration)' == 'Release'">
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(DefineConstants)' == ''">
-    <DefineConstants>$(_UnityReleaseDefineConstants)</DefineConstants>
-  </PropertyGroup>
+    <XmlPeek
+      XmlInputPath="$(MSBuildProjectFullPath)"
+      Query="/Project/PropertyGroup[contains(@Condition, &quot;== 'Debug|&quot;)]/DefineConstants/text()">
+      <Output TaskParameter="Result" PropertyName="_CodexUnityDebugDefineConstantsRaw" />
+    </XmlPeek>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(DefineConstants)' != '' and !$(_DefineConstantsWrapped.Contains(';UNITY_EDITOR;'))">
-    <DefineConstants>$(DefineConstants);$(_UnityReleaseDefineConstants)</DefineConstants>
-  </PropertyGroup>
+    <PropertyGroup Condition="'$(_CodexUnityDebugDefineConstantsRaw)' != ''">
+      <_CodexUnityDebugDefineConstantsUnescaped>$([MSBuild]::Unescape('$(_CodexUnityDebugDefineConstantsRaw)'))</_CodexUnityDebugDefineConstantsUnescaped>
+      <_CodexUnityDebugDefineConstants>$([System.String]::Copy('$(_CodexUnityDebugDefineConstantsUnescaped)').Trim())</_CodexUnityDebugDefineConstants>
+      <_CodexUnityGeneratedDefinesDetected Condition="$(_CodexUnityDebugDefineConstants.Contains('UNITY_'))">true</_CodexUnityGeneratedDefinesDetected>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(_CodexUnityGeneratedDefinesDetected)' == 'true' and '$(_CodexUnityDebugDefineConstants)' != ''">
+      <_CodexUnityReleaseDefineConstants>$(DefineConstants);$(_CodexUnityDebugDefineConstants)</_CodexUnityReleaseDefineConstants>
+      <_CodexUnityReleaseDefineConstants>$([System.Text.RegularExpressions.Regex]::Replace('$(_CodexUnityReleaseDefineConstants)', '(^|;)DEBUG(;|$)', '$1'))</_CodexUnityReleaseDefineConstants>
+      <_CodexUnityReleaseDefineConstants>$([System.Text.RegularExpressions.Regex]::Replace('$(_CodexUnityReleaseDefineConstants)', ';{2,}', ';'))</_CodexUnityReleaseDefineConstants>
+      <_CodexUnityReleaseDefineConstants>$([System.String]::Copy('$(_CodexUnityReleaseDefineConstants)').Trim(';'))</_CodexUnityReleaseDefineConstants>
+      <_CodexUnityReleaseDefineConstantsWrapped>;$(_CodexUnityReleaseDefineConstants);</_CodexUnityReleaseDefineConstantsWrapped>
+      <_CodexUnityReleaseDefineConstants Condition="!$(_CodexUnityReleaseDefineConstantsWrapped.Contains(';RELEASE;'))">$(_CodexUnityReleaseDefineConstants);RELEASE</_CodexUnityReleaseDefineConstants>
+      <DefineConstants>$(_CodexUnityReleaseDefineConstants)</DefineConstants>
+    </PropertyGroup>
+  </Target>
 </Project>
