@@ -532,26 +532,52 @@ namespace Member_Han.Modules.FBXImporter
 
         // --- 초기화 ---
         private bool _isInitialized = false;
+        private const string LegacyClipStateName = "__PoseSpaceRetargeter_GhostClip";
         private Animation _legacyAnim;
+        private bool _ghostAnimatorWasEnabled;
+        private bool _addedLegacyAnimationComponent;
+        private AnimationClip _ownedLegacyClip;
 
         public void Initialize(GameObject ghostRoot, GameObject targetRoot, Dictionary<string, string> mappingData, AnimationClip clip, FileManager settings)
         {
+            CleanupLegacyGhostPlayback();
+
             ghostAnimator = ghostRoot.GetComponent<Animator>();
             targetAnimator = targetRoot.GetComponent<Animator>();
             CaptureTargetInitialTransforms(targetRoot);
 
+            if (clip == null) return;
+
             // Ghost Animator 끄기 (Legacy 구동용)
+            _ghostAnimatorWasEnabled = ghostAnimator != null && ghostAnimator.enabled;
             if (ghostAnimator != null) ghostAnimator.enabled = false;
 
-            // Legacy Animation 재생
+            // Legacy Animation playback
             _legacyAnim = ghostRoot.GetComponent<Animation>();
+            _addedLegacyAnimationComponent = _legacyAnim == null;
             if (_legacyAnim == null) _legacyAnim = ghostRoot.AddComponent<Animation>();
+            _legacyAnim.Stop();
 
-            clip.legacy = true;
-            clip.wrapMode = WrapMode.Once; // Loop 방지: 한 번만 재생
-            _legacyAnim.AddClip(clip, clip.name);
-            _legacyAnim.clip = clip;
-            _legacyAnim.Play();
+            AnimationClip legacyClip = clip;
+            if (legacyClip != null && !legacyClip.legacy)
+            {
+                string legacyClipName = legacyClip.name;
+                _ownedLegacyClip = Instantiate(legacyClip);
+                _ownedLegacyClip.name = legacyClipName;
+                _ownedLegacyClip.legacy = true;
+                legacyClip = _ownedLegacyClip;
+            }
+
+            _legacyAnim.RemoveClip(LegacyClipStateName);
+            _legacyAnim.AddClip(legacyClip, LegacyClipStateName);
+            _legacyAnim.clip = legacyClip;
+            AnimationState state = _legacyAnim[LegacyClipStateName];
+            if (state != null)
+            {
+                state.wrapMode = WrapMode.Once;
+                state.time = 0f;
+            }
+            _legacyAnim.Play(LegacyClipStateName);
 
             // 포즈 핸들러 초기화
             if (!ghostAnimator.avatar || !targetAnimator.avatar) return;
@@ -563,7 +589,6 @@ namespace Member_Han.Modules.FBXImporter
             CalibrateTargetFootRadius();
 
             // 초기 위치 저장
-            _prevGhostPos = ghostAnimator.transform.position;
             _prevGhostPos = ghostAnimator.transform.position;
             ResetEditorHumanoidRootTranslationReferenceState();
             CacheInitialHipHeights();
@@ -652,6 +677,36 @@ namespace Member_Han.Modules.FBXImporter
 #if UNITY_EDITOR
             DisposeEditorHumanoidFingerPoseReference();
 #endif
+            CleanupLegacyGhostPlayback();
+        }
+
+        private void CleanupLegacyGhostPlayback()
+        {
+            if (_legacyAnim != null)
+            {
+                _legacyAnim.Stop();
+                _legacyAnim.RemoveClip(LegacyClipStateName);
+            }
+
+            if (_ownedLegacyClip != null)
+            {
+                Destroy(_ownedLegacyClip);
+                _ownedLegacyClip = null;
+            }
+
+            if (_addedLegacyAnimationComponent && _legacyAnim != null)
+            {
+                Destroy(_legacyAnim);
+            }
+
+            if (ghostAnimator != null)
+            {
+                ghostAnimator.enabled = _ghostAnimatorWasEnabled;
+            }
+
+            _legacyAnim = null;
+            _addedLegacyAnimationComponent = false;
+            _ghostAnimatorWasEnabled = false;
         }
 
 #if UNITY_EDITOR
@@ -1020,12 +1075,12 @@ namespace Member_Han.Modules.FBXImporter
         {
             _legacyAnimationStepSpikeThisFrame = false;
 
-            if (_legacyAnim == null || _legacyAnim.clip == null)
+            if (_legacyAnim == null)
             {
                 return;
             }
 
-            AnimationState state = _legacyAnim[_legacyAnim.clip.name];
+            AnimationState state = _legacyAnim[LegacyClipStateName];
             if (state == null)
             {
                 return;
@@ -2428,12 +2483,12 @@ namespace Member_Han.Modules.FBXImporter
 
         private float GetLegacyAnimationTime()
         {
-            if (_legacyAnim == null || _legacyAnim.clip == null)
+            if (_legacyAnim == null)
             {
                 return 0f;
             }
 
-            AnimationState state = _legacyAnim[_legacyAnim.clip.name];
+            AnimationState state = _legacyAnim[LegacyClipStateName];
             if (state == null)
             {
                 return 0f;
