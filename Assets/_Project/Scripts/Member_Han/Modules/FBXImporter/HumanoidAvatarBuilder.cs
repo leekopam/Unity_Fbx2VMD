@@ -72,6 +72,12 @@ namespace Member_Han.Modules.FBXImporter
             Animator animator = targetRoot.GetComponent<Animator>();
             if (animator == null) animator = targetRoot.AddComponent<Animator>();
 
+            if (explicitMapping == null || explicitMapping.Count == 0)
+            {
+                Debug.LogWarning("[AvatarBuilder] Bone mapping is empty. Trying auto-mapping fallback.");
+                explicitMapping = BuildAutoMapping(targetRoot);
+            }
+
             // 수동 교정 없이 순수 데이터로 아바타 생성
             Avatar newAvatar = CreatePureAvatar(targetRoot, explicitMapping);
             
@@ -81,6 +87,45 @@ namespace Member_Han.Modules.FBXImporter
             
             animator.applyRootMotion = false;
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        }
+
+        /// <summary>
+        /// BoneMapping_Data.txt가 없거나 리그가 다른 FBX를 처리할 때를 대비해, Transform 이름 기반으로 Humanoid 필수 본들을 자동 매핑합니다.
+        /// - HumanTrait.RequiredBone 기준(최소 필수셋)만 대상으로 시도합니다.
+        /// - 실패해도 예외를 던지지 않으며, 찾은 항목만 반환합니다.
+        /// </summary>
+        public static Dictionary<string, string> BuildAutoMapping(GameObject targetRoot)
+        {
+            var mapping = new Dictionary<string, string>();
+            if (targetRoot == null)
+            {
+                return mapping;
+            }
+
+            TransformNameLookup lookup = BuildTransformNameLookup(targetRoot.transform);
+            Transform[] allTransforms = targetRoot.GetComponentsInChildren<Transform>(true);
+
+            var requiredBoneNames = new List<string>();
+            for (int i = 0; i < HumanTrait.BoneCount; i++)
+            {
+                if (HumanTrait.RequiredBone(i))
+                {
+                    requiredBoneNames.Add(HumanTrait.BoneName[i]);
+                }
+            }
+
+            int mappedCount = 0;
+            foreach (string humanBoneName in requiredBoneNames)
+            {
+                if (TryAutoMapRequiredBone(lookup, allTransforms, humanBoneName, out Transform foundBone, out _))
+                {
+                    mapping[humanBoneName] = foundBone.name;
+                    mappedCount++;
+                }
+            }
+
+            Debug.Log($"[AvatarBuilder] Auto bone mapping: {mappedCount}/{requiredBoneNames.Count} required bones mapped.");
+            return mapping;
         }
 
         public static BoneMappingDiagnostic AnalyzeMapping(GameObject targetRoot, Dictionary<string, string> explicitMapping)
@@ -289,6 +334,288 @@ namespace Member_Han.Modules.FBXImporter
             return result;
         }
 
+        private static bool TryAutoMapRequiredBone(
+            TransformNameLookup lookup,
+            Transform[] allTransforms,
+            string humanBoneName,
+            out Transform foundBone,
+            out string matchKind)
+        {
+            foundBone = null;
+            matchKind = "missing";
+
+            IEnumerable<string> candidates = GetAutoMapCandidatesForHumanBone(humanBoneName);
+            int bestRank = -1;
+            foreach (string candidate in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(candidate))
+                {
+                    continue;
+                }
+
+                if (!TryFindMappedTransform(lookup, candidate, out Transform candidateBone, out string candidateKind))
+                {
+                    continue;
+                }
+
+                int rank = RankMatchKind(candidateKind);
+                if (rank > bestRank)
+                {
+                    foundBone = candidateBone;
+                    matchKind = candidateKind;
+                    bestRank = rank;
+                    if (bestRank >= 3)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            if (foundBone != null)
+            {
+                return true;
+            }
+
+            foreach (string candidate in candidates)
+            {
+                if (TryFindUniqueContainsMatch(allTransforms, candidate, out Transform containsMatch))
+                {
+                    foundBone = containsMatch;
+                    matchKind = "contains";
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static int RankMatchKind(string matchKind)
+        {
+            if (matchKind == "exact")
+            {
+                return 3;
+            }
+
+            if (matchKind == "normalized")
+            {
+                return 2;
+            }
+
+            if (matchKind == "alias")
+            {
+                return 1;
+            }
+
+            return 0;
+        }
+
+        private static IEnumerable<string> GetAutoMapCandidatesForHumanBone(string humanBoneName)
+        {
+            yield return humanBoneName;
+
+            // Common alternative naming found in FBX rigs (Mixamo/Bip/Blender 등)
+            switch (humanBoneName)
+            {
+                case "Hips":
+                    yield return "Pelvis";
+                    yield return "Hip";
+                    yield return "Bip001 Pelvis";
+                    yield return "Bip01 Pelvis";
+                    break;
+
+                case "Spine":
+                    yield return "Spine1";
+                    yield return "Spine01";
+                    yield return "Bip001 Spine";
+                    yield return "Bip001 Spine1";
+                    break;
+
+                case "Chest":
+                    yield return "Spine2";
+                    yield return "Spine02";
+                    yield return "UpperChest";
+                    yield return "Bip001 Spine2";
+                    break;
+
+                case "LeftShoulder":
+                    yield return "LeftClavicle";
+                    yield return "Clavicle_L";
+                    yield return "Shoulder_L";
+                    yield return "Bip001 L Clavicle";
+                    break;
+
+                case "RightShoulder":
+                    yield return "RightClavicle";
+                    yield return "Clavicle_R";
+                    yield return "Shoulder_R";
+                    yield return "Bip001 R Clavicle";
+                    break;
+
+                case "LeftUpperArm":
+                    yield return "LeftArm";
+                    yield return "UpperArm_L";
+                    yield return "Arm_L";
+                    yield return "Bip001 L UpperArm";
+                    break;
+
+                case "RightUpperArm":
+                    yield return "RightArm";
+                    yield return "UpperArm_R";
+                    yield return "Arm_R";
+                    yield return "Bip001 R UpperArm";
+                    break;
+
+                case "LeftLowerArm":
+                    yield return "LeftForeArm";
+                    yield return "Forearm_L";
+                    yield return "LowerArm_L";
+                    yield return "Bip001 L Forearm";
+                    break;
+
+                case "RightLowerArm":
+                    yield return "RightForeArm";
+                    yield return "Forearm_R";
+                    yield return "LowerArm_R";
+                    yield return "Bip001 R Forearm";
+                    break;
+
+                case "LeftHand":
+                    yield return "LeftWrist";
+                    yield return "Hand_L";
+                    yield return "Wrist_L";
+                    yield return "Bip001 L Hand";
+                    break;
+
+                case "RightHand":
+                    yield return "RightWrist";
+                    yield return "Hand_R";
+                    yield return "Wrist_R";
+                    yield return "Bip001 R Hand";
+                    break;
+
+                case "LeftUpperLeg":
+                    yield return "LeftUpLeg";
+                    yield return "LeftThigh";
+                    yield return "UpperLeg_L";
+                    yield return "Thigh_L";
+                    yield return "Bip001 L Thigh";
+                    break;
+
+                case "RightUpperLeg":
+                    yield return "RightUpLeg";
+                    yield return "RightThigh";
+                    yield return "UpperLeg_R";
+                    yield return "Thigh_R";
+                    yield return "Bip001 R Thigh";
+                    break;
+
+                case "LeftLowerLeg":
+                    yield return "LeftLeg";
+                    yield return "LeftCalf";
+                    yield return "LowerLeg_L";
+                    yield return "Calf_L";
+                    yield return "Bip001 L Calf";
+                    break;
+
+                case "RightLowerLeg":
+                    yield return "RightLeg";
+                    yield return "RightCalf";
+                    yield return "LowerLeg_R";
+                    yield return "Calf_R";
+                    yield return "Bip001 R Calf";
+                    break;
+
+                case "LeftFoot":
+                    yield return "LeftAnkle";
+                    yield return "Foot_L";
+                    yield return "Ankle_L";
+                    yield return "Bip001 L Foot";
+                    break;
+
+                case "RightFoot":
+                    yield return "RightAnkle";
+                    yield return "Foot_R";
+                    yield return "Ankle_R";
+                    yield return "Bip001 R Foot";
+                    break;
+
+                case "LeftToes":
+                    yield return "LeftToe";
+                    yield return "Toe_L";
+                    yield return "Toes_L";
+                    yield return "Bip001 L Toe0";
+                    break;
+
+                case "RightToes":
+                    yield return "RightToe";
+                    yield return "Toe_R";
+                    yield return "Toes_R";
+                    yield return "Bip001 R Toe0";
+                    break;
+            }
+        }
+
+        private static bool TryFindUniqueContainsMatch(Transform[] allTransforms, string targetBoneName, out Transform foundBone)
+        {
+            foundBone = null;
+            string needle = NormalizeBoneName(targetBoneName);
+            if (string.IsNullOrEmpty(needle))
+            {
+                return false;
+            }
+
+            Transform best = null;
+            int bestScore = -1;
+            bool ambiguous = false;
+
+            foreach (Transform t in allTransforms)
+            {
+                string hay = NormalizeBoneName(t.name);
+                if (string.IsNullOrEmpty(hay))
+                {
+                    continue;
+                }
+
+                int score = -1;
+                if (hay == needle)
+                {
+                    score = 300;
+                }
+                else if (hay.EndsWith(needle))
+                {
+                    score = 200;
+                }
+                else if (hay.Contains(needle))
+                {
+                    score = 100;
+                }
+
+                if (score <= 0)
+                {
+                    continue;
+                }
+
+                if (best == null || score > bestScore)
+                {
+                    best = t;
+                    bestScore = score;
+                    ambiguous = false;
+                }
+                else if (score == bestScore && best != t)
+                {
+                    ambiguous = true;
+                }
+            }
+
+            if (best == null || ambiguous)
+            {
+                return false;
+            }
+
+            foundBone = best;
+            return true;
+        }
+
         private sealed class TransformNameLookup
         {
             public Dictionary<string, Transform> ExactNameMap = new Dictionary<string, Transform>();
@@ -299,7 +626,7 @@ namespace Member_Han.Modules.FBXImporter
         private static TransformNameLookup BuildTransformNameLookup(Transform root)
         {
             var lookup = new TransformNameLookup();
-            var allTransforms = root.GetComponentsInChildren<Transform>();
+            var allTransforms = root.GetComponentsInChildren<Transform>(true);
 
             foreach (var t in allTransforms)
             {
