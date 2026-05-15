@@ -1370,17 +1370,24 @@ namespace Member_Han.Modules.FBXImporter
                 SetGhostVisibility(importedModel, showGhostModel);
 
                 Dictionary<string, string> boneMapping = LoadBoneMappingRuntime();
-                if (!ValidateBoneMapping(boneMapping))
+                if (boneMapping == null)
                 {
-                    FailSession("BoneMapping_Data.txt의 필수 매핑이 부족합니다.");
-                    return true;
+                    boneMapping = new Dictionary<string, string>();
                 }
 
+                // BoneMapping_Data.txt는 특정 리그에 종속될 수 있으므로, 실패 시 자동 매핑으로 폴백합니다.
                 HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
                 if (!ValidateGhostAvatar(importedModel))
                 {
-                    FailSession("Ghost Humanoid Avatar 생성에 실패했습니다.");
-                    return true;
+                    Debug.LogWarning("[FileManager] Ghost Humanoid Avatar 생성 실패. Auto bone mapping으로 재시도합니다.");
+                    boneMapping = HumanoidAvatarBuilder.BuildAutoMapping(importedModel);
+                    HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
+
+                    if (!ValidateGhostAvatar(importedModel))
+                    {
+                        FailSession("Ghost Humanoid Avatar 생성에 실패했습니다.");
+                        return true;
+                    }
                 }
 
                 SetSessionState(FBXSessionState.AvatarReady, "Humanoid Avatar 준비 완료", 0.45f);
@@ -2663,7 +2670,7 @@ namespace Member_Han.Modules.FBXImporter
             }
             else
             {
-                Debug.LogError($"[FileManager] ❌ BoneMapping 로드 실패! 경로: Resources/{loadName}. (빌드에 포함되었는지 확인하세요)");
+                Debug.LogWarning($"[FileManager] BoneMapping 로드 실패: Resources/{loadName}.txt (자동 본 매핑으로 폴백합니다.)");
             }
 
             return mapping;
