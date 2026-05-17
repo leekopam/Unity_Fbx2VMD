@@ -146,6 +146,7 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /Docs/Machine_Spirit/CheckList.md
 /Docs/Machine_Spirit/Local/Modfiy_Log.md
 /Docs/Machine_Spirit/Local/CheckList.md
+
 /Machine Spirit.md
 /Machine Spirit
 /Machine_Spirit.md
@@ -249,3 +250,27 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /Docs/snippets/
 /Docs/archive/conflicting-or-obsolete/
 # END LOCAL PRIVATE WORKFLOW FILES
+
+# External MMD automation tooling (tracked)
+!/Docs/Machine_Spirit/
+!/Docs/Machine_Spirit/Tools/
+/Docs/Machine_Spirit/Tools/*
+!/Docs/Machine_Spirit/Tools/Local/
+/Docs/Machine_Spirit/Tools/Local/*
+!/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
+!/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/**
+!/docs/Machine_Spirit/
+!/docs/Machine_Spirit/Tools/
+/docs/Machine_Spirit/Tools/*
+!/docs/Machine_Spirit/Tools/Local/
+/docs/Machine_Spirit/Tools/Local/*
+!/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
+!/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/**
+
+# Python bytecode/cache
+__pycache__/
+*.pyc
+
+# Local machine-specific config (do not commit)
+/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
+/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
