@@ -412,6 +412,9 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("녹화 시작 직전에 clip time 0을 고정 샘플링해 retarget/grounding 첫 프레임을 안정화하는 프레임 수입니다.")]
         [Range(0, 10)] public int RetargetPrewarmFrameCount = 6;
 
+        [Tooltip("VMD 저장이 성공하면 추가로 이 폴더에도 같은 VMD 파일을 복사합니다. 비워두면 복사하지 않습니다. (예: C:/Users/flzhv/Desktop/MMD/MikuMikuDance_v932x64/SaveFile)")]
+        public string additionalVmdCopyFolder = "";
+
         [Tooltip("비교 CSV/프레임 캡처 Probe를 켭니다. 일반 변환에서는 미세 멈춤을 줄이기 위해 끄고, 회귀 테스트 때만 켭니다.")]
         public bool enableRecordingDiagnostics = false;
 
@@ -1590,6 +1593,7 @@ namespace Member_Han.Modules.FBXImporter
                 ? _activeRecorderController.GetComponent<MotionComparisonProbe>()
                 : null;
             VmdSaveResult effectiveResult = ApplyEditorSmokeThumbRiskFailure(result, probe);
+            TryCopyVmdToAdditionalFolder(effectiveResult);
             ClearActiveRecordingSubscription();
             LogRetargetPlaybackStabilitySummary();
 
@@ -1610,6 +1614,43 @@ namespace Member_Han.Modules.FBXImporter
             ClearEditorSmokeOverride();
 #endif
             _isProcessing = false;
+        }
+
+        private void TryCopyVmdToAdditionalFolder(VmdSaveResult result)
+        {
+            if (!result.Success)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(additionalVmdCopyFolder))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(result.FilePath) || !File.Exists(result.FilePath))
+            {
+                return;
+            }
+
+            try
+            {
+                string targetFolder = additionalVmdCopyFolder.Trim();
+                if (!Path.IsPathRooted(targetFolder))
+                {
+                    string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+                    targetFolder = Path.Combine(projectRoot, targetFolder);
+                }
+
+                Directory.CreateDirectory(targetFolder);
+                string targetPath = Path.Combine(targetFolder, Path.GetFileName(result.FilePath));
+                File.Copy(result.FilePath, targetPath, overwrite: true);
+                Debug.Log($"[FileManager] VMD 추가 복사: {targetPath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[FileManager] VMD 추가 복사 실패: {ex.Message}");
+            }
         }
 
         private VmdSaveResult ApplyEditorSmokeThumbRiskFailure(VmdSaveResult result, MotionComparisonProbe probe)

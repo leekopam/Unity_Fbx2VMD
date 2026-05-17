@@ -1,5 +1,10 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace Member_Han.Modules.FBXImporter.EditorTools
 {
@@ -19,9 +24,450 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             DrawRecordingSettings();
             DrawFinalTuningSettings();
             DrawHandCorrectionSettings();
+            DrawExternalMmdAutomationSettings();
             DrawDebugSettings();
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        private const string ExternalMmdPrefsPrefix = EditorPrefsPrefix + ".ExternalMMD";
+
+        private static Process mmdAutomationProcess;
+        private static readonly StringBuilder mmdAutomationStdout = new StringBuilder(16_384);
+        private static readonly StringBuilder mmdAutomationStderr = new StringBuilder(16_384);
+        private static DateTime mmdAutomationStartedAt;
+        private static string mmdAutomationLastResultJson;
+
+        private static string PrefKey(string suffix) => $"{ExternalMmdPrefsPrefix}.{suffix}";
+
+        private static string GetPrefString(string suffix, string fallback = "")
+        {
+            return EditorPrefs.GetString(PrefKey(suffix), fallback) ?? fallback;
+        }
+
+        private static void SetPrefString(string suffix, string value)
+        {
+            EditorPrefs.SetString(PrefKey(suffix), value ?? string.Empty);
+        }
+
+        private static string DrawPathField(
+            string label,
+            string value,
+            string browseTitle,
+            string extensionFilter,
+            bool saveFile = false,
+            string defaultDirectory = "")
+        {
+            EditorGUILayout.BeginHorizontal();
+            value = EditorGUILayout.TextField(label, value);
+            if (GUILayout.Button("Browse", GUILayout.Width(70)))
+            {
+                string directory = "";
+                try
+                {
+                    if (!string.IsNullOrEmpty(value))
+                    {
+                        directory = Directory.Exists(value) ? value : Path.GetDirectoryName(value) ?? "";
+                    }
+                }
+                catch
+                {
+                    directory = "";
+                }
+
+                if (string.IsNullOrEmpty(directory))
+                {
+                    directory = defaultDirectory ?? "";
+                }
+
+                string next = saveFile
+                    ? EditorUtility.SaveFilePanel(browseTitle, directory, Path.GetFileName(value), extensionFilter)
+                    : EditorUtility.OpenFilePanel(browseTitle, directory, extensionFilter);
+
+                if (!string.IsNullOrEmpty(next))
+                {
+                    value = next;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            return value;
+        }
+
+        private static string DrawFolderField(string label, string value, string browseTitle)
+        {
+            EditorGUILayout.BeginHorizontal();
+            value = EditorGUILayout.TextField(label, value);
+            if (GUILayout.Button("Browse", GUILayout.Width(70)))
+            {
+                string directory = "";
+                try
+                {
+                    if (!string.IsNullOrEmpty(value))
+                    {
+                        directory = Directory.Exists(value) ? value : Path.GetDirectoryName(value) ?? "";
+                    }
+                }
+                catch
+                {
+                    directory = "";
+                }
+
+                string next = EditorUtility.OpenFolderPanel(browseTitle, directory, "");
+                if (!string.IsNullOrEmpty(next))
+                {
+                    value = next;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            return value;
+        }
+
+        private static string ResolvePythonExecutable(string overridePath)
+        {
+            if (!string.IsNullOrEmpty(overridePath) && File.Exists(overridePath))
+            {
+                return overridePath;
+            }
+
+            string pyLauncher = @"C:\Windows\py.exe";
+            if (File.Exists(pyLauncher))
+            {
+                return pyLauncher;
+            }
+
+            return "py";
+        }
+
+        private static string ResolveProjectRoot()
+        {
+            // Assets/.. => Unity project root
+            return Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+        }
+
+        private static string ResolveDefaultMotionVmdBrowseFolder(string projectPmm)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(projectPmm) && File.Exists(projectPmm))
+                {
+                    string directory = Path.GetDirectoryName(projectPmm) ?? "";
+                    if (!string.IsNullOrWhiteSpace(directory))
+                    {
+                        return directory;
+                    }
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            try
+            {
+                string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory) ?? "";
+                if (!string.IsNullOrWhiteSpace(desktop))
+                {
+                    string candidate = Path.Combine(desktop, "MMD", "MikuMikuDance_v932x64", "SaveFile");
+                    if (Directory.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+
+                    return desktop;
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            return "";
+        }
+
+        private static void AppendProcessLine(StringBuilder buffer, string line)
+        {
+            if (string.IsNullOrEmpty(line))
+            {
+                return;
+            }
+
+            const int maxChars = 32_000;
+            if (buffer.Length > maxChars)
+            {
+                buffer.Remove(0, Math.Max(0, buffer.Length - maxChars));
+            }
+
+            buffer.AppendLine(line);
+        }
+
+        private void DrawExternalMmdAutomationSettings()
+        {
+            bool expanded = DrawFoldout("ExternalMMD", "External MMD (Experimental)");
+            if (!expanded)
+            {
+                EndFoldout(false);
+                return;
+            }
+
+            EditorGUILayout.HelpBox(
+                "A-version (PMM only): File(F)->Open(O) PMM, File(F)->Load Motion(M) VMD, File(F)->Render AVI(V).\n" +
+                "Direct .pmx/.pmd loading is not supported yet. For stability, prefer using a pre-made .pmm that already contains the target model.\n" +
+                "If the automation keeps targeting Null_* / camera-light-accessory, set 'Target model name contains' to match the model name shown in MMD.",
+                MessageType.Info);
+
+            string mmdExeOverride = GetPrefString("mmdExeOverride", "");
+            string pythonExeOverride = GetPrefString("pythonExeOverride", "");
+            string projectPmm = GetPrefString("projectPmm", "");
+            string motionVmd = GetPrefString("motionVmd", "");
+            string motionVmdBrowseFolder = GetPrefString("motionVmdBrowseFolder", ResolveDefaultMotionVmdBrowseFolder(projectPmm));
+            string outputAvi = GetPrefString("outputAvi", "");
+            string windowTitle = GetPrefString("windowTitle", "MikuMikuDance");
+            int selectModelTabs = EditorPrefs.GetInt(PrefKey("selectModelTabs"), 1);
+            string targetModelNameContains = GetPrefString("targetModelNameContains", "");
+            int targetModelIndex = EditorPrefs.GetInt(PrefKey("targetModelIndex"), -1);
+            bool skipRenderAvi = EditorPrefs.GetBool(PrefKey("skipRenderAvi"), false);
+            bool playAfterLoad = EditorPrefs.GetBool(PrefKey("playAfterLoad"), false);
+            float playSeconds = EditorPrefs.GetFloat(PrefKey("playSeconds"), 2f);
+
+            mmdExeOverride = DrawPathField("MMD exe (override)", mmdExeOverride, "Select MikuMikuDance.exe", "exe");
+            pythonExeOverride = DrawPathField("Python exe (override)", pythonExeOverride, "Select python/py.exe", "exe");
+            projectPmm = DrawPathField("Project (.pmm)", projectPmm, "Select .pmm project", "pmm");
+            motionVmdBrowseFolder = DrawFolderField("VMD folder (for browse)", motionVmdBrowseFolder, "Select folder that contains .vmd files");
+            motionVmd = DrawPathField("Motion (.vmd)", motionVmd, "Select .vmd motion", "vmd", defaultDirectory: motionVmdBrowseFolder);
+            outputAvi = DrawPathField("Output (.avi)", outputAvi, "Select output .avi path", "avi", saveFile: true);
+            windowTitle = EditorGUILayout.TextField("Window title contains", windowTitle);
+            selectModelTabs = EditorGUILayout.IntSlider("Select model TAB presses", selectModelTabs, 0, 8);
+            targetModelNameContains = EditorGUILayout.TextField("Target model name contains", targetModelNameContains);
+            targetModelIndex = EditorGUILayout.IntField("Target model index (fallback, 0-based)", targetModelIndex);
+            skipRenderAvi = EditorGUILayout.ToggleLeft("Skip render AVI (load motion only)", skipRenderAvi);
+            playAfterLoad = EditorGUILayout.ToggleLeft("Play after load (Space)", playAfterLoad);
+            if (playAfterLoad)
+            {
+                playSeconds = EditorGUILayout.Slider("Play seconds", playSeconds, 0f, 15f);
+            }
+
+            SetPrefString("mmdExeOverride", mmdExeOverride);
+            SetPrefString("pythonExeOverride", pythonExeOverride);
+            SetPrefString("projectPmm", projectPmm);
+            SetPrefString("motionVmd", motionVmd);
+            SetPrefString("motionVmdBrowseFolder", motionVmdBrowseFolder);
+            SetPrefString("outputAvi", outputAvi);
+            SetPrefString("windowTitle", windowTitle);
+            EditorPrefs.SetInt(PrefKey("selectModelTabs"), selectModelTabs);
+            SetPrefString("targetModelNameContains", targetModelNameContains);
+            EditorPrefs.SetInt(PrefKey("targetModelIndex"), targetModelIndex);
+            EditorPrefs.SetBool(PrefKey("skipRenderAvi"), skipRenderAvi);
+            EditorPrefs.SetBool(PrefKey("playAfterLoad"), playAfterLoad);
+            EditorPrefs.SetFloat(PrefKey("playSeconds"), playSeconds);
+
+            EditorGUILayout.Space(4f);
+
+            bool isRunning = mmdAutomationProcess != null && !mmdAutomationProcess.HasExited;
+            using (new EditorGUI.DisabledScope(isRunning))
+            {
+                if (GUILayout.Button("Run Full (A)"))
+                {
+                    StartMmdAutomationProcess(
+                        pythonExeOverride,
+                        mmdExeOverride,
+                        projectPmm,
+                        motionVmd,
+                        outputAvi,
+                        windowTitle,
+                        selectModelTabs,
+                        targetModelNameContains,
+                        targetModelIndex,
+                        skipRenderAvi,
+                        playAfterLoad,
+                        playSeconds);
+                 }
+              }
+
+            using (new EditorGUI.DisabledScope(!isRunning))
+            {
+                if (GUILayout.Button("Stop Running"))
+                {
+                    try
+                    {
+                        mmdAutomationProcess?.Kill();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning($"Failed to stop process: {ex.Message}");
+                    }
+                }
+            }
+
+            DrawMmdAutomationStatus();
+            EndFoldout(true);
+        }
+
+        private static void StartMmdAutomationProcess(
+            string pythonExeOverride,
+            string mmdExeOverride,
+            string projectPmm,
+             string motionVmd,
+              string outputAvi,
+              string windowTitle,
+            int selectModelTabs,
+            string targetModelNameContains,
+            int targetModelIndex,
+            bool skipRenderAvi,
+            bool playAfterLoad,
+            float playSeconds)
+          {
+            if (string.IsNullOrEmpty(projectPmm) || string.IsNullOrEmpty(motionVmd))
+            {
+                Debug.LogError("External MMD: Project(.pmm) and Motion(.vmd) are required.");
+                return;
+            }
+
+            if (!skipRenderAvi && string.IsNullOrEmpty(outputAvi))
+            {
+                Debug.LogError("External MMD: Output(.avi) is required unless Skip render AVI is enabled.");
+                return;
+            }
+
+            string projectRoot = ResolveProjectRoot();
+            string cliScript = Path.Combine(
+                projectRoot,
+                "Docs",
+                "Machine_Spirit",
+                "Tools",
+                "Local",
+                "mmd_qa_mcp",
+                "mmd_qa_automation_cli.py");
+
+            if (!File.Exists(cliScript))
+            {
+                Debug.LogError($"External MMD: CLI script not found: {cliScript}");
+                return;
+            }
+
+            string pythonExe = ResolvePythonExecutable(pythonExeOverride);
+             string args =
+                  $"\"{cliScript}\" " +
+                  $"--pmm \"{projectPmm}\" " +
+                  $"--vmd \"{motionVmd}\" " +
+                  $"--window-title \"{windowTitle}\" " +
+                 $"--select-model-tabs {Mathf.Clamp(selectModelTabs, 0, 32)}";
+
+             if (!string.IsNullOrEmpty(outputAvi))
+             {
+                 args += $" --avi \"{outputAvi}\"";
+             }
+
+             if (skipRenderAvi)
+             {
+                 args += " --skip-render";
+             }
+
+             if (playAfterLoad)
+             {
+                 args += $" --play-after-load --play-seconds {Mathf.Clamp(playSeconds, 0f, 60f):0.###}";
+             }
+
+            if (!string.IsNullOrWhiteSpace(targetModelNameContains))
+            {
+                args += $" --select-model-name \"{targetModelNameContains}\"";
+            }
+
+            if (targetModelIndex >= 0)
+            {
+                args += $" --select-model-index {targetModelIndex}";
+            }
+
+             if (!string.IsNullOrEmpty(mmdExeOverride))
+             {
+                 args += $" --mmd-exe \"{mmdExeOverride}\"";
+             }
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = pythonExe,
+                Arguments = args,
+                WorkingDirectory = projectRoot,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            var process = new Process();
+            process.StartInfo = startInfo;
+            process.EnableRaisingEvents = true;
+            process.OutputDataReceived += (_, e) => AppendProcessLine(mmdAutomationStdout, e.Data);
+            process.ErrorDataReceived += (_, e) => AppendProcessLine(mmdAutomationStderr, e.Data);
+            process.Exited += (_, _) =>
+            {
+                try
+                {
+                    mmdAutomationLastResultJson = mmdAutomationStdout.ToString().Trim();
+                }
+                catch
+                {
+                    mmdAutomationLastResultJson = "";
+                }
+            };
+
+            try
+            {
+                mmdAutomationStdout.Clear();
+                mmdAutomationStderr.Clear();
+                mmdAutomationLastResultJson = "";
+                mmdAutomationStartedAt = DateTime.Now;
+                mmdAutomationProcess = process;
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                string outputLabel = skipRenderAvi ? "skip-render" : $"Output AVI: {outputAvi}";
+                Debug.Log($"External MMD: started automation (PID={process.Id}). {outputLabel}");
+            }
+            catch (Exception ex)
+            {
+                mmdAutomationProcess = null;
+                Debug.LogError($"External MMD: failed to start process: {ex.Message}");
+            }
+        }
+
+        private static void DrawMmdAutomationStatus()
+        {
+            if (mmdAutomationProcess == null)
+            {
+                if (!string.IsNullOrEmpty(mmdAutomationLastResultJson))
+                {
+                    EditorGUILayout.LabelField("Last result (stdout JSON):");
+                    EditorGUILayout.TextArea(mmdAutomationLastResultJson, GUILayout.MinHeight(48));
+                }
+                return;
+            }
+
+            bool isRunning = !mmdAutomationProcess.HasExited;
+            string status = isRunning ? "Running" : $"Exited (code {mmdAutomationProcess.ExitCode})";
+            TimeSpan elapsed = DateTime.Now - mmdAutomationStartedAt;
+
+            EditorGUILayout.LabelField("Status", status);
+            EditorGUILayout.LabelField("Elapsed", $"{elapsed:hh\\:mm\\:ss}");
+
+            if (!isRunning && !string.IsNullOrEmpty(mmdAutomationLastResultJson))
+            {
+                EditorGUILayout.LabelField("Result (stdout JSON):");
+                EditorGUILayout.TextArea(mmdAutomationLastResultJson, GUILayout.MinHeight(48));
+            }
+
+            if (mmdAutomationStdout.Length > 0)
+            {
+                EditorGUILayout.LabelField("Stdout (tail):");
+                EditorGUILayout.TextArea(mmdAutomationStdout.ToString(), GUILayout.MinHeight(64));
+            }
+
+            if (mmdAutomationStderr.Length > 0)
+            {
+                EditorGUILayout.LabelField("Stderr (tail):");
+                EditorGUILayout.TextArea(mmdAutomationStderr.ToString(), GUILayout.MinHeight(64));
+            }
         }
 
         private void DrawImportSettings()
@@ -295,6 +741,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             DrawProperty("startDelay", "녹화 시작 대기 시간");
             DrawProperty("RetargetPrewarmFrameCount", "시작 포즈 prewarm 프레임");
+            DrawFolderProperty("additionalVmdCopyFolder", "VMD 추가 복사 폴더", "생성된 VMD를 추가로 복사할 폴더(선택)");
             DrawProperty("enableRecordingDiagnostics", "녹화 진단/캡처 사용");
             DrawProperty("clampRetargetVisualClipStep", "Ghost clip time step 제한");
             if (GetBool("clampRetargetVisualClipStep"))
@@ -551,6 +998,49 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             EditorGUILayout.PropertyField(property, new GUIContent(label, property.tooltip));
+        }
+
+        private void DrawFolderProperty(string propertyName, string label, string browseTitle)
+        {
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property == null)
+            {
+                EditorGUILayout.HelpBox($"Inspector 필드를 찾을 수 없습니다: {propertyName}", MessageType.Warning);
+                return;
+            }
+
+            if (property.propertyType != SerializedPropertyType.String)
+            {
+                EditorGUILayout.PropertyField(property, new GUIContent(label, property.tooltip));
+                return;
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            property.stringValue = EditorGUILayout.TextField(new GUIContent(label, property.tooltip), property.stringValue);
+            if (GUILayout.Button("Browse", GUILayout.Width(70)))
+            {
+                string directory = "";
+                try
+                {
+                    if (!string.IsNullOrEmpty(property.stringValue))
+                    {
+                        directory = Directory.Exists(property.stringValue)
+                            ? property.stringValue
+                            : Path.GetDirectoryName(property.stringValue) ?? "";
+                    }
+                }
+                catch
+                {
+                    directory = "";
+                }
+
+                string next = EditorUtility.OpenFolderPanel(browseTitle, directory, "");
+                if (!string.IsNullOrEmpty(next))
+                {
+                    property.stringValue = next;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
         }
 
         private bool GetBool(string propertyName)
