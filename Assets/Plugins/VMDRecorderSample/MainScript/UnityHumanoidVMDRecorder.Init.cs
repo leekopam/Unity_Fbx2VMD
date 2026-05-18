@@ -123,22 +123,36 @@ public partial class UnityHumanoidVMDRecorder
         }
 
         // Set offsets for foot IK
+        Quaternion ikReferenceRotation = transform.rotation;
+        Vector3 ikReferencePosition = transform.position;
+        if (EnableParentFrameIkOffsetCompensationWhenCenterParented &&
+            UseCenterAsParentOfAll &&
+            !UseAbsoluteCoordinateSystem &&
+            transform.parent != null)
+        {
+            ikReferenceRotation = transform.parent.rotation;
+            ikReferencePosition = transform.parent.position;
+        }
         if (BoneDictionary[BoneNames.左足ＩＫ] != null)
         {
-            LeftFootIKOffset = Quaternion.Inverse(transform.rotation) * (BoneDictionary[BoneNames.左足ＩＫ].position - transform.position);
+            LeftFootIKOffset = Quaternion.Inverse(ikReferenceRotation) * (BoneDictionary[BoneNames.左足ＩＫ].position - ikReferencePosition);
         }
         if (BoneDictionary[BoneNames.右足ＩＫ] != null)
         {
-            RightFootIKOffset = Quaternion.Inverse(transform.rotation) * (BoneDictionary[BoneNames.右足ＩＫ].position - transform.position);
+            RightFootIKOffset = Quaternion.Inverse(ikReferenceRotation) * (BoneDictionary[BoneNames.右足ＩＫ].position - ikReferencePosition);
         }
         // Set offsets for toe IK
-        if (BoneDictionary.ContainsKey(BoneNames.左つま先ＩＫ) && BoneDictionary[BoneNames.左つま先ＩＫ] != null)
+        if (BoneDictionary.ContainsKey(BoneNames.左つま先ＩＫ)
+            && BoneDictionary[BoneNames.左つま先ＩＫ] != null
+            && BoneDictionary[BoneNames.左足ＩＫ] != null)
         {
-            LeftToeIKOffset = Quaternion.Inverse(transform.rotation) * (BoneDictionary[BoneNames.左つま先ＩＫ].position - BoneDictionary[BoneNames.左足ＩＫ].position);
+            LeftToeIKOffset = Quaternion.Inverse(ikReferenceRotation) * (BoneDictionary[BoneNames.左つま先ＩＫ].position - BoneDictionary[BoneNames.左足ＩＫ].position);
         }
-        if (BoneDictionary.ContainsKey(BoneNames.右つま先ＩＫ) && BoneDictionary[BoneNames.右つま先ＩＫ] != null)
+        if (BoneDictionary.ContainsKey(BoneNames.右つま先ＩＫ)
+            && BoneDictionary[BoneNames.右つま先ＩＫ] != null
+            && BoneDictionary[BoneNames.右足ＩＫ] != null)
         {
-            RightToeIKOffset = Quaternion.Inverse(transform.rotation) * (BoneDictionary[BoneNames.右つま先ＩＫ].position - BoneDictionary[BoneNames.右足ＩＫ].position);
+            RightToeIKOffset = Quaternion.Inverse(ikReferenceRotation) * (BoneDictionary[BoneNames.右つま先ＩＫ].position - BoneDictionary[BoneNames.右足ＩＫ].position);
         }
 
         boneGhost = new VmdBoneGhost(animator, BoneDictionary, UseBottomCenter);

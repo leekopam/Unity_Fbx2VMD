@@ -61,6 +61,10 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     /// </summary>
     /// [한글] "全ての親"의 좌표와 회전을 절대 좌표계로 계산 (UseParentOfAll이 true여야 의미 있음)
     public bool UseAbsoluteCoordinateSystem = true;
+
+    [Header("IK Offsets")]
+    [Tooltip("UseCenterAsParentOfAll=1 & UseAbsoluteCoordinateSystem=0(그리고 parent가 존재)일 때, 발/발끝 IK offset을 같은(parent) 좌표계 기준으로 계산/적용합니다. 회귀 비교용으로 끌 수 있습니다.")]
+    public bool EnableParentFrameIkOffsetCompensationWhenCenterParented = true;
     
     public bool IgnoreInitialPosition = false;            // 초기 위치 무시 여부
     public bool IgnoreInitialRotation = false;            // 초기 회전 무시 여부
