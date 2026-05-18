@@ -120,6 +120,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float durationSeconds;
             public int targetFrameCount;
             public bool enableFingerCloseups;
+            public bool enableRecorderParentFrameIkOffsetsWhenCenterParented;
             public bool isRunning;
             public bool activeJobFinished;
             public bool advanceAfterPlayStopPending;
@@ -146,6 +147,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static float _durationSeconds = DefaultDurationSeconds;
         private static int _targetFrameCount = Mathf.CeilToInt(DefaultDurationSeconds * DefaultFrameRate);
         private static bool _enableFingerCloseups;
+        private static bool _enableRecorderParentFrameIkOffsetsWhenCenterParented = true;
         private static bool _isRunning;
         private static bool _activeJobFinished;
         private static bool _activeJobStartedInPlayMode;
@@ -217,7 +219,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         [MenuItem(MenuRoot + "Run satisfaction_2 testPrefab vs Main_Auto", false, 2130)]
         private static void RunDefaultMenu()
         {
-            StartRun(DefaultFbxFileName, DefaultDurationSeconds, enableFingerCloseups: false);
+            StartRun(
+                DefaultFbxFileName,
+                DefaultDurationSeconds,
+                enableFingerCloseups: false,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented: true);
         }
 
         public static void RunBatch()
@@ -225,15 +231,42 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             string fbxFileName = GetCommandLineValue("-yybCompareFbx", DefaultFbxFileName);
             float durationSeconds = GetCommandLineFloat("-yybCompareDuration", DefaultDurationSeconds);
             bool enableFingerCloseups = GetCommandLineBool("-yybCompareFingerCloseups", false);
-            StartRun(fbxFileName, durationSeconds, enableFingerCloseups);
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented =
+                GetCommandLineBool("-yybCompareRecorderParentFrameIkOffsetsWhenCenterParented", true);
+            StartRun(
+                fbxFileName,
+                durationSeconds,
+                enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented);
         }
 
         public static void RunWithOptions(string fbxFileName, float durationSeconds, bool enableFingerCloseups)
         {
-            StartRun(fbxFileName, durationSeconds, enableFingerCloseups);
+            StartRun(
+                fbxFileName,
+                durationSeconds,
+                enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented: true);
         }
 
-        private static void StartRun(string fbxFileName, float durationSeconds, bool enableFingerCloseups)
+        public static void RunWithOptions(
+            string fbxFileName,
+            float durationSeconds,
+            bool enableFingerCloseups,
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented)
+        {
+            StartRun(
+                fbxFileName,
+                durationSeconds,
+                enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented);
+        }
+
+        private static void StartRun(
+            string fbxFileName,
+            float durationSeconds,
+            bool enableFingerCloseups,
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented)
         {
             if (_isRunning)
             {
@@ -249,6 +282,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _durationSeconds = Mathf.Max(0.1f, durationSeconds);
             _targetFrameCount = Mathf.Max(1, Mathf.CeilToInt(_durationSeconds * DefaultFrameRate));
             _enableFingerCloseups = enableFingerCloseups;
+            _enableRecorderParentFrameIkOffsetsWhenCenterParented = enableRecorderParentFrameIkOffsetsWhenCenterParented;
 
             try
             {
@@ -323,8 +357,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             Debug.Log(
                 $"[YybVisualComparisonBatchRunner] 시작: fbx={_fbxFileName}, duration={_durationSeconds:F2}s, " +
-                $"targetFrames={_targetFrameCount}, fingerCloseups={_enableFingerCloseups}, batchMode={Application.isBatchMode}");
-            AppendRunnerTrace($"run started fbx={_fbxFileName} duration={_durationSeconds:F2}s fingerCloseups={_enableFingerCloseups}");
+                $"targetFrames={_targetFrameCount}, fingerCloseups={_enableFingerCloseups}, " +
+                $"recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented}, batchMode={Application.isBatchMode}");
+            AppendRunnerTrace(
+                $"run started fbx={_fbxFileName} duration={_durationSeconds:F2}s " +
+                $"fingerCloseups={_enableFingerCloseups} recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented}");
 
             if (!Application.isBatchMode && RequestRuntimeDiagnosticScriptRefresh())
             {
@@ -514,6 +551,15 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _activeRecorder = _activeFileManager.targetCharacter != null
                 ? _activeFileManager.targetCharacter.GetComponent<HumanoidSampleCode>()
                 : null;
+            if (_activeRecorder != null)
+            {
+                UnityHumanoidVMDRecorder vmdRecorder = _activeRecorder.GetComponent<UnityHumanoidVMDRecorder>();
+                if (vmdRecorder != null)
+                {
+                    vmdRecorder.EnableParentFrameIkOffsetCompensationWhenCenterParented =
+                        _enableRecorderParentFrameIkOffsetsWhenCenterParented;
+                }
+            }
 
             _activeFileManager.EditorDiagnosticSmokeFinished -= HandleMainAutoFinished;
             _activeFileManager.EditorDiagnosticSmokeFinished += HandleMainAutoFinished;
@@ -976,6 +1022,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 durationSeconds = _durationSeconds,
                 targetFrameCount = _targetFrameCount,
                 enableFingerCloseups = _enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented = _enableRecorderParentFrameIkOffsetsWhenCenterParented,
                 isRunning = _isRunning,
                 activeJobFinished = _activeJobFinished,
                 advanceAfterPlayStopPending = _advanceAfterPlayStopPending,
@@ -1032,6 +1079,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _durationSeconds = Mathf.Max(0.1f, state.durationSeconds);
             _targetFrameCount = Mathf.Max(1, state.targetFrameCount);
             _enableFingerCloseups = state.enableFingerCloseups;
+            _enableRecorderParentFrameIkOffsetsWhenCenterParented = state.enableRecorderParentFrameIkOffsetsWhenCenterParented;
             _summarySessionId = state.summarySessionId ?? string.Empty;
             _summaryDirectory = state.summaryDirectory ?? string.Empty;
             _projectRoot = state.projectRoot ?? (Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath);
@@ -1318,6 +1366,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 duration_seconds = _durationSeconds,
                 target_frame_count = _targetFrameCount,
                 finger_closeups = _enableFingerCloseups,
+                recorder_parent_ik_offsets_when_center_parented = _enableRecorderParentFrameIkOffsetsWhenCenterParented,
                 reference_clip_name = _referenceClip != null ? _referenceClip.name : string.Empty,
                 results = Results.ToArray(),
                 failures = Failures.ToArray()
@@ -1338,6 +1387,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             builder.AppendLine($"- duration seconds: `{_durationSeconds:F2}`");
             builder.AppendLine($"- target frames: `{_targetFrameCount}`");
             builder.AppendLine($"- finger closeups: `{_enableFingerCloseups}`");
+            builder.AppendLine($"- recorder parent IK offsets (center-parented): `{_enableRecorderParentFrameIkOffsetsWhenCenterParented}`");
             builder.AppendLine($"- reference clip: `{(_referenceClip != null ? _referenceClip.name : "")}`");
             builder.AppendLine();
             builder.AppendLine("## Results");
@@ -1504,6 +1554,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float duration_seconds;
             public int target_frame_count;
             public bool finger_closeups;
+            public bool recorder_parent_ik_offsets_when_center_parented;
             public string reference_clip_name;
             public CaptureResult[] results;
             public string[] failures;

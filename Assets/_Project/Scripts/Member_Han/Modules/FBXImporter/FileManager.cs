@@ -1593,6 +1593,7 @@ namespace Member_Han.Modules.FBXImporter
                 ? _activeRecorderController.GetComponent<MotionComparisonProbe>()
                 : null;
             VmdSaveResult effectiveResult = ApplyEditorSmokeThumbRiskFailure(result, probe);
+            TryAppendVmdArtifactToComparisonSessionManifest(probe, effectiveResult);
             TryCopyVmdToAdditionalFolder(effectiveResult);
             ClearActiveRecordingSubscription();
             LogRetargetPlaybackStabilitySummary();
@@ -1614,6 +1615,44 @@ namespace Member_Han.Modules.FBXImporter
             ClearEditorSmokeOverride();
 #endif
             _isProcessing = false;
+        }
+
+        private static void TryAppendVmdArtifactToComparisonSessionManifest(MotionComparisonProbe probe, VmdSaveResult result)
+        {
+            if (probe == null ||
+                result.Success == false ||
+                string.IsNullOrWhiteSpace(probe.LastSessionManifestPath) ||
+                string.IsNullOrWhiteSpace(result.FilePath))
+            {
+                return;
+            }
+
+            MotionComparisonProbeSessionManifestPatcher.TryAppendExportedVmdToSessionManifest(
+                probe.LastSessionManifestPath,
+                MakeProjectRelativePath(result.FilePath),
+                result.FrameCount,
+                result.FileSizeBytes);
+        }
+
+        private static string MakeProjectRelativePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            string rootPath = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+            string fullPath = Path.GetFullPath(path);
+            string fullRoot = Path.GetFullPath(rootPath);
+
+            if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return path.Replace("\\", "/");
+            }
+
+            return fullPath.Substring(fullRoot.Length)
+                .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Replace("\\", "/");
         }
 
         private void TryCopyVmdToAdditionalFolder(VmdSaveResult result)
