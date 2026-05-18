@@ -141,15 +141,21 @@ public partial class UnityHumanoidVMDRecorder
                     targetVector = BoneDictionary[boneName].position - transform.position;
                     targetVector = Quaternion.Inverse(transform.rotation) * targetVector;
                 }
-                // Now subtract the appropriate IK offset
-                //if (boneName == BoneNames.左足ＩＫ)
-                //{
-                //    targetVector -= LeftFootIKOffset;
-                //}
-                //else if (boneName == BoneNames.右足ＩＫ)
-                //{
-                //    targetVector -= RightFootIKOffset;
-                //}
+
+                if (EnableParentFrameIkOffsetCompensationWhenCenterParented &&
+                    UseCenterAsParentOfAll &&
+                    !UseAbsoluteCoordinateSystem &&
+                    transform.parent != null)
+                {
+                    if (boneName == BoneNames.左足ＩＫ)
+                    {
+                        targetVector -= LeftFootIKOffset;
+                    }
+                    else if (boneName == BoneNames.右足ＩＫ)
+                    {
+                        targetVector -= RightFootIKOffset;
+                    }
+                }
 
 
                 // Unity 좌표계 → VMD 좌표계 변환 (X축, Z축 반전)
@@ -175,16 +181,34 @@ public partial class UnityHumanoidVMDRecorder
                 if (boneName == BoneNames.左つま先ＩＫ)
                 {
                     targetVector = BoneDictionary[boneName].position - BoneDictionary[BoneNames.左足ＩＫ].position;
-                    //targetVector = Quaternion.Inverse(transform.rotation) * targetVector;
-                    //targetVector -= LeftToeIKOffset;
-                    targetVector -= new Vector3(-0.001641536f, -0.07096878f, 0.1238693f);
+                    if (EnableParentFrameIkOffsetCompensationWhenCenterParented &&
+                        UseCenterAsParentOfAll &&
+                        !UseAbsoluteCoordinateSystem &&
+                        transform.parent != null)
+                    {
+                        targetVector = Quaternion.Inverse(transform.parent.rotation) * targetVector;
+                        targetVector -= LeftToeIKOffset;
+                    }
+                    else
+                    {
+                        targetVector -= new Vector3(-0.001641536f, -0.07096878f, 0.1238693f);
+                    }
                 }
                 else if (boneName == BoneNames.右つま先ＩＫ)
                 {
                     targetVector = BoneDictionary[boneName].position - BoneDictionary[BoneNames.右足ＩＫ].position;
-                    //targetVector = Quaternion.Inverse(transform.rotation) * targetVector;
-                    //targetVector -= RightToeIKOffset;
-                    targetVector -= new Vector3(0.001641536f, -0.07096878f, 0.1238693f);
+                    if (EnableParentFrameIkOffsetCompensationWhenCenterParented &&
+                        UseCenterAsParentOfAll &&
+                        !UseAbsoluteCoordinateSystem &&
+                        transform.parent != null)
+                    {
+                        targetVector = Quaternion.Inverse(transform.parent.rotation) * targetVector;
+                        targetVector -= RightToeIKOffset;
+                    }
+                    else
+                    {
+                        targetVector -= new Vector3(0.001641536f, -0.07096878f, 0.1238693f);
+                    }
                 }
                 Vector3 ikPosition = new Vector3(-targetVector.x, targetVector.y, -targetVector.z);
                 positionDictionary[boneName].Add(ikPosition * DefaultBoneAmplifier);

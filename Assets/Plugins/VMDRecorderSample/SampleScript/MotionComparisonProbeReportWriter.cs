@@ -236,6 +236,98 @@ internal static class MotionComparisonProbeReportWriter
         File.WriteAllText(filePath, BuildSessionManifestMarkdown(data), Encoding.UTF8);
     }
 
+    public static void TryAppendExportedVmdToSessionManifest(
+        string sessionManifestPath,
+        string vmdRelativePath,
+        int frameCount,
+        long fileSizeBytes)
+    {
+        if (string.IsNullOrWhiteSpace(sessionManifestPath) ||
+            string.IsNullOrWhiteSpace(vmdRelativePath) ||
+            !File.Exists(sessionManifestPath))
+        {
+            return;
+        }
+
+        string rowSuffix = fileSizeBytes > 0 || frameCount > 0
+            ? $" (frames={frameCount}, bytes={fileSizeBytes})"
+            : string.Empty;
+        string artifactRow = $"| exported vmd | `{EscapeMarkdown(vmdRelativePath)}`{rowSuffix} |";
+
+        string[] lines = File.ReadAllLines(sessionManifestPath, Encoding.UTF8);
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].StartsWith("| exported vmd |", StringComparison.Ordinal))
+            {
+                lines[i] = artifactRow;
+                File.WriteAllLines(sessionManifestPath, lines, Encoding.UTF8);
+                return;
+            }
+        }
+
+        int artifactsHeadingIndex = -1;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (string.Equals(lines[i].Trim(), "## 산출물", StringComparison.Ordinal))
+            {
+                artifactsHeadingIndex = i;
+                break;
+            }
+        }
+
+        if (artifactsHeadingIndex < 0)
+        {
+            File.AppendAllText(
+                sessionManifestPath,
+                Environment.NewLine + "## 산출물" + Environment.NewLine + Environment.NewLine +
+                "| 역할 | 경로 |" + Environment.NewLine +
+                "|---|---|" + Environment.NewLine +
+                artifactRow + Environment.NewLine,
+                Encoding.UTF8);
+            return;
+        }
+
+        int tableHeaderIndex = -1;
+        for (int i = artifactsHeadingIndex + 1; i < lines.Length; i++)
+        {
+            if (lines[i].StartsWith("| 역할 |", StringComparison.Ordinal))
+            {
+                tableHeaderIndex = i;
+                break;
+            }
+
+            if (lines[i].StartsWith("## ", StringComparison.Ordinal))
+            {
+                break;
+            }
+        }
+
+        if (tableHeaderIndex < 0)
+        {
+            File.AppendAllText(
+                sessionManifestPath,
+                Environment.NewLine + artifactRow + Environment.NewLine,
+                Encoding.UTF8);
+            return;
+        }
+
+        int insertIndex = lines.Length;
+        for (int i = tableHeaderIndex + 2; i < lines.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(lines[i]) || lines[i].StartsWith("## ", StringComparison.Ordinal))
+            {
+                insertIndex = i;
+                break;
+            }
+        }
+
+        var updated = new string[lines.Length + 1];
+        Array.Copy(lines, 0, updated, 0, insertIndex);
+        updated[insertIndex] = artifactRow;
+        Array.Copy(lines, insertIndex, updated, insertIndex + 1, lines.Length - insertIndex);
+        File.WriteAllLines(sessionManifestPath, updated, Encoding.UTF8);
+    }
+
     internal static string BuildSessionManifestMarkdown(MotionComparisonProbeSessionManifestData data)
     {
         StringBuilder builder = new StringBuilder();
@@ -333,3 +425,18 @@ internal static class MotionComparisonProbeReportWriter
     }
 }
 
+public static class MotionComparisonProbeSessionManifestPatcher
+{
+    public static void TryAppendExportedVmdToSessionManifest(
+        string sessionManifestPath,
+        string vmdRelativePath,
+        int frameCount,
+        long fileSizeBytes)
+    {
+        MotionComparisonProbeReportWriter.TryAppendExportedVmdToSessionManifest(
+            sessionManifestPath,
+            vmdRelativePath,
+            frameCount,
+            fileSizeBytes);
+    }
+}
