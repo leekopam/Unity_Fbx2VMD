@@ -65,6 +65,12 @@ namespace Tests.Editor.FBXImporter
             typeof(int)
         };
 
+        private static readonly Type[] RecordingModeParameterTypes =
+        {
+            typeof(bool),
+            typeof(bool)
+        };
+
         [Test]
         public void Given_ControlledFileExists_When_ResolvingEditorSmokeFbxPath_Then_UsesControlledPath()
         {
@@ -216,6 +222,36 @@ namespace Tests.Editor.FBXImporter
             bool shouldConfigure = ShouldConfigureImportSettings(sourcePath, controlledPath, dataPath);
 
             Assert.That(shouldConfigure, Is.True);
+        }
+
+        [Test]
+        public void Given_CaptureOnlyModeWithoutEditorSmoke_When_DecidingRecordingMode_Then_SkipsVmdRecording()
+        {
+            bool shouldRecord = ShouldStartVmdRecordingAfterImport(
+                recordVmdAfterImport: false,
+                editorSmokeRecordingOverrideActive: false);
+
+            Assert.That(shouldRecord, Is.False);
+        }
+
+        [Test]
+        public void Given_CaptureOnlyModeWithEditorSmoke_When_DecidingRecordingMode_Then_AllowsDiagnosticVmdRecording()
+        {
+            bool shouldRecord = ShouldStartVmdRecordingAfterImport(
+                recordVmdAfterImport: false,
+                editorSmokeRecordingOverrideActive: true);
+
+            Assert.That(shouldRecord, Is.True);
+        }
+
+        [Test]
+        public void Given_VmdMode_When_DecidingRecordingMode_Then_StartsVmdRecording()
+        {
+            bool shouldRecord = ShouldStartVmdRecordingAfterImport(
+                recordVmdAfterImport: true,
+                editorSmokeRecordingOverrideActive: false);
+
+            Assert.That(shouldRecord, Is.True);
         }
 
         [Test]
@@ -381,6 +417,20 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "FileManager must expose a fakeable import-settings decision helper.");
 
             return (bool)method.Invoke(null, new object[] { sourcePath, targetPath, dataPath });
+        }
+
+        private static bool ShouldStartVmdRecordingAfterImport(bool recordVmdAfterImport, bool editorSmokeRecordingOverrideActive)
+        {
+            MethodInfo method = typeof(FileManager).GetMethod(
+                "ShouldStartVmdRecordingAfterImport",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: RecordingModeParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "FileManager must expose a testable recording-mode decision helper.");
+
+            return (bool)method.Invoke(null, new object[] { recordVmdAfterImport, editorSmokeRecordingOverrideActive });
         }
 
         private static string MakeProjectRelativePath(string path, string projectRoot)

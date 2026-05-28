@@ -9,6 +9,9 @@ EditorBuildSettings:
     path: Assets/_Project/Scene/Main_Auto.unity
     guid: f0915ac3840d87d42b18fe00d40aaa2a
   - enabled: 1
+    path: Assets/_Project/Scene/FbxImport_Capture.unity
+    guid: 9dbb477e09644f89b56b56c8fc3a6a1c
+  - enabled: 1
     path: Assets/_Project/Scene/Sub_Manual.unity
     guid: 14dea031bbf2c7f4d99689d7223d0e64
   m_configObjects: {}
