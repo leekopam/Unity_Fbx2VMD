@@ -38,6 +38,7 @@ public partial class UnityHumanoidVMDRecorder
                 // [한글] 하반신 같은 개념은 Unity에 없음 (루트 본으로 대체)
                 { BoneNames.全ての親, (transform) },                            // 루트 Transform
                 { BoneNames.センター, (animator.GetBoneTransform(HumanBodyBones.Hips))},  // 엉덩이(허리)
+                { BoneNames.下半身, (animator.GetBoneTransform(HumanBodyBones.Hips))},     // MMD lower-body rotation carrier
                 { BoneNames.左足ＩＫ, (animator.GetBoneTransform(HumanBodyBones.LeftFoot))},   // 왼발 IK
                 { BoneNames.右足ＩＫ, (animator.GetBoneTransform(HumanBodyBones.RightFoot))},  // 오른발 IK
                 // Added toe IK bones using LeftToes and RightToes:

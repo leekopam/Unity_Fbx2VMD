@@ -18,16 +18,20 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
         private const string DefaultFbxFileName = "satisfaction_2.fbx";
+        private const string SatisfactionReferenceOutputBaseName = "satisfaction_2";
+        private const int SatisfactionReferenceMaxMmdFrame = 6000;
         private const string ManualControllerPath = "Assets/_ManualReference/SampleAnimation/TestAnimator1_Manual.controller";
         private const string FallbackControllerPath = "Assets/Plugins/VMDRecorderSample/SampleAnimation/TestAnimator1.controller";
         private const string ProjectFbxDirectory = "Assets/_Project/FBX";
         private const string ImportFbxDirectory = "Assets/Resources/Import_FBX";
         private const string OutputRootDirectory = "Docs/Machine_Spirit/Local/ComparisonSessions";
+        private const string MmdAutomationRunsRelativePath = "Docs/Machine_Spirit/Local/MMDQASessions/automation_runs";
         private const string LatestSummaryJsonRelativePath = "Docs/Machine_Spirit/Local/progress/evidence/yyb_visual_compare_latest.json";
         private const string LatestSummaryMarkdownRelativePath = "Docs/Machine_Spirit/Local/progress/evidence/yyb_visual_compare_latest.md";
         private const string SummaryJsonFileName = "yyb_visual_compare_summary.json";
         private const string SummaryMarkdownFileName = "yyb_visual_compare_summary.md";
         private const string RunnerTraceRelativePath = "Docs/Machine_Spirit/Local/runtime/yyb_visual_compare_runner_trace.log";
+        private const int EvidenceSafeMaxFullPathLength = 240;
         private static readonly string[] RuntimeDiagnosticScriptPaths =
         {
             "Assets/Plugins/VMDRecorderSample/SampleScript/MotionComparisonProbe.cs",
@@ -142,6 +146,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static FileManager _activeFileManager;
         private static HumanoidSampleCode _activeRecorder;
         private static AnimationClip _referenceClip;
+        private static string _referenceClipAssetPath = string.Empty;
         private static RuntimeAnimatorController _fallbackController;
         private static string _fbxFileName = DefaultFbxFileName;
         private static float _durationSeconds = DefaultDurationSeconds;
@@ -286,8 +291,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             try
             {
-                _referenceClip = LoadFirstAnimationClip(Path.Combine(ProjectFbxDirectory, _fbxFileName)) ??
-                                 LoadFirstAnimationClip(Path.Combine(ImportFbxDirectory, _fbxFileName));
+                _referenceClipAssetPath = ResolveReferenceClipAssetPath(
+                    _fbxFileName,
+                    assetPath => LoadFirstAnimationClip(assetPath) != null);
+                _referenceClip = LoadFirstAnimationClip(_referenceClipAssetPath);
                 if (_referenceClip == null)
                 {
                     throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_fbxFileName}");
@@ -345,9 +352,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 ManualTargetNameToken = string.Empty
             });
 
-            _summarySessionId =
+            string rawSummarySessionId =
                 $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-MainAuto_vs_SubManual_who-testprefab-vs-yyb_what-visual-compare_why-runtime-match_how-unity-batch";
-            _summaryDirectory = Path.Combine(_projectRoot, OutputRootDirectory, _summarySessionId);
+            _summarySessionId = BuildSafeSummarySessionId(rawSummarySessionId);
+            string summaryRoot = Path.Combine(_projectRoot, OutputRootDirectory);
+            _summaryDirectory = Path.Combine(summaryRoot, _summarySessionId);
             Directory.CreateDirectory(_summaryDirectory);
 
             _isRunning = true;
@@ -398,27 +407,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
         private static bool RequestRuntimeDiagnosticScriptRefresh()
         {
-            bool importedAny = false;
-            foreach (string assetPath in RuntimeDiagnosticScriptPaths)
-            {
-                string fullPath = Path.Combine(_projectRoot, assetPath.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(fullPath))
-                {
-                    continue;
-                }
-
-                AssetDatabase.ImportAsset(
-                    assetPath,
-                    ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-                importedAny = true;
-            }
-
-            if (importedAny)
-            {
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            }
-
-            return EditorApplication.isCompiling || EditorApplication.isUpdating;
+            return UnityManualRefreshGuard.RequestRefreshForAssets(
+                RuntimeDiagnosticScriptPaths,
+                "yyb_visual_comparison_runtime_diagnostics");
         }
 
         private static void HandlePlayModeStateChanged(PlayModeStateChange state)
@@ -558,6 +549,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 {
                     vmdRecorder.EnableParentFrameIkOffsetCompensationWhenCenterParented =
                         _enableRecorderParentFrameIkOffsetsWhenCenterParented;
+                    vmdRecorder.IgnoreInitialPosition = true;
                 }
             }
 
@@ -599,6 +591,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             PrepareManualAnimator(animator, _referenceClip);
+            UnityHumanoidVMDRecorder vmdRecorder = _activeRecorder.GetComponent<UnityHumanoidVMDRecorder>();
+            if (vmdRecorder != null)
+            {
+                vmdRecorder.IgnoreInitialPosition = true;
+            }
             _activeRecorder.SetRecordingDiagnostics(
                 enableProbe: true,
                 enableFingerCloseups: _enableFingerCloseups,
@@ -1244,8 +1241,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
         private static void LoadRunAssetsForResume()
         {
-            _referenceClip = LoadFirstAnimationClip(Path.Combine(ProjectFbxDirectory, _fbxFileName)) ??
-                             LoadFirstAnimationClip(Path.Combine(ImportFbxDirectory, _fbxFileName));
+            _referenceClipAssetPath = ResolveReferenceClipAssetPath(
+                _fbxFileName,
+                assetPath => LoadFirstAnimationClip(assetPath) != null);
+            _referenceClip = LoadFirstAnimationClip(_referenceClipAssetPath);
             if (_referenceClip == null)
             {
                 throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_fbxFileName}");
@@ -1358,17 +1357,28 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
         private static void WriteSummaryJson(string path)
         {
+            MotionComparisonFrameQualitySummary[] frameQualitySummaries = BuildFrameQualitySummaries();
+            int summaryTargetFrameCount = ResolveSummaryTargetFrameCount();
+            SummaryFrameRoleDiagnostics frameRoleDiagnostics = BuildSummaryFrameRoleDiagnostics(
+                summaryTargetFrameCount,
+                ResolveFrameCount(CaptureMode.SubManualTestPrefab),
+                ResolveFrameCount(CaptureMode.MainAuto));
             SummaryContainer summary = new SummaryContainer
             {
                 session_id = _summarySessionId,
                 generated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
                 fbx_file = _fbxFileName,
                 duration_seconds = _durationSeconds,
-                target_frame_count = _targetFrameCount,
+                target_frame_count = summaryTargetFrameCount,
                 finger_closeups = _enableFingerCloseups,
                 recorder_parent_ik_offsets_when_center_parented = _enableRecorderParentFrameIkOffsetsWhenCenterParented,
                 reference_clip_name = _referenceClip != null ? _referenceClip.name : string.Empty,
+                reference_clip_asset_path = _referenceClipAssetPath,
                 results = Results.ToArray(),
+                frame_count_roles = frameRoleDiagnostics,
+                sample_ordering_diagnostics = BuildSampleOrderingDiagnostics(),
+                selected_candidate_artifact = BuildCandidateArtifactSelection(frameQualitySummaries),
+                frame_quality_summaries = frameQualitySummaries,
                 failures = Failures.ToArray()
             };
 
@@ -1385,11 +1395,25 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             builder.AppendLine($"- generated at: `{DateTime.Now:yyyy-MM-dd HH:mm:ss}`");
             builder.AppendLine($"- fbx file: `{_fbxFileName}`");
             builder.AppendLine($"- duration seconds: `{_durationSeconds:F2}`");
-            builder.AppendLine($"- target frames: `{_targetFrameCount}`");
+            builder.AppendLine($"- target frames: `{ResolveSummaryTargetFrameCount()}`");
             builder.AppendLine($"- finger closeups: `{_enableFingerCloseups}`");
             builder.AppendLine($"- recorder parent IK offsets (center-parented): `{_enableRecorderParentFrameIkOffsetsWhenCenterParented}`");
             builder.AppendLine($"- reference clip: `{(_referenceClip != null ? _referenceClip.name : "")}`");
+            builder.AppendLine($"- reference clip asset: `{EscapeMarkdown(_referenceClipAssetPath)}`");
             builder.AppendLine();
+
+            SummaryFrameRoleDiagnostics frameRoleDiagnostics = BuildSummaryFrameRoleDiagnostics(
+                ResolveSummaryTargetFrameCount(),
+                ResolveFrameCount(CaptureMode.SubManualTestPrefab),
+                ResolveFrameCount(CaptureMode.MainAuto));
+            builder.AppendLine("## Frame Count Roles");
+            builder.AppendLine();
+            builder.AppendLine($"- ref target: `{frameRoleDiagnostics.reference_target_frame_count}` ({EscapeMarkdown(frameRoleDiagnostics.target_frame_count_role)})");
+            builder.AppendLine($"- Sub_Manual baseline recorded frames: `{frameRoleDiagnostics.baseline_recorded_frame_count}` ({EscapeMarkdown(frameRoleDiagnostics.baseline_recorded_frame_count_role)})");
+            builder.AppendLine($"- Main_Auto candidate recorded frames: `{frameRoleDiagnostics.candidate_recorded_frame_count}` ({EscapeMarkdown(frameRoleDiagnostics.candidate_recorded_frame_count_role)})");
+            builder.AppendLine($"- metric basis: {EscapeMarkdown(frameRoleDiagnostics.frame_quality_metric_basis)}");
+            builder.AppendLine();
+
             builder.AppendLine("## Results");
             builder.AppendLine();
             builder.AppendLine("| job | scene | target | success | session | csv | frames | vmd |");
@@ -1400,6 +1424,71 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     $"| {EscapeMarkdown(result.jobDisplayName)} | {EscapeMarkdown(result.sceneName)} | {EscapeMarkdown(result.targetName)} | {result.success} | " +
                     $"`{EscapeMarkdown(result.comparisonSessionId)}` | `{EscapeMarkdown(result.comparisonMetricsCsvPath)}` | " +
                     $"`{EscapeMarkdown(result.comparisonFrameFolderPath)}` | `{EscapeMarkdown(result.vmdPath)}` |");
+            }
+
+            SummarySampleOrderingDiagnostic[] sampleOrderingDiagnostics = BuildSampleOrderingDiagnostics();
+            if (sampleOrderingDiagnostics.Length > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("## Sample Ordering Diagnostics");
+                builder.AppendLine();
+                builder.AppendLine("| job | scene | rows | first reason | first recorderFrame | first engine frame | recorder span | engine span | first clip time | first grounding step | first step/max | first step at max | grounding clamp delta | grounding smooth delta | finish recorderFrame | finish engine frame |");
+                builder.AppendLine("|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|");
+                foreach (SummarySampleOrderingDiagnostic diagnostic in sampleOrderingDiagnostics)
+                {
+                    builder.AppendLine(
+                        $"| {EscapeMarkdown(diagnostic.job_mode)} | {EscapeMarkdown(diagnostic.scene_name)} | {diagnostic.metric_row_count} | " +
+                        $"{EscapeMarkdown(diagnostic.first_metric_reason)} | {diagnostic.first_metric_recorder_frame} | " +
+                        $"{diagnostic.first_metric_engine_frame_count} | {diagnostic.recording_metric_recorder_frame_span} | " +
+                        $"{diagnostic.recording_metric_engine_frame_span} | {FormatQualityFloat(diagnostic.first_metric_animation_clip_time)} | " +
+                        $"{FormatQualityFloat(diagnostic.first_metric_grounding_vertical_step_last)} | " +
+                        $"{FormatQualityFloat(diagnostic.first_metric_grounding_vertical_step_to_max_ratio)} | " +
+                        $"{diagnostic.first_metric_grounding_vertical_step_at_max_step} | " +
+                        $"{diagnostic.recording_grounding_step_clamp_delta} | {diagnostic.recording_grounding_smoothed_delta} | " +
+                        $"{diagnostic.finish_metric_recorder_frame} | {diagnostic.finish_metric_engine_frame_count} |");
+                }
+            }
+
+            MotionComparisonFrameQualitySummary[] frameQualitySummaries = BuildFrameQualitySummaries();
+            SummaryCandidateArtifactSelection selectedCandidate = BuildCandidateArtifactSelection(frameQualitySummaries);
+            if (selectedCandidate != null && !string.IsNullOrWhiteSpace(selectedCandidate.selected_candidate_vmd_path))
+            {
+                builder.AppendLine();
+                builder.AppendLine("## Selected Candidate Artifact");
+                builder.AppendLine();
+                builder.AppendLine("| selected role | output role | status | acceptance artifact | metrics | vmd | manifest | files | raw status | corrected status | preserves raw diagnostic | basis |");
+                builder.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|");
+                builder.AppendLine(
+                    $"| {EscapeMarkdown(selectedCandidate.selected_candidate_role)} | {EscapeMarkdown(selectedCandidate.selected_candidate_output_role)} | " +
+                    $"{EscapeMarkdown(selectedCandidate.selected_candidate_status)} | {selectedCandidate.selected_candidate_is_acceptance_artifact} | " +
+                    $"`{EscapeMarkdown(selectedCandidate.selected_candidate_metrics_csv)}` | " +
+                    $"`{EscapeMarkdown(selectedCandidate.selected_candidate_vmd_path)}` | " +
+                    $"`{EscapeMarkdown(selectedCandidate.selected_candidate_manifest_path)}` | " +
+                    $"vmd={selectedCandidate.selected_candidate_vmd_exists}, metrics={selectedCandidate.selected_candidate_metrics_exists}, manifest={selectedCandidate.selected_candidate_manifest_exists}, rawDiff={selectedCandidate.selected_candidate_differs_from_raw_vmd} | " +
+                    $"{EscapeMarkdown(selectedCandidate.raw_candidate_status)} | {EscapeMarkdown(selectedCandidate.corrected_candidate_status)} | " +
+                    $"{selectedCandidate.selected_candidate_preserves_raw_diagnostic} | " +
+                    $"{EscapeMarkdown(selectedCandidate.selected_candidate_acceptance_basis)}; {EscapeMarkdown(selectedCandidate.selection_basis)} |");
+            }
+
+            if (frameQualitySummaries.Length > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("## Frame Quality Gate");
+                builder.AppendLine();
+                builder.AppendLine("| baseline | candidate | evaluation | status | mmd | compared frames | foot min Y | root delta | center step | local foot IK min Y | effective foot IK min Y | metrics | mmd screenshot | mmd report | vmd | reason |");
+                builder.AppendLine("|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---|");
+                foreach (MotionComparisonFrameQualitySummary summary in frameQualitySummaries)
+                {
+                    builder.AppendLine(
+                        $"| {EscapeMarkdown(summary.baseline_label)} | {EscapeMarkdown(summary.candidate_label)} | {EscapeMarkdown(summary.frame_quality_evaluation_role)} | {EscapeMarkdown(summary.status)} | " +
+                        $"{EscapeMarkdown(summary.mmd_result_status)} | {summary.compared_frames} | {FormatQualityFloat(summary.min_candidate_foot_bottom_y)} | " +
+                        $"{FormatQualityFloat(summary.max_same_frame_root_position_delta)} | {FormatQualityFloat(summary.max_candidate_vmd_center_step)} | " +
+                        $"{FormatQualityFloat(summary.min_candidate_vmd_foot_ik_y)} | {FormatQualityFloat(summary.min_candidate_vmd_effective_foot_ik_y)} | " +
+                        $"`{EscapeMarkdown(summary.candidate_metrics_csv)}` | " +
+                        $"`{EscapeMarkdown(summary.mmd_after_play_screenshot_path)}` | `{EscapeMarkdown(summary.mmd_report_path)}` | " +
+                        $"`{EscapeMarkdown(summary.candidate_vmd_path)}` | " +
+                        $"{EscapeMarkdown(summary.status_reason)} |");
+                }
             }
 
             if (Failures.Count > 0)
@@ -1414,6 +1503,600 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             File.WriteAllText(path, builder.ToString(), Encoding.UTF8);
+        }
+
+        private static MotionComparisonFrameQualitySummary[] BuildFrameQualitySummaries()
+        {
+            CaptureResult baseline = Results.FirstOrDefault(result =>
+                string.Equals(result.jobMode, CaptureMode.SubManualTestPrefab.ToString(), StringComparison.Ordinal));
+            CaptureResult candidate = Results.FirstOrDefault(result =>
+                string.Equals(result.jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal));
+            if (baseline == null || candidate == null)
+            {
+                return Array.Empty<MotionComparisonFrameQualitySummary>();
+            }
+
+            MotionComparisonFrameQualitySummary summary = MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                baseline.jobDisplayName,
+                ToAbsoluteProjectPath(baseline.comparisonMetricsCsvPath),
+                candidate.jobDisplayName,
+                ToAbsoluteProjectPath(candidate.comparisonMetricsCsvPath),
+                ToAbsoluteProjectPath(candidate.vmdPath),
+                baseline.frameCount,
+                candidate.frameCount,
+                ResolveSummaryTargetFrameCount());
+            MotionComparisonFrameQualitySummary[] summaries =
+                MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(summary);
+            foreach (MotionComparisonFrameQualitySummary frameQualitySummary in summaries)
+            {
+                MotionComparisonProbeReportWriter.AttachLatestMmdAutomationEvidence(
+                    frameQualitySummary,
+                    _projectRoot,
+                    Path.Combine(_projectRoot, MmdAutomationRunsRelativePath));
+            }
+
+            return summaries;
+        }
+
+        private static int ResolveFrameCount(CaptureMode mode)
+        {
+            CaptureResult result = Results.FirstOrDefault(captureResult =>
+                string.Equals(captureResult.jobMode, mode.ToString(), StringComparison.Ordinal));
+            return result != null ? result.frameCount : 0;
+        }
+
+        private static int ResolveMainAutoFrameCount()
+        {
+            return ResolveFrameCount(CaptureMode.MainAuto);
+        }
+
+        private static int ResolveSummaryTargetFrameCount()
+        {
+            return ResolveSummaryTargetFrameCount(
+                ResolveReferenceMmdTargetFrameCount(
+                    _fbxFileName,
+                    _durationSeconds,
+                    _targetFrameCount,
+                    _referenceClip != null ? _referenceClip.length : 0f,
+                    DefaultFrameRate),
+                ResolveMainAutoFrameCount());
+        }
+
+        private static int ResolveSummaryTargetFrameCount(int referenceTargetFrameCount, int mainAutoFrameCount)
+        {
+            _ = mainAutoFrameCount;
+            return Mathf.Max(0, referenceTargetFrameCount);
+        }
+
+        private static int ResolveReferenceMmdTargetFrameCount(
+            string fbxFileName,
+            float requestedDurationSeconds,
+            int configuredTargetFrameCount,
+            float referenceClipLengthSeconds,
+            float recordingFrameRate)
+        {
+            if (TryResolveKnownMmdReferenceTargetFrameCount(
+                    fbxFileName,
+                    requestedDurationSeconds,
+                    configuredTargetFrameCount,
+                    referenceClipLengthSeconds,
+                    recordingFrameRate,
+                    out int referenceTargetFrameCount))
+            {
+                return referenceTargetFrameCount;
+            }
+
+            return Mathf.Max(0, configuredTargetFrameCount);
+        }
+
+        private static bool TryResolveKnownMmdReferenceTargetFrameCount(
+            string fbxFileName,
+            float requestedDurationSeconds,
+            int configuredTargetFrameCount,
+            float referenceClipLengthSeconds,
+            float recordingFrameRate,
+            out int referenceTargetFrameCount)
+        {
+            referenceTargetFrameCount = 0;
+            if (recordingFrameRate <= 0f ||
+                float.IsNaN(recordingFrameRate) ||
+                float.IsInfinity(recordingFrameRate) ||
+                requestedDurationSeconds <= 0f ||
+                float.IsNaN(requestedDurationSeconds) ||
+                float.IsInfinity(requestedDurationSeconds) ||
+                configuredTargetFrameCount <= 0 ||
+                referenceClipLengthSeconds <= 0f ||
+                float.IsNaN(referenceClipLengthSeconds) ||
+                float.IsInfinity(referenceClipLengthSeconds))
+            {
+                return false;
+            }
+
+            string cleanBaseName = Path.GetFileNameWithoutExtension(fbxFileName ?? string.Empty);
+            if (!string.Equals(cleanBaseName, SatisfactionReferenceOutputBaseName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            int knownReferenceFrameCount = SatisfactionReferenceMaxMmdFrame + 1;
+            float knownReferenceDurationSeconds = knownReferenceFrameCount / recordingFrameRate;
+            float frameToleranceSeconds = 0.5f / recordingFrameRate;
+            bool clipCoversReference = referenceClipLengthSeconds + frameToleranceSeconds >= knownReferenceDurationSeconds;
+            bool requestCoversReference = requestedDurationSeconds + frameToleranceSeconds >= knownReferenceDurationSeconds;
+            bool configuredFramesCoverReference = configuredTargetFrameCount >= knownReferenceFrameCount;
+            if (!clipCoversReference || !requestCoversReference || !configuredFramesCoverReference)
+            {
+                return false;
+            }
+
+            referenceTargetFrameCount = knownReferenceFrameCount;
+            return true;
+        }
+
+        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+            int referenceTargetFrameCount,
+            int baselineRecordedFrameCount,
+            int candidateRecordedFrameCount)
+        {
+            return new SummaryFrameRoleDiagnostics
+            {
+                reference_target_frame_count = Mathf.Max(0, referenceTargetFrameCount),
+                baseline_recorded_frame_count = Mathf.Max(0, baselineRecordedFrameCount),
+                candidate_recorded_frame_count = Mathf.Max(0, candidateRecordedFrameCount),
+                baseline_frame_count_delta_from_reference_target = referenceTargetFrameCount > 0
+                    ? baselineRecordedFrameCount - referenceTargetFrameCount
+                    : 0,
+                candidate_frame_count_delta_from_reference_target = referenceTargetFrameCount > 0
+                    ? candidateRecordedFrameCount - referenceTargetFrameCount
+                    : 0,
+                target_frame_count_role = "ref_mmd_mp4 expected frame range for the full satisfaction_2 reference",
+                baseline_recorded_frame_count_role = "Sub_Manual recorded comparison baseline; reported separately and not used as target_frame_count",
+                candidate_recorded_frame_count_role = "Main_Auto candidate capture under test",
+                frame_quality_metric_basis = "Unity pose metrics compare Sub_Manual and Main_Auto rows by recorderFrame; the ref_mmd_mp4 count is only the frame-count target",
+                vmd_export_metric_basis = "VMD export spike and floor metrics are evaluated on the Main_Auto candidate VMD"
+            };
+        }
+
+        private static SummaryCandidateArtifactSelection BuildCandidateArtifactSelection(
+            MotionComparisonFrameQualitySummary[] frameQualitySummaries)
+        {
+            SummaryCandidateArtifactSelection selection = new SummaryCandidateArtifactSelection();
+            if (frameQualitySummaries == null || frameQualitySummaries.Length == 0)
+            {
+                selection.selection_basis = "no frame_quality summary is available";
+                return selection;
+            }
+
+            MotionComparisonFrameQualitySummary raw = frameQualitySummaries.FirstOrDefault(summary =>
+                summary != null &&
+                string.Equals(summary.frame_quality_evaluation_role, "evaluation_candidate_metrics", StringComparison.Ordinal));
+            if (raw == null)
+            {
+                raw = frameQualitySummaries.FirstOrDefault(summary => summary != null);
+            }
+
+            MotionComparisonFrameQualitySummary corrected = frameQualitySummaries.FirstOrDefault(summary =>
+                summary != null &&
+                string.Equals(summary.frame_quality_evaluation_role, "corrected_candidate_metrics", StringComparison.Ordinal));
+
+            FillRawCandidateSelectionFields(selection, raw);
+            FillCorrectedCandidateSelectionFields(selection, corrected);
+
+            bool correctedPasses = corrected != null &&
+                string.Equals(corrected.status, "pass", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(corrected.candidate_vmd_path) &&
+                !string.IsNullOrWhiteSpace(corrected.candidate_metrics_csv);
+            if (correctedPasses)
+            {
+                FillSelectedCandidateFields(selection, corrected);
+                selection.selected_candidate_output_role = "user_facing_export_artifact";
+                selection.selected_candidate_preserves_raw_diagnostic = raw != null;
+                FillSelectedCandidateAcceptanceEvidence(selection, raw, corrected, raw != null ? raw.vertical_solve_corrected_candidate_manifest_path : string.Empty);
+                selection.selection_basis =
+                    "corrected candidate passed the same raw frame_quality evaluator and is selected as the user-facing candidate artifact; raw candidate remains diagnostic";
+                return selection;
+            }
+
+            FillSelectedCandidateFields(selection, raw);
+            selection.selected_candidate_output_role = "raw_recorder_candidate";
+            selection.selected_candidate_preserves_raw_diagnostic = false;
+            FillSelectedCandidateAcceptanceEvidence(selection, raw, raw, string.Empty);
+            selection.selection_basis = corrected == null
+                ? "no corrected candidate artifact is available; raw candidate remains selected"
+                : "corrected candidate is not passing; raw candidate remains selected";
+            return selection;
+        }
+
+        private static void FillSelectedCandidateFields(
+            SummaryCandidateArtifactSelection selection,
+            MotionComparisonFrameQualitySummary summary)
+        {
+            if (selection == null || summary == null)
+            {
+                return;
+            }
+
+            selection.selected_candidate_role = summary.frame_quality_evaluation_role ?? string.Empty;
+            selection.selected_candidate_status = summary.status ?? string.Empty;
+            selection.selected_candidate_status_reason = summary.status_reason ?? string.Empty;
+            selection.selected_candidate_metrics_csv = summary.candidate_metrics_csv ?? string.Empty;
+            selection.selected_candidate_vmd_path = summary.candidate_vmd_path ?? string.Empty;
+        }
+
+        private static void FillSelectedCandidateAcceptanceEvidence(
+            SummaryCandidateArtifactSelection selection,
+            MotionComparisonFrameQualitySummary raw,
+            MotionComparisonFrameQualitySummary selected,
+            string selectedManifestPath)
+        {
+            if (selection == null || selected == null)
+            {
+                return;
+            }
+
+            selection.selected_candidate_manifest_path = selectedManifestPath ?? string.Empty;
+            selection.selected_candidate_vmd_exists =
+                !string.IsNullOrWhiteSpace(selection.selected_candidate_vmd_path) &&
+                File.Exists(selection.selected_candidate_vmd_path);
+            selection.selected_candidate_metrics_exists =
+                !string.IsNullOrWhiteSpace(selection.selected_candidate_metrics_csv) &&
+                File.Exists(selection.selected_candidate_metrics_csv);
+            selection.selected_candidate_manifest_exists =
+                !string.IsNullOrWhiteSpace(selection.selected_candidate_manifest_path) &&
+                File.Exists(selection.selected_candidate_manifest_path);
+            selection.selected_candidate_differs_from_raw_vmd =
+                raw != null &&
+                !string.IsNullOrWhiteSpace(raw.candidate_vmd_path) &&
+                !string.IsNullOrWhiteSpace(selection.selected_candidate_vmd_path) &&
+                File.Exists(raw.candidate_vmd_path) &&
+                selection.selected_candidate_vmd_exists &&
+                !PathsReferToSameFile(raw.candidate_vmd_path, selection.selected_candidate_vmd_path) &&
+                FilesDiffer(raw.candidate_vmd_path, selection.selected_candidate_vmd_path);
+
+            bool selectedPasses = string.Equals(selected.status, "pass", StringComparison.OrdinalIgnoreCase);
+            bool selectedCorrectedArtifact = string.Equals(
+                selected.frame_quality_evaluation_role,
+                "corrected_candidate_metrics",
+                StringComparison.Ordinal);
+            bool hasRequiredFiles = selectedCorrectedArtifact
+                ? selection.selected_candidate_vmd_exists &&
+                  selection.selected_candidate_metrics_exists &&
+                  selection.selected_candidate_manifest_exists &&
+                  selection.selected_candidate_differs_from_raw_vmd
+                : selection.selected_candidate_vmd_exists && selection.selected_candidate_metrics_exists;
+            selection.selected_candidate_is_acceptance_artifact =
+                selectedPasses &&
+                selectedCorrectedArtifact &&
+                string.Equals(selection.selected_candidate_output_role, "user_facing_export_artifact", StringComparison.Ordinal) &&
+                selection.selected_candidate_preserves_raw_diagnostic &&
+                hasRequiredFiles;
+            selection.selected_candidate_acceptance_basis = selection.selected_candidate_is_acceptance_artifact
+                ? "selected corrected VMD/metrics/manifest is the final acceptance/export candidate; raw candidate remains diagnostic"
+                : "selected candidate is not a final acceptance/export artifact yet; raw candidate remains the diagnostic baseline";
+        }
+
+        private static bool PathsReferToSameFile(string leftPath, string rightPath)
+        {
+            try
+            {
+                return string.Equals(
+                    Path.GetFullPath(leftPath),
+                    Path.GetFullPath(rightPath),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception)
+            {
+                return string.Equals(leftPath, rightPath, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        private static bool FilesDiffer(string leftPath, string rightPath)
+        {
+            FileInfo left = new FileInfo(leftPath);
+            FileInfo right = new FileInfo(rightPath);
+            if (left.Length != right.Length)
+            {
+                return true;
+            }
+
+            byte[] leftBytes = File.ReadAllBytes(leftPath);
+            byte[] rightBytes = File.ReadAllBytes(rightPath);
+            if (leftBytes.Length != rightBytes.Length)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < leftBytes.Length; i++)
+            {
+                if (leftBytes[i] != rightBytes[i])
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void FillRawCandidateSelectionFields(
+            SummaryCandidateArtifactSelection selection,
+            MotionComparisonFrameQualitySummary raw)
+        {
+            if (selection == null || raw == null)
+            {
+                return;
+            }
+
+            selection.raw_candidate_status = raw.status ?? string.Empty;
+            selection.raw_candidate_status_reason = raw.status_reason ?? string.Empty;
+            selection.raw_candidate_metrics_csv = raw.candidate_metrics_csv ?? string.Empty;
+            selection.raw_candidate_vmd_path = raw.candidate_vmd_path ?? string.Empty;
+        }
+
+        private static void FillCorrectedCandidateSelectionFields(
+            SummaryCandidateArtifactSelection selection,
+            MotionComparisonFrameQualitySummary corrected)
+        {
+            if (selection == null || corrected == null)
+            {
+                return;
+            }
+
+            selection.corrected_candidate_status = corrected.status ?? string.Empty;
+            selection.corrected_candidate_status_reason = corrected.status_reason ?? string.Empty;
+            selection.corrected_candidate_metrics_csv = corrected.candidate_metrics_csv ?? string.Empty;
+            selection.corrected_candidate_vmd_path = corrected.candidate_vmd_path ?? string.Empty;
+        }
+
+        private static SummarySampleOrderingDiagnostic[] BuildSampleOrderingDiagnostics()
+        {
+            return Results
+                .Select(result => BuildSampleOrderingDiagnostic(
+                    result.jobMode,
+                    result.sceneName,
+                    result.comparisonMetricsCsvPath))
+                .ToArray();
+        }
+
+        private static SummarySampleOrderingDiagnostic BuildSampleOrderingDiagnostic(
+            string jobMode,
+            string sceneName,
+            string metricsCsvPath)
+        {
+            SummarySampleOrderingDiagnostic diagnostic = new SummarySampleOrderingDiagnostic
+            {
+                job_mode = jobMode ?? string.Empty,
+                scene_name = sceneName ?? string.Empty,
+                metrics_csv = metricsCsvPath ?? string.Empty
+            };
+
+            string absolutePath = ToAbsoluteProjectPath(metricsCsvPath);
+            if (string.IsNullOrWhiteSpace(absolutePath) || !File.Exists(absolutePath))
+            {
+                return diagnostic;
+            }
+
+            string[] lines = File.ReadAllLines(absolutePath, Encoding.UTF8);
+            if (lines.Length <= 1)
+            {
+                return diagnostic;
+            }
+
+            string[] headers = SplitSimpleCsvLine(lines[0]);
+            Dictionary<string, int> indices = BuildCsvIndexMap(headers);
+            List<string[]> rows = new List<string[]>();
+            for (int lineIndex = 1; lineIndex < lines.Length; lineIndex++)
+            {
+                if (string.IsNullOrWhiteSpace(lines[lineIndex]))
+                {
+                    continue;
+                }
+
+                rows.Add(SplitSimpleCsvLine(lines[lineIndex]));
+            }
+
+            diagnostic.metric_row_count = rows.Count;
+            if (rows.Count == 0)
+            {
+                return diagnostic;
+            }
+
+            string[] first = rows[0];
+            string[] finish = rows.LastOrDefault(row =>
+                string.Equals(GetCsvString(row, indices, "reason"), "finish", StringComparison.OrdinalIgnoreCase))
+                ?? rows[rows.Count - 1];
+
+            diagnostic.first_metric_reason = GetCsvString(first, indices, "reason");
+            diagnostic.first_metric_recorder_frame = GetCsvInt(first, indices, "recorderFrame");
+            diagnostic.first_metric_engine_frame_count = GetCsvInt(first, indices, "frameCount");
+            diagnostic.first_metric_time_since_level_load = GetCsvFloat(first, indices, "timeSinceLevelLoad");
+            diagnostic.first_metric_animation_clip_time = GetCsvFloat(first, indices, "animationClipTime");
+            diagnostic.first_metric_grounding_vertical_step_last = GetCsvFloat(first, indices, "retargetGroundingVerticalStepLast");
+            diagnostic.first_metric_grounding_initial_vertical_step = GetCsvFloat(first, indices, "retargetGroundingInitialVerticalStep");
+            diagnostic.first_metric_grounding_step_clamp_count = GetCsvInt(first, indices, "retargetGroundingStepClampCount");
+            diagnostic.first_metric_grounding_smoothed_count = GetCsvInt(first, indices, "retargetGroundingSmoothedCount");
+            diagnostic.first_metric_grounding_max_step_per_frame = GetCsvFloat(first, indices, "retargetGroundingMaxStepPerFrame");
+            diagnostic.first_metric_grounding_vertical_step_to_max_ratio = ResolveGroundingStepToMaxRatio(
+                first,
+                indices,
+                diagnostic.first_metric_grounding_vertical_step_last,
+                diagnostic.first_metric_grounding_max_step_per_frame);
+            diagnostic.first_metric_grounding_vertical_step_at_max_step =
+                IsGroundingVerticalStepAtMax(diagnostic.first_metric_grounding_vertical_step_to_max_ratio);
+            diagnostic.finish_metric_reason = GetCsvString(finish, indices, "reason");
+            diagnostic.finish_metric_recorder_frame = GetCsvInt(finish, indices, "recorderFrame");
+            diagnostic.finish_metric_engine_frame_count = GetCsvInt(finish, indices, "frameCount");
+            diagnostic.finish_metric_time_since_level_load = GetCsvFloat(finish, indices, "timeSinceLevelLoad");
+            diagnostic.finish_metric_animation_clip_time = GetCsvFloat(finish, indices, "animationClipTime");
+            diagnostic.finish_metric_grounding_vertical_step_last = GetCsvFloat(finish, indices, "retargetGroundingVerticalStepLast");
+            diagnostic.finish_metric_grounding_step_clamp_count = GetCsvInt(finish, indices, "retargetGroundingStepClampCount");
+            diagnostic.finish_metric_grounding_smoothed_count = GetCsvInt(finish, indices, "retargetGroundingSmoothedCount");
+            diagnostic.finish_metric_grounding_max_step_per_frame = GetCsvFloat(finish, indices, "retargetGroundingMaxStepPerFrame");
+            diagnostic.finish_metric_grounding_vertical_step_to_max_ratio = ResolveGroundingStepToMaxRatio(
+                finish,
+                indices,
+                diagnostic.finish_metric_grounding_vertical_step_last,
+                diagnostic.finish_metric_grounding_max_step_per_frame);
+            diagnostic.finish_metric_grounding_vertical_step_at_max_step =
+                IsGroundingVerticalStepAtMax(diagnostic.finish_metric_grounding_vertical_step_to_max_ratio);
+            diagnostic.recording_metric_recorder_frame_span = CalculateMetricIntSpan(
+                diagnostic.first_metric_recorder_frame,
+                diagnostic.finish_metric_recorder_frame);
+            diagnostic.recording_metric_engine_frame_span = CalculateMetricIntSpan(
+                diagnostic.first_metric_engine_frame_count,
+                diagnostic.finish_metric_engine_frame_count);
+            diagnostic.recording_metric_time_since_level_load_span = CalculateMetricFloatSpan(
+                diagnostic.first_metric_time_since_level_load,
+                diagnostic.finish_metric_time_since_level_load);
+            diagnostic.recording_grounding_step_clamp_delta = CalculateMetricIntSpan(
+                diagnostic.first_metric_grounding_step_clamp_count,
+                diagnostic.finish_metric_grounding_step_clamp_count);
+            diagnostic.recording_grounding_smoothed_delta = CalculateMetricIntSpan(
+                diagnostic.first_metric_grounding_smoothed_count,
+                diagnostic.finish_metric_grounding_smoothed_count);
+            diagnostic.recording_phase_span_role =
+                "finish-first recording phase metrics; absolute first engine frame includes scene load/import/prewarm startup offset and can vary between Unity batch runs";
+            diagnostic.grounding_step_limit_role =
+                "prewarm residual is identified by the first recorder-frame grounding step reaching its configured max; recording clamp/smoothed deltas are finish-first counters inside the captured phase";
+            return diagnostic;
+        }
+
+        private static float ResolveGroundingStepToMaxRatio(
+            string[] row,
+            Dictionary<string, int> indices,
+            float step,
+            float maxStep)
+        {
+            float reportedRatio = GetCsvFloat(row, indices, "retargetGroundingLastStepToMaxStepRatio");
+            if (!float.IsNaN(reportedRatio) && !float.IsInfinity(reportedRatio))
+            {
+                return reportedRatio;
+            }
+
+            if (float.IsNaN(step) ||
+                float.IsInfinity(step) ||
+                float.IsNaN(maxStep) ||
+                float.IsInfinity(maxStep) ||
+                maxStep <= 0f)
+            {
+                return float.NaN;
+            }
+
+            return Mathf.Abs(step) / maxStep;
+        }
+
+        private static bool IsGroundingVerticalStepAtMax(float stepToMaxRatio)
+        {
+            return !float.IsNaN(stepToMaxRatio) &&
+                !float.IsInfinity(stepToMaxRatio) &&
+                stepToMaxRatio >= 0.95f;
+        }
+
+        private static int CalculateMetricIntSpan(int first, int finish)
+        {
+            if (first < 0 || finish < 0)
+            {
+                return -1;
+            }
+
+            return finish - first;
+        }
+
+        private static float CalculateMetricFloatSpan(float first, float finish)
+        {
+            if (float.IsNaN(first) ||
+                float.IsNaN(finish) ||
+                float.IsInfinity(first) ||
+                float.IsInfinity(finish))
+            {
+                return float.NaN;
+            }
+
+            return finish - first;
+        }
+
+        private static string[] SplitSimpleCsvLine(string line)
+        {
+            return (line ?? string.Empty).Split(',');
+        }
+
+        private static Dictionary<string, int> BuildCsvIndexMap(string[] headers)
+        {
+            Dictionary<string, int> indices = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (int index = 0; index < headers.Length; index++)
+            {
+                if (!indices.ContainsKey(headers[index]))
+                {
+                    indices.Add(headers[index], index);
+                }
+            }
+
+            return indices;
+        }
+
+        private static string GetCsvString(
+            string[] row,
+            Dictionary<string, int> indices,
+            string column)
+        {
+            if (row == null ||
+                indices == null ||
+                string.IsNullOrEmpty(column) ||
+                !indices.TryGetValue(column, out int index) ||
+                index < 0 ||
+                index >= row.Length)
+            {
+                return string.Empty;
+            }
+
+            return row[index] ?? string.Empty;
+        }
+
+        private static int GetCsvInt(
+            string[] row,
+            Dictionary<string, int> indices,
+            string column)
+        {
+            return int.TryParse(
+                GetCsvString(row, indices, column),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out int value)
+                ? value
+                : 0;
+        }
+
+        private static float GetCsvFloat(
+            string[] row,
+            Dictionary<string, int> indices,
+            string column)
+        {
+            return float.TryParse(
+                GetCsvString(row, indices, column),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out float value)
+                ? value
+                : float.NaN;
+        }
+
+        private static string ToAbsoluteProjectPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            string normalized = path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            return Path.IsPathRooted(normalized)
+                ? normalized
+                : Path.Combine(_projectRoot, normalized);
+        }
+
+        private static string FormatQualityFloat(float value)
+        {
+            return float.IsNaN(value) || float.IsInfinity(value)
+                ? "n/a"
+                : value.ToString("0.######", CultureInfo.InvariantCulture);
         }
 
         private static void CopyLatestSummary(string sourcePath, string relativeTargetPath)
@@ -1453,6 +2136,24 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             return AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
+        }
+
+        private static string ResolveReferenceClipAssetPath(string fbxFileName, Func<string, bool> hasReferenceClip)
+        {
+            string normalizedFileName = NormalizeFbxFileName(fbxFileName);
+            string importCandidate = Path.Combine(ImportFbxDirectory, normalizedFileName).Replace('\\', '/');
+            if (hasReferenceClip(importCandidate))
+            {
+                return importCandidate;
+            }
+
+            string projectCandidate = Path.Combine(ProjectFbxDirectory, normalizedFileName).Replace('\\', '/');
+            if (hasReferenceClip(projectCandidate))
+            {
+                return projectCandidate;
+            }
+
+            return importCandidate;
         }
 
         private static string NormalizeFbxFileName(string fbxFileName)
@@ -1545,6 +2246,64 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             return string.IsNullOrEmpty(value) ? string.Empty : value.Replace("|", "\\|");
         }
 
+        private static string BuildSafeSummarySessionId(string sessionId)
+        {
+            string safeSessionId = SanitizeFileName(sessionId);
+            string rootFolder = Path.Combine(_projectRoot, OutputRootDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            int leafFileNameLength = Mathf.Max(SummaryJsonFileName.Length, SummaryMarkdownFileName.Length);
+            int maxSessionIdLength = EvidenceSafeMaxFullPathLength
+                                     - rootFolder.Length
+                                     - 1
+                                     - 1
+                                     - leafFileNameLength;
+            maxSessionIdLength = Mathf.Max(16, maxSessionIdLength);
+            return ShortenFileNameToLength(safeSessionId, maxSessionIdLength);
+        }
+
+        private static string SanitizeFileName(string fileName)
+        {
+            string safeName = string.IsNullOrWhiteSpace(fileName) ? "yyb_visual_compare" : fileName.Trim();
+            foreach (char invalidChar in Path.GetInvalidFileNameChars())
+            {
+                safeName = safeName.Replace(invalidChar, '_');
+            }
+
+            return safeName.Replace(' ', '_');
+        }
+
+        private static string ShortenFileNameToLength(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return value;
+            }
+
+            int safeMaxLength = Mathf.Max(10, maxLength);
+            if (value.Length <= safeMaxLength)
+            {
+                return value;
+            }
+
+            const int hashLength = 8;
+            int prefixLength = Mathf.Max(1, safeMaxLength - hashLength - 1);
+            return $"{value.Substring(0, prefixLength)}_{CalculateStableHash(value):x8}";
+        }
+
+        private static uint CalculateStableHash(string value)
+        {
+            const uint offsetBasis = 2166136261;
+            const uint prime = 16777619;
+            uint hash = offsetBasis;
+            foreach (char character in value)
+            {
+                hash ^= character;
+                hash *= prime;
+            }
+
+            return hash;
+        }
+
         [Serializable]
         private sealed class SummaryContainer
         {
@@ -1556,8 +2315,95 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool finger_closeups;
             public bool recorder_parent_ik_offsets_when_center_parented;
             public string reference_clip_name;
+            public string reference_clip_asset_path;
             public CaptureResult[] results;
+            public SummaryFrameRoleDiagnostics frame_count_roles;
+            public SummarySampleOrderingDiagnostic[] sample_ordering_diagnostics;
+            public SummaryCandidateArtifactSelection selected_candidate_artifact;
+            public MotionComparisonFrameQualitySummary[] frame_quality_summaries;
             public string[] failures;
+        }
+
+        [Serializable]
+        private sealed class SummaryCandidateArtifactSelection
+        {
+            public string selected_candidate_role;
+            public string selected_candidate_output_role;
+            public string selected_candidate_status;
+            public string selected_candidate_status_reason;
+            public string selected_candidate_metrics_csv;
+            public string selected_candidate_vmd_path;
+            public bool selected_candidate_preserves_raw_diagnostic;
+            public string selected_candidate_manifest_path;
+            public bool selected_candidate_vmd_exists;
+            public bool selected_candidate_metrics_exists;
+            public bool selected_candidate_manifest_exists;
+            public bool selected_candidate_differs_from_raw_vmd;
+            public bool selected_candidate_is_acceptance_artifact;
+            public string selected_candidate_acceptance_basis;
+            public string raw_candidate_status;
+            public string raw_candidate_status_reason;
+            public string raw_candidate_metrics_csv;
+            public string raw_candidate_vmd_path;
+            public string corrected_candidate_status;
+            public string corrected_candidate_status_reason;
+            public string corrected_candidate_metrics_csv;
+            public string corrected_candidate_vmd_path;
+            public string selection_basis;
+        }
+
+        [Serializable]
+        private sealed class SummaryFrameRoleDiagnostics
+        {
+            public int reference_target_frame_count;
+            public int baseline_recorded_frame_count;
+            public int candidate_recorded_frame_count;
+            public int baseline_frame_count_delta_from_reference_target;
+            public int candidate_frame_count_delta_from_reference_target;
+            public string target_frame_count_role;
+            public string baseline_recorded_frame_count_role;
+            public string candidate_recorded_frame_count_role;
+            public string frame_quality_metric_basis;
+            public string vmd_export_metric_basis;
+        }
+
+        [Serializable]
+        private sealed class SummarySampleOrderingDiagnostic
+        {
+            public string job_mode;
+            public string scene_name;
+            public string metrics_csv;
+            public int metric_row_count;
+            public string first_metric_reason;
+            public int first_metric_recorder_frame;
+            public int first_metric_engine_frame_count;
+            public float first_metric_time_since_level_load;
+            public float first_metric_animation_clip_time;
+            public float first_metric_grounding_vertical_step_last;
+            public float first_metric_grounding_initial_vertical_step;
+            public int first_metric_grounding_step_clamp_count;
+            public int first_metric_grounding_smoothed_count;
+            public float first_metric_grounding_max_step_per_frame;
+            public float first_metric_grounding_vertical_step_to_max_ratio;
+            public bool first_metric_grounding_vertical_step_at_max_step;
+            public string finish_metric_reason;
+            public int finish_metric_recorder_frame;
+            public int finish_metric_engine_frame_count;
+            public float finish_metric_time_since_level_load;
+            public float finish_metric_animation_clip_time;
+            public float finish_metric_grounding_vertical_step_last;
+            public int finish_metric_grounding_step_clamp_count;
+            public int finish_metric_grounding_smoothed_count;
+            public float finish_metric_grounding_max_step_per_frame;
+            public float finish_metric_grounding_vertical_step_to_max_ratio;
+            public bool finish_metric_grounding_vertical_step_at_max_step;
+            public int recording_metric_recorder_frame_span;
+            public int recording_metric_engine_frame_span;
+            public float recording_metric_time_since_level_load_span;
+            public int recording_grounding_step_clamp_delta;
+            public int recording_grounding_smoothed_delta;
+            public string recording_phase_span_role;
+            public string grounding_step_limit_role;
         }
     }
 }

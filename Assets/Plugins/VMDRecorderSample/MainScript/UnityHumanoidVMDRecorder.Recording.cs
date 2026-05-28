@@ -119,7 +119,8 @@ public partial class UnityHumanoidVMDRecorder
                     }
                     else if ((UseAbsoluteCoordinateSystem || transform.parent == null) && IgnoreInitialPosition)
                     {
-                        targetVector = BoneDictionary[boneName].position - parentInitialPosition;
+                        targetVector = BoneDictionary[boneName].position - GetCurrentRootPositionForIkReference();
+                        targetVector -= GetInitialFootIkOffset(boneName);
                     }
                     else if ((UseAbsoluteCoordinateSystem || transform.parent == null) && transform.parent && !IgnoreInitialPosition)
                     {
@@ -162,7 +163,7 @@ public partial class UnityHumanoidVMDRecorder
                 Vector3 ikPosition = new Vector3(-targetVector.x, targetVector.y, -targetVector.z);
                 
                 // 스케일 보정 및 저장
-                positionDictionary[boneName].Add(ikPosition * DefaultBoneAmplifier);
+                positionDictionary[boneName].Add(ApplyMmdFootIkExportFloorGuard(ikPosition * DefaultBoneAmplifier, GetCurrentParentOfAllExportY()));
                 
                 //回転は全部足首／つま先に持たせる（今回はidentity）
                 // [한글] 회전은 모두 발목/발끝에 맡김 (지금은 identity)
@@ -211,7 +212,10 @@ public partial class UnityHumanoidVMDRecorder
                     }
                 }
                 Vector3 ikPosition = new Vector3(-targetVector.x, targetVector.y, -targetVector.z);
-                positionDictionary[boneName].Add(ikPosition * DefaultBoneAmplifier);
+                positionDictionary[boneName].Add(ClampMmdToeIkPositionForEffectiveFloor(
+                    ikPosition * DefaultBoneAmplifier,
+                    GetCurrentParentOfAllExportY(),
+                    GetLastRecordedParentFootIkExportY(boneName)));
                 //回転は全部足首／つま先に持たせる（今回はidentity）
                 Quaternion ikRotation = Quaternion.identity;
                 rotationDictionary[boneName].Add(ikRotation);
@@ -228,8 +232,14 @@ public partial class UnityHumanoidVMDRecorder
                 }
 
                 Vector3 boneVector = ghostEntry.ghost.localPosition;
-                Quaternion boneQuatenion = ghostEntry.ghost.localRotation;
-                rotationDictionary[boneName].Add(new Quaternion(-boneQuatenion.x, boneQuatenion.y, -boneQuatenion.z, boneQuatenion.w));
+                bool shouldWriteRotation = ShouldWriteRotation(boneName);
+                VmdBoneRotationDiagnostic rotationDiagnostic = boneGhost.CaptureRotationDiagnostic(boneName);
+                Quaternion ghostVmdRotation = rotationDiagnostic.ExportVmdRotation;
+                if (EnableExportRotationDiagnostics && shouldWriteRotation)
+                {
+                    RecordExportRotationDiagnostic(FrameNumber, rotationDiagnostic);
+                }
+                rotationDictionary[boneName].Add(shouldWriteRotation ? ghostVmdRotation : Quaternion.identity);
 
                 boneVector -= boneGhost.GhostOriginalLocalPositionDictionary[boneName];
 
@@ -255,9 +265,9 @@ public partial class UnityHumanoidVMDRecorder
                 fixedQuatenion = BoneDictionary[boneName].localRotation.MinusRotation(parentInitialRotation);
             }
 
-            vmdRotation = new Quaternion(-fixedQuatenion.x, fixedQuatenion.y, -fixedQuatenion.z, fixedQuatenion.w);
+            vmdRotation = ConvertUnityRotationToVmdRotation(fixedQuatenion);
 
-            rotationDictionary[boneName].Add(vmdRotation);
+            rotationDictionary[boneName].Add(ShouldWriteRotation(boneName) ? vmdRotation : Quaternion.identity);
 
             Vector3 fixedPosition = Vector3.zero;
             Vector3 vmdPosition = Vector3.zero;
@@ -274,6 +284,10 @@ public partial class UnityHumanoidVMDRecorder
             if (boneName == BoneNames.全ての親 && IgnoreInitialPosition)
             {
                 fixedPosition -= parentInitialPosition;
+                if (FreezeParentOfAllMotionWhenIgnoringInitialPosition)
+                {
+                    fixedPosition = Vector3.zero;
+                }
             }
 
             vmdPosition = new Vector3(-fixedPosition.x, fixedPosition.y, -fixedPosition.z);
@@ -299,7 +313,165 @@ public partial class UnityHumanoidVMDRecorder
         return boneName == BoneNames.全ての親 || boneName == BoneNames.センター;
     }
 
+    private bool ShouldWriteRotation(BoneNames boneName)
+    {
+        return boneName != BoneNames.センター;
+    }
+
     // [한글] 초기 위치/회전 저장 (레코딩 시작 시 기준점 설정)
+    internal static Quaternion ConvertUnityRotationToVmdRotation(Quaternion unityRotation)
+    {
+        return new Quaternion(-unityRotation.x, unityRotation.y, -unityRotation.z, unityRotation.w);
+    }
+
+    internal Vector3 ClampMmdFootIkPositionForExport(Vector3 position)
+    {
+        return ClampMmdFootIkPositionForExport(position, ShouldClampMmdFootIkYToFloor(), MinMmdFootIkY);
+    }
+
+    internal Vector3 ApplyMmdFootIkExportFloorGuard(Vector3 position)
+    {
+        return ApplyMmdFootIkExportFloorGuard(position, GetCurrentParentOfAllExportY());
+    }
+
+    internal Vector3 ApplyMmdFootIkExportFloorGuard(Vector3 position, float parentRootY)
+    {
+        return ApplyMmdFootIkExportFloorGuard(position, parentRootY, MmdFootIkExportOffset, ShouldClampMmdFootIkYToFloor(), MinMmdFootIkY);
+    }
+
+    internal static Vector3 ApplyMmdFootIkExportFloorGuard(Vector3 position, Vector3 exportOffset, bool enabled, float minY)
+    {
+        return ClampMmdFootIkPositionForExport(position + exportOffset, enabled, minY);
+    }
+
+    internal static Vector3 ApplyMmdFootIkExportFloorGuard(Vector3 position, float parentRootY, Vector3 exportOffset, bool enabled, float minY)
+    {
+        return ClampMmdFootIkPositionForEffectiveFloor(position + exportOffset, parentRootY, enabled, minY);
+    }
+
+    internal static Vector3 ClampMmdFootIkPositionForExport(Vector3 position, bool enabled, float minY)
+    {
+        if (!enabled || float.IsNaN(position.y) || position.y >= minY)
+        {
+            return position;
+        }
+
+        position.y = minY;
+        return position;
+    }
+
+    internal Vector3 ClampMmdFootIkPositionForEffectiveFloor(Vector3 position, float parentRootY)
+    {
+        return ClampMmdFootIkPositionForEffectiveFloor(position, parentRootY, ShouldClampMmdFootIkYToFloor(), MinMmdFootIkY);
+    }
+
+    internal static Vector3 ClampMmdFootIkPositionForEffectiveFloor(Vector3 position, float parentRootY, bool enabled, float minY)
+    {
+        if (!enabled || float.IsNaN(position.y) || float.IsNaN(parentRootY) || position.y + parentRootY >= minY)
+        {
+            return position;
+        }
+
+        position.y = minY - parentRootY;
+        return position;
+    }
+
+    internal Vector3 ClampMmdToeIkPositionForEffectiveFloor(Vector3 position, float parentRootY, float parentFootIkY)
+    {
+        return ClampMmdToeIkPositionForEffectiveFloor(position, parentRootY, parentFootIkY, ShouldClampMmdFootIkYToFloor(), MinMmdFootIkY);
+    }
+
+    private bool ShouldClampMmdFootIkYToFloor()
+    {
+        return ClampMmdFootIkYToFloor && !LiftMmdCenterYToKeepFeetAboveFloor;
+    }
+
+    internal static Vector3 ClampMmdToeIkPositionForEffectiveFloor(Vector3 position, float parentRootY, float parentFootIkY, bool enabled, float minY)
+    {
+        if (!enabled ||
+            float.IsNaN(position.y) ||
+            float.IsNaN(parentRootY) ||
+            float.IsNaN(parentFootIkY))
+        {
+            return position;
+        }
+
+        if (position.y + parentRootY + parentFootIkY < minY)
+        {
+            position.y = minY - parentRootY - parentFootIkY;
+        }
+
+        if (position.y < minY)
+        {
+            position.y = minY;
+        }
+
+        return position;
+    }
+
+    private float GetLastRecordedParentFootIkExportY(BoneNames toeIkName)
+    {
+        BoneNames parentFootIkName = BoneNames.None;
+        if (toeIkName == BoneNames.左つま先ＩＫ)
+        {
+            parentFootIkName = BoneNames.左足ＩＫ;
+        }
+        else if (toeIkName == BoneNames.右つま先ＩＫ)
+        {
+            parentFootIkName = BoneNames.右足ＩＫ;
+        }
+
+        if (parentFootIkName == BoneNames.None ||
+            !positionDictionary.TryGetValue(parentFootIkName, out var positions) ||
+            positions.Count == 0)
+        {
+            return 0f;
+        }
+
+        return positions[positions.Count - 1].y;
+    }
+
+    private Vector3 GetInitialFootIkOffset(BoneNames footIkName)
+    {
+        int ordinal = (int)footIkName;
+        if (ordinal == 2)
+        {
+            return LeftFootIKOffset;
+        }
+
+        if (ordinal == 3)
+        {
+            return RightFootIKOffset;
+        }
+
+        return Vector3.zero;
+    }
+    private float GetCurrentParentOfAllExportY()
+    {
+        if (IgnoreInitialPosition && FreezeParentOfAllMotionWhenIgnoringInitialPosition)
+        {
+            return ParentOfAllOffset.y;
+        }
+
+        Vector3 fixedPosition = UseAbsoluteCoordinateSystem ? transform.position : transform.localPosition;
+        if (IgnoreInitialPosition)
+        {
+            fixedPosition -= parentInitialPosition;
+        }
+
+        return (fixedPosition.y * DefaultBoneAmplifier) + ParentOfAllOffset.y;
+    }
+
+    private Vector3 GetCurrentRootPositionForIkReference()
+    {
+        if (IgnoreInitialPosition && FreezeParentOfAllMotionWhenIgnoringInitialPosition)
+        {
+            return UseAbsoluteCoordinateSystem ? transform.position : transform.localPosition;
+        }
+
+        return parentInitialPosition;
+    }
+
     void SetInitialPositionAndRotation()
     {
         if (UseAbsoluteCoordinateSystem)  // 절대 좌표계 사용 시
@@ -391,6 +563,10 @@ public partial class UnityHumanoidVMDRecorder
         positionDictionary = new Dictionary<BoneNames, List<Vector3>>();
         rotationDictionarySaved = rotationDictionary;
         rotationDictionary = new Dictionary<BoneNames, List<Quaternion>>();
+        exportRotationDiagnosticAggregatesSaved = exportRotationDiagnosticAggregates;
+        exportRotationDiagnosticAggregates = new Dictionary<BoneNames, ExportRotationDiagnosticAggregate>();
+        exportRotationDiagnosticSamplesSaved = exportRotationDiagnosticSamples;
+        exportRotationDiagnosticSamples = new List<ExportRotationDiagnosticSample>();
         
         // 다음 레코딩을 위해 딕셔너리 초기화
         foreach (BoneNames boneName in BoneDictionary.Keys)

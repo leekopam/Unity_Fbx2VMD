@@ -1,10 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Reflection;
-using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -26,15 +23,6 @@ public class MotionComparisonProbe : MonoBehaviour
     [SerializeField, Range(1f, 2f)] private float screenshotPadding = 1.2f;
     [SerializeField, Range(1f, 4f)] private float fingerCloseupPadding = 1.6f;
 
-    private const string OutputDocsFolderName = "Docs";
-    private const string OutputRootFolderName = "Machine_Spirit";
-    private const string OutputLocalFolderName = "Local";
-    private const string ComparisonFolderName = "ComparisonLogs";
-    private const string ComparisonFramesFolderName = "ComparisonFrames";
-    private const string ComparisonSessionsFolderName = "ComparisonSessions";
-    private const string SessionManifestFileName = "index.md";
-    private const string FrameSessionIndexFileName = "session_index.md";
-    private const int EvidenceFileNamePartMaxLength = 48;
     private const float DiagnosticFootRadius = 0.04f;
     private const float DiagnosticThumbIndexMaxSpreadAngle = 42f;
     private const float DiagnosticThumbIndexFullRiskAngle = 72f;
@@ -98,6 +86,7 @@ public class MotionComparisonProbe : MonoBehaviour
     private string _screenshotFolder = "";
     private string _screenshotIndexPath = "";
     private string _screenshotSessionIndexPath = "";
+    private int _nonBlankScreenshotCount;
     private string _sessionFolder = "";
     private string _sessionManifestPath = "";
     private string _sessionId = "";
@@ -137,6 +126,8 @@ public class MotionComparisonProbe : MonoBehaviour
     public string LastCsvPath => _csvPath;
     public string LastScreenshotFolder => _screenshotFolder;
     public string LastSessionManifestPath => _sessionManifestPath;
+    public int NonBlankScreenshotCount => _nonBlankScreenshotCount;
+    public bool HasNonBlankScreenshots => _nonBlankScreenshotCount > 0;
     public bool IsSampling => _isSampling;
     public float MaxThumbSpreadRisk => _maxThumbSpreadRisk;
     public float MaxThumbProjectionRisk => _maxThumbProjectionRisk;
@@ -206,7 +197,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
         if (_animator == null)
         {
-            Debug.LogWarning("[MotionComparisonProbe] Animator가 없어 비교 샘플링을 시작하지 못했습니다.");
+            Debug.LogWarning(MotionComparisonProbeReportWriter.BuildAnimatorMissingWarningMessage());
             return;
         }
 
@@ -214,32 +205,44 @@ public class MotionComparisonProbe : MonoBehaviour
         ResetDiagnosticBaselines();
         ResetRiskSummary();
 
-        comparisonLabel = string.IsNullOrWhiteSpace(labelOverride)
-            ? SanitizeFileName(string.IsNullOrWhiteSpace(comparisonLabel) ? gameObject.name : comparisonLabel)
-            : SanitizeFileName(labelOverride);
+        comparisonLabel = MotionComparisonProbeReportWriter.BuildComparisonLabel(
+            comparisonLabel,
+            labelOverride,
+            gameObject.name);
 
-        _sessionStamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-        _evidenceBaseName = BuildEvidenceBaseName("metrics", "session", "probe");
-        _sessionId = BuildEvidenceBaseName("comparison-session", "motion-analysis", "probe");
-        _csvPath = BuildUniqueOutputPath(GetComparisonOutputFolder(), $"{_evidenceBaseName}.csv");
-        WriteHeader(_csvPath);
+        _sessionStamp = MotionComparisonProbeReportWriter.BuildSessionStamp(DateTime.Now);
+        string sceneName = SceneManager.GetActiveScene().name;
+        MotionComparisonProbeSamplingSessionOutputPaths samplingOutputPaths =
+            MotionComparisonProbeOutputPaths.BuildSamplingSessionOutputPaths(
+                Application.dataPath,
+                _sessionStamp,
+                sceneName,
+                comparisonLabel);
+        _evidenceBaseName = samplingOutputPaths.EvidenceBaseName;
+        _sessionId = samplingOutputPaths.SessionId;
+        _csvPath = samplingOutputPaths.MetricsCsvPath;
+        MotionComparisonProbeReportWriter.WriteMetricsCsvHeader(_csvPath);
         PrepareSessionOutput();
-        PrepareScreenshotOutput();
-        WriteSessionManifest("started");
+        WriteSessionManifest(MotionComparisonProbeReportWriter.BuildSessionStartedReason());
 
         _startTime = Time.time;
         _nextSampleIndex = 0;
         _isSampling = true;
         if (_recorder != null && _recorder.FrameNumber != 0)
         {
-            Debug.LogWarning($"[MotionComparisonProbe] 비교 샘플링이 recorderFrame={_recorder.FrameNumber}에서 시작했습니다. Main/Sub 동작 비교는 0프레임 시작 세션만 기준으로 사용하세요.");
+            Debug.LogWarning(MotionComparisonProbeReportWriter.BuildNonZeroRecorderFrameStartWarningMessage(_recorder.FrameNumber));
         }
 
-        SampleNow("start");
+        SampleNow(MotionComparisonProbeReportWriter.BuildSamplingStartReason());
         SkipElapsedSampleTimes(GetCurrentSampleClock(0f));
     }
 
-    public void StopSampling(string reason = "stop")
+    public void StopSampling()
+    {
+        StopSampling(MotionComparisonProbeReportWriter.BuildSamplingStopReason());
+    }
+
+    public void StopSampling(string reason)
     {
         if (!_isSampling)
         {
@@ -251,7 +254,12 @@ public class MotionComparisonProbe : MonoBehaviour
         WriteSessionManifest(reason);
     }
 
-    public void SampleNow(string reason = "sample")
+    public void SampleNow()
+    {
+        SampleNow(MotionComparisonProbeReportWriter.BuildSamplingDefaultReason());
+    }
+
+    public void SampleNow(string reason)
     {
         if (_animator == null || string.IsNullOrEmpty(_csvPath))
         {
@@ -260,13 +268,22 @@ public class MotionComparisonProbe : MonoBehaviour
 
         PoseMetrics metrics = CaptureMetrics(reason);
         UpdateRiskSummary(metrics.YybDiagnostics, false, reason, metrics.AnimationClipTime, metrics.RecorderFrame);
-        File.AppendAllText(_csvPath, metrics.ToCsvLine() + Environment.NewLine, Encoding.UTF8);
+        MotionComparisonProbeReportWriter.AppendMetricsCsvLine(_csvPath, metrics.ToCsvLine());
         CaptureSampleScreenshots(reason, metrics);
         WriteSessionManifest(reason);
 
         if (logSamples)
         {
-            Debug.Log($"[MotionComparisonProbe] {comparisonLabel} {reason} t={metrics.Elapsed:F2}s clip={metrics.AnimationClipTime:F3}s frame={metrics.RecorderFrame} hipsY={metrics.HipsY:F3} facing={metrics.CameraFacingDot:F3} scaleDelta={metrics.MaxScaleDelta:F4} yybRisk={metrics.YybDiagnostics.MaxDeformationRisk:F3}");
+            Debug.Log(MotionComparisonProbeReportWriter.BuildSampleLogMessage(
+                comparisonLabel,
+                reason,
+                metrics.Elapsed,
+                metrics.AnimationClipTime,
+                metrics.RecorderFrame,
+                metrics.HipsY,
+                metrics.CameraFacingDot,
+                metrics.MaxScaleDelta,
+                metrics.YybDiagnostics.MaxDeformationRisk));
         }
     }
 
@@ -288,7 +305,7 @@ public class MotionComparisonProbe : MonoBehaviour
         float sampleClock = GetCurrentSampleClock(elapsed);
         while (_nextSampleIndex < sampleTimes.Length && sampleClock >= sampleTimes[_nextSampleIndex])
         {
-            SampleNow($"t{sampleTimes[_nextSampleIndex]:0.###}");
+            SampleNow(MotionComparisonProbeReportWriter.BuildSampleTimeReason(sampleTimes[_nextSampleIndex]));
             _nextSampleIndex++;
         }
     }
@@ -307,7 +324,7 @@ public class MotionComparisonProbe : MonoBehaviour
             return;
         }
 
-        StopSampling("disabled");
+        StopSampling(MotionComparisonProbeReportWriter.BuildSamplingDisabledReason());
     }
 
     private void OnDestroy()
@@ -342,6 +359,11 @@ public class MotionComparisonProbe : MonoBehaviour
             return elapsedFallback;
         }
 
+        if (elapsedFallback > 0.25f && animationTime.ClipTime <= 0.0001f)
+        {
+            return elapsedFallback;
+        }
+
         return animationTime.ClipTime;
     }
 
@@ -372,6 +394,8 @@ public class MotionComparisonProbe : MonoBehaviour
         RootSpikeMetrics rootSpikeMetrics = CaptureRootSpikeMetrics();
         float lowestFootBottomY = float.IsNaN(lowestFootY) ? float.NaN : lowestFootY - DiagnosticFootRadius;
         float groundY = float.IsNaN(rootSpikeMetrics.LastGroundingTargetY) ? 0f : rootSpikeMetrics.LastGroundingTargetY;
+        float bodyPositionY = CaptureBodyPositionY();
+        float hipsLocalY = hips != null ? hips.localPosition.y : float.NaN;
         float meshBoundsMinY = float.NaN;
         float meshBoundsMaxY = float.NaN;
         if (TryGetRendererBounds(out Bounds rendererBounds))
@@ -384,6 +408,7 @@ public class MotionComparisonProbe : MonoBehaviour
         YybDiagnosticMetrics yybDiagnostics = captureYybDiagnosticOnlyMetrics
             ? CaptureYybDiagnosticMetrics(armMuscles)
             : YybDiagnosticMetrics.Empty;
+        HandTorsoClearanceMetrics handTorsoClearance = CaptureHandTorsoClearanceMetrics(root);
 
         return new PoseMetrics
         {
@@ -402,6 +427,8 @@ public class MotionComparisonProbe : MonoBehaviour
             RootPosition = root.position,
             RootYaw = root.eulerAngles.y,
             RootSpike = rootSpikeMetrics,
+            BodyPositionY = bodyPositionY,
+            HipsLocalY = hipsLocalY,
             HipsY = hips != null ? hips.position.y : float.NaN,
             LowestFootY = lowestFootY,
             LowestFootBottomY = lowestFootBottomY,
@@ -458,6 +485,10 @@ public class MotionComparisonProbe : MonoBehaviour
             RightHandHorizontalRatio = CalculateHandHorizontalRatio(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, root),
             LeftHandBelowShoulderRatio = CalculateHandBelowShoulderRatio(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, root),
             RightHandBelowShoulderRatio = CalculateHandBelowShoulderRatio(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, root),
+            LeftHandTorsoSignedClearance = handTorsoClearance.LeftSignedClearance,
+            RightHandTorsoSignedClearance = handTorsoClearance.RightSignedClearance,
+            MinHandTorsoSignedClearance = handTorsoClearance.MinSignedClearance,
+            HandTorsoPenetrationRisk = handTorsoClearance.PenetrationRisk,
             LeftShoulderDownUpMuscle = armMuscles.LeftShoulderDownUp,
             LeftShoulderFrontBackMuscle = armMuscles.LeftShoulderFrontBack,
             LeftArmDownUpMuscle = armMuscles.LeftArmDownUp,
@@ -495,6 +526,31 @@ public class MotionComparisonProbe : MonoBehaviour
             ThumbGuard = thumbGuardDiagnostics,
             YybDiagnostics = yybDiagnostics
         };
+    }
+
+    private float CaptureBodyPositionY()
+    {
+        if (_animator == null || _animator.avatar == null || !_animator.avatar.isHuman)
+        {
+            return float.NaN;
+        }
+
+        HumanPoseHandler handler = null;
+        try
+        {
+            handler = new HumanPoseHandler(_animator.avatar, _animator.transform);
+            HumanPose pose = new HumanPose();
+            handler.GetHumanPose(ref pose);
+            return pose.bodyPosition.y;
+        }
+        catch
+        {
+            return float.NaN;
+        }
+        finally
+        {
+            handler?.Dispose();
+        }
     }
 
     private AnimationTimeMetrics CaptureAnimationTimeMetrics()
@@ -538,11 +594,18 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         float clipTime = state != null ? state.time : 0f;
+        string source = MotionComparisonProbeReportWriter.BuildRetargeterLegacyAnimationTimeSourceLabel();
+        if (clipTime <= 0.0001f && _recorder != null && _recorder.FrameNumber > 0)
+        {
+            clipTime = _recorder.FrameNumber / 30f;
+            source = MotionComparisonProbeReportWriter.BuildRetargeterLegacyRecorderFrameAnimationTimeSourceLabel();
+        }
+
         clipTime = Mathf.Clamp(clipTime, 0f, clipLength);
 
         metrics = new AnimationTimeMetrics
         {
-            Source = "retargeterLegacy",
+            Source = source,
             ClipName = clip.name,
             ClipTime = clipTime,
             ClipLength = clipLength,
@@ -606,7 +669,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
         metrics = new AnimationTimeMetrics
         {
-            Source = "animatorState",
+            Source = MotionComparisonProbeReportWriter.BuildAnimatorStateAnimationTimeSourceLabel(),
             ClipName = clip != null ? clip.name : "",
             ClipTime = clipTime,
             ClipLength = clipLength,
@@ -624,6 +687,8 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         Type type = retargeter.GetType();
+        float lastGroundingVerticalStep = ReadFloatProperty(type, retargeter, "LastGroundingVerticalStep");
+        float groundingMaxStepPerFrame = ReadFloatMember(type, retargeter, "maxGroundingVerticalStepPerFrame");
         return new RootSpikeMetrics
         {
             LastRootDeltaMagnitude = ReadFloatProperty(type, retargeter, "LastRootDeltaMagnitude"),
@@ -636,13 +701,46 @@ public class MotionComparisonProbe : MonoBehaviour
             MaxGroundingAdjustment = ReadFloatProperty(type, retargeter, "MaxGroundingAdjustment"),
             GroundingStepClampedCount = ReadIntProperty(type, retargeter, "GroundingStepClampedCount"),
             GroundingSmoothedCount = ReadIntProperty(type, retargeter, "GroundingSmoothedCount"),
-            LastGroundingVerticalStep = ReadFloatProperty(type, retargeter, "LastGroundingVerticalStep"),
+            LastGroundingVerticalStep = lastGroundingVerticalStep,
             MaxGroundingVerticalStep = ReadFloatProperty(type, retargeter, "MaxGroundingVerticalStep"),
             InitialGroundingVerticalStep = ReadFloatProperty(type, retargeter, "InitialGroundingVerticalStep"),
             MaxGroundingVerticalStepAfterInitial = ReadFloatProperty(type, retargeter, "MaxGroundingVerticalStepAfterInitial"),
             LastGroundingTargetY = ReadFloatProperty(type, retargeter, "LastGroundingTargetY"),
-            LastGroundingLowestFootBottomY = ReadFloatProperty(type, retargeter, "LastGroundingLowestFootBottomY")
+            LastGroundingLowestFootBottomY = ReadFloatProperty(type, retargeter, "LastGroundingLowestFootBottomY"),
+            FootHeightReferenceLift = ReadFloatProperty(type, retargeter, "LastEditorFootHeightGroundingReferenceLift"),
+            RecordingStartRootY = ReadFloatProperty(type, retargeter, "RecordingStartRootY"),
+            RecordingStartBodyPositionY = ReadFloatProperty(type, retargeter, "RecordingStartBodyPositionY"),
+            RecordingStartHipsLocalY = ReadFloatProperty(type, retargeter, "RecordingStartHipsLocalY"),
+            RecordingStartHipsY = ReadFloatProperty(type, retargeter, "RecordingStartHipsY"),
+            RecordingStartHipsReferenceBeforeLocalY = ReadFloatProperty(type, retargeter, "RecordingStartHipsReferenceBeforeLocalY"),
+            RecordingStartHipsReferenceAfterLocalY = ReadFloatProperty(type, retargeter, "RecordingStartHipsReferenceAfterLocalY"),
+            RecordingStartHipsReferenceDeltaY = ReadFloatProperty(type, retargeter, "RecordingStartHipsReferenceDeltaY"),
+            RecordingStartHipsReferenceFlipDetected = ReadIntProperty(type, retargeter, "RecordingStartHipsReferenceFlipDetected"),
+            RecordingStartHipsReferenceStage = ReadStringProperty(type, retargeter, "RecordingStartHipsReferenceStage"),
+            GroundingMaxStepPerFrame = groundingMaxStepPerFrame,
+            GroundingLastStepToMaxStepRatio = CalculateStepToMaxRatio(lastGroundingVerticalStep, groundingMaxStepPerFrame),
+            GroundingLastStepAtMaxStep = IsStepAtMax(lastGroundingVerticalStep, groundingMaxStepPerFrame) ? 1 : 0
         };
+    }
+
+    private static float CalculateStepToMaxRatio(float step, float maxStep)
+    {
+        if (float.IsNaN(step) ||
+            float.IsInfinity(step) ||
+            float.IsNaN(maxStep) ||
+            float.IsInfinity(maxStep) ||
+            maxStep <= 0f)
+        {
+            return float.NaN;
+        }
+
+        return Mathf.Abs(step) / maxStep;
+    }
+
+    private static bool IsStepAtMax(float step, float maxStep)
+    {
+        float ratio = CalculateStepToMaxRatio(step, maxStep);
+        return !float.IsNaN(ratio) && !float.IsInfinity(ratio) && ratio >= 0.95f;
     }
 
     private ThumbGuardDiagnostics CaptureThumbGuardDiagnostics()
@@ -1055,6 +1153,17 @@ public class MotionComparisonProbe : MonoBehaviour
         return value is int intValue ? intValue : -1;
     }
 
+    private static string ReadStringProperty(Type type, object instance, string propertyName)
+    {
+        PropertyInfo property = type.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property == null)
+        {
+            return "";
+        }
+
+        return property.GetValue(instance) as string ?? "";
+    }
+
     private AnimationClip ResolveCurrentAnimatorClip(int layerIndex)
     {
         AnimationClip bestClip = null;
@@ -1251,12 +1360,13 @@ public class MotionComparisonProbe : MonoBehaviour
         if (TryResolveExplicitThumbBaseHelperRelationship(isRightSide, out Transform helper, out Transform source))
         {
             metrics.HelperRelationshipAvailable = true;
-            string sideName = isRightSide ? "right" : "left";
-            string distanceKey = BuildPairKey($"thumb-helper-distance-{sideName}", helper, source);
+            string distanceKey = MotionComparisonProbeReportWriter.BuildTransformPairKey(
+                MotionComparisonProbeReportWriter.BuildThumbHelperDistancePairKeyLabel(isRightSide), helper, source);
             metrics.ThumbHelperSourceDistanceDelta = CalculateDistanceDeltaFromInitial(helper, source, distanceKey, out float distance);
             metrics.ThumbHelperSourceDistance = distance;
 
-            string rotationKey = BuildPairKey($"thumb-helper-rotation-{sideName}", source, helper);
+            string rotationKey = MotionComparisonProbeReportWriter.BuildTransformPairKey(
+                MotionComparisonProbeReportWriter.BuildThumbHelperRotationPairKeyLabel(isRightSide), source, helper);
             metrics.ThumbHelperSourceRotationDelta = CalculateRelativeRotationDeltaFromInitial(source, helper, rotationKey);
 
             metrics.ThumbHelperSeparationRisk = MaxFinite(
@@ -1320,12 +1430,8 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private bool TryFindExplicitThumbBaseSource(bool isRightSide, out Transform source)
     {
-        string sideToken = isRightSide ? "right" : "left";
-        source = FindDiagnosticTransform($"thumb-explicit-source-{sideToken}", candidate =>
-        {
-            string normalizedName = NormalizeTransformName(candidate.name);
-            return normalizedName.Contains(sideToken) && IsActiveThumbBaseSourceName(normalizedName);
-        });
+        source = FindDiagnosticTransform(MotionComparisonProbeReportWriter.BuildExplicitThumbBaseSourceCacheKey(isRightSide), candidate =>
+            MotionComparisonProbeReportWriter.MatchesActiveThumbBaseSourceTransformName(candidate.name, isRightSide));
         return source != null;
     }
 
@@ -1386,22 +1492,7 @@ public class MotionComparisonProbe : MonoBehaviour
             return false;
         }
 
-        string normalizedName = NormalizeTransformName(candidate.name);
-        if (string.IsNullOrEmpty(normalizedName) ||
-            !normalizedName.Contains("thumb") ||
-            normalizedName.Contains("ghost") ||
-            IsActiveThumbBaseSourceName(normalizedName))
-        {
-            return false;
-        }
-
-        if (normalizedName.Contains("thumb1") ||
-            normalizedName.Contains("thumb2") ||
-            normalizedName.Contains("thumb3") ||
-            normalizedName.Contains("proximal") ||
-            normalizedName.Contains("intermediate") ||
-            normalizedName.Contains("distal") ||
-            normalizedName.Contains("thumbtip"))
+        if (!MotionComparisonProbeReportWriter.MatchesAmbiguousThumbExtraTransformCandidateName(candidate.name))
         {
             return false;
         }
@@ -1452,7 +1543,12 @@ public class MotionComparisonProbe : MonoBehaviour
         YybDiagnosticMetrics diagnostics = captureYybDiagnosticOnlyMetrics
             ? CaptureYybDiagnosticMetrics(CaptureArmMuscles())
             : YybDiagnosticMetrics.Empty;
-        UpdateRiskSummary(diagnostics, true, "realtime", animationTime.ClipTime, recorderFrame);
+        UpdateRiskSummary(
+            diagnostics,
+            true,
+            MotionComparisonProbeReportWriter.BuildRealtimeRiskEvaluationReason(),
+            animationTime.ClipTime,
+            recorderFrame);
     }
 
     private void ResetRiskSummary()
@@ -1560,12 +1656,8 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private bool IsYybDiagnosticTarget()
     {
-        return NameSuggestsYybModel(gameObject.name) || NameSuggestsYybModel(comparisonLabel);
-    }
-
-    private static bool NameSuggestsYybModel(string value)
-    {
-        return NormalizeTransformName(value).Contains("yyb");
+        return MotionComparisonProbeReportWriter.MatchesYybModelName(gameObject.name) ||
+            MotionComparisonProbeReportWriter.MatchesYybModelName(comparisonLabel);
     }
 
     private bool TryCalculateThumbAndIndexDirections(
@@ -1638,22 +1730,14 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private Transform FindThumbBaseHelper(bool isRightSide)
     {
-        string sideToken = isRightSide ? "right" : "left";
-        return FindDiagnosticTransform($"thumb-helper-{sideToken}", candidate =>
-        {
-            string normalizedName = NormalizeTransformName(candidate.name);
-            return normalizedName.Contains(sideToken) && IsDetachedThumbBaseHelperName(normalizedName);
-        });
+        return FindDiagnosticTransform(MotionComparisonProbeReportWriter.BuildThumbBaseHelperCacheKey(isRightSide), candidate =>
+            MotionComparisonProbeReportWriter.MatchesDetachedThumbBaseHelperTransformName(candidate.name, isRightSide));
     }
 
     private Transform FindThumbBaseSource(bool isRightSide)
     {
-        string sideToken = isRightSide ? "right" : "left";
-        Transform source = FindDiagnosticTransform($"thumb-source-{sideToken}", candidate =>
-        {
-            string normalizedName = NormalizeTransformName(candidate.name);
-            return normalizedName.Contains(sideToken) && IsActiveThumbBaseSourceName(normalizedName);
-        });
+        Transform source = FindDiagnosticTransform(MotionComparisonProbeReportWriter.BuildThumbBaseSourceCacheKey(isRightSide), candidate =>
+            MotionComparisonProbeReportWriter.MatchesActiveThumbBaseSourceTransformName(candidate.name, isRightSide));
 
         if (source != null)
         {
@@ -1665,9 +1749,8 @@ public class MotionComparisonProbe : MonoBehaviour
 
     private Transform FindSleeveAnchor(bool isRightSide)
     {
-        string suffix = isRightSide ? "joint_RightArmM" : "joint_LeftArmM";
-        return FindDiagnosticTransform($"sleeve-anchor-{suffix}", candidate =>
-            MatchesTransformNameSuffix(candidate.name, suffix));
+        return FindDiagnosticTransform(MotionComparisonProbeReportWriter.BuildSleeveAnchorTransformCacheKey(isRightSide), candidate =>
+            MotionComparisonProbeReportWriter.MatchesSleeveAnchorTransformName(candidate.name, isRightSide));
     }
 
     private Transform FindDiagnosticTransform(string cacheKey, Func<Transform, bool> predicate)
@@ -1732,8 +1815,8 @@ public class MotionComparisonProbe : MonoBehaviour
             return float.NaN;
         }
 
-        string sideName = isRightSide ? "right" : "left";
-        string key = BuildPairKey($"sleeve-anchor-rotation-{sideName}", source, anchor);
+        string key = MotionComparisonProbeReportWriter.BuildTransformPairKey(
+            MotionComparisonProbeReportWriter.BuildSleeveAnchorRotationPairKeyLabel(isRightSide), source, anchor);
         float rotationDelta = CalculateRelativeRotationDeltaFromInitial(source, anchor, key);
         return RiskAbove(
             rotationDelta,
@@ -1791,63 +1874,6 @@ public class MotionComparisonProbe : MonoBehaviour
         _diagnosticTransformCache.Clear();
         _diagnosticInitialDistances.Clear();
         _diagnosticInitialRelativeRotations.Clear();
-    }
-
-    private static string BuildPairKey(string label, Transform a, Transform b)
-    {
-        return string.Join(":",
-            label,
-            a != null ? a.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0",
-            b != null ? b.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
-    }
-
-    private static bool IsDetachedThumbBaseHelperName(string normalizedName)
-    {
-        if (string.IsNullOrEmpty(normalizedName) ||
-            normalizedName.Contains("!") ||
-            normalizedName.Contains("ghost") ||
-            normalizedName.Contains("thumb0m"))
-        {
-            return false;
-        }
-
-        return IsThumbBaseName(normalizedName);
-    }
-
-    private static bool IsActiveThumbBaseSourceName(string normalizedName)
-    {
-        return !string.IsNullOrEmpty(normalizedName) &&
-            normalizedName.Contains("thumb0m") &&
-            !normalizedName.Contains("ghost") &&
-            !normalizedName.Contains("thumb1") &&
-            !normalizedName.Contains("thumb2") &&
-            !normalizedName.Contains("thumbtip");
-    }
-
-    private static bool IsThumbBaseName(string normalizedName)
-    {
-        return !string.IsNullOrEmpty(normalizedName) &&
-            normalizedName.Contains("thumb0") &&
-            !normalizedName.Contains("thumb1") &&
-            !normalizedName.Contains("thumb2") &&
-            !normalizedName.Contains("thumbtip");
-    }
-
-    private static bool MatchesTransformNameSuffix(string transformName, string targetName)
-    {
-        if (string.IsNullOrEmpty(transformName) || string.IsNullOrEmpty(targetName))
-        {
-            return false;
-        }
-
-        return transformName == targetName ||
-            transformName.EndsWith("." + targetName, StringComparison.Ordinal) ||
-            transformName.EndsWith(targetName, StringComparison.Ordinal);
-    }
-
-    private static string NormalizeTransformName(string value)
-    {
-        return string.IsNullOrEmpty(value) ? "" : value.ToLowerInvariant();
     }
 
     private static bool TryNormalize(Vector3 value, out Vector3 normalized)
@@ -1928,6 +1954,27 @@ public class MotionComparisonProbe : MonoBehaviour
         return result;
     }
 
+    private static float MinFinite(params float[] values)
+    {
+        float result = float.NaN;
+        if (values == null)
+        {
+            return result;
+        }
+
+        foreach (float value in values)
+        {
+            if (!IsFinite(value))
+            {
+                continue;
+            }
+
+            result = IsFinite(result) ? Mathf.Min(result, value) : value;
+        }
+
+        return result;
+    }
+
     private static bool IsFinite(float value)
     {
         return !float.IsNaN(value) && !float.IsInfinity(value);
@@ -1950,7 +1997,7 @@ public class MotionComparisonProbe : MonoBehaviour
         {
             if (!_poseWarningLogged)
             {
-                Debug.LogWarning("[MotionComparisonProbe] 일부 Humanoid arm muscle 인덱스를 찾지 못해 해당 CSV 값은 비워집니다.");
+                Debug.LogWarning(MotionComparisonProbeReportWriter.BuildMissingHumanoidArmMusclesWarningMessage());
                 _poseWarningLogged = true;
             }
 
@@ -2250,79 +2297,118 @@ public class MotionComparisonProbe : MonoBehaviour
         return true;
     }
 
+    private HandTorsoClearanceMetrics CaptureHandTorsoClearanceMetrics(Transform root)
+    {
+        float left = CalculateHandTorsoSignedClearance(LeftFingerBones, root);
+        float right = CalculateHandTorsoSignedClearance(RightFingerBones, root);
+        float minClearance = MinFinite(left, right);
+        float penetrationDepth = IsFinite(minClearance) ? Mathf.Max(0f, -minClearance) : float.NaN;
+        return new HandTorsoClearanceMetrics
+        {
+            LeftSignedClearance = left,
+            RightSignedClearance = right,
+            MinSignedClearance = minClearance,
+            PenetrationRisk = IsFinite(penetrationDepth) ? RiskAbove(penetrationDepth, 0.015f, 0.08f) : float.NaN
+        };
+    }
+
+    private float CalculateHandTorsoSignedClearance(HumanBodyBones[] handBones, Transform root)
+    {
+        Transform hips = GetBone(HumanBodyBones.Hips);
+        Transform chest = GetBone(HumanBodyBones.Chest) ?? GetBone(HumanBodyBones.UpperChest) ?? GetBone(HumanBodyBones.Spine);
+        Transform leftShoulder = GetBone(HumanBodyBones.LeftShoulder) ?? GetBone(HumanBodyBones.LeftUpperArm);
+        Transform rightShoulder = GetBone(HumanBodyBones.RightShoulder) ?? GetBone(HumanBodyBones.RightUpperArm);
+        if (root == null || hips == null || chest == null || leftShoulder == null || rightShoulder == null || handBones == null)
+        {
+            return float.NaN;
+        }
+
+        Vector3 localHips = root.InverseTransformPoint(hips.position);
+        Vector3 localChest = root.InverseTransformPoint(chest.position);
+        float yMin = Mathf.Min(localHips.y, localChest.y);
+        float yMax = Mathf.Max(localHips.y, localChest.y);
+        float shoulderWidth = Vector3.Distance(
+            root.InverseTransformPoint(leftShoulder.position),
+            root.InverseTransformPoint(rightShoulder.position));
+        float radiusX = Mathf.Max(0.05f, shoulderWidth * 0.42f);
+        float radiusZ = Mathf.Max(0.035f, shoulderWidth * 0.24f);
+        float signedClearance = float.NaN;
+
+        foreach (HumanBodyBones handBone in handBones)
+        {
+            Transform bone = GetBone(handBone);
+            if (bone == null)
+            {
+                continue;
+            }
+
+            Vector3 point = root.InverseTransformPoint(bone.position);
+            float dy = point.y < yMin ? yMin - point.y : point.y > yMax ? point.y - yMax : 0f;
+            float nx = point.x / radiusX;
+            float nz = point.z / radiusZ;
+            float radialClearance = (Mathf.Sqrt(nx * nx + nz * nz) - 1f) * Mathf.Min(radiusX, radiusZ);
+            float pointClearance = dy > 0f
+                ? Mathf.Sqrt(radialClearance * radialClearance + dy * dy)
+                : radialClearance;
+            signedClearance = IsFinite(signedClearance) ? Mathf.Min(signedClearance, pointClearance) : pointClearance;
+        }
+
+        return signedClearance;
+    }
+
     private Transform GetBone(HumanBodyBones bone)
     {
         return _animator != null ? _animator.GetBoneTransform(bone) : null;
-    }
-
-    private static string GetComparisonOutputFolder()
-    {
-        return MotionComparisonProbeOutputPaths.GetOrCreateFolderFromDataPath(
-            Application.dataPath,
-            OutputDocsFolderName,
-            OutputRootFolderName,
-            OutputLocalFolderName,
-            ComparisonFolderName);
-    }
-
-    private static string GetComparisonFrameRootFolder()
-    {
-        return MotionComparisonProbeOutputPaths.GetOrCreateFolderFromDataPath(
-            Application.dataPath,
-            OutputDocsFolderName,
-            OutputRootFolderName,
-            OutputLocalFolderName,
-            ComparisonFramesFolderName);
-    }
-
-    private static string GetComparisonSessionRootFolder()
-    {
-        return MotionComparisonProbeOutputPaths.GetOrCreateFolderFromDataPath(
-            Application.dataPath,
-            OutputDocsFolderName,
-            OutputRootFolderName,
-            OutputLocalFolderName,
-            ComparisonSessionsFolderName);
     }
 
     private void PrepareSessionOutput()
     {
         _sessionFolder = "";
         _sessionManifestPath = "";
+        _screenshotFolder = "";
+        _screenshotIndexPath = "";
+        _screenshotSessionIndexPath = "";
+        _nonBlankScreenshotCount = 0;
 
         if (string.IsNullOrWhiteSpace(_sessionId))
         {
             return;
         }
 
-        _sessionFolder = BuildUniqueDirectoryPath(GetComparisonSessionRootFolder(), _sessionId);
-        Directory.CreateDirectory(_sessionFolder);
-        _sessionManifestPath = Path.Combine(_sessionFolder, SessionManifestFileName);
-    }
+        MotionComparisonProbeSessionArtifactOutputPaths paths =
+            MotionComparisonProbeOutputPaths.BuildSessionArtifactOutputPaths(
+                Application.dataPath,
+                _sessionStamp,
+                _sessionId,
+                _csvPath,
+                captureSampleScreenshots);
+        _sessionFolder = paths.SessionFolder;
+        _sessionManifestPath = paths.SessionManifestPath;
 
-    private void PrepareScreenshotOutput()
-    {
-        _screenshotFolder = "";
-        _screenshotIndexPath = "";
-        _screenshotSessionIndexPath = "";
-
-        if (!captureSampleScreenshots)
+        if (!captureSampleScreenshots || string.IsNullOrEmpty(paths.ScreenshotFolder))
         {
             return;
         }
 
-        _screenshotFolder = BuildUniqueDirectoryPath(GetComparisonFrameRootFolder(), $"when-{SanitizeFileName(_sessionStamp)}");
-        Directory.CreateDirectory(_screenshotFolder);
-        _screenshotIndexPath = Path.Combine(_screenshotFolder, "index.csv");
-        File.WriteAllText(_screenshotIndexPath, "label,scene,reason,recorderFrame,view,path" + Environment.NewLine, Encoding.UTF8);
-        _screenshotSessionIndexPath = Path.Combine(_screenshotFolder, FrameSessionIndexFileName);
-        WriteFrameSessionIndex();
+        _screenshotFolder = paths.ScreenshotFolder;
+        _screenshotIndexPath = paths.ScreenshotIndexPath;
+        _screenshotSessionIndexPath = paths.ScreenshotSessionIndexPath;
+        MotionComparisonProbeReportWriter.WriteScreenshotSessionFiles(
+            _screenshotIndexPath,
+            _screenshotSessionIndexPath,
+            paths.FrameSessionIndexData);
     }
 
     private void CaptureSampleScreenshots(string reason, PoseMetrics metrics)
     {
         if (!captureSampleScreenshots || string.IsNullOrEmpty(_screenshotFolder))
         {
+            return;
+        }
+
+        if (Application.isBatchMode)
+        {
+            CaptureSampleScreenshotsNow(reason, metrics);
             return;
         }
 
@@ -2333,27 +2419,31 @@ public class MotionComparisonProbe : MonoBehaviour
     {
         yield return new WaitForEndOfFrame();
 
+        CaptureSampleScreenshotsNow(reason, metrics);
+    }
+
+    private void CaptureSampleScreenshotsNow(string reason, PoseMetrics metrics)
+    {
         if (!captureSampleScreenshots || string.IsNullOrEmpty(_screenshotFolder))
         {
-            yield break;
+            return;
         }
 
         if (!TryCalculateRenderBounds(out Bounds bounds))
         {
-            yield break;
+            Debug.LogWarning(MotionComparisonProbeReportWriter.BuildScreenshotBoundsUnavailableWarningMessage(comparisonLabel, reason));
+            return;
         }
 
-        string safeReason = SanitizeFileName(reason);
-        string frameName = metrics.RecorderFrame >= 0
-            ? metrics.RecorderFrame.ToString("000000", CultureInfo.InvariantCulture)
-            : Time.frameCount.ToString("000000", CultureInfo.InvariantCulture);
+        MotionComparisonProbeScreenshotCaptureNames captureNames =
+            MotionComparisonProbeOutputPaths.BuildScreenshotCaptureNames(metrics.RecorderFrame, Time.frameCount);
 
-        CaptureView(bounds, transform.forward, reason, safeReason, frameName, "front", metrics);
-        CaptureView(bounds, transform.right, reason, safeReason, frameName, "right", metrics);
-        CaptureFingerCloseups(reason, safeReason, frameName, metrics);
+        CaptureView(bounds, transform.forward, reason, captureNames.FrameName, captureNames.FrontViewName, metrics);
+        CaptureView(bounds, transform.right, reason, captureNames.FrameName, captureNames.RightViewName, metrics);
+        CaptureFingerCloseups(reason, captureNames, metrics);
     }
 
-    private void CaptureView(Bounds bounds, Vector3 viewDirection, string reason, string safeReason, string frameName, string viewName, PoseMetrics metrics, float paddingOverride = -1f)
+    private void CaptureView(Bounds bounds, Vector3 viewDirection, string reason, string frameName, string viewName, PoseMetrics metrics, float paddingOverride = -1f)
     {
         if (viewDirection.sqrMagnitude <= 0.000001f)
         {
@@ -2382,14 +2472,30 @@ public class MotionComparisonProbe : MonoBehaviour
         captureCamera.clearFlags = CameraClearFlags.SolidColor;
         captureCamera.backgroundColor = new Color(0.05f, 0.05f, 0.05f, 1f);
 
-        string fileName = $"pose_{ShortenFileNamePart(safeReason)}_rt-{viewName}_frame-{frameName}.png";
-        string path = Path.Combine(_screenshotFolder, fileName);
-        Directory.CreateDirectory(_screenshotFolder);
-        RenderCameraToPng(captureCamera, path);
-        AppendScreenshotIndex(reason, metrics, viewName, path);
+        MotionComparisonProbeScreenshotCaptureOutputPaths outputPaths =
+            MotionComparisonProbeOutputPaths.BuildScreenshotCaptureOutputPaths(
+                Application.dataPath,
+                _screenshotFolder,
+                comparisonLabel,
+                SceneManager.GetActiveScene().name,
+                reason,
+                metrics.RecorderFrame,
+                viewName,
+                frameName);
+
+        if (!RenderCameraToPng(captureCamera, outputPaths.ScreenshotPath))
+        {
+            Debug.LogWarning(MotionComparisonProbeReportWriter.BuildScreenshotBlankWarningMessage(outputPaths.ScreenshotPath));
+            return;
+        }
+
+        _nonBlankScreenshotCount++;
+        MotionComparisonProbeReportWriter.AppendScreenshotIndexRow(
+            _screenshotIndexPath,
+            outputPaths.IndexRow);
     }
 
-    private void CaptureFingerCloseups(string reason, string safeReason, string frameName, PoseMetrics metrics)
+    private void CaptureFingerCloseups(string reason, MotionComparisonProbeScreenshotCaptureNames captureNames, PoseMetrics metrics)
     {
         if (!captureFingerCloseups)
         {
@@ -2398,14 +2504,14 @@ public class MotionComparisonProbe : MonoBehaviour
 
         if (TryCalculateFingerBounds(true, out Bounds leftHandBounds))
         {
-            CaptureView(leftHandBounds, transform.forward, reason, safeReason, frameName, "left-hand-front", metrics, fingerCloseupPadding);
-            CaptureView(leftHandBounds, transform.right, reason, safeReason, frameName, "left-hand-right", metrics, fingerCloseupPadding);
+            CaptureView(leftHandBounds, transform.forward, reason, captureNames.FrameName, captureNames.LeftHandFrontViewName, metrics, fingerCloseupPadding);
+            CaptureView(leftHandBounds, transform.right, reason, captureNames.FrameName, captureNames.LeftHandRightViewName, metrics, fingerCloseupPadding);
         }
 
         if (TryCalculateFingerBounds(false, out Bounds rightHandBounds))
         {
-            CaptureView(rightHandBounds, transform.forward, reason, safeReason, frameName, "right-hand-front", metrics, fingerCloseupPadding);
-            CaptureView(rightHandBounds, transform.right, reason, safeReason, frameName, "right-hand-right", metrics, fingerCloseupPadding);
+            CaptureView(rightHandBounds, transform.forward, reason, captureNames.FrameName, captureNames.RightHandFrontViewName, metrics, fingerCloseupPadding);
+            CaptureView(rightHandBounds, transform.right, reason, captureNames.FrameName, captureNames.RightHandRightViewName, metrics, fingerCloseupPadding);
         }
     }
 
@@ -2416,17 +2522,14 @@ public class MotionComparisonProbe : MonoBehaviour
             return _captureCamera;
         }
 
-        GameObject cameraObject = new GameObject($"MotionComparisonCapture_{comparisonLabel}");
+        GameObject cameraObject = new GameObject(MotionComparisonProbeReportWriter.BuildCaptureCameraObjectName(comparisonLabel));
         cameraObject.hideFlags = HideFlags.HideAndDontSave;
         _captureCamera = cameraObject.AddComponent<Camera>();
         _captureCamera.enabled = false;
 
-        if (_camera != null)
-        {
-            _captureCamera.cullingMask = _camera.cullingMask;
-            _captureCamera.allowHDR = _camera.allowHDR;
-            _captureCamera.allowMSAA = _camera.allowMSAA;
-        }
+        _captureCamera.cullingMask = ~0;
+        _captureCamera.allowHDR = _camera != null && _camera.allowHDR;
+        _captureCamera.allowMSAA = _camera != null && _camera.allowMSAA;
 
         return _captureCamera;
     }
@@ -2538,7 +2641,7 @@ public class MotionComparisonProbe : MonoBehaviour
         return true;
     }
 
-    private void RenderCameraToPng(Camera captureCamera, string path)
+    private bool RenderCameraToPng(Camera captureCamera, string path)
     {
         RenderTexture previousRenderTexture = RenderTexture.active;
         RenderTexture renderTexture = RenderTexture.GetTemporary(screenshotWidth, screenshotHeight, 24, RenderTextureFormat.ARGB32);
@@ -2548,12 +2651,13 @@ public class MotionComparisonProbe : MonoBehaviour
         {
             captureCamera.targetTexture = renderTexture;
             RenderTexture.active = renderTexture;
+            GL.Clear(true, true, captureCamera.backgroundColor);
             captureCamera.Render();
 
             texture = new Texture2D(screenshotWidth, screenshotHeight, TextureFormat.RGB24, false);
             texture.ReadPixels(new Rect(0, 0, screenshotWidth, screenshotHeight), 0, 0);
             texture.Apply();
-            File.WriteAllBytes(path, texture.EncodeToPNG());
+            return MotionComparisonProbeReportWriter.WriteNonBlankScreenshotPng(path, texture);
         }
         finally
         {
@@ -2568,35 +2672,6 @@ public class MotionComparisonProbe : MonoBehaviour
         }
     }
 
-    private void AppendScreenshotIndex(string reason, PoseMetrics metrics, string viewName, string path)
-    {
-        if (string.IsNullOrEmpty(_screenshotIndexPath))
-        {
-            return;
-        }
-
-        MotionComparisonProbeReportWriter.AppendScreenshotIndexRow(
-            _screenshotIndexPath,
-            new MotionComparisonProbeScreenshotIndexRow(
-                comparisonLabel: comparisonLabel,
-                sceneName: SceneManager.GetActiveScene().name,
-                reason: reason,
-                recorderFrame: metrics.RecorderFrame,
-                viewName: viewName,
-                relativePath: MakeProjectRelativePath(path)));
-    }
-
-    private void WriteFrameSessionIndex()
-    {
-        MotionComparisonProbeReportWriter.WriteFrameSessionIndexMarkdown(
-            _screenshotSessionIndexPath,
-            new MotionComparisonProbeFrameSessionIndexData(
-                sessionId: _sessionId,
-                sessionManifestRelativePath: MakeProjectRelativePath(_sessionManifestPath),
-                metricsCsvRelativePath: MakeProjectRelativePath(_csvPath),
-                frameIndexCsvRelativePath: MakeProjectRelativePath(_screenshotIndexPath)));
-    }
-
     private void WriteSessionManifest(string stateReason)
     {
         if (string.IsNullOrEmpty(_sessionManifestPath))
@@ -2605,11 +2680,10 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         string sceneName = SceneManager.GetActiveScene().name;
-        string updatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-        string relativeCsvPath = MakeProjectRelativePath(_csvPath);
-        string relativeScreenshotFolder = MakeProjectRelativePath(_screenshotFolder);
-        string relativeScreenshotIndexPath = MakeProjectRelativePath(_screenshotIndexPath);
-        string relativeFrameSessionIndexPath = MakeProjectRelativePath(_screenshotSessionIndexPath);
+        string updatedAt = MotionComparisonProbeReportWriter.BuildSessionUpdatedAt(DateTime.Now);
+        MotionComparisonProbeSessionManifestOutputPaths outputPaths =
+            MotionComparisonProbeOutputPaths.BuildSessionManifestOutputPaths(
+            Application.dataPath, _csvPath, _screenshotFolder, _screenshotIndexPath, _screenshotSessionIndexPath);
         ThumbGuardDiagnostics thumbGuardDiagnostics = CaptureThumbGuardDiagnostics();
         MotionComparisonProbeReportWriter.WriteSessionManifestMarkdown(
             _sessionManifestPath,
@@ -2621,8 +2695,8 @@ public class MotionComparisonProbe : MonoBehaviour
                 createdAt: _sessionStamp,
                 updatedAt: updatedAt,
                 screenshotsEnabled: captureSampleScreenshots,
-                sampleClock: sampleByAnimationClipTime ? "animationClipTime" : "elapsed",
-                sampleTimes: FormatSampleTimes(),
+                sampleClock: MotionComparisonProbeReportWriter.BuildSampleClockLabel(sampleByAnimationClipTime),
+                sampleTimes: MotionComparisonProbeReportWriter.FormatSampleTimes(sampleTimes),
                 yybDiagnosticOnlyMetrics: captureYybDiagnosticOnlyMetrics,
                 riskEvaluationFrameCount: _riskEvaluationFrameCount,
                 leftThumbCoreCoverageFrameCount: _leftCoreThumbDiagnosticFrameCount,
@@ -2649,137 +2723,7 @@ public class MotionComparisonProbe : MonoBehaviour
                 rightThumbIndexSpreadGuardWeight: thumbGuardDiagnostics.RightIndexSpreadGuardWeight,
                 leftThumbSegmentStraightenGuardWeight: thumbGuardDiagnostics.LeftSegmentStraightenWeight,
                 rightThumbSegmentStraightenGuardWeight: thumbGuardDiagnostics.RightSegmentStraightenWeight,
-                metricsCsvRelativePath: relativeCsvPath,
-                frameFolderRelativePath: relativeScreenshotFolder,
-                frameIndexCsvRelativePath: relativeScreenshotIndexPath,
-                frameSessionIndexRelativePath: relativeFrameSessionIndexPath));
-    }
-
-    private static string BuildUniqueDirectoryPath(string rootFolder, string folderName)
-    {
-        string safeFolderName = SanitizeFileName(folderName);
-        string candidate = Path.Combine(rootFolder, safeFolderName);
-        int index = 1;
-
-        while (Directory.Exists(candidate))
-        {
-            candidate = Path.Combine(rootFolder, $"{safeFolderName}_{index:000}");
-            index++;
-        }
-
-        return candidate;
-    }
-
-    private static string MakeProjectRelativePath(string path)
-    {
-        if (string.IsNullOrEmpty(path))
-        {
-            return "";
-        }
-
-        DirectoryInfo projectRoot = Directory.GetParent(Application.dataPath);
-        string rootPath = projectRoot != null ? projectRoot.FullName : Application.dataPath;
-        string fullPath = Path.GetFullPath(path);
-        string fullRoot = Path.GetFullPath(rootPath);
-
-        if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
-        {
-            return path.Replace("\\", "/");
-        }
-
-        return fullPath.Substring(fullRoot.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace("\\", "/");
-    }
-
-    private static string BuildUniqueOutputPath(string folderPath, string fileName)
-    {
-        string baseName = Path.GetFileNameWithoutExtension(fileName);
-        string extension = Path.GetExtension(fileName);
-        string candidate = Path.Combine(folderPath, fileName);
-        int index = 1;
-
-        while (File.Exists(candidate))
-        {
-            candidate = Path.Combine(folderPath, $"{baseName}_{index:000}{extension}");
-            index++;
-        }
-
-        return candidate;
-    }
-
-    private string BuildEvidenceBaseName(string what, string why, string how)
-    {
-        return string.Join("_",
-            $"when-{ShortenFileNamePart(SanitizeFileName(_sessionStamp))}",
-            $"where-{ShortenFileNamePart(SanitizeFileName(SceneManager.GetActiveScene().name))}",
-            $"who-{ShortenFileNamePart(SanitizeFileName(comparisonLabel))}",
-            $"what-{ShortenFileNamePart(SanitizeFileName(what))}",
-            $"why-{ShortenFileNamePart(SanitizeFileName(why))}",
-            $"how-{ShortenFileNamePart(SanitizeFileName(how))}");
-    }
-
-    private static string SanitizeFileName(string fileName)
-    {
-        string cleanName = string.IsNullOrWhiteSpace(fileName) ? "motion_comparison" : fileName.Trim();
-        foreach (char invalidChar in Path.GetInvalidFileNameChars())
-        {
-            cleanName = cleanName.Replace(invalidChar, '_');
-        }
-
-        return cleanName.Replace(' ', '_');
-    }
-
-    private static string ShortenFileNamePart(string value)
-    {
-        if (string.IsNullOrEmpty(value) || value.Length <= EvidenceFileNamePartMaxLength)
-        {
-            return value;
-        }
-
-        const int hashLength = 8;
-        int prefixLength = Mathf.Max(1, EvidenceFileNamePartMaxLength - hashLength - 1);
-        return $"{value.Substring(0, prefixLength)}_{CalculateStableHash(value):x8}";
-    }
-
-    private static uint CalculateStableHash(string value)
-    {
-        const uint offsetBasis = 2166136261;
-        const uint prime = 16777619;
-        uint hash = offsetBasis;
-        foreach (char character in value)
-        {
-            hash ^= character;
-            hash *= prime;
-        }
-
-        return hash;
-    }
-
-    private string FormatSampleTimes()
-    {
-        if (sampleTimes == null || sampleTimes.Length == 0)
-        {
-            return "";
-        }
-
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < sampleTimes.Length; i++)
-        {
-            if (i > 0)
-            {
-                builder.Append(", ");
-            }
-
-            builder.Append(sampleTimes[i].ToString("0.###", CultureInfo.InvariantCulture));
-        }
-
-        return builder.ToString();
-    }
-
-    private static void WriteHeader(string path)
-    {
-        const string header = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,retargetRootDeltaLast,retargetRootDeltaMax,retargetRootDeltaSkippedCount,retargetPoseRootDeltaLast,retargetPoseRootDeltaMax,retargetPoseRootClampCount,retargetGroundingAdjustmentLast,retargetGroundingAdjustmentMax,retargetGroundingStepClampCount,retargetGroundingSmoothedCount,retargetGroundingVerticalStepLast,retargetGroundingVerticalStepMax,retargetGroundingInitialVerticalStep,retargetGroundingVerticalStepAfterInitialMax,retargetGroundingTargetY,retargetGroundingLowestFootBottomY,hipsY,lowestFootY,lowestFootBottomY,meshBoundsMinY,meshBoundsMaxY,footBottomGroundGap,meshBoundsGroundGap,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
-        const string yybDiagnosticHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk,thumbGuardManualReferenceConfigured,thumbGuardManualReferenceActive,thumbGuardPoseShapingSuppressed,thumbGuardLeftPoseShapingSuppressed,thumbGuardRightPoseShapingSuppressed,thumbGuardProjectionWeight,thumbGuardLeftProjectionWeight,thumbGuardRightProjectionWeight,thumbGuardIndexSpreadWeight,thumbGuardLeftIndexSpreadWeight,thumbGuardRightIndexSpreadWeight,thumbGuardSegmentStraightenWeight,thumbGuardLeftSegmentStraightenWeight,thumbGuardRightSegmentStraightenWeight,thumbGuardLeftProjectionCorrectionApplyCount,thumbGuardRightProjectionCorrectionApplyCount,thumbGuardLeftProjectionCorrectionPreserveCount,thumbGuardRightProjectionCorrectionPreserveCount,thumbGuardLeftSegmentStraightenApplyCount,thumbGuardRightSegmentStraightenApplyCount,thumbGuardLeftSegmentStraightenPreserveCount,thumbGuardRightSegmentStraightenPreserveCount,thumbGuardLeftLocalRotationGuardClampCount,thumbGuardRightLocalRotationGuardClampCount,thumbGuardLeftLocalRotationGuardPreserveCount,thumbGuardRightLocalRotationGuardPreserveCount,thumbGuardLeftLocalRotationGuardCurrentRisk,thumbGuardRightLocalRotationGuardCurrentRisk,thumbGuardLeftLocalRotationGuardLimitedRisk,thumbGuardRightLocalRotationGuardLimitedRisk,thumbGuardLeftWorldRotationSuppressCompetingOverride,thumbGuardRightWorldRotationSuppressCompetingOverride,thumbGuardLeftWorldRotationKeepDetachedHelperOverride,thumbGuardRightWorldRotationKeepDetachedHelperOverride,thumbGuardLeftWorldRotationCurrentReferenceFrameDeviation,thumbGuardRightWorldRotationCurrentReferenceFrameDeviation,thumbGuardLeftWorldRotationCandidateReferenceFrameDeviation,thumbGuardRightWorldRotationCandidateReferenceFrameDeviation,thumbGuardLeftProximalWorldRotationPreserveReason,thumbGuardRightProximalWorldRotationPreserveReason,thumbGuardLeftIntermediateWorldRotationPreserveReason,thumbGuardRightIntermediateWorldRotationPreserveReason,thumbGuardLeftProximalWorldRotationCurrentReferenceAngle,thumbGuardRightProximalWorldRotationCurrentReferenceAngle,thumbGuardLeftIntermediateWorldRotationCurrentReferenceAngle,thumbGuardRightIntermediateWorldRotationCurrentReferenceAngle,thumbGuardLeftProximalWorldRotationCandidateReferenceAngle,thumbGuardRightProximalWorldRotationCandidateReferenceAngle,thumbGuardLeftIntermediateWorldRotationCandidateReferenceAngle,thumbGuardRightIntermediateWorldRotationCandidateReferenceAngle,thumbGuardLeftProximalWorldRotationPreserveCurrentRisk,thumbGuardRightProximalWorldRotationPreserveCurrentRisk,thumbGuardLeftIntermediateWorldRotationPreserveCurrentRisk,thumbGuardRightIntermediateWorldRotationPreserveCurrentRisk,thumbGuardLeftProximalWorldRotationPreserveLimitedRisk,thumbGuardRightProximalWorldRotationPreserveLimitedRisk,thumbGuardLeftIntermediateWorldRotationPreserveLimitedRisk,thumbGuardRightIntermediateWorldRotationPreserveLimitedRisk,thumbGuardHelperSyncEnabled,thumbGuardHelperPositionSyncEnabled,thumbGuardHelperSyncWeight,thumbGuardHelperMaxLocalAngle,thumbGuardPalmStabilizeEnabled,thumbGuardPalmStabilizeWeight,thumbGuardPalmStabilizeMaxLocalAngle,thumbGuardWebbingStabilizeEnabled,thumbGuardWebbingStabilizeWeight,thumbGuardWebbingMaxLocalAngle,thumbGuardWebbingMaxPositionOffset";
-        File.WriteAllText(path, header + "," + yybDiagnosticHeader + Environment.NewLine, Encoding.UTF8);
+                artifactPaths: outputPaths));
     }
 
     private struct ArmMuscleMetrics
@@ -2828,7 +2772,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
         public static AnimationTimeMetrics Empty => new AnimationTimeMetrics
         {
-            Source = "",
+            Source = MotionComparisonProbeReportWriter.BuildUnknownAnimationTimeSourceLabel(),
             ClipName = "",
             ClipTime = float.NaN,
             ClipLength = float.NaN,
@@ -3062,6 +3006,19 @@ public class MotionComparisonProbe : MonoBehaviour
         public float MaxGroundingVerticalStepAfterInitial;
         public float LastGroundingTargetY;
         public float LastGroundingLowestFootBottomY;
+        public float FootHeightReferenceLift;
+        public float RecordingStartRootY;
+        public float RecordingStartBodyPositionY;
+        public float RecordingStartHipsLocalY;
+        public float RecordingStartHipsY;
+        public float RecordingStartHipsReferenceBeforeLocalY;
+        public float RecordingStartHipsReferenceAfterLocalY;
+        public float RecordingStartHipsReferenceDeltaY;
+        public int RecordingStartHipsReferenceFlipDetected;
+        public string RecordingStartHipsReferenceStage;
+        public float GroundingMaxStepPerFrame;
+        public float GroundingLastStepToMaxStepRatio;
+        public int GroundingLastStepAtMaxStep;
 
         public static RootSpikeMetrics Empty => new RootSpikeMetrics
         {
@@ -3080,7 +3037,36 @@ public class MotionComparisonProbe : MonoBehaviour
             InitialGroundingVerticalStep = float.NaN,
             MaxGroundingVerticalStepAfterInitial = float.NaN,
             LastGroundingTargetY = float.NaN,
-            LastGroundingLowestFootBottomY = float.NaN
+            LastGroundingLowestFootBottomY = float.NaN,
+            FootHeightReferenceLift = float.NaN,
+            RecordingStartRootY = float.NaN,
+            RecordingStartBodyPositionY = float.NaN,
+            RecordingStartHipsLocalY = float.NaN,
+            RecordingStartHipsY = float.NaN,
+            RecordingStartHipsReferenceBeforeLocalY = float.NaN,
+            RecordingStartHipsReferenceAfterLocalY = float.NaN,
+            RecordingStartHipsReferenceDeltaY = float.NaN,
+            RecordingStartHipsReferenceFlipDetected = -1,
+            RecordingStartHipsReferenceStage = "",
+            GroundingMaxStepPerFrame = float.NaN,
+            GroundingLastStepToMaxStepRatio = float.NaN,
+            GroundingLastStepAtMaxStep = -1
+        };
+    }
+
+    private struct HandTorsoClearanceMetrics
+    {
+        public float LeftSignedClearance;
+        public float RightSignedClearance;
+        public float MinSignedClearance;
+        public float PenetrationRisk;
+
+        public static HandTorsoClearanceMetrics Empty => new HandTorsoClearanceMetrics
+        {
+            LeftSignedClearance = float.NaN,
+            RightSignedClearance = float.NaN,
+            MinSignedClearance = float.NaN,
+            PenetrationRisk = float.NaN
         };
     }
 
@@ -3149,6 +3135,8 @@ public class MotionComparisonProbe : MonoBehaviour
         public Vector3 RootPosition;
         public float RootYaw;
         public RootSpikeMetrics RootSpike;
+        public float BodyPositionY;
+        public float HipsLocalY;
         public float HipsY;
         public float LowestFootY;
         public float LowestFootBottomY;
@@ -3205,6 +3193,10 @@ public class MotionComparisonProbe : MonoBehaviour
         public float RightHandHorizontalRatio;
         public float LeftHandBelowShoulderRatio;
         public float RightHandBelowShoulderRatio;
+        public float LeftHandTorsoSignedClearance;
+        public float RightHandTorsoSignedClearance;
+        public float MinHandTorsoSignedClearance;
+        public float HandTorsoPenetrationRisk;
         public float LeftShoulderDownUpMuscle;
         public float LeftShoulderFrontBackMuscle;
         public float LeftArmDownUpMuscle;
@@ -3244,14 +3236,14 @@ public class MotionComparisonProbe : MonoBehaviour
 
         public string ToCsvLine()
         {
-            return string.Join(",",
+            return MotionComparisonProbeReportWriter.BuildMetricsCsvLine(
                 Escape(Label),
                 Escape(Scene),
                 Escape(Reason),
                 F(Elapsed),
                 F(TimeSinceLevelLoad),
-                FrameCount.ToString(CultureInfo.InvariantCulture),
-                RecorderFrame.ToString(CultureInfo.InvariantCulture),
+                I(FrameCount),
+                I(RecorderFrame),
                 Escape(AnimationTimeSource),
                 Escape(AnimationClipName),
                 F(AnimationClipTime),
@@ -3263,20 +3255,35 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(RootYaw),
                 F(RootSpike.LastRootDeltaMagnitude),
                 F(RootSpike.MaxRootDeltaMagnitude),
-                RootSpike.RootDeltaSpikeSkippedCount.ToString(CultureInfo.InvariantCulture),
+                I(RootSpike.RootDeltaSpikeSkippedCount),
                 F(RootSpike.LastRootPositionPoseDeltaMagnitude),
                 F(RootSpike.MaxRootPositionPoseDeltaMagnitude),
-                RootSpike.RootPositionSpikeClampedCount.ToString(CultureInfo.InvariantCulture),
+                I(RootSpike.RootPositionSpikeClampedCount),
                 F(RootSpike.LastGroundingAdjustment),
                 F(RootSpike.MaxGroundingAdjustment),
-                RootSpike.GroundingStepClampedCount.ToString(CultureInfo.InvariantCulture),
-                RootSpike.GroundingSmoothedCount.ToString(CultureInfo.InvariantCulture),
+                I(RootSpike.GroundingStepClampedCount),
+                I(RootSpike.GroundingSmoothedCount),
                 F(RootSpike.LastGroundingVerticalStep),
                 F(RootSpike.MaxGroundingVerticalStep),
                 F(RootSpike.InitialGroundingVerticalStep),
                 F(RootSpike.MaxGroundingVerticalStepAfterInitial),
                 F(RootSpike.LastGroundingTargetY),
                 F(RootSpike.LastGroundingLowestFootBottomY),
+                F(RootSpike.GroundingMaxStepPerFrame),
+                F(RootSpike.GroundingLastStepToMaxStepRatio),
+                I(RootSpike.GroundingLastStepAtMaxStep),
+                F(RootSpike.RecordingStartRootY),
+                F(RootSpike.RecordingStartBodyPositionY),
+                F(RootSpike.RecordingStartHipsLocalY),
+                F(RootSpike.RecordingStartHipsY),
+                F(RootSpike.RecordingStartHipsReferenceBeforeLocalY),
+                F(RootSpike.RecordingStartHipsReferenceAfterLocalY),
+                F(RootSpike.RecordingStartHipsReferenceDeltaY),
+                I(RootSpike.RecordingStartHipsReferenceFlipDetected),
+                Escape(RootSpike.RecordingStartHipsReferenceStage),
+                F(BodyPositionY),
+                F(HipsLocalY),
+                F(RootSpike.FootHeightReferenceLift),
                 F(HipsY),
                 F(LowestFootY),
                 F(LowestFootBottomY),
@@ -3312,6 +3319,10 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(RightHandHorizontalRatio),
                 F(LeftHandBelowShoulderRatio),
                 F(RightHandBelowShoulderRatio),
+                F(LeftHandTorsoSignedClearance),
+                F(RightHandTorsoSignedClearance),
+                F(MinHandTorsoSignedClearance),
+                F(HandTorsoPenetrationRisk),
                 F(LeftShoulderDownUpMuscle),
                 F(LeftShoulderFrontBackMuscle),
                 F(LeftArmDownUpMuscle),
@@ -3465,25 +3476,22 @@ public class MotionComparisonProbe : MonoBehaviour
 
         private static string F(float value)
         {
-            return float.IsNaN(value) || float.IsInfinity(value)
-                ? ""
-                : value.ToString("0.######", CultureInfo.InvariantCulture);
+            return MotionComparisonProbeReportWriter.FormatMetricsCsvFloat(value);
+        }
+
+        private static string I(int value)
+        {
+            return MotionComparisonProbeReportWriter.FormatMetricsCsvInt(value);
         }
 
         private static string V(Vector3 value)
         {
-            return Escape($"{F(value.x)}|{F(value.y)}|{F(value.z)}");
+            return MotionComparisonProbeReportWriter.FormatMetricsCsvVector(value);
         }
 
         private static string Escape(string value)
         {
-            if (string.IsNullOrEmpty(value))
-            {
-                return "";
-            }
-
-            string escaped = value.Replace("\"", "\"\"");
-            return escaped.IndexOfAny(new[] { ',', '"', '\r', '\n' }) >= 0 ? $"\"{escaped}\"" : escaped;
+            return MotionComparisonProbeReportWriter.FormatMetricsCsvText(value);
         }
     }
 }

@@ -1,5 +1,8 @@
 using NUnit.Framework;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -70,6 +73,120 @@ namespace Tests.Editor.FBXImporter
             Assert.IsTrue(baseName.Contains(" "),
                 "파일명 내 공백은 base name에 그대로 유지되어야 한다");
             Assert.AreEqual("Snake Hip Hop Dance", baseName);
+        }
+        [Test]
+        public void Given_ExportedYybVmd_When_ReadingBoneNames_Then_MmdStandardNamesAreWritten()
+        {
+            string vmdPath = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "VMDRecorderSample", "smoke_satisfaction_2_208s.vmd");
+
+            Assert.That(File.Exists(vmdPath), Is.True, "The YYB smoke VMD must exist before validating MMD bone names.");
+
+            byte[] bytes = File.ReadAllBytes(vmdPath);
+            const int headerLength = 30 + 20;
+            const int boneFrameSize = 15 + 4 + 12 + 16 + 64;
+            Assert.That(bytes.Length, Is.GreaterThan(headerLength + 4), "VMD must contain a bone frame table.");
+
+            uint boneKeyFrameCount = BitConverter.ToUInt32(bytes, headerLength);
+            int offset = headerLength + 4;
+            Assert.That(bytes.Length, Is.GreaterThanOrEqualTo(offset + (boneKeyFrameCount * boneFrameSize)));
+
+            Encoding shiftJis = Encoding.GetEncoding(932);
+            HashSet<string> names = new HashSet<string>();
+            HashSet<uint> centerFrames = new HashSet<uint>();
+            HashSet<uint> lowerBodyFrames = new HashSet<uint>();
+            uint maxFrame = 0;
+            int centerKeyCount = 0;
+            int centerNonIdentityRotationCount = 0;
+            int lowerBodyKeyCount = 0;
+            int lowerBodyNonIdentityRotationCount = 0;
+            int grooveKeyCount = 0;
+            int grooveNonIdentityRotationCount = 0;
+
+            const string centerName = "\u30bb\u30f3\u30bf\u30fc";
+            const string lowerBodyName = "\u4e0b\u534a\u8eab";
+            const string grooveName = "\u30b0\u30eb\u30fc\u30d6";
+
+            for (int i = 0; i < boneKeyFrameCount; i++)
+            {
+                int frameOffset = offset + (i * boneFrameSize);
+                int length = 0;
+                while (length < 15 && bytes[frameOffset + length] != 0)
+                {
+                    length++;
+                }
+
+                string boneName = shiftJis.GetString(bytes, frameOffset, length);
+                uint frame = BitConverter.ToUInt32(bytes, frameOffset + 15);
+                bool hasNonIdentityRotation = HasNonIdentityRotation(bytes, frameOffset);
+
+                names.Add(boneName);
+                maxFrame = Math.Max(maxFrame, frame);
+
+                if (boneName == centerName)
+                {
+                    centerKeyCount++;
+                    centerFrames.Add(frame);
+                    if (hasNonIdentityRotation)
+                    {
+                        centerNonIdentityRotationCount++;
+                    }
+                }
+                else if (boneName == lowerBodyName)
+                {
+                    lowerBodyKeyCount++;
+                    lowerBodyFrames.Add(frame);
+                    if (hasNonIdentityRotation)
+                    {
+                        lowerBodyNonIdentityRotationCount++;
+                    }
+                }
+                else if (boneName == grooveName)
+                {
+                    grooveKeyCount++;
+                    if (hasNonIdentityRotation)
+                    {
+                        grooveNonIdentityRotationCount++;
+                    }
+                }
+            }
+
+            Assert.That(maxFrame, Is.EqualTo(6000), "Full Satisfaction VMD must match the 0..6000 MMD reference frame range.");
+            int expectedFrameCount = checked((int)maxFrame + 1);
+            Assert.That(centerKeyCount, Is.EqualTo(expectedFrameCount), "MMD center translation must be dense across the full recording.");
+            Assert.That(centerFrames.Count, Is.EqualTo(expectedFrameCount), "MMD center translation must not contain skipped or duplicate frames.");
+            Assert.That(centerNonIdentityRotationCount, Is.EqualTo(0), "MMD center rotation must stay identity; hips rotation belongs on lower-body.");
+            Assert.That(lowerBodyKeyCount, Is.EqualTo(expectedFrameCount), "MMD lower-body must be exported as the hips rotation carrier.");
+            Assert.That(lowerBodyFrames.Count, Is.EqualTo(expectedFrameCount), "MMD lower-body rotation carrier must be dense across the full recording.");
+            Assert.That(lowerBodyNonIdentityRotationCount, Is.EqualTo(expectedFrameCount), "MMD lower-body must carry the recorded hips rotation.");
+            Assert.That(grooveKeyCount, Is.EqualTo(0), "YYB export must not route hips rotation through groove.");
+            Assert.That(grooveNonIdentityRotationCount, Is.EqualTo(0), "Groove rotation must not move the whole model.");
+            Assert.That(names, Does.Contain("\u5168\u3066\u306e\u89aa"));
+            Assert.That(names, Does.Contain("\u30bb\u30f3\u30bf\u30fc"));
+            Assert.That(names, Does.Contain("\u4e0b\u534a\u8eab"));
+            Assert.That(names, Does.Contain("\u5de6\u8db3\uff29\uff2b"));
+            Assert.That(names, Does.Contain("\u53f3\u8db3\uff29\uff2b"));
+            Assert.That(names, Does.Contain("\u5de6\u3064\u307e\u5148\uff29\uff2b"));
+            Assert.That(names, Does.Contain("\u53f3\u3064\u307e\u5148\uff29\uff2b"));
+            Assert.That(names, Does.Not.Contain("\u5de6\u8db3IK"));
+            Assert.That(names, Does.Not.Contain("\u53f3\u8db3IK"));
+            Assert.That(names, Does.Contain("\u5de6\u8155"));
+            Assert.That(names, Does.Contain("\u53f3\u8155"));
+            Assert.That(names, Does.Not.Contain("Null_00"));
+            Assert.That(names, Does.Not.Contain("Null_330"));
+        }
+
+        private static bool HasNonIdentityRotation(byte[] bytes, int boneFrameOffset)
+        {
+            float x = BitConverter.ToSingle(bytes, boneFrameOffset + 31);
+            float y = BitConverter.ToSingle(bytes, boneFrameOffset + 35);
+            float z = BitConverter.ToSingle(bytes, boneFrameOffset + 39);
+            float w = BitConverter.ToSingle(bytes, boneFrameOffset + 43);
+
+            const float tolerance = 0.0001f;
+            return Math.Abs(x) > tolerance ||
+                Math.Abs(y) > tolerance ||
+                Math.Abs(z) > tolerance ||
+                Math.Abs(w - 1f) > tolerance;
         }
     }
 }

@@ -231,6 +231,10 @@ public class HumanoidSampleCode : MonoBehaviour
         {
             _lastSavedFilePath = result.FilePath;
             Debug.Log($"[Recorder] 저장 완료: {result.FilePath} ({result.FileSizeBytes} bytes, {result.FrameCount} frames)");
+            if (!string.IsNullOrEmpty(result.ExportRotationDiagnosticsCsvPath))
+            {
+                Debug.Log($"[Recorder] export rotation diagnostics: {result.ExportRotationDiagnosticsCsvPath}");
+            }
             UpdateUI(1f, _totalDuration, $"저장 완료: {Path.GetFileName(result.FilePath)}");
             Invoke(nameof(OpenTargetFolder), 0.5f);
         }
@@ -268,6 +272,7 @@ public class HumanoidSampleCode : MonoBehaviour
 
         if (EnsureRecorder())
         {
+            vmdRecorder.EnableExportRotationDiagnostics = enableProbe;
             vmdRecorder.UseCaptureFramerateDuringRecording = useCaptureFramerateForRegression;
             vmdRecorder.MaxRecordedFramesPerLateUpdate = useCaptureFramerateForRegression
                 ? Mathf.Max(1, vmdRecorder.MaxRecordedFramesPerLateUpdate)
@@ -847,7 +852,8 @@ internal class TransformJitterProbe : MonoBehaviour
         rows.Clear();
         rendererBoundsRows.Clear();
         startTime = Time.time;
-        string sessionId = $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-{SanitizeFileName(SceneManager.GetActiveScene().name)}_who-{label}_what-camera-model-jitter_why-tremor-diagnosis_how-frame-delta";
+        string sessionId =
+            $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-{SanitizeFileName(SceneManager.GetActiveScene().name)}_who-{ShortSlug(label, 32)}_what-jitter";
         sessionFolder = Path.Combine(GetProjectRoot(), OutputFolder, sessionId);
         Directory.CreateDirectory(sessionFolder);
         hasPrevious = false;
@@ -1474,7 +1480,8 @@ internal class TransformJitterProbe : MonoBehaviour
     {
         if (string.IsNullOrEmpty(sessionFolder))
         {
-            string sessionId = $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-{SanitizeFileName(SceneManager.GetActiveScene().name)}_who-{label}_what-camera-model-jitter_why-tremor-diagnosis_how-frame-delta";
+            string sessionId =
+                $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-{SanitizeFileName(SceneManager.GetActiveScene().name)}_who-{ShortSlug(label, 32)}_what-jitter";
             sessionFolder = Path.Combine(GetProjectRoot(), OutputFolder, sessionId);
             Directory.CreateDirectory(sessionFolder);
         }
@@ -1564,7 +1571,14 @@ internal class TransformJitterProbe : MonoBehaviour
             builder.AppendLine(string.Join(",", fields));
         }
 
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
         File.WriteAllText(path, builder.ToString(), Encoding.UTF8);
+    }
+
+    private static string ShortSlug(string value, int maxLength)
+    {
+        string slug = SanitizeFileName(string.IsNullOrWhiteSpace(value) ? "motion" : value);
+        return slug.Length <= maxLength ? slug : slug.Substring(0, maxLength);
     }
 
     private void WriteRendererBoundsCsv(string path)
