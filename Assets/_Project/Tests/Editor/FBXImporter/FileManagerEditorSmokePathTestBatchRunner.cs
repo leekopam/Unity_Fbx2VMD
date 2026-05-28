@@ -45,6 +45,12 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_ControlledSourceAlreadyInImportFolder_When_DecidingImportSettings_Then_PreservesExistingImporter);
             RunTest(results, nameof(tests.Given_ExternalSourceCopiedToControlledImportFolder_When_DecidingImportSettings_Then_ConfiguresCopiedImporter),
                 tests.Given_ExternalSourceCopiedToControlledImportFolder_When_DecidingImportSettings_Then_ConfiguresCopiedImporter);
+            RunTest(results, nameof(tests.Given_CaptureOnlyModeWithoutEditorSmoke_When_DecidingRecordingMode_Then_SkipsVmdRecording),
+                tests.Given_CaptureOnlyModeWithoutEditorSmoke_When_DecidingRecordingMode_Then_SkipsVmdRecording);
+            RunTest(results, nameof(tests.Given_CaptureOnlyModeWithEditorSmoke_When_DecidingRecordingMode_Then_AllowsDiagnosticVmdRecording),
+                tests.Given_CaptureOnlyModeWithEditorSmoke_When_DecidingRecordingMode_Then_AllowsDiagnosticVmdRecording);
+            RunTest(results, nameof(tests.Given_VmdMode_When_DecidingRecordingMode_Then_StartsVmdRecording),
+                tests.Given_VmdMode_When_DecidingRecordingMode_Then_StartsVmdRecording);
             RunTest(results, nameof(tests.Given_ProjectArtifactPath_When_MakingProjectRelativePath_Then_ReturnsSlashSeparatedRelativePath),
                 tests.Given_ProjectArtifactPath_When_MakingProjectRelativePath_Then_ReturnsSlashSeparatedRelativePath);
             RunTest(results, nameof(tests.Given_OutsidePathWithSharedPrefix_When_MakingProjectRelativePath_Then_ReturnsNormalizedOriginalPath),

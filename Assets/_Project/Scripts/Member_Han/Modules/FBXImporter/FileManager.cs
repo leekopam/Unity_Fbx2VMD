@@ -50,6 +50,9 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("체크 시 선택한 FBX 파일을 Import_FBX 폴더에 복사하여 저장")]
         public bool saveToImportFolder = false;
 
+        [Tooltip("체크 시 FBX 임포트 후 VMD 녹화를 자동 시작합니다. 끄면 Unity 재생/촬영 준비까지만 수행합니다.")]
+        public bool recordVmdAfterImport = true;
+
         [Header("Ghost Retargeting 설정")]
         [Tooltip("애니메이션을 적용할 대상 캐릭터 (Humanoid Avatar 필요)")]
         public GameObject targetCharacter;
@@ -1502,7 +1505,14 @@ namespace Member_Han.Modules.FBXImporter
                 SetSessionState(FBXSessionState.Selected, $"선택됨: {Path.GetFileName(sourcePath)}", 0.05f);
                 string targetPath = CopyToControlledImportFolder(sourcePath);
                 string outputBaseName = Path.GetFileNameWithoutExtension(targetPath);
-                Debug.Log($"[FileManager] 자동 VMD 출력명 고정: {outputBaseName}.vmd (입력 FBX: {Path.GetFileName(sourcePath)})");
+                if (recordVmdAfterImport)
+                {
+                    Debug.Log($"[FileManager] 자동 VMD 출력명 고정: {outputBaseName}.vmd (입력 FBX: {Path.GetFileName(sourcePath)})");
+                }
+                else
+                {
+                    Debug.Log($"[FileManager] FBX 임포트/Unity 촬영 전용 모드: {outputBaseName} (VMD 자동 녹화 생략)");
+                }
                 SetSessionState(FBXSessionState.Copied, $"복제 완료: {Path.GetFileName(targetPath)}", 0.15f);
 
 #if UNITY_EDITOR
@@ -1623,51 +1633,91 @@ namespace Member_Han.Modules.FBXImporter
                 yield break;
             }
 
-            HumanoidSampleCode recorderController = targetObject.GetComponent<HumanoidSampleCode>();
-            if (recorderController == null)
-            {
-                FailSession("Target Character에 HumanoidSampleCode가 없습니다.");
-                yield break;
-            }
-
-            _activeRecorderController = recorderController;
-            _activeRecorderController.RecordingFinished += OnRecordingFinished;
-            _activeRecorderController.SetRecordingDiagnostics(
-                enableRecordingDiagnostics,
-                enableRecordingDiagnostics && enableDiagnosticFingerCloseups,
-                enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics,
-                _editorSmokeSampleTimesOverride);
-
             float recordingStartTime = 0f;
             float recordingLength = clip.length;
             int recordingTargetFrameCount = 0;
             float recordingPlaybackSpeed = 1f;
             string recordingOutputBaseName = outputBaseName;
             string comparisonLabel = $"auto_{recordingOutputBaseName}";
-#if UNITY_EDITOR
-            if (_editorSmokeRecordingOverrideActive)
-            {
-                float requestedDuration = Mathf.Max(0.1f, _editorSmokeDurationSeconds);
-                recordingStartTime = CalculateEditorSmokeStartTime(clip, requestedDuration, _editorSmokeSegment);
-                float remainingLength = Mathf.Max(0.1f, clip.length - recordingStartTime);
-                recordingLength = Mathf.Min(requestedDuration, remainingLength);
-                recordingTargetFrameCount = Mathf.Min(
-                    Mathf.Max(1, _editorSmokeTargetFrameCount),
-                    Mathf.CeilToInt(recordingLength * EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
-                recordingOutputBaseName = BuildEditorSmokeOutputBaseName(outputBaseName, recordingLength, _editorSmokeSegment);
-                comparisonLabel = $"auto_{recordingOutputBaseName}";
-                Debug.Log(
-                    $"[FileManager] Editor smoke cap 적용: VMD={recordingOutputBaseName}.vmd, " +
-                    $"segment={GetEditorSmokeSegmentLabel(_editorSmokeSegment)}, " +
-                    $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
-                    $"targetFrameCount={recordingTargetFrameCount}");
 
-                if (TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+#if UNITY_EDITOR
+            bool editorSmokeRecordingOverrideActive = _editorSmokeRecordingOverrideActive;
+            float[] diagnosticSampleTimesOverride = _editorSmokeSampleTimesOverride;
+#else
+            bool editorSmokeRecordingOverrideActive = false;
+            float[] diagnosticSampleTimesOverride = null;
+#endif
+            bool shouldStartVmdRecording = ShouldStartVmdRecordingAfterImport(
+                recordVmdAfterImport,
+                editorSmokeRecordingOverrideActive);
+
+            HumanoidSampleCode recorderController = null;
+            if (shouldStartVmdRecording)
+            {
+                recorderController = targetObject.GetComponent<HumanoidSampleCode>();
+                if (recorderController == null)
+                {
+                    FailSession("Target Character에 HumanoidSampleCode가 없습니다.");
+                    yield break;
+                }
+
+                _activeRecorderController = recorderController;
+                _activeRecorderController.RecordingFinished += OnRecordingFinished;
+                _activeRecorderController.SetRecordingDiagnostics(
+                    enableRecordingDiagnostics,
+                    enableRecordingDiagnostics && enableDiagnosticFingerCloseups,
+                    enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics,
+                    diagnosticSampleTimesOverride);
+#if UNITY_EDITOR
+                if (_editorSmokeRecordingOverrideActive)
+                {
+                    float requestedDuration = Mathf.Max(0.1f, _editorSmokeDurationSeconds);
+                    recordingStartTime = CalculateEditorSmokeStartTime(clip, requestedDuration, _editorSmokeSegment);
+                    float remainingLength = Mathf.Max(0.1f, clip.length - recordingStartTime);
+                    recordingLength = Mathf.Min(requestedDuration, remainingLength);
+                    recordingTargetFrameCount = Mathf.Min(
+                        Mathf.Max(1, _editorSmokeTargetFrameCount),
+                        Mathf.CeilToInt(recordingLength * EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
+                    recordingOutputBaseName = BuildEditorSmokeOutputBaseName(outputBaseName, recordingLength, _editorSmokeSegment);
+                    comparisonLabel = $"auto_{recordingOutputBaseName}";
+                    Debug.Log(
+                        $"[FileManager] Editor smoke cap 적용: VMD={recordingOutputBaseName}.vmd, " +
+                        $"segment={GetEditorSmokeSegmentLabel(_editorSmokeSegment)}, " +
+                        $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
+                        $"targetFrameCount={recordingTargetFrameCount}");
+
+                    if (TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+                        outputBaseName,
+                        clip.length,
+                        recordingLength,
+                        recordingTargetFrameCount,
+                        EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
+                        out float referenceRecordingLength,
+                        out int referenceTargetFrameCount,
+                        out float referencePlaybackSpeed))
+                    {
+                        recordingLength = referenceRecordingLength;
+                        recordingTargetFrameCount = referenceTargetFrameCount;
+                        recordingPlaybackSpeed = referencePlaybackSpeed;
+
+                        if (recorderController.vmdRecorder != null)
+                        {
+                            recorderController.vmdRecorder.UseCaptureFramerateDuringRecording = true;
+                            recorderController.vmdRecorder.DropLateFrameBacklogWhenNotUsingCaptureFramerate = false;
+                        }
+
+                        Debug.Log(
+                            $"[FileManager] YYB Satisfaction editor smoke reference timing applied: " +
+                            $"clipLength={clip.length:F3}s, recordingLength={recordingLength:F3}s, " +
+                            $"targetFrameCount={recordingTargetFrameCount}, playbackSpeed={recordingPlaybackSpeed:F5}");
+                    }
+                }
+                else
+#endif
+                if (TryBuildKnownMmdReferenceRecordingPlan(
                     outputBaseName,
                     clip.length,
-                    recordingLength,
-                    recordingTargetFrameCount,
-                    EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
+                    MMD_REFERENCE_FRAME_RATE,
                     out float referenceRecordingLength,
                     out int referenceTargetFrameCount,
                     out float referencePlaybackSpeed))
@@ -1683,40 +1733,23 @@ namespace Member_Han.Modules.FBXImporter
                     }
 
                     Debug.Log(
-                        $"[FileManager] YYB Satisfaction editor smoke reference timing applied: " +
+                        $"[FileManager] YYB Satisfaction reference timing applied: " +
                         $"clipLength={clip.length:F3}s, recordingLength={recordingLength:F3}s, " +
                         $"targetFrameCount={recordingTargetFrameCount}, playbackSpeed={recordingPlaybackSpeed:F5}");
                 }
-            }
-            else
-#endif
-            if (TryBuildKnownMmdReferenceRecordingPlan(
-                outputBaseName,
-                clip.length,
-                MMD_REFERENCE_FRAME_RATE,
-                out float referenceRecordingLength,
-                out int referenceTargetFrameCount,
-                out float referencePlaybackSpeed))
-            {
-                recordingLength = referenceRecordingLength;
-                recordingTargetFrameCount = referenceTargetFrameCount;
-                recordingPlaybackSpeed = referencePlaybackSpeed;
-
-                if (recorderController.vmdRecorder != null)
-                {
-                    recorderController.vmdRecorder.UseCaptureFramerateDuringRecording = true;
-                    recorderController.vmdRecorder.DropLateFrameBacklogWhenNotUsingCaptureFramerate = false;
-                }
-
-                Debug.Log(
-                    $"[FileManager] YYB Satisfaction reference timing applied: " +
-                    $"clipLength={clip.length:F3}s, recordingLength={recordingLength:F3}s, " +
-                    $"targetFrameCount={recordingTargetFrameCount}, playbackSpeed={recordingPlaybackSpeed:F5}");
             }
 
             yield return PrewarmRetargetStartPose(ghostAnim, clip, retargeter, recordingStartTime, recordingPlaybackSpeed);
             retargeter?.CaptureRecordingStartBaselineSnapshot();
             retargeter?.ResetPlaybackStabilityMetrics();
+
+            if (!shouldStartVmdRecording)
+            {
+                SetSessionState(FBXSessionState.Success, $"FBX 임포트/촬영 준비 완료: {outputBaseName}", 1f);
+                Debug.Log($"[FileManager] FBX 임포트/Unity 촬영 준비 완료: {outputBaseName} (VMD 자동 녹화 생략)");
+                _isProcessing = false;
+                yield break;
+            }
 
             SetSessionState(FBXSessionState.Recording, $"녹화 중: {recordingOutputBaseName}", 0.75f);
             Debug.Log($"[FileManager] 자동 녹화 시작: VMD={recordingOutputBaseName}.vmd, 비교라벨={comparisonLabel}");
@@ -1799,6 +1832,13 @@ namespace Member_Han.Modules.FBXImporter
         private static int ResolveRetargetPrewarmFrameCount(int configuredFrameCount)
         {
             return Mathf.Clamp(configuredFrameCount, 0, MAX_RETARGET_PREWARM_FRAME_COUNT);
+        }
+
+        private static bool ShouldStartVmdRecordingAfterImport(
+            bool recordVmdAfterImport,
+            bool editorSmokeRecordingOverrideActive)
+        {
+            return recordVmdAfterImport || editorSmokeRecordingOverrideActive;
         }
 
         private void OnRecordingFinished(VmdSaveResult result)
