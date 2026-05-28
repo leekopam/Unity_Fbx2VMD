@@ -253,21 +253,9 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /Docs/archive/conflicting-or-obsolete/
 # END LOCAL PRIVATE WORKFLOW FILES
 
-# External MMD automation tooling (tracked)
-!/Docs/Machine_Spirit/
-!/Docs/Machine_Spirit/Tools/
-/Docs/Machine_Spirit/Tools/*
-!/Docs/Machine_Spirit/Tools/Local/
-/Docs/Machine_Spirit/Tools/Local/*
-!/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
-!/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/**
-!/docs/Machine_Spirit/
-!/docs/Machine_Spirit/Tools/
-/docs/Machine_Spirit/Tools/*
-!/docs/Machine_Spirit/Tools/Local/
-/docs/Machine_Spirit/Tools/Local/*
-!/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
-!/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/**
+# External MMD automation tooling (local only)
+/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
+/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
 
 # Python bytecode/cache
 __pycache__/
