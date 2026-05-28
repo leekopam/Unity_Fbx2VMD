@@ -23,6 +23,8 @@
 /[Ss]creenshots/
 /[Cc]aptures/
 /[Vv]ideos/
+/TestResults-*.log
+/TestResults-*.xml
 /[Aa]ssets/[Ss]creenshots/
 /[Aa]ssets/[Ss]creenshots.meta
 /[Aa]ssets/[Cc]aptures/

@@ -1,6 +1,72 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using BoneNames = UnityHumanoidVMDRecorder.BoneNames;
+
+internal readonly struct VmdBoneRotationDiagnostic
+{
+    public VmdBoneRotationDiagnostic(
+        BoneNames boneName,
+        string sourceMode,
+        Quaternion sourceWorldRotation,
+        Quaternion sourceOriginalLocalRotation,
+        Quaternion sourceCurrentLocalRotation,
+        Quaternion sourceLocalDeltaRotation,
+        BoneNames parentBoneName,
+        Quaternion sourceParentOriginalLocalRotation,
+        Quaternion ghostWorldRotation,
+        Quaternion ghostLocalRotation,
+        Quaternion vmdRotation,
+        float ghostVsSourceLocalDeltaAngleDegrees,
+        Quaternion parentRestBasisCorrectedGhostLocalRotation,
+        Quaternion parentRestBasisCorrectedVmdRotation,
+        float parentRestBasisCorrectedGhostVsSourceLocalDeltaAngleDegrees,
+        string exportSourceMode,
+        Quaternion exportLocalRotation,
+        Quaternion exportVmdRotation,
+        float exportVsSourceLocalDeltaAngleDegrees)
+    {
+        BoneName = boneName;
+        SourceMode = sourceMode;
+        SourceWorldRotation = sourceWorldRotation;
+        SourceOriginalLocalRotation = sourceOriginalLocalRotation;
+        SourceCurrentLocalRotation = sourceCurrentLocalRotation;
+        SourceLocalDeltaRotation = sourceLocalDeltaRotation;
+        ParentBoneName = parentBoneName;
+        SourceParentOriginalLocalRotation = sourceParentOriginalLocalRotation;
+        GhostWorldRotation = ghostWorldRotation;
+        GhostLocalRotation = ghostLocalRotation;
+        VmdRotation = vmdRotation;
+        GhostVsSourceLocalDeltaAngleDegrees = ghostVsSourceLocalDeltaAngleDegrees;
+        ParentRestBasisCorrectedGhostLocalRotation = parentRestBasisCorrectedGhostLocalRotation;
+        ParentRestBasisCorrectedVmdRotation = parentRestBasisCorrectedVmdRotation;
+        ParentRestBasisCorrectedGhostVsSourceLocalDeltaAngleDegrees = parentRestBasisCorrectedGhostVsSourceLocalDeltaAngleDegrees;
+        ExportSourceMode = exportSourceMode;
+        ExportLocalRotation = exportLocalRotation;
+        ExportVmdRotation = exportVmdRotation;
+        ExportVsSourceLocalDeltaAngleDegrees = exportVsSourceLocalDeltaAngleDegrees;
+    }
+
+    public BoneNames BoneName { get; }
+    public string SourceMode { get; }
+    public Quaternion SourceWorldRotation { get; }
+    public Quaternion SourceOriginalLocalRotation { get; }
+    public Quaternion SourceCurrentLocalRotation { get; }
+    public Quaternion SourceLocalDeltaRotation { get; }
+    public BoneNames ParentBoneName { get; }
+    public Quaternion SourceParentOriginalLocalRotation { get; }
+    public Quaternion GhostWorldRotation { get; }
+    public Quaternion GhostLocalRotation { get; }
+    public Quaternion VmdRotation { get; }
+    public float GhostVsSourceLocalDeltaAngleDegrees { get; }
+    public Quaternion ParentRestBasisCorrectedGhostLocalRotation { get; }
+    public Quaternion ParentRestBasisCorrectedVmdRotation { get; }
+    public float ParentRestBasisCorrectedGhostVsSourceLocalDeltaAngleDegrees { get; }
+    public string ExportSourceMode { get; }
+    public Quaternion ExportLocalRotation { get; }
+    public Quaternion ExportVmdRotation { get; }
+    public float ExportVsSourceLocalDeltaAngleDegrees { get; }
+}
 
 //裏で正規化されたモデル
 //(初期ポーズで各ボーンのlocalRotationがQuaternion.identityのモデル)を疑似的にアニメーションさせる
@@ -10,12 +76,14 @@ internal sealed class VmdBoneGhost
     public Dictionary<BoneNames, Vector3> GhostOriginalLocalPositionDictionary { get; private set; } = new Dictionary<BoneNames, Vector3>();
     public Dictionary<BoneNames, Quaternion> GhostOriginalRotationDictionary { get; private set; } = new Dictionary<BoneNames, Quaternion>();
     public Dictionary<BoneNames, Quaternion> OriginalRotationDictionary { get; private set; } = new Dictionary<BoneNames, Quaternion>();
+    public Dictionary<BoneNames, Quaternion> OriginalLocalRotationDictionary { get; private set; } = new Dictionary<BoneNames, Quaternion>();
 
     public bool UseBottomCenter { get; private set; } = false;
 
     const string GhostSalt = "Ghost";
     private Dictionary<BoneNames, Transform> boneDictionary = new Dictionary<BoneNames, Transform>();
-    float centerOffsetLength = 0;
+    private readonly Dictionary<BoneNames, BoneNames> ghostParentBoneDictionary = new Dictionary<BoneNames, BoneNames>();
+    float centerBottomVerticalOffset = 0;
 
     public VmdBoneGhost(Animator animator, Dictionary<BoneNames, Transform> boneDictionary, bool useBottomCenter)
     {
@@ -26,13 +94,14 @@ internal sealed class VmdBoneGhost
             = new Dictionary<BoneNames, (BoneNames optionParent1, BoneNames optionParent2, BoneNames necessaryParent)>()
         {
             { BoneNames.センター, (BoneNames.None, BoneNames.None, BoneNames.全ての親) },
-            { BoneNames.左足,     (BoneNames.None, BoneNames.None, BoneNames.センター) },
+            { BoneNames.下半身,   (BoneNames.None, BoneNames.None, BoneNames.センター) },
+            { BoneNames.左足,     (BoneNames.None, BoneNames.None, BoneNames.下半身) },
             { BoneNames.左ひざ,   (BoneNames.None, BoneNames.None, BoneNames.左足) },
             { BoneNames.左足首,   (BoneNames.None, BoneNames.None, BoneNames.左ひざ) },
-            { BoneNames.右足,     (BoneNames.None, BoneNames.None, BoneNames.センター) },
+            { BoneNames.右足,     (BoneNames.None, BoneNames.None, BoneNames.下半身) },
             { BoneNames.右ひざ,   (BoneNames.None, BoneNames.None, BoneNames.右足) },
             { BoneNames.右足首,   (BoneNames.None, BoneNames.None, BoneNames.右ひざ) },
-            { BoneNames.上半身,   (BoneNames.None, BoneNames.None, BoneNames.センター) },
+            { BoneNames.上半身,   (BoneNames.None, BoneNames.None, BoneNames.下半身) },
             { BoneNames.上半身2,  (BoneNames.None, BoneNames.None, BoneNames.上半身) },
             { BoneNames.首,       (BoneNames.上半身2, BoneNames.None, BoneNames.上半身) },
             { BoneNames.頭,       (BoneNames.首, BoneNames.上半身2, BoneNames.上半身) },
@@ -126,24 +195,32 @@ internal sealed class VmdBoneGhost
             if (boneName == BoneNames.センター)
             {
                 GhostDictionary[boneName].ghost.SetParent(animator.transform);
+                ghostParentBoneDictionary[boneName] = BoneNames.None;
                 continue;
             }
 
             if (boneParentDictionary[boneName].optionParent1 != BoneNames.None && boneDictionary[boneParentDictionary[boneName].optionParent1] != null)
             {
-                GhostDictionary[boneName].ghost.SetParent(GhostDictionary[boneParentDictionary[boneName].optionParent1].ghost);
+                BoneNames parentBoneName = boneParentDictionary[boneName].optionParent1;
+                GhostDictionary[boneName].ghost.SetParent(GhostDictionary[parentBoneName].ghost);
+                ghostParentBoneDictionary[boneName] = parentBoneName;
             }
             else if (boneParentDictionary[boneName].optionParent2 != BoneNames.None && boneDictionary[boneParentDictionary[boneName].optionParent2] != null)
             {
-                GhostDictionary[boneName].ghost.SetParent(GhostDictionary[boneParentDictionary[boneName].optionParent2].ghost);
+                BoneNames parentBoneName = boneParentDictionary[boneName].optionParent2;
+                GhostDictionary[boneName].ghost.SetParent(GhostDictionary[parentBoneName].ghost);
+                ghostParentBoneDictionary[boneName] = parentBoneName;
             }
             else if (boneParentDictionary[boneName].necessaryParent != BoneNames.None && boneDictionary[boneParentDictionary[boneName].necessaryParent] != null)
             {
-                GhostDictionary[boneName].ghost.SetParent(GhostDictionary[boneParentDictionary[boneName].necessaryParent].ghost);
+                BoneNames parentBoneName = boneParentDictionary[boneName].necessaryParent;
+                GhostDictionary[boneName].ghost.SetParent(GhostDictionary[parentBoneName].ghost);
+                ghostParentBoneDictionary[boneName] = parentBoneName;
             }
             else
             {
                 GhostDictionary[boneName] = (GhostDictionary[boneName].ghost, false);
+                ghostParentBoneDictionary[boneName] = BoneNames.None;
             }
         }
 
@@ -155,11 +232,13 @@ internal sealed class VmdBoneGhost
                 GhostOriginalLocalPositionDictionary.Add(boneName, Vector3.zero);
                 GhostOriginalRotationDictionary.Add(boneName, Quaternion.identity);
                 OriginalRotationDictionary.Add(boneName, Quaternion.identity);
+                OriginalLocalRotationDictionary.Add(boneName, Quaternion.identity);
             }
             else
             {
                 GhostOriginalRotationDictionary.Add(boneName, GhostDictionary[boneName].ghost.rotation);
                 OriginalRotationDictionary.Add(boneName, boneDictionary[boneName].rotation);
+                OriginalLocalRotationDictionary.Add(boneName, boneDictionary[boneName].localRotation);
                 if (boneName == BoneNames.センター && UseBottomCenter)
                 {
                     GhostOriginalLocalPositionDictionary.Add(boneName, Vector3.zero);
@@ -169,7 +248,11 @@ internal sealed class VmdBoneGhost
             }
         }
 
-        centerOffsetLength = Vector3.Distance(boneDictionary[BoneNames.全ての親].position, boneDictionary[BoneNames.センター].position);
+        centerBottomVerticalOffset = Mathf.Max(
+            0f,
+            Vector3.Dot(
+                boneDictionary[BoneNames.センター].position - boneDictionary[BoneNames.全ての親].position,
+                Vector3.up));
     }
 
     public void GhostAll()
@@ -179,12 +262,77 @@ internal sealed class VmdBoneGhost
             if (GhostDictionary[boneName].ghost == null || !GhostDictionary[boneName].enabled) { continue; }
             Quaternion transQuaternion = boneDictionary[boneName].rotation * Quaternion.Inverse(OriginalRotationDictionary[boneName]);
             GhostDictionary[boneName].ghost.rotation = transQuaternion * GhostOriginalRotationDictionary[boneName];
+            if (boneName == BoneNames.センター)
+            {
+                GhostDictionary[boneName].ghost.rotation = boneDictionary[BoneNames.全ての親].rotation;
+                if (UseBottomCenter)
+                {
+                    GhostDictionary[boneName].ghost.position = boneDictionary[boneName].position - centerBottomVerticalOffset * Vector3.up;
+                    continue;
+                }
+            }
+
             if (boneName == BoneNames.センター && UseBottomCenter)
             {
-                GhostDictionary[boneName].ghost.position = boneDictionary[boneName].position - centerOffsetLength * GhostDictionary[boneName].ghost.up;
+                GhostDictionary[boneName].ghost.position = boneDictionary[boneName].position - centerBottomVerticalOffset * Vector3.up;
                 continue;
             }
             GhostDictionary[boneName].ghost.position = boneDictionary[boneName].position;
         }
+    }
+
+    internal VmdBoneRotationDiagnostic CaptureRotationDiagnostic(BoneNames boneName)
+    {
+        if (!boneDictionary.TryGetValue(boneName, out Transform source) || source == null)
+        {
+            throw new ArgumentException($"No source bone transform exists for {boneName}.", nameof(boneName));
+        }
+
+        if (!GhostDictionary.TryGetValue(boneName, out var entry) || entry.ghost == null || !entry.enabled)
+        {
+            throw new InvalidOperationException($"No enabled ghost transform exists for {boneName}.");
+        }
+
+        Quaternion ghostLocalRotation = entry.ghost.localRotation;
+        Quaternion sourceOriginalLocalRotation = OriginalLocalRotationDictionary.TryGetValue(boneName, out Quaternion originalLocalRotation)
+            ? originalLocalRotation
+            : Quaternion.identity;
+        Quaternion sourceCurrentLocalRotation = source.localRotation;
+        Quaternion sourceLocalDeltaRotation = sourceCurrentLocalRotation * Quaternion.Inverse(sourceOriginalLocalRotation);
+        BoneNames parentBoneName = ghostParentBoneDictionary.TryGetValue(boneName, out BoneNames mappedParentBoneName)
+            ? mappedParentBoneName
+            : BoneNames.None;
+        Quaternion sourceParentOriginalLocalRotation = parentBoneName != BoneNames.None &&
+            OriginalLocalRotationDictionary.TryGetValue(parentBoneName, out Quaternion parentOriginalLocalRotation)
+                ? parentOriginalLocalRotation
+                : Quaternion.identity;
+        Quaternion parentRestBasisCorrectedGhostLocalRotation =
+            Quaternion.Inverse(sourceParentOriginalLocalRotation) * ghostLocalRotation * sourceParentOriginalLocalRotation;
+        Quaternion exportLocalRotation = parentRestBasisCorrectedGhostLocalRotation;
+        return new VmdBoneRotationDiagnostic(
+            boneName,
+            "ghost_local",
+            source.rotation,
+            sourceOriginalLocalRotation,
+            sourceCurrentLocalRotation,
+            sourceLocalDeltaRotation,
+            parentBoneName,
+            sourceParentOriginalLocalRotation,
+            entry.ghost.rotation,
+            ghostLocalRotation,
+            UnityHumanoidVMDRecorder.ConvertUnityRotationToVmdRotation(ghostLocalRotation),
+            Quaternion.Angle(ghostLocalRotation, sourceLocalDeltaRotation),
+            parentRestBasisCorrectedGhostLocalRotation,
+            UnityHumanoidVMDRecorder.ConvertUnityRotationToVmdRotation(parentRestBasisCorrectedGhostLocalRotation),
+            Quaternion.Angle(parentRestBasisCorrectedGhostLocalRotation, sourceLocalDeltaRotation),
+            "parent_rest_basis_corrected_ghost_local",
+            exportLocalRotation,
+            UnityHumanoidVMDRecorder.ConvertUnityRotationToVmdRotation(exportLocalRotation),
+            Quaternion.Angle(exportLocalRotation, sourceLocalDeltaRotation));
+    }
+
+    internal Quaternion GetExportVmdRotation(BoneNames boneName)
+    {
+        return CaptureRotationDiagnostic(boneName).ExportVmdRotation;
     }
 }

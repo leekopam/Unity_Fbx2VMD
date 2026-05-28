@@ -9,6 +9,10 @@ namespace Member_Han.Modules.FBXImporter
     [DefaultExecutionOrder(20000)]
     public class PoseSpaceRetargeter : MonoBehaviour
     {
+        private const float LateVisualGroundingPenetrationRecoverySmoothing = 0.55f;
+        private const float LateVisualGroundingPenetrationRecoveryMaxStep = 0.1f;
+        private const float RecordingStartHipsBaselineFlipWarningThreshold = 0.02f;
+        private const string RecordingStartHipsReferenceStagePrewarmComplete = "prewarm-complete";
         [Header("--- CORE COMPONENTS ---")]
         public Animator ghostAnimator;  // (Container 내부의 모델)
         public Animator targetAnimator; // 내 캐릭터
@@ -42,7 +46,7 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Foot-lock correction strength. Lower values preserve dance motion, higher values reduce skating.")]
         [Range(0f, 1f)]
-        public float groundedFootLockWeight = 0.45f;
+        public float groundedFootLockWeight = 0f;
 
         [Tooltip("Maximum X/Z root correction per frame for grounded foot lock.")]
         [Range(0.001f, 0.1f)]
@@ -96,6 +100,8 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Manual Animator finger reference를 사용할 때는 엄지 stretch offset을 추가하지 않고 수동 기준 엄지 muscle을 보존합니다.")]
         public bool preserveManualFingerReferenceThumbMuscles = true;
 
+        public bool useManualAnimatorFullBodyPoseReference = false;
+
         [Tooltip("Manual Animator finger reference의 엄지 체인 localRotation도 Target에 적용해 모델별 엄지 축 차이를 줄입니다.")]
         public bool useManualAnimatorThumbLocalRotationReference = true;
 
@@ -142,6 +148,17 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("프레임당 수동 기준 Hips localPosition으로 이동할 수 있는 최대 보정 거리입니다.")]
         [Range(0.001f, 0.2f)]
         public float manualAnimatorHipsLocalPositionMaxOffset = 0.12f;
+
+        [Tooltip("Use the manual Animator lowest-foot lift as the grounding target height so jump/foot-height arcs are not flattened to the floor.")]
+        public bool useManualAnimatorFootHeightGroundingReference = false;
+
+        [Tooltip("Blend weight for the manual Animator lowest-foot grounding height reference.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorFootHeightGroundingReferenceWeight = 1f;
+
+        [Tooltip("Maximum positive grounding target lift from the manual Animator lowest-foot reference.")]
+        [Range(0f, 0.12f)]
+        public float manualAnimatorFootHeightGroundingReferenceMaxLift = 0.08f;
 
         [Tooltip("엄지 시작 위치 보정 강도입니다.")]
         [Range(0f, 1f)]
@@ -191,6 +208,14 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("root delta spike를 무시했을 때 최초 1회 진단 로그를 출력합니다.")]
         public bool logRootDeltaSpikes = false;
 
+        [Header("--- HIPS LOCAL POSITION SPIKE GUARD ---")]
+        [Tooltip("Clamp one-frame target Hips localPosition outliers after SetHumanPose.")]
+        public bool clampTargetHipsLocalPositionSpikes = false;
+
+        [Tooltip("Maximum target Hips localPosition delta allowed per frame.")]
+        [Range(0.005f, 0.25f)]
+        public float maxTargetHipsLocalPositionDeltaPerFrame = 0.02f;
+
         [Header("--- GROUNDING STABILITY GUARD ---")]
         [Tooltip("발바닥 접지 보정이 한 프레임에 크게 튀지 않도록 부드럽게 반영합니다.")]
         public bool smoothGrounding = true;
@@ -207,8 +232,8 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0f, 0.05f)]
         public float groundingDeadZone = 0.005f;
 
-        [Tooltip("초기 접지 확정 뒤에는 root Y를 고정해 매 프레임 접지 추종으로 생기는 화면 떨림을 제거합니다.")]
-        public bool freezeRootYAfterInitialGrounding = true;
+        [Tooltip("초기 접지 확정 뒤에는 root Y를 고정합니다. MMD VMD export에서는 이후 프레임의 발 빠짐을 막기 위해 기본 비활성화합니다.")]
+        public bool freezeRootYAfterInitialGrounding = false;
 
         [Tooltip("Editor/GameView 프레임이 밀려도 Ghost clip time이 한 프레임에 크게 건너뛰지 않게 제한합니다.")]
         public bool clampLegacyAnimationVisualStep = false;
@@ -263,6 +288,9 @@ namespace Member_Han.Modules.FBXImporter
         public float LastRootPositionPoseDeltaMagnitude => _lastRootPositionPoseDeltaMagnitude;
         public float MaxRootPositionPoseDeltaMagnitude => _maxRootPositionPoseDeltaMagnitude;
         public int RootPositionSpikeClampedCount => _rootPositionSpikeClampedCount;
+        public float LastTargetHipsLocalPositionDelta => _lastTargetHipsLocalPositionDelta;
+        public float MaxTargetHipsLocalPositionDelta => _maxTargetHipsLocalPositionDelta;
+        public int TargetHipsLocalPositionSpikeClampedCount => _targetHipsLocalPositionSpikeClampedCount;
         public float LastGroundingAdjustment => _lastGroundingAdjustment;
         public float MaxGroundingAdjustment => _maxGroundingAdjustment;
         public int GroundingStepClampedCount => _groundingStepClampedCount;
@@ -273,6 +301,16 @@ namespace Member_Han.Modules.FBXImporter
         public float MaxGroundingVerticalStepAfterInitial => _maxGroundingVerticalStepAfterInitial;
         public float LastGroundingTargetY => _lastGroundingTargetY;
         public float LastGroundingLowestFootBottomY => _lastGroundingLowestFootBottomY;
+        public float LastEditorFootHeightGroundingReferenceLift => _lastEditorFootHeightGroundingReferenceLift;
+        public float RecordingStartRootY => _recordingStartRootY;
+        public float RecordingStartBodyPositionY => _recordingStartBodyPositionY;
+        public float RecordingStartHipsLocalY => _recordingStartHipsLocalY;
+        public float RecordingStartHipsY => _recordingStartHipsY;
+        public float RecordingStartHipsReferenceBeforeLocalY => _recordingStartHipsReferenceBeforeLocalY;
+        public float RecordingStartHipsReferenceAfterLocalY => _recordingStartHipsReferenceAfterLocalY;
+        public float RecordingStartHipsReferenceDeltaY => _recordingStartHipsReferenceDeltaY;
+        public int RecordingStartHipsReferenceFlipDetected => _recordingStartHipsReferenceFlipDetected ? 1 : 0;
+        public string RecordingStartHipsReferenceStage => _recordingStartHipsReferenceStage;
         public float LastLegacyAnimationStep => _lastLegacyAnimationStep;
         public float MaxLegacyAnimationStep => _maxLegacyAnimationStep;
         public int LegacyAnimationStepSpikeCount => _legacyAnimationStepSpikeCount;
@@ -322,6 +360,7 @@ namespace Member_Han.Modules.FBXImporter
             _hasPreviousLegacyAnimationTime = false;
             _previousLegacyAnimationTime = 0f;
             ResetEditorHumanoidRootTranslationReferenceState();
+            ResetTargetHipsLocalPositionSpikeState();
             _lastLegacyAnimationStep = float.NaN;
             _maxLegacyAnimationStep = 0f;
             _legacyAnimationStepSpikeCount = 0;
@@ -331,6 +370,47 @@ namespace Member_Han.Modules.FBXImporter
             _poseVisualMuscleDeltaOnlySkippedCount = 0;
             _lastPoseVisualMaxMuscleDelta = float.NaN;
             _maxPoseVisualMaxMuscleDelta = 0f;
+            _maxGroundingAdjustment = 0f;
+            _groundingStepClampedCount = 0;
+            _groundingSmoothedCount = 0;
+            _maxGroundingVerticalStep = 0f;
+            _maxGroundingVerticalStepAfterInitial = 0f;
+            _lastEditorFootHeightGroundingReferenceLift = float.NaN;
+            _hasEditorReferenceLowestFootRestY = false;
+            _allowEditorFootHeightGroundingReference = true;
+        }
+
+        public void CaptureRecordingStartBaselineSnapshot()
+        {
+            ResetRecordingStartHipsBaselineDiagnostics();
+            _recordingStartHipsReferenceStage = RecordingStartHipsReferenceStagePrewarmComplete;
+            if (targetAnimator == null)
+            {
+                return;
+            }
+
+            Vector3 rootPosition = targetAnimator.transform.position;
+            _recordingStartRootY = IsFinite(rootPosition) ? rootPosition.y : float.NaN;
+            _recordingStartBodyPositionY = TryGetTargetBodyPositionY(out float bodyPositionY)
+                ? bodyPositionY
+                : float.NaN;
+
+            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            if (targetHips != null)
+            {
+                Vector3 hipsLocalPosition = targetHips.localPosition;
+                Vector3 hipsPosition = targetHips.position;
+                _recordingStartHipsLocalY = IsFinite(hipsLocalPosition) ? hipsLocalPosition.y : float.NaN;
+                _recordingStartHipsY = IsFinite(hipsPosition) ? hipsPosition.y : float.NaN;
+            }
+
+            _recordingStartHipsReferenceBeforeLocalY = _lastEditorHipsLocalReferenceBeforeLocalY;
+            _recordingStartHipsReferenceAfterLocalY = _lastEditorHipsLocalReferenceAfterLocalY;
+            _recordingStartHipsReferenceDeltaY = _lastEditorHipsLocalReferenceDeltaY;
+            _recordingStartHipsReferenceFlipDetected = IsRecordingStartHipsBaselineFlip(
+                _recordingStartHipsReferenceBeforeLocalY,
+                _recordingStartHipsReferenceAfterLocalY,
+                RecordingStartHipsBaselineFlipWarningThreshold);
         }
 
         [Tooltip("Target Humanoid 본의 localPosition을 초기값으로 되돌려 팔/다리 길이 변형을 막습니다.")]
@@ -381,6 +461,8 @@ namespace Member_Han.Modules.FBXImporter
         private Quaternion _poseRootRotationCorrection = Quaternion.identity;
         private Vector3 _targetReferenceBodyPosition;
         private bool _hasTargetReferenceBodyPosition;
+        private Vector3 _targetRootPoseGuardAnchorPosition;
+        private bool _hasTargetRootPoseGuardAnchorPosition;
         private Vector3 _previousBodyRootMotionPosition;
         private bool _hasPreviousBodyRootMotionPosition;
         private Vector3 _leftFootLockPosition;
@@ -395,6 +477,8 @@ namespace Member_Han.Modules.FBXImporter
         private readonly Dictionary<Transform, Vector3> _targetInitialHumanoidLocalPositions = new Dictionary<Transform, Vector3>();
         private readonly Dictionary<Transform, Vector3> _targetInitialThumbBaseHelperLocalPositions = new Dictionary<Transform, Vector3>();
         private readonly Dictionary<Transform, Quaternion> _targetInitialThumbLocalRotations = new Dictionary<Transform, Quaternion>();
+        private Vector3 _targetHipsRestLocalPosition;
+        private bool _hasTargetHipsRestLocalPosition;
         private readonly Dictionary<bool, Transform> _cachedThumbBaseHelpers = new Dictionary<bool, Transform>();
         private readonly Dictionary<bool, Transform> _cachedThumbBaseExplicitSources = new Dictionary<bool, Transform>();
         private readonly Dictionary<bool, float> _initialThumbBaseHelperSourceDistances = new Dictionary<bool, float>();
@@ -415,6 +499,11 @@ namespace Member_Han.Modules.FBXImporter
         private float _lastRootPositionPoseDeltaMagnitude = float.NaN;
         private float _maxRootPositionPoseDeltaMagnitude;
         private int _rootPositionSpikeClampedCount;
+        private Vector3 _previousTargetHipsLocalPosition;
+        private bool _hasPreviousTargetHipsLocalPosition;
+        private float _lastTargetHipsLocalPositionDelta = float.NaN;
+        private float _maxTargetHipsLocalPositionDelta;
+        private int _targetHipsLocalPositionSpikeClampedCount;
         private bool _groundingInitialized;
         private float _lastGroundingAdjustment = float.NaN;
         private float _maxGroundingAdjustment;
@@ -426,6 +515,19 @@ namespace Member_Han.Modules.FBXImporter
         private float _maxGroundingVerticalStepAfterInitial;
         private float _lastGroundingTargetY = float.NaN;
         private float _lastGroundingLowestFootBottomY = float.NaN;
+        private float _lastEditorFootHeightGroundingReferenceLift = float.NaN;
+        private float _lastEditorHipsLocalReferenceBeforeLocalY = float.NaN;
+        private float _lastEditorHipsLocalReferenceAfterLocalY = float.NaN;
+        private float _lastEditorHipsLocalReferenceDeltaY = float.NaN;
+        private float _recordingStartRootY = float.NaN;
+        private float _recordingStartBodyPositionY = float.NaN;
+        private float _recordingStartHipsLocalY = float.NaN;
+        private float _recordingStartHipsY = float.NaN;
+        private float _recordingStartHipsReferenceBeforeLocalY = float.NaN;
+        private float _recordingStartHipsReferenceAfterLocalY = float.NaN;
+        private float _recordingStartHipsReferenceDeltaY = float.NaN;
+        private bool _recordingStartHipsReferenceFlipDetected;
+        private string _recordingStartHipsReferenceStage = string.Empty;
         private bool _lateVisualGroundingWarningLogged;
         private bool _rendererGroundingOutlierWarningLogged;
         private bool _lateVisualGroundingInitialized;
@@ -522,6 +624,9 @@ namespace Member_Han.Modules.FBXImporter
         private Vector3 _editorReferenceBodyPosition;
         private bool _hasEditorReferenceHipsRestLocalPosition;
         private Vector3 _editorReferenceHipsRestLocalPosition;
+        private bool _hasEditorReferenceLowestFootRestY;
+        private float _editorReferenceLowestFootRestY;
+        private bool _allowEditorFootHeightGroundingReference;
         private bool _editorHandLocalRotationReferenceLogged;
         private bool _editorThumbLocalRotationReferenceLogged;
         private bool _editorThumbSegmentDirectionReferenceLogged;
@@ -545,6 +650,8 @@ namespace Member_Han.Modules.FBXImporter
             ghostAnimator = ghostRoot.GetComponent<Animator>();
             targetAnimator = targetRoot.GetComponent<Animator>();
             CaptureTargetInitialTransforms(targetRoot);
+            _targetRootPoseGuardAnchorPosition = targetAnimator != null ? targetAnimator.transform.position : Vector3.zero;
+            _hasTargetRootPoseGuardAnchorPosition = targetAnimator != null && IsFinite(_targetRootPoseGuardAnchorPosition);
 
             if (clip == null) return;
 
@@ -591,7 +698,11 @@ namespace Member_Han.Modules.FBXImporter
             // 초기 위치 저장
             _prevGhostPos = ghostAnimator.transform.position;
             ResetEditorHumanoidRootTranslationReferenceState();
+            ResetRecordingStartHipsBaselineDiagnostics();
+            ResetLastEditorHipsLocalReferenceDiagnostics();
             CacheInitialHipHeights();
+            _hasEditorReferenceLowestFootRestY = false;
+            _allowEditorFootHeightGroundingReference = false;
             _facingCorrection = settings != null && settings.useLegacyPoseSpaceFacingCorrection
                 ? LegacyFacingCorrection
                 : Quaternion.Inverse(ghostAnimator.transform.rotation) * targetAnimator.transform.rotation;
@@ -600,7 +711,7 @@ namespace Member_Han.Modules.FBXImporter
             if (settings != null)
             {
                 groundOffset = settings.HeightOffset;
-                _movementScaleMultiplier = Mathf.Max(0.0001f, settings.MovementScaleMultiplier);
+                _movementScaleMultiplier = NormalizeMovementScaleMultiplier(settings.MovementScaleMultiplier);
                 preserveFbxRootRotation = settings.preserveFbxRootRotation && !settings.useLegacyPoseSpaceFacingCorrection;
                 preserveTargetBodyPosition = settings.preserveRetargetBodyPosition;
                 useBodyPositionXZRootMotion = settings.useRetargetBodyPositionXZRootMotion;
@@ -621,6 +732,7 @@ namespace Member_Han.Modules.FBXImporter
                 thumbStretchMax = settings.ThumbStretchMax;
                 thumbStretchOffset = settings.EffectiveThumbStretchOffset;
                 preserveManualFingerReferenceThumbMuscles = settings.preserveManualFingerReferenceThumbMuscles;
+                useManualAnimatorFullBodyPoseReference = settings.useManualAnimatorFullBodyPoseReference;
                 useManualAnimatorThumbLocalRotationReference = settings.useManualAnimatorThumbLocalRotationReference;
                 useManualAnimatorHandLocalRotationReference = settings.useManualAnimatorHandLocalRotationReference;
                 useManualAnimatorThumbSegmentDirectionReference = settings.useManualAnimatorThumbSegmentDirectionReference;
@@ -635,6 +747,9 @@ namespace Member_Han.Modules.FBXImporter
                 useManualAnimatorBodyPositionYReference = settings.useManualAnimatorBodyPositionYReference;
                 manualAnimatorHipsLocalPositionWeight = Mathf.Clamp01(settings.manualAnimatorHipsLocalPositionWeight);
                 manualAnimatorHipsLocalPositionMaxOffset = Mathf.Max(0.001f, settings.manualAnimatorHipsLocalPositionMaxOffset);
+                useManualAnimatorFootHeightGroundingReference = settings.useManualAnimatorFootHeightGroundingReference;
+                manualAnimatorFootHeightGroundingReferenceWeight = Mathf.Clamp01(settings.manualAnimatorFootHeightGroundingReferenceWeight);
+                manualAnimatorFootHeightGroundingReferenceMaxLift = Mathf.Max(0f, settings.manualAnimatorFootHeightGroundingReferenceMaxLift);
                 manualAnimatorThumbBasePositionWeight = settings.manualAnimatorThumbBasePositionWeight;
                 manualAnimatorThumbBasePositionMaxOffset = settings.manualAnimatorThumbBasePositionMaxOffset;
                 thumbSpreadMin = settings.ThumbSpreadMin;
@@ -648,6 +763,8 @@ namespace Member_Han.Modules.FBXImporter
                 clampRootDeltaSpikes = settings.clampRetargetRootDeltaSpikes;
                 maxRootDeltaPerFrame = settings.MaxRetargetRootDeltaPerFrame;
                 logRootDeltaSpikes = settings.logRetargetRootDeltaSpikes;
+                clampTargetHipsLocalPositionSpikes = settings.clampRetargetHipsLocalPositionSpikes;
+                maxTargetHipsLocalPositionDeltaPerFrame = Mathf.Max(0.005f, settings.MaxRetargetHipsLocalPositionDeltaPerFrame);
                 smoothGrounding = settings.smoothRetargetGrounding;
                 maxGroundingVerticalStepPerFrame = Mathf.Max(0.001f, settings.MaxGroundingVerticalStepPerFrame);
                 groundingSmoothing = Mathf.Clamp01(settings.GroundingSmoothing);
@@ -790,7 +907,8 @@ namespace Member_Han.Modules.FBXImporter
             GameObject referencePrefab,
             RuntimeAnimatorController referenceController,
             AnimationClip referenceClip,
-            bool enableFingerPoseReference = true)
+            bool enableFingerPoseReference = true,
+            bool enableFullBodyPoseReference = true)
         {
             DisposeEditorHumanoidFingerPoseReference();
             _useEditorFingerPoseReference = false;
@@ -798,6 +916,8 @@ namespace Member_Han.Modules.FBXImporter
             _editorBodyRotationReferenceLogged = false;
             _hasEditorReferenceBodyPosition = false;
             _hasEditorReferenceHipsRestLocalPosition = false;
+            _hasEditorReferenceLowestFootRestY = false;
+            _allowEditorFootHeightGroundingReference = false;
             _editorHandLocalRotationReferenceLogged = false;
             _editorThumbLocalRotationReferenceLogged = false;
             _editorThumbSegmentDirectionReferenceLogged = false;
@@ -875,7 +995,11 @@ namespace Member_Han.Modules.FBXImporter
 
             _editorFingerReferenceHandler = new HumanPoseHandler(_editorFingerReferenceAnimator.avatar, _editorFingerReferenceAnimator.transform);
             _editorFingerReferencePose = new HumanPose();
-            _useEditorFingerPoseReference = enableFingerPoseReference && _editorFingerReferenceMuscleIndices.Count > 0;
+            useManualAnimatorFullBodyPoseReference = enableFullBodyPoseReference;
+            _useEditorFingerPoseReference = ShouldUseEditorPoseReference(
+                enableFingerPoseReference,
+                useManualAnimatorFullBodyPoseReference,
+                _editorFingerReferenceMuscleIndices.Count);
 
             // testprefab의 clip 시작(frame 0) Hips localPosition을 캐시 — delta 기반 보정의 기준점
             _hasEditorReferenceHipsRestLocalPosition = false;
@@ -889,6 +1013,14 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             Debug.Log($"[PoseSpaceRetargeter] Manual Animator finger reference ready: prefab={referencePrefab.name}, controller={referenceController.name}, state={stateName}, clip={referenceClip.name}, muscles={_editorFingerReferenceMuscleIndices.Count}, hipsRest={(_hasEditorReferenceHipsRestLocalPosition ? _editorReferenceHipsRestLocalPosition.y.ToString("F4") : "N/A")}");
+        }
+
+        private static bool ShouldUseEditorPoseReference(
+            bool enableFingerPoseReference,
+            bool enableFullBodyPoseReference,
+            int fingerReferenceMuscleCount)
+        {
+            return enableFullBodyPoseReference || (enableFingerPoseReference && fingerReferenceMuscleCount > 0);
         }
 
         private static void DisableEditorReferenceRecordingComponents(GameObject referenceInstance)
@@ -995,6 +1127,7 @@ namespace Member_Han.Modules.FBXImporter
             ApplyEditorHumanoidHipsLocalPositionReference();
             ApplyEditorHumanoidThumbBasePositionReference();
 #endif
+            ClampTargetHipsLocalPositionSpike();
             ClampTargetThumbLocalRotations();
 #if UNITY_EDITOR
             ApplyEditorHumanoidThumbLocalRotationReference();
@@ -1004,6 +1137,14 @@ namespace Member_Han.Modules.FBXImporter
             ApplyEditorHumanoidThumbHandDirectionReference();
 #endif
             ClampTargetRootPositionSpike(targetPositionBeforePose, "SetHumanPose");
+            Vector3 implicitRootGuardReference = SelectImplicitRootGuardReference(
+                _hasTargetRootPoseGuardAnchorPosition ? _targetRootPoseGuardAnchorPosition : targetPositionBeforePose,
+                targetPositionBeforePose,
+                _movementScaleMultiplier);
+            targetAnimator.transform.position = ApplyImplicitBodyPositionRootGuard(
+                implicitRootGuardReference,
+                targetAnimator.transform.position,
+                useBodyPositionXZRootMotion);
 
             // 월드 회전 동기화 (180도 문제 해결)
             if (preserveFbxRootRotation && _hasPoseRootRotationCorrection && IsFinite(poseRootRotation))
@@ -1030,20 +1171,29 @@ namespace Member_Han.Modules.FBXImporter
             Vector3 editorRootTranslationDelta = ExtractEditorRootTranslationDelta(ghostDelta);
 
             // 내 캐릭터 크기에 맞춰 이동량 스케일링
-            Vector3 targetDelta = (ghostDelta * _scaleRatio + editorRootTranslationDelta + bodyRootDelta) * _movementScaleMultiplier;
-            if (!IsFinite(targetDelta))
+            Vector3 targetDelta = CalculateRetargetRootDelta(
+                ghostDelta,
+                _scaleRatio,
+                editorRootTranslationDelta,
+                bodyRootDelta,
+                _movementScaleMultiplier,
+                clampRootDeltaSpikes,
+                maxRootDeltaPerFrame,
+                out float targetDeltaMagnitude,
+                out bool skippedByNonFinite,
+                out bool skippedBySpike);
+            if (skippedByNonFinite)
             {
                 LogPoseWarning("Retarget root delta became non-finite. Skipping root motion for this frame.");
                 _lastRootDeltaMagnitude = float.NaN;
                 _rootDeltaSpikeSkippedCount++;
-                targetDelta = Vector3.zero;
             }
             else
             {
-                _lastRootDeltaMagnitude = targetDelta.magnitude;
+                _lastRootDeltaMagnitude = targetDeltaMagnitude;
                 _maxRootDeltaMagnitude = Mathf.Max(_maxRootDeltaMagnitude, _lastRootDeltaMagnitude);
 
-                if (clampRootDeltaSpikes && _lastRootDeltaMagnitude > maxRootDeltaPerFrame)
+                if (skippedBySpike)
                 {
                     _rootDeltaSpikeSkippedCount++;
                     if (logRootDeltaSpikes && !_rootDeltaSpikeWarningLogged)
@@ -1071,6 +1221,49 @@ namespace Member_Han.Modules.FBXImporter
             RestoreTargetLocalScales();
         }
 
+        private static Vector3 CalculateRetargetRootDelta(
+            Vector3 ghostDelta,
+            float scaleRatio,
+            Vector3 editorRootTranslationDelta,
+            Vector3 bodyRootDelta,
+            float movementScaleMultiplier,
+            bool clampRootDeltaSpikes,
+            float maxRootDeltaPerFrame,
+            out float deltaMagnitude,
+            out bool skippedByNonFinite,
+            out bool skippedBySpike)
+        {
+            skippedByNonFinite = false;
+            skippedBySpike = false;
+
+            Vector3 targetDelta = (ghostDelta * scaleRatio + editorRootTranslationDelta + bodyRootDelta) * movementScaleMultiplier;
+            if (!IsFinite(targetDelta))
+            {
+                deltaMagnitude = float.NaN;
+                skippedByNonFinite = true;
+                return Vector3.zero;
+            }
+
+            deltaMagnitude = targetDelta.magnitude;
+            if (clampRootDeltaSpikes && deltaMagnitude > maxRootDeltaPerFrame)
+            {
+                skippedBySpike = true;
+                return Vector3.zero;
+            }
+
+            return targetDelta;
+        }
+
+        private static float NormalizeMovementScaleMultiplier(float value)
+        {
+            if (!IsFinite(value))
+            {
+                return 1f;
+            }
+
+            return Mathf.Clamp(value, 0f, 1.2f);
+        }
+
         private void UpdateLegacyAnimationVisualStep()
         {
             _legacyAnimationStepSpikeThisFrame = false;
@@ -1094,6 +1287,21 @@ namespace Member_Han.Modules.FBXImporter
                 _hasPreviousLegacyAnimationTime = true;
                 _lastLegacyAnimationStep = 0f;
                 return;
+            }
+
+            if (TryCalculateManualLegacyAnimationTime(
+                currentTime,
+                _previousLegacyAnimationTime,
+                length,
+                state.speed,
+                Time.deltaTime,
+                Application.isPlaying,
+                out float manualAnimationTime))
+            {
+                currentTime = manualAnimationTime;
+                state.enabled = true;
+                state.time = currentTime;
+                _legacyAnim.Sample();
             }
 
             if (currentTime + 0.0001f < _previousLegacyAnimationTime)
@@ -1124,6 +1332,39 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             _previousLegacyAnimationTime = currentTime;
+        }
+
+        private static bool TryCalculateManualLegacyAnimationTime(
+            float currentTime,
+            float previousTime,
+            float length,
+            float playbackSpeed,
+            float deltaTime,
+            bool isPlaying,
+            out float manualAnimationTime)
+        {
+            manualAnimationTime = currentTime;
+
+            if (!isPlaying ||
+                length <= 0f ||
+                currentTime > previousTime + 0.0001f ||
+                currentTime + 0.0001f < previousTime ||
+                previousTime >= length - 0.0001f)
+            {
+                return false;
+            }
+
+            float effectivePlaybackSpeed = Mathf.Approximately(playbackSpeed, 0f)
+                ? 1f
+                : Mathf.Abs(playbackSpeed);
+            float manualStep = Mathf.Max(0f, deltaTime * effectivePlaybackSpeed);
+            if (manualStep <= 0f)
+            {
+                return false;
+            }
+
+            manualAnimationTime = Mathf.Min(previousTime + manualStep, length);
+            return true;
         }
 
         private void SmoothPoseOnVisualSpike(ref HumanPose pose)
@@ -1157,15 +1398,21 @@ namespace Member_Han.Modules.FBXImporter
 
             float bodyPositionDelta = Vector3.Distance(_previousVisualPoseBodyPosition, pose.bodyPosition);
             float bodyRotationDelta = Quaternion.Angle(_previousVisualPoseBodyRotation, pose.bodyRotation);
-            bool bodyPoseSpike = bodyPositionDelta > 0.08f || bodyRotationDelta > 25f;
-            bool muscleDeltaOnlySpike = maxMuscleDelta > poseVisualMuscleDeltaThreshold &&
-                !_legacyAnimationStepSpikeThisFrame &&
-                !bodyPoseSpike;
-            bool shouldSmooth = _legacyAnimationStepSpikeThisFrame || bodyPoseSpike;
+            bool shouldSmooth = ShouldSmoothVisualPoseSpike(
+                maxMuscleDelta,
+                bodyPositionDelta,
+                bodyRotationDelta,
+                poseVisualMuscleDeltaThreshold,
+                _legacyAnimationStepSpikeThisFrame,
+                out bool muscleDeltaOnlySpike);
 
             if (shouldSmooth)
             {
-                float currentWeight = Mathf.Clamp(poseVisualSpikeCurrentWeight, 0.1f, 1f);
+                float currentWeight = CalculateVisualPoseSpikeCurrentWeight(
+                    poseVisualSpikeCurrentWeight,
+                    bodyPositionDelta,
+                    bodyRotationDelta,
+                    _legacyAnimationStepSpikeThisFrame);
                 for (int i = 0; i < pose.muscles.Length; i++)
                 {
                     pose.muscles[i] = Mathf.Lerp(_previousVisualPoseMuscles[i], pose.muscles[i], currentWeight);
@@ -1182,6 +1429,42 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             RememberVisualPose(pose);
+        }
+
+        private static float CalculateVisualPoseSpikeCurrentWeight(
+            float configuredWeight,
+            float bodyPositionDelta,
+            float bodyRotationDelta,
+            bool legacyAnimationStepSpikeThisFrame)
+        {
+            float currentWeight = Mathf.Clamp(configuredWeight, 0.1f, 1f);
+            if (IsBodyPoseSpike(bodyPositionDelta, bodyRotationDelta))
+            {
+                return Mathf.Min(currentWeight, 0.1f);
+            }
+
+            return currentWeight;
+        }
+
+        private static bool ShouldSmoothVisualPoseSpike(
+            float maxMuscleDelta,
+            float bodyPositionDelta,
+            float bodyRotationDelta,
+            float poseVisualMuscleDeltaThreshold,
+            bool legacyAnimationStepSpikeThisFrame,
+            out bool muscleDeltaOnlySpike)
+        {
+            bool bodyPoseSpike = IsBodyPoseSpike(bodyPositionDelta, bodyRotationDelta);
+            muscleDeltaOnlySpike = maxMuscleDelta > poseVisualMuscleDeltaThreshold &&
+                !legacyAnimationStepSpikeThisFrame &&
+                !bodyPoseSpike;
+
+            return legacyAnimationStepSpikeThisFrame || bodyPoseSpike;
+        }
+
+        private static bool IsBodyPoseSpike(float bodyPositionDelta, float bodyRotationDelta)
+        {
+            return bodyPositionDelta > 0.08f || bodyRotationDelta > 25f;
         }
 
         private void RememberVisualPose(HumanPose pose)
@@ -1263,20 +1546,33 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            foreach (int muscleIndex in _editorFingerReferenceMuscleIndices)
+            if (useManualAnimatorFullBodyPoseReference)
             {
-                if (muscleIndex < 0 || muscleIndex >= pose.muscles.Length || muscleIndex >= _editorFingerReferencePose.muscles.Length)
+                int count = Mathf.Min(pose.muscles.Length, _editorFingerReferencePose.muscles.Length);
+                for (int i = 0; i < count; i++)
                 {
-                    continue;
+                    pose.muscles[i] = _editorFingerReferencePose.muscles[i];
+                }
+            }
+            else
+            {
+                foreach (int muscleIndex in _editorFingerReferenceMuscleIndices)
+                {
+                    if (muscleIndex < 0 || muscleIndex >= pose.muscles.Length || muscleIndex >= _editorFingerReferencePose.muscles.Length)
+                    {
+                        continue;
+                    }
+
+                    pose.muscles[muscleIndex] = _editorFingerReferencePose.muscles[muscleIndex];
                 }
 
-                pose.muscles[muscleIndex] = _editorFingerReferencePose.muscles[muscleIndex];
             }
 
             if (!_editorFingerPoseReferenceLogged)
             {
                 float time = GetLegacyAnimationTime();
-                Debug.Log($"[PoseSpaceRetargeter] Manual Animator finger reference applied at t={time:F3}s.");
+                string scope = useManualAnimatorFullBodyPoseReference ? "full-body muscle" : "finger";
+                Debug.Log($"[PoseSpaceRetargeter] Manual Animator {scope} reference applied at t={time:F3}s.");
                 _editorFingerPoseReferenceLogged = true;
             }
         }
@@ -1356,48 +1652,167 @@ namespace Member_Han.Modules.FBXImporter
 
             Vector3 refCurrentLocalPosition = referenceHips.localPosition;
             Vector3 currentLocalPosition = targetHips.localPosition;
-            if (!IsFinite(refCurrentLocalPosition) || !IsFinite(currentLocalPosition))
-            {
-                return;
-            }
-
             // Delta 방식: testprefab의 clip 시작 대비 현재 변위만 YYB 자연 위치에 더한다.
             // 절대 복사는 모델 비율 차이(YYB Hips Y≈1.024 vs testprefab≈1.056)로 인해 YYB Hips를 잘못된 높이로 강제한다.
-            Vector3 desiredLocalPosition;
-            if (_hasEditorReferenceHipsRestLocalPosition)
-            {
-                Vector3 refDelta = refCurrentLocalPosition - _editorReferenceHipsRestLocalPosition;
-                desiredLocalPosition = currentLocalPosition + refDelta;
-            }
-            else
-            {
-                desiredLocalPosition = refCurrentLocalPosition;
-            }
-
-            Vector3 delta = desiredLocalPosition - currentLocalPosition;
-            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
+            if (!TryCalculateEditorHipsLocalPositionReference(
+                refCurrentLocalPosition,
+                _editorReferenceHipsRestLocalPosition,
+                _hasEditorReferenceHipsRestLocalPosition,
+                _targetHipsRestLocalPosition,
+                _hasTargetHipsRestLocalPosition,
+                currentLocalPosition,
+                manualAnimatorHipsLocalPositionWeight,
+                manualAnimatorHipsLocalPositionMaxOffset,
+                out Vector3 nextLocalPosition))
             {
                 return;
             }
 
-            float maxOffset = Mathf.Max(0f, manualAnimatorHipsLocalPositionMaxOffset);
-            if (maxOffset > 0f)
-            {
-                delta = Vector3.ClampMagnitude(delta, maxOffset);
-            }
-
-            Vector3 nextLocalPosition = currentLocalPosition + delta * Mathf.Clamp01(manualAnimatorHipsLocalPositionWeight);
-            if (!IsFinite(nextLocalPosition))
-            {
-                return;
-            }
-
+            RecordEditorHipsLocalReferenceDiagnostics(currentLocalPosition, nextLocalPosition);
             targetHips.localPosition = nextLocalPosition;
             if (!_editorHipsLocalPositionReferenceLogged)
             {
                 Debug.Log($"[PoseSpaceRetargeter] Manual Animator Hips localPosition reference applied. weight={manualAnimatorHipsLocalPositionWeight:F2}, maxOffset={manualAnimatorHipsLocalPositionMaxOffset:F3}m");
                 _editorHipsLocalPositionReferenceLogged = true;
             }
+        }
+
+        private static bool TryCalculateEditorHipsLocalPositionReference(
+            Vector3 referenceCurrentLocalPosition,
+            Vector3 referenceRestLocalPosition,
+            bool hasReferenceRestLocalPosition,
+            Vector3 currentLocalPosition,
+            float weight,
+            float maxOffset,
+            out Vector3 nextLocalPosition)
+        {
+            return TryCalculateEditorHipsLocalPositionReference(
+                referenceCurrentLocalPosition,
+                referenceRestLocalPosition,
+                hasReferenceRestLocalPosition,
+                currentLocalPosition,
+                false,
+                currentLocalPosition,
+                weight,
+                maxOffset,
+                out nextLocalPosition);
+        }
+
+        private static bool TryCalculateEditorHipsLocalPositionReference(
+            Vector3 referenceCurrentLocalPosition,
+            Vector3 referenceRestLocalPosition,
+            bool hasReferenceRestLocalPosition,
+            Vector3 targetRestLocalPosition,
+            bool hasTargetRestLocalPosition,
+            Vector3 currentLocalPosition,
+            float weight,
+            float maxOffset,
+            out Vector3 nextLocalPosition)
+        {
+            nextLocalPosition = currentLocalPosition;
+            if (!IsFinite(referenceCurrentLocalPosition) || !IsFinite(currentLocalPosition))
+            {
+                return false;
+            }
+
+            if (hasReferenceRestLocalPosition && !IsFinite(referenceRestLocalPosition))
+            {
+                return false;
+            }
+
+            Vector3 desiredLocalPosition;
+            if (hasReferenceRestLocalPosition)
+            {
+                Vector3 referenceDelta = referenceCurrentLocalPosition - referenceRestLocalPosition;
+                Vector3 anchorLocalPosition = hasTargetRestLocalPosition && IsFinite(targetRestLocalPosition)
+                    ? targetRestLocalPosition
+                    : currentLocalPosition;
+                desiredLocalPosition = anchorLocalPosition + referenceDelta;
+            }
+            else
+            {
+                desiredLocalPosition = referenceCurrentLocalPosition;
+            }
+
+            Vector3 delta = desiredLocalPosition - currentLocalPosition;
+            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                delta = Vector3.ClampMagnitude(delta, clampedMaxOffset);
+            }
+
+            nextLocalPosition = currentLocalPosition + delta * Mathf.Clamp01(weight);
+            if (!IsFinite(nextLocalPosition))
+            {
+                nextLocalPosition = currentLocalPosition;
+                return false;
+            }
+
+            return true;
+        }
+
+        private void RecordEditorHipsLocalReferenceDiagnostics(Vector3 beforeLocalPosition, Vector3 afterLocalPosition)
+        {
+            _lastEditorHipsLocalReferenceBeforeLocalY = IsFinite(beforeLocalPosition) ? beforeLocalPosition.y : float.NaN;
+            _lastEditorHipsLocalReferenceAfterLocalY = IsFinite(afterLocalPosition) ? afterLocalPosition.y : float.NaN;
+            _lastEditorHipsLocalReferenceDeltaY =
+                IsFinite(_lastEditorHipsLocalReferenceBeforeLocalY) && IsFinite(_lastEditorHipsLocalReferenceAfterLocalY)
+                    ? _lastEditorHipsLocalReferenceAfterLocalY - _lastEditorHipsLocalReferenceBeforeLocalY
+                    : float.NaN;
+        }
+
+        private static bool IsRecordingStartHipsBaselineFlip(float beforeLocalY, float afterLocalY, float warningThreshold)
+        {
+            if (!IsFinite(beforeLocalY) || !IsFinite(afterLocalY) || !IsFinite(warningThreshold))
+            {
+                return false;
+            }
+
+            return Mathf.Abs(afterLocalY - beforeLocalY) > Mathf.Max(0f, warningThreshold);
+        }
+
+        private bool TryGetTargetBodyPositionY(out float bodyPositionY)
+        {
+            bodyPositionY = float.NaN;
+            if (_targetHandler == null)
+            {
+                return false;
+            }
+
+            HumanPose targetPose = new HumanPose();
+            _targetHandler.GetHumanPose(ref targetPose);
+            if (!IsFinite(targetPose.bodyPosition))
+            {
+                return false;
+            }
+
+            bodyPositionY = targetPose.bodyPosition.y;
+            return true;
+        }
+
+        private void ResetLastEditorHipsLocalReferenceDiagnostics()
+        {
+            _lastEditorHipsLocalReferenceBeforeLocalY = float.NaN;
+            _lastEditorHipsLocalReferenceAfterLocalY = float.NaN;
+            _lastEditorHipsLocalReferenceDeltaY = float.NaN;
+        }
+
+        private void ResetRecordingStartHipsBaselineDiagnostics()
+        {
+            _recordingStartRootY = float.NaN;
+            _recordingStartBodyPositionY = float.NaN;
+            _recordingStartHipsLocalY = float.NaN;
+            _recordingStartHipsY = float.NaN;
+            _recordingStartHipsReferenceBeforeLocalY = float.NaN;
+            _recordingStartHipsReferenceAfterLocalY = float.NaN;
+            _recordingStartHipsReferenceDeltaY = float.NaN;
+            _recordingStartHipsReferenceFlipDetected = false;
+            _recordingStartHipsReferenceStage = string.Empty;
         }
 
         private void ApplyEditorHumanoidHandLocalRotationReference()
@@ -1985,19 +2400,50 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             Vector3 effectiveHelperWorldPosition = overrideHelperWorldPosition ? helperWorldPosition : helperTransform.position;
-            float distance = Vector3.Distance(effectiveHelperWorldPosition, sourceTransform.position);
-            if (IsFinite(distance))
+            float currentDistance = Vector3.Distance(effectiveHelperWorldPosition, sourceTransform.position);
+
+            Quaternion relativeRotation = Quaternion.Inverse(sourceTransform.rotation) * helperTransform.rotation;
+            float rotationDelta = float.NaN;
+            if (IsFinite(relativeRotation))
+            {
+                rotationDelta = Quaternion.Angle(initialRelativeRotation, relativeRotation);
+            }
+
+            return TryCalculateThumbHelperRelationshipRisk(
+                currentDistance,
+                initialDistance,
+                rotationDelta,
+                spreadRisk,
+                projectionRisk,
+                out helperDistanceRisk,
+                out helperRotationRisk,
+                out webbingRisk);
+        }
+
+        private static bool TryCalculateThumbHelperRelationshipRisk(
+            float currentDistance,
+            float initialDistance,
+            float rotationDelta,
+            float spreadRisk,
+            float projectionRisk,
+            out float helperDistanceRisk,
+            out float helperRotationRisk,
+            out float webbingRisk)
+        {
+            helperDistanceRisk = float.NaN;
+            helperRotationRisk = float.NaN;
+            webbingRisk = float.NaN;
+
+            if (IsFinite(currentDistance) && IsFinite(initialDistance))
             {
                 helperDistanceRisk = RiskAbove(
-                    Mathf.Abs(distance - initialDistance),
+                    Mathf.Abs(currentDistance - initialDistance),
                     ManualThumbHelperDistanceDeltaWarning,
                     ManualThumbHelperDistanceDeltaFullRisk);
             }
 
-            Quaternion relativeRotation = Quaternion.Inverse(sourceTransform.rotation) * helperTransform.rotation;
-            if (IsFinite(relativeRotation))
+            if (IsFinite(rotationDelta))
             {
-                float rotationDelta = Quaternion.Angle(initialRelativeRotation, relativeRotation);
                 helperRotationRisk = RiskAbove(
                     rotationDelta,
                     ManualThumbHelperRotationWarning,
@@ -2441,6 +2887,8 @@ namespace Member_Han.Modules.FBXImporter
             _editorHipsLocalPositionReferenceLogged = false;
             _hasEditorReferenceBodyPosition = false;
             _hasEditorReferenceHipsRestLocalPosition = false;
+            _hasEditorReferenceLowestFootRestY = false;
+            _allowEditorFootHeightGroundingReference = false;
         }
 
         private static string ResolveFirstAnimatorStateName(RuntimeAnimatorController controller)
@@ -2568,24 +3016,63 @@ namespace Member_Han.Modules.FBXImporter
 
         private float CalculateSafeScaleRatio(Transform ghostHip, Transform targetHip)
         {
-            float ratio = _scaleRatio;
+            bool hasAnimatorScale = ghostAnimator != null && targetAnimator != null;
+            float ghostHumanScale = hasAnimatorScale ? ghostAnimator.humanScale : 0f;
+            float targetHumanScale = hasAnimatorScale ? targetAnimator.humanScale : 0f;
+            bool hasHipPositions = ghostHip != null && targetHip != null;
+            float ghostHipY = hasHipPositions ? ghostHip.position.y : 0f;
+            float targetHipY = hasHipPositions ? targetHip.position.y : 0f;
 
-            if (ghostAnimator != null && targetAnimator != null && ghostAnimator.humanScale > 0.0001f && targetAnimator.humanScale > 0.0001f)
+            float ratio = CalculateSafeScaleRatio(
+                _scaleRatio,
+                hasAnimatorScale,
+                ghostHumanScale,
+                targetHumanScale,
+                _initialGhostHipHeight,
+                _initialTargetHipHeight,
+                hasHipPositions,
+                ghostHipY,
+                targetHipY,
+                out bool usedInvalidFallback);
+            if (usedInvalidFallback)
             {
-                ratio = targetAnimator.humanScale / ghostAnimator.humanScale;
+                LogPoseWarning("Invalid retarget scale ratio. Falling back to 1.0.");
             }
-            else if (_initialGhostHipHeight > 0.01f)
+
+            return ratio;
+        }
+
+        private static float CalculateSafeScaleRatio(
+            float currentScaleRatio,
+            bool hasAnimatorScale,
+            float ghostHumanScale,
+            float targetHumanScale,
+            float initialGhostHipHeight,
+            float initialTargetHipHeight,
+            bool hasHipPositions,
+            float ghostHipY,
+            float targetHipY,
+            out bool usedInvalidFallback)
+        {
+            usedInvalidFallback = false;
+            float ratio = currentScaleRatio;
+
+            if (hasAnimatorScale && ghostHumanScale > 0.0001f && targetHumanScale > 0.0001f)
             {
-                ratio = _initialTargetHipHeight / _initialGhostHipHeight;
+                ratio = targetHumanScale / ghostHumanScale;
             }
-            else if (ghostHip != null && targetHip != null && ghostHip.position.y > 0.01f)
+            else if (initialGhostHipHeight > 0.01f)
             {
-                ratio = targetHip.position.y / ghostHip.position.y;
+                ratio = initialTargetHipHeight / initialGhostHipHeight;
+            }
+            else if (hasHipPositions && ghostHipY > 0.01f)
+            {
+                ratio = targetHipY / ghostHipY;
             }
 
             if (!IsFinite(ratio) || ratio <= 0f)
             {
-                LogPoseWarning("Invalid retarget scale ratio. Falling back to 1.0.");
+                usedInvalidFallback = true;
                 return 1f;
             }
 
@@ -2691,12 +3178,18 @@ namespace Member_Han.Modules.FBXImporter
 
             Vector3 delta = current - _previousEditorRootTranslation;
             _previousEditorRootTranslation = current;
-            if (!IsFinite(delta))
-            {
-                return Vector3.zero;
-            }
-
-            if (FlattenXZ(ghostDelta).sqrMagnitude > 0.00000025f)
+            Vector3 editorRootDelta = CalculateEditorRootTranslationReferenceDelta(
+                delta,
+                ghostDelta,
+                editorHumanoidRootTranslationWeight,
+                editorHumanoidRootTranslationCurrentWeight,
+                _hasSmoothedEditorRootTranslationDelta,
+                _smoothedEditorRootTranslationDelta,
+                out _smoothedEditorRootTranslationDelta,
+                out _hasSmoothedEditorRootTranslationDelta,
+                out bool skippedByGhostDelta,
+                out bool skippedByNonFinite);
+            if (skippedByGhostDelta || skippedByNonFinite)
             {
                 return Vector3.zero;
             }
@@ -2707,21 +3200,56 @@ namespace Member_Han.Modules.FBXImporter
                 _editorRootTranslationReferenceLogged = true;
             }
 
-            delta.y = 0f;
-            delta *= Mathf.Clamp01(editorHumanoidRootTranslationWeight);
-            if (!_hasSmoothedEditorRootTranslationDelta)
-            {
-                _smoothedEditorRootTranslationDelta = delta;
-                _hasSmoothedEditorRootTranslationDelta = true;
-                return delta;
-            }
-
-            float currentWeight = Mathf.Clamp(editorHumanoidRootTranslationCurrentWeight, 0.05f, 1f);
-            _smoothedEditorRootTranslationDelta = Vector3.Lerp(_smoothedEditorRootTranslationDelta, delta, currentWeight);
-            return _smoothedEditorRootTranslationDelta;
+            return editorRootDelta;
 #else
             return Vector3.zero;
 #endif
+        }
+
+        private static Vector3 CalculateEditorRootTranslationReferenceDelta(
+            Vector3 rawEditorDelta,
+            Vector3 ghostDelta,
+            float editorRootTranslationWeight,
+            float editorRootTranslationCurrentWeight,
+            bool hasSmoothedEditorRootTranslationDelta,
+            Vector3 previousSmoothedEditorRootTranslationDelta,
+            out Vector3 nextSmoothedEditorRootTranslationDelta,
+            out bool nextHasSmoothedEditorRootTranslationDelta,
+            out bool skippedByGhostDelta,
+            out bool skippedByNonFinite)
+        {
+            nextSmoothedEditorRootTranslationDelta = previousSmoothedEditorRootTranslationDelta;
+            nextHasSmoothedEditorRootTranslationDelta = hasSmoothedEditorRootTranslationDelta;
+            skippedByGhostDelta = false;
+            skippedByNonFinite = false;
+
+            if (!IsFinite(rawEditorDelta))
+            {
+                skippedByNonFinite = true;
+                return Vector3.zero;
+            }
+
+            if (FlattenXZ(ghostDelta).sqrMagnitude > 0.00000025f)
+            {
+                skippedByGhostDelta = true;
+                return Vector3.zero;
+            }
+
+            Vector3 weightedDelta = rawEditorDelta;
+            weightedDelta.y = 0f;
+            weightedDelta *= Mathf.Clamp01(editorRootTranslationWeight);
+
+            if (!hasSmoothedEditorRootTranslationDelta)
+            {
+                nextSmoothedEditorRootTranslationDelta = weightedDelta;
+                nextHasSmoothedEditorRootTranslationDelta = true;
+                return weightedDelta;
+            }
+
+            float currentWeight = Mathf.Clamp(editorRootTranslationCurrentWeight, 0.05f, 1f);
+            nextSmoothedEditorRootTranslationDelta = Vector3.Lerp(previousSmoothedEditorRootTranslationDelta, weightedDelta, currentWeight);
+            nextHasSmoothedEditorRootTranslationDelta = true;
+            return nextSmoothedEditorRootTranslationDelta;
         }
 
         private void ResetEditorHumanoidRootTranslationReferenceState()
@@ -3801,16 +4329,22 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            Vector3 poseDelta = targetAnimator.transform.position - positionBeforePose;
-            if (!IsFinite(poseDelta))
+            Vector3 currentPosition = targetAnimator.transform.position;
+            bool shouldClamp = TryCalculateRootPositionSpikeClamp(
+                positionBeforePose,
+                currentPosition,
+                maxRootDeltaPerFrame,
+                out Vector3 clampedPosition,
+                out float poseDeltaMagnitude);
+
+            _lastRootPositionPoseDeltaMagnitude = poseDeltaMagnitude;
+            if (!IsFinite(poseDeltaMagnitude))
             {
-                _lastRootPositionPoseDeltaMagnitude = float.NaN;
                 return;
             }
 
-            _lastRootPositionPoseDeltaMagnitude = poseDelta.magnitude;
             _maxRootPositionPoseDeltaMagnitude = Mathf.Max(_maxRootPositionPoseDeltaMagnitude, _lastRootPositionPoseDeltaMagnitude);
-            if (_lastRootPositionPoseDeltaMagnitude <= maxRootDeltaPerFrame)
+            if (!shouldClamp)
             {
                 return;
             }
@@ -3822,7 +4356,149 @@ namespace Member_Han.Modules.FBXImporter
                 _rootDeltaSpikeWarningLogged = true;
             }
 
-            targetAnimator.transform.position = positionBeforePose + Vector3.ClampMagnitude(poseDelta, maxRootDeltaPerFrame);
+            targetAnimator.transform.position = clampedPosition;
+        }
+
+        private static Vector3 ApplyImplicitBodyPositionRootGuard(
+            Vector3 positionBeforePose,
+            Vector3 currentPosition,
+            bool allowBodyPositionXZRootMotion)
+        {
+            if (allowBodyPositionXZRootMotion || !IsFinite(positionBeforePose) || !IsFinite(currentPosition))
+            {
+                return currentPosition;
+            }
+
+            return new Vector3(positionBeforePose.x, currentPosition.y, positionBeforePose.z);
+        }
+
+        private static Vector3 SelectImplicitRootGuardReference(
+            Vector3 rootAnchorPosition,
+            Vector3 positionBeforePose,
+            float movementScaleMultiplier)
+        {
+            if (movementScaleMultiplier <= 0f && IsFinite(rootAnchorPosition))
+            {
+                return rootAnchorPosition;
+            }
+
+            return positionBeforePose;
+        }
+
+        private static bool TryCalculateRootPositionSpikeClamp(
+            Vector3 positionBeforePose,
+            Vector3 currentPosition,
+            float maxRootDeltaPerFrame,
+            out Vector3 clampedPosition,
+            out float deltaMagnitude)
+        {
+            clampedPosition = currentPosition;
+            Vector3 poseDelta = currentPosition - positionBeforePose;
+            if (!IsFinite(poseDelta))
+            {
+                deltaMagnitude = float.NaN;
+                return false;
+            }
+
+            deltaMagnitude = poseDelta.magnitude;
+            if (deltaMagnitude <= maxRootDeltaPerFrame)
+            {
+                return false;
+            }
+
+            clampedPosition = positionBeforePose + Vector3.ClampMagnitude(poseDelta, maxRootDeltaPerFrame);
+            return true;
+        }
+
+        private void ClampTargetHipsLocalPositionSpike()
+        {
+            if (!clampTargetHipsLocalPositionSpikes || targetAnimator == null || !targetAnimator.isHuman)
+            {
+                ResetTargetHipsLocalPositionSpikeState();
+                return;
+            }
+
+            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            if (targetHips == null)
+            {
+                ResetTargetHipsLocalPositionSpikeState();
+                return;
+            }
+
+            Vector3 currentLocalPosition = targetHips.localPosition;
+            if (!_hasPreviousTargetHipsLocalPosition)
+            {
+                RememberTargetHipsLocalPosition(currentLocalPosition);
+                return;
+            }
+
+            bool shouldClamp = TryCalculateHipsLocalPositionSpikeClamp(
+                _previousTargetHipsLocalPosition,
+                currentLocalPosition,
+                maxTargetHipsLocalPositionDeltaPerFrame,
+                out Vector3 clampedLocalPosition,
+                out float deltaMagnitude);
+
+            _lastTargetHipsLocalPositionDelta = deltaMagnitude;
+            if (!IsFinite(deltaMagnitude))
+            {
+                return;
+            }
+
+            _maxTargetHipsLocalPositionDelta = Mathf.Max(_maxTargetHipsLocalPositionDelta, deltaMagnitude);
+            if (shouldClamp)
+            {
+                targetHips.localPosition = clampedLocalPosition;
+                _targetHipsLocalPositionSpikeClampedCount++;
+            }
+
+            RememberTargetHipsLocalPosition(targetHips.localPosition);
+        }
+
+        private void RememberTargetHipsLocalPosition(Vector3 localPosition)
+        {
+            if (!IsFinite(localPosition))
+            {
+                return;
+            }
+
+            _previousTargetHipsLocalPosition = localPosition;
+            _hasPreviousTargetHipsLocalPosition = true;
+        }
+
+        private void ResetTargetHipsLocalPositionSpikeState()
+        {
+            _previousTargetHipsLocalPosition = Vector3.zero;
+            _hasPreviousTargetHipsLocalPosition = false;
+            _lastTargetHipsLocalPositionDelta = float.NaN;
+            _maxTargetHipsLocalPositionDelta = 0f;
+            _targetHipsLocalPositionSpikeClampedCount = 0;
+        }
+
+        private static bool TryCalculateHipsLocalPositionSpikeClamp(
+            Vector3 previousLocalPosition,
+            Vector3 currentLocalPosition,
+            float maxDeltaPerFrame,
+            out Vector3 clampedPosition,
+            out float deltaMagnitude)
+        {
+            clampedPosition = currentLocalPosition;
+            Vector3 delta = currentLocalPosition - previousLocalPosition;
+            if (!IsFinite(delta))
+            {
+                deltaMagnitude = float.NaN;
+                return false;
+            }
+
+            deltaMagnitude = delta.magnitude;
+            float clampedMaxDelta = Mathf.Max(0f, maxDeltaPerFrame);
+            if (clampedMaxDelta <= 0f || deltaMagnitude <= clampedMaxDelta)
+            {
+                return false;
+            }
+
+            clampedPosition = previousLocalPosition + Vector3.ClampMagnitude(delta, clampedMaxDelta);
+            return true;
         }
 
         private void CaptureTargetInitialTransforms(GameObject targetRoot)
@@ -3843,6 +4519,7 @@ namespace Member_Han.Modules.FBXImporter
             _thumbLocalRotationGuardWarningLogged = false;
             _rootDeltaSpikeWarningLogged = false;
             _hasPreviousBodyRootMotionPosition = false;
+            ResetTargetHipsLocalPositionSpikeState();
             _leftFootLocked = false;
             _rightFootLocked = false;
             _lastRootDeltaMagnitude = float.NaN;
@@ -3875,10 +4552,13 @@ namespace Member_Han.Modules.FBXImporter
             _maxGroundingVerticalStepAfterInitial = 0f;
             _lastGroundingTargetY = float.NaN;
             _lastGroundingLowestFootBottomY = float.NaN;
+            _lastEditorFootHeightGroundingReferenceLift = float.NaN;
             _lateVisualGroundingWarningLogged = false;
             _rendererGroundingOutlierWarningLogged = false;
             _lateVisualGroundingInitialized = false;
             _appliedPoseClampWarningLogged = false;
+            _targetHipsRestLocalPosition = Vector3.zero;
+            _hasTargetHipsRestLocalPosition = false;
 
             foreach (Transform targetBone in targetRoot.GetComponentsInChildren<Transform>(true))
             {
@@ -3893,12 +4573,18 @@ namespace Member_Han.Modules.FBXImporter
             for (int i = (int)HumanBodyBones.Hips; i < (int)HumanBodyBones.LastBone; i++)
             {
                 HumanBodyBones bone = (HumanBodyBones)i;
+                Transform targetBone = targetAnimator.GetBoneTransform(bone);
                 if (bone == HumanBodyBones.Hips)
                 {
+                    if (targetBone != null && IsFinite(targetBone.localPosition))
+                    {
+                        _targetHipsRestLocalPosition = targetBone.localPosition;
+                        _hasTargetHipsRestLocalPosition = true;
+                    }
+
                     continue;
                 }
 
-                Transform targetBone = targetAnimator.GetBoneTransform(bone);
                 if (targetBone == null || _targetInitialHumanoidLocalPositions.ContainsKey(targetBone))
                 {
                     continue;
@@ -4327,9 +5013,8 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             float footRadius = GetEstimatedFootRadius();
-            float lBottom = lFoot.position.y - footRadius;
-            float rBottom = rFoot.position.y - footRadius;
-            if (!IsFinite(lBottom) || !IsFinite(rBottom))
+            if (!TryCalculateFootBottomY(lFoot.position.y, footRadius, out float lBottom) ||
+                !TryCalculateFootBottomY(rFoot.position.y, footRadius, out float rBottom))
             {
                 LogPoseWarning("Foot position became non-finite. Skipping grounding for this frame.");
                 return;
@@ -4346,14 +5031,13 @@ namespace Member_Han.Modules.FBXImporter
             // Raycast를 사용하여 실제 지면을 찾을 수도 있으나, 현재는 평면(Plane) 위라고 가정하고 0.0f 사용
             // 만약 계단이나 경사면이라면 Physics.Raycast로 hit.point.y를 구해야 함.
             float targetGroundY = 0.0f; // 평면 가정
-            float targetHeight = targetGroundY + groundOffset;
+            float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + groundOffset);
             _lastGroundingTargetY = targetGroundY;
             _lastGroundingLowestFootBottomY = contactBottomY;
 
             // 보정값 계산 (목표 - 현재)
             // 양수면 들어 올리고, 음수면 내림 (양방향)
-            float adjustment = targetHeight - contactBottomY;
-            if (!IsFinite(adjustment))
+            if (!TryCalculateGroundingAdjustment(targetHeight, contactBottomY, out float adjustment))
             {
                 LogPoseWarning("Grounding adjustment became non-finite. Skipping grounding for this frame.");
                 _lastGroundingAdjustment = float.NaN;
@@ -4383,53 +5067,41 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            float deadZone = Mathf.Max(0f, groundingDeadZone);
-            if (_groundingInitialized && Mathf.Abs(adjustment) <= deadZone)
+            bool wasGroundingInitialized = _groundingInitialized;
+            float appliedVerticalStep = CalculateGroundingVerticalStep(
+                currentPos.y,
+                adjustment,
+                wasGroundingInitialized,
+                smoothGrounding,
+                groundingSmoothing,
+                maxGroundingVerticalStepPerFrame,
+                groundingDeadZone,
+                _lastGroundingVerticalStep,
+                out bool skippedByDeadZone,
+                out bool smoothedGrounding,
+                out bool clampedGroundingStep);
+            if (skippedByDeadZone)
             {
                 _lastGroundingVerticalStep = 0f;
                 return;
             }
 
-            bool wasGroundingInitialized = _groundingInitialized;
-            float effectiveAdjustment = adjustment;
-            if (_groundingInitialized && deadZone > 0f)
-            {
-                // Dead zone should not only skip tiny errors. Subtracting it from
-                // larger corrections prevents the root from chasing small foot noise.
-                effectiveAdjustment = Mathf.Sign(adjustment) * Mathf.Max(0f, Mathf.Abs(adjustment) - deadZone);
-            }
-
-            float desiredY = currentPos.y + effectiveAdjustment;
-            float nextY = desiredY;
-            if (!_groundingInitialized)
+            if (!wasGroundingInitialized)
             {
                 _groundingInitialized = true;
             }
-            else if (smoothGrounding)
+
+            if (smoothedGrounding)
             {
-                float smoothing = Mathf.Clamp01(groundingSmoothing);
-                if (smoothing < 1f)
-                {
-                    nextY = Mathf.Lerp(currentPos.y, desiredY, smoothing);
-                    _groundingSmoothedCount++;
-                }
-
-                float maxStep = Mathf.Max(0.001f, maxGroundingVerticalStepPerFrame);
-                float verticalStep = nextY - currentPos.y;
-                if (IsGroundingDirectionReversal(verticalStep))
-                {
-                    maxStep = Mathf.Max(0.001f, maxStep * GroundingDirectionReversalStepScale);
-                }
-
-                if (Mathf.Abs(verticalStep) > maxStep)
-                {
-                    nextY = currentPos.y + Mathf.Sign(verticalStep) * maxStep;
-                    _groundingStepClampedCount++;
-                }
+                _groundingSmoothedCount++;
             }
 
-            float clampedNextY = nextY;
-            float appliedVerticalStep = clampedNextY - currentPos.y;
+            if (clampedGroundingStep)
+            {
+                _groundingStepClampedCount++;
+            }
+
+            float clampedNextY = currentPos.y + appliedVerticalStep;
             _lastGroundingVerticalStep = appliedVerticalStep;
             _maxGroundingVerticalStep = Mathf.Max(_maxGroundingVerticalStep, Mathf.Abs(appliedVerticalStep));
             if (wasGroundingInitialized)
@@ -4456,14 +5128,177 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
-        private bool IsGroundingDirectionReversal(float verticalStep)
+        private static bool TryCalculateGroundingAdjustment(
+            float targetHeight,
+            float contactBottomY,
+            out float adjustment)
         {
-            if (!IsFinite(_lastGroundingVerticalStep) || Mathf.Abs(verticalStep) <= 0.0005f || Mathf.Abs(_lastGroundingVerticalStep) <= 0.0005f)
+            adjustment = targetHeight - contactBottomY;
+            if (!IsFinite(adjustment))
+            {
+                adjustment = 0f;
+                return false;
+            }
+
+            return true;
+        }
+
+        private float ResolveEditorFootHeightGroundingReferenceTarget(float baseTargetHeight)
+        {
+#if UNITY_EDITOR
+            _lastEditorFootHeightGroundingReferenceLift = 0f;
+            if (!useManualAnimatorFootHeightGroundingReference ||
+                !_allowEditorFootHeightGroundingReference ||
+                manualAnimatorFootHeightGroundingReferenceWeight <= 0f ||
+                _editorFingerReferenceAnimator == null)
+            {
+                return baseTargetHeight;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator() ||
+                !TryGetAnimatorLowestFootY(_editorFingerReferenceAnimator, out float referenceCurrentLowestFootY))
+            {
+                return baseTargetHeight;
+            }
+
+            if (!_hasEditorReferenceLowestFootRestY)
+            {
+                _editorReferenceLowestFootRestY = referenceCurrentLowestFootY;
+                _hasEditorReferenceLowestFootRestY = true;
+                return baseTargetHeight;
+            }
+
+            if (TryCalculateEditorFootHeightGroundingReferenceTarget(
+                    baseTargetHeight,
+                    referenceCurrentLowestFootY,
+                    _editorReferenceLowestFootRestY,
+                    manualAnimatorFootHeightGroundingReferenceWeight,
+                    manualAnimatorFootHeightGroundingReferenceMaxLift,
+                    out float targetHeight))
+            {
+                _lastEditorFootHeightGroundingReferenceLift = targetHeight - baseTargetHeight;
+                return targetHeight;
+            }
+
+            _lastEditorFootHeightGroundingReferenceLift = float.NaN;
+            return baseTargetHeight;
+#else
+            return baseTargetHeight;
+#endif
+        }
+
+        private static bool TryCalculateEditorFootHeightGroundingReferenceTarget(
+            float baseTargetHeight,
+            float referenceCurrentLowestFootY,
+            float referenceRestLowestFootY,
+            float weight,
+            float maxLift,
+            out float targetHeight)
+        {
+            targetHeight = baseTargetHeight;
+            if (!IsFinite(baseTargetHeight) ||
+                !IsFinite(referenceCurrentLowestFootY) ||
+                !IsFinite(referenceRestLowestFootY) ||
+                !IsFinite(weight) ||
+                !IsFinite(maxLift))
             {
                 return false;
             }
 
-            return Mathf.Sign(verticalStep) != Mathf.Sign(_lastGroundingVerticalStep);
+            float referenceLift = referenceCurrentLowestFootY - referenceRestLowestFootY;
+            if (referenceLift <= 0f)
+            {
+                return true;
+            }
+
+            float weightedLift = referenceLift * Mathf.Clamp01(weight);
+            if (maxLift > 0f)
+            {
+                weightedLift = Mathf.Min(weightedLift, maxLift);
+            }
+
+            targetHeight = baseTargetHeight + weightedLift;
+            if (!IsFinite(targetHeight))
+            {
+                targetHeight = baseTargetHeight;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static float CalculateGroundingVerticalStep(
+            float currentY,
+            float adjustment,
+            bool wasGroundingInitialized,
+            bool smoothGrounding,
+            float groundingSmoothing,
+            float maxGroundingVerticalStepPerFrame,
+            float groundingDeadZone,
+            float previousGroundingVerticalStep,
+            out bool skippedByDeadZone,
+            out bool smoothed,
+            out bool clamped)
+        {
+            skippedByDeadZone = false;
+            smoothed = false;
+            clamped = false;
+
+            float deadZone = Mathf.Max(0f, groundingDeadZone);
+            if (wasGroundingInitialized && Mathf.Abs(adjustment) <= deadZone)
+            {
+                skippedByDeadZone = true;
+                return 0f;
+            }
+
+            float effectiveAdjustment = adjustment;
+            if (wasGroundingInitialized && deadZone > 0f)
+            {
+                // Subtracting the dead zone prevents the root from chasing small foot noise.
+                effectiveAdjustment = Mathf.Sign(adjustment) * Mathf.Max(0f, Mathf.Abs(adjustment) - deadZone);
+            }
+
+            float desiredY = currentY + effectiveAdjustment;
+            float nextY = desiredY;
+            if (wasGroundingInitialized && smoothGrounding)
+            {
+                float smoothing = Mathf.Clamp01(groundingSmoothing);
+                if (smoothing < 1f)
+                {
+                    nextY = Mathf.Lerp(currentY, desiredY, smoothing);
+                    smoothed = true;
+                }
+
+                float maxStep = Mathf.Max(0.001f, maxGroundingVerticalStepPerFrame);
+                float verticalStep = nextY - currentY;
+                if (IsGroundingDirectionReversal(verticalStep, previousGroundingVerticalStep))
+                {
+                    maxStep = Mathf.Max(0.001f, maxStep * GroundingDirectionReversalStepScale);
+                }
+
+                if (Mathf.Abs(verticalStep) > maxStep)
+                {
+                    nextY = currentY + Mathf.Sign(verticalStep) * maxStep;
+                    clamped = true;
+                }
+            }
+
+            return nextY - currentY;
+        }
+
+        private bool IsGroundingDirectionReversal(float verticalStep)
+        {
+            return IsGroundingDirectionReversal(verticalStep, _lastGroundingVerticalStep);
+        }
+
+        private static bool IsGroundingDirectionReversal(float verticalStep, float previousGroundingVerticalStep)
+        {
+            if (!IsFinite(previousGroundingVerticalStep) || Mathf.Abs(verticalStep) <= 0.0005f || Mathf.Abs(previousGroundingVerticalStep) <= 0.0005f)
+            {
+                return false;
+            }
+
+            return Mathf.Sign(verticalStep) != Mathf.Sign(previousGroundingVerticalStep);
         }
 
         public void ApplyLateVisualGroundingCorrection()
@@ -4495,52 +5330,42 @@ namespace Member_Han.Modules.FBXImporter
             float rendererMinY = ResolveGroundingContactBottomY(lowestFootBottomY);
 
             float targetGroundY = 0.0f;
-            float targetHeight = targetGroundY + groundOffset;
-            float residual = targetHeight - rendererMinY;
+            float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + groundOffset);
             _lastGroundingTargetY = targetGroundY;
             _lastGroundingLowestFootBottomY = rendererMinY;
 
-            if (!IsFinite(residual))
+            if (!TryCalculateGroundingAdjustment(targetHeight, rendererMinY, out float residual))
             {
                 LogPoseWarning("Late visual grounding residual became non-finite. Skipping final grounding for this frame.");
                 return;
             }
 
-            float deadZone = Mathf.Max(0.001f, groundingDeadZone);
-            if (Mathf.Abs(residual) <= deadZone)
+            if (ShouldSkipLateVisualGroundingForActiveVerticalStep(
+                residual,
+                smoothLateVisualGroundingCorrection,
+                _lastGroundingVerticalStep))
             {
                 _lateVisualGroundingInitialized = true;
                 return;
             }
 
-            if (smoothLateVisualGroundingCorrection && Mathf.Abs(_lastGroundingVerticalStep) > 0.0005f)
+            if (!TryCalculateLateVisualGroundingEffectiveResidual(
+                residual,
+                smoothLateVisualGroundingCorrection,
+                groundingDeadZone,
+                maxLateVisualGroundingCorrection,
+                out float effectiveResidual,
+                out bool exceededMaxCorrection))
             {
-                _lateVisualGroundingInitialized = true;
-                return;
-            }
-
-            float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
-            if (Mathf.Abs(residual) > maxCorrection)
-            {
-                if (!_lateVisualGroundingWarningLogged)
+                if (exceededMaxCorrection && !_lateVisualGroundingWarningLogged)
                 {
+                    float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
                     Debug.LogWarning($"[PoseSpaceRetargeter] Late visual grounding residual {residual:F3}m exceeded max {maxCorrection:F3}m. Skipping this frame to avoid collapsing a real jump.");
                     _lateVisualGroundingWarningLogged = true;
                 }
 
                 _lateVisualGroundingInitialized = true;
                 return;
-            }
-
-            float effectiveResidual = residual;
-            if (smoothLateVisualGroundingCorrection && deadZone > 0f)
-            {
-                effectiveResidual = Mathf.Sign(residual) * Mathf.Max(0f, Mathf.Abs(residual) - deadZone);
-                if (Mathf.Abs(effectiveResidual) <= 0.0001f)
-                {
-                    _lateVisualGroundingInitialized = true;
-                    return;
-                }
             }
 
             Vector3 currentPos = targetAnimator.transform.position;
@@ -4556,14 +5381,13 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            currentPos.y += appliedResidual;
-            if (!IsFinite(currentPos))
+            if (!TryCalculateLateVisualGroundingAppliedPosition(currentPos, appliedResidual, out Vector3 appliedPosition))
             {
                 LogPoseWarning("Target position became non-finite after late visual grounding. Skipping final grounding for this frame.");
                 return;
             }
 
-            targetAnimator.transform.position = currentPos;
+            targetAnimator.transform.position = appliedPosition;
             _lateVisualGroundingInitialized = true;
 
             _lastGroundingAdjustment = appliedResidual;
@@ -4583,28 +5407,169 @@ namespace Member_Han.Modules.FBXImporter
 
         private float CalculateLateVisualGroundingStep(float residual)
         {
+            return CalculateLateVisualGroundingStep(
+                residual,
+                smoothLateVisualGroundingCorrection,
+                _lateVisualGroundingInitialized,
+                lateVisualGroundingSnapThreshold,
+                lateVisualGroundingSmoothing,
+                maxLateVisualGroundingStepPerFrame);
+        }
+
+        private static bool TryCalculateLateVisualGroundingEffectiveResidual(
+            float residual,
+            bool smoothLateVisualGroundingCorrection,
+            float groundingDeadZone,
+            float maxLateVisualGroundingCorrection,
+            out float effectiveResidual,
+            out bool exceededMaxCorrection)
+        {
+            effectiveResidual = 0f;
+            exceededMaxCorrection = false;
+
+            bool isPenetrationResidual = residual > 0.0001f;
+            bool isFloatingResidual = residual < -0.0001f;
+            bool isVisualFloorResidual = isPenetrationResidual || isFloatingResidual;
+            float deadZone = Mathf.Max(0.001f, groundingDeadZone);
+            float skipDeadZone = isVisualFloorResidual ? 0.001f : deadZone;
+            if (Mathf.Abs(residual) <= skipDeadZone)
+            {
+                return false;
+            }
+
+            float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
+            if (Mathf.Abs(residual) > maxCorrection)
+            {
+                exceededMaxCorrection = true;
+                return false;
+            }
+
+            effectiveResidual = residual;
+            if (smoothLateVisualGroundingCorrection && deadZone > 0f && !isVisualFloorResidual)
+            {
+                effectiveResidual = Mathf.Sign(residual) * Mathf.Max(0f, Mathf.Abs(residual) - deadZone);
+                if (Mathf.Abs(effectiveResidual) <= 0.0001f)
+                {
+                    effectiveResidual = 0f;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool ShouldSkipLateVisualGroundingForActiveVerticalStep(
+            float residual,
+            bool smoothLateVisualGroundingCorrection,
+            float lastGroundingVerticalStep)
+        {
+            if (!smoothLateVisualGroundingCorrection ||
+                !IsFinite(residual) ||
+                !IsFinite(lastGroundingVerticalStep) ||
+                Mathf.Abs(residual) <= 0.0005f ||
+                Mathf.Abs(lastGroundingVerticalStep) <= 0.0005f)
+            {
+                return false;
+            }
+
+            return Mathf.Sign(residual) != Mathf.Sign(lastGroundingVerticalStep);
+        }
+
+        private static bool TryCalculateLateVisualGroundingAppliedPosition(
+            Vector3 currentPosition,
+            float appliedResidual,
+            out Vector3 appliedPosition)
+        {
+            appliedPosition = Vector3.zero;
+            if (!IsFinite(currentPosition))
+            {
+                return false;
+            }
+
+            appliedPosition = currentPosition;
+            appliedPosition.y += appliedResidual;
+            if (!IsFinite(appliedPosition))
+            {
+                appliedPosition = Vector3.zero;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static float CalculateLateVisualGroundingStep(
+            float residual,
+            bool smoothLateVisualGroundingCorrection,
+            bool lateVisualGroundingInitialized,
+            float lateVisualGroundingSnapThreshold,
+            float lateVisualGroundingSmoothing,
+            float maxLateVisualGroundingStepPerFrame)
+        {
             if (!smoothLateVisualGroundingCorrection)
             {
                 return residual;
             }
 
-            if (!_lateVisualGroundingInitialized)
+            if (!lateVisualGroundingInitialized)
             {
                 return residual;
             }
 
             float snapThreshold = Mathf.Max(0.005f, lateVisualGroundingSnapThreshold);
+            if (residual > 0.0001f && residual <= snapThreshold)
+            {
+                return residual;
+            }
+
+            bool isFloorPenetration = residual > 0.0001f;
             float smoothing = Mathf.Clamp01(lateVisualGroundingSmoothing);
+            if (isFloorPenetration)
+            {
+                smoothing = Mathf.Max(smoothing, LateVisualGroundingPenetrationRecoverySmoothing);
+            }
+
             float step = Mathf.Abs(residual) > snapThreshold
                 ? residual * Mathf.Max(0.1f, smoothing)
                 : residual * smoothing;
             float maxStep = Mathf.Max(0.001f, maxLateVisualGroundingStepPerFrame);
+            if (isFloorPenetration)
+            {
+                maxStep = Mathf.Max(maxStep, LateVisualGroundingPenetrationRecoveryMaxStep);
+            }
+
             if (Mathf.Abs(step) > maxStep)
             {
                 step = Mathf.Sign(step) * maxStep;
             }
 
             return step;
+        }
+
+        private static bool TryGetAnimatorLowestFootY(Animator animator, out float lowestFootY)
+        {
+            lowestFootY = 0f;
+            if (animator == null || !animator.isHuman)
+            {
+                return false;
+            }
+
+            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            if (leftFoot == null || rightFoot == null)
+            {
+                return false;
+            }
+
+            Vector3 leftLocal = animator.transform.InverseTransformPoint(leftFoot.position);
+            Vector3 rightLocal = animator.transform.InverseTransformPoint(rightFoot.position);
+            lowestFootY = Mathf.Min(leftLocal.y, rightLocal.y);
+            if (!IsFinite(lowestFootY))
+            {
+                lowestFootY = 0f;
+                return false;
+            }
+
+            return true;
         }
 
         private bool TryGetLowestFootBottomY(out float lowestFootBottomY)
@@ -4623,14 +5588,38 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             float footRadius = GetEstimatedFootRadius();
-            float leftBottom = leftFoot.position.y - footRadius;
-            float rightBottom = rightFoot.position.y - footRadius;
-            if (!IsFinite(leftBottom) || !IsFinite(rightBottom))
+            return TryCalculateLowestFootBottomY(leftFoot.position.y, rightFoot.position.y, footRadius, out lowestFootBottomY);
+        }
+
+        private static bool TryCalculateLowestFootBottomY(
+            float leftFootY,
+            float rightFootY,
+            float footRadius,
+            out float lowestFootBottomY)
+        {
+            lowestFootBottomY = 0f;
+            if (!TryCalculateFootBottomY(leftFootY, footRadius, out float leftBottom) ||
+                !TryCalculateFootBottomY(rightFootY, footRadius, out float rightBottom))
             {
                 return false;
             }
 
             lowestFootBottomY = Mathf.Min(leftBottom, rightBottom);
+            return true;
+        }
+
+        private static bool TryCalculateFootBottomY(
+            float footY,
+            float footRadius,
+            out float footBottomY)
+        {
+            footBottomY = footY - footRadius;
+            if (!IsFinite(footBottomY))
+            {
+                footBottomY = 0f;
+                return false;
+            }
+
             return true;
         }
 
@@ -4655,20 +5644,64 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            float lowestFootY = Mathf.Min(leftFoot.position.y, rightFoot.position.y);
-            float estimatedRadius = lowestFootY - rendererMinY;
-            if (!IsFinite(estimatedRadius))
+            if (!TryCalculateEstimatedFootRadius(leftFoot.position.y, rightFoot.position.y, rendererMinY, out float estimatedRadius))
             {
                 return;
             }
 
-            _estimatedFootRadius = Mathf.Clamp(estimatedRadius, 0.02f, 0.16f);
+            _estimatedFootRadius = estimatedRadius;
             _hasEstimatedFootRadius = true;
+        }
+
+        private static bool TryCalculateEstimatedFootRadius(
+            float leftFootY,
+            float rightFootY,
+            float rendererMinY,
+            out float estimatedRadius)
+        {
+            float lowestFootY = Mathf.Min(leftFootY, rightFootY);
+            estimatedRadius = lowestFootY - rendererMinY;
+            if (!IsFinite(estimatedRadius))
+            {
+                return false;
+            }
+
+            estimatedRadius = Mathf.Clamp(estimatedRadius, 0.02f, 0.16f);
+            return true;
         }
 
         private float ResolveGroundingContactBottomY(float lowestFootBottomY)
         {
-            if (!TryGetRendererBoundsMinY(out float rendererMinY))
+            bool hasRendererBounds = TryGetRendererBoundsMinY(out float rendererMinY);
+            float contactBottomY = ResolveGroundingContactBottomY(
+                lowestFootBottomY,
+                hasRendererBounds,
+                rendererMinY,
+                rejectRendererGroundingOutliers,
+                maxRendererFootGroundingSeparation,
+                out bool rendererGroundingOutlier);
+
+            if (rendererGroundingOutlier && !_rendererGroundingOutlierWarningLogged)
+            {
+                float separation = Mathf.Abs(rendererMinY - lowestFootBottomY);
+                float maxSeparation = Mathf.Max(0.02f, maxRendererFootGroundingSeparation);
+                Debug.LogWarning($"[PoseSpaceRetargeter] Renderer bounds grounding outlier ignored. rendererMinY={rendererMinY:F3}, footBottomY={lowestFootBottomY:F3}, separation={separation:F3}, limit={maxSeparation:F3}");
+                _rendererGroundingOutlierWarningLogged = true;
+            }
+
+            return contactBottomY;
+        }
+
+        private static float ResolveGroundingContactBottomY(
+            float lowestFootBottomY,
+            bool hasRendererBounds,
+            float rendererMinY,
+            bool rejectRendererGroundingOutliers,
+            float maxRendererFootGroundingSeparation,
+            out bool rendererGroundingOutlier)
+        {
+            rendererGroundingOutlier = false;
+            if (!hasRendererBounds)
             {
                 return lowestFootBottomY;
             }
@@ -4685,12 +5718,7 @@ namespace Member_Han.Modules.FBXImporter
                 return rendererMinY;
             }
 
-            if (!_rendererGroundingOutlierWarningLogged)
-            {
-                Debug.LogWarning($"[PoseSpaceRetargeter] Renderer bounds grounding outlier ignored. rendererMinY={rendererMinY:F3}, footBottomY={lowestFootBottomY:F3}, separation={separation:F3}, limit={maxSeparation:F3}");
-                _rendererGroundingOutlierWarningLogged = true;
-            }
-
+            rendererGroundingOutlier = true;
             return lowestFootBottomY;
         }
 
@@ -4707,21 +5735,12 @@ namespace Member_Han.Modules.FBXImporter
             int correctionCount = 0;
             AddFootLockCorrection(leftFoot, targetHeight, footRadius, ref _leftFootLocked, ref _leftFootLockPosition, ref correctionSum, ref correctionCount);
             AddFootLockCorrection(rightFoot, targetHeight, footRadius, ref _rightFootLocked, ref _rightFootLockPosition, ref correctionSum, ref correctionCount);
-            if (correctionCount <= 0)
-            {
-                return;
-            }
-
-            Vector3 correction = correctionSum / correctionCount;
-            correction.y = 0f;
-            correction *= Mathf.Clamp01(groundedFootLockWeight);
-            float maxStep = Mathf.Max(0.001f, maxGroundedFootLockStep);
-            if (correction.magnitude > maxStep)
-            {
-                correction = correction.normalized * maxStep;
-            }
-
-            if (!IsFinite(correction) || correction.sqrMagnitude <= 0.00000001f)
+            if (!TryCalculateGroundedFootLockRootCorrection(
+                correctionSum,
+                correctionCount,
+                groundedFootLockWeight,
+                maxGroundedFootLockStep,
+                out Vector3 correction))
             {
                 return;
             }
@@ -4731,6 +5750,32 @@ namespace Member_Han.Modules.FBXImporter
             {
                 targetAnimator.transform.position = rootPosition;
             }
+        }
+
+        private static bool TryCalculateGroundedFootLockRootCorrection(
+            Vector3 correctionSum,
+            int correctionCount,
+            float groundedFootLockWeight,
+            float maxGroundedFootLockStep,
+            out Vector3 correction)
+        {
+            correction = Vector3.zero;
+            if (correctionCount <= 0)
+            {
+                return false;
+            }
+
+            correction = correctionSum / correctionCount;
+            correction.y = 0f;
+            correction *= Mathf.Clamp01(groundedFootLockWeight);
+
+            float maxStep = Mathf.Max(0.001f, maxGroundedFootLockStep);
+            if (correction.magnitude > maxStep)
+            {
+                correction = correction.normalized * maxStep;
+            }
+
+            return IsFinite(correction) && correction.sqrMagnitude > 0.00000001f;
         }
 
         private void AddFootLockCorrection(
@@ -4748,53 +5793,91 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            const float contactHeight = 0.08f;
-            const float releaseHeight = 0.14f;
-            const float resetDistance = 0.25f;
-            float bottomY = foot.position.y - footRadius;
-            if (!IsFinite(bottomY))
+            if (!TryCalculateFootBottomY(foot.position.y, footRadius, out float bottomY))
             {
                 locked = false;
                 return;
             }
 
-            if (bottomY > targetHeight + releaseHeight)
+            bool shouldAccumulate = TryCalculateFootLockCorrection(
+                bottomY,
+                foot.position,
+                targetHeight,
+                locked,
+                lockPosition,
+                out bool nextLocked,
+                out Vector3 nextLockPosition,
+                out Vector3 correction);
+            locked = nextLocked;
+            lockPosition = nextLockPosition;
+            if (!shouldAccumulate)
             {
-                locked = false;
                 return;
-            }
-
-            Vector3 footPosition = foot.position;
-            footPosition.y = 0f;
-            if (!IsFinite(footPosition))
-            {
-                locked = false;
-                return;
-            }
-
-            if (!locked || bottomY > targetHeight + contactHeight)
-            {
-                lockPosition = footPosition;
-                locked = bottomY <= targetHeight + contactHeight;
-                return;
-            }
-
-            Vector3 correction = lockPosition - footPosition;
-            correction.y = 0f;
-            if (!IsFinite(correction))
-            {
-                locked = false;
-                return;
-            }
-
-            if (correction.magnitude > resetDistance)
-            {
-                lockPosition = footPosition;
-                correction = Vector3.zero;
             }
 
             correctionSum += correction;
             correctionCount++;
+        }
+
+        private static bool TryCalculateFootLockCorrection(
+            float bottomY,
+            Vector3 footPosition,
+            float targetHeight,
+            bool locked,
+            Vector3 lockPosition,
+            out bool nextLocked,
+            out Vector3 nextLockPosition,
+            out Vector3 correction)
+        {
+            const float contactHeight = 0.08f;
+            const float releaseHeight = 0.14f;
+            const float resetDistance = 0.25f;
+
+            nextLocked = locked;
+            nextLockPosition = lockPosition;
+            correction = Vector3.zero;
+
+            if (!IsFinite(bottomY))
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            if (bottomY > targetHeight + releaseHeight)
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            footPosition.y = 0f;
+            if (!IsFinite(footPosition))
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            if (!locked || bottomY > targetHeight + contactHeight)
+            {
+                nextLockPosition = footPosition;
+                nextLocked = bottomY <= targetHeight + contactHeight;
+                return false;
+            }
+
+            correction = lockPosition - footPosition;
+            correction.y = 0f;
+            if (!IsFinite(correction))
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            if (correction.magnitude > resetDistance)
+            {
+                nextLockPosition = footPosition;
+                correction = Vector3.zero;
+            }
+
+            return true;
         }
 
         private bool TryGetRendererBoundsMinY(out float minY)

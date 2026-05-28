@@ -22,6 +22,12 @@ public partial class UnityHumanoidVMDRecorder
         ResetRecordingCadenceStats();
         positionDictionary = new Dictionary<BoneNames, List<Vector3>>();
         rotationDictionary = new Dictionary<BoneNames, List<Quaternion>>();
+        exportRotationDiagnosticAggregates = new Dictionary<BoneNames, ExportRotationDiagnosticAggregate>();
+        exportRotationDiagnosticAggregatesSaved = new Dictionary<BoneNames, ExportRotationDiagnosticAggregate>();
+        exportRotationDiagnosticSamples = new List<ExportRotationDiagnosticSample>();
+        exportRotationDiagnosticSamplesSaved = new List<ExportRotationDiagnosticSample>();
+        LastExportRotationDiagnosticsCsvPath = "";
+        LastExportRotationDiagnosticSamplesCsvPath = "";
         int listCapacity = Mathf.Max(0, expectedFrameCapacity);
 
         if (BoneDictionary != null)

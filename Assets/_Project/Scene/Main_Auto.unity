@@ -504,7 +504,7 @@ MonoBehaviour:
   preserveRetargetBodyPosition: 1
   useRetargetBodyPositionXZRootMotion: 0
   stabilizeGroundedFootXZ: 0
-  GroundedFootLockWeight: 0.45
+  GroundedFootLockWeight: 0
   MaxGroundedFootLockStep: 0.025
   useEditorHumanoidClipMuscleReference: 1
   useEditorHumanoidRootTranslationReference: 0
@@ -513,25 +513,28 @@ MonoBehaviour:
   useManualAnimatorFingerPoseReference: 1
   useManualAnimatorBodyRotationReference: 1
   useManualAnimatorBodyPositionYReference: 1
-  useManualAnimatorHipsLocalPositionReference: 0
+  useManualAnimatorHipsLocalPositionReference: 1
   manualAnimatorHipsLocalPositionWeight: 1
   manualAnimatorHipsLocalPositionMaxOffset: 0.12
-  useManualAnimatorThumbLocalRotationReference: 1
+  useManualAnimatorFootHeightGroundingReference: 1
+  manualAnimatorFootHeightGroundingReferenceWeight: 1
+  manualAnimatorFootHeightGroundingReferenceMaxLift: 0.08
+  useManualAnimatorThumbLocalRotationReference: 0
   useManualAnimatorHandLocalRotationReference: 1
-  useManualAnimatorThumbSegmentDirectionReference: 1
+  useManualAnimatorThumbSegmentDirectionReference: 0
   manualAnimatorThumbSegmentDirectionWeight: 1
-  useManualAnimatorThumbHandDirectionReference: 1
+  useManualAnimatorThumbHandDirectionReference: 0
   manualAnimatorThumbHandDirectionWeight: 0.5
   useManualAnimatorHandPalmFrameReference: 1
   manualAnimatorHandPalmFrameWeight: 1
-  useManualAnimatorThumbBasePositionReference: 1
+  useManualAnimatorThumbBasePositionReference: 0
   manualAnimatorThumbBasePositionWeight: 1
   manualAnimatorThumbBasePositionMaxOffset: 0.04
   manualFingerReferencePrefab: {fileID: 0}
   manualFingerReferenceController: {fileID: 0}
   disableMmdShoulderPostPoseDuringRetarget: 0
   clampRetargetMusclesToHumanRange: 1
-  enableAnatomicalArmGuard: 1
+  enableAnatomicalArmGuard: 0
   ArmStretchMuscleLimit: 0
   clampRetargetArmStretchMuscles: 0
   UpperArmTwistMuscleLimit: 0.75
@@ -539,7 +542,7 @@ MonoBehaviour:
   lockTargetHumanoidBonePositions: 1
   lockTargetLimbChildLocalPositions: 1
   lockTargetLimbChildLocalRotations: 0
-  attachTargetArmDeformationGuard: 1
+  attachTargetArmDeformationGuard: 0
   targetGuardClampAnatomicalArmMuscles: 0
   targetGuardClampArmStretchMuscles: 0
   logArmDeformationGuardCorrections: 0
@@ -554,7 +557,7 @@ MonoBehaviour:
   YybArmDirectionUpperArmMaxDegrees: 65
   YybArmDirectionForearmMaxDegrees: 85
   logYybArmDirectionRetargetCorrection: 0
-  enableYybArmVisualTwistCorrection: 1
+  enableYybArmVisualTwistCorrection: 0
   YybArmVisualUpperArmInfluence: 0.35
   YybArmVisualForearmInfluence: 0.75
   YybArmVisualUpperArmMaxDegrees: 45
@@ -566,7 +569,7 @@ MonoBehaviour:
   YybArmSwingMinHandHorizontalRatio: 0.05
   YybArmSwingMaxHandBelowShoulderRatio: 0.75
   logYybArmSwingLimitCorrection: 0
-  enableYybArmSleeveAnchorCorrection: 1
+  enableYybArmSleeveAnchorCorrection: 0
   YybArmSleeveAnchorInfluence: 0.85
   YybArmShoulderCapAnchorInfluence: 0
   YybArmSleeveAnchorMaxDegrees: 85
@@ -578,21 +581,21 @@ MonoBehaviour:
   FingerSpreadScale: 1
   ThumbStretchScale: 1
   ThumbSpreadScale: 1
-  enableThumbAnatomicalGuard: 1
-  preserveManualFingerReferenceThumbMuscles: 1
+  enableThumbAnatomicalGuard: 0
+  preserveManualFingerReferenceThumbMuscles: 0
   ThumbStretchMin: -2.1
   ThumbStretchMax: 1
   ThumbSpreadMin: -0.9
   ThumbSpreadMax: 0.9
   logThumbAnatomicalGuardCorrections: 0
-  enableThumbLocalRotationGuard: 1
+  enableThumbLocalRotationGuard: 0
   disableThumbLocalRotationGuardWithManualFingerReference: 1
   ThumbProximalMaxLocalAngle: 28
   ThumbIntermediateMaxLocalAngle: 55
   ThumbDistalMaxLocalAngle: 55
   logThumbLocalRotationGuardCorrections: 0
-  syncDetachedThumbBaseHelpers: 1
-  syncDetachedThumbBaseHelperPositions: 1
+  syncDetachedThumbBaseHelpers: 0
+  syncDetachedThumbBaseHelperPositions: 0
   detachedThumbBaseHelperSyncWeight: 0.8
   detachedThumbBaseHelperMaxLocalAngle: 28
   detachedThumbBaseHelperMaxPositionOffset: 0.01
@@ -603,11 +606,11 @@ MonoBehaviour:
   stabilizeDetachedThumbBasePalm: 0
   detachedThumbBasePalmStabilizeWeight: 0
   detachedThumbBasePalmMaxLocalAngle: 45
-  stabilizeThumbWebbingCrease: 1
+  stabilizeThumbWebbingCrease: 0
   thumbWebbingCreaseStabilizeWeight: 1
   thumbWebbingCreaseMaxLocalAngle: 6
   thumbWebbingCreaseMaxPositionOffset: 0.0012
-  enableThumbVisualLengthGuard: 1
+  enableThumbVisualLengthGuard: 0
   ThumbProjectionMinPalmNormal: 0.358
   ThumbProjectionMaxPalmNormal: 0.58
   ThumbProjectionGuardWeight: 1
@@ -616,11 +619,11 @@ MonoBehaviour:
   ThumbMaxSegmentBendAngle: 10
   ThumbSegmentStraightenWeight: 0.9
   startDelay: 1
-  RetargetPrewarmFrameCount: 6
+  RetargetPrewarmFrameCount: 120
   enableRecordingDiagnostics: 0
   useDeterministicCaptureFramerateForDiagnostics: 0
   enableDiagnosticFingerCloseups: 1
-  failEditorSmokeOnThumbRisk: 1
+  failEditorSmokeOnThumbRisk: 0
   editorSmokeMaxGenericThumbAnatomyRisk: 0.4
   editorSmokeMaxYybDeformationRisk: 0.35
   faceTargetToCameraOnIdle: 1
@@ -632,7 +635,7 @@ MonoBehaviour:
   RetargetPoseVisualSpikeCurrentWeight: 0.65
   RetargetPoseVisualMuscleDeltaThreshold: 0.35
   HeightOffset: 0
-  MovementScaleMultiplier: 1
+  MovementScaleMultiplier: 0
   clampRetargetRootDeltaSpikes: 1
   MaxRetargetRootDeltaPerFrame: 0.25
   logRetargetRootDeltaSpikes: 0
@@ -640,13 +643,13 @@ MonoBehaviour:
   MaxGroundingVerticalStepPerFrame: 0.01
   GroundingSmoothing: 0.25
   GroundingDeadZone: 0.005
-  FreezeRootYAfterInitialGrounding: 1
+  FreezeRootYAfterInitialGrounding: 0
   rejectRendererGroundingOutliers: 1
   MaxRendererFootGroundingSeparation: 0.12
   smoothLateVisualGroundingCorrection: 1
   LateVisualGroundingSnapThreshold: 0.03
   LateVisualGroundingSmoothing: 0.25
-  MaxLateVisualGroundingStepPerFrame: 0.003
+  MaxLateVisualGroundingStepPerFrame: 0.05
   ThumbRotationOffset: {x: -10, y: -30, z: 0}
   mirrorRightThumbRotationOffset: 1
   LeftThumbRotationOffset: {x: 0, y: 0, z: 0}
@@ -1033,8 +1036,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   RecordMainCamera: 0
   UseAbsoluteCoordinateSystem: 1
-  IgnoreInitialPosition: 0
+  IgnoreInitialPosition: 1
   IgnoreInitialRotation: 0
+  FreezeParentOfAllMotionWhenIgnoringInitialPosition: 1
   Offset: {x: 0, y: 0, z: 0}
   KeyReductionLevel: 3
 --- !u!114 &963194230
