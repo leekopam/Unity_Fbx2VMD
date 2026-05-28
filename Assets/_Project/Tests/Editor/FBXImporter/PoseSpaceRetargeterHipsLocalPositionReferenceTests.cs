@@ -1,0 +1,229 @@
+using Member_Han.Modules.FBXImporter;
+using NUnit.Framework;
+using System;
+using System.Reflection;
+using UnityEngine;
+
+namespace Tests.Editor.FBXImporter
+{
+    public class PoseSpaceRetargeterHipsLocalPositionReferenceTests
+    {
+        private static readonly Type[] HipsLocalPositionReferenceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(bool),
+            typeof(Vector3),
+            typeof(float),
+            typeof(float),
+            typeof(Vector3).MakeByRefType()
+        };
+
+        private static readonly Type[] AnchoredHipsLocalPositionReferenceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(bool),
+            typeof(Vector3),
+            typeof(bool),
+            typeof(Vector3),
+            typeof(float),
+            typeof(float),
+            typeof(Vector3).MakeByRefType()
+        };
+
+        private static readonly Type[] RecordingStartHipsBaselineFlipParameterTypes =
+        {
+            typeof(float),
+            typeof(float),
+            typeof(float)
+        };
+
+        [Test]
+        public void Given_RestReference_When_CalculatingHipsLocalPosition_Then_AppliesReferenceDeltaWithWeight()
+        {
+            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+                referenceCurrentLocalPosition: new Vector3(0.1f, 0.08f, -0.02f),
+                referenceRestLocalPosition: new Vector3(0.02f, 0.04f, -0.01f),
+                hasReferenceRestLocalPosition: true,
+                currentLocalPosition: new Vector3(0f, 1f, 0f),
+                weight: 0.5f,
+                maxOffset: 0f,
+                out Vector3 nextLocalPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextLocalPosition.x, Is.EqualTo(0.04f).Within(0.0001f));
+            Assert.That(nextLocalPosition.y, Is.EqualTo(1.02f).Within(0.0001f));
+            Assert.That(nextLocalPosition.z, Is.EqualTo(-0.005f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_NoRestReference_When_CalculatingHipsLocalPosition_Then_UsesReferenceAbsolutePosition()
+        {
+            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+                referenceCurrentLocalPosition: new Vector3(0.02f, 0.9f, 0.03f),
+                referenceRestLocalPosition: Vector3.zero,
+                hasReferenceRestLocalPosition: false,
+                currentLocalPosition: new Vector3(0f, 1f, 0f),
+                weight: 1f,
+                maxOffset: 0f,
+                out Vector3 nextLocalPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextLocalPosition.x, Is.EqualTo(0.02f).Within(0.0001f));
+            Assert.That(nextLocalPosition.y, Is.EqualTo(0.9f).Within(0.0001f));
+            Assert.That(nextLocalPosition.z, Is.EqualTo(0.03f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MaxOffset_When_CalculatingHipsLocalPosition_Then_ClampsDeltaBeforeApplyingWeight()
+        {
+            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+                referenceCurrentLocalPosition: new Vector3(0.2f, 0f, 0f),
+                referenceRestLocalPosition: Vector3.zero,
+                hasReferenceRestLocalPosition: false,
+                currentLocalPosition: Vector3.zero,
+                weight: 1f,
+                maxOffset: 0.1f,
+                out Vector3 nextLocalPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextLocalPosition.x, Is.EqualTo(0.1f).Within(0.0001f));
+            Assert.That(nextLocalPosition.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(nextLocalPosition.z, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_TargetRestAnchor_When_CurrentHipsCollapsed_Then_AppliesReferenceDeltaFromTargetRest()
+        {
+            bool calculated = TryCalculateAnchoredEditorHipsLocalPositionReference(
+                referenceCurrentLocalPosition: new Vector3(0f, 0.02f, 0f),
+                referenceRestLocalPosition: new Vector3(0f, 0.04f, 0f),
+                hasReferenceRestLocalPosition: true,
+                targetRestLocalPosition: new Vector3(0f, 0.75f, 0f),
+                hasTargetRestLocalPosition: true,
+                currentLocalPosition: new Vector3(0f, 0.55f, 0f),
+                weight: 1f,
+                maxOffset: 0f,
+                out Vector3 nextLocalPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextLocalPosition.y, Is.EqualTo(0.73f).Within(0.0001f), "Reference delta must be anchored to the YYB rest Hips, not added to an already-collapsed current Hips.");
+        }
+
+        [Test]
+        public void Given_NonFiniteReference_When_CalculatingHipsLocalPosition_Then_ReturnsFalseAndKeepsCurrent()
+        {
+            Vector3 current = new Vector3(0f, 1f, 0f);
+
+            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+                referenceCurrentLocalPosition: new Vector3(float.NaN, 0f, 0f),
+                referenceRestLocalPosition: Vector3.zero,
+                hasReferenceRestLocalPosition: false,
+                currentLocalPosition: current,
+                weight: 1f,
+                maxOffset: 0f,
+                out Vector3 nextLocalPosition);
+
+            Assert.That(calculated, Is.False);
+            Assert.That(nextLocalPosition, Is.EqualTo(current));
+        }
+
+        [Test]
+        public void Given_RecordingStartHipsLocalBaselineChangesPastThreshold_When_CheckingFlip_Then_ReportsFlip()
+        {
+            Assert.That(IsRecordingStartHipsBaselineFlip(0.829f, 0.800f, 0.02f), Is.True);
+            Assert.That(IsRecordingStartHipsBaselineFlip(0.829f, 0.812f, 0.02f), Is.False);
+            Assert.That(IsRecordingStartHipsBaselineFlip(float.NaN, 0.800f, 0.02f), Is.False);
+        }
+
+        private static bool TryCalculateEditorHipsLocalPositionReference(
+            Vector3 referenceCurrentLocalPosition,
+            Vector3 referenceRestLocalPosition,
+            bool hasReferenceRestLocalPosition,
+            Vector3 currentLocalPosition,
+            float weight,
+            float maxOffset,
+            out Vector3 nextLocalPosition)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "TryCalculateEditorHipsLocalPositionReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: HipsLocalPositionReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for Manual Animator Hips localPosition reference calculation.");
+
+            object[] args =
+            {
+                referenceCurrentLocalPosition,
+                referenceRestLocalPosition,
+                hasReferenceRestLocalPosition,
+                currentLocalPosition,
+                weight,
+                maxOffset,
+                currentLocalPosition
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextLocalPosition = (Vector3)args[6];
+            return calculated;
+        }
+
+        private static bool TryCalculateAnchoredEditorHipsLocalPositionReference(
+            Vector3 referenceCurrentLocalPosition,
+            Vector3 referenceRestLocalPosition,
+            bool hasReferenceRestLocalPosition,
+            Vector3 targetRestLocalPosition,
+            bool hasTargetRestLocalPosition,
+            Vector3 currentLocalPosition,
+            float weight,
+            float maxOffset,
+            out Vector3 nextLocalPosition)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "TryCalculateEditorHipsLocalPositionReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: AnchoredHipsLocalPositionReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose an anchored Hips localPosition helper so manual reference deltas do not compound current-pose collapse.");
+
+            object[] args =
+            {
+                referenceCurrentLocalPosition,
+                referenceRestLocalPosition,
+                hasReferenceRestLocalPosition,
+                targetRestLocalPosition,
+                hasTargetRestLocalPosition,
+                currentLocalPosition,
+                weight,
+                maxOffset,
+                currentLocalPosition
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextLocalPosition = (Vector3)args[8];
+            return calculated;
+        }
+
+        private static bool IsRecordingStartHipsBaselineFlip(
+            float beforeLocalY,
+            float afterLocalY,
+            float warningThreshold)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "IsRecordingStartHipsBaselineFlip",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: RecordingStartHipsBaselineFlipParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure guard for recording-start Hips localPosition baseline flips.");
+            return (bool)method.Invoke(null, new object[] { beforeLocalY, afterLocalY, warningThreshold });
+        }
+
+    }
+}

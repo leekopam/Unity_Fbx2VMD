@@ -22,7 +22,7 @@ namespace Member_Han.Modules.FBXImporter
         private Dictionary<string, Transform> _nodeMap = new Dictionary<string, Transform>();
         private bool _loggedSkippedScaleCurves;
         private bool _loggedSkippedNonRootPositionCurves;
-        
+
         // 생성된 AnimationClip 저장 (외부 접근용)
         private AnimationClip[] _animationClips;
         #endregion
@@ -153,7 +153,7 @@ namespace Member_Han.Modules.FBXImporter
 
             return rootObject;
         }
-        
+
         /// <summary>
         /// 생성된 AnimationClip 배열 반환
         /// </summary>
@@ -161,6 +161,41 @@ namespace Member_Han.Modules.FBXImporter
         {
             return _animationClips ?? new AnimationClip[0];
         }
+
+#if UNITY_EDITOR
+        public GameObject ImportSynchronouslyForEditorDiagnostics(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                Debug.LogError($"?뚯씪??李얠쓣 ???놁쓬: {path}");
+                return null;
+            }
+
+            if (!AssimpLibraryLoader.IsLoaded)
+            {
+                AssimpLibraryLoader.LoadLibrary();
+            }
+
+            Scene scene = ImportWithAssimp(path);
+            if (scene == null)
+            {
+                Debug.LogError("FBX ?꾪룷???ㅽ뙣");
+                return null;
+            }
+
+            GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
+
+            _nodeMap.Clear();
+            _loggedSkippedScaleCurves = false;
+            _loggedSkippedNonRootPositionCurves = false;
+            BuildHierarchy(scene.RootNode, rootObject.transform, scene);
+            ProcessMeshes(scene.RootNode, scene);
+            ProcessAnimations(scene, rootObject);
+            rootObject.transform.rotation = UnityEngine.Quaternion.Euler(0, 180f, 0);
+
+            return rootObject;
+        }
+#endif
         #endregion
 
         #region Assimp 초기화
@@ -176,7 +211,7 @@ namespace Member_Han.Modules.FBXImporter
             try
             {
                 Scene scene = importer.ImportFile(path, steps);
-                
+
                 if (scene == null)
                 {
                     Debug.LogError("[RuntimeFBXImporter] importer.ImportFile이 null을 반환함");
@@ -184,7 +219,7 @@ namespace Member_Han.Modules.FBXImporter
                 else
                 {
                 }
-                
+
                 return scene;
             }
             catch (System.Exception e)
@@ -204,6 +239,13 @@ namespace Member_Han.Modules.FBXImporter
                    PostProcessSteps.MakeLeftHanded |
                    PostProcessSteps.FlipWindingOrder;
         }
+
+#if UNITY_EDITOR
+        public static PostProcessSteps BuildAssimpPostProcessStepsForEditorDiagnostics()
+        {
+            return BuildAssimpPostProcessSteps();
+        }
+#endif
 
         private static float CalculateAnimationDurationSeconds(Assimp.Animation animation)
         {
@@ -391,7 +433,7 @@ namespace Member_Han.Modules.FBXImporter
 
             smr.sharedMesh = unityMesh;
             smr.bones = bones.ToArray();
-            
+
             // 루트 본 설정 (보통 첫 번째 본)
             if (bones.Count > 0)
             {
@@ -507,15 +549,15 @@ namespace Member_Han.Modules.FBXImporter
                         duration = anim.DurationInTicks / 60.0;
                 }
                 clip.frameRate = 60;
-                
+
                 // 컴포넌트에 클립 등록
                 animComp.AddClip(clip, clip.name);
                 clips.Add(clip);
             }
-            
+
             // 생성된 클립들을 필드에 저장
             _animationClips = clips.ToArray();
-            
+
             // 클립 강제 납품 및 로깅
             if (clips.Count > 0)
             {
@@ -630,7 +672,7 @@ namespace Member_Han.Modules.FBXImporter
         private string GetRelativePath(Transform root, Transform target)
         {
             if (root == target) return "";
-            
+
             string path = target.name;
             while (target.parent != null && target.parent != root)
             {
@@ -672,7 +714,7 @@ namespace Member_Han.Modules.FBXImporter
             {
                 // 에디터 기본 경로 (Assets/Plugins/Assimp-net/assimp.dll)
                 Path.Combine(Application.dataPath, "Plugins", ASSIMP_PLUGIN_FOLDER, ASSIMP_DLL_NAME),
-                
+
                 // 빌드: 실행 파일 옆 Plugins 폴더
                 Path.Combine(Application.dataPath, "Plugins", ASSIMP_DLL_NAME),
 
@@ -701,7 +743,7 @@ namespace Member_Han.Modules.FBXImporter
 
             Debug.Log($"네이티브 라이브러리 발견: {validPath}");
             System.IntPtr handle = LoadLibrary(validPath);
-            
+
             if (handle == System.IntPtr.Zero)
             {
                 int errorCode = Marshal.GetLastWin32Error();

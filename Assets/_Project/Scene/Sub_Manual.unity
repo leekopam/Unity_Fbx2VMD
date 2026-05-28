@@ -428,8 +428,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   RecordMainCamera: 0
   UseAbsoluteCoordinateSystem: 1
-  IgnoreInitialPosition: 0
+  IgnoreInitialPosition: 1
   IgnoreInitialRotation: 0
+  FreezeParentOfAllMotionWhenIgnoringInitialPosition: 1
   Offset: {x: 0, y: 0, z: 0}
   KeyReductionLevel: 3
 --- !u!114 &963194230
@@ -733,7 +734,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 240061973030223375, guid: cbbe675d429fd1e48afe756b6e97c91b, type: 3}
       propertyPath: KeyReductionLevel
-      value: 2
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 240061973030223375, guid: cbbe675d429fd1e48afe756b6e97c91b, type: 3}
       propertyPath: DefaultBoneAmplifier
