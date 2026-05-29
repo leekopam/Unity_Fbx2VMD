@@ -12,8 +12,15 @@ namespace Tests.Editor.Graphics
 {
     public static class GraphicSettingTestBatchRunner
     {
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_recoding.unity";
         private const string GraphicSettingTypeName = "Member_Han.Modules.Graphics.GraphicSetting, Assembly-CSharp";
+        private const string BackgroundColorSettingTypeName = "BackgroundColorSetting, Assembly-CSharp";
+        private const string YybRootName = "YYB Hatsune Miku";
+        private const float ComparisonCameraViewportHeight = 0.56f;
+        private const float ComparisonCameraViewportWidth = 0.82f;
+        private const float ComparisonCameraViewportCenterY = 0.28f;
+        private const float ComparisonCameraAspect = 16f / 9f;
+        private const float ComparisonCameraDepth = 39f;
         private static string pendingCapturePath;
         private static double pendingCaptureStartTime;
         private static int pendingCapturePlayFrames;
@@ -46,14 +53,22 @@ namespace Tests.Editor.Graphics
                 tests.Given_MaterialShaderProfile_When_ShaderLacksProperties_Then_SkipsUnsupportedSettings);
             RunTest(results, nameof(GraphicSettingTests.Given_BuiltInPipelineProfile_When_ApplyNow_Then_ConfiguresPostProcessLayerAntialiasing),
                 tests.Given_BuiltInPipelineProfile_When_ApplyNow_Then_ConfiguresPostProcessLayerAntialiasing);
-            RunTest(results, nameof(GraphicSettingTests.MainAutoScene_HasGraphicSettingOnRootSettingObjectForInspectorControl),
-                tests.MainAutoScene_HasGraphicSettingOnRootSettingObjectForInspectorControl);
-            RunTest(results, nameof(GraphicSettingTests.MainAutoScene_InstallerEnsuresActualGameViewQualityPath),
-                tests.MainAutoScene_InstallerEnsuresActualGameViewQualityPath);
-            RunTest(results, nameof(GraphicSettingTests.MainAutoScene_MainCameraUsesNeutralPreviewBackgroundForYybVisibility),
-                tests.MainAutoScene_MainCameraUsesNeutralPreviewBackgroundForYybVisibility);
-            RunTest(results, nameof(GraphicSettingTests.MainAutoScene_MainCameraFramesYybRendererBoundsForGameView),
-                tests.MainAutoScene_MainCameraFramesYybRendererBoundsForGameView);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_HasGraphicSettingOnRootSettingObjectForYybQualityControl),
+                tests.MainRecordingScene_HasGraphicSettingOnRootSettingObjectForYybQualityControl);
+            RunTest(results, nameof(GraphicSettingTests.MainAutoScene_DoesNotCarryGraphicSettingQualityControls),
+                tests.MainAutoScene_DoesNotCarryGraphicSettingQualityControls);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_InstallerEnsuresActualGameViewQualityPath),
+                tests.MainRecordingScene_InstallerEnsuresActualGameViewQualityPath);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_UsesOnlyMainCameraForGameViewComparison),
+                tests.MainRecordingScene_UsesOnlyMainCameraForGameViewComparison);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_MainCameraUsesReferenceMp4BlackBackground),
+                tests.MainRecordingScene_MainCameraUsesReferenceMp4BlackBackground);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_MainCameraFramesYybRendererBoundsForGameView),
+                tests.MainRecordingScene_MainCameraFramesYybRendererBoundsForGameView);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_MainCameraMatchesReferenceMp4FullBodyFraming),
+                tests.MainRecordingScene_MainCameraMatchesReferenceMp4FullBodyFraming);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_MainCameraRendersYybPixelsForComparisonCapture),
+                tests.MainRecordingScene_MainCameraRendersYybPixelsForComparisonCapture);
 
             WriteResult(resultPath, results);
 
@@ -72,22 +87,43 @@ namespace Tests.Editor.Graphics
 
         public static void CaptureMainAutoGameViewEvidence()
         {
+            CaptureMainRecordingGameViewEvidence();
+        }
+
+        public static void CaptureMainRecordingGameViewEvidence()
+        {
             try
             {
-                EditorSceneManager.OpenScene(MainAutoScenePath);
-                ApplyMainAutoGraphicSetting();
+                EditorSceneManager.OpenScene(MainRecordingScenePath);
+                ApplyMainRecordingGraphicSetting();
+
+                string sessionId = Environment.GetEnvironmentVariable("YYB_VISUAL_QUALITY_SESSION_ID");
+                if (string.IsNullOrWhiteSpace(sessionId))
+                {
+                    sessionId = $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-Main_recoding_who-yyb_what-visual-quality_how-editor-batch";
+                }
 
                 string folder = Path.GetFullPath(Path.Combine(
                     Directory.GetCurrentDirectory(),
-                    "Docs/Machine_Spirit/Local/GraphicsCaptures"));
+                    "Docs/Machine_Spirit/Local/VisualQualitySessions",
+                    sessionId));
                 Directory.CreateDirectory(folder);
 
-                pendingCapturePath = Path.Combine(folder, $"yyb-gameview-after-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+                pendingCapturePath = Path.Combine(folder, "Main_recoding_GameView_3840x2160.png");
                 pendingCaptureStartTime = EditorApplication.timeSinceStartup;
                 pendingCapturePlayFrames = 0;
 
-                EditorApplication.update -= CaptureMainAutoGameViewEvidenceUpdate;
-                EditorApplication.update += CaptureMainAutoGameViewEvidenceUpdate;
+                bool canUsePlayModeCapture =
+                    !Application.isBatchMode ||
+                    SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null;
+                if (!canUsePlayModeCapture)
+                {
+                    CaptureMainRecordingGameViewEvidenceNow();
+                    return;
+                }
+
+                EditorApplication.update -= CaptureMainRecordingGameViewEvidenceUpdate;
+                EditorApplication.update += CaptureMainRecordingGameViewEvidenceUpdate;
 
                 if (!EditorApplication.isPlaying)
                 {
@@ -97,7 +133,7 @@ namespace Tests.Editor.Graphics
             catch (Exception ex)
             {
                 Debug.LogException(ex);
-                EditorApplication.update -= CaptureMainAutoGameViewEvidenceUpdate;
+                EditorApplication.update -= CaptureMainRecordingGameViewEvidenceUpdate;
                 EditorApplication.Exit(1);
             }
         }
@@ -117,7 +153,7 @@ namespace Tests.Editor.Graphics
             }
         }
 
-        private static void ApplyMainAutoGraphicSetting()
+        private static void ApplyMainRecordingGraphicSetting()
         {
             Type graphicSettingType = Type.GetType(GraphicSettingTypeName);
             if (graphicSettingType == null)
@@ -129,7 +165,7 @@ namespace Tests.Editor.Graphics
             Component setting = settingRoot != null ? settingRoot.GetComponent(graphicSettingType) : null;
             if (setting == null)
             {
-                throw new InvalidOperationException("Main_Auto Setting object must have GraphicSetting.");
+                throw new InvalidOperationException("Main_recoding Setting object must have GraphicSetting.");
             }
 
             MethodInfo applyNow = graphicSettingType.GetMethod(
@@ -141,9 +177,19 @@ namespace Tests.Editor.Graphics
             }
 
             applyNow.Invoke(setting, null);
+
+            Type backgroundSettingType = Type.GetType(BackgroundColorSettingTypeName);
+            Component backgroundSetting = backgroundSettingType != null ? settingRoot.GetComponent(backgroundSettingType) : null;
+            MethodInfo applyBackground = backgroundSettingType?.GetMethod(
+                "ApplyNow",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (backgroundSetting != null && applyBackground != null)
+            {
+                applyBackground.Invoke(backgroundSetting, null);
+            }
         }
 
-        private static void CaptureMainAutoGameViewEvidenceUpdate()
+        private static void CaptureMainRecordingGameViewEvidenceUpdate()
         {
             try
             {
@@ -163,38 +209,155 @@ namespace Tests.Editor.Graphics
                     return;
                 }
 
-                ApplyMainAutoGraphicSetting();
+                ApplyMainRecordingGraphicSetting();
                 Camera camera = Camera.main;
                 if (camera == null)
                 {
-                    throw new InvalidOperationException("Main_Auto has no MainCamera-tagged camera.");
+                    throw new InvalidOperationException("Main_recoding has no MainCamera-tagged camera.");
                 }
 
-                RenderCameraToPng(camera, pendingCapturePath, 1920, 1080);
-                Debug.Log($"GraphicSetting capture wrote {pendingCapturePath}");
-                EditorApplication.update -= CaptureMainAutoGameViewEvidenceUpdate;
-                EditorApplication.Exit(0);
+                CaptureMainRecordingGameViewEvidenceNow();
+                EditorApplication.update -= CaptureMainRecordingGameViewEvidenceUpdate;
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex);
-                EditorApplication.update -= CaptureMainAutoGameViewEvidenceUpdate;
+                EditorApplication.update -= CaptureMainRecordingGameViewEvidenceUpdate;
                 EditorApplication.Exit(1);
             }
+        }
+
+        private static void CaptureMainRecordingGameViewEvidenceNow()
+        {
+            ApplyMainRecordingGraphicSetting();
+            Camera camera = Camera.main;
+            if (camera == null)
+            {
+                throw new InvalidOperationException("Main_recoding has no MainCamera-tagged camera.");
+            }
+
+            FrameCameraForCurrentYyb(camera);
+            RenderCameraToPng(camera, pendingCapturePath, 3840, 2160);
+            Debug.Log($"GraphicSetting capture wrote {pendingCapturePath}");
+            EditorApplication.Exit(0);
+        }
+
+        private static void FrameCameraForCurrentYyb(Camera camera)
+        {
+            GameObject yybRoot = GameObject.Find(YybRootName);
+            if (camera == null || yybRoot == null || !TryGetVisibleRendererBounds(yybRoot, out Bounds bounds))
+            {
+                return;
+            }
+
+            Vector3 focus = bounds.center;
+            camera.orthographic = true;
+            camera.orthographicSize = Mathf.Max(
+                bounds.extents.y / ComparisonCameraViewportHeight,
+                bounds.extents.x / (ComparisonCameraAspect * ComparisonCameraViewportWidth));
+            float cameraY = focus.y - (ComparisonCameraViewportCenterY - 0.5f) * 2f * camera.orthographicSize;
+            camera.transform.position = new Vector3(focus.x, cameraY, focus.z + ComparisonCameraDepth);
+            camera.transform.rotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
+            camera.nearClipPlane = 0.3f;
+            camera.farClipPlane = ComparisonCameraDepth + bounds.extents.z + 100f;
+            camera.useOcclusionCulling = false;
+            Debug.Log(
+                $"GraphicSetting capture framed {YybRootName}: center={bounds.center}, size={bounds.size}, " +
+                $"cameraPosition={camera.transform.position}, orthographicSize={camera.orthographicSize}");
+        }
+
+        private static bool TryGetVisibleRendererBounds(GameObject root, out Bounds bounds)
+        {
+            bounds = new Bounds(Vector3.zero, Vector3.zero);
+            bool hasBounds = false;
+
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(false))
+            {
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                if (!TryGetRendererWorldBounds(renderer, out Bounds rendererBounds))
+                {
+                    continue;
+                }
+
+                if (!hasBounds)
+                {
+                    bounds = rendererBounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(rendererBounds);
+                }
+            }
+
+            return hasBounds && bounds.size.sqrMagnitude > 0.000001f;
+        }
+
+        private static bool TryGetRendererWorldBounds(Renderer renderer, out Bounds bounds)
+        {
+            if (renderer is SkinnedMeshRenderer skinnedRenderer && skinnedRenderer.sharedMesh != null)
+            {
+                var bakedMesh = new Mesh();
+                try
+                {
+                    skinnedRenderer.BakeMesh(bakedMesh);
+                    bounds = TransformBounds(skinnedRenderer.transform.localToWorldMatrix, bakedMesh.bounds);
+                    return bounds.size.sqrMagnitude > 0.000001f;
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(bakedMesh);
+                }
+            }
+
+            bounds = renderer.bounds;
+            return bounds.size.sqrMagnitude > 0.000001f;
+        }
+
+        private static Bounds TransformBounds(Matrix4x4 matrix, Bounds localBounds)
+        {
+            Vector3 center = localBounds.center;
+            Vector3 extents = localBounds.extents;
+            var worldBounds = new Bounds(matrix.MultiplyPoint3x4(center), Vector3.zero);
+
+            for (int x = -1; x <= 1; x += 2)
+            {
+                for (int y = -1; y <= 1; y += 2)
+                {
+                    for (int z = -1; z <= 1; z += 2)
+                    {
+                        Vector3 corner = center + Vector3.Scale(extents, new Vector3(x, y, z));
+                        worldBounds.Encapsulate(matrix.MultiplyPoint3x4(corner));
+                    }
+                }
+            }
+
+            return worldBounds;
         }
 
         private static void RenderCameraToPng(Camera camera, string path, int width, int height)
         {
             RenderTexture previousTarget = camera.targetTexture;
             RenderTexture previousActive = RenderTexture.active;
+            Behaviour postProcessLayer = camera.GetComponent("PostProcessLayer") as Behaviour;
+            bool previousPostProcessLayerEnabled = postProcessLayer != null && postProcessLayer.enabled;
             var renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             {
-                antiAliasing = 8
+                antiAliasing = 1
             };
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
 
             try
             {
+                if (postProcessLayer != null)
+                {
+                    postProcessLayer.enabled = false;
+                }
+
                 camera.targetTexture = renderTexture;
                 RenderTexture.active = renderTexture;
                 camera.Render();
@@ -206,6 +369,11 @@ namespace Tests.Editor.Graphics
             {
                 camera.targetTexture = previousTarget;
                 RenderTexture.active = previousActive;
+                if (postProcessLayer != null)
+                {
+                    postProcessLayer.enabled = previousPostProcessLayerEnabled;
+                }
+
                 UnityEngine.Object.DestroyImmediate(texture);
                 renderTexture.Release();
                 UnityEngine.Object.DestroyImmediate(renderTexture);
