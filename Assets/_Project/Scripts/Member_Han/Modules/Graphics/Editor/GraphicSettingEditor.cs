@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -17,7 +16,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
         Target,
         Texture,
         Model,
-        Capture,
         Advanced
     }
 
@@ -29,7 +27,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             "antiAliasingPreset",
             "renderSharpness",
             "modelEdgeAndAlpha",
-            "captureQuality",
             "gameViewScaleMode"
         };
 
@@ -62,14 +59,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             "materialShaderProfile"
         };
 
-        private static readonly string[] CaptureFields =
-        {
-            "captureQuality",
-            "captureFolder",
-            "captureFilePrefix",
-            "gameViewScaleMode"
-        };
-
         private static readonly string[] AdvancedFields =
         {
             "antiAliasing",
@@ -78,7 +67,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             "enableCameraMsaa",
             "msaaSampleCount",
             "renderScale",
-            "captureSuperSize",
             "textureImportProfile",
             "materialShaderProfile"
         };
@@ -94,16 +82,12 @@ namespace Member_Han.Modules.Graphics.EditorTools
             { "antiAliasingPreset", "GameView 안티앨리어싱" },
             { "renderSharpness", "렌더 스케일 기준" },
             { "modelEdgeAndAlpha", "모델 윤곽선/알파 기준" },
-            { "captureQuality", "스크린샷 저장 배율" },
             { "antiAliasing", "후처리 안티앨리어싱 방식" },
             { "smaaQuality", "SMAA 품질" },
             { "enableCameraPostProcessing", "카메라 후처리 사용" },
             { "enableCameraMsaa", "카메라 MSAA 사용" },
             { "msaaSampleCount", "MSAA 샘플 수" },
             { "renderScale", "URP 렌더 스케일" },
-            { "captureSuperSize", "스크린샷 확대 배율" },
-            { "captureFolder", "스크린샷 저장 폴더" },
-            { "captureFilePrefix", "스크린샷 파일 접두사" },
             { "applyBackgroundColor", "카메라 배경색 변경" },
             { "backgroundColor", "카메라 배경색" },
             { "gameViewScaleMode", "GameView 확대 표시" },
@@ -135,7 +119,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             "대상",
             "텍스처",
             "모델",
-            "캡처",
             "고급"
         };
 
@@ -151,8 +134,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
                     return TextureFields;
                 case GraphicSettingInspectorCategory.Model:
                     return ModelFields;
-                case GraphicSettingInspectorCategory.Capture:
-                    return CaptureFields;
                 case GraphicSettingInspectorCategory.Advanced:
                     return AdvancedFields;
                 default:
@@ -177,8 +158,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
                     return new[] { "렌더 스케일 1.0x", "렌더 스케일 1.25x", "렌더 스케일 1.5x", "세부값 직접 입력" };
                 case "modelEdgeAndAlpha":
                     return new[] { "윤곽선 생략", "기본 윤곽선", "얇은 윤곽선", "세부값 직접 입력" };
-                case "captureQuality":
-                    return new[] { "1x 캡처", "2x 캡처", "4x 캡처", "세부값 직접 입력" };
                 default:
                     return Array.Empty<string>();
             }
@@ -223,14 +202,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             (int)GraphicSettingQualityPreset.Balanced,
             (int)GraphicSettingQualityPreset.Quality,
             (int)GraphicSettingQualityPreset.Custom
-        };
-
-        private static readonly int[] CapturePresetValues =
-        {
-            (int)GraphicCaptureQualityPreset.Basic,
-            (int)GraphicCaptureQualityPreset.HighQuality,
-            (int)GraphicCaptureQualityPreset.UltraQuality,
-            (int)GraphicCaptureQualityPreset.Custom
         };
 
         private static readonly GUIContent[] GameViewScaleLabels =
@@ -331,8 +302,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             {
                 ScheduleAutoApply(setting, selectedCategory);
             }
-
-            DrawCategoryActions(setting);
         }
 
         private void DrawCategoryToolbar()
@@ -369,9 +338,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
                 case "modelEdgeAndAlpha":
                     DrawQualityPreset(property, propertyName);
                     break;
-                case "captureQuality":
-                    DrawCapturePreset(property, propertyName);
-                    break;
                 case "gameViewScaleMode":
                     DrawGameViewScale(property, propertyName);
                     break;
@@ -404,15 +370,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
                 property.enumValueIndex,
                 labels,
                 QualityPresetValues);
-        }
-
-        private static void DrawCapturePreset(SerializedProperty property, string propertyName)
-        {
-            property.enumValueIndex = EditorGUILayout.IntPopup(
-                Label(propertyName),
-                property.enumValueIndex,
-                ToGuiContents(GraphicSettingInspectorSchema.GetPresetOptionLabels(propertyName)),
-                CapturePresetValues);
         }
 
         private static void DrawGameViewScale(SerializedProperty property, string propertyName)
@@ -480,20 +437,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
                 values);
         }
 
-        private void DrawCategoryActions(GraphicSetting setting)
-        {
-            if (selectedCategory != GraphicSettingInspectorCategory.Capture)
-            {
-                return;
-            }
-
-            EditorGUILayout.Space(8f);
-            if (GUILayout.Button("현재 화면 캡처 저장"))
-            {
-                ApplyToTargets(setting, Capture);
-            }
-        }
-
         private void PromoteDirectSettingsToCustomPreset()
         {
             if (selectedCategory != GraphicSettingInspectorCategory.Advanced)
@@ -505,7 +448,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             SetEnumValue("antiAliasingPreset", (int)GraphicSettingQualityPreset.Custom);
             SetEnumValue("renderSharpness", (int)GraphicSettingQualityPreset.Custom);
             SetEnumValue("modelEdgeAndAlpha", (int)GraphicSettingQualityPreset.Custom);
-            SetEnumValue("captureQuality", (int)GraphicCaptureQualityPreset.Custom);
         }
 
         private void SetEnumValue(string propertyName, int value)
@@ -559,11 +501,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
                 case GraphicSettingInspectorCategory.Model:
                     ApplyMaterialShaderSettings(setting);
                     break;
-                case GraphicSettingInspectorCategory.Capture:
-                    setting.ApplyNow();
-                    GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
-                    MarkSettingDirty(setting);
-                    break;
                 case GraphicSettingInspectorCategory.Advanced:
                     setting.ApplyNow();
                     ApplyTextureImports(setting);
@@ -607,12 +544,6 @@ namespace Member_Han.Modules.Graphics.EditorTools
             {
                 action(setting);
             }
-        }
-
-        private static void Capture(GraphicSetting setting)
-        {
-            string path = setting.CaptureSupersampledScreenshot();
-            Debug.Log($"GraphicSetting 스크린샷 저장 요청: {path}");
         }
 
         private static void ApplyTextureImports(GraphicSetting setting)
@@ -1044,15 +975,12 @@ namespace Member_Han.Modules.Graphics.EditorTools
             serialized.FindProperty("antiAliasingPreset").enumValueIndex = (int)GraphicSettingQualityPreset.Quality;
             serialized.FindProperty("renderSharpness").enumValueIndex = (int)GraphicSettingQualityPreset.Balanced;
             serialized.FindProperty("modelEdgeAndAlpha").enumValueIndex = (int)GraphicSettingQualityPreset.Balanced;
-            serialized.FindProperty("captureQuality").enumValueIndex = (int)GraphicCaptureQualityPreset.HighQuality;
             serialized.FindProperty("antiAliasing").enumValueIndex = (int)GraphicAntiAliasingMode.SMAA;
             serialized.FindProperty("smaaQuality").enumValueIndex = (int)AntialiasingQuality.High;
             serialized.FindProperty("enableCameraPostProcessing").boolValue = true;
             serialized.FindProperty("enableCameraMsaa").boolValue = true;
             serialized.FindProperty("msaaSampleCount").intValue = 8;
             serialized.FindProperty("renderScale").floatValue = pipelineAsset == null ? 1.0f : 1.25f;
-            serialized.FindProperty("captureSuperSize").intValue = 2;
-            serialized.FindProperty("captureFolder").stringValue = "Docs/Machine_Spirit/Local/GraphicsCaptures";
             serialized.FindProperty("applyBackgroundColor").boolValue = true;
             serialized.FindProperty("backgroundColor").colorValue = new Color(0.5f, 0.5f, 0.5f, 1f);
             serialized.ApplyModifiedPropertiesWithoutUndo();

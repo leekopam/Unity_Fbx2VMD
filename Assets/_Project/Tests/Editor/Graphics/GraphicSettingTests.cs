@@ -154,7 +154,6 @@ namespace Tests.Editor.Graphics
                 SetField(setting, "targetRenderPipelineAsset", null);
                 SetField(setting, "antiAliasingPreset", ParseFieldEnum(setting, "antiAliasingPreset", "Quality"));
                 SetField(setting, "renderSharpness", ParseFieldEnum(setting, "renderSharpness", "Balanced"));
-                SetField(setting, "captureQuality", ParseFieldEnum(setting, "captureQuality", "UltraQuality"));
 
                 Invoke(setting, "ApplyNow");
 
@@ -163,7 +162,6 @@ namespace Tests.Editor.Graphics
                 Assert.That(GetField<object>(setting, "smaaQuality").ToString(), Is.EqualTo("High"));
                 Assert.That(GetField<float>(setting, "renderScale"), Is.EqualTo(1.0f).Within(0.0001f),
                     "Built-in GameView path must not claim URP renderScale without a configured URP asset.");
-                Assert.That(GetField<int>(setting, "captureSuperSize"), Is.EqualTo(4));
             }
             finally
             {
@@ -206,9 +204,10 @@ namespace Tests.Editor.Graphics
             Type schemaType = RequireType(InspectorSchemaTypeName);
             string[] labels = GetStaticMemberValue<string[]>(schemaType, "CategoryLabels");
 
-            Assert.That(labels, Is.EqualTo(new[] { "품질", "대상", "텍스처", "모델", "캡처", "고급" }));
+            Assert.That(labels, Is.EqualTo(new[] { "품질", "대상", "텍스처", "모델", "고급" }));
 
             Type verifiedCategoryType = GetStaticMemberValue<Type>(schemaType, "CategoryEnumType");
+            Assert.That(Enum.GetNames(verifiedCategoryType), Does.Not.Contain("Capture"));
             object verifiedPresetCategory = Enum.Parse(verifiedCategoryType, "Quality");
             string[] verifiedPresetFields = (string[])InvokeStatic(schemaType, "GetVisiblePropertyNames", verifiedPresetCategory);
 
@@ -216,6 +215,7 @@ namespace Tests.Editor.Graphics
             Assert.That(verifiedPresetFields, Does.Contain("antiAliasingPreset"));
             Assert.That(verifiedPresetFields, Does.Contain("renderSharpness"));
             Assert.That(verifiedPresetFields, Does.Not.Contain("targetCamera"));
+            Assert.That(verifiedPresetFields, Does.Not.Contain("captureQuality"));
 
             string[] textureLabels = (string[])InvokeStatic(schemaType, "GetPresetOptionLabels", "textureResolution");
             Assert.That(textureLabels, Is.EqualTo(new[] { "작업용 2K", "표준 4K", "검수용 원본(최대 8K)", "세부값 직접 입력" }));
@@ -414,11 +414,6 @@ namespace Tests.Editor.Graphics
                 "Main_Auto built-in GameView path must leave URP renderScale inactive.");
             Assert.That(GetField<bool>(component, "applyBackgroundColor"), Is.True,
                 "Main_Auto Setting must actively keep the neutral YYB preview background applied.");
-            Assert.That(GetField<int>(component, "captureSuperSize"), Is.EqualTo(2),
-                "Main_Auto Setting must keep 2x capture evidence available from the inspector.");
-            Assert.That(GetField<string>(component, "captureFolder"),
-                Is.EqualTo("Docs/Machine_Spirit/Local/GraphicsCaptures"),
-                "GameView capture evidence must stay under the ignored project-local evidence folder.");
 
             object materialProfile = GetMemberValue<object>(component, "materialShaderProfile");
             Assert.That(materialProfile, Is.Not.Null,
@@ -427,6 +422,10 @@ namespace Tests.Editor.Graphics
             var serialized = new SerializedObject(component);
             Assert.That(serialized.FindProperty("materialShaderProfile"), Is.Not.Null,
                 "GraphicSetting inspector must expose the material shader profile on the selected Setting object.");
+            Assert.That(serialized.FindProperty("captureQuality"), Is.Null,
+                "GraphicSetting must not expose screenshot capture controls.");
+            Assert.That(serialized.FindProperty("captureSuperSize"), Is.Null,
+                "GraphicSetting must not own screenshot capture output settings.");
         }
 
         [Test]
@@ -459,18 +458,18 @@ namespace Tests.Editor.Graphics
 
                 Assert.That(GetField<object>(installed, "antiAliasingPreset").ToString(), Is.EqualTo("Quality"));
                 Assert.That(GetField<object>(installed, "renderSharpness").ToString(), Is.EqualTo("Balanced"));
-                Assert.That(GetField<object>(installed, "captureQuality").ToString(), Is.EqualTo("HighQuality"));
                 Assert.That(GetField<object>(installed, "antiAliasing").ToString(), Is.EqualTo("SMAA"));
                 Assert.That(GetField<object>(installed, "smaaQuality").ToString(), Is.EqualTo("High"));
                 Assert.That(GetField<int>(installed, "msaaSampleCount"), Is.EqualTo(8));
                 Assert.That(GetField<float>(installed, "renderScale"), Is.EqualTo(1.0f).Within(0.0001f),
                     "Installer must keep URP renderScale inactive when Main_Auto uses the built-in pipeline.");
-                Assert.That(GetField<int>(installed, "captureSuperSize"), Is.EqualTo(2));
-                Assert.That(GetField<string>(installed, "captureFolder"),
-                    Is.EqualTo("Docs/Machine_Spirit/Local/GraphicsCaptures"));
                 Assert.That(GetField<bool>(installed, "applyBackgroundColor"), Is.True);
                 Assert.That(GetField<Color>(installed, "backgroundColor"),
                     Is.EqualTo(new Color(0.5f, 0.5f, 0.5f, 1f)));
+                Assert.That(graphicSettingType.GetField("captureQuality", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("captureSuperSize", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("captureFolder", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("captureFilePrefix", InstanceFields), Is.Null);
 
                 pipelineAsset = GetField<UniversalRenderPipelineAsset>(installed, "targetRenderPipelineAsset");
                 if (pipelineAsset != null)
