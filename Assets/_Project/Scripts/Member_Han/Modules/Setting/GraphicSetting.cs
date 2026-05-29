@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.PostProcessing;
@@ -34,14 +33,6 @@ namespace Member_Han.Modules.Graphics
         Performance,
         Balanced,
         Quality,
-        Custom
-    }
-
-    public enum GraphicCaptureQualityPreset
-    {
-        Basic,
-        HighQuality,
-        UltraQuality,
         Custom
     }
 
@@ -439,7 +430,6 @@ namespace Member_Han.Modules.Graphics
         [SerializeField] private GraphicSettingQualityPreset antiAliasingPreset = GraphicSettingQualityPreset.Quality;
         [SerializeField] private GraphicSettingQualityPreset renderSharpness = GraphicSettingQualityPreset.Balanced;
         [SerializeField] private GraphicSettingQualityPreset modelEdgeAndAlpha = GraphicSettingQualityPreset.Balanced;
-        [SerializeField] private GraphicCaptureQualityPreset captureQuality = GraphicCaptureQualityPreset.HighQuality;
 
         [Header("Anti Aliasing")]
         [SerializeField] private GraphicAntiAliasingMode antiAliasing = GraphicAntiAliasingMode.SMAA;
@@ -448,15 +438,6 @@ namespace Member_Han.Modules.Graphics
         [SerializeField] private bool enableCameraMsaa = true;
         [SerializeField] private int msaaSampleCount = 8;
         [SerializeField, Range(0.1f, 2.0f)] private float renderScale = 1.0f;
-
-        [Header("Capture")]
-        [SerializeField] private int captureSuperSize = 2;
-        [SerializeField] private string captureFolder = "Docs/Machine_Spirit/Local/GraphicsCaptures";
-        [SerializeField] private string captureFilePrefix = "graphic-setting";
-
-        [Header("Camera Background")]
-        [SerializeField] private bool applyBackgroundColor;
-        [SerializeField] private Color backgroundColor = new Color(0.5f, 0.5f, 0.5f, 1f);
 
         [Header("Editor GameView")]
         [SerializeField] private GraphicGameViewScaleMode gameViewScaleMode = GraphicGameViewScaleMode.Fit;
@@ -503,7 +484,6 @@ namespace Member_Han.Modules.Graphics
         private void OnValidate()
         {
             msaaSampleCount = NormalizeMsaaSampleCount(msaaSampleCount);
-            captureSuperSize = Mathf.Clamp(captureSuperSize, 1, 8);
             renderScale = Mathf.Clamp(renderScale, 0.1f, 2.0f);
             if (builtInPostProcessResources == null)
             {
@@ -542,23 +522,6 @@ namespace Member_Han.Modules.Graphics
             }
 
             QualitySettings.antiAliasing = enableCameraMsaa ? NormalizeMsaaSampleCount(msaaSampleCount) : 0;
-        }
-
-        public string CaptureSupersampledScreenshot()
-        {
-            ApplySimplePresetValues(ResolveTargetPipelineAsset() != null);
-
-            string path = BuildCapturePath(DateTime.Now);
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            ScreenCapture.CaptureScreenshot(path, Mathf.Clamp(captureSuperSize, 1, 8));
-            return path;
-        }
-
-        public string BuildCapturePath(DateTime timestamp)
-        {
-            string safePrefix = string.IsNullOrWhiteSpace(captureFilePrefix) ? "graphic-setting" : captureFilePrefix.Trim();
-            string fileName = $"{safePrefix}-{timestamp:yyyyMMdd-HHmmss}-x{Mathf.Clamp(captureSuperSize, 1, 8)}.png";
-            return Path.GetFullPath(Path.Combine(captureFolder, fileName));
         }
 
         public GraphicTextureImportPlan CreateTextureImportPlan()
@@ -678,7 +641,6 @@ namespace Member_Han.Modules.Graphics
         {
             ApplyAntiAliasingPreset();
             ApplyRenderSharpnessPreset(hasRenderScaleTarget);
-            ApplyCaptureQualityPreset();
         }
 
         private void ApplyAntiAliasingPreset()
@@ -731,29 +693,9 @@ namespace Member_Han.Modules.Graphics
             }
         }
 
-        private void ApplyCaptureQualityPreset()
-        {
-            switch (captureQuality)
-            {
-                case GraphicCaptureQualityPreset.Basic:
-                    captureSuperSize = 1;
-                    break;
-                case GraphicCaptureQualityPreset.HighQuality:
-                    captureSuperSize = 2;
-                    break;
-                case GraphicCaptureQualityPreset.UltraQuality:
-                    captureSuperSize = 4;
-                    break;
-            }
-        }
-
         private void ApplyCameraSettings(Camera camera, bool useUniversalRenderPipeline)
         {
             camera.allowMSAA = enableCameraMsaa;
-            if (applyBackgroundColor)
-            {
-                camera.backgroundColor = backgroundColor;
-            }
 
             if (!useUniversalRenderPipeline)
             {

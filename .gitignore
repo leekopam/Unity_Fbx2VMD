@@ -34,6 +34,10 @@
 /[Aa]ssets/[Vv]ideos/
 /[Aa]ssets/[Vv]ideos.meta
 
+# graphify generated knowledge graph outputs are local-only.
+/graphify-out/
+/.graphify_*
+
 # Uncomment this line if you wish to ignore the asset store tools plugin
 # /[Aa]ssets/AssetStoreTools*
 

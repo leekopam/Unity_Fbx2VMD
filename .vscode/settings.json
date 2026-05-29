@@ -56,6 +56,7 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "owner.sln",
-    "dotrush.roslyn.projectOrSolutionFiles": []
+    "dotnet.defaultSolution": "Unity_Fbx2VMD.sln",
+    "dotrush.roslyn.projectOrSolutionFiles": [],
+    "dotnet.preferCSharpExtension": true
 }
