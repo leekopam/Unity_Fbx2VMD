@@ -6,17 +6,31 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.UI;
 
 namespace Tests.Editor.Graphics
 {
     public class GraphicSettingTests
     {
         private const string GraphicSettingTypeName = "Member_Han.Modules.Graphics.GraphicSetting, Assembly-CSharp";
+        private const string BackgroundColorSettingTypeName = "BackgroundColorSetting, Assembly-CSharp";
+        private const string RecodingSettingTypeName = "RecodingSetting, Assembly-CSharp";
+        private const string FileManagerTypeName = "Member_Han.Modules.FBXImporter.FileManager, Assembly-CSharp";
         private const string TextureProfileTypeName = "Member_Han.Modules.Graphics.GraphicTextureImportProfile, Assembly-CSharp";
         private const string MaterialShaderProfileTypeName = "Member_Han.Modules.Graphics.GraphicMaterialShaderProfile, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Member_Han.Modules.Graphics.GraphicMaterialShaderUtility, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Member_Han.Modules.Graphics.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Member_Han.Modules.Graphics.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
+        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_recoding.unity";
+        private const string YybTextureFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/tex";
+        private const string YybMaterialFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/Materials";
+        private const string YybRootName = "YYB Hatsune Miku";
+        private const string ManualRecordButtonName = "MMD_Record_Button";
+        private const string ManualRecordMethodName = "StartManualRecording";
+        private const float ReferenceMp4ViewportCenterY = 0.28f;
+        private const float ReferenceMp4ViewportHeight = 0.56f;
+        private static readonly Color ReferenceMp4BackgroundColor = Color.black;
         private const BindingFlags InstanceFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private const BindingFlags StaticMethods = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private const BindingFlags StaticMembers = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -44,14 +58,11 @@ namespace Tests.Editor.Graphics
                 SetField(setting, "enableCameraMsaa", true);
                 SetField(setting, "msaaSampleCount", 8);
                 SetField(setting, "renderScale", 1.5f);
-                SetField(setting, "applyBackgroundColor", true);
-                SetField(setting, "backgroundColor", Color.gray);
 
                 Invoke(setting, "ApplyNow");
 
                 UniversalAdditionalCameraData additionalData = camera.GetUniversalAdditionalCameraData();
                 Assert.That(camera.allowMSAA, Is.True);
-                Assert.That(camera.backgroundColor, Is.EqualTo(Color.gray));
                 Assert.That(additionalData.renderPostProcessing, Is.True);
                 Assert.That(additionalData.antialiasing, Is.EqualTo(AntialiasingMode.SubpixelMorphologicalAntiAliasing));
                 Assert.That(additionalData.antialiasingQuality, Is.EqualTo(AntialiasingQuality.High));
@@ -69,19 +80,17 @@ namespace Tests.Editor.Graphics
         [Test]
         public void Given_BackgroundApplyDisabled_When_ApplyNow_Then_PreservesCameraBackground()
         {
-            Type graphicSettingType = RequireType(GraphicSettingTypeName);
-            var cameraObject = new GameObject("Graphic Setting Background Preserve Camera");
-            var settingObject = new GameObject("Graphic Setting Background Preserve");
-            var pipelineAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+            Type backgroundSettingType = RequireType(BackgroundColorSettingTypeName);
+            var cameraObject = new GameObject("Background Color Setting Preserve Camera");
+            var settingObject = new GameObject("Background Color Setting Preserve");
 
             try
             {
                 var camera = cameraObject.AddComponent<Camera>();
                 camera.backgroundColor = Color.red;
 
-                var setting = settingObject.AddComponent(graphicSettingType);
+                var setting = settingObject.AddComponent(backgroundSettingType);
                 SetField(setting, "targetCamera", camera);
-                SetField(setting, "targetRenderPipelineAsset", pipelineAsset);
                 SetField(setting, "applyBackgroundColor", false);
                 SetField(setting, "backgroundColor", Color.gray);
 
@@ -91,7 +100,6 @@ namespace Tests.Editor.Graphics
             }
             finally
             {
-                UnityEngine.Object.DestroyImmediate(pipelineAsset);
                 UnityEngine.Object.DestroyImmediate(settingObject);
                 UnityEngine.Object.DestroyImmediate(cameraObject);
             }
@@ -204,10 +212,11 @@ namespace Tests.Editor.Graphics
             Type schemaType = RequireType(InspectorSchemaTypeName);
             string[] labels = GetStaticMemberValue<string[]>(schemaType, "CategoryLabels");
 
-            Assert.That(labels, Is.EqualTo(new[] { "품질", "대상", "텍스처", "모델", "고급" }));
+            Assert.That(labels, Is.EqualTo(new[] { "품질", "대상", "녹화", "텍스처", "모델", "고급" }));
 
             Type verifiedCategoryType = GetStaticMemberValue<Type>(schemaType, "CategoryEnumType");
             Assert.That(Enum.GetNames(verifiedCategoryType), Does.Not.Contain("Capture"));
+            Assert.That(Enum.GetNames(verifiedCategoryType), Does.Not.Contain("Recording"));
             object verifiedPresetCategory = Enum.Parse(verifiedCategoryType, "Quality");
             string[] verifiedPresetFields = (string[])InvokeStatic(schemaType, "GetVisiblePropertyNames", verifiedPresetCategory);
 
@@ -216,6 +225,7 @@ namespace Tests.Editor.Graphics
             Assert.That(verifiedPresetFields, Does.Contain("renderSharpness"));
             Assert.That(verifiedPresetFields, Does.Not.Contain("targetCamera"));
             Assert.That(verifiedPresetFields, Does.Not.Contain("captureQuality"));
+            Assert.That(verifiedPresetFields, Does.Not.Contain("manualRecordButton"));
 
             string[] textureLabels = (string[])InvokeStatic(schemaType, "GetPresetOptionLabels", "textureResolution");
             Assert.That(textureLabels, Is.EqualTo(new[] { "작업용 2K", "표준 4K", "검수용 원본(최대 8K)", "세부값 직접 입력" }));
@@ -382,42 +392,79 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
-        public void MainAutoScene_HasGraphicSettingOnRootSettingObjectForInspectorControl()
+        public void MainRecordingScene_HasGraphicSettingOnRootSettingObjectForYybQualityControl()
         {
             Type graphicSettingType = RequireType(GraphicSettingTypeName);
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            Type backgroundSettingType = RequireType(BackgroundColorSettingTypeName);
+            Type recodingSettingType = RequireType(RecodingSettingTypeName);
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
 
             GameObject settingRoot = GameObject.Find("Setting");
-            Assert.That(settingRoot, Is.Not.Null, "Main_Auto scene must keep a root Setting object.");
+            Assert.That(settingRoot, Is.Not.Null, "Main_recoding scene must keep a root Setting object.");
 
             Component component = settingRoot.GetComponent(graphicSettingType);
             Assert.That(component, Is.Not.Null, "Setting must have GraphicSetting component so selecting Setting shows the controls.");
+            Component backgroundSetting = settingRoot.GetComponent(backgroundSettingType);
+            Assert.That(backgroundSetting, Is.Not.Null, "Setting must have BackgroundColorSetting for GameView background control.");
+            Component recodingSetting = settingRoot.GetComponent(recodingSettingType);
+            Assert.That(recodingSetting, Is.Not.Null, "Setting must have RecodingSetting for manual recording control.");
 
             var targetCamera = GetField<Camera>(component, "targetCamera");
             Assert.That(targetCamera, Is.EqualTo(Camera.main), "GraphicSetting must target the Main Camera by default.");
+            Assert.That(GetField<Camera>(backgroundSetting, "targetCamera"), Is.EqualTo(Camera.main),
+                "BackgroundColorSetting must target the Main Camera by default.");
 
             var pipelineAsset = GetField<UniversalRenderPipelineAsset>(component, "targetRenderPipelineAsset");
             Assert.That(pipelineAsset, Is.Null,
-                "Main_Auto currently uses the built-in render path, so URP renderScale must not be claimed as active.");
+                "Main_recoding currently uses the built-in render path, so URP renderScale must not be claimed as active.");
 
             object postProcessResources = GetMemberValue<object>(component, "builtInPostProcessResources");
             Assert.That(postProcessResources, Is.Not.Null,
                 "GraphicSetting must keep Built-in Post Processing resources assigned for runtime AA.");
 
+            Assert.That(GetField<object>(component, "textureResolution").ToString(), Is.EqualTo("Quality"),
+                "Main_recoding must use the 8K/no-compression import preset for YYB visual quality work.");
+            Assert.That(GetField<object>(component, "antiAliasingPreset").ToString(), Is.EqualTo("Quality"),
+                "Main_recoding must use the high AA preset for YYB edge readability.");
+            Assert.That(GetField<object>(component, "renderSharpness").ToString(), Is.EqualTo("Quality"),
+                "Main_recoding must store the high render sharpness preset even when the built-in path keeps renderScale inactive.");
+            Assert.That(GetField<object>(component, "modelEdgeAndAlpha").ToString(), Is.EqualTo("Quality"),
+                "Main_recoding must use the fine outline/alpha preset for YYB material tuning.");
             Assert.That(GetField<object>(component, "antiAliasing").ToString(), Is.EqualTo("SMAA"),
-                "Main_Auto Setting must apply SMAA to the actual GameView camera path.");
+                "Main_recoding Setting must apply SMAA to the actual GameView camera path.");
             Assert.That(GetField<object>(component, "smaaQuality").ToString(), Is.EqualTo("High"),
-                "Main_Auto Setting must use high SMAA for YYB edge readability.");
+                "Main_recoding Setting must use high SMAA for YYB edge readability.");
             Assert.That(GetField<int>(component, "msaaSampleCount"), Is.EqualTo(8),
-                "Main_Auto Setting must keep the quality preset at 8x MSAA.");
+                "Main_recoding Setting must keep the quality preset at 8x MSAA.");
             Assert.That(GetField<float>(component, "renderScale"), Is.EqualTo(1.0f).Within(0.0001f),
-                "Main_Auto built-in GameView path must leave URP renderScale inactive.");
-            Assert.That(GetField<bool>(component, "applyBackgroundColor"), Is.True,
-                "Main_Auto Setting must actively keep the neutral YYB preview background applied.");
+                "Main_recoding built-in GameView path must leave URP renderScale inactive.");
+            Assert.That(GetField<bool>(backgroundSetting, "applyBackgroundColor"), Is.True,
+                "BackgroundColorSetting must actively keep the neutral YYB preview background applied.");
+            Assert.That(GetField<Color>(backgroundSetting, "backgroundColor"), Is.EqualTo(ReferenceMp4BackgroundColor),
+                "BackgroundColorSetting must own the reference mp4 background color.");
+
+            Component fileManager = UnityEngine.Object.FindObjectOfType(RequireType(FileManagerTypeName)) as Component;
+            Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FileManager for recording control.");
+            Component recordingController = ResolveRecordingController(fileManager);
+            Assert.That(recordingController, Is.Not.Null, "Main_recoding target must keep HumanoidSampleCode for manual recording.");
+            GameObject manualRecordButtonObject = GameObject.Find(ManualRecordButtonName);
+            Assert.That(manualRecordButtonObject, Is.Not.Null, "Main_recoding must expose a manual MMD recording button.");
+            Button manualRecordButton = manualRecordButtonObject.GetComponent<Button>();
+            Assert.That(manualRecordButton, Is.Not.Null, "Manual MMD recording button must use Unity UI Button.");
+            Assert.That(GetField<Component>(recodingSetting, "recordingFileManager"), Is.EqualTo(fileManager),
+                "RecodingSetting must show which FileManager owns the recording flow.");
+            Assert.That(GetField<Button>(recodingSetting, "manualRecordButton"), Is.EqualTo(manualRecordButton),
+                "RecodingSetting must show the manual recording button assignment.");
+            Assert.That(GetField<Component>(recodingSetting, "recordingController"), Is.EqualTo(recordingController),
+                "RecodingSetting must show which HumanoidSampleCode receives manual recording.");
+            Assert.That(HasPersistentCall(manualRecordButton, recodingSetting, ManualRecordMethodName), Is.True,
+                "Manual recording button must call RecodingSetting.StartManualRecording on the selected Setting object.");
 
             object materialProfile = GetMemberValue<object>(component, "materialShaderProfile");
             Assert.That(materialProfile, Is.Not.Null,
                 "GraphicSetting must expose a material shader profile for MMD outline and alpha tuning.");
+
+            AssertYybQualityTargets(component);
 
             var serialized = new SerializedObject(component);
             Assert.That(serialized.FindProperty("materialShaderProfile"), Is.Not.Null,
@@ -426,13 +473,35 @@ namespace Tests.Editor.Graphics
                 "GraphicSetting must not expose screenshot capture controls.");
             Assert.That(serialized.FindProperty("captureSuperSize"), Is.Null,
                 "GraphicSetting must not own screenshot capture output settings.");
+            Assert.That(serialized.FindProperty("applyBackgroundColor"), Is.Null,
+                "GraphicSetting must not own background color controls.");
+            Assert.That(serialized.FindProperty("backgroundColor"), Is.Null,
+                "GraphicSetting must not own the background color value.");
+            Assert.That(serialized.FindProperty("recordingFileManager"), Is.Null,
+                "GraphicSetting must not own recording FileManager assignment.");
+            Assert.That(serialized.FindProperty("manualRecordButton"), Is.Null,
+                "GraphicSetting must not own recording button assignment.");
         }
 
         [Test]
-        public void MainAutoScene_InstallerEnsuresActualGameViewQualityPath()
+        public void MainAutoScene_DoesNotCarryGraphicSettingQualityControls()
+        {
+            Type graphicSettingType = RequireType(GraphicSettingTypeName);
+            EditorSceneManager.OpenScene(MainAutoScenePath);
+
+            Component component = UnityEngine.Object.FindObjectOfType(graphicSettingType) as Component;
+
+            Assert.That(component, Is.Null,
+                "Main_Auto must stay focused on VMD generation and must not carry the Main_recoding visual quality controls.");
+        }
+
+        [Test]
+        public void MainRecordingScene_InstallerEnsuresActualGameViewQualityPath()
         {
             Type installerType = RequireType(SceneInstallerTypeName);
             Type graphicSettingType = RequireType(GraphicSettingTypeName);
+            Type backgroundSettingType = RequireType(BackgroundColorSettingTypeName);
+            Type recodingSettingType = RequireType(RecodingSettingTypeName);
             Type postProcessLayerType = RequireType(
                 "UnityEngine.Rendering.PostProcessing.PostProcessLayer, Unity.Postprocessing.Runtime");
 
@@ -441,7 +510,7 @@ namespace Tests.Editor.Graphics
             int originalPipelineMsaa = 1;
             float originalPipelineRenderScale = 1f;
 
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
             try
             {
                 object installed = InvokeStatic(installerType, "EnsureInActiveScene");
@@ -454,22 +523,44 @@ namespace Tests.Editor.Graphics
                 Assert.That(component.transform.parent, Is.Null,
                     "Installer must not hide the GameView controls under a child object.");
                 Assert.That(GetField<Camera>(installed, "targetCamera"), Is.EqualTo(Camera.main),
-                    "Installer must wire the setting to the actual Main_Auto GameView camera.");
+                    "Installer must wire the setting to the actual Main_recoding GameView camera.");
 
+                Assert.That(GetField<object>(installed, "textureResolution").ToString(), Is.EqualTo("Quality"));
                 Assert.That(GetField<object>(installed, "antiAliasingPreset").ToString(), Is.EqualTo("Quality"));
-                Assert.That(GetField<object>(installed, "renderSharpness").ToString(), Is.EqualTo("Balanced"));
+                Assert.That(GetField<object>(installed, "renderSharpness").ToString(), Is.EqualTo("Quality"));
+                Assert.That(GetField<object>(installed, "modelEdgeAndAlpha").ToString(), Is.EqualTo("Quality"));
                 Assert.That(GetField<object>(installed, "antiAliasing").ToString(), Is.EqualTo("SMAA"));
                 Assert.That(GetField<object>(installed, "smaaQuality").ToString(), Is.EqualTo("High"));
                 Assert.That(GetField<int>(installed, "msaaSampleCount"), Is.EqualTo(8));
                 Assert.That(GetField<float>(installed, "renderScale"), Is.EqualTo(1.0f).Within(0.0001f),
                     "Installer must keep URP renderScale inactive when Main_Auto uses the built-in pipeline.");
-                Assert.That(GetField<bool>(installed, "applyBackgroundColor"), Is.True);
-                Assert.That(GetField<Color>(installed, "backgroundColor"),
-                    Is.EqualTo(new Color(0.5f, 0.5f, 0.5f, 1f)));
+                Component backgroundSetting = component.GetComponent(backgroundSettingType);
+                Assert.That(backgroundSetting, Is.Not.Null, "Installer must keep BackgroundColorSetting on Setting.");
+                Assert.That(GetField<Camera>(backgroundSetting, "targetCamera"), Is.EqualTo(Camera.main));
+                Assert.That(GetField<bool>(backgroundSetting, "applyBackgroundColor"), Is.True);
+                Assert.That(GetField<Color>(backgroundSetting, "backgroundColor"),
+                    Is.EqualTo(ReferenceMp4BackgroundColor));
+                Component recodingSetting = component.GetComponent(recodingSettingType);
+                Assert.That(recodingSetting, Is.Not.Null, "Installer must keep RecodingSetting on Setting.");
+                Component fileManager = UnityEngine.Object.FindObjectOfType(RequireType(FileManagerTypeName)) as Component;
+                Component recordingController = ResolveRecordingController(fileManager);
+                Button manualRecordButton = GameObject.Find(ManualRecordButtonName)?.GetComponent<Button>();
+                Assert.That(fileManager, Is.Not.Null);
+                Assert.That(recordingController, Is.Not.Null);
+                Assert.That(manualRecordButton, Is.Not.Null);
+                Assert.That(GetField<Component>(recodingSetting, "recordingFileManager"), Is.EqualTo(fileManager));
+                Assert.That(GetField<Button>(recodingSetting, "manualRecordButton"), Is.EqualTo(manualRecordButton));
+                Assert.That(GetField<Component>(recodingSetting, "recordingController"), Is.EqualTo(recordingController));
+                Assert.That(HasPersistentCall(manualRecordButton, recodingSetting, ManualRecordMethodName), Is.True);
+                AssertYybQualityTargets(installed);
                 Assert.That(graphicSettingType.GetField("captureQuality", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("captureSuperSize", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("captureFolder", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("captureFilePrefix", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("applyBackgroundColor", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("backgroundColor", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("recordingFileManager", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("manualRecordButton", InstanceFields), Is.Null);
 
                 pipelineAsset = GetField<UniversalRenderPipelineAsset>(installed, "targetRenderPipelineAsset");
                 if (pipelineAsset != null)
@@ -479,12 +570,13 @@ namespace Tests.Editor.Graphics
                 }
 
                 Invoke(installed, "ApplyNow");
+                Invoke(backgroundSetting, "ApplyNow");
 
                 Camera mainCamera = Camera.main;
                 Assert.That(mainCamera, Is.Not.Null);
                 Assert.That(mainCamera.allowMSAA, Is.True);
-                Assert.That(mainCamera.backgroundColor, Is.EqualTo(new Color(0.5f, 0.5f, 0.5f, 1f)),
-                    "Applied GameView camera background must keep YYB visible against a neutral preview color.");
+                Assert.That(mainCamera.backgroundColor, Is.EqualTo(ReferenceMp4BackgroundColor),
+                    "Applied GameView camera background must match the black reference mp4 background.");
 
                 if (pipelineAsset != null)
                 {
@@ -494,7 +586,7 @@ namespace Tests.Editor.Graphics
                         Is.EqualTo(AntialiasingMode.SubpixelMorphologicalAntiAliasing));
                     Assert.That(cameraData.antialiasingQuality, Is.EqualTo(AntialiasingQuality.High));
                     Assert.That(pipelineAsset.msaaSampleCount, Is.EqualTo(8));
-                    Assert.That(pipelineAsset.renderScale, Is.EqualTo(1.25f).Within(0.0001f));
+                    Assert.That(pipelineAsset.renderScale, Is.EqualTo(1.5f).Within(0.0001f));
                 }
                 else
                 {
@@ -519,27 +611,41 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
-        public void MainAutoScene_MainCameraUsesNeutralPreviewBackgroundForYybVisibility()
+        public void MainRecordingScene_UsesOnlyMainCameraForGameViewComparison()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
 
             Camera mainCamera = Camera.main;
-            Assert.That(mainCamera, Is.Not.Null, "Main_Auto scene must expose a MainCamera-tagged camera for GameView.");
-            Assert.That(mainCamera.clearFlags, Is.EqualTo(CameraClearFlags.SolidColor),
-                "GameView must use a stable solid background behind YYB instead of editor transparency.");
-            Assert.That(mainCamera.backgroundColor, Is.EqualTo(new Color(0.5f, 0.5f, 0.5f, 1f)),
-                "GameView background must be neutral gray so dark YYB hair/clothes remain readable.");
+            Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
+
+            Camera[] cameras = UnityEngine.Object.FindObjectsOfType<Camera>();
+            Assert.That(cameras, Has.Length.EqualTo(1),
+                "Main_recoding must not keep temporary comparison cameras; ref mp4 comparison must use the existing Main Camera.");
+            Assert.That(cameras[0], Is.EqualTo(mainCamera));
         }
 
         [Test]
-        public void MainAutoScene_MainCameraFramesYybRendererBoundsForGameView()
+        public void MainRecordingScene_MainCameraUsesReferenceMp4BlackBackground()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
 
             Camera mainCamera = Camera.main;
-            Assert.That(mainCamera, Is.Not.Null, "Main_Auto scene must expose a MainCamera-tagged camera for GameView.");
+            Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
+            Assert.That(mainCamera.clearFlags, Is.EqualTo(CameraClearFlags.SolidColor),
+                "GameView must use a stable solid background behind YYB instead of editor transparency.");
+            Assert.That(mainCamera.backgroundColor, Is.EqualTo(ReferenceMp4BackgroundColor),
+                "GameView background must match the black background sampled from the reference mp4.");
+        }
 
-            Bounds bounds = GetVisibleRendererBounds("YYB Hatsune Miku");
+        [Test]
+        public void MainRecordingScene_MainCameraFramesYybRendererBoundsForGameView()
+        {
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
+
+            Camera mainCamera = Camera.main;
+            Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
+
+            Bounds bounds = GetVisibleRendererBounds(YybRootName);
             Plane[] planes = GeometryUtility.CalculateFrustumPlanes(mainCamera);
             Assert.That(GeometryUtility.TestPlanesAABB(planes, bounds), Is.True,
                 $"Main Camera frustum must include YYB bounds. cameraPosition={mainCamera.transform.position}, cameraRotation={mainCamera.transform.eulerAngles}, orthographic={mainCamera.orthographic}, orthographicSize={mainCamera.orthographicSize}, boundsCenter={bounds.center}, boundsSize={bounds.size}");
@@ -551,14 +657,75 @@ namespace Tests.Editor.Graphics
             Assert.That(centerViewport.z, Is.GreaterThan(0f), "YYB bounds center must be in front of the Main Camera.");
             Assert.That(centerViewport.x, Is.InRange(0.2f, 0.8f), "YYB bounds center must be horizontally framed.");
             Assert.That(centerViewport.y, Is.InRange(0.2f, 0.8f), "YYB bounds center must be vertically framed.");
-            Assert.That(topViewport.y, Is.LessThanOrEqualTo(0.95f), "YYB top must stay inside the GameView frame.");
-            Assert.That(bottomViewport.y, Is.GreaterThanOrEqualTo(0.05f), "YYB feet must stay inside the GameView frame.");
+            Assert.That(topViewport.y, Is.LessThanOrEqualTo(0.72f), "YYB top must stay inside the GameView frame with the mp4-style lower full-body anchor.");
+            Assert.That(bottomViewport.y, Is.GreaterThanOrEqualTo(-0.005f), "YYB feet must stay inside the GameView frame while matching the mp4 lower anchor.");
 
             float modelViewportHeight = topViewport.y - bottomViewport.y;
             Assert.That(modelViewportHeight, Is.GreaterThanOrEqualTo(0.38f),
                 "YYB must occupy enough vertical GameView space to be readable at default 16:9 preview size.");
             Assert.That(modelViewportHeight, Is.LessThanOrEqualTo(0.8f),
                 "YYB must keep enough vertical margin that hair and feet are not cropped in GameView.");
+        }
+
+        [Test]
+        public void MainRecordingScene_MainCameraMatchesReferenceMp4FullBodyFraming()
+        {
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
+
+            Camera mainCamera = Camera.main;
+            Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
+
+            Bounds bounds = GetVisibleRendererBounds(YybRootName);
+            Vector3 centerViewport = mainCamera.WorldToViewportPoint(bounds.center);
+            Vector3 topViewport = mainCamera.WorldToViewportPoint(bounds.center + Vector3.up * bounds.extents.y);
+            Vector3 bottomViewport = mainCamera.WorldToViewportPoint(bounds.center - Vector3.up * bounds.extents.y);
+            float modelViewportHeight = topViewport.y - bottomViewport.y;
+
+            Assert.That(centerViewport.x, Is.InRange(0.47f, 0.53f),
+                "YYB must be horizontally centered for side-by-side mp4/Unity frame comparison.");
+            Assert.That(centerViewport.y, Is.InRange(ReferenceMp4ViewportCenterY - 0.04f, ReferenceMp4ViewportCenterY + 0.04f),
+                "YYB vertical framing must match the reference mp4 full-body lower anchor.");
+            Assert.That(modelViewportHeight, Is.InRange(ReferenceMp4ViewportHeight - 0.04f, ReferenceMp4ViewportHeight + 0.04f),
+                "YYB bbox height must match the reference mp4 full-body scale.");
+        }
+
+        [Test]
+        public void MainRecordingScene_MainCameraRendersYybPixelsForComparisonCapture()
+        {
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
+
+            Camera mainCamera = Camera.main;
+            Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
+
+            Bounds bounds = GetVisibleRendererBounds(YybRootName);
+            if (Application.isBatchMode)
+            {
+                Debug.Log(
+                    "Skipping Main Camera pixel render assertion because Unity batchmode can produce an empty camera buffer; " +
+                    "the live Unity Test Runner covers this assertion with a real GameView graphics context.");
+                return;
+            }
+
+            int nonUniformPixels = CountPixelsDifferentFromCorner(mainCamera, 512, 288);
+            Assert.That(nonUniformPixels, Is.GreaterThan(500),
+                $"Main Camera render must contain visible YYB pixels for mp4/Unity comparison. cameraPosition={mainCamera.transform.position}, cameraRotation={mainCamera.transform.eulerAngles}, orthographic={mainCamera.orthographic}, orthographicSize={mainCamera.orthographicSize}, boundsCenter={bounds.center}, boundsSize={bounds.size}, nonUniformPixels={nonUniformPixels}");
+        }
+
+        private static void AssertYybQualityTargets(object component)
+        {
+            var textureSourceRoots = GetField<GameObject[]>(component, "textureSourceRoots");
+            Assert.That(textureSourceRoots, Is.Empty,
+                "Texture import must stay limited to the configured YYB tex folder and must not walk toon/fx/spa roots.");
+
+            var materialSourceRoots = GetField<GameObject[]>(component, "materialSourceRoots");
+            Assert.That(materialSourceRoots, Has.Length.EqualTo(1));
+            Assert.That(materialSourceRoots[0], Is.Not.Null);
+            Assert.That(materialSourceRoots[0].name, Is.EqualTo(YybRootName));
+
+            Assert.That(GetField<string[]>(component, "textureAssetFolders"),
+                Is.EquivalentTo(new[] { YybTextureFolder }));
+            Assert.That(GetField<string[]>(component, "materialAssetFolders"),
+                Is.EquivalentTo(new[] { YybMaterialFolder }));
         }
 
         private static Type RequireType(string typeName)
@@ -629,6 +796,31 @@ namespace Tests.Editor.Graphics
             return method.Invoke(null, arguments);
         }
 
+        private static bool HasPersistentCall(Button button, UnityEngine.Object target, string methodName)
+        {
+            for (int i = 0; i < button.onClick.GetPersistentEventCount(); i++)
+            {
+                if (button.onClick.GetPersistentTarget(i) == target &&
+                    button.onClick.GetPersistentMethodName(i) == methodName)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static Component ResolveRecordingController(Component fileManager)
+        {
+            if (fileManager == null)
+            {
+                return null;
+            }
+
+            GameObject targetCharacter = GetMemberValue<GameObject>(fileManager, "targetCharacter");
+            return targetCharacter != null ? targetCharacter.GetComponent<HumanoidSampleCode>() : null;
+        }
+
         private static Shader RequireShader(string name)
         {
             Shader shader = Shader.Find(name);
@@ -653,13 +845,102 @@ namespace Tests.Editor.Graphics
 
             Assert.That(visibleRenderers.Count, Is.GreaterThan(0), $"Expected visible renderers under '{rootName}'.");
 
-            Bounds bounds = visibleRenderers[0].bounds;
+            Assert.That(TryGetRendererWorldBounds(visibleRenderers[0], out Bounds bounds), Is.True,
+                $"Expected renderer bounds under '{rootName}'.");
             for (int i = 1; i < visibleRenderers.Count; i++)
             {
-                bounds.Encapsulate(visibleRenderers[i].bounds);
+                if (TryGetRendererWorldBounds(visibleRenderers[i], out Bounds rendererBounds))
+                {
+                    bounds.Encapsulate(rendererBounds);
+                }
             }
 
             return bounds;
+        }
+
+        private static bool TryGetRendererWorldBounds(Renderer renderer, out Bounds bounds)
+        {
+            if (renderer is SkinnedMeshRenderer skinnedRenderer && skinnedRenderer.sharedMesh != null)
+            {
+                var bakedMesh = new Mesh();
+                try
+                {
+                    skinnedRenderer.BakeMesh(bakedMesh);
+                    bounds = TransformBounds(skinnedRenderer.transform.localToWorldMatrix, bakedMesh.bounds);
+                    return bounds.size.sqrMagnitude > 0.000001f;
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(bakedMesh);
+                }
+            }
+
+            bounds = renderer.bounds;
+            return bounds.size.sqrMagnitude > 0.000001f;
+        }
+
+        private static Bounds TransformBounds(Matrix4x4 matrix, Bounds localBounds)
+        {
+            Vector3 center = localBounds.center;
+            Vector3 extents = localBounds.extents;
+            var worldBounds = new Bounds(matrix.MultiplyPoint3x4(center), Vector3.zero);
+
+            for (int x = -1; x <= 1; x += 2)
+            {
+                for (int y = -1; y <= 1; y += 2)
+                {
+                    for (int z = -1; z <= 1; z += 2)
+                    {
+                        Vector3 corner = center + Vector3.Scale(extents, new Vector3(x, y, z));
+                        worldBounds.Encapsulate(matrix.MultiplyPoint3x4(corner));
+                    }
+                }
+            }
+
+            return worldBounds;
+        }
+
+        private static int CountPixelsDifferentFromCorner(Camera camera, int width, int height)
+        {
+            RenderTexture previousTarget = camera.targetTexture;
+            RenderTexture previousActive = RenderTexture.active;
+            var renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+
+            try
+            {
+                camera.targetTexture = renderTexture;
+                RenderTexture.active = renderTexture;
+                camera.Render();
+                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                texture.Apply();
+
+                Color32[] pixels = texture.GetPixels32();
+                Color32 background = pixels.Length > 0 ? pixels[0] : new Color32(0, 0, 0, 0);
+                int nonUniformPixels = 0;
+                foreach (Color32 pixel in pixels)
+                {
+                    int delta =
+                        Math.Abs(pixel.r - background.r) +
+                        Math.Abs(pixel.g - background.g) +
+                        Math.Abs(pixel.b - background.b) +
+                        Math.Abs(pixel.a - background.a);
+                    if (delta > 24)
+                    {
+                        nonUniformPixels++;
+                    }
+                }
+
+                return nonUniformPixels;
+            }
+            finally
+            {
+                camera.targetTexture = previousTarget;
+                RenderTexture.active = previousActive;
+                UnityEngine.Object.DestroyImmediate(texture);
+                renderTexture.Release();
+                UnityEngine.Object.DestroyImmediate(renderTexture);
+            }
         }
     }
 }
