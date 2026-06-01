@@ -732,17 +732,16 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
         private void DrawRecordingSettings()
         {
-            bool expanded = DrawFoldout("Recording", "녹화");
+            bool expanded = DrawFoldout("Recording", "VMD 녹화");
             if (!expanded)
             {
                 EndFoldout(false);
                 return;
             }
 
-            DrawProperty("startDelay", "녹화 시작 대기 시간");
+            DrawProperty("startDelay", "VMD 녹화 시작 대기 시간");
             DrawProperty("RetargetPrewarmFrameCount", "시작 포즈 prewarm 프레임");
             DrawFolderProperty("additionalVmdCopyFolder", "VMD 추가 복사 폴더", "생성된 VMD를 추가로 복사할 폴더(선택)");
-            DrawProperty("enableRecordingDiagnostics", "녹화 진단/캡처 사용");
             DrawProperty("clampRetargetVisualClipStep", "Ghost clip time step 제한");
             if (GetBool("clampRetargetVisualClipStep"))
             {
@@ -758,17 +757,6 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 EditorGUI.indentLevel++;
                 DrawProperty("RetargetPoseVisualSpikeCurrentWeight", "현재 pose 반영 비율");
                 DrawProperty("RetargetPoseVisualMuscleDeltaThreshold", "muscle delta 기준");
-                EditorGUI.indentLevel--;
-            }
-
-            if (GetBool("enableRecordingDiagnostics"))
-            {
-                EditorGUILayout.HelpBox(
-                    "CSV/프레임 캡처와 결정론 녹화는 회귀 테스트용입니다. 일반 변환에서 켜면 GameView가 살짝 멈추거나 배속처럼 보일 수 있습니다.",
-                    MessageType.Warning);
-                EditorGUI.indentLevel++;
-                DrawProperty("useDeterministicCaptureFramerateForDiagnostics", "테스트용 30fps 시간 고정");
-                DrawProperty("enableDiagnosticFingerCloseups", "손 close-up 캡처");
                 EditorGUI.indentLevel--;
             }
 

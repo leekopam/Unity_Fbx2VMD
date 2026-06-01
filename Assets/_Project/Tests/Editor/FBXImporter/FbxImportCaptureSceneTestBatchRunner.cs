@@ -25,6 +25,10 @@ namespace Tests.Editor.FBXImporter
                 tests.MainAutoScene_RemainsVmdGenerationScene);
             RunTest(results, nameof(tests.FbxImportCaptureScene_IsRegisteredAndConfiguredForCaptureOnly),
                 tests.FbxImportCaptureScene_IsRegisteredAndConfiguredForCaptureOnly);
+            RunTest(results, nameof(tests.MainRecordingScene_HasManualMmdRecordingButtonWiredToTarget),
+                tests.MainRecordingScene_HasManualMmdRecordingButtonWiredToTarget);
+            RunTest(results, nameof(tests.ConversionAndCaptureScenes_DoNotExposeManualMmdRecordingButton),
+                tests.ConversionAndCaptureScenes_DoNotExposeManualMmdRecordingButton);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

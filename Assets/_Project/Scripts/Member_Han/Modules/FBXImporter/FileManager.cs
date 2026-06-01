@@ -423,7 +423,7 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("엄지 둘째 마디를 첫 마디 방향에 맞춰 펴는 강도입니다.")]
         [Range(0f, 1f)] public float ThumbSegmentStraightenWeight = 0.9f;
 
-        [Header("Recording Orchestration")]
+        [Header("VMD Recording Orchestration")]
         [Tooltip("FBX 로드 후 녹화 시작까지의 대기 시간 (초)")]
         [Range(0f, 10f)] public float startDelay = 3.0f;
 
@@ -434,12 +434,15 @@ namespace Member_Han.Modules.FBXImporter
         public string additionalVmdCopyFolder = "";
 
         [Tooltip("비교 CSV/프레임 캡처 Probe를 켭니다. 일반 변환에서는 미세 멈춤을 줄이기 위해 끄고, 회귀 테스트 때만 켭니다.")]
+        [HideInInspector]
         public bool enableRecordingDiagnostics = false;
 
         [Tooltip("회귀 테스트 때 녹화 중 Unity 시간을 30fps로 고정합니다. 일반 GameView 재생에서는 배속/멈칫 체감이 생길 수 있어 끕니다.")]
+        [HideInInspector]
         public bool useDeterministicCaptureFramerateForDiagnostics = false;
 
         [Tooltip("Recording Diagnostics를 켰을 때 손 close-up 캡처도 함께 남깁니다.")]
+        [HideInInspector]
         public bool enableDiagnosticFingerCloseups = true;
 
         [Tooltip("Editor smoke에서 MotionComparisonProbe 엄지 리스크가 임계치를 넘으면 VMD 저장 성공도 smoke 실패로 승격합니다.")]
@@ -603,9 +606,10 @@ namespace Member_Han.Modules.FBXImporter
             Tail
         }
 
-        public bool IsProcessing => _isProcessing;
         public event Action<string, VmdSaveResult> EditorDiagnosticSmokeFinished;
 #endif
+
+        public bool IsProcessing => _isProcessing;
 
         public float EffectiveThumbProximalMaxLocalAngle
         {
