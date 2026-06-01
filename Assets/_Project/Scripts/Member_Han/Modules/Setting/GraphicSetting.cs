@@ -439,10 +439,6 @@ namespace Member_Han.Modules.Graphics
         [SerializeField] private int msaaSampleCount = 8;
         [SerializeField, Range(0.1f, 2.0f)] private float renderScale = 1.0f;
 
-        [Header("Camera Background")]
-        [SerializeField] private bool applyBackgroundColor;
-        [SerializeField] private Color backgroundColor = new Color(0.5f, 0.5f, 0.5f, 1f);
-
         [Header("Editor GameView")]
         [SerializeField] private GraphicGameViewScaleMode gameViewScaleMode = GraphicGameViewScaleMode.Fit;
 
@@ -700,10 +696,6 @@ namespace Member_Han.Modules.Graphics
         private void ApplyCameraSettings(Camera camera, bool useUniversalRenderPipeline)
         {
             camera.allowMSAA = enableCameraMsaa;
-            if (applyBackgroundColor)
-            {
-                camera.backgroundColor = backgroundColor;
-            }
 
             if (!useUniversalRenderPipeline)
             {
