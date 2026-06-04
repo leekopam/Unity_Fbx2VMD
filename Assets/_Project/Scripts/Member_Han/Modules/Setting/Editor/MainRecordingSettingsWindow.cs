@@ -68,7 +68,7 @@ namespace Member_Han.Modules.Graphics.EditorTools
         {
             new OnboardingCardDefinition(
                 "Basic Setup",
-                "Import your model, configure motion capture,\nand start using Warudo.",
+                "Import your model, configure motion capture,\nand start setting up the scene.",
                 "Get Started",
                 new Color32(62, 58, 129, 255),
                 new Color32(210, 212, 238, 255),
