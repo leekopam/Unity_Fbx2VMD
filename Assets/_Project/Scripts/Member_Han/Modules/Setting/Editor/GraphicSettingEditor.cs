@@ -17,6 +17,7 @@ namespace Member_Han.Modules.Graphics.EditorTools
     {
         Quality,
         Target,
+        Recoding,
         Texture,
         Model,
         Advanced
@@ -116,6 +117,7 @@ namespace Member_Han.Modules.Graphics.EditorTools
         {
             "품질",
             "대상",
+            "녹화",
             "텍스처",
             "모델",
             "고급"
@@ -129,6 +131,8 @@ namespace Member_Han.Modules.Graphics.EditorTools
             {
                 case GraphicSettingInspectorCategory.Target:
                     return TargetFields;
+                case GraphicSettingInspectorCategory.Recoding:
+                    return Array.Empty<string>();
                 case GraphicSettingInspectorCategory.Texture:
                     return TextureFields;
                 case GraphicSettingInspectorCategory.Model:
