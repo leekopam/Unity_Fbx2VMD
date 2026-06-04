@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.Editor.Graphics
 {
@@ -99,9 +100,28 @@ namespace Tests.Editor.Graphics
             Type windowType = RequireType(SettingsWindowTypeName);
 
             Assert.That(typeof(EditorWindow).IsAssignableFrom(windowType), Is.True);
-            Assert.That(InvokeStatic<string>(windowType, "GetWindowTitle"), Is.EqualTo("Main_recording 설정"));
+            Assert.That(InvokeStatic<string>(windowType, "GetWindowTitle"), Is.EqualTo("Onboarding Assistant"));
             Assert.That(InvokeStatic<bool>(windowType, "ShouldOpenForScene", MainRecordingScenePath), Is.True);
             Assert.That(InvokeStatic<bool>(windowType, "ShouldOpenForScene", MainAutoScenePath), Is.False);
+        }
+
+        [Test]
+        public void Given_SettingsWindowType_When_InspectingOnboardingLayout_Then_MatchesReferenceFirstScreen()
+        {
+            Type windowType = RequireType(SettingsWindowTypeName);
+
+            Assert.That(
+                InvokeStatic<string[]>(windowType, "GetSidebarItemLabelsForTests"),
+                Is.EqualTo(new[] { "Camera", "Directional Light", "Character (Inactive)" }));
+            Assert.That(
+                InvokeStatic<string[]>(windowType, "GetOnboardingCardTitlesForTests"),
+                Is.EqualTo(new[] { "Basic Setup", "Interactions Setup", "Get Connected!" }));
+            Assert.That(
+                InvokeStatic<string[]>(windowType, "GetOnboardingCardButtonLabelsForTests"),
+                Is.EqualTo(new[] { "Get Started", "Get Started", "Get Started" }));
+            Assert.That(
+                InvokeStatic<string>(windowType, "GetVisualAssetPolicyForTests"),
+                Does.Contain("no GUI Pack or project image asset dependency"));
         }
 
         [Test]
@@ -114,10 +134,11 @@ namespace Tests.Editor.Graphics
             EditorWindow window = null;
             try
             {
+                ExpectHeadlessWindowLogsIfNeeded();
                 window = (EditorWindow)InvokeStatic<object>(windowType, "OpenForMainRecordingScene");
                 Assert.That(window, Is.Not.Null);
                 Assert.That(window.GetType(), Is.EqualTo(windowType));
-                Assert.That(window.titleContent.text, Is.EqualTo("Main_recording 설정"));
+                Assert.That(window.titleContent.text, Is.EqualTo("Onboarding Assistant"));
 
                 object context = InvokeStatic<object>(windowType, "ResolveContext");
                 Assert.That(GetMemberValue<Component>(context, "GraphicSetting"), Is.Not.Null);
@@ -134,6 +155,18 @@ namespace Tests.Editor.Graphics
                     window.Close();
                 }
             }
+        }
+
+        private static void ExpectHeadlessWindowLogsIfNeeded()
+        {
+            if (SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
+            {
+                return;
+            }
+
+            LogAssert.Expect(LogType.Error, "No graphic device is available to initialize the view.");
+            LogAssert.Expect(LogType.Error, "No graphic device is available to show the window.");
+            LogAssert.Expect(LogType.Error, "No graphic device is available to initialize the view.");
         }
 
         private static void AssertHeader<T>(string fieldName, string expectedHeader)
