@@ -12,7 +12,7 @@ namespace Tests.Editor.Graphics
 {
     public static class GraphicSettingTestBatchRunner
     {
-        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_recoding.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string GraphicSettingTypeName = "Member_Han.Modules.Graphics.GraphicSetting, Assembly-CSharp";
         private const string BackgroundColorSettingTypeName = "BackgroundColorSetting, Assembly-CSharp";
         private const string YybRootName = "YYB Hatsune Miku";
@@ -59,6 +59,10 @@ namespace Tests.Editor.Graphics
                 tests.MainAutoScene_DoesNotCarryGraphicSettingQualityControls);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_InstallerEnsuresActualGameViewQualityPath),
                 tests.MainRecordingScene_InstallerEnsuresActualGameViewQualityPath);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_ActualGameViewZoomIsReappliedFromSceneSetting),
+                tests.MainRecordingScene_ActualGameViewZoomIsReappliedFromSceneSetting);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_ActualGameViewZoomDriftIsReappliedFromOneXSetting),
+                tests.MainRecordingScene_ActualGameViewZoomDriftIsReappliedFromOneXSetting);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_UsesOnlyMainCameraForGameViewComparison),
                 tests.MainRecordingScene_UsesOnlyMainCameraForGameViewComparison);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_MainCameraUsesReferenceMp4BlackBackground),

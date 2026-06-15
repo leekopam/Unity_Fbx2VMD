@@ -440,7 +440,7 @@ namespace Member_Han.Modules.Graphics
         [SerializeField, Range(0.1f, 2.0f)] private float renderScale = 1.0f;
 
         [Header("Editor GameView")]
-        [SerializeField] private GraphicGameViewScaleMode gameViewScaleMode = GraphicGameViewScaleMode.Fit;
+        [SerializeField] private GraphicGameViewScaleMode gameViewScaleMode = GraphicGameViewScaleMode.OneX;
 
         [Header("Texture Import")]
         [SerializeField] private GraphicTextureImportProfile textureImportProfile = new GraphicTextureImportProfile();

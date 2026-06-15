@@ -501,6 +501,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             DrawProperty("targetCharacter", "대상 캐릭터");
             DrawProperty("showGhostModel", "Ghost 모델 표시");
+            DrawProperty("showGhostSkeletonWhenNoRenderers", "Renderer 없는 Ghost skeleton 표시");
             if (GetBool("showGhostModel"))
             {
                 EditorGUILayout.HelpBox("디버그용 표시입니다. 녹화 기준을 확인한 뒤에는 꺼두는 편이 좋습니다.", MessageType.Info);
@@ -740,6 +741,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             DrawProperty("startDelay", "VMD 녹화 시작 대기 시간");
+            DrawProperty("vmdRecordingPlaybackSpeed", "VMD 녹화 배속");
+            DrawProperty("useKnownMmdReferenceTiming", "satisfaction_2 reference timing 사용");
             DrawProperty("RetargetPrewarmFrameCount", "시작 포즈 prewarm 프레임");
             DrawFolderProperty("additionalVmdCopyFolder", "VMD 추가 복사 폴더", "생성된 VMD를 추가로 복사할 폴더(선택)");
             DrawProperty("clampRetargetVisualClipStep", "Ghost clip time step 제한");

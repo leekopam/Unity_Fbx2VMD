@@ -54,6 +54,10 @@ public partial class UnityHumanoidVMDRecorder
         }
 
         ApplyMmdExportSafetyGuards(safeFrameCount);
+        exportIkSourceDiagnosticSamplesSaved = BuildFinalExportIkSourceDiagnosticSamples(
+            exportIkSourceDiagnosticSamplesSaved,
+            positionDictionarySaved,
+            safeFrameCount);
 
         VmdMorphRecorder morphSnapshot = morphRecorderSaved;
         if (morphSnapshot != null)
@@ -93,8 +97,9 @@ public partial class UnityHumanoidVMDRecorder
             }
 
             string exportRotationDiagnosticsCsvPath = WriteExportRotationDiagnosticsCsv(filePath);
+            string exportIkSourceDiagnosticsCsvPath = WriteExportIkSourceDiagnosticsCsv(filePath);
             Debug.Log($"{transform.name} VMD 파일 생성 완료: {filePath}");
-            return VmdSaveResult.Ok(filePath, safeFrameCount, fileInfo.Length, exportRotationDiagnosticsCsvPath);
+            return VmdSaveResult.Ok(filePath, safeFrameCount, fileInfo.Length, exportRotationDiagnosticsCsvPath, exportIkSourceDiagnosticsCsvPath);
         }
         catch (Exception ex)
         {

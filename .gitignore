@@ -38,6 +38,31 @@
 /graphify-out/
 /.graphify_*
 
+# Local-only reference packs and temporary workspaces.
+/tmp/
+# Keep all project Docs folders local-only.
+/[Dd][Oo][Cc][Ss]/
+# Agent-generated issue/report drafts must live under Docs and stay out of Git.
+/.scratch/
+/[Ss]cratch/
+/[Ii]ssues/
+/[Rr]eport/
+/[Rr]eports/
+/[Pp][Rr][Dd]/
+/*[Ii]ssue*.[Mm][Dd]
+/*[Rr]eport*.[Mm][Dd]
+/*[Pp][Rr][Dd]*.[Mm][Dd]
+/*[Ww][Oo][Rr][Kk][Pp][Ll][Aa][Nn]*.[Mm][Dd]
+/Docs/ref/
+/Assets/GUIPack-Clean&Minimalist/
+/Assets/GUIPack-Clean&Minimalist.meta
+/Assets/UI/GUIPack-Clean&Minimalist/
+/Assets/UI/GUIPack-Clean&Minimalist.meta
+/Assets/MagicaCloth2/
+/Assets/MagicaCloth2.meta
+/Assets/_Project/Tool/MagicaCloth2/
+/Assets/_Project/Tool/MagicaCloth2.meta
+
 # Uncomment this line if you wish to ignore the asset store tools plugin
 # /[Aa]ssets/AssetStoreTools*
 
@@ -77,6 +102,7 @@ ExportedObj/
 sysinfo.txt
 
 # Builds
+/Builds/
 *.apk
 *.aab
 *.unitypackage

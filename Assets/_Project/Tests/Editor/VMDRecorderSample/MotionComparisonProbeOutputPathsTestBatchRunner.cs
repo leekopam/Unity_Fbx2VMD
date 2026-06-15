@@ -101,6 +101,10 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_ProbeSource_When_CheckedForSessionManifestArtifactPaths_Then_DoesNotUnpackRelativePathFields);
             RunTest(results, nameof(tests.Given_ProbeSource_When_CheckedForSamplingStartupPathHelpers_Then_UsesConsolidatedSessionPathHelper),
                 tests.Given_ProbeSource_When_CheckedForSamplingStartupPathHelpers_Then_UsesConsolidatedSessionPathHelper);
+            RunTest(results, nameof(tests.Given_JitterProbeSource_When_CheckedForTeleportGate_Then_UsesScreenAnchorThresholds),
+                tests.Given_JitterProbeSource_When_CheckedForTeleportGate_Then_UsesScreenAnchorThresholds);
+            RunTest(results, nameof(tests.Given_JitterProbeSource_When_CheckedForAnomalyScreenshots_Then_CapturesPeakFrames),
+                tests.Given_JitterProbeSource_When_CheckedForAnomalyScreenshots_Then_CapturesPeakFrames);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

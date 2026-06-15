@@ -10,6 +10,10 @@ public class MotionComparisonProbe : MonoBehaviour
 {
     private static readonly float[] DefaultSampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
     private const string PoseSpaceRetargeterLegacyClipStateName = "__PoseSpaceRetargeter_GhostClip";
+    private const int MinScreenshotWidth = 128;
+    private const int MinScreenshotHeight = 128;
+    private const int MaxScreenshotWidth = 7680;
+    private const int MaxScreenshotHeight = 4320;
 
     [SerializeField] private string comparisonLabel = "";
     [SerializeField] private float[] sampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
@@ -18,9 +22,10 @@ public class MotionComparisonProbe : MonoBehaviour
     [SerializeField] private bool captureSampleScreenshots = true;
     [SerializeField] private bool captureFingerCloseups = true;
     [SerializeField] private bool captureYybDiagnosticOnlyMetrics = true;
-    [SerializeField, Min(128)] private int screenshotWidth = 960;
-    [SerializeField, Min(128)] private int screenshotHeight = 960;
-    [SerializeField, Range(1f, 2f)] private float screenshotPadding = 1.2f;
+    [SerializeField, Min(MinScreenshotWidth)] private int screenshotWidth = 960;
+    [SerializeField, Min(MinScreenshotHeight)] private int screenshotHeight = 960;
+    [SerializeField, Range(1f, 2f)] private float screenshotPadding = 1.8f;
+    [SerializeField, Range(0.2f, 0.6f)] private float screenshotVerticalViewportCenter = 0.28f;
     [SerializeField, Range(1f, 4f)] private float fingerCloseupPadding = 1.6f;
 
     private const float DiagnosticFootRadius = 0.04f;
@@ -39,6 +44,8 @@ public class MotionComparisonProbe : MonoBehaviour
     private const float DiagnosticArmTwistFullRiskMuscle = 1.6f;
     private const float DiagnosticSleeveAnchorWarningDegrees = 85f;
     private const float DiagnosticSleeveAnchorFullRiskDegrees = 120f;
+    private const float DiagnosticSleeveThicknessWarningRatio = 0.7f;
+    private const float DiagnosticSleeveThicknessFullRiskRatio = 0.45f;
     private static readonly HumanBodyBones[] LeftFingerBones =
     {
         HumanBodyBones.LeftHand,
@@ -129,6 +136,8 @@ public class MotionComparisonProbe : MonoBehaviour
     public int NonBlankScreenshotCount => _nonBlankScreenshotCount;
     public bool HasNonBlankScreenshots => _nonBlankScreenshotCount > 0;
     public bool IsSampling => _isSampling;
+    public int ScreenshotWidth => screenshotWidth;
+    public int ScreenshotHeight => screenshotHeight;
     public float MaxThumbSpreadRisk => _maxThumbSpreadRisk;
     public float MaxThumbProjectionRisk => _maxThumbProjectionRisk;
     public float MaxThumbHelperSeparationRisk => _maxThumbHelperSeparationRisk;
@@ -149,6 +158,11 @@ public class MotionComparisonProbe : MonoBehaviour
     public void SetFingerCloseups(bool enabled) => captureFingerCloseups = enabled;
     public void ResetSampleTimesToDefault() => sampleTimes = (float[])DefaultSampleTimes.Clone();
     public void SetSampleTimes(float[] customSampleTimes) => sampleTimes = NormalizeSampleTimes(customSampleTimes);
+    public void SetScreenshotCaptureResolution(int width, int height)
+    {
+        screenshotWidth = Mathf.Clamp(width, MinScreenshotWidth, MaxScreenshotWidth);
+        screenshotHeight = Mathf.Clamp(height, MinScreenshotHeight, MaxScreenshotHeight);
+    }
 
     private static float[] NormalizeSampleTimes(IEnumerable<float> customSampleTimes)
     {
@@ -1308,8 +1322,14 @@ public class MotionComparisonProbe : MonoBehaviour
         right.ArmTwistRisk = CalculateArmTwistRisk(armMuscles.RightArmTwist, armMuscles.RightForearmTwist);
         left.SleeveAnchorRisk = CalculateSleeveAnchorRisk(false);
         right.SleeveAnchorRisk = CalculateSleeveAnchorRisk(true);
-        float leftArmSleeveRisk = CalculateArmSleeveDeformationRisk(left.ArmTwistRisk, left.SleeveAnchorRisk);
-        float rightArmSleeveRisk = CalculateArmSleeveDeformationRisk(right.ArmTwistRisk, right.SleeveAnchorRisk);
+        left.SleeveThicknessRisk = CalculateSleeveThicknessRisk(false, out left.SleeveAnchorDistance, out left.SleeveThicknessRatio);
+        right.SleeveThicknessRisk = CalculateSleeveThicknessRisk(true, out right.SleeveAnchorDistance, out right.SleeveThicknessRatio);
+        float leftArmSleeveRisk = MaxFinite(
+            CalculateArmSleeveDeformationRisk(left.ArmTwistRisk, left.SleeveAnchorRisk),
+            left.SleeveThicknessRisk);
+        float rightArmSleeveRisk = MaxFinite(
+            CalculateArmSleeveDeformationRisk(right.ArmTwistRisk, right.SleeveAnchorRisk),
+            right.SleeveThicknessRisk);
         left.DeformationRisk = MaxFinite(
             left.ThumbSpreadRisk,
             left.ThumbProjectionRisk,
@@ -1824,6 +1844,27 @@ public class MotionComparisonProbe : MonoBehaviour
             DiagnosticSleeveAnchorFullRiskDegrees);
     }
 
+    private float CalculateSleeveThicknessRisk(bool isRightSide, out float distance, out float thicknessRatio)
+    {
+        distance = float.NaN;
+        thicknessRatio = float.NaN;
+
+        Transform source = GetBone(isRightSide ? HumanBodyBones.RightLowerArm : HumanBodyBones.LeftLowerArm);
+        Transform anchor = FindSleeveAnchor(isRightSide);
+        if (source == null || anchor == null)
+        {
+            return float.NaN;
+        }
+
+        string key = MotionComparisonProbeReportWriter.BuildTransformPairKey(
+            MotionComparisonProbeReportWriter.BuildSleeveThicknessPairKeyLabel(isRightSide), source, anchor);
+        thicknessRatio = CalculateDistanceRatioFromInitial(source, anchor, key, out distance);
+        return RiskBelow(
+            thicknessRatio,
+            DiagnosticSleeveThicknessWarningRatio,
+            DiagnosticSleeveThicknessFullRiskRatio);
+    }
+
     private float CalculateDistanceDeltaFromInitial(Transform a, Transform b, string key, out float distance)
     {
         distance = float.NaN;
@@ -1845,6 +1886,34 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         return Mathf.Abs(distance - initialDistance);
+    }
+
+    private float CalculateDistanceRatioFromInitial(Transform a, Transform b, string key, out float distance)
+    {
+        distance = float.NaN;
+        if (a == null || b == null || string.IsNullOrEmpty(key))
+        {
+            return float.NaN;
+        }
+
+        distance = Vector3.Distance(a.position, b.position);
+        if (!IsFinite(distance))
+        {
+            return float.NaN;
+        }
+
+        if (!_diagnosticInitialDistances.TryGetValue(key, out float initialDistance))
+        {
+            _diagnosticInitialDistances[key] = distance;
+            return 1f;
+        }
+
+        if (!IsFinite(initialDistance) || initialDistance <= 0.000001f)
+        {
+            return float.NaN;
+        }
+
+        return distance / initialDistance;
     }
 
     private float CalculateRelativeRotationDeltaFromInitial(Transform source, Transform target, string key)
@@ -1906,6 +1975,26 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         return Mathf.Clamp01((value - warningValue) / (fullRiskValue - warningValue));
+    }
+
+    private static float RiskBelow(float value, float warningValue, float fullRiskValue)
+    {
+        if (!IsFinite(value))
+        {
+            return float.NaN;
+        }
+
+        if (value >= warningValue)
+        {
+            return 0f;
+        }
+
+        if (warningValue <= fullRiskValue)
+        {
+            return 1f;
+        }
+
+        return Mathf.Clamp01((warningValue - value) / (warningValue - fullRiskValue));
     }
 
     private static float RiskMagnitude(float value, float warningValue, float fullRiskValue)
@@ -2465,6 +2554,11 @@ public class MotionComparisonProbe : MonoBehaviour
         if (paddingOverride > 0f)
         {
             captureCamera.orthographicSize = CalculateOrthographicSize(bounds, captureCamera, paddingOverride);
+        }
+        else
+        {
+            float verticalOffset = (0.5f - screenshotVerticalViewportCenter) * 2f * captureCamera.orthographicSize;
+            captureCamera.transform.position += Vector3.up * verticalOffset;
         }
 
         captureCamera.nearClipPlane = 0.01f;
@@ -3087,6 +3181,9 @@ public class MotionComparisonProbe : MonoBehaviour
         public float WebbingRisk;
         public float ArmTwistRisk;
         public float SleeveAnchorRisk;
+        public float SleeveAnchorDistance;
+        public float SleeveThicknessRatio;
+        public float SleeveThicknessRisk;
         public float DeformationRisk;
         public bool HasCoreThumbAnatomy => ThumbDirectionAvailable && PalmFrameAvailable;
 
@@ -3107,6 +3204,9 @@ public class MotionComparisonProbe : MonoBehaviour
             WebbingRisk = float.NaN,
             ArmTwistRisk = float.NaN,
             SleeveAnchorRisk = float.NaN,
+            SleeveAnchorDistance = float.NaN,
+            SleeveThicknessRatio = float.NaN,
+            SleeveThicknessRisk = float.NaN,
             DeformationRisk = float.NaN
         };
 
@@ -3114,6 +3214,9 @@ public class MotionComparisonProbe : MonoBehaviour
         {
             ArmTwistRisk = float.NaN;
             SleeveAnchorRisk = float.NaN;
+            SleeveAnchorDistance = float.NaN;
+            SleeveThicknessRatio = float.NaN;
+            SleeveThicknessRisk = float.NaN;
             DeformationRisk = float.NaN;
         }
     }
@@ -3400,6 +3503,12 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(YybDiagnostics.Right.ArmTwistRisk),
                 F(YybDiagnostics.Left.SleeveAnchorRisk),
                 F(YybDiagnostics.Right.SleeveAnchorRisk),
+                F(YybDiagnostics.Left.SleeveAnchorDistance),
+                F(YybDiagnostics.Right.SleeveAnchorDistance),
+                F(YybDiagnostics.Left.SleeveThicknessRatio),
+                F(YybDiagnostics.Right.SleeveThicknessRatio),
+                F(YybDiagnostics.Left.SleeveThicknessRisk),
+                F(YybDiagnostics.Right.SleeveThicknessRisk),
                 F(YybDiagnostics.Left.DeformationRisk),
                 F(YybDiagnostics.Right.DeformationRisk),
                 F(YybDiagnostics.MaxDeformationRisk),

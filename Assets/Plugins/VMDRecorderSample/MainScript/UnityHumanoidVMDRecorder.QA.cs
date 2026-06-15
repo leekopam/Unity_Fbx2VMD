@@ -26,8 +26,11 @@ public partial class UnityHumanoidVMDRecorder
         exportRotationDiagnosticAggregatesSaved = new Dictionary<BoneNames, ExportRotationDiagnosticAggregate>();
         exportRotationDiagnosticSamples = new List<ExportRotationDiagnosticSample>();
         exportRotationDiagnosticSamplesSaved = new List<ExportRotationDiagnosticSample>();
+        exportIkSourceDiagnosticSamples = new List<ExportIkSourceDiagnosticSample>();
+        exportIkSourceDiagnosticSamplesSaved = new List<ExportIkSourceDiagnosticSample>();
         LastExportRotationDiagnosticsCsvPath = "";
         LastExportRotationDiagnosticSamplesCsvPath = "";
+        LastExportIkSourceDiagnosticsCsvPath = "";
         int listCapacity = Mathf.Max(0, expectedFrameCapacity);
 
         if (BoneDictionary != null)

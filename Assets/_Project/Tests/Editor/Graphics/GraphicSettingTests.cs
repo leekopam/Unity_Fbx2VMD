@@ -21,8 +21,10 @@ namespace Tests.Editor.Graphics
         private const string MaterialShaderUtilityTypeName = "Member_Han.Modules.Graphics.GraphicMaterialShaderUtility, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Member_Han.Modules.Graphics.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Member_Han.Modules.Graphics.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
+        private const string GameViewScaleAutoApplierTypeName =
+            "Member_Han.Modules.Graphics.EditorTools.GraphicSettingGameViewScaleAutoApplier, Assembly-CSharp-Editor";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
-        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_recoding.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string YybTextureFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/tex";
         private const string YybMaterialFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/Materials";
         private const string YybRootName = "YYB Hatsune Miku";
@@ -430,6 +432,8 @@ namespace Tests.Editor.Graphics
                 "Main_recoding must store the high render sharpness preset even when the built-in path keeps renderScale inactive.");
             Assert.That(GetField<object>(component, "modelEdgeAndAlpha").ToString(), Is.EqualTo("Quality"),
                 "Main_recoding must use the fine outline/alpha preset for YYB material tuning.");
+            Assert.That(GetField<object>(component, "gameViewScaleMode").ToString(), Is.EqualTo("OneX"),
+                "Main_recoding must default GameView display to 1x so editor zoom does not exaggerate pixelation.");
             Assert.That(GetField<object>(component, "antiAliasing").ToString(), Is.EqualTo("SMAA"),
                 "Main_recoding Setting must apply SMAA to the actual GameView camera path.");
             Assert.That(GetField<object>(component, "smaaQuality").ToString(), Is.EqualTo("High"),
@@ -473,6 +477,10 @@ namespace Tests.Editor.Graphics
                 "GraphicSetting must not expose screenshot capture controls.");
             Assert.That(serialized.FindProperty("captureSuperSize"), Is.Null,
                 "GraphicSetting must not own screenshot capture output settings.");
+            Assert.That(serialized.FindProperty("recordingCaptureQuality"), Is.Null,
+                "GraphicSetting must not own recording capture quality settings.");
+            Assert.That(serialized.FindProperty("previewRenderTexture"), Is.Null,
+                "GraphicSetting must not own recording preview render textures.");
             Assert.That(serialized.FindProperty("applyBackgroundColor"), Is.Null,
                 "GraphicSetting must not own background color controls.");
             Assert.That(serialized.FindProperty("backgroundColor"), Is.Null,
@@ -529,6 +537,7 @@ namespace Tests.Editor.Graphics
                 Assert.That(GetField<object>(installed, "antiAliasingPreset").ToString(), Is.EqualTo("Quality"));
                 Assert.That(GetField<object>(installed, "renderSharpness").ToString(), Is.EqualTo("Quality"));
                 Assert.That(GetField<object>(installed, "modelEdgeAndAlpha").ToString(), Is.EqualTo("Quality"));
+                Assert.That(GetField<object>(installed, "gameViewScaleMode").ToString(), Is.EqualTo("OneX"));
                 Assert.That(GetField<object>(installed, "antiAliasing").ToString(), Is.EqualTo("SMAA"));
                 Assert.That(GetField<object>(installed, "smaaQuality").ToString(), Is.EqualTo("High"));
                 Assert.That(GetField<int>(installed, "msaaSampleCount"), Is.EqualTo(8));
@@ -557,6 +566,8 @@ namespace Tests.Editor.Graphics
                 Assert.That(graphicSettingType.GetField("captureSuperSize", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("captureFolder", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("captureFilePrefix", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("recordingCaptureQuality", InstanceFields), Is.Null);
+                Assert.That(graphicSettingType.GetField("previewRenderTexture", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("applyBackgroundColor", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("backgroundColor", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("recordingFileManager", InstanceFields), Is.Null);
@@ -608,6 +619,46 @@ namespace Tests.Editor.Graphics
                     pipelineAsset.renderScale = originalPipelineRenderScale;
                 }
             }
+        }
+
+        [Test]
+        public void MainRecordingScene_ActualGameViewZoomIsReappliedFromSceneSetting()
+        {
+            Type autoApplierType = RequireType(GameViewScaleAutoApplierTypeName);
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
+            EditorWindow gameView = RequireGameViewWindow();
+
+            SetGameViewZoomScale(gameView, new Vector2(5f, 5f));
+            Vector2 before = GetGameViewZoomScale(gameView);
+            Assert.That(before.x, Is.EqualTo(5f).Within(0.001f));
+            Assert.That(before.y, Is.EqualTo(5f).Within(0.001f));
+
+            bool applied = (bool)InvokeStatic(autoApplierType, "ApplyActiveSceneSettingGameViewScale");
+            Vector2 after = GetGameViewZoomScale(gameView);
+
+            Assert.That(applied, Is.True, "Scene setting must apply to the already-open GameView UI.");
+            Assert.That(after.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(after.y, Is.EqualTo(1f).Within(0.001f));
+        }
+
+        [Test]
+        public void MainRecordingScene_ActualGameViewZoomDriftIsReappliedFromOneXSetting()
+        {
+            Type autoApplierType = RequireType(GameViewScaleAutoApplierTypeName);
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
+            EditorWindow gameView = RequireGameViewWindow();
+
+            SetGameViewZoomScale(gameView, new Vector2(5f, 5f));
+            Vector2 before = GetGameViewZoomScale(gameView);
+            Assert.That(before.x, Is.EqualTo(5f).Within(0.001f));
+            Assert.That(before.y, Is.EqualTo(5f).Within(0.001f));
+
+            bool applied = (bool)InvokeStatic(autoApplierType, "ApplyActiveSceneSettingGameViewScaleIfDrifted");
+            Vector2 after = GetGameViewZoomScale(gameView);
+
+            Assert.That(applied, Is.True, "OneX setting must reapply when the already-open GameView drifts back to a zoomed scale.");
+            Assert.That(after.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(after.y, Is.EqualTo(1f).Within(0.001f));
         }
 
         [Test]
@@ -819,6 +870,42 @@ namespace Tests.Editor.Graphics
 
             GameObject targetCharacter = GetMemberValue<GameObject>(fileManager, "targetCharacter");
             return targetCharacter != null ? targetCharacter.GetComponent<HumanoidSampleCode>() : null;
+        }
+
+        private static EditorWindow RequireGameViewWindow()
+        {
+            Type gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
+            Assert.That(gameViewType, Is.Not.Null, "Expected UnityEditor.GameView type.");
+            EditorWindow gameView = EditorWindow.GetWindow(gameViewType);
+            Assert.That(gameView, Is.Not.Null, "Expected an open GameView window.");
+            gameView.Show();
+            return gameView;
+        }
+
+        private static Vector2 GetGameViewZoomScale(EditorWindow gameView)
+        {
+            object zoomArea = GetGameViewZoomArea(gameView);
+            FieldInfo scaleField = zoomArea.GetType().GetField("m_Scale", InstanceFields);
+            Assert.That(scaleField, Is.Not.Null, "Expected GameView zoom area scale field.");
+            return (Vector2)scaleField.GetValue(zoomArea);
+        }
+
+        private static void SetGameViewZoomScale(EditorWindow gameView, Vector2 scale)
+        {
+            object zoomArea = GetGameViewZoomArea(gameView);
+            FieldInfo scaleField = zoomArea.GetType().GetField("m_Scale", InstanceFields);
+            Assert.That(scaleField, Is.Not.Null, "Expected GameView zoom area scale field.");
+            scaleField.SetValue(zoomArea, scale);
+            gameView.Repaint();
+        }
+
+        private static object GetGameViewZoomArea(EditorWindow gameView)
+        {
+            FieldInfo zoomAreaField = gameView.GetType().GetField("m_ZoomArea", InstanceFields);
+            Assert.That(zoomAreaField, Is.Not.Null, "Expected GameView zoom area field.");
+            object zoomArea = zoomAreaField.GetValue(gameView);
+            Assert.That(zoomArea, Is.Not.Null, "Expected GameView zoom area instance.");
+            return zoomArea;
         }
 
         private static Shader RequireShader(string name)

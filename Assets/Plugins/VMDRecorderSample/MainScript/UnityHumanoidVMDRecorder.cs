@@ -17,8 +17,14 @@ public struct VmdSaveResult
     public int FrameCount;
     public long FileSizeBytes;
     public string ExportRotationDiagnosticsCsvPath;
+    public string ExportIkSourceDiagnosticsCsvPath;
 
-    public static VmdSaveResult Ok(string filePath, int frameCount, long fileSizeBytes, string exportRotationDiagnosticsCsvPath = "")
+    public static VmdSaveResult Ok(
+        string filePath,
+        int frameCount,
+        long fileSizeBytes,
+        string exportRotationDiagnosticsCsvPath = "",
+        string exportIkSourceDiagnosticsCsvPath = "")
     {
         return new VmdSaveResult
         {
@@ -27,7 +33,8 @@ public struct VmdSaveResult
             ErrorMessage = "",
             FrameCount = frameCount,
             FileSizeBytes = fileSizeBytes,
-            ExportRotationDiagnosticsCsvPath = exportRotationDiagnosticsCsvPath ?? ""
+            ExportRotationDiagnosticsCsvPath = exportRotationDiagnosticsCsvPath ?? "",
+            ExportIkSourceDiagnosticsCsvPath = exportIkSourceDiagnosticsCsvPath ?? ""
         };
     }
 
@@ -40,7 +47,8 @@ public struct VmdSaveResult
             ErrorMessage = errorMessage,
             FrameCount = 0,
             FileSizeBytes = 0,
-            ExportRotationDiagnosticsCsvPath = ""
+            ExportRotationDiagnosticsCsvPath = "",
+            ExportIkSourceDiagnosticsCsvPath = ""
         };
     }
 }
@@ -78,7 +86,7 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     public bool IgnoreInitialRotation = false;            // 초기 회전 무시 여부
 
     [Tooltip("IgnoreInitialPosition이 켜진 export에서 scene/root carrier 이동을 全ての親과 발 IK 좌표에 쓰지 않습니다. Main_Auto처럼 Unity 화면에서는 제자리인데 carrier transform만 움직이는 경로의 MMD 날아다님을 방지합니다.")]
-    public bool FreezeParentOfAllMotionWhenIgnoringInitialPosition = true;
+    public bool FreezeParentOfAllMotionWhenIgnoringInitialPosition = false;
     
     /// <summary>
     /// 一部のモデルではMMD上ではセンターが足元にある
@@ -116,7 +124,7 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     [Tooltip("captureFramerate를 쓰지 않는 일반 재생에서 렌더 프레임이 밀렸을 때 backlog를 버려 저장 burst를 막습니다. 테스트용 결정론 녹화에서는 끄거나 captureFramerate를 켭니다.")]
     public bool DropLateFrameBacklogWhenNotUsingCaptureFramerate = true;
     
-    public int KeyReductionLevel = 1;                     // 키 리덕션 레벨 (MMD 캐릭터 export는 기본 전 프레임 기록)
+    public int KeyReductionLevel = 3;                     // 키 리덕션 레벨 (파일 크기 감소)
     // === 레코딩 상태 변수 ===
     public bool IsRecording { get; private set; } = false;  // 현재 레코딩 중인지 여부
     public int FrameNumber { get; private set; } = 0;       // 현재 레코딩 중인 프레임 번호
@@ -221,7 +229,7 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
 
     [Header("MMD Export Delta Guard")]
     [Tooltip("Limits one-frame center-bone export jumps so MMD playback does not teleport through root motion spikes.")]
-    public bool ClampMmdCenterExportDeltaSpikes = true;
+    public bool ClampMmdCenterExportDeltaSpikes = false;
 
     [Tooltip("Maximum VMD-space movement allowed per frame for center-bone keys.")]
     [Range(0.02f, 1f)] public float MaxMmdCenterExportDeltaPerFrame = 0.12f;
@@ -249,8 +257,11 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     [Header("Export Diagnostics")]
     [Tooltip("Writes per-bone export rotation residual diagnostics next to the generated VMD file.")]
     public bool EnableExportRotationDiagnostics = false;
+    [Tooltip("Writes per-frame foot IK source samples next to the generated VMD file for recorder-side path probes.")]
+    public bool EnableExportIkSourceDiagnostics = false;
     public string LastExportRotationDiagnosticsCsvPath { get; private set; } = "";
     public string LastExportRotationDiagnosticSamplesCsvPath { get; private set; } = "";
+    public string LastExportIkSourceDiagnosticsCsvPath { get; private set; } = "";
 
     public Vector3 LeftFootIKOffset = Vector3.zero;           // 왼발 IK 오프셋
     public Vector3 RightFootIKOffset = Vector3.zero;          // 오른발 IK 오프셋
@@ -266,6 +277,8 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     Dictionary<BoneNames, ExportRotationDiagnosticAggregate> exportRotationDiagnosticAggregatesSaved = new Dictionary<BoneNames, ExportRotationDiagnosticAggregate>();
     List<ExportRotationDiagnosticSample> exportRotationDiagnosticSamples = new List<ExportRotationDiagnosticSample>();
     List<ExportRotationDiagnosticSample> exportRotationDiagnosticSamplesSaved = new List<ExportRotationDiagnosticSample>();
+    List<ExportIkSourceDiagnosticSample> exportIkSourceDiagnosticSamples = new List<ExportIkSourceDiagnosticSample>();
+    List<ExportIkSourceDiagnosticSample> exportIkSourceDiagnosticSamplesSaved = new List<ExportIkSourceDiagnosticSample>();
     bool recorderInitializationWarningLogged;
     float recordingFrameAccumulator;
     int lastSavedUnityFrame = -1;
@@ -274,6 +287,12 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     int droppedLateFrameBacklogCount;
     int previousCaptureFramerate;
     bool captureFramerateApplied;
+    Transform cachedIkRootReferenceTransform;
+    static readonly string[] MovingIkRootReferenceNames =
+    {
+        "461.!Root",
+        "modelRootNode"
+    };
 
     public int SameUnityFrameSaveCount => sameUnityFrameSaveCount;
     public int MaxFramesSavedInSingleLateUpdate => maxFramesSavedInSingleLateUpdate;
@@ -352,6 +371,44 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
         public VmdBoneRotationDiagnostic Diagnostic { get; }
     }
 
+    internal readonly struct ExportIkSourceDiagnosticSample
+    {
+        public ExportIkSourceDiagnosticSample(
+            int recorderFrameNumber,
+            int unityFrameNumber,
+            float sampleTime,
+            BoneNames boneName,
+            Vector3 rootReferencePosition,
+            Vector3 sourceWorldPosition,
+            Vector3 sourceRelativePosition,
+            Vector3 exportedUnityPosition,
+            Vector3 directFootWorldPosition = default(Vector3),
+            Vector3 directFootRootPosition = default(Vector3))
+        {
+            RecorderFrameNumber = recorderFrameNumber;
+            UnityFrameNumber = unityFrameNumber;
+            SampleTime = sampleTime;
+            BoneName = boneName;
+            RootReferencePosition = rootReferencePosition;
+            SourceWorldPosition = sourceWorldPosition;
+            SourceRelativePosition = sourceRelativePosition;
+            ExportedUnityPosition = exportedUnityPosition;
+            DirectFootWorldPosition = directFootWorldPosition;
+            DirectFootRootPosition = directFootRootPosition;
+        }
+
+        public int RecorderFrameNumber { get; }
+        public int UnityFrameNumber { get; }
+        public float SampleTime { get; }
+        public BoneNames BoneName { get; }
+        public Vector3 RootReferencePosition { get; }
+        public Vector3 SourceWorldPosition { get; }
+        public Vector3 SourceRelativePosition { get; }
+        public Vector3 ExportedUnityPosition { get; }
+        public Vector3 DirectFootWorldPosition { get; }
+        public Vector3 DirectFootRootPosition { get; }
+    }
+
     internal void RecordExportRotationDiagnostic(int frameNumber, VmdBoneRotationDiagnostic diagnostic)
     {
         if (!exportRotationDiagnosticAggregates.TryGetValue(diagnostic.BoneName, out var aggregate))
@@ -372,6 +429,76 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     internal IReadOnlyCollection<ExportRotationDiagnosticSample> GetExportRotationDiagnosticSamples()
     {
         return exportRotationDiagnosticSamples.ToArray();
+    }
+
+    internal void RecordExportIkSourceDiagnostic(
+        int recorderFrameNumber,
+        int unityFrameNumber,
+        float sampleTime,
+        BoneNames boneName,
+        Vector3 rootReferencePosition,
+        Vector3 sourceWorldPosition,
+        Vector3 sourceRelativePosition,
+        Vector3 exportedUnityPosition,
+        Vector3 directFootWorldPosition = default(Vector3),
+        Vector3 directFootRootPosition = default(Vector3))
+    {
+        exportIkSourceDiagnosticSamples.Add(new ExportIkSourceDiagnosticSample(
+            recorderFrameNumber,
+            unityFrameNumber,
+            sampleTime,
+            boneName,
+            rootReferencePosition,
+            sourceWorldPosition,
+            sourceRelativePosition,
+            exportedUnityPosition,
+            directFootWorldPosition,
+            directFootRootPosition));
+    }
+
+    internal IReadOnlyCollection<ExportIkSourceDiagnosticSample> GetExportIkSourceDiagnosticSamples()
+    {
+        return exportIkSourceDiagnosticSamples.ToArray();
+    }
+
+    internal static List<ExportIkSourceDiagnosticSample> BuildFinalExportIkSourceDiagnosticSamples(
+        IEnumerable<ExportIkSourceDiagnosticSample> samples,
+        IReadOnlyDictionary<BoneNames, List<Vector3>> finalVmdPositions,
+        int safeFrameCount)
+    {
+        var finalSamples = new List<ExportIkSourceDiagnosticSample>();
+        if (samples == null)
+        {
+            return finalSamples;
+        }
+
+        foreach (ExportIkSourceDiagnosticSample sample in samples)
+        {
+            Vector3 exportedUnityPosition = sample.ExportedUnityPosition;
+            if (finalVmdPositions != null &&
+                sample.RecorderFrameNumber >= 0 &&
+                sample.RecorderFrameNumber < safeFrameCount &&
+                finalVmdPositions.TryGetValue(sample.BoneName, out var finalPositions) &&
+                finalPositions != null &&
+                sample.RecorderFrameNumber < finalPositions.Count)
+            {
+                exportedUnityPosition = ConvertVmdExportPositionToUnityMeters(finalPositions[sample.RecorderFrameNumber]);
+            }
+
+            finalSamples.Add(new ExportIkSourceDiagnosticSample(
+                sample.RecorderFrameNumber,
+                sample.UnityFrameNumber,
+                sample.SampleTime,
+                sample.BoneName,
+                sample.RootReferencePosition,
+                sample.SourceWorldPosition,
+                sample.SourceRelativePosition,
+                exportedUnityPosition,
+                sample.DirectFootWorldPosition,
+                sample.DirectFootRootPosition));
+        }
+
+        return finalSamples;
     }
 
     internal static string BuildExportRotationDiagnosticsCsv(IEnumerable<ExportRotationDiagnosticAggregate> aggregates)
@@ -448,6 +575,45 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
         return builder.ToString();
     }
 
+    internal static string BuildExportIkSourceDiagnosticsCsv(IEnumerable<ExportIkSourceDiagnosticSample> samples)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("recorderFrame,unityFrame,sampleTime,boneName,boneIndex,rootReferencePosition,sourceWorldPosition,sourceRelativePosition,exportedUnityPosition,directFootWorldPosition,directFootRootPosition");
+
+        if (samples == null)
+        {
+            return builder.ToString();
+        }
+
+        foreach (ExportIkSourceDiagnosticSample sample in samples.OrderBy(row => row.RecorderFrameNumber).ThenBy(row => (int)row.BoneName))
+        {
+            builder.Append(sample.RecorderFrameNumber.ToString(CultureInfo.InvariantCulture));
+            builder.Append(',');
+            builder.Append(sample.UnityFrameNumber.ToString(CultureInfo.InvariantCulture));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticFloat(sample.SampleTime));
+            builder.Append(',');
+            builder.Append(CsvEscape(sample.BoneName.ToString()));
+            builder.Append(',');
+            builder.Append(((int)sample.BoneName).ToString(CultureInfo.InvariantCulture));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.RootReferencePosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.SourceWorldPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.SourceRelativePosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.ExportedUnityPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.DirectFootWorldPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.DirectFootRootPosition));
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
     private string WriteExportRotationDiagnosticsCsv(string vmdFilePath)
     {
         LastExportRotationDiagnosticsCsvPath = "";
@@ -473,9 +639,34 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
         return csvPath;
     }
 
+    private string WriteExportIkSourceDiagnosticsCsv(string vmdFilePath)
+    {
+        LastExportIkSourceDiagnosticsCsvPath = "";
+        if (!EnableExportIkSourceDiagnostics ||
+            exportIkSourceDiagnosticSamplesSaved == null ||
+            exportIkSourceDiagnosticSamplesSaved.Count == 0)
+        {
+            return "";
+        }
+
+        string csvPath = Path.ChangeExtension(vmdFilePath, ".export_ik_source_samples.csv");
+        File.WriteAllText(csvPath, BuildExportIkSourceDiagnosticsCsv(exportIkSourceDiagnosticSamplesSaved), Encoding.UTF8);
+        LastExportIkSourceDiagnosticsCsvPath = csvPath;
+        Debug.Log($"[VMDRecorder] export IK source diagnostics: {csvPath}");
+        return csvPath;
+    }
+
     private static string FormatDiagnosticFloat(float value)
     {
         return value.ToString("0.######", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatDiagnosticVector3(Vector3 value)
+    {
+        return CsvEscape(
+            FormatDiagnosticFloat(value.x) + "|" +
+            FormatDiagnosticFloat(value.y) + "|" +
+            FormatDiagnosticFloat(value.z));
     }
 
     private static string CsvEscape(string value)

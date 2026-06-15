@@ -59,14 +59,38 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_EmptyPath_When_MakingProjectRelativePath_Then_ReturnsEmptyPath);
             RunTest(results, nameof(tests.Given_SatisfactionFullClip_When_CalculatingReferenceTiming_Then_Matches6000FrameYybReference),
                 tests.Given_SatisfactionFullClip_When_CalculatingReferenceTiming_Then_Matches6000FrameYybReference);
+            RunTest(results, nameof(tests.Given_SatisfactionFullClipAndReferenceTimingDisabled_When_CalculatingReferenceTiming_Then_KeepsNormalPlayback),
+                tests.Given_SatisfactionFullClipAndReferenceTimingDisabled_When_CalculatingReferenceTiming_Then_KeepsNormalPlayback);
+            RunTest(results, nameof(tests.Given_CustomVmdPlaybackSpeed_When_ResolvingRecordingLength_Then_PreservesFullClipAtThatSpeed),
+                tests.Given_CustomVmdPlaybackSpeed_When_ResolvingRecordingLength_Then_PreservesFullClipAtThatSpeed);
+            RunTest(results, nameof(tests.Given_GhostHasNoRenderers_When_ShowGhostModelIsEnabled_Then_UsesSkeletonDebugFallback),
+                tests.Given_GhostHasNoRenderers_When_ShowGhostModelIsEnabled_Then_UsesSkeletonDebugFallback);
+            RunTest(results, nameof(tests.Given_GhostHasRenderers_When_ShowGhostModelIsEnabled_Then_StillUsesSkeletonDebugVisibilityAid),
+                tests.Given_GhostHasRenderers_When_ShowGhostModelIsEnabled_Then_StillUsesSkeletonDebugVisibilityAid);
+            RunTest(results, nameof(tests.Given_GhostSkeletonDebugRendererInitializedBeforeAnimator_When_AnimatorIsAdded_Then_ReacquiresAnimatorForSceneViewLines),
+                tests.Given_GhostSkeletonDebugRendererInitializedBeforeAnimator_When_AnimatorIsAdded_Then_ReacquiresAnimatorForSceneViewLines);
+            RunTest(results, nameof(tests.Given_GhostContainerScaleIsSmall_When_DrawingDebugSkeleton_Then_CompensatesLinePositionsForSceneVisibility),
+                tests.Given_GhostContainerScaleIsSmall_When_DrawingDebugSkeleton_Then_CompensatesLinePositionsForSceneVisibility);
             RunTest(results, nameof(tests.Given_FullEditorSmokeSatisfactionClip_When_CalculatingReferenceTiming_Then_Matches6000FrameYybReference),
                 tests.Given_FullEditorSmokeSatisfactionClip_When_CalculatingReferenceTiming_Then_Matches6000FrameYybReference);
             RunTest(results, nameof(tests.Given_ShortEditorSmokeSatisfactionClip_When_CalculatingReferenceTiming_Then_KeepsRequestedSmokeWindow),
                 tests.Given_ShortEditorSmokeSatisfactionClip_When_CalculatingReferenceTiming_Then_KeepsRequestedSmokeWindow);
             RunTest(results, nameof(tests.Given_LongRetargetPrewarmConfigured_When_ResolvingPrewarmFrameCount_Then_DoesNotCapAtLegacyTenFrames),
                 tests.Given_LongRetargetPrewarmConfigured_When_ResolvingPrewarmFrameCount_Then_DoesNotCapAtLegacyTenFrames);
+            RunTest(results, nameof(tests.Given_PreviewOnlyImport_When_ResolvingPrewarmFrameCount_Then_DoesNotHoldStartPoseAcrossVisibleFrames),
+                tests.Given_PreviewOnlyImport_When_ResolvingPrewarmFrameCount_Then_DoesNotHoldStartPoseAcrossVisibleFrames);
+            RunTest(results, nameof(tests.Given_PreviewOnlyImport_When_ResolvingPrewarmVisibleYieldFrames_Then_DoesNotRenderExtraStartFrame),
+                tests.Given_PreviewOnlyImport_When_ResolvingPrewarmVisibleYieldFrames_Then_DoesNotRenderExtraStartFrame);
+            RunTest(results, nameof(tests.Given_PreviewOnlyImport_When_ResolvingStartDelay_Then_DoesNotHoldInitialPoseBeforePlayback),
+                tests.Given_PreviewOnlyImport_When_ResolvingStartDelay_Then_DoesNotHoldInitialPoseBeforePlayback);
             RunTest(results, nameof(tests.Given_NonSatisfactionClip_When_CalculatingReferenceTiming_Then_KeepsDefaultClipTiming),
                 tests.Given_NonSatisfactionClip_When_CalculatingReferenceTiming_Then_KeepsDefaultClipTiming);
+            RunTest(results, nameof(tests.Given_EditorSmokeCaptureOverride_When_NormalizingResolution_Then_AllowsUhd4KAndRejectsInvalidInput),
+                tests.Given_EditorSmokeCaptureOverride_When_NormalizingResolution_Then_AllowsUhd4KAndRejectsInvalidInput);
+            RunTest(results, nameof(tests.Given_MainSceneFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesFullClipUhd4KAndHeadMiddleTailSamples),
+                tests.Given_MainSceneFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesFullClipUhd4KAndHeadMiddleTailSamples);
+            RunTest(results, nameof(tests.Given_MainRecordingFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesSatisfaction2Fbx),
+                tests.Given_MainRecordingFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesSatisfaction2Fbx);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

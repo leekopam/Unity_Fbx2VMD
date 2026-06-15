@@ -16,6 +16,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
     {
         private const string MenuRoot = "Machine Spirit/YYB Compare/";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
         private const string DefaultFbxFileName = "satisfaction_2.fbx";
         private const string SatisfactionReferenceOutputBaseName = "satisfaction_2";
@@ -54,6 +55,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private enum CaptureMode
         {
             MainAuto,
+            MainRecording,
             SubManualTestPrefab,
             SubManualYyb
         }
@@ -231,6 +233,36 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 enableRecorderParentFrameIkOffsetsWhenCenterParented: true);
         }
 
+        [MenuItem(MenuRoot + "Clear Stale Run State", false, 2139)]
+        private static void ClearStaleRunStateMenu()
+        {
+            ClearStaleRunState("menu");
+        }
+
+        public static void ClearStaleRunState(string reason)
+        {
+            HumanoidSampleCode.SetEditorAutoStartSuppressed(false);
+            RestoreEnterPlayModeOptions();
+            CleanupActiveSubscriptions();
+            EditorApplication.playModeStateChanged -= HandlePlayModeStateChanged;
+            EditorApplication.update -= TryEnterPlayModeForActiveJob;
+            EditorApplication.update -= TryAdvanceAfterPlayStop;
+            PendingJobs.Clear();
+            Results.Clear();
+            Failures.Clear();
+            _activeJob = null;
+            _activeFileManager = null;
+            _activeRecorder = null;
+            _activeJobFinished = false;
+            _advanceAfterPlayStopPending = false;
+            _playModeEntryPending = false;
+            _playModeEntryRequestedAt = 0d;
+            _activeJobStartedInPlayMode = false;
+            _isRunning = false;
+            ClearPersistedState();
+            AppendRunnerTrace($"stale run state cleared reason={reason}");
+        }
+
         public static void RunBatch()
         {
             string fbxFileName = GetCommandLineValue("-yybCompareFbx", DefaultFbxFileName);
@@ -345,6 +377,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             });
             PendingJobs.Enqueue(new CaptureJob
             {
+                Mode = CaptureMode.SubManualYyb,
+                ScenePath = SubManualScenePath,
+                SceneName = "Sub_Manual",
+                DisplayName = "Sub_Manual YYB 수동 기준",
+                ManualTargetNameToken = ManualYybNameToken
+            });
+            PendingJobs.Enqueue(new CaptureJob
+            {
+                Mode = CaptureMode.MainRecording,
+                ScenePath = MainRecordingScenePath,
+                SceneName = "Main_Recoding",
+                DisplayName = "Main_Recoding YYB 자동 경로",
+                ManualTargetNameToken = string.Empty
+            });
+            PendingJobs.Enqueue(new CaptureJob
+            {
                 Mode = CaptureMode.MainAuto,
                 ScenePath = MainAutoScenePath,
                 SceneName = "Main_Auto",
@@ -453,8 +501,15 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
         private static void StartNextJob()
         {
-            if (!_isRunning)
+            if (!CanStartNextJob(_isRunning, _activeJob != null, _activeJobFinished))
             {
+                if (_isRunning)
+                {
+                    AppendRunnerTrace(
+                        $"start next ignored active={_activeJob?.DisplayName ?? "<none>"} " +
+                        $"finished={_activeJobFinished} pendingJobs={PendingJobs.Count}");
+                }
+
                 return;
             }
 
@@ -494,6 +549,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             QueuePlayModeEntryForActiveJob("StartNextJob");
         }
 
+        private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)
+        {
+            return isRunning && (!hasActiveJob || activeJobFinished);
+        }
+
         private static void StartCurrentJobInPlayMode()
         {
             if (!_isRunning || _activeJob == null || !EditorApplication.isPlaying || EditorApplication.isPaused || EditorApplication.isCompiling)
@@ -513,7 +573,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 switch (_activeJob.Mode)
                 {
                     case CaptureMode.MainAuto:
-                        StartMainAutoJob();
+                    case CaptureMode.MainRecording:
+                        StartMainSceneJob();
                         break;
                     case CaptureMode.SubManualTestPrefab:
                     case CaptureMode.SubManualYyb:
@@ -526,17 +587,18 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             catch (Exception ex)
             {
                 _activeJobStartedInPlayMode = false;
+                _activeJobFinished = true;
                 RecordFailure($"{_activeJob.DisplayName} 시작 실패: {ex.Message}");
                 RequestPlayModeStop();
             }
         }
 
-        private static void StartMainAutoJob()
+        private static void StartMainSceneJob()
         {
             _activeFileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
             if (_activeFileManager == null)
             {
-                throw new InvalidOperationException("Main_Auto 씬에서 FileManager를 찾지 못했습니다.");
+                throw new InvalidOperationException($"{_activeJob.SceneName} 씬에서 FileManager를 찾지 못했습니다.");
             }
 
             _activeRecorder = _activeFileManager.targetCharacter != null
@@ -553,8 +615,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 }
             }
 
-            _activeFileManager.EditorDiagnosticSmokeFinished -= HandleMainAutoFinished;
-            _activeFileManager.EditorDiagnosticSmokeFinished += HandleMainAutoFinished;
+            _activeFileManager.EditorDiagnosticSmokeFinished -= HandleMainSceneFinished;
+            _activeFileManager.EditorDiagnosticSmokeFinished += HandleMainSceneFinished;
             SavePersistedState();
 
             bool started = _activeFileManager.StartEditorDiagnosticSmoke(
@@ -578,10 +640,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
         private static void StartSubManualJob(string targetNameToken)
         {
-            _activeRecorder = FindManualRecorder(targetNameToken);
+            _activeRecorder = SelectActiveManualRecorder(targetNameToken);
             if (_activeRecorder == null)
             {
                 throw new InvalidOperationException($"Sub_Manual 수동 기준 대상을 찾지 못했습니다: {targetNameToken}");
+            }
+            if (!_activeRecorder.gameObject.activeInHierarchy)
+            {
+                throw new InvalidOperationException($"Sub_Manual 수동 기준 대상이 비활성 상태입니다: {GetHierarchyPath(_activeRecorder.transform)}");
             }
 
             Animator animator = _activeRecorder.GetComponent<Animator>();
@@ -678,9 +744,48 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             return null;
         }
 
-        private static void HandleMainAutoFinished(string fbxFileName, VmdSaveResult result)
+        private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
         {
-            if (_activeJob == null || _activeJob.Mode != CaptureMode.MainAuto || _activeJobFinished)
+            HumanoidSampleCode[] recorders = UnityEngine.Object.FindObjectsOfType<HumanoidSampleCode>(true);
+            HumanoidSampleCode selected = null;
+            foreach (HumanoidSampleCode recorder in recorders)
+            {
+                if (recorder == null)
+                {
+                    continue;
+                }
+
+                string hierarchyPath = GetHierarchyPath(recorder.transform);
+                if (hierarchyPath.IndexOf(targetNameToken, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    selected = recorder;
+                    break;
+                }
+            }
+
+            if (selected == null)
+            {
+                return null;
+            }
+
+            foreach (HumanoidSampleCode recorder in recorders)
+            {
+                if (recorder == null)
+                {
+                    continue;
+                }
+
+                recorder.gameObject.SetActive(ReferenceEquals(recorder, selected));
+            }
+
+            return selected;
+        }
+
+        private static void HandleMainSceneFinished(string fbxFileName, VmdSaveResult result)
+        {
+            if (_activeJob == null ||
+                (_activeJob.Mode != CaptureMode.MainAuto && _activeJob.Mode != CaptureMode.MainRecording) ||
+                _activeJobFinished)
             {
                 return;
             }
@@ -688,9 +793,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             MotionComparisonProbe probe = _activeRecorder != null
                 ? _activeRecorder.GetComponent<MotionComparisonProbe>()
                 : UnityEngine.Object.FindObjectOfType<MotionComparisonProbe>();
-            FinalizeActiveJob(result, probe, targetName: _activeFileManager != null && _activeFileManager.targetCharacter != null
+            FinalizeActiveJob(
+                BuildStableCandidateResult(result),
+                probe,
+                targetName: _activeFileManager != null && _activeFileManager.targetCharacter != null
                 ? _activeFileManager.targetCharacter.name
-                : "Main_Auto Target");
+                : $"{_activeJob.SceneName} Target");
         }
 
         private static void HandleManualFinished(VmdSaveResult result)
@@ -751,6 +859,112 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             RequestPlayModeStop();
+        }
+
+        private static VmdSaveResult BuildStableCandidateResult(VmdSaveResult result)
+        {
+            if (!result.Success ||
+                _activeJob == null ||
+                _activeJob.Mode == CaptureMode.MainAuto ||
+                string.IsNullOrWhiteSpace(result.FilePath) ||
+                !File.Exists(result.FilePath))
+            {
+                return result;
+            }
+
+            string copyPath = BuildCandidateVmdEvidencePath(_activeJob, result.FilePath);
+            if (string.IsNullOrWhiteSpace(copyPath))
+            {
+                return result;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(copyPath) ?? _summaryDirectory);
+            File.Copy(result.FilePath, copyPath, overwrite: true);
+            string exportRotationDiagnosticsCsvPath = CopyStableCandidateSiblingArtifact(
+                result.FilePath,
+                result.ExportRotationDiagnosticsCsvPath,
+                copyPath);
+            string exportIkSourceDiagnosticsCsvPath = CopyStableCandidateSiblingArtifact(
+                result.FilePath,
+                result.ExportIkSourceDiagnosticsCsvPath,
+                copyPath);
+            return VmdSaveResult.Ok(
+                copyPath,
+                result.FrameCount,
+                new FileInfo(copyPath).Length,
+                exportRotationDiagnosticsCsvPath,
+                exportIkSourceDiagnosticsCsvPath);
+        }
+
+        private static string CopyStableCandidateSiblingArtifact(
+            string sourceVmdPath,
+            string sourceArtifactPath,
+            string candidateVmdPath)
+        {
+            if (string.IsNullOrWhiteSpace(sourceArtifactPath) ||
+                !File.Exists(sourceArtifactPath) ||
+                string.IsNullOrWhiteSpace(candidateVmdPath))
+            {
+                return string.Empty;
+            }
+
+            string destinationPath = BuildStableCandidateSiblingArtifactPath(
+                sourceVmdPath,
+                sourceArtifactPath,
+                candidateVmdPath);
+            if (string.IsNullOrWhiteSpace(destinationPath))
+            {
+                return string.Empty;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath) ?? _summaryDirectory);
+            File.Copy(sourceArtifactPath, destinationPath, overwrite: true);
+            return destinationPath;
+        }
+
+        private static string BuildStableCandidateSiblingArtifactPath(
+            string sourceVmdPath,
+            string sourceArtifactPath,
+            string candidateVmdPath)
+        {
+            string artifactFileName = Path.GetFileName(sourceArtifactPath);
+            string candidateDirectory = Path.GetDirectoryName(candidateVmdPath) ?? _summaryDirectory;
+            string candidateBaseName = Path.GetFileNameWithoutExtension(candidateVmdPath);
+            if (string.IsNullOrWhiteSpace(artifactFileName) ||
+                string.IsNullOrWhiteSpace(candidateDirectory) ||
+                string.IsNullOrWhiteSpace(candidateBaseName))
+            {
+                return string.Empty;
+            }
+
+            string sourceBaseName = Path.GetFileNameWithoutExtension(sourceVmdPath);
+            string suffix = !string.IsNullOrWhiteSpace(sourceBaseName) &&
+                artifactFileName.StartsWith(sourceBaseName, StringComparison.OrdinalIgnoreCase)
+                    ? artifactFileName.Substring(sourceBaseName.Length)
+                    : $".{SanitizeFileName(Path.GetFileNameWithoutExtension(sourceArtifactPath))}{Path.GetExtension(sourceArtifactPath)}";
+            if (string.IsNullOrWhiteSpace(suffix))
+            {
+                suffix = Path.GetExtension(sourceArtifactPath);
+            }
+
+            return Path.Combine(candidateDirectory, $"{candidateBaseName}{suffix}");
+        }
+
+        private static string BuildCandidateVmdEvidencePath(CaptureJob job, string sourceVmdPath)
+        {
+            if (job == null || string.IsNullOrWhiteSpace(_summaryDirectory))
+            {
+                return string.Empty;
+            }
+
+            string sourceExtension = Path.GetExtension(sourceVmdPath);
+            if (string.IsNullOrWhiteSpace(sourceExtension))
+            {
+                sourceExtension = ".vmd";
+            }
+
+            string fileName = BuildCandidateVmdEvidenceFileName(job.Mode, sourceExtension);
+            return Path.Combine(_summaryDirectory, fileName);
         }
 
         private static void RequestPlayModeStop()
@@ -895,7 +1109,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         {
             if (_activeFileManager != null)
             {
-                _activeFileManager.EditorDiagnosticSmokeFinished -= HandleMainAutoFinished;
+                _activeFileManager.EditorDiagnosticSmokeFinished -= HandleMainSceneFinished;
             }
 
             if (_activeRecorder != null)
@@ -919,7 +1133,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
         private static void FinalizeRun()
         {
-            _isRunning = false;
+            AppendRunnerTrace($"finalize started results={Results.Count} failures={Failures.Count}");
             HumanoidSampleCode.SetEditorAutoStartSuppressed(false);
             RestoreEnterPlayModeOptions();
             CleanupActiveSubscriptions();
@@ -929,12 +1143,25 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             string summaryJsonPath = Path.Combine(_summaryDirectory, SummaryJsonFileName);
             string summaryMarkdownPath = Path.Combine(_summaryDirectory, SummaryMarkdownFileName);
-            Directory.CreateDirectory(Path.GetDirectoryName(summaryJsonPath) ?? _summaryDirectory);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(summaryJsonPath) ?? _summaryDirectory);
+                WriteSummaryJson(summaryJsonPath);
+                WriteSummaryMarkdown(summaryMarkdownPath);
+                CopyLatestSummary(summaryJsonPath, LatestSummaryJsonRelativePath);
+                CopyLatestSummary(summaryMarkdownPath, LatestSummaryMarkdownRelativePath);
+            }
+            catch (Exception ex)
+            {
+                string message = $"summary finalize failed: {ex.Message}";
+                if (!Failures.Contains(message))
+                {
+                    Failures.Add(message);
+                }
 
-            WriteSummaryJson(summaryJsonPath);
-            WriteSummaryMarkdown(summaryMarkdownPath);
-            CopyLatestSummary(summaryJsonPath, LatestSummaryJsonRelativePath);
-            CopyLatestSummary(summaryMarkdownPath, LatestSummaryMarkdownRelativePath);
+                Debug.LogError($"[YybVisualComparisonBatchRunner] {message}\n{ex.StackTrace}");
+                AppendRunnerTrace(message);
+            }
 
             string resultMessage =
                 $"[YybVisualComparisonBatchRunner] 종료: success={Results.Count(result => result.success)}/{Results.Count}, " +
@@ -953,7 +1180,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 summaryJsonPath: summaryJsonPath,
                 summaryMarkdownPath: summaryMarkdownPath,
                 failures: Failures.ToArray());
+            _isRunning = false;
             ClearPersistedState();
+            AppendRunnerTrace($"finalize completed passed={Failures.Count == 0} results={Results.Count}");
 
             if (Application.isBatchMode)
             {
@@ -1184,11 +1413,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
             else if (PendingJobs.Count > 0)
             {
-                EditorApplication.delayCall += StartNextJob;
+                StartNextJob();
             }
             else
             {
-                EditorApplication.delayCall += FinalizeRun;
+                FinalizeRun();
             }
         }
 
@@ -1509,13 +1738,52 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         {
             CaptureResult baseline = Results.FirstOrDefault(result =>
                 string.Equals(result.jobMode, CaptureMode.SubManualTestPrefab.ToString(), StringComparison.Ordinal));
-            CaptureResult candidate = Results.FirstOrDefault(result =>
-                string.Equals(result.jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal));
+            if (baseline == null)
+            {
+                return Array.Empty<MotionComparisonFrameQualitySummary>();
+            }
+
+            List<MotionComparisonFrameQualitySummary> frameQualitySummaries = new List<MotionComparisonFrameQualitySummary>();
+            foreach (CaptureResult candidate in EnumerateMainSceneCandidates())
+            {
+                frameQualitySummaries.AddRange(BuildFrameQualitySummariesForCandidate(baseline, candidate));
+            }
+
+            foreach (MotionComparisonFrameQualitySummary frameQualitySummary in frameQualitySummaries)
+            {
+                MotionComparisonProbeReportWriter.AttachLatestMmdAutomationEvidence(
+                    frameQualitySummary,
+                    _projectRoot,
+                    Path.Combine(_projectRoot, MmdAutomationRunsRelativePath));
+            }
+
+            return frameQualitySummaries.ToArray();
+        }
+
+        private static IEnumerable<CaptureResult> EnumerateMainSceneCandidates()
+        {
+            return Results.Where(result =>
+                result != null &&
+                IsMainSceneCandidateMode(result.jobMode) &&
+                result.success);
+        }
+
+        private static bool IsMainSceneCandidateMode(string jobMode)
+        {
+            return string.Equals(jobMode, CaptureMode.MainRecording.ToString(), StringComparison.Ordinal) ||
+                string.Equals(jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal);
+        }
+
+        private static MotionComparisonFrameQualitySummary[] BuildFrameQualitySummariesForCandidate(
+            CaptureResult baseline,
+            CaptureResult candidate)
+        {
             if (baseline == null || candidate == null)
             {
                 return Array.Empty<MotionComparisonFrameQualitySummary>();
             }
 
+            ResolveShortCandidateVmdPath(candidate);
             MotionComparisonFrameQualitySummary summary = MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
                 baseline.jobDisplayName,
                 ToAbsoluteProjectPath(baseline.comparisonMetricsCsvPath),
@@ -1525,17 +1793,69 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 baseline.frameCount,
                 candidate.frameCount,
                 ResolveSummaryTargetFrameCount());
-            MotionComparisonFrameQualitySummary[] summaries =
-                MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(summary);
-            foreach (MotionComparisonFrameQualitySummary frameQualitySummary in summaries)
+            if (string.Equals(candidate.jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal) &&
+                MotionComparisonProbeReportWriter.TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
+                    summary,
+                    out VerticalSolvePrimaryExportPromotion promotion))
             {
-                MotionComparisonProbeReportWriter.AttachLatestMmdAutomationEvidence(
-                    frameQualitySummary,
-                    _projectRoot,
-                    Path.Combine(_projectRoot, MmdAutomationRunsRelativePath));
+                candidate.fileSizeBytes = promotion.promoted_vmd_bytes;
+                summary = MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                    baseline.jobDisplayName,
+                    ToAbsoluteProjectPath(baseline.comparisonMetricsCsvPath),
+                    candidate.jobDisplayName,
+                    ToAbsoluteProjectPath(candidate.comparisonMetricsCsvPath),
+                    ToAbsoluteProjectPath(candidate.vmdPath),
+                    baseline.frameCount,
+                    candidate.frameCount,
+                    ResolveSummaryTargetFrameCount());
+                summary.frame_quality_evaluation_role = "main_auto_integrated_vertical_solve_metrics";
+                summary.frame_quality_evaluation_basis =
+                    "primary Main_Auto result paths after bounded vertical solve promotion; raw metrics/VMD were preserved as raw_vertical_solve_diagnostic artifacts";
+                summary.vertical_solve_corrected_candidate_manifest_path = promotion.integrated_manifest_path;
+            }
+            else if (string.Equals(candidate.jobMode, CaptureMode.MainRecording.ToString(), StringComparison.Ordinal))
+            {
+                MotionComparisonProbeReportWriter.MarkIntentionalMovingRootStageMotion(summary);
             }
 
+            MotionComparisonFrameQualitySummary[] summaries =
+                MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(summary);
             return summaries;
+        }
+
+        private static void ResolveShortCandidateVmdPath(CaptureResult candidate)
+        {
+            if (candidate == null ||
+                !IsMainSceneCandidateMode(candidate.jobMode) ||
+                string.Equals(candidate.jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(_summaryDirectory))
+            {
+                return;
+            }
+
+            string sourceExtension = Path.GetExtension(candidate.vmdPath);
+            if (string.IsNullOrWhiteSpace(sourceExtension))
+            {
+                sourceExtension = ".vmd";
+            }
+
+            string shortPath = Path.Combine(
+                _summaryDirectory,
+                BuildCandidateVmdEvidenceFileName(candidate.jobMode, sourceExtension));
+            if (!File.Exists(shortPath))
+            {
+                return;
+            }
+
+            string currentAbsolutePath = ToAbsoluteProjectPath(candidate.vmdPath);
+            if (string.Equals(currentAbsolutePath, shortPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            candidate.vmdPath = MakeProjectRelativePath(shortPath);
+            candidate.fileSizeBytes = new FileInfo(shortPath).Length;
+            SavePersistedState();
         }
 
         private static int ResolveFrameCount(CaptureMode mode)
@@ -1667,9 +1987,25 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 return selection;
             }
 
+            MotionComparisonFrameQualitySummary mainAutoIntegrated = frameQualitySummaries.FirstOrDefault(summary =>
+                summary != null &&
+                string.Equals(summary.frame_quality_evaluation_role, "main_auto_integrated_vertical_solve_metrics", StringComparison.Ordinal));
             MotionComparisonFrameQualitySummary raw = frameQualitySummaries.FirstOrDefault(summary =>
                 summary != null &&
-                string.Equals(summary.frame_quality_evaluation_role, "evaluation_candidate_metrics", StringComparison.Ordinal));
+                string.Equals(summary.frame_quality_evaluation_role, "evaluation_candidate_metrics", StringComparison.Ordinal) &&
+                IsMainAutoSummary(summary));
+            if (raw == null)
+            {
+                raw = frameQualitySummaries.FirstOrDefault(summary =>
+                    summary != null &&
+                    string.Equals(summary.frame_quality_evaluation_role, "evaluation_candidate_metrics", StringComparison.Ordinal));
+            }
+
+            if (raw == null)
+            {
+                raw = mainAutoIntegrated;
+            }
+
             if (raw == null)
             {
                 raw = frameQualitySummaries.FirstOrDefault(summary => summary != null);
@@ -1677,7 +2013,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             MotionComparisonFrameQualitySummary corrected = frameQualitySummaries.FirstOrDefault(summary =>
                 summary != null &&
-                string.Equals(summary.frame_quality_evaluation_role, "corrected_candidate_metrics", StringComparison.Ordinal));
+                string.Equals(summary.frame_quality_evaluation_role, "corrected_candidate_metrics", StringComparison.Ordinal) &&
+                IsMainAutoSummary(summary));
+            if (corrected == null)
+            {
+                corrected = frameQualitySummaries.FirstOrDefault(summary =>
+                    summary != null &&
+                    string.Equals(summary.frame_quality_evaluation_role, "corrected_candidate_metrics", StringComparison.Ordinal));
+            }
 
             FillRawCandidateSelectionFields(selection, raw);
             FillCorrectedCandidateSelectionFields(selection, corrected);
@@ -1686,6 +2029,21 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 string.Equals(corrected.status, "pass", StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrWhiteSpace(corrected.candidate_vmd_path) &&
                 !string.IsNullOrWhiteSpace(corrected.candidate_metrics_csv);
+            bool integratedPrimaryPasses = mainAutoIntegrated != null &&
+                string.Equals(mainAutoIntegrated.status, "pass", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(mainAutoIntegrated.candidate_vmd_path) &&
+                !string.IsNullOrWhiteSpace(mainAutoIntegrated.candidate_metrics_csv);
+            if (integratedPrimaryPasses)
+            {
+                FillSelectedCandidateFields(selection, mainAutoIntegrated);
+                selection.selected_candidate_output_role = "user_facing_export_artifact";
+                selection.selected_candidate_preserves_raw_diagnostic = true;
+                FillSelectedCandidateAcceptanceEvidence(selection, raw, mainAutoIntegrated, mainAutoIntegrated.vertical_solve_corrected_candidate_manifest_path);
+                selection.selection_basis =
+                    "primary Main_Auto export paths passed after bounded vertical solve integration; raw diagnostic artifacts remain preserved";
+                return selection;
+            }
+
             if (correctedPasses)
             {
                 FillSelectedCandidateFields(selection, corrected);
@@ -1693,18 +2051,26 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 selection.selected_candidate_preserves_raw_diagnostic = raw != null;
                 FillSelectedCandidateAcceptanceEvidence(selection, raw, corrected, raw != null ? raw.vertical_solve_corrected_candidate_manifest_path : string.Empty);
                 selection.selection_basis =
-                    "corrected candidate passed the same raw frame_quality evaluator and is selected as the user-facing candidate artifact; raw candidate remains diagnostic";
+                    "corrected candidate passed frame-quality gates and is selected for user-facing export; raw candidate remains recorded for diagnostics";
                 return selection;
             }
 
-            FillSelectedCandidateFields(selection, raw);
-            selection.selected_candidate_output_role = "raw_recorder_candidate";
-            selection.selected_candidate_preserves_raw_diagnostic = false;
-            FillSelectedCandidateAcceptanceEvidence(selection, raw, raw, string.Empty);
-            selection.selection_basis = corrected == null
-                ? "no corrected candidate artifact is available; raw candidate remains selected"
-                : "corrected candidate is not passing; raw candidate remains selected";
+            if (raw != null)
+            {
+                FillSelectedCandidateFields(selection, raw);
+                selection.selection_basis = corrected == null
+                    ? "no corrected candidate is available; selected raw/evaluation candidate for diagnostics"
+                    : "corrected candidate is not passing; selected raw/evaluation candidate for diagnostics";
+            }
+
             return selection;
+        }
+
+        private static bool IsMainAutoSummary(MotionComparisonFrameQualitySummary summary)
+        {
+            return summary != null &&
+                !string.IsNullOrWhiteSpace(summary.candidate_label) &&
+                summary.candidate_label.IndexOf("Main_Auto", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static void FillSelectedCandidateFields(
@@ -1758,20 +2124,30 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 selected.frame_quality_evaluation_role,
                 "corrected_candidate_metrics",
                 StringComparison.Ordinal);
+            bool selectedIntegratedPrimary = string.Equals(
+                selected.frame_quality_evaluation_role,
+                "main_auto_integrated_vertical_solve_metrics",
+                StringComparison.Ordinal);
             bool hasRequiredFiles = selectedCorrectedArtifact
                 ? selection.selected_candidate_vmd_exists &&
                   selection.selected_candidate_metrics_exists &&
                   selection.selected_candidate_manifest_exists &&
                   selection.selected_candidate_differs_from_raw_vmd
-                : selection.selected_candidate_vmd_exists && selection.selected_candidate_metrics_exists;
+                : selectedIntegratedPrimary
+                    ? selection.selected_candidate_vmd_exists &&
+                      selection.selected_candidate_metrics_exists &&
+                      selection.selected_candidate_manifest_exists
+                    : selection.selected_candidate_vmd_exists && selection.selected_candidate_metrics_exists;
             selection.selected_candidate_is_acceptance_artifact =
                 selectedPasses &&
-                selectedCorrectedArtifact &&
+                (selectedCorrectedArtifact || selectedIntegratedPrimary) &&
                 string.Equals(selection.selected_candidate_output_role, "user_facing_export_artifact", StringComparison.Ordinal) &&
                 selection.selected_candidate_preserves_raw_diagnostic &&
                 hasRequiredFiles;
             selection.selected_candidate_acceptance_basis = selection.selected_candidate_is_acceptance_artifact
-                ? "selected corrected VMD/metrics/manifest is the final acceptance/export candidate; raw candidate remains diagnostic"
+                ? selectedIntegratedPrimary
+                    ? "selected primary Main_Auto export VMD/metrics/manifest is the final acceptance/export candidate; raw diagnostic files remain preserved"
+                    : "selected corrected VMD/metrics/manifest is the final acceptance/export candidate; raw candidate remains diagnostic"
                 : "selected candidate is not a final acceptance/export artifact yet; raw candidate remains the diagnostic baseline";
         }
 
@@ -2270,6 +2646,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             return safeName.Replace(' ', '_');
+        }
+
+        private static string BuildCandidateVmdEvidenceFileName(CaptureMode mode, string extension)
+        {
+            return BuildCandidateVmdEvidenceFileName(mode.ToString(), extension);
+        }
+
+        private static string BuildCandidateVmdEvidenceFileName(string mode, string extension)
+        {
+            string safeExtension = string.IsNullOrWhiteSpace(extension) ? ".vmd" : extension;
+            string shortMode = string.Equals(mode, CaptureMode.MainRecording.ToString(), StringComparison.Ordinal)
+                ? "rec"
+                : string.Equals(mode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal)
+                    ? "auto"
+                    : SanitizeFileName(mode);
+            return $"vmd-{shortMode}{safeExtension}";
         }
 
         private static string ShortenFileNameToLength(string value, int maxLength)
