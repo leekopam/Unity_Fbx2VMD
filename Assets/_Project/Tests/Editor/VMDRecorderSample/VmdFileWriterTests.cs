@@ -458,8 +458,8 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(recorder.MmdFootIkExportOffset, Is.EqualTo(Vector3.zero), "Default recorders, including testPrefab, must not receive YYB-specific foot lift implicitly.");
                 Assert.That(recorder.ClampMmdFootIkYToFloor, Is.False, "Default recorders must opt in to MMD floor guard explicitly.");
                 Assert.That(recorder.LiftMmdCenterYToKeepFeetAboveFloor, Is.False, "Default recorders must opt in to center/root floor lift explicitly.");
-                Assert.That(recorder.FreezeParentOfAllMotionWhenIgnoringInitialPosition, Is.True, "IgnoreInitialPosition exports should not leak scene carrier motion into MMD root/IK keys.");
-                Assert.That(recorder.ClampMmdCenterExportDeltaSpikes, Is.True, "MMD center guard must be on by default so exported center keys cannot teleport.");
+                Assert.That(recorder.FreezeParentOfAllMotionWhenIgnoringInitialPosition, Is.False, "Default recorders must keep the post-reference-video freeze path opt-in.");
+                Assert.That(recorder.ClampMmdCenterExportDeltaSpikes, Is.False, "Default recorders must keep the post-reference-video center clamp path opt-in.");
                 Assert.That(recorder.MaxMmdCenterExportDeltaPerFrame, Is.LessThanOrEqualTo(0.12f), "MMD center guard must stay stricter than the retarget root-motion spike clamp.");
                 Assert.That(recorder.ClampMmdIkExportDeltaSpikes, Is.False, "Default recorders must not alter foot/toe IK targets in the center/root-only floor correction path.");
                 Assert.That(recorder.MaxMmdFootIkExportDeltaPerFrame, Is.LessThanOrEqualTo(0.12f), "MMD foot IK movement must stay within the same no-teleport threshold as center export.");
@@ -1154,6 +1154,117 @@ namespace Tests.Editor.VMDRecorderSample
             }
         }
 
+        [Test]
+        public void Given_ExportIkSourceDiagnostics_When_BuildingCsv_Then_PerFrameRowsAreReported()
+        {
+            var recorderObject = new GameObject("export-ik-source-diagnostic-samples");
+            try
+            {
+                var recorder = recorderObject.AddComponent<UnityHumanoidVMDRecorder>();
+                recorder.RecordExportIkSourceDiagnostic(
+                    12,
+                    340,
+                    1.25f,
+                    (BoneNames)2,
+                    new Vector3(1f, 0f, -2f),
+                    new Vector3(1.3f, 0.1f, -2.4f),
+                    new Vector3(0.2f, 0.1f, -0.3f),
+                    new Vector3(0.25f, 0.1f, -0.35f));
+
+                string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(
+                    recorder.GetExportIkSourceDiagnosticSamples());
+                string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+                Assert.That(lines[0], Does.Contain("recorderFrame,unityFrame,sampleTime"));
+                Assert.That(lines[0], Does.Contain("directFootWorldPosition"));
+                Assert.That(lines[0], Does.Contain("directFootRootPosition"));
+                Assert.That(lines.Length, Is.EqualTo(2));
+
+                string[] columns = lines[1].Split(',');
+                Assert.That(columns[0], Is.EqualTo("12"));
+                Assert.That(columns[1], Is.EqualTo("340"));
+                Assert.That(columns[2], Is.EqualTo("1.25"));
+                Assert.That(columns[4], Is.EqualTo("2"));
+                Assert.That(columns[5], Is.EqualTo("1|0|-2"));
+                Assert.That(columns[6], Is.EqualTo("1.3|0.1|-2.4"));
+                Assert.That(columns[7], Is.EqualTo("0.2|0.1|-0.3"));
+                Assert.That(columns[8], Is.EqualTo("0.25|0.1|-0.35"));
+                Assert.That(columns[9], Is.EqualTo("0|0|0"));
+                Assert.That(columns[10], Is.EqualTo("0|0|0"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(recorderObject);
+            }
+        }
+
+        [Test]
+        public void Given_MovingModelRootNode_When_ResolvingFootIkRootReference_Then_UsesMovingRoot()
+        {
+            var recorderObject = new GameObject("moving-root-reference-recorder");
+            var modelRootObject = new GameObject("461.!Root");
+            try
+            {
+                recorderObject.transform.position = new Vector3(1f, 0f, 2f);
+                modelRootObject.transform.SetParent(recorderObject.transform, worldPositionStays: true);
+                modelRootObject.transform.position = new Vector3(1.25f, 0f, 2.5f);
+
+                var recorder = recorderObject.AddComponent<UnityHumanoidVMDRecorder>();
+                recorder.UseAbsoluteCoordinateSystem = true;
+                recorder.IgnoreInitialPosition = false;
+
+                InvokePrivate(recorder, "SetInitialPositionAndRotation");
+                var rootReference = (Vector3)InvokePrivate(recorder, "GetCurrentRootPositionForIkReference");
+
+                Assert.That(rootReference.x, Is.EqualTo(modelRootObject.transform.position.x).Within(0.0001f));
+                Assert.That(rootReference.y, Is.EqualTo(modelRootObject.transform.position.y).Within(0.0001f));
+                Assert.That(rootReference.z, Is.EqualTo(modelRootObject.transform.position.z).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(modelRootObject);
+                UnityEngine.Object.DestroyImmediate(recorderObject);
+            }
+        }
+
+        [Test]
+        public void Given_PostGuardIkExportPositions_When_BuildingIkSourceDiagnostics_Then_ReportsFinalWriterInput()
+        {
+            var samples = new[]
+            {
+                new UnityHumanoidVMDRecorder.ExportIkSourceDiagnosticSample(
+                    recorderFrameNumber: 2,
+                    unityFrameNumber: 120,
+                    sampleTime: 0.5f,
+                    boneName: (BoneNames)2,
+                    rootReferencePosition: Vector3.zero,
+                    sourceWorldPosition: new Vector3(1f, 2f, 3f),
+                    sourceRelativePosition: new Vector3(0.1f, 0.2f, 0.3f),
+                    exportedUnityPosition: new Vector3(0.25f, 0.1f, -0.35f))
+            };
+            var finalVmdPositions = new Dictionary<BoneNames, List<Vector3>>
+            {
+                [(BoneNames)2] = new List<Vector3>
+                {
+                    Vector3.zero,
+                    Vector3.zero,
+                    new Vector3(-2.5f, 1.25f, 3.75f)
+                }
+            };
+
+            List<UnityHumanoidVMDRecorder.ExportIkSourceDiagnosticSample> finalSamples =
+                UnityHumanoidVMDRecorder.BuildFinalExportIkSourceDiagnosticSamples(
+                    samples,
+                    finalVmdPositions,
+                    safeFrameCount: 3);
+            string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(finalSamples);
+            string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+            string[] columns = lines[1].Split(',');
+            Assert.That(columns[8], Is.EqualTo("0.2|0.1|-0.3"),
+                "IK source diagnostics must report the post-guard VMD writer input converted back to Unity meters.");
+        }
+
         private static VmdBoneRotationDiagnostic BuildRotationDiagnostic(
             BoneNames boneName,
             float ghostAngle,
@@ -1180,6 +1291,13 @@ namespace Tests.Editor.VMDRecorderSample
                 Quaternion.identity,
                 Quaternion.identity,
                 exportAngle);
+        }
+
+        private static object InvokePrivate(object target, string methodName)
+        {
+            MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, methodName);
+            return method.Invoke(target, null);
         }
 
         private static void WriteOneFrameVmd(string filePath, List<BoneNames> activeBones)

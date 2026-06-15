@@ -9,9 +9,15 @@ EditorBuildSettings:
     path: Assets/_Project/Scene/Main_Auto.unity
     guid: f0915ac3840d87d42b18fe00d40aaa2a
   - enabled: 1
-    path: Assets/_Project/Scene/FbxImport_Capture.unity
+    path: Assets/_Project/Scene/Main_Recoding.unity
     guid: 0f171e57dc96eae469164342e21d12ff
+  - enabled: 1
+    path: Assets/_Project/Scene/MainRecording_SettingsCompanion.unity
+    guid: 08cbc6d950bf49b448a66f823ff35489
   - enabled: 1
     path: Assets/_Project/Scene/Sub_Manual.unity
     guid: 14dea031bbf2c7f4d99689d7223d0e64
+  - enabled: 1
+    path: Assets/_Project/Scene/FbxImport_Capture.unity
+    guid: 0d622ebb755a6964395e5386e2964c81
   m_configObjects: {}

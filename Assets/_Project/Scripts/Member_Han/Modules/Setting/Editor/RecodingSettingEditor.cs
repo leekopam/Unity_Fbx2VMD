@@ -21,7 +21,21 @@ namespace Member_Han.Modules.Graphics.EditorTools
             DrawProperty("enableRecordingDiagnostics", "녹화 진단/캡처 사용");
             DrawProperty("useDeterministicCaptureFramerateForDiagnostics", "테스트용 30fps 시간 고정");
             DrawProperty("enableDiagnosticFingerCloseups", "손 close-up 캡처");
+            DrawProperty("recordingCaptureQuality", "녹화 캡처 해상도");
+            DrawProperty("customRecordingCaptureWidth", "사용자 지정 캡처 폭");
+            DrawProperty("customRecordingCaptureHeight", "사용자 지정 캡처 높이");
             DrawProperty("applyDiagnosticsToFileManagerOnAwake", "실행 시작 시 FileManager에 적용");
+
+            EditorGUILayout.Space(6f);
+            DrawSection("설정 팝업");
+            DrawProperty("settingsPopup", "런타임 설정 팝업");
+            DrawProperty("openSettingsPopupOnStart", "시작 시 설정 팝업 열기");
+
+            EditorGUILayout.Space(6f);
+            DrawSection("공유 설정 파일");
+            DrawProperty("loadSharedSettingsOnAwake", "시작 시 공유 설정 로드");
+            DrawProperty("sharedSettingsFilePathOverride", "공유 설정 파일 override");
+            DrawProperty("sharedSettingsPollingIntervalSeconds", "공유 설정 polling 간격");
 
             serializedObject.ApplyModifiedProperties();
 

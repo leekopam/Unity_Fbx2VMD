@@ -12,6 +12,8 @@ namespace Tests.Editor.FBXImporter
 {
     public class YybMmdExportSafetyDefaultsTests
     {
+        private const float ExpectedYybMmdExportMaxDeltaPerFrame = 0.11f;
+
         private static readonly Type[] YybReferenceClipResolverParameterTypes =
         {
             typeof(string),
@@ -26,25 +28,29 @@ namespace Tests.Editor.FBXImporter
             FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FileManager.");
-            Assert.That(fileManager.stabilizeGroundedFootXZ, Is.False, "This slice must not use per-foot X/Z locking while validating center/root Y floor correction.");
-            Assert.That(fileManager.GroundedFootLockWeight, Is.EqualTo(0f).Within(0.0001f), "Foot-lock correction must be fully disabled for center/root-only floor correction.");
-            Assert.That(fileManager.FreezeRootYAfterInitialGrounding, Is.False, "Root Y must keep following final foot grounding to avoid MMD foot sinking.");
-            Assert.That(fileManager.RetargetPrewarmFrameCount, Is.GreaterThanOrEqualTo(120), "Main_Auto full-reference smoke must use the prewarm cap so frame-0 grounding residual is not still at the per-frame limit when recording starts.");
-            Assert.That(fileManager.MaxLateVisualGroundingStepPerFrame, Is.GreaterThanOrEqualTo(0.04f), "Late visual grounding must be able to clear the observed t60 foot penetration before the next diagnostic sample.");
-            Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.False, "This acceptance path must not change arm/body correction while validating foot-only MMD export fixes.");
-            Assert.That(fileManager.enableAnatomicalArmGuard, Is.False, "Foot-only MMD export validation must not alter arm pose.");
-            Assert.That(fileManager.attachTargetArmDeformationGuard, Is.False, "Foot-only MMD export validation must not attach arm deformation guards.");
-            Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.False, "Foot-only MMD export validation must not twist arms.");
-            Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.False, "Foot-only MMD export validation must not anchor sleeves/arms.");
-            Assert.That(fileManager.enableThumbAnatomicalGuard, Is.False, "Foot-only MMD export validation must not alter thumbs.");
-            Assert.That(fileManager.enableThumbLocalRotationGuard, Is.False, "Foot-only MMD export validation must not clamp thumb rotations.");
-            Assert.That(fileManager.enableThumbVisualLengthGuard, Is.False, "Foot-only MMD export validation must not reshape thumbs.");
-            Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.False, "This acceptance path records the source FBX pose and must report thumb diagnostics without failing the foot/root export smoke.");
+            Assert.That(fileManager.stabilizeGroundedFootXZ, Is.False, "Rollback preset must not enable per-foot X/Z locking.");
+            Assert.That(fileManager.GroundedFootLockWeight, Is.EqualTo(0.45f).Within(0.0001f), "Rollback preset must restore the pre-reference-video foot-lock blend.");
+            Assert.That(fileManager.FreezeRootYAfterInitialGrounding, Is.True, "Root Y must freeze after initial grounding so live playback does not chase per-frame foot noise.");
+            Assert.That(fileManager.RetargetPrewarmFrameCount, Is.EqualTo(6), "Rollback preset must remove the 120-frame prewarm added by the reference-video tuning pass.");
+            Assert.That(fileManager.MaxLateVisualGroundingStepPerFrame, Is.EqualTo(0.003f).Within(0.0001f), "Rollback preset must restore the conservative late visual grounding step.");
+            Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.False, "Rollback preset must keep the arm/body swing limiter disabled.");
+            Assert.That(fileManager.enableAnatomicalArmGuard, Is.True, "Main_Auto must keep arm anatomy protection while validating the shared YYB playback/export path.");
+            Assert.That(fileManager.attachTargetArmDeformationGuard, Is.True, "Main_Auto must attach arm deformation guards while validating the shared YYB playback/export path.");
+            Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, "Main_Auto must keep YYB arm visual twist correction for the shared playback/export path.");
+            Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, "Main_Auto must keep sleeve anchor correction for the shared playback/export path.");
+            Assert.That(fileManager.enableThumbAnatomicalGuard, Is.True, "Main_Auto must keep thumb anatomy protection for the shared playback/export path.");
+            Assert.That(fileManager.enableThumbLocalRotationGuard, Is.True, "Main_Auto must keep thumb local rotation protection for the shared playback/export path.");
+            Assert.That(fileManager.enableThumbVisualLengthGuard, Is.True, "Main_Auto must keep thumb visual length protection for the shared playback/export path.");
+            Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.True, "Editor smoke must fail when thumb risk exceeds the threshold.");
             Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.False, "Full-body pose reference changes body pose and must stay out of the center/root-only floor correction slice.");
-            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.True, "Hips local reference must be enabled only with the YYB-rest anchored helper so t60 Hips collapse is corrected without full-body pose override.");
-            Assert.That(fileManager.useManualAnimatorFootHeightGroundingReference, Is.True, "Main_Auto must preserve the manual reference lowest-foot lift so the t30 foot-height arc is not flattened by grounding.");
-            Assert.That(fileManager.manualAnimatorFootHeightGroundingReferenceMaxLift, Is.EqualTo(0.08f).Within(0.0001f), "Foot-height grounding reference must be capped below the root teleport threshold.");
+            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.False, "Rollback preset must remove the manual hips local-position override from the reference-video tuning pass.");
+            Assert.That(fileManager.useManualAnimatorFootHeightGroundingReference, Is.False, "Rollback preset must remove manual lowest-foot grounding from the reference-video tuning pass.");
+            Assert.That(fileManager.manualAnimatorFootHeightGroundingReferenceMaxLift, Is.EqualTo(0.08f).Within(0.0001f), "Serialized cap remains available but must be inactive while the reference-video foot-height reference is disabled.");
             Assert.That(fileManager.clampRetargetHipsLocalPositionSpikes, Is.False, "Hips local clamps change pose internals and must stay out of the center/root-only floor correction slice.");
+            Assert.That(fileManager.vmdRecordingPlaybackSpeed, Is.EqualTo(1f).Within(0.0001f), "Main_Auto VMD export must default to normal playback speed.");
+            Assert.That(fileManager.useKnownMmdReferenceTiming, Is.False, "Reference timing must be opt-in so Main_Auto does not accelerate normal VMD generation by default.");
+            Assert.That(fileManager.showGhostModel, Is.True, "This scene keeps Ghost display enabled for the current debug task.");
+            Assert.That(fileManager.showGhostSkeletonWhenNoRenderers, Is.True, "Rendererless mocap Ghost FBX files must remain visible when Ghost display is enabled.");
 
             var yybPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
@@ -52,17 +58,70 @@ namespace Tests.Editor.FBXImporter
 
             var recorder = yybPrefab.GetComponent<UnityHumanoidVMDRecorder>();
             Assert.That(recorder, Is.Not.Null, "YYB prefab must contain UnityHumanoidVMDRecorder.");
-            Assert.That(recorder.UseBottomCenter, Is.True, "YYB MMD export must write the center bone from the foot-level bottom center instead of the humanoid hips height.");
-            Assert.That(recorder.KeyReductionLevel, Is.EqualTo(1), "MMD character export must keep every recorded frame; reduced keys cause visible stepped playback and apparent teleports.");
+            Assert.That(recorder.IgnoreInitialPosition, Is.False, "Rollback preset must restore the pre-reference-video initial position behavior.");
+            Assert.That(recorder.FreezeParentOfAllMotionWhenIgnoringInitialPosition, Is.False, "Rollback preset must keep the new freeze path disabled when initial position is not ignored.");
+            Assert.That(recorder.UseBottomCenter, Is.False, "Rollback preset must restore humanoid center export instead of bottom-center export.");
+            Assert.That(recorder.KeyReductionLevel, Is.EqualTo(2), "Rollback preset must restore the pre-reference-video key reduction level.");
             Assert.That(recorder.MaxRecordedFramesPerLateUpdate, Is.EqualTo(1), "Recording must not burst multiple VMD frames from a single rendered Unity pose.");
             Assert.That(recorder.ParentOfAllOffset, Is.EqualTo(Vector3.zero), "YYB MMD export must not use a static global/root lift; floor correction is frame-local center Y only.");
             Assert.That(recorder.MmdFootIkExportOffset, Is.EqualTo(Vector3.zero), "YYB MMD export must not add a static IK lift; it causes visible hover in MMD playback.");
             Assert.That(recorder.ClampMmdFootIkYToFloor, Is.False, "YYB MMD export must not clamp foot/toe IK Y in this slice; only center/root Y may be lifted.");
             Assert.That(recorder.LiftMmdCenterYToKeepFeetAboveFloor, Is.True, "YYB MMD export must resolve floor penetration by lifting center/root Y per frame.");
-            Assert.That(recorder.MinMmdFootIkY, Is.EqualTo(0.05f).Within(0.0001f), "YYB MMD export should keep the effective foot IK height at the same floor clearance seen in Unity smoke metrics.");
-            Assert.That(recorder.ClampMmdCenterExportDeltaSpikes, Is.True, "YYB MMD export must clamp one-frame center movement so MMD play cannot teleport.");
-            Assert.That(recorder.MaxMmdCenterExportDeltaPerFrame, Is.LessThanOrEqualTo(0.12f), "YYB MMD center movement must stay below the teleport threshold used by export QA.");
+            Assert.That(recorder.MinMmdFootIkY, Is.EqualTo(0.05f).Within(0.0001f), "YYB MMD export should keep effective foot IK height at the same floor clearance seen in Unity smoke metrics.");
+            Assert.That(recorder.ClampMmdCenterExportDeltaSpikes, Is.True, "YYB MMD export must clamp one-frame center movement so MMD playback cannot teleport.");
             Assert.That(recorder.ClampMmdIkExportDeltaSpikes, Is.True, "YYB MMD export must clamp foot/toe IK one-frame jumps so MMD playback cannot snap through IK targets.");
+        }
+
+        [Test]
+        public void YybMmdExportPrefabs_UseGuardedCenterFootAndToeClampMargin()
+        {
+            AssertYybMmdExportClampMargin(
+                "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
+            AssertYybMmdExportClampMargin(
+                "Assets/_ManualReference/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_Prefab.prefab");
+        }
+
+        [Test]
+        public void MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback()
+        {
+            AssertRegressionSafeRetargetDefaults("Assets/_Project/Scene/Main_Auto.unity");
+            AssertRegressionSafeRetargetDefaults("Assets/_Project/Scene/Main_Recoding.unity");
+        }
+
+        [Test]
+        public void MainSceneRootMotionPolicy_KeepsMainAutoFixedAndAllowsMainRecordingMovement()
+        {
+            AssertSceneRootMotionPolicy(
+                "Assets/_Project/Scene/Main_Auto.unity",
+                expectedUseRetargetBodyPositionXZRootMotion: false,
+                expectedUseEditorHumanoidRootTranslationReference: false,
+                expectedClampRetargetHipsLocalPositionSpikes: false);
+            AssertSceneRootMotionPolicy(
+                "Assets/_Project/Scene/Main_Recoding.unity",
+                expectedUseRetargetBodyPositionXZRootMotion: true,
+                expectedUseEditorHumanoidRootTranslationReference: true,
+                expectedClampRetargetHipsLocalPositionSpikes: true);
+        }
+
+        [Test]
+        public void MainRecordingRootMotionPolicy_LimitsPreviewRootStepForTeleportGuard()
+        {
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
+
+            FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must contain FileManager.");
+            Assert.That(
+                fileManager.MaxRetargetRootDeltaPerFrame,
+                Is.EqualTo(0.006f).Within(0.0001f),
+                "Main_recoding preview path must cap one-frame X/Z root motion below the visible root jump threshold.");
+        }
+
+        [Test]
+        public void MainScenes_FreezeRootYAfterInitialGroundingForLivePlaybackStability()
+        {
+            AssertRootYFreezeAfterInitialGrounding("Assets/_Project/Scene/Main_Auto.unity");
+            AssertRootYFreezeAfterInitialGrounding("Assets/_Project/Scene/Main_Recoding.unity");
         }
 
         [Test]
@@ -261,6 +320,267 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_IntegratedVerticalSolveOutputPasses_When_BuildingCandidateArtifactSelection_Then_MarksPrimaryOutputAsAcceptanceArtifact()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybMmdExportSafetyDefaultsTests_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string metricsPath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            string manifestPath = Path.Combine(root, "main.integrated_vertical_solve_primary_export.json");
+
+            try
+            {
+                File.WriteAllText(metricsPath, "corrected-main-auto-metrics");
+                File.WriteAllText(vmdPath, "corrected-main-auto-vmd");
+                File.WriteAllText(manifestPath, "{}");
+                var integrated = new MotionComparisonFrameQualitySummary
+                {
+                    frame_quality_evaluation_role = "main_auto_integrated_vertical_solve_metrics",
+                    status = "pass",
+                    status_reason = "same-frame Unity metrics and VMD export checks stayed within thresholds",
+                    candidate_metrics_csv = metricsPath,
+                    candidate_vmd_path = vmdPath,
+                    vertical_solve_corrected_candidate_manifest_path = manifestPath
+                };
+
+                object selection = BuildCandidateArtifactSelection(integrated);
+
+                Assert.That(GetField<string>(selection, "selected_candidate_role"), Is.EqualTo("main_auto_integrated_vertical_solve_metrics"));
+                Assert.That(GetField<string>(selection, "selected_candidate_status"), Is.EqualTo("pass"));
+                Assert.That(GetField<string>(selection, "selected_candidate_output_role"), Is.EqualTo("user_facing_export_artifact"));
+                Assert.That(GetField<bool>(selection, "selected_candidate_vmd_exists"), Is.True);
+                Assert.That(GetField<bool>(selection, "selected_candidate_metrics_exists"), Is.True);
+                Assert.That(GetField<bool>(selection, "selected_candidate_is_acceptance_artifact"), Is.True);
+                Assert.That(GetField<string>(selection, "selected_candidate_acceptance_basis"), Does.Contain("primary Main_Auto export"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybMmdExportSafetyDefaultsTests_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string recordingMetricsPath = Path.Combine(root, "main-recording.csv");
+            string recordingVmdPath = Path.Combine(root, "main-recording.vmd");
+            string mainAutoMetricsPath = Path.Combine(root, "main-auto.csv");
+            string mainAutoVmdPath = Path.Combine(root, "main-auto.vmd");
+            string mainAutoManifestPath = Path.Combine(root, "main-auto.integrated_vertical_solve_primary_export.json");
+
+            try
+            {
+                File.WriteAllText(recordingMetricsPath, "main-recording-metrics");
+                File.WriteAllText(recordingVmdPath, "main-recording-vmd");
+                File.WriteAllText(mainAutoMetricsPath, "main-auto-metrics");
+                File.WriteAllText(mainAutoVmdPath, "main-auto-vmd");
+                File.WriteAllText(mainAutoManifestPath, "{}");
+                var mainRecording = new MotionComparisonFrameQualitySummary
+                {
+                    candidate_label = "Main_Recoding YYB 자동 경로",
+                    frame_quality_evaluation_role = "evaluation_candidate_metrics",
+                    status = "pass",
+                    candidate_metrics_csv = recordingMetricsPath,
+                    candidate_vmd_path = recordingVmdPath
+                };
+                var mainAuto = new MotionComparisonFrameQualitySummary
+                {
+                    candidate_label = "Main_Auto YYB 자동 경로",
+                    frame_quality_evaluation_role = "main_auto_integrated_vertical_solve_metrics",
+                    status = "pass",
+                    candidate_metrics_csv = mainAutoMetricsPath,
+                    candidate_vmd_path = mainAutoVmdPath,
+                    vertical_solve_corrected_candidate_manifest_path = mainAutoManifestPath
+                };
+
+                object selection = BuildCandidateArtifactSelection(mainRecording, mainAuto);
+
+                Assert.That(GetField<string>(selection, "selected_candidate_role"), Is.EqualTo("main_auto_integrated_vertical_solve_metrics"));
+                Assert.That(GetField<string>(selection, "selected_candidate_metrics_csv"), Is.EqualTo(mainAutoMetricsPath));
+                Assert.That(GetField<string>(selection, "selected_candidate_vmd_path"), Is.EqualTo(mainAutoVmdPath));
+                Assert.That(GetField<bool>(selection, "selected_candidate_is_acceptance_artifact"), Is.True);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes()
+        {
+            Assert.That(IsMainSceneCandidateMode("MainAuto"), Is.True);
+            Assert.That(IsMainSceneCandidateMode("MainRecording"), Is.True);
+            Assert.That(IsMainSceneCandidateMode("SubManualTestPrefab"), Is.False);
+            Assert.That(IsMainSceneCandidateMode("SubManualYyb"), Is.False);
+        }
+
+        [Test]
+        public void Given_MainRecordingStableCandidate_When_ExportIkSourceDiagnosticsExists_Then_CopiesDiagnosticsBesideStableVmd()
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            Type captureModeType = runnerType.GetNestedType("CaptureMode", BindingFlags.NonPublic);
+            Type captureJobType = runnerType.GetNestedType("CaptureJob", BindingFlags.NonPublic);
+            Assert.That(captureModeType, Is.Not.Null);
+            Assert.That(captureJobType, Is.Not.Null);
+
+            FieldInfo activeJobField = runnerType.GetField("_activeJob", BindingFlags.Static | BindingFlags.NonPublic);
+            FieldInfo summaryDirectoryField = runnerType.GetField("_summaryDirectory", BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo buildMethod = runnerType.GetMethod(
+                "BuildStableCandidateResult",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(VmdSaveResult) },
+                modifiers: null);
+            Assert.That(activeJobField, Is.Not.Null);
+            Assert.That(summaryDirectoryField, Is.Not.Null);
+            Assert.That(buildMethod, Is.Not.Null);
+
+            object originalActiveJob = activeJobField.GetValue(null);
+            string originalSummaryDirectory = (string)summaryDirectoryField.GetValue(null);
+            string root = Path.Combine(Path.GetTempPath(), "YybStableCandidateDiagnostics_" + Guid.NewGuid().ToString("N"));
+            string sourceDirectory = Path.Combine(root, "source");
+            string summaryDirectory = Path.Combine(root, "summary");
+            Directory.CreateDirectory(sourceDirectory);
+            Directory.CreateDirectory(summaryDirectory);
+            string sourceVmdPath = Path.Combine(sourceDirectory, "source.vmd");
+            string sourceRotationCsvPath = Path.Combine(sourceDirectory, "source.export_rotation_diagnostics.csv");
+            string sourceIkCsvPath = Path.Combine(sourceDirectory, "source.export_ik_source_samples.csv");
+
+            try
+            {
+                File.WriteAllText(sourceVmdPath, "vmd");
+                File.WriteAllText(sourceRotationCsvPath, "rotation");
+                File.WriteAllText(sourceIkCsvPath, "ik-source");
+
+                object captureJob = Activator.CreateInstance(captureJobType);
+                captureJobType.GetField("Mode").SetValue(
+                    captureJob,
+                    Enum.Parse(captureModeType, "MainRecording"));
+                captureJobType.GetField("ScenePath").SetValue(captureJob, "Assets/_Project/Scene/Main_Recoding.unity");
+                captureJobType.GetField("SceneName").SetValue(captureJob, "Main_Recoding");
+                captureJobType.GetField("DisplayName").SetValue(captureJob, "Main_Recoding YYB automatic path");
+
+                activeJobField.SetValue(null, captureJob);
+                summaryDirectoryField.SetValue(null, summaryDirectory);
+
+                var sourceResult = VmdSaveResult.Ok(
+                    sourceVmdPath,
+                    frameCount: 3,
+                    fileSizeBytes: new FileInfo(sourceVmdPath).Length,
+                    exportRotationDiagnosticsCsvPath: sourceRotationCsvPath,
+                    exportIkSourceDiagnosticsCsvPath: sourceIkCsvPath);
+
+                var stableResult = (VmdSaveResult)buildMethod.Invoke(null, new object[] { sourceResult });
+
+                Assert.That(Path.GetFileName(stableResult.FilePath), Is.EqualTo("vmd-rec.vmd"));
+                Assert.That(File.Exists(stableResult.FilePath), Is.True);
+                Assert.That(Path.GetFileName(stableResult.ExportIkSourceDiagnosticsCsvPath), Is.EqualTo("vmd-rec.export_ik_source_samples.csv"));
+                Assert.That(File.Exists(stableResult.ExportIkSourceDiagnosticsCsvPath), Is.True);
+                Assert.That(File.ReadAllText(stableResult.ExportIkSourceDiagnosticsCsvPath), Is.EqualTo("ik-source"));
+                Assert.That(Path.GetFileName(stableResult.ExportRotationDiagnosticsCsvPath), Is.EqualTo("vmd-rec.export_rotation_diagnostics.csv"));
+                Assert.That(File.Exists(stableResult.ExportRotationDiagnosticsCsvPath), Is.True);
+            }
+            finally
+            {
+                activeJobField.SetValue(null, originalActiveJob);
+                summaryDirectoryField.SetValue(null, originalSummaryDirectory);
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_ActiveCaptureJobIsUnfinished_When_CheckingStartNextJobGate_Then_IgnoresDuplicateAdvance()
+        {
+            Assert.That(CanStartNextJob(isRunning: true, hasActiveJob: true, activeJobFinished: false), Is.False);
+            Assert.That(CanStartNextJob(isRunning: true, hasActiveJob: true, activeJobFinished: true), Is.True);
+            Assert.That(CanStartNextJob(isRunning: true, hasActiveJob: false, activeJobFinished: false), Is.True);
+            Assert.That(CanStartNextJob(isRunning: false, hasActiveJob: false, activeJobFinished: false), Is.False);
+        }
+
+        [Test]
+        public void Given_SubManualYybRecorderIsInactive_When_SelectingManualRecorder_Then_ActivatesOnlyTargetRecorder()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            GameObject testPrefab = null;
+            GameObject yyb = null;
+            try
+            {
+                testPrefab = new GameObject("testPrefab");
+                testPrefab.AddComponent<HumanoidSampleCode>();
+                yyb = new GameObject("YYB Hatsune Miku_default_1.0ver");
+                HumanoidSampleCode yybRecorder = yyb.AddComponent<HumanoidSampleCode>();
+                yyb.SetActive(false);
+
+                HumanoidSampleCode selected = SelectActiveManualRecorder("YYB Hatsune Miku_default_1.0ver");
+
+                Assert.That(selected, Is.SameAs(yybRecorder));
+                Assert.That(yyb.activeSelf, Is.True, "Sub_Manual YYB capture must enable the YYB recorder before StartAutoRecording starts coroutines.");
+                Assert.That(yyb.activeInHierarchy, Is.True, "The selected YYB recorder must be active in hierarchy.");
+                Assert.That(testPrefab.activeSelf, Is.False, "Sub_Manual capture must keep only one manual target visible.");
+            }
+            finally
+            {
+                if (testPrefab != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(testPrefab);
+                }
+                if (yyb != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(yyb);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_AutoRecordingWasStartedBeforeStart_When_HumanoidSampleCodeStartRuns_Then_DoesNotClearRecordingSession()
+        {
+            GameObject target = null;
+            try
+            {
+                target = new GameObject("manual-recorder");
+                HumanoidSampleCode sampleCode = target.AddComponent<HumanoidSampleCode>();
+                FieldInfo activeField = typeof(HumanoidSampleCode).GetField(
+                    "_isRecordingSessionActive",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(activeField, Is.Not.Null);
+                activeField.SetValue(sampleCode, true);
+
+                MethodInfo startMethod = typeof(HumanoidSampleCode).GetMethod(
+                    "Start",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(startMethod, Is.Not.Null);
+                startMethod.Invoke(sampleCode, null);
+
+                Assert.That(
+                    activeField.GetValue(sampleCode),
+                    Is.EqualTo(true),
+                    "HumanoidSampleCode.Start must not call SetReady over an already-started runner recording session.");
+            }
+            finally
+            {
+                if (target != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(target);
+                }
+            }
+        }
+
+        [Test]
         public void Given_MetricsCsv_When_BuildingSampleOrderingDiagnostics_Then_ReportsFrameZeroPrewarmAndGroundingOrdering()
         {
             string tempCsv = Path.Combine(
@@ -390,6 +710,95 @@ namespace Tests.Editor.FBXImporter
             return (int)method.Invoke(null, new object[] { referenceTargetFrameCount, mainAutoFrameCount });
         }
 
+        private static void AssertRegressionSafeRetargetDefaults(string scenePath)
+        {
+            EditorSceneManager.OpenScene(scenePath);
+
+            FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FileManager.");
+            Assert.That(fileManager.MovementScaleMultiplier, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep root movement playback active.");
+            Assert.That(fileManager.enableAnatomicalArmGuard, Is.True, $"{scenePath} must keep the arm anatomy guard enabled.");
+            Assert.That(fileManager.attachTargetArmDeformationGuard, Is.True, $"{scenePath} must attach the target arm deformation guard.");
+            Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, $"{scenePath} must keep YYB arm visual twist correction enabled.");
+            Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, $"{scenePath} must keep sleeve anchor correction enabled.");
+            Assert.That(fileManager.useManualAnimatorThumbLocalRotationReference, Is.True, $"{scenePath} must keep manual thumb local rotation reference enabled.");
+            Assert.That(fileManager.useManualAnimatorThumbSegmentDirectionReference, Is.True, $"{scenePath} must keep manual thumb segment direction reference enabled.");
+            Assert.That(fileManager.useManualAnimatorThumbHandDirectionReference, Is.True, $"{scenePath} must keep manual thumb hand direction reference enabled.");
+            Assert.That(fileManager.useManualAnimatorThumbBasePositionReference, Is.True, $"{scenePath} must keep manual thumb base position reference enabled.");
+            Assert.That(fileManager.enableThumbAnatomicalGuard, Is.True, $"{scenePath} must keep thumb anatomy guard enabled.");
+            Assert.That(fileManager.preserveManualFingerReferenceThumbMuscles, Is.True, $"{scenePath} must preserve manual thumb muscles while using the manual finger reference.");
+            Assert.That(fileManager.enableThumbLocalRotationGuard, Is.True, $"{scenePath} must keep thumb local rotation guard enabled.");
+            Assert.That(fileManager.syncDetachedThumbBaseHelpers, Is.True, $"{scenePath} must keep detached thumb helper rotation sync enabled.");
+            Assert.That(fileManager.syncDetachedThumbBaseHelperPositions, Is.True, $"{scenePath} must keep detached thumb helper position sync enabled.");
+            Assert.That(fileManager.stabilizeThumbWebbingCrease, Is.True, $"{scenePath} must keep thumb webbing crease stabilization enabled.");
+            Assert.That(fileManager.enableThumbVisualLengthGuard, Is.True, $"{scenePath} must keep thumb visual length guard enabled.");
+            Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.True, $"{scenePath} must fail editor smoke when thumb risk exceeds the threshold.");
+        }
+
+        private static void AssertSceneRootMotionPolicy(
+            string scenePath,
+            bool expectedUseRetargetBodyPositionXZRootMotion,
+            bool expectedUseEditorHumanoidRootTranslationReference,
+            bool expectedClampRetargetHipsLocalPositionSpikes)
+        {
+            EditorSceneManager.OpenScene(scenePath);
+
+            FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FileManager.");
+            Assert.That(
+                fileManager.preserveRetargetBodyPosition,
+                Is.True,
+                $"{scenePath} must keep body-position preservation enabled so Y height remains stable while scene-specific X/Z root policy is applied.");
+            Assert.That(
+                fileManager.useRetargetBodyPositionXZRootMotion,
+                Is.EqualTo(expectedUseRetargetBodyPositionXZRootMotion),
+                $"{scenePath} must keep the requested scene-specific X/Z root-motion policy.");
+            Assert.That(
+                fileManager.useEditorHumanoidRootTranslationReference,
+                Is.EqualTo(expectedUseEditorHumanoidRootTranslationReference),
+                $"{scenePath} must use the requested scene-specific Humanoid RootT translation policy.");
+            Assert.That(
+                fileManager.clampRetargetHipsLocalPositionSpikes,
+                Is.EqualTo(expectedClampRetargetHipsLocalPositionSpikes),
+                $"{scenePath} must match the scene-specific Hips local-position spike policy.");
+        }
+
+        private static void AssertRootYFreezeAfterInitialGrounding(string scenePath)
+        {
+            EditorSceneManager.OpenScene(scenePath);
+
+            FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FileManager.");
+            Assert.That(
+                fileManager.FreezeRootYAfterInitialGrounding,
+                Is.True,
+                $"{scenePath} must freeze target root Y after the initial grounding pass so live playback does not chase per-frame foot noise.");
+        }
+
+        private static void AssertYybMmdExportClampMargin(string prefabPath)
+        {
+            var yybPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            Assert.That(yybPrefab, Is.Not.Null, $"{prefabPath} must be loadable.");
+
+            var recorder = yybPrefab.GetComponent<UnityHumanoidVMDRecorder>();
+            Assert.That(recorder, Is.Not.Null, $"{prefabPath} must contain UnityHumanoidVMDRecorder.");
+            Assert.That(
+                recorder.MaxMmdCenterExportDeltaPerFrame,
+                Is.EqualTo(ExpectedYybMmdExportMaxDeltaPerFrame).Within(0.0001f),
+                $"{prefabPath} must keep center export clamp below the 0.12m teleport threshold with margin.");
+            Assert.That(
+                recorder.MaxMmdFootIkExportDeltaPerFrame,
+                Is.EqualTo(ExpectedYybMmdExportMaxDeltaPerFrame).Within(0.0001f),
+                $"{prefabPath} must keep foot IK export clamp below the 0.12m teleport threshold with margin.");
+            Assert.That(
+                recorder.MaxMmdToeIkExportDeltaPerFrame,
+                Is.EqualTo(ExpectedYybMmdExportMaxDeltaPerFrame).Within(0.0001f),
+                $"{prefabPath} must keep toe IK export clamp below the 0.12m teleport threshold with margin.");
+        }
+
         private static int ResolveReferenceMmdTargetFrameCount(
             string fbxFileName,
             float requestedDurationSeconds,
@@ -461,6 +870,60 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "YYB runner summary must select the user-facing candidate artifact without hiding the raw candidate gate.");
 
             return method.Invoke(null, new object[] { summaries });
+        }
+
+        private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "CanStartNextJob",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(bool), typeof(bool), typeof(bool) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must gate duplicate delayed StartNextJob calls while an active job is unfinished.");
+
+            return (bool)method.Invoke(null, new object[] { isRunning, hasActiveJob, activeJobFinished });
+        }
+
+        private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "SelectActiveManualRecorder",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must activate the selected Sub_Manual recorder before starting capture.");
+
+            return (HumanoidSampleCode)method.Invoke(null, new object[] { targetNameToken });
+        }
+
+        private static bool IsMainSceneCandidateMode(string jobMode)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "IsMainSceneCandidateMode",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must expose the main-scene candidate predicate for summary coverage tests.");
+
+            return (bool)method.Invoke(null, new object[] { jobMode });
         }
 
         private static object BuildSampleOrderingDiagnostic(

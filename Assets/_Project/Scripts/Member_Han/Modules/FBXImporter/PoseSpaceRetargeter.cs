@@ -12,6 +12,8 @@ namespace Member_Han.Modules.FBXImporter
         private const float LateVisualGroundingPenetrationRecoverySmoothing = 0.55f;
         private const float LateVisualGroundingPenetrationRecoveryMaxStep = 0.1f;
         private const float RecordingStartHipsBaselineFlipWarningThreshold = 0.02f;
+        private const float BodyPositionVisualSpikeThreshold = 0.02f;
+        private const float BodyRotationVisualSpikeThresholdDegrees = 25f;
         private const string RecordingStartHipsReferenceStagePrewarmComplete = "prewarm-complete";
         [Header("--- CORE COMPONENTS ---")]
         public Animator ghostAnimator;  // (Container 내부의 모델)
@@ -46,7 +48,7 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Foot-lock correction strength. Lower values preserve dance motion, higher values reduce skating.")]
         [Range(0f, 1f)]
-        public float groundedFootLockWeight = 0f;
+        public float groundedFootLockWeight = 0.45f;
 
         [Tooltip("Maximum X/Z root correction per frame for grounded foot lock.")]
         [Range(0.001f, 0.1f)]
@@ -202,7 +204,7 @@ namespace Member_Han.Modules.FBXImporter
         public bool clampRootDeltaSpikes = true;
 
         [Tooltip("한 프레임에 허용할 최대 root 이동량입니다.")]
-        [Range(0.01f, 1.0f)]
+        [Range(0.001f, 1.0f)]
         public float maxRootDeltaPerFrame = 0.25f;
 
         [Tooltip("root delta spike를 무시했을 때 최초 1회 진단 로그를 출력합니다.")]
@@ -378,6 +380,53 @@ namespace Member_Han.Modules.FBXImporter
             _lastEditorFootHeightGroundingReferenceLift = float.NaN;
             _hasEditorReferenceLowestFootRestY = false;
             _allowEditorFootHeightGroundingReference = true;
+        }
+
+        public bool PrepareRecordingStartPose(float startTimeSeconds, float playbackSpeed, bool holdPose)
+        {
+            bool prepared = TryPrepareRecordingStartPose(_legacyAnim, startTimeSeconds, playbackSpeed, holdPose);
+            if (!prepared)
+            {
+                return false;
+            }
+
+            _hasPreviousLegacyAnimationTime = false;
+            _previousLegacyAnimationTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, _legacyAnim[LegacyClipStateName].length));
+            _lastLegacyAnimationStep = 0f;
+            _legacyAnimationStepSpikeThisFrame = false;
+            ResetVisualPoseHistory();
+            return true;
+        }
+
+#if UNITY_EDITOR
+        private static bool PrepareRecordingStartPoseForTest(Animation legacyAnim, float startTimeSeconds, float playbackSpeed, bool holdPose)
+        {
+            return TryPrepareRecordingStartPose(legacyAnim, startTimeSeconds, playbackSpeed, holdPose);
+        }
+#endif
+
+        private static bool TryPrepareRecordingStartPose(Animation legacyAnim, float startTimeSeconds, float playbackSpeed, bool holdPose)
+        {
+            if (legacyAnim == null)
+            {
+                return false;
+            }
+
+            AnimationState state = legacyAnim[LegacyClipStateName];
+            if (state == null)
+            {
+                return false;
+            }
+
+            float sampleTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, state.length));
+            float safePlaybackSpeed = Mathf.Max(0.0001f, playbackSpeed);
+            legacyAnim.Play(LegacyClipStateName);
+            state.enabled = true;
+            state.wrapMode = WrapMode.Once;
+            state.time = sampleTime;
+            state.speed = holdPose ? 0f : safePlaybackSpeed;
+            legacyAnim.Sample();
+            return true;
         }
 
         public void CaptureRecordingStartBaselineSnapshot()
@@ -633,6 +682,13 @@ namespace Member_Han.Modules.FBXImporter
         private bool _editorHandPalmFrameReferenceLogged;
         private bool _editorThumbBasePositionReferenceLogged;
         private bool _editorHipsLocalPositionReferenceLogged;
+#else
+        private Animator _editorFingerReferenceAnimator;
+        private bool _useEditorFingerPoseReference;
+        private bool _hasEditorReferenceBodyPosition;
+        private Vector3 _editorReferenceBodyPosition;
+        private bool _hasEditorReferenceLowestFootRestY;
+        private bool _allowEditorFootHeightGroundingReference;
 #endif
 
         // --- 초기화 ---
@@ -675,7 +731,7 @@ namespace Member_Han.Modules.FBXImporter
                 legacyClip = _ownedLegacyClip;
             }
 
-            _legacyAnim.RemoveClip(LegacyClipStateName);
+            RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
             _legacyAnim.AddClip(legacyClip, LegacyClipStateName);
             _legacyAnim.clip = legacyClip;
             AnimationState state = _legacyAnim[LegacyClipStateName];
@@ -802,7 +858,7 @@ namespace Member_Han.Modules.FBXImporter
             if (_legacyAnim != null)
             {
                 _legacyAnim.Stop();
-                _legacyAnim.RemoveClip(LegacyClipStateName);
+                RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
             }
 
             if (_ownedLegacyClip != null)
@@ -900,6 +956,21 @@ namespace Member_Han.Modules.FBXImporter
             if (_useEditorRootTranslationReference)
             {
                 Debug.Log($"[PoseSpaceRetargeter] Editor Humanoid RootT translation reference ready from {referenceClip.name}");
+            }
+        }
+
+        private static bool HasLegacyAnimationClipState(Animation legacyAnimation, string stateName)
+        {
+            return legacyAnimation != null &&
+                !string.IsNullOrEmpty(stateName) &&
+                legacyAnimation[stateName] != null;
+        }
+
+        private static void RemoveLegacyAnimationClipStateIfPresent(Animation legacyAnimation, string stateName)
+        {
+            if (HasLegacyAnimationClipState(legacyAnimation, stateName))
+            {
+                legacyAnimation.RemoveClip(stateName);
             }
         }
 
@@ -1097,7 +1168,15 @@ namespace Member_Han.Modules.FBXImporter
             Vector3 bodyPos = _humanPose.bodyPosition;
             bodyPos.x *= _scaleRatio;
             bodyPos.z *= _scaleRatio;
-            Vector3 bodyRootDelta = ExtractBodyPositionXZRootDelta(bodyPos);
+            Vector3 bodyRootMotionSource = bodyPos;
+#if UNITY_EDITOR
+            bodyRootMotionSource = SelectBodyPositionRootMotionSource(
+                bodyPos,
+                _editorReferenceBodyPosition,
+                _hasEditorReferenceBodyPosition,
+                useManualAnimatorBodyRotationReference);
+#endif
+            Vector3 bodyRootDelta = ExtractBodyPositionXZRootDelta(bodyRootMotionSource);
             if (preserveTargetBodyPosition && _hasTargetReferenceBodyPosition)
             {
                 bodyPos = _targetReferenceBodyPosition;
@@ -1118,6 +1197,16 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
             _humanPose.bodyPosition = bodyPos;
+
+            Vector3 rootMotionCarrierPositionBeforePose = targetAnimator.transform.position;
+            Vector3 poseSolveRootPosition = SelectPoseSolveRootPosition(
+                rootMotionCarrierPositionBeforePose,
+                _hasTargetRootPoseGuardAnchorPosition ? _targetRootPoseGuardAnchorPosition : rootMotionCarrierPositionBeforePose,
+                useBodyPositionXZRootMotion);
+            if (IsFinite(poseSolveRootPosition))
+            {
+                targetAnimator.transform.position = poseSolveRootPosition;
+            }
 
             Vector3 targetPositionBeforePose = targetAnimator.transform.position;
             _targetHandler.SetHumanPose(ref _humanPose);
@@ -1143,6 +1232,11 @@ namespace Member_Han.Modules.FBXImporter
                 _movementScaleMultiplier);
             targetAnimator.transform.position = ApplyImplicitBodyPositionRootGuard(
                 implicitRootGuardReference,
+                targetAnimator.transform.position,
+                useBodyPositionXZRootMotion,
+                bodyRootDelta);
+            targetAnimator.transform.position = RestoreRootMotionCarrierPositionAfterPose(
+                rootMotionCarrierPositionBeforePose,
                 targetAnimator.transform.position,
                 useBodyPositionXZRootMotion);
 
@@ -1181,7 +1275,7 @@ namespace Member_Han.Modules.FBXImporter
                 maxRootDeltaPerFrame,
                 out float targetDeltaMagnitude,
                 out bool skippedByNonFinite,
-                out bool skippedBySpike);
+                out bool limitedBySpike);
             if (skippedByNonFinite)
             {
                 LogPoseWarning("Retarget root delta became non-finite. Skipping root motion for this frame.");
@@ -1193,16 +1287,14 @@ namespace Member_Han.Modules.FBXImporter
                 _lastRootDeltaMagnitude = targetDeltaMagnitude;
                 _maxRootDeltaMagnitude = Mathf.Max(_maxRootDeltaMagnitude, _lastRootDeltaMagnitude);
 
-                if (skippedBySpike)
+                if (limitedBySpike)
                 {
                     _rootDeltaSpikeSkippedCount++;
                     if (logRootDeltaSpikes && !_rootDeltaSpikeWarningLogged)
                     {
-                        Debug.LogWarning($"[PoseSpaceRetargeter] Root delta spike {_lastRootDeltaMagnitude:F3}m skipped. ghostDelta={ghostDelta.magnitude:F3}m, editorRootDelta={editorRootTranslationDelta.magnitude:F3}m, limit={maxRootDeltaPerFrame:F3}m");
+                        Debug.LogWarning($"[PoseSpaceRetargeter] Root delta spike {_lastRootDeltaMagnitude:F3}m limited. ghostDelta={ghostDelta.magnitude:F3}m, editorRootDelta={editorRootTranslationDelta.magnitude:F3}m, limit={maxRootDeltaPerFrame:F3}m");
                         _rootDeltaSpikeWarningLogged = true;
                     }
-
-                    targetDelta = Vector3.zero;
                 }
             }
 
@@ -1231,10 +1323,10 @@ namespace Member_Han.Modules.FBXImporter
             float maxRootDeltaPerFrame,
             out float deltaMagnitude,
             out bool skippedByNonFinite,
-            out bool skippedBySpike)
+            out bool limitedBySpike)
         {
             skippedByNonFinite = false;
-            skippedBySpike = false;
+            limitedBySpike = false;
 
             Vector3 targetDelta = (ghostDelta * scaleRatio + editorRootTranslationDelta + bodyRootDelta) * movementScaleMultiplier;
             if (!IsFinite(targetDelta))
@@ -1247,8 +1339,10 @@ namespace Member_Han.Modules.FBXImporter
             deltaMagnitude = targetDelta.magnitude;
             if (clampRootDeltaSpikes && deltaMagnitude > maxRootDeltaPerFrame)
             {
-                skippedBySpike = true;
-                return Vector3.zero;
+                limitedBySpike = true;
+                Vector3 limitedDelta = Vector3.ClampMagnitude(targetDelta, Mathf.Max(0f, maxRootDeltaPerFrame));
+                deltaMagnitude = limitedDelta.magnitude;
+                return limitedDelta;
             }
 
             return targetDelta;
@@ -1464,7 +1558,8 @@ namespace Member_Han.Modules.FBXImporter
 
         private static bool IsBodyPoseSpike(float bodyPositionDelta, float bodyRotationDelta)
         {
-            return bodyPositionDelta > 0.08f || bodyRotationDelta > 25f;
+            return bodyPositionDelta > BodyPositionVisualSpikeThreshold ||
+                bodyRotationDelta > BodyRotationVisualSpikeThresholdDegrees;
         }
 
         private void RememberVisualPose(HumanPose pose)
@@ -3001,6 +3096,16 @@ namespace Member_Han.Modules.FBXImporter
             return normalized;
         }
 #else
+        private static void RemoveLegacyAnimationClipStateIfPresent(Animation legacyAnimation, string stateName)
+        {
+            if (legacyAnimation != null &&
+                !string.IsNullOrEmpty(stateName) &&
+                legacyAnimation[stateName] != null)
+            {
+                legacyAnimation.RemoveClip(stateName);
+            }
+        }
+
         private void ApplyEditorHumanoidMuscleReference(ref HumanPose pose)
         {
         }
@@ -3011,6 +3116,94 @@ namespace Member_Han.Modules.FBXImporter
 
         private void ApplyEditorHumanoidBodyRotationReference(ref HumanPose pose)
         {
+        }
+
+        private void ResetLastEditorHipsLocalReferenceDiagnostics()
+        {
+            _lastEditorHipsLocalReferenceBeforeLocalY = float.NaN;
+            _lastEditorHipsLocalReferenceAfterLocalY = float.NaN;
+            _lastEditorHipsLocalReferenceDeltaY = float.NaN;
+        }
+
+        private void ResetRecordingStartHipsBaselineDiagnostics()
+        {
+            _recordingStartRootY = float.NaN;
+            _recordingStartBodyPositionY = float.NaN;
+            _recordingStartHipsLocalY = float.NaN;
+            _recordingStartHipsY = float.NaN;
+            _recordingStartHipsReferenceBeforeLocalY = float.NaN;
+            _recordingStartHipsReferenceAfterLocalY = float.NaN;
+            _recordingStartHipsReferenceDeltaY = float.NaN;
+            _recordingStartHipsReferenceFlipDetected = false;
+            _recordingStartHipsReferenceStage = string.Empty;
+        }
+
+        private bool TryGetTargetBodyPositionY(out float bodyPositionY)
+        {
+            bodyPositionY = float.NaN;
+            if (_targetHandler == null)
+            {
+                return false;
+            }
+
+            HumanPose targetPose = new HumanPose();
+            _targetHandler.GetHumanPose(ref targetPose);
+            if (!IsFinite(targetPose.bodyPosition))
+            {
+                return false;
+            }
+
+            bodyPositionY = targetPose.bodyPosition.y;
+            return true;
+        }
+
+        private static bool IsRecordingStartHipsBaselineFlip(float beforeLocalY, float afterLocalY, float warningThreshold)
+        {
+            if (!IsFinite(beforeLocalY) || !IsFinite(afterLocalY) || !IsFinite(warningThreshold))
+            {
+                return false;
+            }
+
+            return Mathf.Abs(afterLocalY - beforeLocalY) > Mathf.Max(0f, warningThreshold);
+        }
+
+        private bool ShouldSuppressCompetingManualThumbOverride(bool leftHand)
+        {
+            return false;
+        }
+
+        private bool ShouldKeepDetachedHelperManualThumbOverrides(bool leftHand)
+        {
+            return false;
+        }
+
+        public bool TryGetHighRiskManualThumbPoseConstraintOverrides(
+            bool leftHand,
+            out float projectionMin,
+            out float projectionMax,
+            out float maxSpreadAngle)
+        {
+            projectionMin = 0f;
+            projectionMax = 0f;
+            maxSpreadAngle = 0f;
+            return false;
+        }
+
+        public string BuildThumbHelperRelationshipDebugSummary(bool leftHand)
+        {
+            return leftHand
+                ? "side=L, state=editor-only"
+                : "side=R, state=editor-only";
+        }
+
+        private Transform GetCachedThumbBaseHelper(bool leftHand)
+        {
+            return null;
+        }
+
+        private Transform GetCachedExplicitThumbBaseSource(bool leftHand)
+        {
+            return null;
         }
 #endif
 
@@ -3114,6 +3307,27 @@ namespace Member_Han.Modules.FBXImporter
 
             _targetReferenceBodyPosition = targetPose.bodyPosition;
             _hasTargetReferenceBodyPosition = true;
+        }
+
+        private static Vector3 SelectBodyPositionRootMotionSource(
+            Vector3 poseBodyPosition,
+            Vector3 manualReferenceBodyPosition,
+            bool hasManualReferenceBodyPosition,
+            bool preferManualReferenceXZ)
+        {
+            if (IsFinite(poseBodyPosition))
+            {
+                return poseBodyPosition;
+            }
+
+            if (preferManualReferenceXZ &&
+                hasManualReferenceBodyPosition &&
+                IsFinite(manualReferenceBodyPosition))
+            {
+                return manualReferenceBodyPosition;
+            }
+
+            return poseBodyPosition;
         }
 
         private Vector3 ExtractBodyPositionXZRootDelta(Vector3 bodyPosition)
@@ -4130,6 +4344,7 @@ namespace Member_Han.Modules.FBXImporter
                 GetCachedExplicitThumbBaseSource(leftHand) != null;
         }
 
+#if UNITY_EDITOR
         private bool TryEvaluateThumbManualReferenceFrameDeviation(
             bool leftHand,
             Transform targetThumb,
@@ -4283,6 +4498,39 @@ namespace Member_Han.Modules.FBXImporter
                 targetThumb.localRotation = originalRotation;
             }
         }
+#else
+        private bool TryEvaluateThumbManualReferenceFrameDeviation(
+            bool leftHand,
+            Transform targetThumb,
+            Quaternion candidateWorldRotation,
+            out float currentDeviation,
+            out float candidateDeviation)
+        {
+            currentDeviation = float.NaN;
+            candidateDeviation = float.NaN;
+            return false;
+        }
+
+        private bool TryEvaluateCurrentThumbReferenceFrameDelta(
+            bool leftHand,
+            out float spreadDelta,
+            out float projectionDelta)
+        {
+            spreadDelta = float.NaN;
+            projectionDelta = float.NaN;
+            return false;
+        }
+
+        private bool TryEvaluateThumbLocalRotationOverrideRisk(
+            bool leftHand,
+            Transform targetThumb,
+            Quaternion candidateRotation,
+            out float risk)
+        {
+            risk = float.NaN;
+            return false;
+        }
+#endif
 
         private static bool TryGetThumbBoneSide(HumanBodyBones thumbBone, out bool leftHand)
         {
@@ -4364,7 +4612,26 @@ namespace Member_Han.Modules.FBXImporter
             Vector3 currentPosition,
             bool allowBodyPositionXZRootMotion)
         {
-            if (allowBodyPositionXZRootMotion || !IsFinite(positionBeforePose) || !IsFinite(currentPosition))
+            return ApplyImplicitBodyPositionRootGuard(
+                positionBeforePose,
+                currentPosition,
+                allowBodyPositionXZRootMotion,
+                Vector3.zero);
+        }
+
+        private static Vector3 ApplyImplicitBodyPositionRootGuard(
+            Vector3 positionBeforePose,
+            Vector3 currentPosition,
+            bool allowBodyPositionXZRootMotion,
+            Vector3 explicitBodyRootDelta)
+        {
+            bool hasExplicitBodyRootMotion =
+                IsFinite(explicitBodyRootDelta) &&
+                FlattenXZ(explicitBodyRootDelta).sqrMagnitude > 0.0000000001f;
+
+            if ((allowBodyPositionXZRootMotion && !hasExplicitBodyRootMotion) ||
+                !IsFinite(positionBeforePose) ||
+                !IsFinite(currentPosition))
             {
                 return currentPosition;
             }
@@ -4383,6 +4650,39 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return positionBeforePose;
+        }
+
+        private static Vector3 SelectPoseSolveRootPosition(
+            Vector3 currentRootPosition,
+            Vector3 rootAnchorPosition,
+            bool isolateRootMotionFromPoseSolve)
+        {
+            if (!isolateRootMotionFromPoseSolve ||
+                !IsFinite(currentRootPosition) ||
+                !IsFinite(rootAnchorPosition))
+            {
+                return currentRootPosition;
+            }
+
+            return new Vector3(rootAnchorPosition.x, currentRootPosition.y, rootAnchorPosition.z);
+        }
+
+        private static Vector3 RestoreRootMotionCarrierPositionAfterPose(
+            Vector3 rootMotionCarrierPositionBeforePose,
+            Vector3 poseSolvedPosition,
+            bool isolateRootMotionFromPoseSolve)
+        {
+            if (!isolateRootMotionFromPoseSolve ||
+                !IsFinite(rootMotionCarrierPositionBeforePose) ||
+                !IsFinite(poseSolvedPosition))
+            {
+                return poseSolvedPosition;
+            }
+
+            return new Vector3(
+                rootMotionCarrierPositionBeforePose.x,
+                poseSolvedPosition.y,
+                rootMotionCarrierPositionBeforePose.z);
         }
 
         private static bool TryCalculateRootPositionSpikeClamp(
@@ -5023,9 +5323,7 @@ namespace Member_Han.Modules.FBXImporter
             // 현재 가장 낮은 발바닥 높이. Renderer bounds가 발에서 너무 멀면
             // 옷/머리카락/소매 outlier로 보고 발 기준을 유지한다.
             float lowestFootCurrentY = Mathf.Min(lBottom, rBottom);
-            float contactBottomY = _hasEstimatedFootRadius
-                ? lowestFootCurrentY
-                : ResolveGroundingContactBottomY(lowestFootCurrentY);
+            float contactBottomY = ResolveGroundingContactBottomY(lowestFootCurrentY);
 
             // 목표는 지면(0) + Offset
             // Raycast를 사용하여 실제 지면을 찾을 수도 있으나, 현재는 평면(Plane) 위라고 가정하고 0.0f 사용
@@ -5673,8 +5971,9 @@ namespace Member_Han.Modules.FBXImporter
         private float ResolveGroundingContactBottomY(float lowestFootBottomY)
         {
             bool hasRendererBounds = TryGetRendererBoundsMinY(out float rendererMinY);
-            float contactBottomY = ResolveGroundingContactBottomY(
+            float contactBottomY = ResolvePrimaryGroundingContactBottomY(
                 lowestFootBottomY,
+                _hasEstimatedFootRadius,
                 hasRendererBounds,
                 rendererMinY,
                 rejectRendererGroundingOutliers,
@@ -5690,6 +5989,25 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return contactBottomY;
+        }
+
+        private static float ResolvePrimaryGroundingContactBottomY(
+            float lowestFootBottomY,
+            bool hasEstimatedFootRadius,
+            bool hasRendererBounds,
+            float rendererMinY,
+            bool rejectRendererGroundingOutliers,
+            float maxRendererFootGroundingSeparation,
+            out bool rendererGroundingOutlier)
+        {
+            // Estimated foot radius changes the foot-bottom input; it must not bypass nearby renderer contact.
+            return ResolveGroundingContactBottomY(
+                lowestFootBottomY,
+                hasRendererBounds,
+                rendererMinY,
+                rejectRendererGroundingOutliers,
+                maxRendererFootGroundingSeparation,
+                out rendererGroundingOutlier);
         }
 
         private static float ResolveGroundingContactBottomY(

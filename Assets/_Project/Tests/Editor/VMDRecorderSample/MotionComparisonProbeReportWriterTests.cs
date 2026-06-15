@@ -27,6 +27,35 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_NewMotionComparisonProbe_When_InspectingFullBodyScreenshotPadding_Then_MatchesReferenceMp4LongShotFraming()
+        {
+            var probeObject = new GameObject("MotionComparisonProbe padding test");
+            try
+            {
+                var probe = probeObject.AddComponent<MotionComparisonProbe>();
+                FieldInfo field = typeof(MotionComparisonProbe).GetField(
+                    "screenshotPadding",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(field, Is.Not.Null, "MotionComparisonProbe must expose its full-body screenshot padding as a serialized field.");
+                Assert.That((float)field.GetValue(probe), Is.EqualTo(1.8f).Within(0.0001f),
+                    "Full-body comparison captures must use the measured MP4 long-shot scale instead of zooming the model to the frame.");
+
+                FieldInfo anchorField = typeof(MotionComparisonProbe).GetField(
+                    "screenshotVerticalViewportCenter",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(anchorField, Is.Not.Null, "MotionComparisonProbe must expose its full-body vertical viewport anchor as a serialized field.");
+                Assert.That((float)anchorField.GetValue(probe), Is.EqualTo(0.28f).Within(0.0001f),
+                    "Full-body comparison captures must use the measured MP4 lower-stage anchor instead of centering the model vertically.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(probeObject);
+            }
+        }
+
+        [Test]
         public void Given_MetricsCsvValues_When_FormattersRun_Then_UseInvariantCsvAndBlankInvalidNumbers()
         {
             Assert.That(MotionComparisonProbeReportWriter.FormatMetricsCsvText("hello, \"world\""), Is.EqualTo("\"hello, \"\"world\"\"\""));
@@ -710,13 +739,29 @@ namespace Tests.Editor.VMDRecorderSample
         {
             string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
 
-            Assert.That(columns.Length, Is.EqualTo(235));
+            Assert.That(columns.Length, Is.EqualTo(241));
             Assert.That(columns[0], Is.EqualTo("label"));
             Assert.That(columns[1], Is.EqualTo("scene"));
             Assert.That(columns[2], Is.EqualTo("reason"));
             Assert.That(columns[140], Is.EqualTo("rightLittleProximalLocalEuler"));
             Assert.That(columns[141], Is.EqualTo("leftThumbIndexSpreadAngle"));
             Assert.That(columns[columns.Length - 1], Is.EqualTo("thumbGuardWebbingMaxPositionOffset"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSleeveThicknessDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int sleeveAnchorIndex = Array.IndexOf(columns, "rightSleeveAnchorRisk");
+
+            Assert.That(sleeveAnchorIndex, Is.GreaterThan(0));
+            Assert.That(columns[sleeveAnchorIndex + 1], Is.EqualTo("leftSleeveAnchorDistance"));
+            Assert.That(columns[sleeveAnchorIndex + 2], Is.EqualTo("rightSleeveAnchorDistance"));
+            Assert.That(columns[sleeveAnchorIndex + 3], Is.EqualTo("leftSleeveThicknessRatio"));
+            Assert.That(columns[sleeveAnchorIndex + 4], Is.EqualTo("rightSleeveThicknessRatio"));
+            Assert.That(columns[sleeveAnchorIndex + 5], Is.EqualTo("leftSleeveThicknessRisk"));
+            Assert.That(columns[sleeveAnchorIndex + 6], Is.EqualTo("rightSleeveThicknessRisk"));
+            Assert.That(columns[sleeveAnchorIndex + 7], Is.EqualTo("leftYybDeformationRisk"));
         }
 
         [Test]
@@ -1296,6 +1341,430 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(summary.candidate_root_step_spike_frames, Is.EqualTo(0));
                 Assert.That(summary.max_candidate_root_step, Is.NaN);
                 Assert.That(summary.max_same_frame_root_position_delta, Is.EqualTo(3f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_YybCandidateRiskColumnWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-yyb.csv");
+            string vmdPath = Path.Combine(root, "main-yyb.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithYybRisk(
+                    baselinePath,
+                    YybRiskRow("Sub_Manual testPrefab", 0, "0"),
+                    YybRiskRow("Sub_Manual testPrefab", 300, "0"));
+                WriteMetricsCsvWithYybRisk(
+                    candidatePath,
+                    YybRiskRow("Main_Recoding YYB", 0, ""),
+                    YybRiskRow("Main_Recoding YYB", 300, ""));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("YYB deformation risk diagnostic missing"));
+                Assert.That(GetSummaryField<bool>(summary, "candidate_yyb_deformation_risk_column_present"), Is.True);
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_deformation_risk_frame_count"), Is.EqualTo(0));
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_deformation_risk_missing_frames"), Is.EqualTo(2));
+                Assert.That(GetSummaryField<float>(summary, "candidate_yyb_max_deformation_risk"), Is.NaN);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_YybCandidateWithoutRiskColumn_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-yyb.csv");
+            string vmdPath = Path.Combine(root, "main-yyb.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsv(
+                    baselinePath,
+                    Row("Sub_Manual testPrefab", 0, 0f, 1f, 0f, 1f, 0.1f, 0.1f, 0f, 0f, 0f),
+                    Row("Sub_Manual testPrefab", 300, 0f, 1f, 0f, 1f, 0.1f, 0.1f, 0f, 0f, 0f));
+                WriteMetricsCsv(
+                    candidatePath,
+                    Row("Main_Recoding YYB", 0, 0f, 1f, 0f, 1f, 0.1f, 0.1f, 0f, 0f, 0f),
+                    Row("Main_Recoding YYB", 300, 0f, 1f, 0f, 1f, 0.1f, 0.1f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("YYB deformation risk diagnostic missing"));
+                Assert.That(GetSummaryField<bool>(summary, "candidate_yyb_deformation_risk_column_present"), Is.False);
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_deformation_risk_missing_frames"), Is.EqualTo(2));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_YybCandidateSleeveThicknessRiskWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-yyb.csv");
+            string vmdPath = Path.Combine(root, "main-yyb.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    baselinePath,
+                    YybRiskAndSleeveThicknessRow("Sub_Manual YYB", 0, "0", "0", "0"),
+                    YybRiskAndSleeveThicknessRow("Sub_Manual YYB", 300, "0", "0", "0"));
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    candidatePath,
+                    YybRiskAndSleeveThicknessRow("Main_Auto YYB", 0, "0.1", "", ""),
+                    YybRiskAndSleeveThicknessRow("Main_Auto YYB", 300, "0.1", "", ""));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual YYB",
+                        baselinePath,
+                        "Main_Auto YYB",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("YYB sleeve thickness diagnostic missing"));
+                Assert.That(GetSummaryField<bool>(summary, "candidate_yyb_sleeve_thickness_risk_column_present"), Is.True);
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_sleeve_thickness_risk_frame_count"), Is.EqualTo(0));
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_sleeve_thickness_risk_missing_frames"), Is.EqualTo(2));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_YybCandidateSleeveThicknessRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-yyb.csv");
+            string vmdPath = Path.Combine(root, "main-yyb.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    baselinePath,
+                    YybRiskAndSleeveThicknessRow("Sub_Manual YYB", 0, "0", "0", "0"),
+                    YybRiskAndSleeveThicknessRow("Sub_Manual YYB", 300, "0", "0", "0"));
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    candidatePath,
+                    YybRiskAndSleeveThicknessRow("Main_Auto YYB", 0, "0.1", "0.2", "0.1"),
+                    YybRiskAndSleeveThicknessRow("Main_Auto YYB", 300, "0.1", "0.4", "0.37"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual YYB",
+                        baselinePath,
+                        "Main_Auto YYB",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("YYB sleeve thickness risk threshold exceeded"));
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_sleeve_thickness_risk_frame_count"), Is.EqualTo(2));
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_sleeve_thickness_risk_missing_frames"), Is.EqualTo(0));
+                Assert.That(GetSummaryField<float>(summary, "candidate_yyb_max_sleeve_thickness_risk"), Is.EqualTo(0.4f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_YybCandidateRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-yyb.csv");
+            string vmdPath = Path.Combine(root, "main-yyb.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithYybRisk(
+                    baselinePath,
+                    YybRiskRow("Sub_Manual YYB", 0, "0"),
+                    YybRiskRow("Sub_Manual YYB", 300, "0"));
+                WriteMetricsCsvWithYybRisk(
+                    candidatePath,
+                    YybRiskRow("Main_Auto YYB", 0, "0.1"),
+                    YybRiskRow("Main_Auto YYB", 300, "0.42"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual YYB",
+                        baselinePath,
+                        "Main_Auto YYB",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("YYB deformation risk threshold exceeded"));
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_deformation_risk_frame_count"), Is.EqualTo(2));
+                Assert.That(GetSummaryField<int>(summary, "candidate_yyb_deformation_risk_missing_frames"), Is.EqualTo(0));
+                Assert.That(GetSummaryField<float>(summary, "candidate_yyb_max_deformation_risk"), Is.EqualTo(0.42f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_MainRecordingMovingRootStageMotion_When_MarkingIntentionalRootPath_Then_AllowsRootPathDeltaOnly()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    baselinePath,
+                    RowWithYybAndSleeve("manual", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"),
+                    RowWithYybAndSleeve("manual", 300, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"));
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    candidatePath,
+                    RowWithYybAndSleeve("main-recording", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"),
+                    RowWithYybAndSleeve("main-recording", 300, 0.75f, 1f, 0f, 1f, 0.146f, 0.146f, 0.08f, 0f, 0f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB 자동 경로",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("same-frame root position delta threshold exceeded"));
+                Assert.That(summary.max_same_frame_root_position_delta, Is.EqualTo(0.75f).Within(0.0001f));
+                Assert.That(summary.candidate_retarget_root_delta_max, Is.EqualTo(0.08f).Within(0.0001f));
+                Assert.That(summary.max_same_frame_foot_bottom_y_delta, Is.EqualTo(0.066f).Within(0.0001f));
+
+                MotionComparisonProbeReportWriter.MarkIntentionalMovingRootStageMotion(summary);
+
+                Assert.That(summary.status, Is.EqualTo("pass"));
+                Assert.That(summary.status_reason, Does.Contain("intentional moving-root stage path"));
+                Assert.That(summary.frame_quality_evaluation_role, Is.EqualTo("main_recording_moving_root_metrics"));
+                Assert.That(summary.max_same_frame_root_position_delta, Is.EqualTo(0.75f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_MainRecordingMovingRootStageMotionWithRetargetRootSpike_When_MarkingIntentionalRootPath_Then_StillFails()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    baselinePath,
+                    RowWithYybAndSleeve("manual", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"),
+                    RowWithYybAndSleeve("manual", 300, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"));
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    candidatePath,
+                    RowWithYybAndSleeve("main-recording", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"),
+                    RowWithYybAndSleeve("main-recording", 300, 0.75f, 1f, 0f, 1f, 0.146f, 0.146f, 0.152133f, 0f, 0f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB 자동 경로",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                MotionComparisonProbeReportWriter.MarkIntentionalMovingRootStageMotion(summary);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("one-frame root/center/IK teleport threshold exceeded"));
+                Assert.That(summary.status_reason, Does.Not.Contain("moving-root retarget root delta"));
+                Assert.That(summary.candidate_retarget_root_delta_max, Is.EqualTo(0.152133f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_MainRecordingMovingRootStageMotionWithFloorFailure_When_MarkingIntentionalRootPath_Then_StillFails()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    baselinePath,
+                    RowWithYybAndSleeve("manual", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"),
+                    RowWithYybAndSleeve("manual", 300, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"));
+                WriteMetricsCsvWithYybRiskAndSleeveThickness(
+                    candidatePath,
+                    RowWithYybAndSleeve("main-recording", 0, 0f, 1f, 0f, 1f, -0.03f, -0.03f, 0f, 0f, 0f, "0", "0", "0"),
+                    RowWithYybAndSleeve("main-recording", 300, 0.75f, 1f, 0f, 1f, -0.02f, -0.02f, 0f, 0f, 0f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, -0.03f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, -0.03f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB 자동 경로",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                MotionComparisonProbeReportWriter.MarkIntentionalMovingRootStageMotion(summary);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("below-floor foot/IK sample detected"));
+                Assert.That(summary.status_reason, Does.Not.Contain("same-frame root position delta threshold exceeded"));
             }
             finally
             {
@@ -2184,6 +2653,111 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_CorrectedCandidatePasses_When_PromotingToPrimaryExport_Then_RewritesMainAutoPathsAndPreservesRawDiagnostics()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsContributors(
+                    baselinePath,
+                    HipsContributionRow("manual", 0, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 900, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 1800, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f));
+                WriteMetricsCsvWithHipsContributors(
+                    candidatePath,
+                    HipsContributionRow("main", 0, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.25f, 0.25f),
+                    HipsContributionRow("main", 900, 0f, 1.05f, 0f, 0.64f, 0.61f, 0.000f, 0.000f, 1.12f, 0.302f, 0.302f),
+                    HipsContributionRow("main", 1800, 0f, 1.05f, 0f, 0.62f, 0.58f, 0.000f, 0.000f, 1.12f, 0.25f, 0.25f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 900, 0.01f, 0f, 0f),
+                    VmdFrame("Center", 1800, 0.02f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 900, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1800, 0.02f, 0.05f, 0f));
+
+                string rawCandidateCsv = File.ReadAllText(candidatePath);
+                string rawCandidateVmd = Convert.ToBase64String(File.ReadAllBytes(vmdPath));
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+
+                Assert.That(raw.status, Is.EqualTo("fail"));
+                Assert.That(raw.vertical_solve_corrected_candidate_status, Is.EqualTo("pass"));
+
+                bool promoted = MotionComparisonProbeReportWriter.TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
+                    raw,
+                    out VerticalSolvePrimaryExportPromotion promotion);
+
+                Assert.That(promoted, Is.True);
+                Assert.That(promotion, Is.Not.Null);
+                Assert.That(File.Exists(promotion.raw_diagnostic_metrics_csv), Is.True);
+                Assert.That(File.Exists(promotion.raw_diagnostic_vmd_path), Is.True);
+                Assert.That(File.ReadAllText(promotion.raw_diagnostic_metrics_csv), Is.EqualTo(rawCandidateCsv));
+                Assert.That(Convert.ToBase64String(File.ReadAllBytes(promotion.raw_diagnostic_vmd_path)), Is.EqualTo(rawCandidateVmd));
+                Assert.That(File.ReadAllText(candidatePath), Is.Not.EqualTo(rawCandidateCsv));
+                Assert.That(Convert.ToBase64String(File.ReadAllBytes(vmdPath)), Is.Not.EqualTo(rawCandidateVmd));
+
+                MotionComparisonFrameQualitySummary promotedPrimary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+                Assert.That(promotedPrimary.status, Is.EqualTo("pass"));
+                Assert.That(promotedPrimary.max_same_frame_hips_y_delta, Is.EqualTo(0.0395f).Within(0.0001f));
+                Assert.That(promotedPrimary.max_same_frame_foot_bottom_y_delta, Is.EqualTo(0.0345f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_IntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsPrimaryAsOnlyAcceptanceEntry()
+        {
+            var integrated = new MotionComparisonFrameQualitySummary
+            {
+                frame_quality_evaluation_role = "main_auto_integrated_vertical_solve_metrics",
+                frame_quality_evaluation_basis = "primary Main_Auto result paths after bounded vertical solve promotion",
+                status = "pass",
+                candidate_metrics_csv = "main.csv",
+                candidate_vmd_path = "main.vmd",
+                vertical_solve_corrected_candidate_metrics_csv = "main.corrected.csv",
+                vertical_solve_corrected_candidate_vmd_path = "main.corrected.vmd"
+            };
+
+            MotionComparisonFrameQualitySummary[] entries =
+                MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(integrated);
+
+            Assert.That(entries, Has.Length.EqualTo(1));
+            Assert.That(entries[0], Is.SameAs(integrated));
+            Assert.That(entries[0].frame_quality_evaluation_role, Is.EqualTo("main_auto_integrated_vertical_solve_metrics"));
+            Assert.That(entries[0].status, Is.EqualTo("pass"));
+        }
+
+        [Test]
         public void Given_VerticalSolveWouldCreateUnsafeVmdCarrierStep_When_BuildingEvaluationEntries_Then_CorrectedVmdStaysWithinSafetyGates()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
@@ -2712,6 +3286,43 @@ namespace Tests.Editor.VMDRecorderSample
             };
         }
 
+        private static string[] RowWithYybAndSleeve(
+            string label,
+            int recorderFrame,
+            float rootX,
+            float rootY,
+            float rootZ,
+            float hipsY,
+            float lowestFootBottomY,
+            float footBottomGroundGap,
+            float retargetRootDeltaMax,
+            float retargetPoseDeltaMax,
+            float retargetGroundingVerticalStepMax,
+            string yybMaxDeformationRisk,
+            string leftSleeveThicknessRisk,
+            string rightSleeveThicknessRisk)
+        {
+            string[] baseRow = Row(
+                label,
+                recorderFrame,
+                rootX,
+                rootY,
+                rootZ,
+                hipsY,
+                lowestFootBottomY,
+                footBottomGroundGap,
+                retargetRootDeltaMax,
+                retargetPoseDeltaMax,
+                retargetGroundingVerticalStepMax);
+            var row = new List<string>(baseRow)
+            {
+                yybMaxDeformationRisk ?? "",
+                leftSleeveThicknessRisk ?? "",
+                rightSleeveThicknessRisk ?? ""
+            };
+            return row.ToArray();
+        }
+
         private static string[] HipsContributionRow(
             string label,
             int recorderFrame,
@@ -2889,6 +3500,34 @@ namespace Tests.Editor.VMDRecorderSample
             File.WriteAllLines(path, lines);
         }
 
+        private static void WriteMetricsCsvWithYybRisk(string path, params string[][] rows)
+        {
+            var lines = new List<string>
+            {
+                "label,recorderFrame,rootX,rootY,rootZ,hipsY,lowestFootBottomY,footBottomGroundGap,retargetRootDeltaMax,retargetPoseRootDeltaMax,retargetGroundingVerticalStepMax,yybMaxDeformationRisk"
+            };
+            foreach (string[] row in rows)
+            {
+                lines.Add(string.Join(",", row));
+            }
+
+            File.WriteAllLines(path, lines);
+        }
+
+        private static void WriteMetricsCsvWithYybRiskAndSleeveThickness(string path, params string[][] rows)
+        {
+            var lines = new List<string>
+            {
+                "label,recorderFrame,rootX,rootY,rootZ,hipsY,lowestFootBottomY,footBottomGroundGap,retargetRootDeltaMax,retargetPoseRootDeltaMax,retargetGroundingVerticalStepMax,yybMaxDeformationRisk,leftSleeveThicknessRisk,rightSleeveThicknessRisk"
+            };
+            foreach (string[] row in rows)
+            {
+                lines.Add(string.Join(",", row));
+            }
+
+            File.WriteAllLines(path, lines);
+        }
+
         private static void WriteMetricsCsvWithHipsContributors(string path, params string[][] rows)
         {
             var lines = new List<string>
@@ -2901,6 +3540,51 @@ namespace Tests.Editor.VMDRecorderSample
             }
 
             File.WriteAllLines(path, lines);
+        }
+
+        private static string[] YybRiskAndSleeveThicknessRow(
+            string label,
+            int recorderFrame,
+            string yybMaxDeformationRisk,
+            string leftSleeveThicknessRisk,
+            string rightSleeveThicknessRisk)
+        {
+            return new[]
+            {
+                label,
+                recorderFrame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0",
+                "1",
+                "0",
+                "1",
+                "0.1",
+                "0.1",
+                "0",
+                "0",
+                "0",
+                yybMaxDeformationRisk ?? "",
+                leftSleeveThicknessRisk ?? "",
+                rightSleeveThicknessRisk ?? ""
+            };
+        }
+
+        private static string[] YybRiskRow(string label, int recorderFrame, string yybMaxDeformationRisk)
+        {
+            return new[]
+            {
+                label,
+                recorderFrame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0",
+                "1",
+                "0",
+                "1",
+                "0.1",
+                "0.1",
+                "0",
+                "0",
+                "0",
+                yybMaxDeformationRisk ?? ""
+            };
         }
 
         private static void WriteMetricsCsvWithRecordingStartHipsBaseline(string path, params string[][] rows)

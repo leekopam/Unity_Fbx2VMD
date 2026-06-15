@@ -35,10 +35,20 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_BodyPositionRootMotionDisabled_When_ApplyingImplicitRootGuard_Then_RestoresRootXZAndKeepsPoseY);
             RunTest(results, nameof(tests.Given_BodyPositionRootMotionEnabled_When_ApplyingImplicitRootGuard_Then_KeepsPoseRootPosition),
                 tests.Given_BodyPositionRootMotionEnabled_When_ApplyingImplicitRootGuard_Then_KeepsPoseRootPosition);
+            RunTest(results, nameof(tests.Given_ExplicitBodyRootDelta_When_ApplyingImplicitRootGuard_Then_RestoresPoseRootXZBeforeExplicitMotion),
+                tests.Given_ExplicitBodyRootDelta_When_ApplyingImplicitRootGuard_Then_RestoresPoseRootXZBeforeExplicitMotion);
             RunTest(results, nameof(tests.Given_StationaryMovementScale_When_SelectingImplicitRootGuardReference_Then_UsesSessionAnchor),
                 tests.Given_StationaryMovementScale_When_SelectingImplicitRootGuardReference_Then_UsesSessionAnchor);
             RunTest(results, nameof(tests.Given_ExplicitMovementScale_When_SelectingImplicitRootGuardReference_Then_UsesFramePosition),
                 tests.Given_ExplicitMovementScale_When_SelectingImplicitRootGuardReference_Then_UsesFramePosition);
+            RunTest(results, nameof(tests.Given_MovingRootEnabled_When_SelectingPoseSolveRootPosition_Then_UsesAnchorXZAndKeepsCurrentY),
+                tests.Given_MovingRootEnabled_When_SelectingPoseSolveRootPosition_Then_UsesAnchorXZAndKeepsCurrentY);
+            RunTest(results, nameof(tests.Given_MovingRootDisabled_When_SelectingPoseSolveRootPosition_Then_KeepsCurrentPosition),
+                tests.Given_MovingRootDisabled_When_SelectingPoseSolveRootPosition_Then_KeepsCurrentPosition);
+            RunTest(results, nameof(tests.Given_MovingRootEnabled_When_RestoringCarrierAfterPose_Then_UsesCarrierXZAndPoseY),
+                tests.Given_MovingRootEnabled_When_RestoringCarrierAfterPose_Then_UsesCarrierXZAndPoseY);
+            RunTest(results, nameof(tests.Given_MovingRootDisabled_When_RestoringCarrierAfterPose_Then_KeepsPoseSolvedPosition),
+                tests.Given_MovingRootDisabled_When_RestoringCarrierAfterPose_Then_KeepsPoseSolvedPosition);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

@@ -25,12 +25,18 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_FiniteInputs_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostEditorAndBodyDelta);
             RunTest(results, nameof(tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN),
                 tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN);
-            RunTest(results, nameof(tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsSpike),
-                tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsSpike);
+            RunTest(results, nameof(tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_LimitsDeltaAndReportsSpike),
+                tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_LimitsDeltaAndReportsSpike);
+            RunTest(results, nameof(tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_KeepsLimitedMovement),
+                tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_KeepsLimitedMovement);
             RunTest(results, nameof(tests.Given_DeltaExceedsLimitAndClampDisabled_When_CalculatingRootMotionDelta_Then_KeepsDelta),
                 tests.Given_DeltaExceedsLimitAndClampDisabled_When_CalculatingRootMotionDelta_Then_KeepsDelta);
             RunTest(results, nameof(tests.Given_ZeroMovementScaleMultiplier_When_Normalizing_Then_AllowsStationaryRootMotion),
                 tests.Given_ZeroMovementScaleMultiplier_When_Normalizing_Then_AllowsStationaryRootMotion);
+            RunTest(results, nameof(tests.Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY),
+                tests.Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY);
+            RunTest(results, nameof(tests.Given_ManualBodyReferenceUnavailable_When_SelectingBodyRootMotionSource_Then_KeepsPoseBodyPosition),
+                tests.Given_ManualBodyReferenceUnavailable_When_SelectingBodyRootMotionSource_Then_KeepsPoseBodyPosition);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

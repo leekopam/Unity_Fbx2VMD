@@ -1137,6 +1137,42 @@ namespace Tests.Editor.VMDRecorderSample
             }
         }
 
+        [Test]
+        public void Given_JitterProbeSource_When_CheckedForTeleportGate_Then_UsesScreenAnchorThresholds()
+        {
+            string source = ReadHumanoidSampleCodeSource();
+
+            Assert.That(source, Does.Contain("private const float RootScreenTeleportThreshold = 5f;"));
+            Assert.That(source, Does.Contain("private const float HipsScreenTeleportThreshold = 25f;"));
+            Assert.That(source, Does.Contain("private const float HeadScreenTeleportThreshold = 40f;"));
+            Assert.That(source, Does.Contain("private const float FootScreenTeleportThreshold = 120f;"));
+            Assert.That(source, Does.Contain("private const float BoundsScreenTeleportThreshold = 120f;"));
+            Assert.That(source, Does.Contain("summary.VisibleScreenJitter = summary.MaxRootScreenCenterDelta > RootScreenTeleportThreshold;"));
+            Assert.That(source, Does.Not.Contain("summary.VisibleScreenJitter = summary.MaxRootScreenCenterDelta > 1f;"));
+        }
+
+        [Test]
+        public void Given_JitterProbeSource_When_CheckedForAnomalyScreenshots_Then_CapturesPeakFrames()
+        {
+            string source = ReadHumanoidSampleCodeSource();
+
+            Assert.That(source, Does.Contain("private const int MaxAnomalyScreenshots = 6;"));
+            Assert.That(source, Does.Not.Contain("private const int MaxAnomalyScreenshots = 0;"));
+        }
+
+        private static string ReadHumanoidSampleCodeSource()
+        {
+            string sourcePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "Plugins",
+                "VMDRecorderSample",
+                "SampleScript",
+                "HumanoidSampleCode.cs");
+
+            return File.ReadAllText(sourcePath);
+        }
+
         private static int CountOccurrences(string value, string search)
         {
             if (string.IsNullOrEmpty(value) || string.IsNullOrEmpty(search))

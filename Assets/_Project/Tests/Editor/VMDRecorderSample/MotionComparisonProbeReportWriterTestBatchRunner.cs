@@ -23,6 +23,8 @@ namespace Tests.Editor.VMDRecorderSample
 
             RunTest(results, nameof(tests.Given_ScreenshotIndexRow_When_BuildCsvLine_Then_EscapesQuotesAndCommas),
                 tests.Given_ScreenshotIndexRow_When_BuildCsvLine_Then_EscapesQuotesAndCommas);
+            RunTest(results, nameof(tests.Given_NewMotionComparisonProbe_When_InspectingFullBodyScreenshotPadding_Then_MatchesReferenceMp4LongShotFraming),
+                tests.Given_NewMotionComparisonProbe_When_InspectingFullBodyScreenshotPadding_Then_MatchesReferenceMp4LongShotFraming);
             RunTest(results, nameof(tests.Given_MetricsCsvValues_When_FormattersRun_Then_UseInvariantCsvAndBlankInvalidNumbers),
                 tests.Given_MetricsCsvValues_When_FormattersRun_Then_UseInvariantCsvAndBlankInvalidNumbers);
             RunTest(results, nameof(tests.Given_CsvInteger_When_FormatCsvInt_Then_UsesInvariantDigits),
@@ -105,6 +107,8 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_SessionTimestamp_When_BuildSessionTimeLabels_Then_UsesInvariantManifestFormats);
             RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_KeepsColumnOrderAndCount),
                 tests.Given_MetricsCsvHeader_When_BuildHeader_Then_KeepsColumnOrderAndCount);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSleeveThicknessDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSleeveThicknessDiagnostics);
             RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesHipsYContributionDiagnostics),
                 tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesHipsYContributionDiagnostics);
             RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRecordingStartHipsBaselineDiagnostics),
@@ -137,6 +141,22 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_MetricSamplesDriftByOneRecorderFrame_When_BuildFrameQualitySummary_Then_ComparesNearestFrame);
             RunTest(results, nameof(tests.Given_SparseMetricsCsvsWithSameFrameRootDelta_When_BuildFrameQualitySummary_Then_FailsGate),
                 tests.Given_SparseMetricsCsvsWithSameFrameRootDelta_When_BuildFrameQualitySummary_Then_FailsGate);
+            RunTest(results, nameof(tests.Given_YybCandidateRiskColumnWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
+                tests.Given_YybCandidateRiskColumnWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
+            RunTest(results, nameof(tests.Given_YybCandidateWithoutRiskColumn_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
+                tests.Given_YybCandidateWithoutRiskColumn_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
+            RunTest(results, nameof(tests.Given_YybCandidateSleeveThicknessRiskWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
+                tests.Given_YybCandidateSleeveThicknessRiskWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
+            RunTest(results, nameof(tests.Given_YybCandidateSleeveThicknessRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
+                tests.Given_YybCandidateSleeveThicknessRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
+            RunTest(results, nameof(tests.Given_YybCandidateRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
+                tests.Given_YybCandidateRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
+            RunTest(results, nameof(tests.Given_MainRecordingMovingRootStageMotion_When_MarkingIntentionalRootPath_Then_AllowsRootPathDeltaOnly),
+                tests.Given_MainRecordingMovingRootStageMotion_When_MarkingIntentionalRootPath_Then_AllowsRootPathDeltaOnly);
+            RunTest(results, nameof(tests.Given_MainRecordingMovingRootStageMotionWithRetargetRootSpike_When_MarkingIntentionalRootPath_Then_StillFails),
+                tests.Given_MainRecordingMovingRootStageMotionWithRetargetRootSpike_When_MarkingIntentionalRootPath_Then_StillFails);
+            RunTest(results, nameof(tests.Given_MainRecordingMovingRootStageMotionWithFloorFailure_When_MarkingIntentionalRootPath_Then_StillFails),
+                tests.Given_MainRecordingMovingRootStageMotionWithFloorFailure_When_MarkingIntentionalRootPath_Then_StillFails);
             RunTest(results, nameof(tests.Given_ConstantSceneRootOffset_When_BuildFrameQualitySummary_Then_DoesNotFailRootDeltaGate),
                 tests.Given_ConstantSceneRootOffset_When_BuildFrameQualitySummary_Then_DoesNotFailRootDeltaGate);
             RunTest(results, nameof(tests.Given_ConstantVerticalModelOffset_When_BuildFrameQualitySummary_Then_DoesNotWarnHipsOrFootGate),
@@ -165,6 +185,10 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_CorrectedMetricsArtifact_When_BuildingFrameQualityEvaluationEntries_Then_EvaluatesCorrectedArtifactSeparatelyFromRawCandidate);
             RunTest(results, nameof(tests.Given_CorrectedMetricsArtifact_When_BuildingFrameQualityEvaluationEntries_Then_CorrectedEntryUsesExplicitVmdArtifactAndManifest),
                 tests.Given_CorrectedMetricsArtifact_When_BuildingFrameQualityEvaluationEntries_Then_CorrectedEntryUsesExplicitVmdArtifactAndManifest);
+            RunTest(results, nameof(tests.Given_CorrectedCandidatePasses_When_PromotingToPrimaryExport_Then_RewritesMainAutoPathsAndPreservesRawDiagnostics),
+                tests.Given_CorrectedCandidatePasses_When_PromotingToPrimaryExport_Then_RewritesMainAutoPathsAndPreservesRawDiagnostics);
+            RunTest(results, nameof(tests.Given_IntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsPrimaryAsOnlyAcceptanceEntry),
+                tests.Given_IntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsPrimaryAsOnlyAcceptanceEntry);
             RunTest(results, nameof(tests.Given_VerticalSolveWouldCreateUnsafeVmdCarrierStep_When_BuildingEvaluationEntries_Then_CorrectedVmdStaysWithinSafetyGates),
                 tests.Given_VerticalSolveWouldCreateUnsafeVmdCarrierStep_When_BuildingEvaluationEntries_Then_CorrectedVmdStaysWithinSafetyGates);
             RunTest(results, nameof(tests.Given_FootVerticalSolveWouldSinkEffectiveVmdIk_When_BuildingEvaluationEntries_Then_CorrectedVmdPreservesFloorMargin),

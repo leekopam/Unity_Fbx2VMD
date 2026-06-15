@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
@@ -15,6 +15,11 @@ namespace Member_Han.Modules.FBXImporter
         #region 상수
         private const int MAX_BONE_WEIGHTS_PER_VERTEX = 4;
         private const int VERTEX_INDEX_FORMAT_THRESHOLD = 65535;
+        private const float FBX_TO_UNITY_UNIT_SCALE = 0.01f;
+        private const byte ALPHA_CUTOUT_OPAQUE_THRESHOLD = 250;
+        private const float STANDARD_SHADER_CUTOUT_MODE = 1f;
+        private const float STANDARD_SHADER_CUTOUT_THRESHOLD = 0.5f;
+        private const string UNLIT_TRANSPARENT_CUTOUT_SHADER = "Unlit/Transparent Cutout";
         #endregion
 
         #region Private 필드
@@ -22,6 +27,7 @@ namespace Member_Han.Modules.FBXImporter
         private Dictionary<string, Transform> _nodeMap = new Dictionary<string, Transform>();
         private bool _loggedSkippedScaleCurves;
         private bool _loggedSkippedNonRootPositionCurves;
+        private string _sourceDirectory = string.Empty;
 
         // 생성된 AnimationClip 저장 (외부 접근용)
         private AnimationClip[] _animationClips;
@@ -143,13 +149,12 @@ namespace Member_Han.Modules.FBXImporter
             _nodeMap.Clear();
             _loggedSkippedScaleCurves = false;
             _loggedSkippedNonRootPositionCurves = false;
+            _sourceDirectory = ResolveSourceDirectory(path);
             BuildHierarchy(scene.RootNode, rootObject.transform, scene);
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
 
-            // 좌표계 변환으로 인해 뒤를 보는 현상 보정 (180도 회전)
-            // MakeLeftHanded로 인해 Z축이 반전되었으므로, 다시 180도 돌려 앞을 보게 함
-            rootObject.transform.rotation = UnityEngine.Quaternion.Euler(0, 180f, 0);
+            ApplyRuntimeRootTransform(rootObject);
 
             return rootObject;
         }
@@ -188,10 +193,11 @@ namespace Member_Han.Modules.FBXImporter
             _nodeMap.Clear();
             _loggedSkippedScaleCurves = false;
             _loggedSkippedNonRootPositionCurves = false;
+            _sourceDirectory = ResolveSourceDirectory(path);
             BuildHierarchy(scene.RootNode, rootObject.transform, scene);
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
-            rootObject.transform.rotation = UnityEngine.Quaternion.Euler(0, 180f, 0);
+            ApplyRuntimeRootTransform(rootObject);
 
             return rootObject;
         }
@@ -216,9 +222,6 @@ namespace Member_Han.Modules.FBXImporter
                 {
                     Debug.LogError("[RuntimeFBXImporter] importer.ImportFile이 null을 반환함");
                 }
-                else
-                {
-                }
 
                 return scene;
             }
@@ -238,6 +241,20 @@ namespace Member_Han.Modules.FBXImporter
                    PostProcessSteps.CalculateTangentSpace |
                    PostProcessSteps.MakeLeftHanded |
                    PostProcessSteps.FlipWindingOrder;
+        }
+
+        private static void ApplyRuntimeRootTransform(GameObject rootObject)
+        {
+            if (rootObject == null)
+            {
+                return;
+            }
+
+            rootObject.transform.localScale = UnityEngine.Vector3.one;
+
+            // 좌표계 변환으로 인해 뒤를 보는 현상 보정 (180도 회전)
+            // MakeLeftHanded로 인해 Z축이 반전되었으므로, 다시 180도 돌려 앞을 보게 함
+            rootObject.transform.rotation = UnityEngine.Quaternion.Euler(0, 180f, 0);
         }
 
 #if UNITY_EDITOR
@@ -288,7 +305,7 @@ namespace Member_Han.Modules.FBXImporter
             Assimp.Quaternion aRot;
             node.Transform.Decompose(out aScale, out aRot, out aPos);
 
-            go.transform.localPosition = new UnityEngine.Vector3(aPos.X, aPos.Y, aPos.Z);
+            go.transform.localPosition = new UnityEngine.Vector3(aPos.X, aPos.Y, aPos.Z) * FBX_TO_UNITY_UNIT_SCALE;
             go.transform.localRotation = new UnityEngine.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
             go.transform.localScale = new UnityEngine.Vector3(aScale.X, aScale.Y, aScale.Z);
 
@@ -328,6 +345,7 @@ namespace Member_Han.Modules.FBXImporter
 
         private void CreateMesh(GameObject go, Assimp.Mesh asmMesh, Scene scene)
         {
+            GameObject meshObject = ResolveMeshObject(go, asmMesh);
             UnityEngine.Mesh unityMesh = new UnityEngine.Mesh();
             unityMesh.name = asmMesh.Name;
 
@@ -341,7 +359,7 @@ namespace Member_Han.Modules.FBXImporter
             List<UnityEngine.Vector3> vertices = new List<UnityEngine.Vector3>();
             foreach (var v in asmMesh.Vertices)
             {
-                vertices.Add(new UnityEngine.Vector3(v.X, v.Y, v.Z));
+                vertices.Add(new UnityEngine.Vector3(v.X, v.Y, v.Z) * FBX_TO_UNITY_UNIT_SCALE);
             }
             unityMesh.SetVertices(vertices);
 
@@ -383,12 +401,29 @@ namespace Member_Han.Modules.FBXImporter
             // 본이 있으면 SkinnedMeshRenderer, 없으면 일반 MeshRenderer
             if (asmMesh.HasBones)
             {
-                SetupSkinnedMesh(go, unityMesh, asmMesh, vertices.Count);
+                SetupSkinnedMesh(meshObject, unityMesh, asmMesh, vertices.Count);
             }
             else
             {
-                SetupStaticMesh(go, unityMesh);
+                SetupStaticMesh(meshObject, unityMesh);
             }
+
+            AssignRuntimeMaterial(meshObject, asmMesh, scene, _sourceDirectory);
+        }
+
+        private static GameObject ResolveMeshObject(GameObject nodeObject, Assimp.Mesh asmMesh)
+        {
+            if (nodeObject == null || nodeObject.GetComponent<Renderer>() == null)
+            {
+                return nodeObject;
+            }
+
+            string meshName = string.IsNullOrWhiteSpace(asmMesh?.Name)
+                ? "ImportedMesh"
+                : asmMesh.Name;
+            var meshObject = new GameObject(meshName);
+            meshObject.transform.SetParent(nodeObject.transform, false);
+            return meshObject;
         }
 
         private void SetupSkinnedMesh(GameObject go, UnityEngine.Mesh unityMesh, Assimp.Mesh asmMesh, int vertexCount)
@@ -427,6 +462,7 @@ namespace Member_Han.Modules.FBXImporter
                 }
             }
 
+            NormalizeBoneWeights(weights);
             unityMesh.boneWeights = weights;
             unityMesh.bindposes = bindPoses.ToArray();
             unityMesh.RecalculateBounds();
@@ -449,6 +485,255 @@ namespace Member_Han.Modules.FBXImporter
             unityMesh.RecalculateBounds();
         }
 
+        private static void AssignRuntimeMaterial(GameObject go, Assimp.Mesh asmMesh, Scene scene, string sourceDirectory)
+        {
+            if (go == null || asmMesh == null || scene == null)
+            {
+                return;
+            }
+
+            Renderer renderer = go.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                return;
+            }
+
+            Assimp.Material sourceMaterial = ResolveAssimpMaterial(scene, asmMesh.MaterialIndex);
+            if (sourceMaterial == null)
+            {
+                return;
+            }
+
+            renderer.sharedMaterial = CreateRuntimeMaterial(sourceMaterial, sourceDirectory);
+        }
+
+        private static Assimp.Material ResolveAssimpMaterial(Scene scene, int materialIndex)
+        {
+            if (scene == null || materialIndex < 0 || materialIndex >= scene.MaterialCount)
+            {
+                return null;
+            }
+
+            return scene.Materials[materialIndex];
+        }
+
+        private static UnityEngine.Material CreateRuntimeMaterial(Assimp.Material sourceMaterial, string sourceDirectory)
+        {
+            string texturePath = ResolveMainTexturePath(sourceMaterial, sourceDirectory);
+            Shader shader = SelectRuntimeMaterialShader(texturePath);
+
+            var material = new UnityEngine.Material(shader)
+            {
+                name = string.IsNullOrWhiteSpace(sourceMaterial?.Name)
+                    ? "ImportedMaterial"
+                    : sourceMaterial.Name
+            };
+
+            ApplyReferenceMaterialDefaults(material);
+            AssignMainTexture(material, texturePath);
+            return material;
+        }
+
+        private static Shader SelectRuntimeMaterialShader(string texturePath)
+        {
+            if (!string.IsNullOrEmpty(texturePath))
+            {
+                Shader textureCutoutShader = Shader.Find(UNLIT_TRANSPARENT_CUTOUT_SHADER);
+                if (textureCutoutShader != null)
+                {
+                    return textureCutoutShader;
+                }
+            }
+
+            Shader shader = Shader.Find("Standard");
+            if (shader == null)
+            {
+                shader = Shader.Find("Diffuse");
+            }
+
+            return shader;
+        }
+
+        private static void ApplyReferenceMaterialDefaults(UnityEngine.Material material)
+        {
+            SetMaterialFloatIfSupported(material, "_Glossiness", 0f);
+            SetMaterialFloatIfSupported(material, "_Metallic", 0f);
+        }
+
+        private static void SetMaterialFloatIfSupported(UnityEngine.Material material, string propertyName, float value)
+        {
+            if (material != null && material.HasProperty(propertyName))
+            {
+                material.SetFloat(propertyName, value);
+            }
+        }
+
+        private static string ResolveMainTexturePath(Assimp.Material sourceMaterial, string sourceDirectory)
+        {
+            string textureReference = ResolveDiffuseTextureReference(sourceMaterial);
+            string texturePath = RuntimeFbxMaterialResolver.ResolveTextureCandidateFromDirectory(sourceDirectory, textureReference);
+            if (string.IsNullOrEmpty(texturePath))
+            {
+                texturePath = RuntimeFbxMaterialResolver.ResolveTextureCandidateFromMaterialName(
+                    sourceDirectory,
+                    sourceMaterial?.Name);
+            }
+
+            return texturePath;
+        }
+
+        private static void AssignMainTexture(UnityEngine.Material material, string texturePath)
+        {
+            if (string.IsNullOrEmpty(texturePath))
+            {
+                return;
+            }
+
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(texturePath);
+                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false)
+                {
+                    name = Path.GetFileName(texturePath)
+                };
+
+                if (texture.LoadImage(bytes))
+                {
+                    material.mainTexture = texture;
+                    ApplyTextureMaterialState(material, texture);
+                    return;
+                }
+
+                DestroyTexture(texture);
+            }
+            catch (IOException e)
+            {
+                Debug.LogWarning($"[RuntimeFBXImporter] 텍스처 로드 실패: {texturePath} ({e.Message})");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[RuntimeFBXImporter] 텍스처 적용 실패: {texturePath} ({e.Message})");
+            }
+        }
+
+        private static string ResolveDiffuseTextureReference(Assimp.Material sourceMaterial)
+        {
+            if (sourceMaterial == null)
+            {
+                return string.Empty;
+            }
+
+            if (sourceMaterial.GetMaterialTexture(TextureType.Diffuse, 0, out TextureSlot textureSlot))
+            {
+                return textureSlot.FilePath;
+            }
+
+            if (sourceMaterial.HasTextureDiffuse)
+            {
+                return sourceMaterial.TextureDiffuse.FilePath;
+            }
+
+            return string.Empty;
+        }
+
+        private static void ApplyTextureMaterialState(UnityEngine.Material material, Texture2D texture)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            if (UsesCutoutShader(material) || TextureContainsTransparentPixels(texture))
+            {
+                ApplyAlphaCutoutMaterialState(material);
+            }
+        }
+
+        private static bool UsesCutoutShader(UnityEngine.Material material)
+        {
+            return material != null
+                && material.shader != null
+                && string.Equals(material.shader.name, UNLIT_TRANSPARENT_CUTOUT_SHADER, System.StringComparison.Ordinal);
+        }
+
+        private static void ApplyAlphaCutoutMaterialState(UnityEngine.Material material)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            if (material.HasProperty("_Mode"))
+            {
+                material.SetFloat("_Mode", STANDARD_SHADER_CUTOUT_MODE);
+            }
+
+            SetMaterialFloatIfSupported(material, "_Cutoff", STANDARD_SHADER_CUTOUT_THRESHOLD);
+            SetMaterialFloatIfSupported(material, "_SrcBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            SetMaterialFloatIfSupported(material, "_DstBlend", (float)UnityEngine.Rendering.BlendMode.Zero);
+            SetMaterialFloatIfSupported(material, "_ZWrite", 1f);
+            material.SetOverrideTag("RenderType", "TransparentCutout");
+            material.EnableKeyword("_ALPHATEST_ON");
+            material.DisableKeyword("_ALPHABLEND_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+        }
+
+        private static bool TextureContainsTransparentPixels(Texture2D texture)
+        {
+            try
+            {
+                Color32[] pixels = texture.GetPixels32();
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    if (pixels[i].a < ALPHA_CUTOUT_OPAQUE_THRESHOLD)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (UnityException e)
+            {
+                Debug.LogWarning($"[RuntimeFBXImporter] texture alpha scan skipped: {texture.name} ({e.Message})");
+            }
+
+            return false;
+        }
+
+        private static void DestroyTexture(Texture2D texture)
+        {
+            if (texture == null)
+            {
+                return;
+            }
+
+            if (Application.isEditor && !Application.isPlaying)
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+            else
+            {
+                UnityEngine.Object.Destroy(texture);
+            }
+        }
+
+        private static string ResolveSourceDirectory(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                return Path.GetDirectoryName(Path.GetFullPath(path)) ?? string.Empty;
+            }
+            catch (System.Exception)
+            {
+                return string.Empty;
+            }
+        }
+
         private void AddBoneWeight(ref BoneWeight bw, ref int count, int boneIndex, float weight)
         {
             if (weight <= 0) return;
@@ -459,6 +744,25 @@ namespace Member_Han.Modules.FBXImporter
             else if (count == 2) { bw.boneIndex2 = boneIndex; bw.weight2 = weight; }
             else if (count == 3) { bw.boneIndex3 = boneIndex; bw.weight3 = weight; }
             count++;
+        }
+
+        private static void NormalizeBoneWeights(BoneWeight[] weights)
+        {
+            for (int i = 0; i < weights.Length; i++)
+            {
+                BoneWeight weight = weights[i];
+                float total = weight.weight0 + weight.weight1 + weight.weight2 + weight.weight3;
+                if (total <= 0f)
+                {
+                    continue;
+                }
+
+                weight.weight0 /= total;
+                weight.weight1 /= total;
+                weight.weight2 /= total;
+                weight.weight3 /= total;
+                weights[i] = weight;
+            }
         }
         #endregion
 
@@ -585,9 +889,9 @@ namespace Member_Han.Modules.FBXImporter
             foreach (var key in positionKeys)
             {
                 float time = (float)key.Time * timeScale;
-                curveX.AddKey(time, key.Value.X);
-                curveY.AddKey(time, key.Value.Y);
-                curveZ.AddKey(time, key.Value.Z);
+                curveX.AddKey(time, key.Value.X * FBX_TO_UNITY_UNIT_SCALE);
+                curveY.AddKey(time, key.Value.Y * FBX_TO_UNITY_UNIT_SCALE);
+                curveZ.AddKey(time, key.Value.Z * FBX_TO_UNITY_UNIT_SCALE);
             }
 
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.x", curveX);
@@ -666,6 +970,9 @@ namespace Member_Han.Modules.FBXImporter
             mat.m10 = m.B1; mat.m11 = m.B2; mat.m12 = m.B3; mat.m13 = m.B4;
             mat.m20 = m.C1; mat.m21 = m.C2; mat.m22 = m.C3; mat.m23 = m.C4;
             mat.m30 = m.D1; mat.m31 = m.D2; mat.m32 = m.D3; mat.m33 = m.D4;
+            mat.m03 *= FBX_TO_UNITY_UNIT_SCALE;
+            mat.m13 *= FBX_TO_UNITY_UNIT_SCALE;
+            mat.m23 *= FBX_TO_UNITY_UNIT_SCALE;
             return mat;
         }
 
@@ -758,4 +1065,5 @@ namespace Member_Han.Modules.FBXImporter
         #endregion
     }
     #endregion
+
 }

@@ -33,11 +33,33 @@ namespace Tests.Editor.FBXImporter
             typeof(bool)
         };
 
+        private static readonly Type[] ExplicitBodyRootMotionGuardParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(bool),
+            typeof(Vector3)
+        };
+
         private static readonly Type[] ImplicitRootGuardReferenceParameterTypes =
         {
             typeof(Vector3),
             typeof(Vector3),
             typeof(float)
+        };
+
+        private static readonly Type[] PoseSolveRootPositionParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(bool)
+        };
+
+        private static readonly Type[] RootMotionCarrierRestoreParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(bool)
         };
 
         [Test]
@@ -150,6 +172,20 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ExplicitBodyRootDelta_When_ApplyingImplicitRootGuard_Then_RestoresPoseRootXZBeforeExplicitMotion()
+        {
+            Vector3 guarded = ApplyImplicitBodyPositionRootGuard(
+                positionBeforePose: new Vector3(1f, 2f, 3f),
+                currentPosition: new Vector3(4f, 2.5f, -2f),
+                allowBodyPositionXZRootMotion: true,
+                explicitBodyRootDelta: new Vector3(0.01f, 0f, -0.02f));
+
+            Assert.That(guarded.x, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(guarded.y, Is.EqualTo(2.5f).Within(0.0001f));
+            Assert.That(guarded.z, Is.EqualTo(3f).Within(0.0001f));
+        }
+
+        [Test]
         public void Given_StationaryMovementScale_When_SelectingImplicitRootGuardReference_Then_UsesSessionAnchor()
         {
             Vector3 reference = SelectImplicitRootGuardReference(
@@ -173,6 +209,62 @@ namespace Tests.Editor.FBXImporter
             Assert.That(reference.x, Is.EqualTo(4f).Within(0.0001f));
             Assert.That(reference.y, Is.EqualTo(2f).Within(0.0001f));
             Assert.That(reference.z, Is.EqualTo(-2f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MovingRootEnabled_When_SelectingPoseSolveRootPosition_Then_UsesAnchorXZAndKeepsCurrentY()
+        {
+            Vector3 poseSolvePosition = SelectPoseSolveRootPosition(
+                currentRootPosition: new Vector3(2f, 0.35f, -4f),
+                rootAnchorPosition: new Vector3(0.1f, -0.2f, 0.3f),
+                isolateRootMotionFromPoseSolve: true);
+
+            Assert.That(poseSolvePosition.x, Is.EqualTo(0.1f).Within(0.0001f));
+            Assert.That(poseSolvePosition.y, Is.EqualTo(0.35f).Within(0.0001f));
+            Assert.That(poseSolvePosition.z, Is.EqualTo(0.3f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MovingRootDisabled_When_SelectingPoseSolveRootPosition_Then_KeepsCurrentPosition()
+        {
+            Vector3 currentPosition = new Vector3(2f, 0.35f, -4f);
+
+            Vector3 poseSolvePosition = SelectPoseSolveRootPosition(
+                currentRootPosition: currentPosition,
+                rootAnchorPosition: new Vector3(0.1f, -0.2f, 0.3f),
+                isolateRootMotionFromPoseSolve: false);
+
+            Assert.That(poseSolvePosition.x, Is.EqualTo(currentPosition.x).Within(0.0001f));
+            Assert.That(poseSolvePosition.y, Is.EqualTo(currentPosition.y).Within(0.0001f));
+            Assert.That(poseSolvePosition.z, Is.EqualTo(currentPosition.z).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MovingRootEnabled_When_RestoringCarrierAfterPose_Then_UsesCarrierXZAndPoseY()
+        {
+            Vector3 restoredPosition = RestoreRootMotionCarrierPositionAfterPose(
+                rootMotionCarrierPositionBeforePose: new Vector3(2f, 0.35f, -4f),
+                poseSolvedPosition: new Vector3(0.1f, 0.5f, 0.3f),
+                isolateRootMotionFromPoseSolve: true);
+
+            Assert.That(restoredPosition.x, Is.EqualTo(2f).Within(0.0001f));
+            Assert.That(restoredPosition.y, Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(restoredPosition.z, Is.EqualTo(-4f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MovingRootDisabled_When_RestoringCarrierAfterPose_Then_KeepsPoseSolvedPosition()
+        {
+            Vector3 poseSolvedPosition = new Vector3(0.1f, 0.5f, 0.3f);
+
+            Vector3 restoredPosition = RestoreRootMotionCarrierPositionAfterPose(
+                rootMotionCarrierPositionBeforePose: new Vector3(2f, 0.35f, -4f),
+                poseSolvedPosition: poseSolvedPosition,
+                isolateRootMotionFromPoseSolve: false);
+
+            Assert.That(restoredPosition.x, Is.EqualTo(poseSolvedPosition.x).Within(0.0001f));
+            Assert.That(restoredPosition.y, Is.EqualTo(poseSolvedPosition.y).Within(0.0001f));
+            Assert.That(restoredPosition.z, Is.EqualTo(poseSolvedPosition.z).Within(0.0001f));
         }
 
         private static bool TryCalculateRootPositionSpikeClamp(
@@ -261,6 +353,54 @@ namespace Tests.Editor.FBXImporter
             return (Vector3)method.Invoke(null, args);
         }
 
+        private static Vector3 SelectPoseSolveRootPosition(
+            Vector3 currentRootPosition,
+            Vector3 rootAnchorPosition,
+            bool isolateRootMotionFromPoseSolve)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "SelectPoseSolveRootPosition",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: PoseSolveRootPositionParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should isolate the moving root carrier from SetHumanPose root X/Z solve.");
+
+            object[] args =
+            {
+                currentRootPosition,
+                rootAnchorPosition,
+                isolateRootMotionFromPoseSolve
+            };
+
+            return (Vector3)method.Invoke(null, args);
+        }
+
+        private static Vector3 RestoreRootMotionCarrierPositionAfterPose(
+            Vector3 rootMotionCarrierPositionBeforePose,
+            Vector3 poseSolvedPosition,
+            bool isolateRootMotionFromPoseSolve)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "RestoreRootMotionCarrierPositionAfterPose",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: RootMotionCarrierRestoreParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should restore moving-root carrier X/Z after SetHumanPose before applying explicit root delta.");
+
+            object[] args =
+            {
+                rootMotionCarrierPositionBeforePose,
+                poseSolvedPosition,
+                isolateRootMotionFromPoseSolve
+            };
+
+            return (Vector3)method.Invoke(null, args);
+        }
+
         private static Vector3 SelectImplicitRootGuardReference(
             Vector3 rootAnchorPosition,
             Vector3 positionBeforePose,
@@ -284,5 +424,32 @@ namespace Tests.Editor.FBXImporter
 
             return (Vector3)method.Invoke(null, args);
         }
+
+        private static Vector3 ApplyImplicitBodyPositionRootGuard(
+            Vector3 positionBeforePose,
+            Vector3 currentPosition,
+            bool allowBodyPositionXZRootMotion,
+            Vector3 explicitBodyRootDelta)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "ApplyImplicitBodyPositionRootGuard",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: ExplicitBodyRootMotionGuardParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose an explicit-body-root overload so SetHumanPose root X/Z and explicit body root motion are not applied in the same step.");
+
+            object[] args =
+            {
+                positionBeforePose,
+                currentPosition,
+                allowBodyPositionXZRootMotion,
+                explicitBodyRootDelta
+            };
+
+            return (Vector3)method.Invoke(null, args);
+        }
+
     }
 }

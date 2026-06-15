@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Member_Han.Modules.FileSystem;
+using Member_Han.Modules.Graphics;
 
 namespace Member_Han.Modules.FBXImporter
 {
@@ -27,6 +28,7 @@ namespace Member_Han.Modules.FBXImporter
 #if UNITY_EDITOR
         private const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
 #endif
+        private static Func<IFileBrowserService> fileBrowserServiceFactory = () => new RuntimeFileBrowserService();
 
         private enum FBXSessionState
         {
@@ -73,7 +75,7 @@ namespace Member_Han.Modules.FBXImporter
         public bool stabilizeGroundedFootXZ = false;
 
         [Tooltip("Foot-lock correction strength. Lower values preserve dance motion, higher values reduce skating.")]
-        [Range(0f, 1f)] public float GroundedFootLockWeight = 0f;
+        [Range(0f, 1f)] public float GroundedFootLockWeight = 0.45f;
 
         [Tooltip("Maximum X/Z root correction per frame for grounded foot lock.")]
         [Range(0.001f, 0.1f)] public float MaxGroundedFootLockStep = 0.025f;
@@ -257,9 +259,9 @@ namespace Member_Han.Modules.FBXImporter
 
         [Header("YYB Arm Anatomical Swing Correction")]
         [Tooltip("손이 몸 밖/어깨 근처에 있는데 상완만 아래로 크게 떨어지는 포즈를 제한합니다.")]
-        public bool enableYybArmSwingLimitCorrection = true;
+        public bool enableYybArmSwingLimitCorrection = false;
 
-        [Tooltip("상완 하강 제한 보정 강도입니다. MMD VMD export에서 손이 몸을 관통하는 포즈를 줄이기 위해 Main_Auto 기본 경로에서 사용합니다.")]
+        [Tooltip("상완 하강 제한 보정 강도입니다. Target Humanoid 포즈를 직접 바꾸므로 기본 자동 경로에서는 끄고, 진단/긴급 보정 때만 사용합니다.")]
         [Range(0f, 1f)] public float YybArmSwingLimitWeight = 0.85f;
 
         [Tooltip("상완 방향이 아래 방향과 이 값보다 더 가까우면 보정 후보로 봅니다. 0.68은 수동 기준 모션과의 차이를 줄이는 균형값입니다.")]
@@ -298,6 +300,9 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Ghost 모델 보이기 (디버깅용)")]
         public bool showGhostModel = false;
+
+        [Tooltip("When the imported Ghost has no renderers, draw a simple skeleton fallback so the debug display is still visible.")]
+        public bool showGhostSkeletonWhenNoRenderers = true;
 
         [Header("Golden Hand Settings")]
         [Tooltip("Finger Stretch Scale (Default 1.0)")]
@@ -427,6 +432,12 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("FBX 로드 후 녹화 시작까지의 대기 시간 (초)")]
         [Range(0f, 10f)] public float startDelay = 3.0f;
 
+        [Tooltip("VMD recording playback speed. 1 is normal speed.")]
+        [Range(0.1f, 4f)] public float vmdRecordingPlaybackSpeed = 1f;
+
+        [Tooltip("Opt-in legacy reference timing for satisfaction_2 regression evidence. Off by default so normal VMD export records at 1x.")]
+        public bool useKnownMmdReferenceTiming = false;
+
         [Tooltip("녹화 시작 직전에 clip time 0을 고정 샘플링해 retarget/grounding 첫 프레임을 안정화하는 프레임 수입니다.")]
         [Range(0, MAX_RETARGET_PREWARM_FRAME_COUNT)] public int RetargetPrewarmFrameCount = 6;
 
@@ -444,6 +455,18 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Recording Diagnostics를 켰을 때 손 close-up 캡처도 함께 남깁니다.")]
         [HideInInspector]
         public bool enableDiagnosticFingerCloseups = true;
+
+        [Tooltip("MotionComparisonProbe PNG 캡처 해상도 preset입니다. VMD frame/key 품질에는 영향을 주지 않습니다.")]
+        [HideInInspector]
+        public RecordingCaptureQualityPreset recordingCaptureQuality = RecordingCaptureQualityPreset.Existing960Square;
+
+        [Tooltip("Custom preset을 선택했을 때 사용할 PNG 캡처 폭입니다.")]
+        [HideInInspector]
+        public int customRecordingCaptureWidth = 3840;
+
+        [Tooltip("Custom preset을 선택했을 때 사용할 PNG 캡처 높이입니다.")]
+        [HideInInspector]
+        public int customRecordingCaptureHeight = 2160;
 
         [Tooltip("Editor smoke에서 MotionComparisonProbe 엄지 리스크가 임계치를 넘으면 VMD 저장 성공도 smoke 실패로 승격합니다.")]
         public bool failEditorSmokeOnThumbRisk = true;
@@ -485,14 +508,14 @@ namespace Member_Han.Modules.FBXImporter
         [Range(-0.5f, 0.5f)] public float HeightOffset = 0.0f;
 
         [Tooltip("보폭 비율 (1.0 = 자동, 미끄러지면 조절)")]
-        [Range(0f, 1.2f)] public float MovementScaleMultiplier = 1.0f;
+        [Range(0.8f, 1.2f)] public float MovementScaleMultiplier = 1.0f;
 
         [Header("Root Motion Spike Guard")]
         [Tooltip("FBX root delta가 한 프레임에 과도하게 튀면 순간이동으로 보고 해당 프레임의 추가 root 이동을 무시합니다.")]
         public bool clampRetargetRootDeltaSpikes = true;
 
         [Tooltip("한 프레임에 허용할 최대 root 이동량입니다. 일반 춤 동작보다 훨씬 큰 값만 순간이동 후보로 처리합니다.")]
-        [Range(0.01f, 1.0f)] public float MaxRetargetRootDeltaPerFrame = 0.25f;
+        [Range(0.001f, 1.0f)] public float MaxRetargetRootDeltaPerFrame = 0.25f;
 
         [Tooltip("root delta spike를 무시했을 때 최초 1회 진단 로그를 출력합니다.")]
         public bool logRetargetRootDeltaSpikes = false;
@@ -518,7 +541,7 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0f, 0.05f)] public float GroundingDeadZone = 0.005f;
 
         [Tooltip("초기 접지 확정 뒤에 타깃 root Y를 고정합니다. MMD VMD export에서는 이후 프레임의 발 빠짐을 막기 위해 기본 비활성화합니다.")]
-        public bool FreezeRootYAfterInitialGrounding = false;
+        public bool FreezeRootYAfterInitialGrounding = true;
 
         [Tooltip("전체 renderer bounds 하단이 발바닥 추정치에서 과하게 멀어지면 옷/머리카락/소매 outlier로 보고 접지 기준에서 제외합니다.")]
         public bool rejectRendererGroundingOutliers = true;
@@ -594,6 +617,10 @@ namespace Member_Han.Modules.FBXImporter
         private float _editorSmokePreviousStartDelay;
         private EditorDiagnosticSmokeSegment _editorSmokeSegment;
         private string _editorSmokeCurrentFbxFileName;
+        private bool _editorSmokeCaptureResolutionOverrideActive;
+        private int _editorSmokeCaptureWidth;
+        private int _editorSmokeCaptureHeight;
+        private bool _editorSmokeUseKnownMmdReferenceTiming;
         private Coroutine _editorDiagnosticBatchAdvanceCoroutine;
 #endif
         #endregion
@@ -690,6 +717,18 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
+        public RecordingCaptureResolutionPlan CreateRecordingCaptureResolutionPlan()
+        {
+            if (recordingCaptureQuality == RecordingCaptureQualityPreset.Custom)
+            {
+                return RecordingCaptureResolution.CreateCustomPlan(
+                    customRecordingCaptureWidth,
+                    customRecordingCaptureHeight);
+            }
+
+            return RecordingCaptureResolution.CreatePlan(recordingCaptureQuality);
+        }
+
 #if UNITY_EDITOR
         public bool StartEditorDiagnosticSmoke(
             string fbxFileName,
@@ -700,7 +739,9 @@ namespace Member_Han.Modules.FBXImporter
             bool useDeterministicCaptureFramerate,
             float diagnosticStartDelay,
             EditorDiagnosticSmokeSegment segment = EditorDiagnosticSmokeSegment.Head,
-            float[] sampleTimesOverride = null)
+            float[] sampleTimesOverride = null,
+            int captureWidthOverride = 0,
+            int captureHeightOverride = 0)
         {
             if (_isProcessing)
             {
@@ -738,14 +779,50 @@ namespace Member_Han.Modules.FBXImporter
             _editorSmokeSampleTimesOverride = CloneEditorSmokeSampleTimes(sampleTimesOverride);
             _editorSmokeSegment = segment;
             _editorSmokeCurrentFbxFileName = Path.GetFileName(sourcePath);
+            _editorSmokeCaptureResolutionOverrideActive = TryBuildEditorSmokeCaptureResolutionOverride(
+                captureWidthOverride,
+                captureHeightOverride,
+                out _editorSmokeCaptureWidth,
+                out _editorSmokeCaptureHeight);
+            _editorSmokeUseKnownMmdReferenceTiming = ShouldUseKnownMmdReferenceTimingForEditorSmoke(
+                Path.GetFileNameWithoutExtension(sourcePath),
+                safeDuration,
+                safeTargetFrameCount,
+                EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
+                useKnownMmdReferenceTiming);
 
             Debug.Log(
                 $"[FileManager] Editor smoke 진단 시작: FBX={Path.GetFileName(sourcePath)}, " +
                 $"duration={safeDuration:F2}s, targetFrameCount={safeTargetFrameCount}, " +
                 $"segment={GetEditorSmokeSegmentLabel(segment)}, diagnostics={enableDiagnostics}");
             LogEditorSmokeThumbState("smoke-start-before-process");
+            if (_editorSmokeCaptureResolutionOverrideActive)
+            {
+                Debug.Log($"[FileManager] Editor smoke capture override: {_editorSmokeCaptureWidth}x{_editorSmokeCaptureHeight}");
+            }
 
             ProcessFBXAsync(sourcePath);
+            return true;
+        }
+
+        private static bool TryBuildEditorSmokeCaptureResolutionOverride(
+            int requestedWidth,
+            int requestedHeight,
+            out int width,
+            out int height)
+        {
+            width = 0;
+            height = 0;
+            if (requestedWidth <= 0 || requestedHeight <= 0)
+            {
+                return false;
+            }
+
+            RecordingCaptureResolutionPlan plan = RecordingCaptureResolution.CreateCustomPlan(
+                requestedWidth,
+                requestedHeight);
+            width = plan.Width;
+            height = plan.Height;
             return true;
         }
 
@@ -873,6 +950,10 @@ namespace Member_Han.Modules.FBXImporter
             _editorSmokeRestoreSettingsActive = false;
             _editorSmokeSegment = EditorDiagnosticSmokeSegment.Head;
             _editorSmokeCurrentFbxFileName = null;
+            _editorSmokeCaptureResolutionOverrideActive = false;
+            _editorSmokeCaptureWidth = 0;
+            _editorSmokeCaptureHeight = 0;
+            _editorSmokeUseKnownMmdReferenceTiming = false;
         }
 
         public void ScheduleEditorDiagnosticBatchAdvance(Action continuation)
@@ -926,9 +1007,33 @@ namespace Member_Han.Modules.FBXImporter
             out int targetFrameCount,
             out float playbackSpeed)
         {
+            return TryBuildKnownMmdReferenceRecordingPlan(
+                outputBaseName,
+                clipLengthSeconds,
+                recordingFrameRate,
+                useKnownReferenceTiming: true,
+                out recordingLengthSeconds,
+                out targetFrameCount,
+                out playbackSpeed);
+        }
+
+        private static bool TryBuildKnownMmdReferenceRecordingPlan(
+            string outputBaseName,
+            float clipLengthSeconds,
+            float recordingFrameRate,
+            bool useKnownReferenceTiming,
+            out float recordingLengthSeconds,
+            out int targetFrameCount,
+            out float playbackSpeed)
+        {
             recordingLengthSeconds = clipLengthSeconds;
             targetFrameCount = 0;
             playbackSpeed = 1f;
+
+            if (!useKnownReferenceTiming)
+            {
+                return false;
+            }
 
             if (recordingFrameRate <= 0f ||
                 float.IsNaN(recordingFrameRate) ||
@@ -971,9 +1076,37 @@ namespace Member_Han.Modules.FBXImporter
             out int targetFrameCount,
             out float playbackSpeed)
         {
+            return TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+                outputBaseName,
+                clipLengthSeconds,
+                requestedDurationSeconds,
+                requestedTargetFrameCount,
+                recordingFrameRate,
+                useKnownReferenceTiming: true,
+                out recordingLengthSeconds,
+                out targetFrameCount,
+                out playbackSpeed);
+        }
+
+        private static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+            string outputBaseName,
+            float clipLengthSeconds,
+            float requestedDurationSeconds,
+            int requestedTargetFrameCount,
+            float recordingFrameRate,
+            bool useKnownReferenceTiming,
+            out float recordingLengthSeconds,
+            out int targetFrameCount,
+            out float playbackSpeed)
+        {
             recordingLengthSeconds = requestedDurationSeconds;
             targetFrameCount = requestedTargetFrameCount;
             playbackSpeed = 1f;
+
+            if (!useKnownReferenceTiming)
+            {
+                return false;
+            }
 
             if (requestedDurationSeconds <= 0f ||
                 float.IsNaN(requestedDurationSeconds) ||
@@ -1011,6 +1144,69 @@ namespace Member_Han.Modules.FBXImporter
             targetFrameCount = referenceTargetFrameCount;
             playbackSpeed = referencePlaybackSpeed;
             return true;
+        }
+
+        private static bool ShouldUseKnownMmdReferenceTimingForEditorSmoke(
+            string outputBaseName,
+            float requestedDurationSeconds,
+            int requestedTargetFrameCount,
+            float recordingFrameRate,
+            bool sceneUseKnownReferenceTiming)
+        {
+            if (sceneUseKnownReferenceTiming)
+            {
+                return true;
+            }
+
+            if (requestedDurationSeconds <= 0f ||
+                float.IsNaN(requestedDurationSeconds) ||
+                float.IsInfinity(requestedDurationSeconds) ||
+                requestedTargetFrameCount <= 0 ||
+                recordingFrameRate <= 0f ||
+                float.IsNaN(recordingFrameRate) ||
+                float.IsInfinity(recordingFrameRate))
+            {
+                return false;
+            }
+
+            string cleanBaseName = Path.GetFileNameWithoutExtension(outputBaseName ?? string.Empty);
+            if (!string.Equals(cleanBaseName, SATISFACTION_REFERENCE_OUTPUT_BASE_NAME, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            int referenceFrameCount = SATISFACTION_REFERENCE_MAX_MMD_FRAME + 1;
+            float referenceDurationSeconds = referenceFrameCount / recordingFrameRate;
+            float frameToleranceSeconds = 0.5f / recordingFrameRate;
+            bool coversFullReferenceDuration =
+                requestedDurationSeconds + frameToleranceSeconds >= referenceDurationSeconds;
+            bool coversFullReferenceFrames = requestedTargetFrameCount >= referenceFrameCount;
+
+            return coversFullReferenceDuration && coversFullReferenceFrames;
+        }
+
+        private static float ResolveVmdRecordingPlaybackSpeed(float configuredPlaybackSpeed)
+        {
+            if (configuredPlaybackSpeed <= 0f ||
+                float.IsNaN(configuredPlaybackSpeed) ||
+                float.IsInfinity(configuredPlaybackSpeed))
+            {
+                return 1f;
+            }
+
+            return Mathf.Max(0.0001f, configuredPlaybackSpeed);
+        }
+
+        private static float ResolveRecordingLengthForPlaybackSpeed(float clipLengthSeconds, float playbackSpeed)
+        {
+            if (clipLengthSeconds <= 0f ||
+                float.IsNaN(clipLengthSeconds) ||
+                float.IsInfinity(clipLengthSeconds))
+            {
+                return 0f;
+            }
+
+            return clipLengthSeconds / ResolveVmdRecordingPlaybackSpeed(playbackSpeed);
         }
 
         private struct TransformSnapshot
@@ -1052,7 +1248,9 @@ namespace Member_Han.Modules.FBXImporter
 
         private void LateUpdate()
         {
-            if (!_isProcessing)
+            if (ShouldApplyTargetIdlePoseGuardThisFrame(
+                    _isProcessing,
+                    _activeRetargeter != null))
             {
                 ApplyTargetIdlePoseGuard();
             }
@@ -1069,7 +1267,7 @@ namespace Member_Han.Modules.FBXImporter
         private void InitializeServices()
         {
             // 파일 브라우저 서비스 초기화 (StandaloneFileBrowser 사용)
-            _fileBrowserService = new RuntimeFileBrowserService();
+            _fileBrowserService = fileBrowserServiceFactory?.Invoke() ?? new RuntimeFileBrowserService();
 
             // 런타임 FBX 임포터 초기화 (Assimp 사용)
             _fbxImporter = new RuntimeFBXImporter();
@@ -1133,8 +1331,27 @@ namespace Member_Han.Modules.FBXImporter
             ProcessFBXAsync(selectedFile);
         }
 
+        public bool TryStartFbxImportFromSharedSettings(string sourcePath)
+        {
+            if (_isProcessing)
+            {
+                SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(sourcePath))
+            {
+                return false;
+            }
+
+            ProcessFBXAsync(sourcePath.Trim());
+            return true;
+        }
+
         private bool HandleImportButtonClick()
         {
+            EnsureServicesInitialized();
+
             if (_isProcessing)
             {
                 SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
@@ -1281,6 +1498,13 @@ namespace Member_Han.Modules.FBXImporter
                 snapshot.Transform.localRotation = snapshot.LocalRotation;
                 snapshot.Transform.localScale = snapshot.LocalScale;
             }
+        }
+
+        private static bool ShouldApplyTargetIdlePoseGuardThisFrame(
+            bool isProcessing,
+            bool hasActiveRetargeter)
+        {
+            return !isProcessing && !hasActiveRetargeter;
         }
 
         private void FaceTargetCharacterToCamera(GameObject targetObject)
@@ -1540,7 +1764,7 @@ namespace Member_Han.Modules.FBXImporter
 
                 GameObject ghostContainer = CreateGhostContainer(importedModel);
                 _activeGhostContainer = ghostContainer;
-                SetGhostVisibility(importedModel, showGhostModel);
+                SetGhostVisibility(importedModel, showGhostModel, showGhostSkeletonWhenNoRenderers);
 
                 Dictionary<string, string> boneMapping = LoadBoneMappingRuntime();
                 if (boneMapping == null)
@@ -1628,8 +1852,20 @@ namespace Member_Han.Modules.FBXImporter
             AnimationClip clip,
             string outputBaseName)
         {
-            SetSessionState(FBXSessionState.Retargeting, $"녹화 시작 전 {startDelay:F1}초 대기", 0.7f);
-            yield return new WaitForSeconds(startDelay);
+#if UNITY_EDITOR
+            bool earlyEditorSmokeRecordingOverrideActive = _editorSmokeRecordingOverrideActive;
+#else
+            bool earlyEditorSmokeRecordingOverrideActive = false;
+#endif
+            bool earlyShouldStartVmdRecording = ShouldStartVmdRecordingAfterImport(
+                recordVmdAfterImport,
+                earlyEditorSmokeRecordingOverrideActive);
+            float resolvedStartDelay = ResolveStartDelayForRecordingMode(startDelay, earlyShouldStartVmdRecording);
+            SetSessionState(FBXSessionState.Retargeting, $"녹화 시작 전 {resolvedStartDelay:F1}초 대기", 0.7f);
+            if (resolvedStartDelay > 0f)
+            {
+                yield return new WaitForSeconds(resolvedStartDelay);
+            }
 
             if (ghostAnim == null || clip == null)
             {
@@ -1638,9 +1874,9 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             float recordingStartTime = 0f;
-            float recordingLength = clip.length;
+            float recordingPlaybackSpeed = ResolveVmdRecordingPlaybackSpeed(vmdRecordingPlaybackSpeed);
+            float recordingLength = ResolveRecordingLengthForPlaybackSpeed(clip.length, recordingPlaybackSpeed);
             int recordingTargetFrameCount = 0;
-            float recordingPlaybackSpeed = 1f;
             string recordingOutputBaseName = outputBaseName;
             string comparisonLabel = $"auto_{recordingOutputBaseName}";
 
@@ -1667,11 +1903,21 @@ namespace Member_Han.Modules.FBXImporter
 
                 _activeRecorderController = recorderController;
                 _activeRecorderController.RecordingFinished += OnRecordingFinished;
+                RecordingCaptureResolutionPlan recordingCapturePlan;
+#if UNITY_EDITOR
+                recordingCapturePlan = _editorSmokeCaptureResolutionOverrideActive
+                    ? RecordingCaptureResolution.CreateCustomPlan(_editorSmokeCaptureWidth, _editorSmokeCaptureHeight)
+                    : CreateRecordingCaptureResolutionPlan();
+#else
+                recordingCapturePlan = CreateRecordingCaptureResolutionPlan();
+#endif
                 _activeRecorderController.SetRecordingDiagnostics(
                     enableRecordingDiagnostics,
                     enableRecordingDiagnostics && enableDiagnosticFingerCloseups,
                     enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics,
-                    diagnosticSampleTimesOverride);
+                    diagnosticSampleTimesOverride,
+                    recordingCapturePlan.Width,
+                    recordingCapturePlan.Height);
 #if UNITY_EDITOR
                 if (_editorSmokeRecordingOverrideActive)
                 {
@@ -1696,6 +1942,7 @@ namespace Member_Han.Modules.FBXImporter
                         recordingLength,
                         recordingTargetFrameCount,
                         EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
+                        _editorSmokeUseKnownMmdReferenceTiming,
                         out float referenceRecordingLength,
                         out int referenceTargetFrameCount,
                         out float referencePlaybackSpeed))
@@ -1722,6 +1969,7 @@ namespace Member_Han.Modules.FBXImporter
                     outputBaseName,
                     clip.length,
                     MMD_REFERENCE_FRAME_RATE,
+                    useKnownMmdReferenceTiming,
                     out float referenceRecordingLength,
                     out int referenceTargetFrameCount,
                     out float referencePlaybackSpeed))
@@ -1743,7 +1991,20 @@ namespace Member_Han.Modules.FBXImporter
                 }
             }
 
-            yield return PrewarmRetargetStartPose(ghostAnim, clip, retargeter, recordingStartTime, recordingPlaybackSpeed);
+            int prewarmFrameCount = ResolveRetargetPrewarmFrameCountForRecordingMode(
+                RetargetPrewarmFrameCount,
+                shouldStartVmdRecording);
+            int visiblePrewarmYieldFrameCount = ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(
+                RetargetPrewarmFrameCount,
+                shouldStartVmdRecording);
+            yield return PrewarmRetargetStartPose(
+                ghostAnim,
+                clip,
+                retargeter,
+                recordingStartTime,
+                recordingPlaybackSpeed,
+                prewarmFrameCount,
+                visiblePrewarmYieldFrameCount);
             retargeter?.CaptureRecordingStartBaselineSnapshot();
             retargeter?.ResetPlaybackStabilityMetrics();
 
@@ -1770,7 +2031,14 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
-        private IEnumerator PrewarmRetargetStartPose(Animation ghostAnim, AnimationClip clip, PoseSpaceRetargeter retargeter, float startTimeSeconds, float playbackSpeed)
+        private IEnumerator PrewarmRetargetStartPose(
+            Animation ghostAnim,
+            AnimationClip clip,
+            PoseSpaceRetargeter retargeter,
+            float startTimeSeconds,
+            float playbackSpeed,
+            int configuredPrewarmFrameCount,
+            int visiblePrewarmYieldFrameCount)
         {
             ghostAnim.clip = clip;
             if (ghostAnim.GetClip(clip.name) == null)
@@ -1788,14 +2056,23 @@ namespace Member_Han.Modules.FBXImporter
 
             float sampleTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, state.length));
             float safePlaybackSpeed = Mathf.Max(0.0001f, playbackSpeed);
-            int prewarmFrames = ResolveRetargetPrewarmFrameCount(RetargetPrewarmFrameCount);
+            int prewarmFrames = ResolveRetargetPrewarmFrameCount(configuredPrewarmFrameCount);
+            int visibleYieldFrames = Mathf.Max(0, visiblePrewarmYieldFrameCount);
             if (prewarmFrames <= 0)
             {
-                state.time = sampleTime;
-                state.speed = safePlaybackSpeed;
-                ghostAnim.Sample();
+                if (!PrepareRetargeterRecordingStartPose(retargeter, sampleTime, safePlaybackSpeed, holdPose: false))
+                {
+                    state.time = sampleTime;
+                    state.speed = safePlaybackSpeed;
+                    ghostAnim.Sample();
+                }
+
                 retargeter?.ApplyLateVisualGroundingCorrection();
-                yield return YieldRetargetPrewarmFrame();
+                if (visibleYieldFrames > 0)
+                {
+                    yield return YieldRetargetPrewarmFrame();
+                }
+
                 yield break;
             }
 
@@ -1805,20 +2082,33 @@ namespace Member_Han.Modules.FBXImporter
             state.speed = 0f;
             for (int i = 0; i < prewarmFrames; i++)
             {
-                state.time = sampleTime;
-                ghostAnim.Sample();
+                if (!PrepareRetargeterRecordingStartPose(retargeter, sampleTime, safePlaybackSpeed, holdPose: true))
+                {
+                    state.time = sampleTime;
+                    ghostAnim.Sample();
+                }
+
                 yield return YieldRetargetPrewarmFrame();
             }
 
-            state.time = sampleTime;
-            state.speed = safePlaybackSpeed;
-            ghostAnim.Sample();
-            ghostAnim.Play(clip.name);
-            state.time = sampleTime;
-            state.speed = safePlaybackSpeed;
-            ghostAnim.Sample();
+            if (!PrepareRetargeterRecordingStartPose(retargeter, sampleTime, safePlaybackSpeed, holdPose: false))
+            {
+                state.time = sampleTime;
+                state.speed = safePlaybackSpeed;
+                ghostAnim.Sample();
+                ghostAnim.Play(clip.name);
+                state.time = sampleTime;
+                state.speed = safePlaybackSpeed;
+                ghostAnim.Sample();
+            }
+
             retargeter?.ApplyLateVisualGroundingCorrection();
             Debug.Log($"[FileManager] Retarget prewarm 완료: {prewarmFrames} frame(s) at clip time {sampleTime:F2}.");
+        }
+
+        private static bool PrepareRetargeterRecordingStartPose(PoseSpaceRetargeter retargeter, float sampleTime, float playbackSpeed, bool holdPose)
+        {
+            return retargeter != null && retargeter.PrepareRecordingStartPose(sampleTime, playbackSpeed, holdPose);
         }
 
         private static object YieldRetargetPrewarmFrame()
@@ -1836,6 +2126,42 @@ namespace Member_Han.Modules.FBXImporter
         private static int ResolveRetargetPrewarmFrameCount(int configuredFrameCount)
         {
             return Mathf.Clamp(configuredFrameCount, 0, MAX_RETARGET_PREWARM_FRAME_COUNT);
+        }
+
+        private static int ResolveRetargetPrewarmFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
+        {
+            if (!shouldStartVmdRecording)
+            {
+                return 0;
+            }
+
+            return ResolveRetargetPrewarmFrameCount(configuredFrameCount);
+        }
+
+        private static int ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
+        {
+            if (!shouldStartVmdRecording)
+            {
+                return 0;
+            }
+
+            int prewarmFrames = ResolveRetargetPrewarmFrameCount(configuredFrameCount);
+            return prewarmFrames > 0 ? prewarmFrames : 1;
+        }
+
+        private static float ResolveStartDelayForRecordingMode(float configuredStartDelay, bool shouldStartVmdRecording)
+        {
+            if (!shouldStartVmdRecording)
+            {
+                return 0f;
+            }
+
+            if (float.IsNaN(configuredStartDelay) || float.IsInfinity(configuredStartDelay))
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp(configuredStartDelay, 0f, 10f);
         }
 
         private static bool ShouldStartVmdRecordingAfterImport(
@@ -2025,6 +2351,7 @@ namespace Member_Han.Modules.FBXImporter
             };
         }
 
+#if UNITY_EDITOR
         private string BuildEditorSmokeThumbDiagnosticUnavailableMessage(MotionComparisonProbe probe)
         {
             string fbxName = GetEditorSmokeFbxName();
@@ -2066,6 +2393,7 @@ namespace Member_Han.Modules.FBXImporter
                 ? "unknown.fbx"
                 : _editorSmokeCurrentFbxFileName;
         }
+#endif
 
         private static bool IsFiniteDiagnosticRisk(float value)
         {
@@ -2151,9 +2479,59 @@ namespace Member_Han.Modules.FBXImporter
 
         private static void SetGhostVisibility(GameObject importedModel, bool visible)
         {
-            foreach (Renderer renderer in importedModel.GetComponentsInChildren<Renderer>())
+            SetGhostVisibility(importedModel, visible, useSkeletonFallbackWhenRendererless: true);
+        }
+
+        private static void SetGhostVisibility(GameObject importedModel, bool visible, bool useSkeletonFallbackWhenRendererless)
+        {
+            if (importedModel == null)
             {
+                return;
+            }
+
+            Renderer[] renderers = importedModel.GetComponentsInChildren<Renderer>(true);
+            int controlledRendererCount = 0;
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer == null || renderer.GetComponentInParent<GhostSkeletonDebugRenderer>() != null)
+                {
+                    continue;
+                }
+
                 renderer.enabled = visible;
+                controlledRendererCount++;
+            }
+
+            SetGhostSkeletonDebugRenderer(
+                importedModel,
+                visible && useSkeletonFallbackWhenRendererless,
+                controlledRendererCount);
+        }
+
+        private static bool ShouldAttachGhostSkeletonDebugRenderer(bool visible, int rendererCount)
+        {
+            return visible;
+        }
+
+        private static void SetGhostSkeletonDebugRenderer(GameObject importedModel, bool visible, int rendererCount)
+        {
+            GhostSkeletonDebugRenderer debugRenderer = importedModel.GetComponent<GhostSkeletonDebugRenderer>();
+            bool shouldAttach = ShouldAttachGhostSkeletonDebugRenderer(visible, rendererCount);
+
+            if (shouldAttach)
+            {
+                if (debugRenderer == null)
+                {
+                    debugRenderer = importedModel.AddComponent<GhostSkeletonDebugRenderer>();
+                }
+
+                debugRenderer.SetVisible(true);
+                return;
+            }
+
+            if (debugRenderer != null)
+            {
+                debugRenderer.SetVisible(false);
             }
         }
 
@@ -2271,10 +2649,12 @@ namespace Member_Han.Modules.FBXImporter
             // Restore the captured target idle pose immediately before the next session captures
             // retargeter/thumb-guard baselines so every FBX starts from the same common pose.
             ApplyTargetIdlePoseGuard();
+#if UNITY_EDITOR
             if (_editorSmokeRecordingOverrideActive)
             {
                 LogEditorSmokeThumbState("prepare-target-after-idle-restore");
             }
+#endif
 
             IKControl ikControl = targetObject.GetComponent<IKControl>();
             if (ikControl != null)
@@ -2451,10 +2831,12 @@ namespace Member_Han.Modules.FBXImporter
                 thumbWebbingCreaseMaxPositionOffset);
             thumbGuard.enabled = true;
             thumbGuard.RecaptureBaseline();
+#if UNITY_EDITOR
             if (_editorSmokeRecordingOverrideActive)
             {
                 LogEditorSmokeThumbState("thumb-guard-bound");
             }
+#endif
         }
 
         private bool EffectiveDetachedThumbBaseHelperPositionSync
@@ -2790,6 +3172,7 @@ namespace Member_Han.Modules.FBXImporter
                 $"thumbReference[{BuildActiveRetargeterThumbReferenceSummary()}]");
         }
 
+#if UNITY_EDITOR
         private void LogEditorSmokeThumbState(string stage)
         {
             if (!_editorSmokeRecordingOverrideActive || targetCharacter == null)
@@ -2812,6 +3195,7 @@ namespace Member_Han.Modules.FBXImporter
                 $"guardLeft[{leftGuard}], guardRight[{rightGuard}], " +
                 $"retargeterLeft[{leftRetargeter}], retargeterRight[{rightRetargeter}]");
         }
+#endif
 
         private string BuildActiveRetargeterThumbReferenceSummary()
         {
@@ -3607,6 +3991,213 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return (hips != null) ? hips.position.y : 0f;
+        }
+    }
+
+    [DisallowMultipleComponent]
+    public sealed class GhostSkeletonDebugRenderer : MonoBehaviour
+    {
+        private static readonly HumanBodyBones[,] BonePairs =
+        {
+            { HumanBodyBones.Hips, HumanBodyBones.Spine },
+            { HumanBodyBones.Spine, HumanBodyBones.Chest },
+            { HumanBodyBones.Chest, HumanBodyBones.Neck },
+            { HumanBodyBones.Neck, HumanBodyBones.Head },
+            { HumanBodyBones.Chest, HumanBodyBones.LeftUpperArm },
+            { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm },
+            { HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand },
+            { HumanBodyBones.Chest, HumanBodyBones.RightUpperArm },
+            { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm },
+            { HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand },
+            { HumanBodyBones.Hips, HumanBodyBones.LeftUpperLeg },
+            { HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg },
+            { HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot },
+            { HumanBodyBones.Hips, HumanBodyBones.RightUpperLeg },
+            { HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg },
+            { HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot },
+        };
+
+        private const float LineWidth = 0.018f;
+        private const float RootMarkerHalfSize = 0.16f;
+        private const float MinScaleForUncompensatedDebugLines = 0.25f;
+        private const float MaxDisplayScaleCompensation = 100f;
+        private const float MinLossyScaleForDebugLines = 0.0001f;
+        private static readonly Color LineColor = new Color(0.05f, 0.95f, 1f, 0.92f);
+        private static readonly Color RootMarkerColor = new Color(1f, 0.85f, 0.05f, 0.95f);
+
+        private readonly List<LineRenderer> boneLines = new List<LineRenderer>();
+        private readonly List<LineRenderer> rootMarkerLines = new List<LineRenderer>();
+        private Animator animator;
+        private Material lineMaterial;
+        private bool initialized;
+        private bool visible;
+
+        public void SetVisible(bool value)
+        {
+            visible = value;
+            enabled = value;
+            EnsureInitialized();
+            SetLinesEnabled(value);
+        }
+
+        private void Awake()
+        {
+            animator = GetComponent<Animator>();
+        }
+
+        private void LateUpdate()
+        {
+            if (!visible)
+            {
+                return;
+            }
+
+            EnsureInitialized();
+            UpdateRootMarker();
+            UpdateBoneLines();
+        }
+
+        private void OnDestroy()
+        {
+            if (lineMaterial != null)
+            {
+                Destroy(lineMaterial);
+            }
+        }
+
+        private void EnsureInitialized()
+        {
+            animator = animator != null ? animator : GetComponent<Animator>();
+            if (initialized)
+            {
+                return;
+            }
+
+            Shader shader = Shader.Find("Sprites/Default");
+            Shader fallbackShader = Shader.Find("Unlit/Color");
+            lineMaterial = new Material(shader != null ? shader : fallbackShader);
+            lineMaterial.color = LineColor;
+
+            for (int i = 0; i < BonePairs.GetLength(0); i++)
+            {
+                boneLines.Add(CreateLine($"GhostBoneLine_{i:00}", LineColor));
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                rootMarkerLines.Add(CreateLine($"GhostRootMarker_{i:00}", RootMarkerColor));
+            }
+
+            initialized = true;
+        }
+
+        private LineRenderer CreateLine(string lineName, Color color)
+        {
+            var lineObject = new GameObject(lineName);
+            lineObject.transform.SetParent(transform, false);
+            var line = lineObject.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.positionCount = 2;
+            line.startWidth = LineWidth;
+            line.endWidth = LineWidth;
+            line.numCapVertices = 2;
+            line.numCornerVertices = 2;
+            line.material = lineMaterial;
+            line.startColor = color;
+            line.endColor = color;
+            line.enabled = visible;
+            return line;
+        }
+
+        private void SetLinesEnabled(bool enabledValue)
+        {
+            foreach (LineRenderer line in boneLines)
+            {
+                if (line != null)
+                {
+                    line.enabled = enabledValue;
+                }
+            }
+
+            foreach (LineRenderer line in rootMarkerLines)
+            {
+                if (line != null)
+                {
+                    line.enabled = enabledValue;
+                }
+            }
+        }
+
+        private void UpdateRootMarker()
+        {
+            Vector3 center = transform.position;
+            SetLine(rootMarkerLines[0], center - Vector3.right * RootMarkerHalfSize, center + Vector3.right * RootMarkerHalfSize, true);
+            SetLine(rootMarkerLines[1], center - Vector3.up * RootMarkerHalfSize, center + Vector3.up * RootMarkerHalfSize, true);
+            SetLine(rootMarkerLines[2], center - Vector3.forward * RootMarkerHalfSize, center + Vector3.forward * RootMarkerHalfSize, true);
+        }
+
+        private void UpdateBoneLines()
+        {
+            for (int i = 0; i < BonePairs.GetLength(0); i++)
+            {
+                Transform from = GetBone(BonePairs[i, 0]);
+                Transform to = GetBone(BonePairs[i, 1]);
+                bool hasPair = from != null && to != null;
+                SetLine(
+                    boneLines[i],
+                    hasPair ? GetDebugWorldPosition(from) : Vector3.zero,
+                    hasPair ? GetDebugWorldPosition(to) : Vector3.zero,
+                    hasPair);
+            }
+        }
+
+        private Transform GetBone(HumanBodyBones bone)
+        {
+            if (animator == null || !animator.isHuman)
+            {
+                return null;
+            }
+
+            return animator.GetBoneTransform(bone);
+        }
+
+        private Vector3 GetDebugWorldPosition(Transform bone)
+        {
+            Vector3 center = transform.position;
+            float displayScale = CalculateDisplayScaleCompensation(transform.lossyScale);
+            return center + (bone.position - center) * displayScale;
+        }
+
+        private static float CalculateDisplayScaleCompensation(Vector3 lossyScale)
+        {
+            float maxScale = Mathf.Max(
+                Mathf.Abs(lossyScale.x),
+                Mathf.Abs(lossyScale.y),
+                Mathf.Abs(lossyScale.z));
+
+            if (maxScale <= MinLossyScaleForDebugLines || maxScale >= MinScaleForUncompensatedDebugLines)
+            {
+                return 1f;
+            }
+
+            return Mathf.Min(MaxDisplayScaleCompensation, 1f / maxScale);
+        }
+
+        private static void SetLine(LineRenderer line, Vector3 from, Vector3 to, bool enabledValue)
+        {
+            if (line == null)
+            {
+                return;
+            }
+
+            line.enabled = enabledValue;
+            if (!enabledValue)
+            {
+                return;
+            }
+
+            line.SetPosition(0, from);
+            line.SetPosition(1, to);
         }
     }
 }

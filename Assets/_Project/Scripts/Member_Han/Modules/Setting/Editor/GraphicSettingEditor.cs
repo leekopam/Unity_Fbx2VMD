@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.PostProcessing;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace Member_Han.Modules.Graphics.EditorTools
@@ -836,8 +837,134 @@ namespace Member_Han.Modules.Graphics.EditorTools
         }
     }
 
+    [InitializeOnLoad]
+    public static class GraphicSettingGameViewScaleAutoApplier
+    {
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
+        private const double MaintainIntervalSeconds = 0.5d;
+        private static bool isScheduled;
+        private static double nextMaintainTime;
+
+        static GraphicSettingGameViewScaleAutoApplier()
+        {
+            EditorSceneManager.sceneOpened -= OnSceneOpened;
+            EditorSceneManager.sceneOpened += OnSceneOpened;
+            EditorApplication.update -= MaintainActiveSceneSettingGameViewScale;
+            EditorApplication.update += MaintainActiveSceneSettingGameViewScale;
+            ScheduleApply();
+        }
+
+        public static void ScheduleApply()
+        {
+            if (isScheduled)
+            {
+                return;
+            }
+
+            isScheduled = true;
+            EditorApplication.delayCall += ApplyScheduled;
+        }
+
+        public static bool ApplyActiveSceneSettingGameViewScale()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return false;
+            }
+
+            GraphicSetting setting = FindActiveSceneGraphicSetting();
+            return setting != null && GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
+        }
+
+        public static bool ApplyActiveSceneSettingGameViewScaleIfDrifted()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return false;
+            }
+
+            GraphicSetting setting = FindActiveSceneGraphicSetting();
+            if (setting == null || setting.GameViewScaleMode != GraphicGameViewScaleMode.OneX)
+            {
+                return false;
+            }
+
+            return !GraphicSettingGameViewScaleUtility.IsCurrentZoomScale(Vector2.one, 0.001f)
+                && GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
+        }
+
+        private static void OnSceneOpened(Scene scene, OpenSceneMode mode)
+        {
+            if (scene.path == MainRecordingScenePath)
+            {
+                ScheduleApply();
+            }
+        }
+
+        private static void MaintainActiveSceneSettingGameViewScale()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            if (now < nextMaintainTime)
+            {
+                return;
+            }
+
+            nextMaintainTime = now + MaintainIntervalSeconds;
+            ApplyActiveSceneSettingGameViewScaleIfDrifted();
+        }
+
+        private static void ApplyScheduled()
+        {
+            isScheduled = false;
+            ApplyActiveSceneSettingGameViewScale();
+        }
+
+        private static GraphicSetting FindActiveSceneGraphicSetting()
+        {
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.IsValid() || activeScene.path != MainRecordingScenePath)
+            {
+                return null;
+            }
+
+            GameObject[] roots = activeScene.GetRootGameObjects();
+            foreach (GameObject root in roots)
+            {
+                if (root == null)
+                {
+                    continue;
+                }
+
+                var setting = root.GetComponent<GraphicSetting>();
+                if (setting != null)
+                {
+                    return setting;
+                }
+
+                setting = root.GetComponentInChildren<GraphicSetting>(true);
+                if (setting != null)
+                {
+                    return setting;
+                }
+            }
+
+            return null;
+        }
+    }
+
     public static class GraphicSettingGameViewScaleUtility
     {
+        public static bool IsCurrentZoomScale(Vector2 expected, float tolerance)
+        {
+            if (!TryGetCurrentZoomScale(out Vector2 current))
+            {
+                return false;
+            }
+
+            return Mathf.Abs(current.x - expected.x) <= tolerance
+                && Mathf.Abs(current.y - expected.y) <= tolerance;
+        }
+
         public static bool TryApply(GraphicGameViewScaleMode mode)
         {
             Type gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
@@ -868,6 +995,54 @@ namespace Member_Han.Modules.Graphics.EditorTools
 
             Debug.LogWarning("현재 Unity 버전에서 GraphicSetting이 GameView 확대 표시를 변경하지 못했습니다.");
             return false;
+        }
+
+        private static bool TryGetCurrentZoomScale(out Vector2 scale)
+        {
+            scale = Vector2.zero;
+            Type gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
+            if (gameViewType == null)
+            {
+                return false;
+            }
+
+            EditorWindow gameView = FindOpenGameView(gameViewType);
+            return gameView != null && TryGetZoomAreaScale(gameView, out scale);
+        }
+
+        private static EditorWindow FindOpenGameView(Type gameViewType)
+        {
+            UnityEngine.Object[] gameViews = Resources.FindObjectsOfTypeAll(gameViewType);
+            foreach (UnityEngine.Object gameView in gameViews)
+            {
+                if (gameView is EditorWindow window)
+                {
+                    return window;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TryGetZoomAreaScale(EditorWindow gameView, out Vector2 scale)
+        {
+            scale = Vector2.zero;
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            FieldInfo zoomAreaField = gameView.GetType().GetField("m_ZoomArea", flags);
+            object zoomArea = zoomAreaField?.GetValue(gameView);
+            if (zoomArea == null)
+            {
+                return false;
+            }
+
+            FieldInfo scaleField = zoomArea.GetType().GetField("m_Scale", flags);
+            if (scaleField == null || scaleField.FieldType != typeof(Vector2))
+            {
+                return false;
+            }
+
+            scale = (Vector2)scaleField.GetValue(zoomArea);
+            return true;
         }
 
         private static bool TrySetZoomAreaScale(EditorWindow gameView, Vector2 scale)
@@ -918,7 +1093,7 @@ namespace Member_Han.Modules.Graphics.EditorTools
 
     public static class GraphicSettingSceneInstaller
     {
-        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_recoding.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string YybRootName = "YYB Hatsune Miku";
         private const string ManualRecordButtonName = "MMD_Record_Button";
         private const string RecodingSettingManualRecordMethodName = nameof(RecodingSetting.StartManualRecording);
@@ -939,6 +1114,7 @@ namespace Member_Han.Modules.Graphics.EditorTools
             var scene = EditorSceneManager.OpenScene(MainRecordingScenePath);
             GraphicSetting setting = EnsureInActiveScene();
             setting.ApplyNow();
+            GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
             BackgroundColorSetting backgroundSetting = setting.GetComponent<BackgroundColorSetting>();
             backgroundSetting?.ApplyNow();
             GraphicSettingTextureImportEditorUtility.Apply(setting);
@@ -1029,6 +1205,7 @@ namespace Member_Han.Modules.Graphics.EditorTools
             serialized.FindProperty("antiAliasingPreset").enumValueIndex = (int)GraphicSettingQualityPreset.Quality;
             serialized.FindProperty("renderSharpness").enumValueIndex = (int)GraphicSettingQualityPreset.Quality;
             serialized.FindProperty("modelEdgeAndAlpha").enumValueIndex = (int)GraphicSettingQualityPreset.Quality;
+            serialized.FindProperty("gameViewScaleMode").enumValueIndex = (int)GraphicGameViewScaleMode.OneX;
             serialized.FindProperty("antiAliasing").enumValueIndex = (int)GraphicAntiAliasingMode.SMAA;
             serialized.FindProperty("smaaQuality").enumValueIndex = (int)AntialiasingQuality.High;
             serialized.FindProperty("enableCameraPostProcessing").boolValue = true;
@@ -1084,7 +1261,12 @@ namespace Member_Han.Modules.Graphics.EditorTools
                 "useDeterministicCaptureFramerateForDiagnostics",
                 fileManager != null && fileManager.useDeterministicCaptureFramerateForDiagnostics);
             SetBool(serialized, "enableDiagnosticFingerCloseups", fileManager == null || fileManager.enableDiagnosticFingerCloseups);
+            SetEnum(serialized, "recordingCaptureQuality", (int)RecordingCaptureQualityPreset.Uhd4K);
+            SetInt(serialized, "customRecordingCaptureWidth", 3840);
+            SetInt(serialized, "customRecordingCaptureHeight", 2160);
             SetBool(serialized, "applyDiagnosticsToFileManagerOnAwake", true);
+            SetObjectReference(serialized, "settingsPopup", null);
+            SetBool(serialized, "openSettingsPopupOnStart", true);
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             if (button == null)
@@ -1138,6 +1320,24 @@ namespace Member_Han.Modules.Graphics.EditorTools
             if (property != null)
             {
                 property.boolValue = value;
+            }
+        }
+
+        private static void SetEnum(SerializedObject serialized, string propertyName, int value)
+        {
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            if (property != null)
+            {
+                property.enumValueIndex = value;
+            }
+        }
+
+        private static void SetInt(SerializedObject serialized, string propertyName, int value)
+        {
+            SerializedProperty property = serialized.FindProperty(propertyName);
+            if (property != null)
+            {
+                property.intValue = value;
             }
         }
 
