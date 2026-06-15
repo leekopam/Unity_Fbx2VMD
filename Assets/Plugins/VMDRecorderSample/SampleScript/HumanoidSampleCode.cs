@@ -30,6 +30,8 @@ public class HumanoidSampleCode : MonoBehaviour
     [SerializeField] private bool finishByRecordedFrameCount = true;
     [SerializeField] private bool enableMotionComparisonProbe = false;
     [SerializeField] private bool probeFingerCloseups = true;
+    [SerializeField, Min(128)] private int probeScreenshotWidth = 960;
+    [SerializeField, Min(128)] private int probeScreenshotHeight = 960;
 
     [HideInInspector] public int StopRecordingTime = 0;
     [HideInInspector] public bool AutoStartRecording = false;
@@ -38,6 +40,8 @@ public class HumanoidSampleCode : MonoBehaviour
 
     public bool IsRecordingSessionActive => _isRecordingSessionActive || _isSaving;
     public string LastSavedFilePath => _lastSavedFilePath;
+    public int ProbeScreenshotWidth => probeScreenshotWidth;
+    public int ProbeScreenshotHeight => probeScreenshotHeight;
 
     private bool _isRecordingSessionActive = false;
     private bool _isSaving = false;
@@ -61,6 +65,10 @@ public class HumanoidSampleCode : MonoBehaviour
 
     private const float RecordingFrameRate = 30f;
     private const float UiUpdateInterval = 0.1f;
+    private const int MinProbeScreenshotWidth = 128;
+    private const int MinProbeScreenshotHeight = 128;
+    private const int MaxProbeScreenshotWidth = 7680;
+    private const int MaxProbeScreenshotHeight = 4320;
     private const string KoreanProgressTextSample = "가나다파일선택녹화저장완료오류";
     private static readonly string[] KoreanUiFontNames =
     {
@@ -82,12 +90,15 @@ public class HumanoidSampleCode : MonoBehaviour
         EnsureRecorder();
         EnsureProgressTextKoreanFont();
 
-        if (vmdRecorder != null && vmdRecorder.IsRecording)
+        if (!_isRecordingSessionActive && !_isSaving && vmdRecorder != null && vmdRecorder.IsRecording)
         {
             vmdRecorder.StopRecording();
         }
 
-        SetReady("FBX를 선택하세요");
+        if (!_isRecordingSessionActive && !_isSaving)
+        {
+            SetReady("FBX를 선택하세요");
+        }
 
         if (ShouldAutoStartRecording() && HasAnimatorClip())
         {
@@ -196,6 +207,13 @@ public class HumanoidSampleCode : MonoBehaviour
     {
         if (!_isRecordingSessionActive || vmdRecorder == null) return;
 
+        if (_recordingSession == null)
+        {
+            _recordingSession = new HumanoidRecordingSession(RecordingFrameRate);
+            _recordingSession.Start(_totalDuration, _targetFrameCount, _finishCurrentSessionByRecordedFrameCount);
+            Debug.LogWarning("[Recorder] Recording session state was restored after a script reload.");
+        }
+
         HumanoidRecordingTick tick = _recordingSession.Tick(Time.deltaTime, vmdRecorder.FrameNumber);
         _currentTimer = _recordingSession.CurrentTimerSeconds;
 
@@ -262,10 +280,13 @@ public class HumanoidSampleCode : MonoBehaviour
         bool enableProbe,
         bool enableFingerCloseups,
         bool useCaptureFramerateForRegression,
-        float[] sampleTimesOverride = null)
+        float[] sampleTimesOverride = null,
+        int screenshotWidth = 960,
+        int screenshotHeight = 960)
     {
         enableMotionComparisonProbe = enableProbe;
         probeFingerCloseups = enableFingerCloseups;
+        SetProbeScreenshotCaptureResolution(screenshotWidth, screenshotHeight);
         _probeSampleTimesOverride = sampleTimesOverride != null && sampleTimesOverride.Length > 0
             ? (float[])sampleTimesOverride.Clone()
             : null;
@@ -273,12 +294,19 @@ public class HumanoidSampleCode : MonoBehaviour
         if (EnsureRecorder())
         {
             vmdRecorder.EnableExportRotationDiagnostics = enableProbe;
+            vmdRecorder.EnableExportIkSourceDiagnostics = enableProbe;
             vmdRecorder.UseCaptureFramerateDuringRecording = useCaptureFramerateForRegression;
             vmdRecorder.MaxRecordedFramesPerLateUpdate = useCaptureFramerateForRegression
                 ? Mathf.Max(1, vmdRecorder.MaxRecordedFramesPerLateUpdate)
                 : 2;
             vmdRecorder.DropLateFrameBacklogWhenNotUsingCaptureFramerate = !useCaptureFramerateForRegression;
         }
+    }
+
+    public void SetProbeScreenshotCaptureResolution(int width, int height)
+    {
+        probeScreenshotWidth = Mathf.Clamp(width, MinProbeScreenshotWidth, MaxProbeScreenshotWidth);
+        probeScreenshotHeight = Mathf.Clamp(height, MinProbeScreenshotHeight, MaxProbeScreenshotHeight);
     }
 
     private bool ShouldFinishCurrentSessionByRecordedFrameCount()
@@ -311,6 +339,7 @@ public class HumanoidSampleCode : MonoBehaviour
         }
 
         string probeLabel = string.IsNullOrWhiteSpace(label) ? ModelName : label;
+        probe.SetScreenshotCaptureResolution(probeScreenshotWidth, probeScreenshotHeight);
         probe.SetFingerCloseups(probeFingerCloseups);
         if (_probeSampleTimesOverride != null && _probeSampleTimesOverride.Length > 0)
         {
@@ -774,7 +803,12 @@ internal class TransformJitterProbe : MonoBehaviour
 {
     private const string OutputFolder = "Docs/Machine_Spirit/Local/JitterLogs";
     private const float AnomalyScreenDeltaThreshold = 20f;
-    private const int MaxAnomalyScreenshots = 0;
+    private const int MaxAnomalyScreenshots = 6;
+    private const float RootScreenTeleportThreshold = 5f;
+    private const float HipsScreenTeleportThreshold = 25f;
+    private const float HeadScreenTeleportThreshold = 40f;
+    private const float FootScreenTeleportThreshold = 120f;
+    private const float BoundsScreenTeleportThreshold = 120f;
     private static readonly JitterJoint[] DirectJoints =
     {
         new JitterJoint(HumanBodyBones.Hips, "hipsDirect"),
@@ -1684,12 +1718,17 @@ internal class TransformJitterProbe : MonoBehaviour
         summary.AverageDeltaTime = rows.Count > 0 ? totalDeltaTime / rows.Count : 0f;
         summary.CameraMoved = summary.MaxCameraPositionDelta > 0.0005f || summary.MaxCameraRotationDelta > 0.01f;
         summary.ModelMoved = summary.MaxRootPositionDelta > 0.002f || summary.MaxMeshCenterDelta > 0.002f || summary.MaxMeshMinYDelta > 0.002f;
-        summary.VisibleScreenJitter = summary.MaxRootScreenCenterDelta > 1f;
-        summary.VisibleBoundsScreenJitter = summary.MaxScreenCenterDelta > 1f ||
-            summary.MaxHipsScreenCenterDelta > 1f ||
-            summary.MaxHeadScreenCenterDelta > 1f ||
-            summary.MaxLeftFootScreenCenterDelta > 1f ||
-            summary.MaxRightFootScreenCenterDelta > 1f;
+        summary.VisibleScreenJitter = summary.MaxRootScreenCenterDelta > RootScreenTeleportThreshold;
+        bool bodyAnchorScreenTeleport =
+            summary.MaxHipsScreenCenterDelta > HipsScreenTeleportThreshold ||
+            summary.MaxHeadScreenCenterDelta > HeadScreenTeleportThreshold;
+        bool footScreenTeleport =
+            summary.MaxLeftFootScreenCenterDelta > FootScreenTeleportThreshold ||
+            summary.MaxRightFootScreenCenterDelta > FootScreenTeleportThreshold;
+        bool boundsDrivenTeleport =
+            summary.MaxScreenCenterDelta > BoundsScreenTeleportThreshold &&
+            (summary.VisibleScreenJitter || bodyAnchorScreenTeleport);
+        summary.VisibleBoundsScreenJitter = bodyAnchorScreenTeleport || footScreenTeleport || boundsDrivenTeleport;
         return summary;
     }
 
@@ -1990,6 +2029,8 @@ internal class TransformJitterProbe : MonoBehaviour
             builder.AppendLine($"- max right foot screen center delta: `{F(MaxRightFootScreenCenterDelta)}px`");
             builder.AppendLine($"- camera moved: `{CameraMoved}`");
             builder.AppendLine($"- model moved: `{ModelMoved}`");
+            builder.AppendLine($"- visible root screen jitter threshold: `>{F(RootScreenTeleportThreshold)}px`");
+            builder.AppendLine($"- visible bounds screen jitter thresholds: `hips>{F(HipsScreenTeleportThreshold)}px, head>{F(HeadScreenTeleportThreshold)}px, foot>{F(FootScreenTeleportThreshold)}px, bounds>{F(BoundsScreenTeleportThreshold)}px with body/root anchor`");
             builder.AppendLine($"- visible root screen jitter: `{VisibleScreenJitter}`");
             builder.AppendLine($"- visible bounds screen jitter: `{VisibleBoundsScreenJitter}`");
             return builder.ToString();

@@ -77,6 +77,10 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_ExportRotationDiagnostics_When_BuildingCsv_Then_WorstResidualFramesAreReported);
             RunTest(results, nameof(tests.Given_ExportRotationDiagnosticSamples_When_BuildingCsv_Then_PerFrameRowsAreReported),
                 tests.Given_ExportRotationDiagnosticSamples_When_BuildingCsv_Then_PerFrameRowsAreReported);
+            RunTest(results, nameof(tests.Given_ExportIkSourceDiagnostics_When_BuildingCsv_Then_PerFrameRowsAreReported),
+                tests.Given_ExportIkSourceDiagnostics_When_BuildingCsv_Then_PerFrameRowsAreReported);
+            RunTest(results, nameof(tests.Given_MovingModelRootNode_When_ResolvingFootIkRootReference_Then_UsesMovingRoot),
+                tests.Given_MovingModelRootNode_When_ResolvingFootIkRootReference_Then_UsesMovingRoot);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

@@ -26120,12 +26120,12 @@ MonoBehaviour:
   UseParentOfAll: 1
   UseCenterAsParentOfAll: 1
   UseAbsoluteCoordinateSystem: 1
-  IgnoreInitialPosition: 1
+  IgnoreInitialPosition: 0
   IgnoreInitialRotation: 0
-  FreezeParentOfAllMotionWhenIgnoringInitialPosition: 1
-  UseBottomCenter: 1
+  FreezeParentOfAllMotionWhenIgnoringInitialPosition: 0
+  UseBottomCenter: 0
   TrimMorphNumber: 0
-  KeyReductionLevel: 1
+  KeyReductionLevel: 2
   ForceLeftToeEnd: {fileID: 0}
   ForceRightToeEnd: {fileID: 0}
   ParentOfAllOffset: {x: 0, y: 0, z: 0}
@@ -26134,10 +26134,10 @@ MonoBehaviour:
   LiftMmdCenterYToKeepFeetAboveFloor: 1
   MinMmdFootIkY: 0.05
   ClampMmdCenterExportDeltaSpikes: 1
-  MaxMmdCenterExportDeltaPerFrame: 0.12
-  ClampMmdIkExportDeltaSpikes: 0
-  MaxMmdFootIkExportDeltaPerFrame: 0.12
-  MaxMmdToeIkExportDeltaPerFrame: 0.12
+  MaxMmdCenterExportDeltaPerFrame: 0.11
+  ClampMmdIkExportDeltaSpikes: 1
+  MaxMmdFootIkExportDeltaPerFrame: 0.11
+  MaxMmdToeIkExportDeltaPerFrame: 0.11
   LeftFootIKOffset: {x: 0, y: 0, z: 0}
   RightFootIKOffset: {x: 0, y: 0, z: 0}
   LeftToeIKOffset: {x: 0, y: 0, z: 0}

@@ -18,17 +18,27 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
     {
         private const string MenuRoot = "Machine Spirit/FBX Smoke/";
         private const string MainAutoSceneName = "Main_Auto";
+        private const string MainRecordingSceneName = "Main_recoding";
         private const string ImportFbxRelativeDirectory = "Resources/Import_FBX";
         private const string RuntimeDirectory = "Docs/Machine_Spirit/Local/runtime";
         private const string RequestFileName = "fbx_smoke_request.json";
         private const string StatusFileName = "fbx_smoke_status.json";
         private const string TraceFileName = "fbx_smoke_trace.log";
+        private const string RunAllImportFbxHeadCommand = "run_all_import_fbx_31s";
+        private const string RunAllImportFbxMiddleCommand = "run_all_import_fbx_middle_31s";
+        private const string RunAllImportFbxTailCommand = "run_all_import_fbx_tail_31s";
+        private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
+        private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
         private const string CaptureAntennaTailHelperEvidenceCommand = "capture_antenna_tail_helper_evidence";
         private const string CaptureAntennaTailHelperEvidenceCleanCommand = "capture_antenna_tail_helper_evidence_clean";
         private const string CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand = "capture_antenna_tail_helper_evidence_resume_after_clean";
+        private const string SatisfactionFbxFileName = "satisfaction_2.fbx";
         private const float SmokeDurationSeconds = 31f;
         private const float SmokeFrameRate = 30f;
         private const float SmokeStartDelaySeconds = 0.2f;
+        private const float SatisfactionFullRegressionEvidenceDurationSeconds = 207.7833f;
+        private const int FullRegressionEvidenceCaptureWidth = 3840;
+        private const int FullRegressionEvidenceCaptureHeight = 2160;
         private const float SatisfactionSmokeMidPeakTimeSeconds = 16.9f;
         private const float SatisfactionSmokeLatePeakTimeSeconds = 27.2f;
         private const float SatisfactionMiddleHelperEvidenceTimeSeconds = 102.125f;
@@ -56,6 +66,15 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             ThumbEvidenceEarlyPeakTimeSeconds,
             ThumbEvidencePeakTimeSeconds,
             ThumbEvidenceTimeSeconds
+        };
+        private static readonly float[] SatisfactionFullRegressionEvidenceSampleTimes =
+        {
+            ThumbEvidenceEarlyTimeSeconds,
+            ThumbEvidenceEarlyPeakTimeSeconds,
+            ThumbEvidencePeakTimeSeconds,
+            ThumbEvidenceTimeSeconds,
+            SatisfactionMiddleHelperEvidenceTimeSeconds,
+            SatisfactionTailHelperEvidenceTimeSeconds
         };
         private static readonly float[] SatisfactionMiddleHelperEvidenceSampleTimes =
         {
@@ -186,7 +205,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static void RunSatisfactionSmoke()
         {
             RunSingleSmoke(
-                "satisfaction_2.fbx",
+                SatisfactionFbxFileName,
                 SmokeDurationSeconds,
                 enableFingerCloseups: false,
                 sampleTimesOverride: SatisfactionSmokeSampleTimes);
@@ -220,18 +239,32 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static void CaptureSatisfactionThumbEvidence()
         {
             RunSingleSmoke(
-                "satisfaction_2.fbx",
+                SatisfactionFbxFileName,
                 ThumbEvidenceDurationSeconds,
                 enableFingerCloseups: true,
                 sampleTimesOverride: ThumbEvidenceSampleTimes,
                 mode: "thumb-evidence");
         }
 
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Middle Helper Evidence 102.125s", false, 2106)]
+        [MenuItem(MenuRoot + "Capture satisfaction_2 Full Regression Evidence 208s 4K", false, 2106)]
+        private static void CaptureSatisfactionFullRegressionEvidence()
+        {
+            RunSingleSmoke(
+                SatisfactionFbxFileName,
+                SatisfactionFullRegressionEvidenceDurationSeconds,
+                enableFingerCloseups: true,
+                sampleTimesOverride: SatisfactionFullRegressionEvidenceSampleTimes,
+                mode: "full-regression-evidence",
+                segment: FileManager.EditorDiagnosticSmokeSegment.Head,
+                captureWidthOverride: FullRegressionEvidenceCaptureWidth,
+                captureHeightOverride: FullRegressionEvidenceCaptureHeight);
+        }
+
+        [MenuItem(MenuRoot + "Capture satisfaction_2 Middle Helper Evidence 102.125s", false, 2107)]
         private static void CaptureSatisfactionMiddleHelperEvidence()
         {
             RunSingleSmoke(
-                "satisfaction_2.fbx",
+                SatisfactionFbxFileName,
                 SmokeDurationSeconds,
                 enableFingerCloseups: true,
                 sampleTimesOverride: SatisfactionMiddleHelperEvidenceSampleTimes,
@@ -239,11 +272,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 segment: FileManager.EditorDiagnosticSmokeSegment.Middle);
         }
 
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Tail Helper Evidence 181.25s", false, 2107)]
+        [MenuItem(MenuRoot + "Capture satisfaction_2 Tail Helper Evidence 181.25s", false, 2108)]
         private static void CaptureSatisfactionTailHelperEvidence()
         {
             RunSingleSmoke(
-                "satisfaction_2.fbx",
+                SatisfactionFbxFileName,
                 SmokeDurationSeconds,
                 enableFingerCloseups: true,
                 sampleTimesOverride: SatisfactionTailHelperEvidenceSampleTimes,
@@ -251,7 +284,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 segment: FileManager.EditorDiagnosticSmokeSegment.Tail);
         }
 
-        [MenuItem(MenuRoot + "Capture neo_1_001 Middle Helper Evidence 98.575s", false, 2108)]
+        [MenuItem(MenuRoot + "Capture neo_1_001 Middle Helper Evidence 98.575s", false, 2109)]
         private static void CaptureNeoMiddleHelperEvidence()
         {
             RunSingleSmoke(
@@ -263,7 +296,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 segment: FileManager.EditorDiagnosticSmokeSegment.Middle);
         }
 
-        [MenuItem(MenuRoot + "Capture neo_1_001 Tail Helper Evidence 183.85s", false, 2109)]
+        [MenuItem(MenuRoot + "Capture neo_1_001 Tail Helper Evidence 183.85s", false, 2110)]
         private static void CaptureNeoTailHelperEvidence()
         {
             RunSingleSmoke(
@@ -275,7 +308,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 segment: FileManager.EditorDiagnosticSmokeSegment.Tail);
         }
 
-        [MenuItem(MenuRoot + "Capture Antenna39 Tail Helper Evidence 188.567s", false, 2110)]
+        [MenuItem(MenuRoot + "Capture Antenna39 Tail Helper Evidence 188.567s", false, 2111)]
         private static void CaptureAntennaTailHelperEvidence()
         {
             RunSingleSmoke(
@@ -287,7 +320,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 segment: FileManager.EditorDiagnosticSmokeSegment.Tail);
         }
 
-        [MenuItem(MenuRoot + "Dump Active FileManager Probe", false, 2111)]
+        [MenuItem(MenuRoot + "Dump Active FileManager Probe", false, 2112)]
         private static void DumpActiveFileManagerProbe()
         {
             if (!ValidateRuntimeContext(null, interactive: true, out _))
@@ -311,6 +344,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         [MenuItem(MenuRoot + "Run mikumikuni_retake_000 31s", true)]
         [MenuItem(MenuRoot + "Run neo_1_001 31s", true)]
         [MenuItem(MenuRoot + "Capture satisfaction_2 Thumb Evidence 0.6s+1.0s+12.6s+13.1s", true)]
+        [MenuItem(MenuRoot + "Capture satisfaction_2 Full Regression Evidence 208s 4K", true)]
         [MenuItem(MenuRoot + "Capture satisfaction_2 Middle Helper Evidence 102.125s", true)]
         [MenuItem(MenuRoot + "Capture satisfaction_2 Tail Helper Evidence 181.25s", true)]
         [MenuItem(MenuRoot + "Capture neo_1_001 Middle Helper Evidence 98.575s", true)]
@@ -451,6 +485,26 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             switch (request.command)
             {
+                case CaptureSatisfactionThumbEvidenceCommand:
+                    return TryStartAutomationSingleSmoke(
+                        "satisfaction_2.fbx",
+                        ThumbEvidenceDurationSeconds,
+                        true,
+                        ThumbEvidenceSampleTimes,
+                        "thumb-evidence",
+                        FileManager.EditorDiagnosticSmokeSegment.Head,
+                        out message);
+                case CaptureSatisfactionFullRegressionEvidenceCommand:
+                    return TryStartAutomationSingleSmoke(
+                        "satisfaction_2.fbx",
+                        SatisfactionFullRegressionEvidenceDurationSeconds,
+                        true,
+                        SatisfactionFullRegressionEvidenceSampleTimes,
+                        "full-regression-evidence",
+                        FileManager.EditorDiagnosticSmokeSegment.Head,
+                        out message,
+                        FullRegressionEvidenceCaptureWidth,
+                        FullRegressionEvidenceCaptureHeight);
                 case CaptureAntennaTailHelperEvidenceCommand:
                     return TryStartAutomationSingleSmoke(
                         "Antenna39 try_006 g.fbx",
@@ -460,9 +514,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                         "helper-evidence-tail",
                         FileManager.EditorDiagnosticSmokeSegment.Tail,
                         out message);
-                case "run_all_import_fbx_middle_31s":
+                case RunAllImportFbxHeadCommand:
+                    return TryStartAutomationBatch(FileManager.EditorDiagnosticSmokeSegment.Head, out message);
+                case RunAllImportFbxMiddleCommand:
                     return TryStartAutomationBatch(FileManager.EditorDiagnosticSmokeSegment.Middle, out message);
-                case "run_all_import_fbx_tail_31s":
+                case RunAllImportFbxTailCommand:
                     return TryStartAutomationBatch(FileManager.EditorDiagnosticSmokeSegment.Tail, out message);
                 default:
                     message = $"unsupported command: {request.command}";
@@ -535,7 +591,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float[] sampleTimesOverride,
             string mode,
             FileManager.EditorDiagnosticSmokeSegment segment,
-            out string message)
+            out string message,
+            int captureWidthOverride = 0,
+            int captureHeightOverride = 0)
         {
             message = string.Empty;
             if (!TryGetFileManager(fbxFileName, out FileManager fileManager, interactive: false, out message))
@@ -543,7 +601,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride))
+            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride))
             {
                 message = $"smoke start failed: {fbxFileName}";
                 return false;
@@ -578,7 +636,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             bool enableFingerCloseups = false,
             float[] sampleTimesOverride = null,
             string mode = "single",
-            FileManager.EditorDiagnosticSmokeSegment segment = FileManager.EditorDiagnosticSmokeSegment.Head)
+            FileManager.EditorDiagnosticSmokeSegment segment = FileManager.EditorDiagnosticSmokeSegment.Head,
+            int captureWidthOverride = 0,
+            int captureHeightOverride = 0)
         {
             if (IsBatchRunning())
             {
@@ -591,7 +651,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 return;
             }
 
-            if (StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride))
+            if (StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride))
             {
                 TrackSingleSmoke(fileManager, fbxFileName, mode);
             }
@@ -680,7 +740,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             FileManager.EditorDiagnosticSmokeSegment segment = FileManager.EditorDiagnosticSmokeSegment.Head,
             float durationSeconds = SmokeDurationSeconds,
             bool enableFingerCloseups = false,
-            float[] sampleTimesOverride = null)
+            float[] sampleTimesOverride = null,
+            int captureWidthOverride = 0,
+            int captureHeightOverride = 0)
         {
             if (fileManager == null)
             {
@@ -705,7 +767,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 useDeterministicCaptureFramerate: true,
                 diagnosticStartDelay: SmokeStartDelaySeconds,
                 segment: segment,
-                sampleTimesOverride: sampleTimesOverride);
+                sampleTimesOverride: sampleTimesOverride,
+                captureWidthOverride: captureWidthOverride,
+                captureHeightOverride: captureHeightOverride);
 
             if (started)
             {
@@ -717,6 +781,31 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             return started;
+        }
+
+        private static string GetFullRegressionEvidenceCommandForTest()
+        {
+            return CaptureSatisfactionFullRegressionEvidenceCommand;
+        }
+
+        private static float GetFullRegressionEvidenceDurationSecondsForTest()
+        {
+            return SatisfactionFullRegressionEvidenceDurationSeconds;
+        }
+
+        private static string GetFullRegressionEvidenceFbxFileNameForTest()
+        {
+            return SatisfactionFbxFileName;
+        }
+
+        private static int[] GetFullRegressionEvidenceCaptureResolutionForTest()
+        {
+            return new[] { FullRegressionEvidenceCaptureWidth, FullRegressionEvidenceCaptureHeight };
+        }
+
+        private static float[] GetFullRegressionEvidenceSampleTimesForTest()
+        {
+            return (float[])SatisfactionFullRegressionEvidenceSampleTimes.Clone();
         }
 
         private static void TrackSingleSmoke(FileManager fileManager, string fbxFileName, string mode)
@@ -1089,9 +1178,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            if (!string.Equals(EditorSceneManager.GetActiveScene().name, MainAutoSceneName, StringComparison.Ordinal))
+            if (!IsSupportedMainScene(EditorSceneManager.GetActiveScene().name))
             {
-                errorMessage = "활성 씬이 Main_Auto가 아닙니다.";
+                errorMessage = "활성 씬이 Main_Auto 또는 Main_recoding이 아닙니다.";
                 if (interactive)
                 {
                     EditorUtility.DisplayDialog("FBX Smoke", errorMessage, "확인");
@@ -1118,6 +1207,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             }
 
             return true;
+        }
+
+        private static bool IsSupportedMainScene(string sceneName)
+        {
+            return string.Equals(sceneName, MainAutoSceneName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(sceneName, MainRecordingSceneName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string[] GetImportFbxFileNames()

@@ -290,6 +290,14 @@ internal sealed class MotionComparisonFrameQualitySummary
     public int candidate_frame_count_delta_from_target;
     public int candidate_below_floor_metric_frames;
     public int candidate_root_step_spike_frames;
+    public bool candidate_yyb_deformation_risk_column_present;
+    public int candidate_yyb_deformation_risk_frame_count;
+    public int candidate_yyb_deformation_risk_missing_frames;
+    public float candidate_yyb_max_deformation_risk;
+    public bool candidate_yyb_sleeve_thickness_risk_column_present;
+    public int candidate_yyb_sleeve_thickness_risk_frame_count;
+    public int candidate_yyb_sleeve_thickness_risk_missing_frames;
+    public float candidate_yyb_max_sleeve_thickness_risk;
     public int candidate_vmd_bone_frames;
     public int candidate_vmd_center_spike_frames;
     public int candidate_vmd_foot_ik_spike_frames;
@@ -380,6 +388,19 @@ internal sealed class MotionComparisonFrameQualitySummary
 }
 
 [Serializable]
+internal sealed class VerticalSolvePrimaryExportPromotion
+{
+    public string raw_metrics_csv;
+    public string raw_vmd_path;
+    public string raw_diagnostic_metrics_csv;
+    public string raw_diagnostic_vmd_path;
+    public string corrected_metrics_csv;
+    public string corrected_vmd_path;
+    public string integrated_manifest_path;
+    public long promoted_vmd_bytes;
+}
+
+[Serializable]
 internal sealed class MmdAutomationReportForSummary
 {
     public string status;
@@ -419,13 +440,16 @@ internal static class MotionComparisonProbeReportWriter
     private const float QualitySameFrameHipsYFailThreshold = QualityTeleportStepThreshold;
     private const float QualitySameFrameFootBottomYWarnThreshold = 0.035f;
     private const float QualitySameFrameFootBottomYFailThreshold = 0.05f;
+    private const float QualityYybDeformationRiskFailThreshold = 0.35f;
+    private const float QualityYybSleeveThicknessRiskFailThreshold = 0.35f;
     private const int QualityMetricFrameMatchTolerance = 1;
     private const float VerticalSolvePrototypeMaxCorrectionY = 0.08f;
     private const float VerticalSolveArtifactMaxCorrectionY = 0.085f;
     private const float VerticalSolvePostprocessSafetyMarginY = 0.0005f;
+    private const string MainRecordingMovingRootEvaluationRole = "main_recording_moving_root_metrics";
     private const string ScreenshotIndexCsvHeader = "label,scene,reason,recorderFrame,view,path";
     private const string MetricsCsvHeader = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,retargetRootDeltaLast,retargetRootDeltaMax,retargetRootDeltaSkippedCount,retargetPoseRootDeltaLast,retargetPoseRootDeltaMax,retargetPoseRootClampCount,retargetGroundingAdjustmentLast,retargetGroundingAdjustmentMax,retargetGroundingStepClampCount,retargetGroundingSmoothedCount,retargetGroundingVerticalStepLast,retargetGroundingVerticalStepMax,retargetGroundingInitialVerticalStep,retargetGroundingVerticalStepAfterInitialMax,retargetGroundingTargetY,retargetGroundingLowestFootBottomY,retargetGroundingMaxStepPerFrame,retargetGroundingLastStepToMaxStepRatio,retargetGroundingLastStepAtMaxStep,retargetRecordingStartRootY,retargetRecordingStartBodyPositionY,retargetRecordingStartHipsLocalY,retargetRecordingStartHipsY,retargetRecordingStartHipsReferenceBeforeLocalY,retargetRecordingStartHipsReferenceAfterLocalY,retargetRecordingStartHipsReferenceDeltaY,retargetRecordingStartHipsReferenceFlipDetected,retargetRecordingStartHipsReferenceStage,bodyPositionY,hipsLocalY,retargetFootHeightReferenceLift,hipsY,lowestFootY,lowestFootBottomY,meshBoundsMinY,meshBoundsMaxY,footBottomGroundGap,meshBoundsGroundGap,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftHandTorsoSignedClearance,rightHandTorsoSignedClearance,minHandTorsoSignedClearance,handTorsoPenetrationRisk,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
-    private const string YybDiagnosticMetricsCsvHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk,thumbGuardManualReferenceConfigured,thumbGuardManualReferenceActive,thumbGuardPoseShapingSuppressed,thumbGuardLeftPoseShapingSuppressed,thumbGuardRightPoseShapingSuppressed,thumbGuardProjectionWeight,thumbGuardLeftProjectionWeight,thumbGuardRightProjectionWeight,thumbGuardIndexSpreadWeight,thumbGuardLeftIndexSpreadWeight,thumbGuardRightIndexSpreadWeight,thumbGuardSegmentStraightenWeight,thumbGuardLeftSegmentStraightenWeight,thumbGuardRightSegmentStraightenWeight,thumbGuardLeftProjectionCorrectionApplyCount,thumbGuardRightProjectionCorrectionApplyCount,thumbGuardLeftProjectionCorrectionPreserveCount,thumbGuardRightProjectionCorrectionPreserveCount,thumbGuardLeftSegmentStraightenApplyCount,thumbGuardRightSegmentStraightenApplyCount,thumbGuardLeftSegmentStraightenPreserveCount,thumbGuardRightSegmentStraightenPreserveCount,thumbGuardLeftLocalRotationGuardClampCount,thumbGuardRightLocalRotationGuardClampCount,thumbGuardLeftLocalRotationGuardPreserveCount,thumbGuardRightLocalRotationGuardPreserveCount,thumbGuardLeftLocalRotationGuardCurrentRisk,thumbGuardRightLocalRotationGuardCurrentRisk,thumbGuardLeftLocalRotationGuardLimitedRisk,thumbGuardRightLocalRotationGuardLimitedRisk,thumbGuardLeftWorldRotationSuppressCompetingOverride,thumbGuardRightWorldRotationSuppressCompetingOverride,thumbGuardLeftWorldRotationKeepDetachedHelperOverride,thumbGuardRightWorldRotationKeepDetachedHelperOverride,thumbGuardLeftWorldRotationCurrentReferenceFrameDeviation,thumbGuardRightWorldRotationCurrentReferenceFrameDeviation,thumbGuardLeftWorldRotationCandidateReferenceFrameDeviation,thumbGuardRightWorldRotationCandidateReferenceFrameDeviation,thumbGuardLeftProximalWorldRotationPreserveReason,thumbGuardRightProximalWorldRotationPreserveReason,thumbGuardLeftIntermediateWorldRotationPreserveReason,thumbGuardRightIntermediateWorldRotationPreserveReason,thumbGuardLeftProximalWorldRotationCurrentReferenceAngle,thumbGuardRightProximalWorldRotationCurrentReferenceAngle,thumbGuardLeftIntermediateWorldRotationCurrentReferenceAngle,thumbGuardRightIntermediateWorldRotationCurrentReferenceAngle,thumbGuardLeftProximalWorldRotationCandidateReferenceAngle,thumbGuardRightProximalWorldRotationCandidateReferenceAngle,thumbGuardLeftIntermediateWorldRotationCandidateReferenceAngle,thumbGuardRightIntermediateWorldRotationCandidateReferenceAngle,thumbGuardLeftProximalWorldRotationPreserveCurrentRisk,thumbGuardRightProximalWorldRotationPreserveCurrentRisk,thumbGuardLeftIntermediateWorldRotationPreserveCurrentRisk,thumbGuardRightIntermediateWorldRotationPreserveCurrentRisk,thumbGuardLeftProximalWorldRotationPreserveLimitedRisk,thumbGuardRightProximalWorldRotationPreserveLimitedRisk,thumbGuardLeftIntermediateWorldRotationPreserveLimitedRisk,thumbGuardRightIntermediateWorldRotationPreserveLimitedRisk,thumbGuardHelperSyncEnabled,thumbGuardHelperPositionSyncEnabled,thumbGuardHelperSyncWeight,thumbGuardHelperMaxLocalAngle,thumbGuardPalmStabilizeEnabled,thumbGuardPalmStabilizeWeight,thumbGuardPalmStabilizeMaxLocalAngle,thumbGuardWebbingStabilizeEnabled,thumbGuardWebbingStabilizeWeight,thumbGuardWebbingMaxLocalAngle,thumbGuardWebbingMaxPositionOffset";
+    private const string YybDiagnosticMetricsCsvHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftSleeveAnchorDistance,rightSleeveAnchorDistance,leftSleeveThicknessRatio,rightSleeveThicknessRatio,leftSleeveThicknessRisk,rightSleeveThicknessRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk,thumbGuardManualReferenceConfigured,thumbGuardManualReferenceActive,thumbGuardPoseShapingSuppressed,thumbGuardLeftPoseShapingSuppressed,thumbGuardRightPoseShapingSuppressed,thumbGuardProjectionWeight,thumbGuardLeftProjectionWeight,thumbGuardRightProjectionWeight,thumbGuardIndexSpreadWeight,thumbGuardLeftIndexSpreadWeight,thumbGuardRightIndexSpreadWeight,thumbGuardSegmentStraightenWeight,thumbGuardLeftSegmentStraightenWeight,thumbGuardRightSegmentStraightenWeight,thumbGuardLeftProjectionCorrectionApplyCount,thumbGuardRightProjectionCorrectionApplyCount,thumbGuardLeftProjectionCorrectionPreserveCount,thumbGuardRightProjectionCorrectionPreserveCount,thumbGuardLeftSegmentStraightenApplyCount,thumbGuardRightSegmentStraightenApplyCount,thumbGuardLeftSegmentStraightenPreserveCount,thumbGuardRightSegmentStraightenPreserveCount,thumbGuardLeftLocalRotationGuardClampCount,thumbGuardRightLocalRotationGuardClampCount,thumbGuardLeftLocalRotationGuardPreserveCount,thumbGuardRightLocalRotationGuardPreserveCount,thumbGuardLeftLocalRotationGuardCurrentRisk,thumbGuardRightLocalRotationGuardCurrentRisk,thumbGuardLeftLocalRotationGuardLimitedRisk,thumbGuardRightLocalRotationGuardLimitedRisk,thumbGuardLeftWorldRotationSuppressCompetingOverride,thumbGuardRightWorldRotationSuppressCompetingOverride,thumbGuardLeftWorldRotationKeepDetachedHelperOverride,thumbGuardRightWorldRotationKeepDetachedHelperOverride,thumbGuardLeftWorldRotationCurrentReferenceFrameDeviation,thumbGuardRightWorldRotationCurrentReferenceFrameDeviation,thumbGuardLeftWorldRotationCandidateReferenceFrameDeviation,thumbGuardRightWorldRotationCandidateReferenceFrameDeviation,thumbGuardLeftProximalWorldRotationPreserveReason,thumbGuardRightProximalWorldRotationPreserveReason,thumbGuardLeftIntermediateWorldRotationPreserveReason,thumbGuardRightIntermediateWorldRotationPreserveReason,thumbGuardLeftProximalWorldRotationCurrentReferenceAngle,thumbGuardRightProximalWorldRotationCurrentReferenceAngle,thumbGuardLeftIntermediateWorldRotationCurrentReferenceAngle,thumbGuardRightIntermediateWorldRotationCurrentReferenceAngle,thumbGuardLeftProximalWorldRotationCandidateReferenceAngle,thumbGuardRightProximalWorldRotationCandidateReferenceAngle,thumbGuardLeftIntermediateWorldRotationCandidateReferenceAngle,thumbGuardRightIntermediateWorldRotationCandidateReferenceAngle,thumbGuardLeftProximalWorldRotationPreserveCurrentRisk,thumbGuardRightProximalWorldRotationPreserveCurrentRisk,thumbGuardLeftIntermediateWorldRotationPreserveCurrentRisk,thumbGuardRightIntermediateWorldRotationPreserveCurrentRisk,thumbGuardLeftProximalWorldRotationPreserveLimitedRisk,thumbGuardRightProximalWorldRotationPreserveLimitedRisk,thumbGuardLeftIntermediateWorldRotationPreserveLimitedRisk,thumbGuardRightIntermediateWorldRotationPreserveLimitedRisk,thumbGuardHelperSyncEnabled,thumbGuardHelperPositionSyncEnabled,thumbGuardHelperSyncWeight,thumbGuardHelperMaxLocalAngle,thumbGuardPalmStabilizeEnabled,thumbGuardPalmStabilizeWeight,thumbGuardPalmStabilizeMaxLocalAngle,thumbGuardWebbingStabilizeEnabled,thumbGuardWebbingStabilizeWeight,thumbGuardWebbingMaxLocalAngle,thumbGuardWebbingMaxPositionOffset";
     private const string SessionManifestArtifactsHeading = "## \uc0b0\ucd9c\ubb3c";
     private const string SessionManifestArtifactsTableHeader = "| \uc5ed\ud560 | \uacbd\ub85c |";
     private const string SessionManifestArtifactsTableSeparator = "|---|---|";
@@ -790,6 +814,11 @@ internal static class MotionComparisonProbeReportWriter
         return isRightSide ? "sleeve-anchor-rotation-right" : "sleeve-anchor-rotation-left";
     }
 
+    internal static string BuildSleeveThicknessPairKeyLabel(bool isRightSide)
+    {
+        return isRightSide ? "sleeve-thickness-right" : "sleeve-thickness-left";
+    }
+
     internal static string BuildSleeveAnchorTransformNameSuffix(bool isRightSide)
     {
         return isRightSide ? "joint_RightArmM" : "joint_LeftArmM";
@@ -922,6 +951,14 @@ internal static class MotionComparisonProbeReportWriter
             candidate_frame_count_delta_from_target = targetFrameCount > 0 ? candidateRecordedFrameCount - targetFrameCount : 0,
             candidate_below_floor_metric_frames = candidate.BelowFloorFrameCount,
             candidate_root_step_spike_frames = candidate.RootStepSpikeFrameCount,
+            candidate_yyb_deformation_risk_column_present = candidate.HasYybMaxDeformationRiskColumn,
+            candidate_yyb_deformation_risk_frame_count = candidate.YybDeformationRiskFrameCount,
+            candidate_yyb_deformation_risk_missing_frames = candidate.YybDeformationRiskMissingFrameCount,
+            candidate_yyb_max_deformation_risk = candidate.MaxYybDeformationRisk,
+            candidate_yyb_sleeve_thickness_risk_column_present = candidate.HasYybSleeveThicknessRiskColumns,
+            candidate_yyb_sleeve_thickness_risk_frame_count = candidate.YybSleeveThicknessRiskFrameCount,
+            candidate_yyb_sleeve_thickness_risk_missing_frames = candidate.YybSleeveThicknessRiskMissingFrameCount,
+            candidate_yyb_max_sleeve_thickness_risk = candidate.MaxYybSleeveThicknessRisk,
             candidate_vmd_bone_frames = vmd.BoneFrameCount,
             candidate_vmd_center_spike_frames = vmd.CenterSpikeFrameCount,
             candidate_vmd_foot_ik_spike_frames = vmd.FootIkSpikeFrameCount,
@@ -1094,12 +1131,82 @@ internal static class MotionComparisonProbeReportWriter
         return true;
     }
 
+    internal static bool TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
+        MotionComparisonFrameQualitySummary rawSummary,
+        out VerticalSolvePrimaryExportPromotion promotion)
+    {
+        promotion = null;
+        if (rawSummary == null ||
+            !string.Equals(rawSummary.vertical_solve_corrected_candidate_status, "pass", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(rawSummary.candidate_metrics_csv) ||
+            string.IsNullOrWhiteSpace(rawSummary.candidate_vmd_path) ||
+            string.IsNullOrWhiteSpace(rawSummary.vertical_solve_corrected_candidate_metrics_csv) ||
+            string.IsNullOrWhiteSpace(rawSummary.vertical_solve_corrected_candidate_vmd_path) ||
+            !File.Exists(rawSummary.candidate_metrics_csv) ||
+            !File.Exists(rawSummary.candidate_vmd_path) ||
+            !File.Exists(rawSummary.vertical_solve_corrected_candidate_metrics_csv) ||
+            !File.Exists(rawSummary.vertical_solve_corrected_candidate_vmd_path))
+        {
+            return false;
+        }
+
+        string diagnosticMetricsPath = BuildVerticalSolveRawDiagnosticPath(rawSummary.candidate_metrics_csv);
+        string diagnosticVmdPath = BuildVerticalSolveRawDiagnosticPath(rawSummary.candidate_vmd_path);
+        string integratedManifestPath = BuildVerticalSolveIntegratedManifestPath(rawSummary.candidate_metrics_csv);
+        try
+        {
+            EnsureParentDirectoryExists(diagnosticMetricsPath);
+            EnsureParentDirectoryExists(diagnosticVmdPath);
+            File.Copy(rawSummary.candidate_metrics_csv, diagnosticMetricsPath, overwrite: true);
+            File.Copy(rawSummary.candidate_vmd_path, diagnosticVmdPath, overwrite: true);
+            File.Copy(rawSummary.vertical_solve_corrected_candidate_metrics_csv, rawSummary.candidate_metrics_csv, overwrite: true);
+            File.Copy(rawSummary.vertical_solve_corrected_candidate_vmd_path, rawSummary.candidate_vmd_path, overwrite: true);
+
+            FileInfo promotedVmd = new FileInfo(rawSummary.candidate_vmd_path);
+            promotion = new VerticalSolvePrimaryExportPromotion
+            {
+                raw_metrics_csv = rawSummary.candidate_metrics_csv,
+                raw_vmd_path = rawSummary.candidate_vmd_path,
+                raw_diagnostic_metrics_csv = diagnosticMetricsPath,
+                raw_diagnostic_vmd_path = diagnosticVmdPath,
+                corrected_metrics_csv = rawSummary.vertical_solve_corrected_candidate_metrics_csv,
+                corrected_vmd_path = rawSummary.vertical_solve_corrected_candidate_vmd_path,
+                integrated_manifest_path = integratedManifestPath,
+                promoted_vmd_bytes = promotedVmd.Exists ? promotedVmd.Length : 0L
+            };
+            WriteVerticalSolveIntegratedPrimaryExportManifest(promotion, rawSummary);
+            return promotion.promoted_vmd_bytes > 0L;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[MotionComparisonProbeReportWriter] Vertical solve primary export promotion failed: {ex.Message}");
+            promotion = null;
+            return false;
+        }
+    }
+
     internal static MotionComparisonFrameQualitySummary[] BuildFrameQualityEvaluationEntries(
         MotionComparisonFrameQualitySummary rawSummary)
     {
         if (rawSummary == null)
         {
             return Array.Empty<MotionComparisonFrameQualitySummary>();
+        }
+
+        if (string.Equals(
+                rawSummary.frame_quality_evaluation_role,
+                MainRecordingMovingRootEvaluationRole,
+                StringComparison.Ordinal))
+        {
+            return new[] { rawSummary };
+        }
+
+        if (string.Equals(
+                rawSummary.frame_quality_evaluation_role,
+                "main_auto_integrated_vertical_solve_metrics",
+                StringComparison.Ordinal))
+        {
+            return new[] { rawSummary };
         }
 
         if (!TryBuildVerticalSolveCorrectedCandidateFrameQualitySummary(
@@ -1113,6 +1220,22 @@ internal static class MotionComparisonProbeReportWriter
         rawSummary.frame_quality_evaluation_basis =
             "primary frame_quality evaluator over the unmodified candidate metrics CSV; corrected candidate artifacts remain separate evidence";
         return new[] { rawSummary, correctedSummary };
+    }
+
+    internal static void MarkIntentionalMovingRootStageMotion(MotionComparisonFrameQualitySummary summary)
+    {
+        if (summary == null)
+        {
+            return;
+        }
+
+        summary.frame_quality_evaluation_role = MainRecordingMovingRootEvaluationRole;
+        summary.frame_quality_evaluation_basis =
+            "Main_recoding stage preview intentionally follows FBX X/Z root motion; same-frame root path and relative foot-bottom deltas are reported but excluded from the stationary-root gate, while retarget root, root-step/VMD center/IK spikes, below-floor, and hips gates remain enforced";
+        ApplyFrameQualityStatus(
+            summary,
+            allowSameFrameRootPositionDelta: true,
+            allowRelativeFootBottomDelta: true);
     }
 
     private static string BuildVerticalSolvePostprocessCandidateLabel(string candidateLabel)
@@ -1812,6 +1935,82 @@ internal static class MotionComparisonProbeReportWriter
             : Path.Combine(directory, manifestFileName);
     }
 
+    private static string BuildVerticalSolveRawDiagnosticPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "";
+        }
+
+        string directory = Path.GetDirectoryName(path);
+        string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(path);
+        string extension = Path.GetExtension(path);
+        if (string.IsNullOrEmpty(extension))
+        {
+            extension = ".txt";
+        }
+
+        string diagnosticFileName = $"{fileNameWithoutExtension}.raw_vertical_solve_diagnostic{extension}";
+        return string.IsNullOrEmpty(directory)
+            ? diagnosticFileName
+            : Path.Combine(directory, diagnosticFileName);
+    }
+
+    private static string BuildVerticalSolveIntegratedManifestPath(string candidateMetricsCsvPath)
+    {
+        if (string.IsNullOrWhiteSpace(candidateMetricsCsvPath))
+        {
+            return "";
+        }
+
+        string directory = Path.GetDirectoryName(candidateMetricsCsvPath);
+        string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(candidateMetricsCsvPath);
+        string manifestFileName = $"{fileNameWithoutExtension}.integrated_vertical_solve_primary_export.json";
+        return string.IsNullOrEmpty(directory)
+            ? manifestFileName
+            : Path.Combine(directory, manifestFileName);
+    }
+
+    private static void WriteVerticalSolveIntegratedPrimaryExportManifest(
+        VerticalSolvePrimaryExportPromotion promotion,
+        MotionComparisonFrameQualitySummary rawSummary)
+    {
+        if (promotion == null || string.IsNullOrWhiteSpace(promotion.integrated_manifest_path))
+        {
+            return;
+        }
+
+        EnsureParentDirectoryExists(promotion.integrated_manifest_path);
+        string json =
+            "{\n" +
+            "  \"artifact_role\": \"integrated_vertical_solve_primary_export\",\n" +
+            "  \"generated_at\": \"" + DateTime.Now.ToString("o", CultureInfo.InvariantCulture) + "\",\n" +
+            "  \"raw_metrics_csv\": \"" + JsonEscape(promotion.raw_metrics_csv) + "\",\n" +
+            "  \"raw_vmd_path\": \"" + JsonEscape(promotion.raw_vmd_path) + "\",\n" +
+            "  \"raw_diagnostic_metrics_csv\": \"" + JsonEscape(promotion.raw_diagnostic_metrics_csv) + "\",\n" +
+            "  \"raw_diagnostic_vmd_path\": \"" + JsonEscape(promotion.raw_diagnostic_vmd_path) + "\",\n" +
+            "  \"corrected_metrics_csv\": \"" + JsonEscape(promotion.corrected_metrics_csv) + "\",\n" +
+            "  \"corrected_vmd_path\": \"" + JsonEscape(promotion.corrected_vmd_path) + "\",\n" +
+            "  \"promoted_vmd_bytes\": " + promotion.promoted_vmd_bytes.ToString(CultureInfo.InvariantCulture) + ",\n" +
+            "  \"corrected_metric_rows\": " + rawSummary.vertical_solve_corrected_candidate_corrected_metric_frames.ToString(CultureInfo.InvariantCulture) + "\n" +
+            "}\n";
+        File.WriteAllText(promotion.integrated_manifest_path, json, Encoding.UTF8);
+    }
+
+    private static string JsonEscape(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "";
+        }
+
+        return value
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"")
+            .Replace("\r", "\\r")
+            .Replace("\n", "\\n");
+    }
+
     private static bool TryWriteVerticalSolveCorrectedCandidateVmdArtifact(
         string sourceVmdPath,
         string outputVmdPath,
@@ -2443,9 +2642,13 @@ internal static class MotionComparisonProbeReportWriter
         return string.Equals((reason ?? "").Trim(), "finish", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void ApplyFrameQualityStatus(MotionComparisonFrameQualitySummary summary)
+    private static void ApplyFrameQualityStatus(
+        MotionComparisonFrameQualitySummary summary,
+        bool allowSameFrameRootPositionDelta = false,
+        bool allowRelativeFootBottomDelta = false)
     {
         List<string> reasons = new List<string>();
+        List<string> allowedNotes = new List<string>();
         bool fail = false;
         bool warn = false;
         if (summary.baseline_metric_frames == 0 || summary.candidate_metric_frames == 0)
@@ -2469,10 +2672,40 @@ internal static class MotionComparisonProbeReportWriter
             fail = true;
         }
 
+        if (IsYybFrameQualityCandidate(summary))
+        {
+            if (!summary.candidate_yyb_deformation_risk_column_present ||
+                summary.candidate_yyb_deformation_risk_missing_frames > 0)
+            {
+                reasons.Add("YYB deformation risk diagnostic missing");
+                fail = true;
+            }
+
+            if (ExceedsThreshold(summary.candidate_yyb_max_deformation_risk, QualityYybDeformationRiskFailThreshold))
+            {
+                reasons.Add("YYB deformation risk threshold exceeded");
+                fail = true;
+            }
+
+            if (!summary.candidate_yyb_sleeve_thickness_risk_column_present ||
+                summary.candidate_yyb_sleeve_thickness_risk_missing_frames > 0)
+            {
+                reasons.Add("YYB sleeve thickness diagnostic missing");
+                fail = true;
+            }
+
+            if (ExceedsThreshold(summary.candidate_yyb_max_sleeve_thickness_risk, QualityYybSleeveThicknessRiskFailThreshold))
+            {
+                reasons.Add("YYB sleeve thickness risk threshold exceeded");
+                fail = true;
+            }
+        }
+
+        bool hasRetargetRootDelta = IsTeleportStep(summary.candidate_retarget_root_delta_max);
         if (summary.candidate_root_step_spike_frames > 0 ||
             summary.candidate_vmd_center_spike_frames > 0 ||
             summary.candidate_vmd_foot_ik_spike_frames > 0 ||
-            IsTeleportStep(summary.candidate_retarget_root_delta_max) ||
+            hasRetargetRootDelta ||
             IsTeleportStep(summary.candidate_retarget_pose_delta_max))
         {
             reasons.Add("one-frame root/center/IK teleport threshold exceeded");
@@ -2481,8 +2714,15 @@ internal static class MotionComparisonProbeReportWriter
 
         if (IsTeleportStep(summary.max_same_frame_root_position_delta))
         {
-            reasons.Add("same-frame root position delta threshold exceeded");
-            fail = true;
+            if (allowSameFrameRootPositionDelta)
+            {
+                allowedNotes.Add("intentional moving-root stage path delta");
+            }
+            else
+            {
+                reasons.Add("same-frame root position delta threshold exceeded");
+                fail = true;
+            }
         }
 
         if (ExceedsThreshold(summary.max_same_frame_hips_y_delta, QualitySameFrameHipsYFailThreshold))
@@ -2498,13 +2738,27 @@ internal static class MotionComparisonProbeReportWriter
 
         if (ExceedsThreshold(summary.max_same_frame_foot_bottom_y_delta, QualitySameFrameFootBottomYFailThreshold))
         {
-            reasons.Add("same-frame foot bottom Y delta fail threshold exceeded");
-            fail = true;
+            if (allowRelativeFootBottomDelta)
+            {
+                allowedNotes.Add("relative foot-bottom delta");
+            }
+            else
+            {
+                reasons.Add("same-frame foot bottom Y delta fail threshold exceeded");
+                fail = true;
+            }
         }
         else if (ExceedsThreshold(summary.max_same_frame_foot_bottom_y_delta, QualitySameFrameFootBottomYWarnThreshold))
         {
-            reasons.Add("same-frame foot bottom Y delta warning threshold exceeded");
-            warn = true;
+            if (allowRelativeFootBottomDelta)
+            {
+                allowedNotes.Add("relative foot-bottom delta");
+            }
+            else
+            {
+                reasons.Add("same-frame foot bottom Y delta warning threshold exceeded");
+                warn = true;
+            }
         }
 
         if (reasons.Count == 0 &&
@@ -2517,12 +2771,23 @@ internal static class MotionComparisonProbeReportWriter
         if (reasons.Count == 0)
         {
             summary.status = "pass";
-            summary.status_reason = "same-frame Unity metrics and VMD export checks stayed within thresholds";
+            summary.status_reason = allowedNotes.Count > 0
+                ? "same-frame Unity metrics and VMD export checks stayed within thresholds; " +
+                  string.Join(", ", allowedNotes.ToArray()) +
+                  " reported but excluded from the stationary-root gate"
+                : "same-frame Unity metrics and VMD export checks stayed within thresholds";
             return;
         }
 
         summary.status = fail ? "fail" : warn ? "warn" : "pass";
         summary.status_reason = string.Join("; ", reasons.ToArray());
+    }
+
+    private static bool IsYybFrameQualityCandidate(MotionComparisonFrameQualitySummary summary)
+    {
+        return summary != null &&
+            (MatchesYybModelName(summary.candidate_label) ||
+             MatchesYybModelName(Path.GetFileNameWithoutExtension(summary.candidate_metrics_csv)));
     }
 
     private static void ApplyVerticalSolvePrototypeStatus(MotionComparisonFrameQualitySummary summary)
@@ -2625,6 +2890,10 @@ internal static class MotionComparisonProbeReportWriter
 
         string[] headers = SplitCsvLine(lines[0]);
         Dictionary<string, int> columns = BuildColumnLookup(headers);
+        data.HasYybMaxDeformationRiskColumn = columns.ContainsKey("yybMaxDeformationRisk");
+        data.HasYybSleeveThicknessRiskColumns =
+            columns.ContainsKey("leftSleeveThicknessRisk") &&
+            columns.ContainsKey("rightSleeveThicknessRisk");
         for (int lineIndex = 1; lineIndex < lines.Length; lineIndex++)
         {
             if (string.IsNullOrWhiteSpace(lines[lineIndex]))
@@ -2663,7 +2932,10 @@ internal static class MotionComparisonProbeReportWriter
                 FootBottomGroundGap = ReadFloat(values, columns, "footBottomGroundGap"),
                 RetargetRootDeltaMax = ReadFloat(values, columns, "retargetRootDeltaMax"),
                 RetargetPoseDeltaMax = ReadFloat(values, columns, "retargetPoseRootDeltaMax"),
-                GroundingVerticalStepMax = ReadFloat(values, columns, "retargetGroundingVerticalStepMax")
+                GroundingVerticalStepMax = ReadFloat(values, columns, "retargetGroundingVerticalStepMax"),
+                YybMaxDeformationRisk = ReadFloat(values, columns, "yybMaxDeformationRisk"),
+                LeftSleeveThicknessRisk = ReadFloat(values, columns, "leftSleeveThicknessRisk"),
+                RightSleeveThicknessRisk = ReadFloat(values, columns, "rightSleeveThicknessRisk")
             };
             data.Frames[recorderFrame] = frame;
         }
@@ -3537,8 +3809,14 @@ internal static class MotionComparisonProbeReportWriter
     private sealed class MetricsCsvData
     {
         public readonly Dictionary<int, MetricsCsvFrame> Frames = new Dictionary<int, MetricsCsvFrame>();
+        public bool HasYybMaxDeformationRiskColumn;
+        public bool HasYybSleeveThicknessRiskColumns;
         public int BelowFloorFrameCount;
         public int RootStepSpikeFrameCount;
+        public int YybDeformationRiskFrameCount;
+        public int YybDeformationRiskMissingFrameCount;
+        public int YybSleeveThicknessRiskFrameCount;
+        public int YybSleeveThicknessRiskMissingFrameCount;
         public float MinFootBottomY = float.NaN;
         public float MinFootBottomGroundGap = float.NaN;
         public float MaxRootStep = float.NaN;
@@ -3546,6 +3824,8 @@ internal static class MotionComparisonProbeReportWriter
         public float MaxRetargetPoseDelta = float.NaN;
         public float MaxGroundingVerticalStep = float.NaN;
         public float MaxFootHeightReferenceLift = float.NaN;
+        public float MaxYybDeformationRisk = float.NaN;
+        public float MaxYybSleeveThicknessRisk = float.NaN;
 
         public bool TryGetFirstFrame(out MetricsCsvFrame firstFrame)
         {
@@ -3567,6 +3847,10 @@ internal static class MotionComparisonProbeReportWriter
         {
             BelowFloorFrameCount = 0;
             RootStepSpikeFrameCount = 0;
+            YybDeformationRiskFrameCount = 0;
+            YybDeformationRiskMissingFrameCount = 0;
+            YybSleeveThicknessRiskFrameCount = 0;
+            YybSleeveThicknessRiskMissingFrameCount = 0;
             MinFootBottomY = float.NaN;
             MinFootBottomGroundGap = float.NaN;
             MaxRootStep = float.NaN;
@@ -3574,6 +3858,8 @@ internal static class MotionComparisonProbeReportWriter
             MaxRetargetPoseDelta = float.NaN;
             MaxGroundingVerticalStep = float.NaN;
             MaxFootHeightReferenceLift = float.NaN;
+            MaxYybDeformationRisk = float.NaN;
+            MaxYybSleeveThicknessRisk = float.NaN;
 
             List<MetricsCsvFrame> frames = new List<MetricsCsvFrame>(Frames.Values);
             frames.Sort((left, right) => left.RecorderFrame.CompareTo(right.RecorderFrame));
@@ -3588,6 +3874,44 @@ internal static class MotionComparisonProbeReportWriter
                 MaxRetargetPoseDelta = MaxFinite(MaxRetargetPoseDelta, frame.RetargetPoseDeltaMax);
                 MaxGroundingVerticalStep = MaxFinite(MaxGroundingVerticalStep, frame.GroundingVerticalStepMax);
                 MaxFootHeightReferenceLift = MaxFinite(MaxFootHeightReferenceLift, frame.FootHeightReferenceLift);
+                if (HasYybMaxDeformationRiskColumn)
+                {
+                    if (IsFinite(frame.YybMaxDeformationRisk))
+                    {
+                        YybDeformationRiskFrameCount++;
+                        MaxYybDeformationRisk = MaxFinite(MaxYybDeformationRisk, frame.YybMaxDeformationRisk);
+                    }
+                    else
+                    {
+                        YybDeformationRiskMissingFrameCount++;
+                    }
+                }
+                else
+                {
+                    YybDeformationRiskMissingFrameCount++;
+                }
+
+                if (HasYybSleeveThicknessRiskColumns)
+                {
+                    bool hasLeftSleeveRisk = IsFinite(frame.LeftSleeveThicknessRisk);
+                    bool hasRightSleeveRisk = IsFinite(frame.RightSleeveThicknessRisk);
+                    if (hasLeftSleeveRisk && hasRightSleeveRisk)
+                    {
+                        YybSleeveThicknessRiskFrameCount++;
+                        MaxYybSleeveThicknessRisk = MaxFinite(
+                            MaxFinite(MaxYybSleeveThicknessRisk, frame.LeftSleeveThicknessRisk),
+                            frame.RightSleeveThicknessRisk);
+                    }
+                    else
+                    {
+                        YybSleeveThicknessRiskMissingFrameCount++;
+                    }
+                }
+                else
+                {
+                    YybSleeveThicknessRiskMissingFrameCount++;
+                }
+
                 if (IsBelowFloor(frame.LowestFootBottomY) || IsBelowFloor(frame.FootBottomGroundGap))
                 {
                     BelowFloorFrameCount++;
@@ -3641,6 +3965,9 @@ internal static class MotionComparisonProbeReportWriter
         public float RetargetRootDeltaMax;
         public float RetargetPoseDeltaMax;
         public float GroundingVerticalStepMax;
+        public float YybMaxDeformationRisk;
+        public float LeftSleeveThicknessRisk;
+        public float RightSleeveThicknessRisk;
     }
 
     private readonly struct VerticalSolveFrameCorrection

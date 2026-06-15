@@ -24,6 +24,15 @@ namespace Tests.Editor.FBXImporter
                 nameof(YybMmdExportSafetyDefaultsTests.MainAutoScene_UsesMmdSafeYybExportDefaults),
                 () => new YybMmdExportSafetyDefaultsTests().MainAutoScene_UsesMmdSafeYybExportDefaults());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.YybMmdExportPrefabs_UseGuardedCenterFootAndToeClampMargin),
+                () => new YybMmdExportSafetyDefaultsTests().YybMmdExportPrefabs_UseGuardedCenterFootAndToeClampMargin());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.MainSceneRootMotionPolicy_KeepsMainAutoFixedAndAllowsMainRecordingMovement),
+                () => new YybMmdExportSafetyDefaultsTests().MainSceneRootMotionPolicy_KeepsMainAutoFixedAndAllowsMainRecordingMovement());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.MainRecordingRootMotionPolicy_LimitsPreviewRootStepForTeleportGuard),
+                () => new YybMmdExportSafetyDefaultsTests().MainRecordingRootMotionPolicy_LimitsPreviewRootStepForTeleportGuard());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(YybMmdExportSafetyDefaultsTests.Given_ControlledImportFbxExists_When_ResolvingYybReferenceClipPath_Then_MatchesMainAutoSmokeInputPriority),
                 () => new YybMmdExportSafetyDefaultsTests().Given_ControlledImportFbxExists_When_ResolvingYybReferenceClipPath_Then_MatchesMainAutoSmokeInputPriority());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
@@ -32,6 +41,12 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(YybMmdExportSafetyDefaultsTests.Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact),
                 () => new YybMmdExportSafetyDefaultsTests().Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact),
+                () => new YybMmdExportSafetyDefaultsTests().Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes),
+                () => new YybMmdExportSafetyDefaultsTests().Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes());
 
             var namingTests = new VmdNamingContractTests();
             RunTest(results, typeof(VmdNamingContractTests).FullName + "." +

@@ -160,10 +160,28 @@ public partial class UnityHumanoidVMDRecorder
 
 
                 // Unity 좌표계 → VMD 좌표계 변환 (X축, Z축 반전)
+                Vector3 sourceWorldPosition = BoneDictionary[boneName].position;
                 Vector3 ikPosition = new Vector3(-targetVector.x, targetVector.y, -targetVector.z);
                 
                 // 스케일 보정 및 저장
-                positionDictionary[boneName].Add(ApplyMmdFootIkExportFloorGuard(ikPosition * DefaultBoneAmplifier, GetCurrentParentOfAllExportY()));
+                Vector3 exportedVmdPosition = ApplyMmdFootIkExportFloorGuard(ikPosition * DefaultBoneAmplifier, GetCurrentParentOfAllExportY());
+                positionDictionary[boneName].Add(exportedVmdPosition);
+                if (EnableExportIkSourceDiagnostics)
+                {
+                    Vector3 diagnosticRootReference = GetCurrentIkDiagnosticRootReference();
+                    Vector3 directFootWorldPosition = GetCurrentDirectFootWorldPositionForIkBone(boneName, sourceWorldPosition);
+                    RecordExportIkSourceDiagnostic(
+                        FrameNumber,
+                        Time.frameCount,
+                        Time.time,
+                        boneName,
+                        diagnosticRootReference,
+                        sourceWorldPosition,
+                        targetVector,
+                        ConvertVmdExportPositionToUnityMeters(exportedVmdPosition),
+                        directFootWorldPosition,
+                        directFootWorldPosition - diagnosticRootReference);
+                }
                 
                 //回転は全部足首／つま先に持たせる（今回はidentity）
                 // [한글] 회전은 모두 발목/발끝에 맡김 (지금은 identity)
@@ -469,7 +487,121 @@ public partial class UnityHumanoidVMDRecorder
             return UseAbsoluteCoordinateSystem ? transform.position : transform.localPosition;
         }
 
+        if (TryGetMovingIkRootReferencePosition(out Vector3 movingRootPosition))
+        {
+            return movingRootPosition;
+        }
+
         return parentInitialPosition;
+    }
+
+    private bool TryGetMovingIkRootReferencePosition(out Vector3 position)
+    {
+        Transform rootReference = ResolveMovingIkRootReferenceTransform();
+        if (rootReference != null && IsFinite(rootReference.position))
+        {
+            position = rootReference.position;
+            return true;
+        }
+
+        position = Vector3.zero;
+        return false;
+    }
+
+    private Transform ResolveMovingIkRootReferenceTransform()
+    {
+        if (cachedIkRootReferenceTransform != null)
+        {
+            return cachedIkRootReferenceTransform;
+        }
+
+        for (int i = 0; i < MovingIkRootReferenceNames.Length; i++)
+        {
+            Transform found = FindChildRecursive(transform, MovingIkRootReferenceNames[i]);
+            if (found != null)
+            {
+                cachedIkRootReferenceTransform = found;
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    private static Transform FindChildRecursive(Transform root, string childName)
+    {
+        if (root == null || string.IsNullOrEmpty(childName))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child.name == childName)
+            {
+                return child;
+            }
+
+            Transform nested = FindChildRecursive(child, childName);
+            if (nested != null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
+    private Vector3 GetCurrentIkDiagnosticRootReference()
+    {
+        if (UseCenterAsParentOfAll && !UseAbsoluteCoordinateSystem && transform.parent != null)
+        {
+            return transform.parent.position;
+        }
+
+        if ((UseAbsoluteCoordinateSystem || transform.parent == null) && IgnoreInitialPosition)
+        {
+            return GetCurrentRootPositionForIkReference();
+        }
+
+        return transform.position;
+    }
+
+    private Vector3 GetCurrentDirectFootWorldPositionForIkBone(BoneNames boneName, Vector3 fallback)
+    {
+        if (animator == null || animator.avatar == null || !animator.avatar.isHuman)
+        {
+            return fallback;
+        }
+
+        HumanBodyBones footBone;
+        int ordinal = (int)boneName;
+        if (ordinal == 2)
+        {
+            footBone = HumanBodyBones.LeftFoot;
+        }
+        else if (ordinal == 3)
+        {
+            footBone = HumanBodyBones.RightFoot;
+        }
+        else
+        {
+            return fallback;
+        }
+
+        Transform footTransform = animator.GetBoneTransform(footBone);
+        return footTransform != null && IsFinite(footTransform.position)
+            ? footTransform.position
+            : fallback;
+    }
+
+    private static Vector3 ConvertVmdExportPositionToUnityMeters(Vector3 exportedVmdPosition)
+    {
+        return new Vector3(
+            -exportedVmdPosition.x / DefaultBoneAmplifier,
+            exportedVmdPosition.y / DefaultBoneAmplifier,
+            -exportedVmdPosition.z / DefaultBoneAmplifier);
     }
 
     void SetInitialPositionAndRotation()
@@ -567,6 +699,8 @@ public partial class UnityHumanoidVMDRecorder
         exportRotationDiagnosticAggregates = new Dictionary<BoneNames, ExportRotationDiagnosticAggregate>();
         exportRotationDiagnosticSamplesSaved = exportRotationDiagnosticSamples;
         exportRotationDiagnosticSamples = new List<ExportRotationDiagnosticSample>();
+        exportIkSourceDiagnosticSamplesSaved = exportIkSourceDiagnosticSamples;
+        exportIkSourceDiagnosticSamples = new List<ExportIkSourceDiagnosticSample>();
         
         // 다음 레코딩을 위해 딕셔너리 초기화
         foreach (BoneNames boneName in BoneDictionary.Keys)

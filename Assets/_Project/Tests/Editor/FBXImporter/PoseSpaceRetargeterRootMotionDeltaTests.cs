@@ -27,6 +27,14 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
+        private static readonly Type[] BodyPositionRootMotionSourceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(bool),
+            typeof(bool)
+        };
+
         [Test]
         public void Given_FiniteInputs_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostEditorAndBodyDelta()
         {
@@ -72,7 +80,7 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsSpike()
+        public void Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_LimitsDeltaAndReportsSpike()
         {
             Vector3 delta = CalculateRetargetRootDelta(
                 ghostDelta: new Vector3(0.3f, 0f, 0.4f),
@@ -86,8 +94,35 @@ namespace Tests.Editor.FBXImporter
                 out bool skippedByNonFinite,
                 out bool skippedBySpike);
 
-            Assert.That(delta, Is.EqualTo(Vector3.zero));
-            Assert.That(deltaMagnitude, Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(delta.x, Is.EqualTo(0.15f).Within(0.0001f));
+            Assert.That(delta.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(delta.z, Is.EqualTo(0.2f).Within(0.0001f));
+            Assert.That(delta.magnitude, Is.EqualTo(0.25f).Within(0.0001f));
+            Assert.That(deltaMagnitude, Is.EqualTo(delta.magnitude).Within(0.0001f));
+            Assert.That(skippedByNonFinite, Is.False);
+            Assert.That(skippedBySpike, Is.True);
+        }
+
+        [Test]
+        public void Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_KeepsLimitedMovement()
+        {
+            Vector3 delta = CalculateRetargetRootDelta(
+                ghostDelta: new Vector3(0.03f, 0f, 0.04f),
+                scaleRatio: 1f,
+                editorRootTranslationDelta: Vector3.zero,
+                bodyRootDelta: Vector3.zero,
+                movementScaleMultiplier: 1f,
+                clampRootDeltaSpikes: true,
+                maxRootDeltaPerFrame: 0.006f,
+                out float deltaMagnitude,
+                out bool skippedByNonFinite,
+                out bool skippedBySpike);
+
+            Assert.That(delta.x, Is.EqualTo(0.0036f).Within(0.0001f));
+            Assert.That(delta.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(delta.z, Is.EqualTo(0.0048f).Within(0.0001f));
+            Assert.That(delta.magnitude, Is.EqualTo(0.006f).Within(0.0001f));
+            Assert.That(deltaMagnitude, Is.EqualTo(delta.magnitude).Within(0.0001f));
             Assert.That(skippedByNonFinite, Is.False);
             Assert.That(skippedBySpike, Is.True);
         }
@@ -121,6 +156,36 @@ namespace Tests.Editor.FBXImporter
             Assert.That(NormalizeMovementScaleMultiplier(0f), Is.EqualTo(0f).Within(0.0001f));
             Assert.That(NormalizeMovementScaleMultiplier(-0.5f), Is.EqualTo(0f).Within(0.0001f));
             Assert.That(NormalizeMovementScaleMultiplier(1.5f), Is.EqualTo(1.2f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY()
+        {
+            Vector3 source = SelectBodyPositionRootMotionSource(
+                poseBodyPosition: new Vector3(0.1f, 1.2f, -0.2f),
+                manualReferenceBodyPosition: new Vector3(-0.4f, 0.9f, 0.35f),
+                hasManualReferenceBodyPosition: true,
+                preferManualReferenceXZ: true);
+
+            Assert.That(source.x, Is.EqualTo(0.1f).Within(0.0001f));
+            Assert.That(source.y, Is.EqualTo(1.2f).Within(0.0001f));
+            Assert.That(source.z, Is.EqualTo(-0.2f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ManualBodyReferenceUnavailable_When_SelectingBodyRootMotionSource_Then_KeepsPoseBodyPosition()
+        {
+            Vector3 poseBodyPosition = new Vector3(0.1f, 1.2f, -0.2f);
+
+            Vector3 source = SelectBodyPositionRootMotionSource(
+                poseBodyPosition: poseBodyPosition,
+                manualReferenceBodyPosition: new Vector3(-0.4f, 0.9f, 0.35f),
+                hasManualReferenceBodyPosition: false,
+                preferManualReferenceXZ: true);
+
+            Assert.That(source.x, Is.EqualTo(poseBodyPosition.x).Within(0.0001f));
+            Assert.That(source.y, Is.EqualTo(poseBodyPosition.y).Within(0.0001f));
+            Assert.That(source.z, Is.EqualTo(poseBodyPosition.z).Within(0.0001f));
         }
 
         private static Vector3 CalculateRetargetRootDelta(
@@ -178,5 +243,30 @@ namespace Tests.Editor.FBXImporter
 
             return (float)method.Invoke(null, new object[] { value });
         }
+
+        private static Vector3 SelectBodyPositionRootMotionSource(
+            Vector3 poseBodyPosition,
+            Vector3 manualReferenceBodyPosition,
+            bool hasManualReferenceBodyPosition,
+            bool preferManualReferenceXZ)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "SelectBodyPositionRootMotionSource",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: BodyPositionRootMotionSourceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure helper for choosing the bodyPosition X/Z root-motion source.");
+
+            return (Vector3)method.Invoke(null, new object[]
+            {
+                poseBodyPosition,
+                manualReferenceBodyPosition,
+                hasManualReferenceBodyPosition,
+                preferManualReferenceXZ
+            });
+        }
+
     }
 }

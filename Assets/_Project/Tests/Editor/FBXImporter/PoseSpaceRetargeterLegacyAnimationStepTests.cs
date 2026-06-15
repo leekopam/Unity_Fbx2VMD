@@ -2,6 +2,7 @@ using Member_Han.Modules.FBXImporter;
 using NUnit.Framework;
 using System;
 using System.Reflection;
+using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -70,6 +71,36 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_MainRecordingResidualBodyPositionSpike_When_DeterminingVisualPoseSmoothing_Then_Smooths()
+        {
+            bool shouldSmooth = ShouldSmoothVisualPoseSpike(
+                maxMuscleDelta: 0.1f,
+                bodyPositionDelta: 0.046524f,
+                bodyRotationDelta: 5.580996f,
+                poseVisualMuscleDeltaThreshold: 0.35f,
+                legacyAnimationStepSpikeThisFrame: false,
+                out bool muscleDeltaOnlySpike);
+
+            Assert.That(shouldSmooth, Is.True);
+            Assert.That(muscleDeltaOnlySpike, Is.False);
+        }
+
+        [Test]
+        public void Given_MainRecordingHeadSpikeResidualBodyDelta_When_DeterminingVisualPoseSmoothing_Then_Smooths()
+        {
+            bool shouldSmooth = ShouldSmoothVisualPoseSpike(
+                maxMuscleDelta: 0.1f,
+                bodyPositionDelta: 0.027252f,
+                bodyRotationDelta: 0f,
+                poseVisualMuscleDeltaThreshold: 0.35f,
+                legacyAnimationStepSpikeThisFrame: false,
+                out bool muscleDeltaOnlySpike);
+
+            Assert.That(shouldSmooth, Is.True);
+            Assert.That(muscleDeltaOnlySpike, Is.False);
+        }
+
+        [Test]
         public void Given_MuscleOnlySpike_When_DeterminingVisualPoseSmoothing_Then_DoesNotSmoothAndReportsMuscleOnlySkip()
         {
             bool shouldSmooth = ShouldSmoothVisualPoseSpike(
@@ -106,6 +137,18 @@ namespace Tests.Editor.FBXImporter
                 configuredWeight: 0.65f,
                 bodyPositionDelta: 0.41f,
                 bodyRotationDelta: 8f,
+                legacyAnimationStepSpikeThisFrame: false);
+
+            Assert.That(weight, Is.EqualTo(0.1f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MainRecordingHeadSpikeResidualBodyDelta_When_CalculatingVisualPoseSpikeWeight_Then_UsesStrongOutlierClamp()
+        {
+            float weight = CalculateVisualPoseSpikeCurrentWeight(
+                configuredWeight: 0.65f,
+                bodyPositionDelta: 0.027252f,
+                bodyRotationDelta: 0f,
                 legacyAnimationStepSpikeThisFrame: false);
 
             Assert.That(weight, Is.EqualTo(0.1f).Within(0.0001f));
@@ -205,6 +248,31 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(advanced, Is.False);
             Assert.That(advancedTime, Is.EqualTo(0.05f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_LegacyAnimationClipStateMissing_When_CheckingClipPresence_Then_DoesNotRequestRemove()
+        {
+            var root = new GameObject("legacy-animation-presence-fixture");
+
+            try
+            {
+                Animation legacyAnimation = root.AddComponent<Animation>();
+
+                Assert.That(HasLegacyAnimationClipState(legacyAnimation, "__PoseSpaceRetargeter_GhostClip"), Is.False);
+
+                var clip = new AnimationClip
+                {
+                    legacy = true
+                };
+                legacyAnimation.AddClip(clip, "__PoseSpaceRetargeter_GhostClip");
+
+                Assert.That(HasLegacyAnimationClipState(legacyAnimation, "__PoseSpaceRetargeter_GhostClip"), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         private static bool TryCalculateManualLegacyAnimationTime(
@@ -312,6 +380,20 @@ namespace Tests.Editor.FBXImporter
                 bodyRotationDelta,
                 legacyAnimationStepSpikeThisFrame
             });
+        }
+
+        private static bool HasLegacyAnimationClipState(Animation legacyAnimation, string stateName)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "HasLegacyAnimationClipState",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Animation), typeof(string) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should check legacy clip presence before RemoveClip to avoid Unity console asserts.");
+
+            return (bool)method.Invoke(null, new object[] { legacyAnimation, stateName });
         }
     }
 }

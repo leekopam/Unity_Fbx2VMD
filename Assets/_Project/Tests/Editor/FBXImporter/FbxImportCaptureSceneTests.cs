@@ -13,7 +13,7 @@ namespace Tests.Editor.FBXImporter
     public class FbxImportCaptureSceneTests
     {
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
-        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_recoding.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string CaptureScenePath = "Assets/_Project/Scene/FbxImport_Capture.unity";
         private const string RecodingSettingTypeName = "RecodingSetting, Assembly-CSharp";
         private const string ManualRecordButtonName = "MMD_Record_Button";
@@ -92,6 +92,24 @@ namespace Tests.Editor.FBXImporter
                 "Setting must show which HumanoidSampleCode receives manual recording.");
             Assert.That(HasPersistentCall(button, setting, SettingManualRecordMethodName), Is.True,
                 $"{ManualRecordButtonName} must call Setting.{SettingManualRecordMethodName} so the assignment is visible on Setting.");
+        }
+
+        [Test]
+        public void MainRecordingScene_UsesManualFullBodyPoseReferenceForLowerBodyArcGuard()
+        {
+            EditorSceneManager.OpenScene(MainRecordingScenePath);
+
+            FileManager fileManager = Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FileManager for FBX selection/import.");
+            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True,
+                "A7 lower-body arc guard requires the Sub_Manual/testPrefab full-body muscle reference before retarget export.");
+            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True,
+                "The full-body reference must keep using the same manual body/root orientation basis.");
+            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.True,
+                "A7 Hips path probe points to the manual Hips/model-root relation as the only single-component hypothesis under threshold.");
+            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.True,
+                "The A7 candidate must preserve the moving-root path already approved for A6/A8 separation.");
         }
 
         [Test]
