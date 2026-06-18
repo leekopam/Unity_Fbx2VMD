@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using Member_Han.Modules.FBXImporter;
 using Member_Han.Modules.FileSystem;
 using Member_Han.Modules.Graphics;
+using Member_Han.Modules.Graphics.EditorTools;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -16,10 +19,8 @@ namespace Tests.Editor.Graphics
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
-        private const string SettingsWindowTypeName =
-            "Member_Han.Modules.Graphics.EditorTools.MainRecordingSettingsWindow, Assembly-CSharp-Editor";
-        private const string SettingsWindowContextTypeName =
-            "Member_Han.Modules.Graphics.EditorTools.MainRecordingSettingsWindowContext, Assembly-CSharp-Editor";
+        private const string SettingsLauncherTypeName =
+            "Member_Han.Modules.Graphics.EditorTools.MainRecordingSettingsCompanionLauncher, Assembly-CSharp-Editor";
         private const string LayoutSpecTypeName =
             "Member_Han.Modules.Graphics.MainRecordingSettingsLayoutSpec, Assembly-CSharp";
         private const string RuntimePopupTypeName =
@@ -28,6 +29,10 @@ namespace Tests.Editor.Graphics
             "Member_Han.Modules.Graphics.MainRecordingSettingsCompanionController, Assembly-CSharp";
         private const string EditorPlayModeGuardTypeName =
             "Member_Han.Modules.Graphics.EditorTools.MainRecordingEditorPlayModeGuard, Assembly-CSharp-Editor";
+        private const string RuntimeLauncherTypeName =
+            "Member_Han.Modules.Graphics.MainRecordingSettingsRuntimeLauncher, Assembly-CSharp";
+        private const string RuntimeBootstrapTypeName =
+            "Member_Han.Modules.Graphics.MainRecordingSettingsRuntimeBootstrap, Assembly-CSharp";
 
         [Test]
         public void Given_MissingFileManager_When_ApplyingSharedSettingsWithFbxPath_Then_ReturnsUserMessage()
@@ -87,6 +92,456 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
+        public void Given_RecodingSetting_When_ApplyingSharedSettingsWithMissingFbxFile_Then_ReturnsFailure()
+        {
+            string missingFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            var fileManagerObject = new GameObject("Shared Settings Missing FBX FileManager Test");
+            var settingObject = new GameObject("Shared Settings Missing FBX RecodingSetting Test");
+
+            try
+            {
+                var fileManager = fileManagerObject.AddComponent<Member_Han.Modules.FBXImporter.FileManager>();
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                SetField(recodingSetting, "recordingFileManager", fileManager);
+
+                var document = new MainRecordingSettingsDocument
+                {
+                    fbxPath = missingFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                };
+                SetImportCommand(document, "cmd-missing-fbx", missingFbxPath);
+
+                MainRecordingSettingsActionResult result =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.UserMessage, Does.Contain("FBX"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(fileManagerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_ApplyingSameSharedFbxPathTwice_Then_SkipsDuplicateImport()
+        {
+            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            var fileManagerObject = new GameObject("Shared Settings Duplicate FBX FileManager Test");
+            var settingObject = new GameObject("Shared Settings Duplicate FBX RecodingSetting Test");
+
+            try
+            {
+                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
+
+                var fileManager = fileManagerObject.AddComponent<Member_Han.Modules.FBXImporter.FileManager>();
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                SetField(recodingSetting, "recordingFileManager", fileManager);
+                SetField(recodingSetting, "lastAppliedSharedSettingsFbxPath", tempFbxPath);
+                SetField(fileManager, "_isProcessing", true);
+
+                var document = new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                };
+
+                MainRecordingSettingsActionResult result =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+
+                Assert.That(result.Succeeded, Is.True);
+                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(tempFbxPath));
+            }
+            finally
+            {
+                if (File.Exists(tempFbxPath))
+                {
+                    File.Delete(tempFbxPath);
+                }
+
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(fileManagerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_ApplyingExistingNewSharedFbxPath_Then_StartsImportOnceAndSkipsDuplicate()
+        {
+            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            var fileManagerObject = new GameObject("Shared Settings Positive FBX FileManager Test");
+            var settingObject = new GameObject("Shared Settings Positive FBX RecodingSetting Test");
+            Func<FileManager, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+
+            try
+            {
+                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
+
+                var fileManager = fileManagerObject.AddComponent<FileManager>();
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                SetField(recodingSetting, "recordingFileManager", fileManager);
+
+                int startCount = 0;
+                FileManager startedManager = null;
+                string startedPath = string.Empty;
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
+                {
+                    startCount++;
+                    startedManager = manager;
+                    startedPath = path;
+                    return true;
+                };
+
+                var document = new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                };
+                SetImportCommand(document, "cmd-1", tempFbxPath);
+
+                MainRecordingSettingsActionResult firstResult =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+                MainRecordingSettingsActionResult secondResult =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+
+                Assert.That(firstResult.Succeeded, Is.True);
+                Assert.That(secondResult.Succeeded, Is.True);
+                Assert.That(startCount, Is.EqualTo(1));
+                Assert.That(startedManager, Is.SameAs(fileManager));
+                Assert.That(startedPath, Is.EqualTo(tempFbxPath));
+                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(tempFbxPath));
+            }
+            finally
+            {
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                if (File.Exists(tempFbxPath))
+                {
+                    File.Delete(tempFbxPath);
+                }
+
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(fileManagerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_ImportCommandIdChangesForSameFbx_Then_StartsImportAgain()
+        {
+            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            var fileManagerObject = new GameObject("Shared Settings Command FBX FileManager Test");
+            var settingObject = new GameObject("Shared Settings Command FBX RecodingSetting Test");
+            Func<FileManager, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+
+            try
+            {
+                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
+
+                var fileManager = fileManagerObject.AddComponent<FileManager>();
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                SetField(recodingSetting, "recordingFileManager", fileManager);
+
+                int startCount = 0;
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
+                {
+                    startCount++;
+                    return manager == fileManager && path == tempFbxPath;
+                };
+
+                var document = new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                };
+
+                SetImportCommand(document, "cmd-1", tempFbxPath);
+                MainRecordingSettingsActionResult firstResult =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+
+                SetImportCommand(document, "cmd-2", tempFbxPath);
+                MainRecordingSettingsActionResult secondResult =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+                MainRecordingSettingsActionResult duplicateResult =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+
+                Assert.That(firstResult.Succeeded, Is.True);
+                Assert.That(secondResult.Succeeded, Is.True);
+                Assert.That(duplicateResult.Succeeded, Is.True);
+                Assert.That(startCount, Is.EqualTo(2));
+                Assert.That(GetField<string>(recodingSetting, "lastHandledSharedSettingsCommandId"), Is.EqualTo("cmd-2"));
+            }
+            finally
+            {
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                if (File.Exists(tempFbxPath))
+                {
+                    File.Delete(tempFbxPath);
+                }
+
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(fileManagerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_LoadingStoredFbxPathWithoutImportCommand_Then_DoesNotStartImport()
+        {
+            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            string settingsPath = CreateTempSettingsPath();
+            var store = new MainRecordingSettingsStore(settingsPath);
+            var fileManagerObject = new GameObject("Stored FBX Path FileManager Test");
+            var settingObject = new GameObject("Stored FBX Path RecodingSetting Test");
+            Func<FileManager, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+
+            try
+            {
+                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
+                store.Save(new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                });
+
+                var fileManager = fileManagerObject.AddComponent<FileManager>();
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                SetField(recodingSetting, "recordingFileManager", fileManager);
+
+                int startCount = 0;
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
+                {
+                    startCount++;
+                    return true;
+                };
+
+                MainRecordingSettingsActionResult result =
+                    recodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+
+                Assert.That(result.Succeeded, Is.True);
+                Assert.That(startCount, Is.EqualTo(0));
+                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(string.Empty));
+            }
+            finally
+            {
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                if (File.Exists(tempFbxPath))
+                {
+                    File.Delete(tempFbxPath);
+                }
+
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(fileManagerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_LoadingStaleImportCommandOnPlayStart_Then_ClearsCommandWithoutStartingImport()
+        {
+            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            string settingsPath = CreateTempSettingsPath();
+            var store = new MainRecordingSettingsStore(settingsPath);
+            var fileManagerObject = new GameObject("Stale Import Command FileManager Test");
+            var settingObject = new GameObject("Stale Import Command RecodingSetting Test");
+            Func<FileManager, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+
+            try
+            {
+                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
+                var document = new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                };
+                SetImportCommand(document, "cmd-stale-on-play-start", tempFbxPath);
+                store.Save(document);
+
+                var fileManager = fileManagerObject.AddComponent<FileManager>();
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                SetField(recodingSetting, "recordingFileManager", fileManager);
+
+                int startCount = 0;
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
+                {
+                    startCount++;
+                    return true;
+                };
+
+                MainRecordingSettingsActionResult result =
+                    recodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+                MainRecordingSettingsDocument loadedDocument = store.LoadOrCreateDefault();
+                object loadedCommand = GetField<MainRecordingSettingsCommandEnvelope>(
+                    loadedDocument,
+                    "pendingCommand");
+
+                Assert.That(result.Succeeded, Is.True);
+                Assert.That(startCount, Is.EqualTo(0),
+                    "Play start must not replay a command that was already present in the settings file.");
+                Assert.That(GetField<string>(loadedCommand, "commandId"), Is.EqualTo(string.Empty));
+                Assert.That(GetField<string>(loadedCommand, "action"), Is.EqualTo(string.Empty));
+                Assert.That(GetField<string>(loadedCommand, "fbxPath"), Is.EqualTo(string.Empty));
+            }
+            finally
+            {
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                if (File.Exists(tempFbxPath))
+                {
+                    File.Delete(tempFbxPath);
+                }
+
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(fileManagerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_ImportCommandHasEmptyPath_Then_DoesNotFallbackToStoredFbxPath()
+        {
+            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            var fileManagerObject = new GameObject("Empty Command Path FileManager Test");
+            var settingObject = new GameObject("Empty Command Path RecodingSetting Test");
+            Func<FileManager, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+
+            try
+            {
+                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
+
+                var fileManager = fileManagerObject.AddComponent<FileManager>();
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                SetField(recodingSetting, "recordingFileManager", fileManager);
+
+                int startCount = 0;
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
+                {
+                    startCount++;
+                    return true;
+                };
+
+                var document = new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                };
+                SetImportCommand(document, "cmd-empty-path", string.Empty);
+
+                MainRecordingSettingsActionResult result =
+                    recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+                object consumedCommand = GetField<MainRecordingSettingsCommandEnvelope>(
+                    document,
+                    "pendingCommand");
+
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(startCount, Is.EqualTo(0),
+                    "An import command must carry its own FBX path and must not reuse a stored document path.");
+                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(string.Empty));
+                Assert.That(GetField<string>(consumedCommand, "commandId"), Is.EqualTo(string.Empty));
+                Assert.That(GetField<string>(consumedCommand, "action"), Is.EqualTo(string.Empty));
+                Assert.That(GetField<string>(consumedCommand, "fbxPath"), Is.EqualTo(string.Empty));
+            }
+            finally
+            {
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                if (File.Exists(tempFbxPath))
+                {
+                    File.Delete(tempFbxPath);
+                }
+
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(fileManagerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_ImportCommandIsConsumed_Then_ClearsPendingCommandBeforeNextPlay()
+        {
+            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
+            string settingsPath = CreateTempSettingsPath();
+            var store = new MainRecordingSettingsStore(settingsPath);
+            var firstFileManagerObject = new GameObject("Consumed Command First FileManager Test");
+            var firstSettingObject = new GameObject("Consumed Command First RecodingSetting Test");
+            var secondFileManagerObject = new GameObject("Consumed Command Second FileManager Test");
+            var secondSettingObject = new GameObject("Consumed Command Second RecodingSetting Test");
+            Func<FileManager, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+
+            try
+            {
+                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
+                store.Save(new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                });
+
+                int startCount = 0;
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, path) =>
+                {
+                    startCount++;
+                    return path == tempFbxPath;
+                };
+
+                var firstFileManager = firstFileManagerObject.AddComponent<FileManager>();
+                var firstRecodingSetting = firstSettingObject.AddComponent<RecodingSetting>();
+                SetField(firstRecodingSetting, "recordingFileManager", firstFileManager);
+
+                MainRecordingSettingsActionResult initialResult =
+                    firstRecodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+                Assert.That(initialResult.Succeeded, Is.True);
+                Assert.That(startCount, Is.EqualTo(0));
+
+                var document = new MainRecordingSettingsDocument
+                {
+                    fbxPath = tempFbxPath,
+                    captureWidth = 1920,
+                    captureHeight = 1080,
+                };
+                SetImportCommand(document, "cmd-stale-guard", tempFbxPath);
+                store.Save(document);
+                File.SetLastWriteTimeUtc(settingsPath, DateTime.UtcNow.AddMinutes(1));
+
+                MainRecordingSettingsActionResult firstResult =
+                    firstRecodingSetting.PollSharedSettingsForTests();
+                MainRecordingSettingsDocument consumedDocument = store.LoadOrCreateDefault();
+                object consumedCommand = GetField<MainRecordingSettingsCommandEnvelope>(
+                    consumedDocument,
+                    "pendingCommand");
+
+                Assert.That(firstResult.Succeeded, Is.True);
+                Assert.That(startCount, Is.EqualTo(1));
+                Assert.That(GetField<string>(consumedCommand, "commandId"), Is.EqualTo(string.Empty));
+                Assert.That(GetField<string>(consumedCommand, "action"), Is.EqualTo(string.Empty));
+                Assert.That(GetField<string>(consumedCommand, "fbxPath"), Is.EqualTo(string.Empty));
+
+                var secondFileManager = secondFileManagerObject.AddComponent<FileManager>();
+                var secondRecodingSetting = secondSettingObject.AddComponent<RecodingSetting>();
+                SetField(secondRecodingSetting, "recordingFileManager", secondFileManager);
+
+                MainRecordingSettingsActionResult secondResult =
+                    secondRecodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+
+                Assert.That(secondResult.Succeeded, Is.True);
+                Assert.That(startCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                if (File.Exists(tempFbxPath))
+                {
+                    File.Delete(tempFbxPath);
+                }
+
+                UnityEngine.Object.DestroyImmediate(firstSettingObject);
+                UnityEngine.Object.DestroyImmediate(firstFileManagerObject);
+                UnityEngine.Object.DestroyImmediate(secondSettingObject);
+                UnityEngine.Object.DestroyImmediate(secondFileManagerObject);
+            }
+        }
+
+        [Test]
         public void Given_RecodingSetting_When_SettingsFileChanges_Then_PollingAppliesUpdatedDocument()
         {
             string path = CreateTempSettingsPath();
@@ -119,6 +574,60 @@ namespace Tests.Editor.Graphics
                 Assert.That(GetField<bool>(recodingSetting, "openSettingsPopupOnStart"), Is.True);
                 Assert.That(GetField<int>(recodingSetting, "customRecordingCaptureWidth"), Is.EqualTo(2560));
                 Assert.That(GetField<int>(recodingSetting, "customRecordingCaptureHeight"), Is.EqualTo(1440));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(settingObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecodingSetting_When_WritingRuntimePlayModeState_Then_SharedSettingsFileReflectsPlayState()
+        {
+            string path = CreateTempSettingsPath();
+            var store = new MainRecordingSettingsStore(path);
+            store.Save(new MainRecordingSettingsDocument
+            {
+                fbxPath = "D:/motions/satisfaction_2.fbx",
+                captureWidth = 2560,
+                captureHeight = 1440,
+                openSettingsOnStart = false,
+            });
+
+            var settingObject = new GameObject("Runtime State Writer RecodingSetting Test");
+
+            try
+            {
+                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                recodingSetting.LoadSharedSettingsFromPathForTests(path);
+
+                MainRecordingSettingsActionResult playingResult =
+                    InvokeInstance<MainRecordingSettingsActionResult>(
+                        recodingSetting,
+                        "WriteRuntimePlayModeStateForTests",
+                        "playing");
+                MainRecordingSettingsDocument playingDocument = store.LoadOrCreateDefault();
+                object playingState = GetField<object>(playingDocument, "runtimeState");
+
+                Assert.That(playingResult.Succeeded, Is.True);
+                Assert.That(GetField<string>(playingState, "playMode"), Is.EqualTo("playing"));
+                Assert.That(GetField<string>(playingState, "updatedAtUtc"), Is.Not.Empty);
+                Assert.That(playingDocument.fbxPath, Is.EqualTo("D:/motions/satisfaction_2.fbx"));
+                Assert.That(playingDocument.captureWidth, Is.EqualTo(2560));
+                Assert.That(playingDocument.captureHeight, Is.EqualTo(1440));
+                Assert.That(playingDocument.openSettingsOnStart, Is.False);
+
+                MainRecordingSettingsActionResult stoppedResult =
+                    InvokeInstance<MainRecordingSettingsActionResult>(
+                        recodingSetting,
+                        "WriteRuntimePlayModeStateForTests",
+                        "stopped");
+                MainRecordingSettingsDocument stoppedDocument = store.LoadOrCreateDefault();
+                object stoppedState = GetField<object>(stoppedDocument, "runtimeState");
+
+                Assert.That(stoppedResult.Succeeded, Is.True);
+                Assert.That(GetField<string>(stoppedState, "playMode"), Is.EqualTo("stopped"));
+                Assert.That(GetField<string>(stoppedState, "updatedAtUtc"), Is.Not.Empty);
             }
             finally
             {
@@ -207,75 +716,336 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
-        public void Given_SettingsWindowType_When_InspectingMetadata_Then_UsesSeparateEditorWindowForMainRecording()
+        public void Given_SettingsLauncherType_When_InspectingMetadata_Then_UsesElectronCompanionForMainRecording()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
+            Type launcherType = RequireType(SettingsLauncherTypeName);
 
-            Assert.That(typeof(EditorWindow).IsAssignableFrom(windowType), Is.True);
-            Assert.That(InvokeStatic<string>(windowType, "GetWindowTitle"), Is.EqualTo("Onboarding Assistant"));
+            Assert.That(typeof(EditorWindow).IsAssignableFrom(launcherType), Is.False);
+            Assert.That(InvokeStatic<string>(launcherType, "GetMenuPathForTests"),
+                Is.EqualTo("Tools/Graphics/Open Main_recording Settings"));
             Assert.That(
-                InvokeStatic<Vector2>(windowType, "GetReferenceWindowSizeForTests"),
-                Is.EqualTo(new Vector2(1265f, 675f)));
-            Assert.That(
-                InvokeStatic<float>(windowType, "GetDefaultDisplayScaleForTests"),
-                Is.EqualTo(1.25f).Within(0.0001f));
-            Assert.That(
-                InvokeStatic<Vector2>(windowType, "GetDefaultDisplayWindowSizeForTests"),
-                Is.EqualTo(new Vector2(1581.25f, 843.75f)));
-            Assert.That(
-                InvokeStatic<Vector2>(windowType, "GetReferenceCardSizeForTests"),
-                Is.EqualTo(new Vector2(672f, 192f)));
-            Assert.That(InvokeStatic<bool>(windowType, "UsesRuntimeSharedLayoutSpecForTests"), Is.True);
-            Assert.That(
-                InvokeStatic<string>(windowType, "GetMainRecordingScenePathForTests"),
+                InvokeStatic<string>(launcherType, "GetMainRecordingScenePathForTests"),
                 Is.EqualTo(MainRecordingScenePath));
             Assert.That(File.Exists(MainRecordingScenePath), Is.True);
-            Assert.That(InvokeStatic<bool>(windowType, "ShouldOpenForScene", MainRecordingScenePath), Is.True);
-            Assert.That(InvokeStatic<bool>(windowType, "ShouldOpenForScene", MainAutoScenePath), Is.False);
+            Assert.That(InvokeStatic<bool>(launcherType, "ShouldOpenForScene", MainRecordingScenePath), Is.True);
+            Assert.That(InvokeStatic<bool>(launcherType, "ShouldOpenForScene", MainAutoScenePath), Is.False);
             Assert.That(
-                InvokeStatic<string>(windowType, "GetEditorSurfacePolicyForTests"),
-                Does.Contain("EditorWindow"));
+                InvokeStatic<string>(launcherType, "GetEditorSurfacePolicyForTests"),
+                Does.Contain("Electron"));
             Assert.That(
-                InvokeStatic<string>(windowType, "GetEditorSurfacePolicyForTests"),
-                Does.Contain("outside GameView"));
+                InvokeStatic<string>(launcherType, "GetEditorSurfacePolicyForTests"),
+                Does.Contain("Web UI"));
+            Assert.That(InvokeStatic<bool>(launcherType, "CanLaunchWebSettingsForTests"), Is.True);
+        }
+
+        [Test]
+        public void Given_SettingsLauncher_When_InspectingLaunchPlan_Then_UsesElectronAssetsAndSharedSettings()
+        {
+            Type launcherType = RequireType(SettingsLauncherTypeName);
+
+            object plan = InvokeStatic<object>(launcherType, "CreateDefaultLaunchPlanForTests");
+
+            Assert.That(GetMemberValue<string>(plan, "WorkingDirectory"),
+                Is.EqualTo("Assets/_Project/Tools/MainRecordingSettings"));
+            Assert.That(GetMemberValue<string>(plan, "ExecutableName"), Is.EqualTo("npm"));
+            Assert.That(GetMemberValue<string>(plan, "Arguments"), Is.EqualTo("run start:prod"));
+            Assert.That(GetMemberValue<string>(plan, "SettingsPath"),
+                Does.EndWith("main-recording-settings.json"));
+        }
+
+        [Test]
+        public void Given_PlayerExecutableDirectory_When_CreatingSettingsLaunchPlan_Then_UsesPackagedSettingsExe()
+        {
+            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+
+            object plan = InvokeStatic<object>(
+                runtimeLauncherType,
+                "CreateLaunchPlanForTests",
+                "D:/Builds/Local/MainRecordingRelease",
+                "D:/Data/main-recording-settings.json");
+
+            Assert.That(
+                GetMemberValue<string>(plan, "ExecutablePath").Replace('\\', '/'),
+                Is.EqualTo("D:/Builds/Local/MainRecordingRelease/MainRecordingSettings/Unity_Fbx2VMD_Settings.exe"));
+            Assert.That(
+                GetMemberValue<string>(plan, "WorkingDirectory").Replace('\\', '/'),
+                Is.EqualTo("D:/Builds/Local/MainRecordingRelease/MainRecordingSettings"));
+            Assert.That(
+                GetMemberValue<string>(plan, "SettingsPath").Replace('\\', '/'),
+                Is.EqualTo("D:/Data/main-recording-settings.json"));
+            Assert.That(GetMemberValue<string>(plan, "Arguments"), Does.Contain("--settings-path"));
+            Assert.That(GetMemberValue<string>(plan, "Arguments"), Does.Contain("main-recording-settings.json"));
+        }
+
+        [Test]
+        public void Given_PlayerLaunchPlan_When_CreatingProcessStartInfo_Then_DoesNotInheritElectronRunAsNode()
+        {
+            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+            string originalElectronRunAsNode = Environment.GetEnvironmentVariable(
+                "ELECTRON_RUN_AS_NODE",
+                EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("ELECTRON_RUN_AS_NODE", "1", EnvironmentVariableTarget.Process);
+
+            try
+            {
+                object plan = InvokeStatic<object>(
+                    runtimeLauncherType,
+                    "CreateLaunchPlanForTests",
+                    "D:/Builds/Local/MainRecordingRelease",
+                    "D:/Data/main-recording-settings.json");
+
+                var startInfo = InvokeStatic<ProcessStartInfo>(
+                    runtimeLauncherType,
+                    "CreateProcessStartInfoForTests",
+                    plan);
+
+                Assert.That(startInfo.Environment.ContainsKey("ELECTRON_RUN_AS_NODE"), Is.False);
+                Assert.That(
+                    startInfo.Environment[MainRecordingSettingsPathResolver.EnvironmentVariableName].Replace('\\', '/'),
+                    Is.EqualTo("D:/Data/main-recording-settings.json"));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(
+                    "ELECTRON_RUN_AS_NODE",
+                    originalElectronRunAsNode,
+                    EnvironmentVariableTarget.Process);
+            }
+        }
+
+        [Test]
+        public void Given_PlayerRuntimePolicy_When_CheckingAutoLaunch_Then_UsesExternalSettingsOnlyForNonBatchPlayer()
+        {
+            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+
             Assert.That(
                 InvokeStatic<bool>(
-                    windowType,
-                    "ShouldAutoOpenEditorWindowForPlayModeForTests",
+                    runtimeLauncherType,
+                    "ShouldAutoLaunchForPlayerForTests",
+                    true,
+                    false,
+                    false),
+                Is.True);
+            Assert.That(
+                InvokeStatic<bool>(
+                    runtimeLauncherType,
+                    "ShouldAutoLaunchForPlayerForTests",
+                    true,
+                    true,
+                    false),
+                Is.False);
+            Assert.That(
+                InvokeStatic<bool>(
+                    runtimeLauncherType,
+                    "ShouldAutoLaunchForPlayerForTests",
+                    true,
+                    false,
+                    true),
+                Is.False);
+            Assert.That(
+                InvokeStatic<bool>(
+                    runtimeLauncherType,
+                    "ShouldAutoLaunchForPlayerForTests",
+                    false,
+                    false,
+                    false),
+                Is.False);
+        }
+
+        [Test]
+        public void Given_PlayerRuntimeLaunchResult_When_LaunchSucceeds_Then_GameViewPopupStaysFallbackOnly()
+        {
+            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+
+            Assert.That(
+                InvokeStatic<bool>(
+                    runtimeLauncherType,
+                    "ShouldOpenGameViewPopupFallbackForTests",
+                    true,
+                    false,
+                    false,
+                    true),
+                Is.False);
+            Assert.That(
+                InvokeStatic<bool>(
+                    runtimeLauncherType,
+                    "ShouldOpenGameViewPopupFallbackForTests",
+                    true,
+                    false,
+                    false,
+                    false),
+                Is.True);
+            Assert.That(
+                InvokeStatic<bool>(
+                    runtimeLauncherType,
+                    "ShouldOpenGameViewPopupFallbackForTests",
+                    true,
+                    true,
+                    false,
+                    false),
+                Is.False);
+        }
+
+        [Test]
+        public void Given_PlayerStartup_When_FirstBuildSceneHasNoRecodingSetting_Then_RuntimeBootstrapRunsBeforeSceneLoad()
+        {
+            Type bootstrapType = RequireType(RuntimeBootstrapTypeName);
+            MethodInfo method = bootstrapType.GetMethod(
+                "AutoLaunchForPlayerStartup",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+
+            object[] attributes = method.GetCustomAttributes(
+                typeof(RuntimeInitializeOnLoadMethodAttribute),
+                false);
+            Assert.That(attributes.Length, Is.EqualTo(1));
+            var attribute = (RuntimeInitializeOnLoadMethodAttribute)attributes[0];
+            Assert.That(attribute.loadType, Is.EqualTo(RuntimeInitializeLoadType.BeforeSceneLoad));
+
+            Assert.That(
+                InvokeStatic<bool>(
+                    bootstrapType,
+                    "ShouldAutoLaunchOnPlayerStartupForTests",
+                    true,
+                    false,
+                    false),
+                Is.True);
+            Assert.That(
+                InvokeStatic<bool>(
+                    bootstrapType,
+                    "ShouldAutoLaunchOnPlayerStartupForTests",
+                    true,
+                    true,
+                    false),
+                Is.False);
+            Assert.That(
+                InvokeStatic<bool>(
+                    bootstrapType,
+                    "ShouldAutoLaunchOnPlayerStartupForTests",
+                    true,
+                    false,
+                    true),
+                Is.False);
+
+            EditorSceneManager.OpenScene(MainAutoScenePath);
+            Assert.That(
+                UnityEngine.Object.FindObjectOfType<RecodingSetting>(),
+                Is.Null,
+                "The first Player scene is Main_Auto, so Player startup settings launch must not depend on RecodingSetting.Start().");
+        }
+
+        [Test]
+        public void Given_RuntimeSettingsProcessAlreadyStarted_When_TryLaunchRunsAgain_Then_SkipsDuplicateProcess()
+        {
+            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+            int launchCount = 0;
+            Func<MainRecordingSettingsLaunchPlan, Process> launcher = plan =>
+            {
+                launchCount++;
+                return Process.GetCurrentProcess();
+            };
+
+            InvokeStatic<object>(runtimeLauncherType, "SetLaunchProcessForTests", launcher);
+            SetStaticField(runtimeLauncherType, "startedProcess", Process.GetCurrentProcess());
+
+            try
+            {
+                MainRecordingSettingsActionResult result =
+                    InvokeStatic<MainRecordingSettingsActionResult>(
+                        runtimeLauncherType,
+                        "TryLaunch",
+                        "D:/Missing/MainRecordingRelease",
+                        "D:/Data/main-recording-settings.json");
+
+                Assert.That(result.Succeeded, Is.True);
+                Assert.That(launchCount, Is.EqualTo(0));
+            }
+            finally
+            {
+                InvokeStatic<object>(runtimeLauncherType, "ResetLaunchProcessForTests");
+            }
+        }
+
+        [Test]
+        public void Given_MainRecordingScene_When_EnteringEditorPlayMode_Then_AutoLaunchesWebSettings()
+        {
+            Type guardType = RequireType(EditorPlayModeGuardTypeName);
+
+            Assert.That(
+                InvokeStatic<bool>(
+                    guardType,
+                    "ShouldAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     false,
                     PlayModeStateChange.EnteredPlayMode),
                 Is.True);
             Assert.That(
                 InvokeStatic<bool>(
-                    windowType,
-                    "ShouldAutoOpenEditorWindowForPlayModeForTests",
+                    guardType,
+                    "ShouldAutoLaunchWebSettingsForPlayModeForTests",
+                    MainAutoScenePath,
+                    false,
+                    PlayModeStateChange.EnteredPlayMode),
+                Is.False);
+            Assert.That(
+                InvokeStatic<bool>(
+                    guardType,
+                    "ShouldAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     true,
                     PlayModeStateChange.EnteredPlayMode),
                 Is.False);
+            Assert.That(
+                InvokeStatic<bool>(
+                    guardType,
+                    "ShouldAutoLaunchWebSettingsForPlayModeForTests",
+                    MainRecordingScenePath,
+                    false,
+                    PlayModeStateChange.ExitingEditMode),
+                Is.False);
         }
 
         [Test]
-        public void Given_SettingsWindowType_When_ResolvingDefaultPosition_Then_UsesMovableFloatingWindowAwayFromOrigin()
+        public void Given_MainRecordingScene_When_AutoLaunchingEditorPlayMode_Then_InvokesWebSettingsLauncherOnce()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
+            Type launcherType = RequireType(SettingsLauncherTypeName);
+            Type guardType = RequireType(EditorPlayModeGuardTypeName);
+            int launchCount = 0;
+            string settingsPath = string.Empty;
+            Action<MainRecordingSettingsLaunchPlan> launcher = plan =>
+            {
+                launchCount++;
+                settingsPath = plan.SettingsPath;
+            };
 
-            Rect mainEditorRect = new Rect(0f, 0f, 2560f, 1440f);
-            Rect position = InvokeStatic<Rect>(
-                windowType,
-                "GetDefaultFloatingWindowPositionForTests",
-                mainEditorRect);
+            InvokeStatic<object>(guardType, "ResetAutoLaunchWebSettingsForTests");
+            InvokeStatic<object>(launcherType, "SetLaunchWebSettingsForTests", launcher);
 
-            Assert.That(
-                InvokeStatic<string>(windowType, "GetWindowPresentationModeForTests"),
-                Is.EqualTo("utility-floating"));
-            Assert.That(position.width, Is.EqualTo(1581.25f).Within(1f));
-            Assert.That(position.height, Is.EqualTo(843.75f).Within(1f));
-            Assert.That(position.x, Is.GreaterThan(0f),
-                "The settings window must not open at the screen origin where its title bar is hard to grab.");
-            Assert.That(position.y, Is.GreaterThan(0f),
-                "The settings window must leave top margin so the separate OS window can be dragged.");
+            try
+            {
+                bool firstLaunch = InvokeStatic<bool>(
+                    guardType,
+                    "TryAutoLaunchWebSettingsForPlayModeForTests",
+                    MainRecordingScenePath,
+                    false,
+                    PlayModeStateChange.EnteredPlayMode);
+                bool duplicateLaunch = InvokeStatic<bool>(
+                    guardType,
+                    "TryAutoLaunchWebSettingsForPlayModeForTests",
+                    MainRecordingScenePath,
+                    false,
+                    PlayModeStateChange.EnteredPlayMode);
+
+                Assert.That(firstLaunch, Is.True);
+                Assert.That(duplicateLaunch, Is.False);
+                Assert.That(launchCount, Is.EqualTo(1));
+                Assert.That(settingsPath, Does.EndWith("main-recording-settings.json"));
+            }
+            finally
+            {
+                InvokeStatic<object>(launcherType, "ResetLaunchWebSettingsForTests");
+                InvokeStatic<object>(guardType, "ResetAutoLaunchWebSettingsForTests");
+            }
         }
 
         [Test]
@@ -449,10 +1219,12 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
-        public void Given_SettingsWindowType_When_InspectingOnboardingLayout_Then_MatchesReferenceFirstScreen()
+        public void Given_WebSettingsSource_When_InspectingReferenceShell_Then_MatchesElectronFirstScreenContract()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
             Type layoutSpecType = RequireType(LayoutSpecTypeName);
+            string webRoot = "Assets/_Project/Tools/MainRecordingSettings";
+            string indexPath = Path.Combine(webRoot, "build", "index.html");
+            string stylePath = Path.Combine(webRoot, "build", "styles.css");
 
             Assert.That(GetStaticMemberValue<int>(layoutSpecType, "ReferenceWidth"), Is.EqualTo(1265));
             Assert.That(GetStaticMemberValue<int>(layoutSpecType, "ReferenceHeight"), Is.EqualTo(675));
@@ -463,142 +1235,92 @@ namespace Tests.Editor.Graphics
             Assert.That(
                 GetStaticMemberValue<float>(layoutSpecType, "CardButtonWidth"),
                 Is.GreaterThanOrEqualTo(128f),
-                "The 'FBX 파일 선택' button must be wide enough to avoid clipping at the default 1.25x display scale.");
-            float fbxImportButtonPreferredWidth = InvokeStatic<float>(
-                windowType,
-                "GetCardButtonPreferredWidthForTests",
-                "FBX 파일 선택");
-            float fbxImportButtonAvailableWidth = InvokeStatic<float>(
-                windowType,
-                "GetCardButtonAvailableWidthForTests");
-            Assert.That(
-                fbxImportButtonPreferredWidth,
-                Is.LessThanOrEqualTo(fbxImportButtonAvailableWidth),
-                $"The 'FBX 파일 선택' button label preferred width ({fbxImportButtonPreferredWidth}) must fit in the available button width ({fbxImportButtonAvailableWidth}).");
-            Assert.That(
-                InvokeStatic<string>(windowType, "GetCardButtonClippingForTests"),
-                Is.Not.EqualTo("Clip"),
-                "The card button style must not clip the requested Korean label.");
+                "The 'FBX 가져오기' button must be wide enough to avoid clipping at the default 1.25x display scale.");
 
-            Assert.That(
-                InvokeStatic<string[]>(windowType, "GetSidebarItemLabelsForTests"),
-                Is.EqualTo(new[] { "Camera 1", "Environment", "Directional Light" }));
-            Assert.That(
-                InvokeStatic<string[]>(windowType, "GetOnboardingCardTitlesForTests"),
-                Is.EqualTo(new[] { "FBX 파일 임포트", "기능 1", "기능 2" }));
-            Assert.That(
-                InvokeStatic<string[]>(windowType, "GetOnboardingCardBodiesForTests"),
-                Is.EqualTo(new[]
-                {
-                    "FBX 파일을 선택해 프로젝트로 가져오고 모션 캡쳐 설정을 시작합니다",
-                    "추후 업데이트 예정입니다.",
-                    "추후 업데이트 예정입니다.",
-                }));
-            Assert.That(
-                InvokeStatic<string[]>(windowType, "GetOnboardingCardButtonLabelsForTests"),
-                Is.EqualTo(new[] { "FBX 파일 선택", "준비중", "준비중" }));
-            Assert.That(
-                InvokeStatic<string[]>(windowType, "GetOnboardingCardActionsForTests"),
-                Is.EqualTo(new[] { "ImportFbx", "ComingSoon", "ComingSoon" }));
-            Assert.That(
-                InvokeStatic<bool[]>(windowType, "GetOnboardingCardEnabledStatesForTests"),
-                Is.EqualTo(new[] { true, false, false }));
-            Assert.That(
-                InvokeStatic<string>(windowType, "GetVisualAssetPolicyForTests"),
-                Does.Contain("Clean & Minimalist GUI Pack"));
-            Assert.That(
-                InvokeStatic<string>(windowType, "GetVisualAssetPolicyForTests"),
-                Does.Contain("no external reference product assets"));
-            string[] requiredGuiPackAssetPaths =
-                InvokeStatic<string[]>(windowType, "GetRequiredGuiPackAssetPathsForTests");
-            Assert.That(requiredGuiPackAssetPaths, Has.Length.EqualTo(9));
-            foreach (string assetPath in requiredGuiPackAssetPaths)
-            {
-                Assert.That(assetPath, Does.StartWith("Assets/UI/GUIPack-Clean&Minimalist"));
-            }
-            Assert.That(
-                InvokeStatic<int>(windowType, "CountRequiredGuiPackAssetsAvailableForTests"),
-                Is.EqualTo(0).Or.EqualTo(requiredGuiPackAssetPaths.Length),
-                "The local-only GUI pack can be absent in a clean workspace, but a partial install should not pass.");
-            Assert.That(InvokeStatic<bool>(windowType, "HasReadableKoreanTextForTests"), Is.True);
+            Assert.That(File.Exists(indexPath), Is.True, indexPath);
+            Assert.That(File.Exists(stylePath), Is.True, stylePath);
+            string index = File.ReadAllText(indexPath);
+            string styles = File.ReadAllText(stylePath);
+
+            Assert.That(index, Does.Contain("class=\"rail\""));
+            Assert.That(index, Does.Contain("class=\"sidebar\""));
+            Assert.That(index, Does.Contain("id=\"statusBadge\""));
+            Assert.That(index, Does.Contain("FBX 파일 임포트"));
+            Assert.That(index, Does.Contain("FBX 가져오기"));
+            Assert.That(styles, Does.Contain("--reference-width: 1265px"));
+            Assert.That(styles, Does.Contain("--reference-height: 675px"));
         }
 
         [Test]
-        public void Given_SettingsWindowCards_When_SharedFooterIsRemoved_Then_CardsUseFullWindowHeight()
+        public void Given_EditorSettingsSource_When_InspectingLegacyFile_Then_RemovesImguiEditorWindowSurface()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
+            string oldWindowPath =
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingSettingsWindow.cs";
+            string launcherPath =
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingSettingsCompanionLauncher.cs";
+            string guardPath =
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingEditorPlayModeGuard.cs";
 
-            Rect viewport = InvokeStatic<Rect>(windowType, "GetOnboardingCardsViewportRectForTests");
-            float contentHeight = InvokeStatic<float>(windowType, "GetOnboardingCardsContentHeightForTests");
+            Assert.That(File.Exists(launcherPath), Is.True, "The menu entry must live in the companion launcher.");
+            Assert.That(File.Exists(guardPath), Is.True, "The Play Mode guard must be split from the old IMGUI window.");
+            string launcherSource = File.ReadAllText(launcherPath);
+            string legacyAutoOpenEditorWindowMethodName =
+                "ShouldAutoOpenEditorWindow" + "ForPlayModeForTests";
+            Assert.That(launcherSource, Does.Not.Contain(legacyAutoOpenEditorWindowMethodName));
+            if (!File.Exists(oldWindowPath))
+            {
+                return;
+            }
 
-            Assert.That(
-                viewport.yMax,
-                Is.EqualTo(675f).Within(0.001f),
-                "The onboarding card viewport should use the full reference height after the shared settings footer is removed.");
-            Assert.That(
-                contentHeight,
-                Is.GreaterThan(viewport.height),
-                "Three onboarding cards remain scrollable even without the removed shared settings footer.");
-            Assert.That(
-                InvokeStatic<bool>(windowType, "HasSharedSettingsFooterForTests"),
-                Is.False);
+            string oldWindowSource = File.ReadAllText(oldWindowPath);
+            Assert.That(oldWindowSource, Does.Not.Contain("EditorWindow"));
+            Assert.That(oldWindowSource, Does.Not.Contain("OnGUI"));
+            Assert.That(oldWindowSource, Does.Not.Contain("DrawRail"));
+            Assert.That(oldWindowSource, Does.Not.Contain("DrawSidebar"));
+            Assert.That(oldWindowSource, Does.Not.Contain("DrawMainArea"));
+            Assert.That(oldWindowSource, Does.Not.Contain("DrawCard"));
+            Assert.That(oldWindowSource, Does.Not.Contain("MainRecordingSettingsWindowPlayModeAutoOpener"));
         }
 
         [Test]
-        public void Given_SettingsWindowType_When_InspectingRedBoxRemovals_Then_RemovesSharedFooterAndCharacterPlaceholder()
+        public void Given_EditorSettingsSource_When_InspectingVisibleLogText_Then_KeepsKoreanReadable()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
+            string launcherPath =
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingSettingsCompanionLauncher.cs";
+            string guardPath =
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingEditorPlayModeGuard.cs";
 
-            string[] visibleText = InvokeStatic<string[]>(windowType, "GetVisibleSettingsWindowTextForTests");
+            string launcherSource = ReadUtf8Source(launcherPath);
+            string guardSource = ReadUtf8Source(guardPath);
 
-            Assert.That(visibleText, Does.Not.Contain("저장"));
-            Assert.That(visibleText, Does.Not.Contain("공유 설정을 불러왔습니다."));
-            Assert.That(visibleText, Does.Not.Contain("공유 설정을 저장했습니다."));
-            Assert.That(visibleText, Does.Not.Contain("캐릭터"));
-            Assert.That(visibleText, Does.Not.Contain("Character 1 (비활성화)"));
-            Assert.That(visibleText, Does.Not.Contain("Character 1 (Inactive)"));
+            Assert.That(HasUtf8Bom(launcherPath), Is.True, launcherPath);
+            Assert.That(HasUtf8Bom(guardPath), Is.True, guardPath);
+            Assert.That(launcherSource, Does.Contain("Web 설정창 실행에 실패했습니다."));
+            Assert.That(
+                guardSource,
+                Does.Contain(
+                    "Main_Recoding Play 준비를 위해 Burst direct-call 컴파일을 비활성화하고 스크립트 clean compile을 요청했습니다."));
+            AssertSourceDoesNotContainReplacementCharacters(launcherPath, launcherSource);
+            AssertSourceDoesNotContainReplacementCharacters(guardPath, guardSource);
         }
 
         [Test]
-        public void Given_SettingsWindowStyleCache_When_PartiallyInitialized_Then_RebuildsAllStyles()
+        public void Given_WebSettingsSource_When_InspectingVisibleText_Then_RemovesLegacyEditorWindowPlaceholders()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
+            string indexPath =
+                "Assets/_Project/Tools/MainRecordingSettings/build/index.html";
 
-            try
-            {
-                ResetSettingsWindowStyleCache(windowType);
-                SetStaticField(windowType, "titleStyle", new GUIStyle(EditorStyles.label));
+            Assert.That(File.Exists(indexPath), Is.True, indexPath);
+            string index = File.ReadAllText(indexPath);
 
-                Assert.DoesNotThrow(() =>
-                    InvokeStatic<float>(windowType, "GetCardButtonPreferredWidthForTests", "FBX 파일 선택"));
-                Assert.That(GetStaticMemberValue<object>(windowType, "titleStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "sidebarHeaderStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "sidebarItemStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "sidebarInactiveItemStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "cardTitleStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "cardBodyStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "cardButtonStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "iconStyle"), Is.Not.Null);
-                Assert.That(GetStaticMemberValue<object>(windowType, "toolbarStyle"), Is.Not.Null);
-            }
-            finally
-            {
-                ResetSettingsWindowStyleCache(windowType);
-            }
-        }
-
-        [Test]
-        public void Given_SettingsWindowType_When_InspectingWindowText_Then_UsesReadableKoreanStrings()
-        {
-            Type windowType = RequireType(SettingsWindowTypeName);
-
-            string[] footerText = InvokeStatic<string[]>(windowType, "GetVisibleSettingsWindowTextForTests");
-
-            foreach (string text in footerText)
-            {
-                Assert.That(text.IndexOf('\uFFFD'), Is.EqualTo(-1), $"{text} must not contain replacement glyphs.");
-                Assert.That(text, Does.Not.Contain("??"));
-            }
+            Assert.That(index, Does.Not.Contain("공유 설정을 불러왔습니다."));
+            Assert.That(index, Does.Not.Contain("공유 설정을 저장했습니다."));
+            Assert.That(index, Does.Not.Contain("공유 설정 저장"));
+            Assert.That(index, Does.Not.Contain("캐릭터"));
+            Assert.That(index, Does.Not.Contain("Character 1 (비활성화)"));
+            Assert.That(index, Does.Not.Contain("Character 1 (Inactive)"));
+            Assert.That(index.IndexOf('\uFFFD'), Is.EqualTo(-1));
+            Assert.That(index, Does.Not.Contain("??"));
         }
 
         [Test]
@@ -649,11 +1371,13 @@ namespace Tests.Editor.Graphics
         [Test]
         public void Given_MainRecordingScene_When_InspectingOnboardingActions_Then_BasicSetupCanReachFbxImporter()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
             EditorSceneManager.OpenScene(MainRecordingScenePath);
+            RecodingSetting recodingSetting = UnityEngine.Object.FindObjectOfType<RecodingSetting>();
 
             Assert.That(
-                InvokeStatic<bool>(windowType, "CanHandleImportFbxActionForTests"),
+                MainRecordingSettingsActions.CanExecute(
+                    MainRecordingSettingsActionType.ImportFbx,
+                    recodingSetting),
                 Is.True);
         }
 
@@ -699,41 +1423,16 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
-        public void Given_MainRecordingScene_When_OpenSettingsWindow_Then_ResolvesSplitSettingComponents()
+        public void Given_MainRecordingScene_When_ResolvingSettingsActionComponents_Then_UsesSplitSceneComponents()
         {
-            Type windowType = RequireType(SettingsWindowTypeName);
-            Type contextType = RequireType(SettingsWindowContextTypeName);
             EditorSceneManager.OpenScene(MainRecordingScenePath);
 
-            EditorWindow window = null;
-            try
-            {
-                ExpectHeadlessWindowLogsIfNeeded();
-                window = (EditorWindow)InvokeStatic<object>(windowType, "OpenForMainRecordingScene");
-                Assert.That(window, Is.Not.Null);
-                Assert.That(window.GetType(), Is.EqualTo(windowType));
-                Assert.That(window.titleContent.text, Is.EqualTo("Onboarding Assistant"));
-                Assert.That(window.minSize, Is.EqualTo(new Vector2(1265f, 675f)));
-                Assert.That(window.maxSize.x, Is.GreaterThan(window.minSize.x));
-                Assert.That(window.maxSize.y, Is.GreaterThan(window.minSize.y));
-                Assert.That(window.position.width, Is.EqualTo(1581.25f).Within(1f));
-                Assert.That(window.position.height, Is.EqualTo(843.75f).Within(1f));
-
-                object context = InvokeStatic<object>(windowType, "ResolveContext");
-                Assert.That(GetMemberValue<Component>(context, "GraphicSetting"), Is.Not.Null);
-                Assert.That(GetMemberValue<BackgroundColorSetting>(context, "BackgroundColorSetting"), Is.Not.Null);
-                Assert.That(GetMemberValue<RecodingSetting>(context, "RecodingSetting"), Is.Not.Null);
-                Assert.That(GetMemberValue<Camera>(context, "TargetCamera"), Is.EqualTo(Camera.main));
-                Assert.That(GetMemberValue<bool>(context, "IsComplete"), Is.True);
-                Assert.That(context.GetType(), Is.EqualTo(contextType));
-            }
-            finally
-            {
-                if (window != null)
-                {
-                    window.Close();
-                }
-            }
+            GameObject root = GameObject.Find("Setting");
+            Assert.That(root, Is.Not.Null);
+            Assert.That(root.GetComponent<GraphicSetting>(), Is.Not.Null);
+            Assert.That(root.GetComponent<BackgroundColorSetting>(), Is.Not.Null);
+            Assert.That(root.GetComponent<RecodingSetting>(), Is.Not.Null);
+            Assert.That(Camera.main, Is.Not.Null);
         }
 
         [Test]
@@ -873,6 +1572,20 @@ namespace Tests.Editor.Graphics
             field.SetValue(instance, value);
         }
 
+        private static void SetImportCommand(MainRecordingSettingsDocument document, string commandId, string fbxPath)
+        {
+            FieldInfo commandField = typeof(MainRecordingSettingsDocument).GetField("pendingCommand");
+            Assert.That(commandField, Is.Not.Null, "MainRecordingSettingsDocument.pendingCommand must exist.");
+
+            object command = commandField.GetValue(document);
+            Assert.That(command, Is.Not.Null, "MainRecordingSettingsDocument.pendingCommand must not be null.");
+
+            SetField(command, "commandId", commandId);
+            SetField(command, "action", "ImportFbx");
+            SetField(command, "fbxPath", fbxPath);
+            SetField(command, "requestedAtUtc", DateTime.UtcNow.ToString("O"));
+        }
+
         private static void SetStaticField(Type type, string fieldName, object value)
         {
             FieldInfo field = type.GetField(
@@ -920,6 +1633,26 @@ namespace Tests.Editor.Graphics
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             return Path.Combine(folder, "main-recording-settings.json");
+        }
+
+        private static string ReadUtf8Source(string path)
+        {
+            Assert.That(File.Exists(path), Is.True, path);
+            return new UTF8Encoding(false, true).GetString(File.ReadAllBytes(path)).TrimStart('\uFEFF');
+        }
+
+        private static bool HasUtf8Bom(string path)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            return bytes.Length >= 3 &&
+                   bytes[0] == 0xEF &&
+                   bytes[1] == 0xBB &&
+                   bytes[2] == 0xBF;
+        }
+
+        private static void AssertSourceDoesNotContainReplacementCharacters(string path, string source)
+        {
+            Assert.That(source.IndexOf('\uFFFD'), Is.EqualTo(-1), $"{path} contains a replacement character.");
         }
 
         private sealed class CancelFileBrowserService : IFileBrowserService

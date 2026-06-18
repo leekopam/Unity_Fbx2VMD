@@ -82,15 +82,15 @@ namespace Member_Han.Modules.Graphics
         public const float CardButtonY = 134f;
         public const float CardButtonWidth = 152f;
         public const float CardButtonHeight = 40f;
-        public const string EditorSurface = "editor window";
+        public const string EditorSurface = "electron web launcher";
         public const string EditorSurfacePolicy =
-            "Editor settings surface uses MainRecordingSettingsWindow (UnityEditor.EditorWindow) outside GameView; GameView popup stays fallback/manual only.";
-        public const string ProductionSurface = "companion";
+            "Editor settings surface launches the Electron Web UI through MainRecordingSettingsCompanionLauncher; GameView popup stays fallback/manual only.";
+        public const string ProductionSurface = "electron web companion";
         public const string FallbackSurface = "runtime popup development fallback";
         public const string DeliveryPolicy =
-            "Production settings surface uses a companion OS frame and a shared settings file; no socket or live receiver dependency in the first release.";
+            "Production settings surface launches the packaged Electron/Web companion beside the Player, then uses HTTP/WebSocket bridge and shared settings file.";
         public const string VisualAssetPolicy =
-            "Clean & Minimalist GUI Pack provides settings popup, rounded background/button/input, and icon resources; no external reference product assets, socket, or live receiver dependency.";
+            "Clean & Minimalist GUI Pack remains a runtime fallback resource; Electron Web UI must not copy external reference product assets.";
         public const string KoreanTextPolicy =
             "Visible Korean settings UI text must stay UTF-8 readable; no replacement glyphs, question-mark mojibake, or missing Korean font fallback.";
         public const string GuiPackRoot = "Assets/UI/GUIPack-Clean&Minimalist";
@@ -189,9 +189,9 @@ namespace Member_Han.Modules.Graphics
                 false),
         };
 
-        public static bool ShouldAutoOpenRuntimePopup(bool requestedOpen, bool isEditor)
+        public static bool ShouldAutoOpenRuntimePopup(bool requestedOpen, bool isEditor, bool isBatchMode = false)
         {
-            return requestedOpen && !isEditor;
+            return requestedOpen && !isEditor && !isBatchMode;
         }
     }
 }

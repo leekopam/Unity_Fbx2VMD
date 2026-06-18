@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using RootMotion.FinalIK;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -49,8 +50,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.clampRetargetHipsLocalPositionSpikes, Is.False, "Hips local clamps change pose internals and must stay out of the center/root-only floor correction slice.");
             Assert.That(fileManager.vmdRecordingPlaybackSpeed, Is.EqualTo(1f).Within(0.0001f), "Main_Auto VMD export must default to normal playback speed.");
             Assert.That(fileManager.useKnownMmdReferenceTiming, Is.False, "Reference timing must be opt-in so Main_Auto does not accelerate normal VMD generation by default.");
-            Assert.That(fileManager.showGhostModel, Is.True, "This scene keeps Ghost display enabled for the current debug task.");
-            Assert.That(fileManager.showGhostSkeletonWhenNoRenderers, Is.True, "Rendererless mocap Ghost FBX files must remain visible when Ghost display is enabled.");
+            Assert.That(fileManager.showGhostModel, Is.False, "Main_Auto must not show imported Ghost models until the user enables the debug option.");
+            Assert.That(fileManager.showGhostSkeletonWhenNoRenderers, Is.False, "Rendererless Ghost skeleton fallback must stay off while Ghost display is disabled.");
 
             var yybPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
@@ -79,6 +80,91 @@ namespace Tests.Editor.FBXImporter
                 "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
             AssertYybMmdExportClampMargin(
                 "Assets/_ManualReference/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_Prefab.prefab");
+        }
+
+        [Test]
+        public void Given_RuntimeMmdIkDeltaOverride_When_ApplyingToRecorder_Then_ChangesOnlyFootAndToeIkClamp()
+        {
+            var recorderObject = new GameObject("runtime override recorder");
+            try
+            {
+                var recorder = recorderObject.AddComponent<UnityHumanoidVMDRecorder>();
+                recorder.ClampMmdIkExportDeltaSpikes = true;
+                recorder.MaxMmdCenterExportDeltaPerFrame = 0.11f;
+                recorder.MaxMmdFootIkExportDeltaPerFrame = 0.11f;
+                recorder.MaxMmdToeIkExportDeltaPerFrame = 0.11f;
+
+                bool applied = ApplyMmdIkDeltaGuardRuntimeOverride(recorder, 0.12f);
+
+                Assert.That(applied, Is.True);
+                Assert.That(recorder.ClampMmdIkExportDeltaSpikes, Is.True);
+                Assert.That(recorder.MaxMmdCenterExportDeltaPerFrame, Is.EqualTo(0.11f).Within(0.0001f));
+                Assert.That(recorder.MaxMmdFootIkExportDeltaPerFrame, Is.EqualTo(0.12f).Within(0.0001f));
+                Assert.That(recorder.MaxMmdToeIkExportDeltaPerFrame, Is.EqualTo(0.12f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(recorderObject);
+            }
+        }
+
+        [Test]
+        public void Given_RuntimeMmdIkDeltaRecoveryOverride_When_ApplyingToRecorder_Then_KeepsBaseClampAndSetsRecoveryWindow()
+        {
+            var recorderObject = new GameObject("runtime recovery override recorder");
+            try
+            {
+                var recorder = recorderObject.AddComponent<UnityHumanoidVMDRecorder>();
+                recorder.ClampMmdIkExportDeltaSpikes = true;
+                recorder.MaxMmdCenterExportDeltaPerFrame = 0.11f;
+                recorder.MaxMmdFootIkExportDeltaPerFrame = 0.11f;
+                recorder.MaxMmdToeIkExportDeltaPerFrame = 0.11f;
+
+                bool applied = ApplyMmdIkDeltaGuardRuntimeOverride(recorder, 0.12f, 0.30f);
+
+                Assert.That(applied, Is.True);
+                Assert.That(recorder.ClampMmdIkExportDeltaSpikes, Is.True);
+                Assert.That(recorder.MaxMmdCenterExportDeltaPerFrame, Is.EqualTo(0.11f).Within(0.0001f));
+                Assert.That(recorder.MaxMmdFootIkExportDeltaPerFrame, Is.EqualTo(0.11f).Within(0.0001f));
+                Assert.That(recorder.MaxMmdToeIkExportDeltaPerFrame, Is.EqualTo(0.11f).Within(0.0001f));
+                Assert.That(recorder.UseMmdIkExportDeltaRecoveryLimit, Is.True);
+                Assert.That(recorder.MmdIkExportDeltaRecoveryLimitPerFrame, Is.EqualTo(0.12f).Within(0.0001f));
+                Assert.That(recorder.MmdIkExportDeltaRecoveryTriggerPerFrame, Is.EqualTo(0.30f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(recorderObject);
+            }
+        }
+
+        [Test]
+        public void Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow()
+        {
+            var recorderObject = new GameObject("runtime recovery debt override recorder");
+            try
+            {
+                var recorder = recorderObject.AddComponent<UnityHumanoidVMDRecorder>();
+                recorder.ClampMmdIkExportDeltaSpikes = true;
+                recorder.MaxMmdCenterExportDeltaPerFrame = 0.11f;
+                recorder.MaxMmdFootIkExportDeltaPerFrame = 0.11f;
+                recorder.MaxMmdToeIkExportDeltaPerFrame = 0.11f;
+
+                bool applied = ApplyMmdIkDeltaGuardRuntimeOverride(recorder, 0.12099f, 0.26f, 0.08f);
+
+                Assert.That(applied, Is.True);
+                Assert.That(recorder.ClampMmdIkExportDeltaSpikes, Is.True);
+                Assert.That(recorder.MaxMmdCenterExportDeltaPerFrame, Is.EqualTo(0.11f).Within(0.0001f));
+                Assert.That(recorder.MaxMmdFootIkExportDeltaPerFrame, Is.EqualTo(0.11f).Within(0.0001f));
+                Assert.That(recorder.MaxMmdToeIkExportDeltaPerFrame, Is.EqualTo(0.11f).Within(0.0001f));
+                Assert.That(recorder.UseMmdIkExportDeltaRecoveryLimit, Is.True);
+                Assert.That(recorder.MmdIkExportDeltaRecoveryLimitPerFrame, Is.EqualTo(0.12099f).Within(0.0001f));
+                Assert.That(recorder.MmdIkExportDeltaRecoveryTriggerPerFrame, Is.EqualTo(0.26f).Within(0.0001f));
+                Assert.That(recorder.MmdIkExportDeltaRecoveryDebtThresholdPerFrame, Is.EqualTo(0.08f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(recorderObject);
+            }
         }
 
         [Test]
@@ -122,6 +208,125 @@ namespace Tests.Editor.FBXImporter
         {
             AssertRootYFreezeAfterInitialGrounding("Assets/_Project/Scene/Main_Auto.unity");
             AssertRootYFreezeAfterInitialGrounding("Assets/_Project/Scene/Main_Recoding.unity");
+        }
+
+        [Test]
+        public void MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault()
+        {
+            AssertFinalIkFootGroundingDefaults("Assets/_Project/Scene/Main_Auto.unity");
+            AssertFinalIkFootGroundingDefaults("Assets/_Project/Scene/Main_Recoding.unity");
+        }
+
+        [Test]
+        public void Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik()
+        {
+            var managerObject = new GameObject("final ik foot grounding manager");
+            var targetObject = new GameObject("final ik foot grounding target");
+            try
+            {
+                var manager = managerObject.AddComponent<FileManager>();
+                SetField(manager, "enableFinalIkFootGroundingExperiment", true);
+                SetField(manager, "finalIkFootGroundingWeight", 0.15f);
+                SetField(manager, "finalIkFootGroundingMaxStep", 0.05f);
+                SetField(manager, "finalIkFootGroundingFootRadius", 0.06f);
+                SetField(manager, "finalIkFootGroundingPrediction", 0f);
+                SetField(manager, "finalIkFootGroundingFootRotationWeight", 0f);
+                SetField(manager, "finalIkFootGroundingPelvisDamper", 0.1f);
+
+                InvokeFinalIkFootGroundingConfiguration(manager, targetObject);
+
+                var bipedIk = targetObject.GetComponent<BipedIK>();
+                var grounder = targetObject.GetComponent<GrounderBipedIK>();
+
+                Assert.That(bipedIk, Is.Not.Null, "Final IK foot grounding experiment must use BipedIK as the narrow foot solver.");
+                Assert.That(grounder, Is.Not.Null, "Final IK foot grounding experiment must add GrounderBipedIK for foot contact correction.");
+                Assert.That(targetObject.GetComponent<VRIK>(), Is.Null, "Foot grounding experiment must not install VRIK, which would replace the whole retargeting solve.");
+                Assert.That(grounder.ik, Is.SameAs(bipedIk));
+                Assert.That(grounder.weight, Is.EqualTo(0.15f).Within(0.0001f));
+                Assert.That(grounder.spineBend, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(grounder.solver.maxStep, Is.EqualTo(0.05f).Within(0.0001f));
+                Assert.That(grounder.solver.footRadius, Is.EqualTo(0.06f).Within(0.0001f));
+                Assert.That(grounder.solver.prediction, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(grounder.solver.footRotationWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(grounder.solver.pelvisDamper, Is.EqualTo(0.1f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(managerObject);
+                UnityEngine.Object.DestroyImmediate(targetObject);
+            }
+        }
+
+        [Test]
+        public void Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers()
+        {
+            var managerObject = new GameObject("final ik foot grounding manager");
+            var targetObject = new GameObject("final ik foot grounding target");
+            try
+            {
+                var manager = managerObject.AddComponent<FileManager>();
+                SetField(manager, "enableFinalIkFootGroundingExperiment", true);
+                SetField(manager, "finalIkFootGroundingWeight", 0.15f);
+
+                InvokeFinalIkFootGroundingConfiguration(manager, targetObject);
+
+                var bipedIk = targetObject.GetComponent<BipedIK>();
+                var grounder = targetObject.GetComponent<GrounderBipedIK>();
+
+                Assert.That(bipedIk, Is.Not.Null, "The enabled experiment should add the BipedIK solver before the OFF regression path is exercised.");
+                Assert.That(grounder, Is.Not.Null, "The enabled experiment should add the GrounderBipedIK solver before the OFF regression path is exercised.");
+                Assert.That(bipedIk.enabled, Is.True);
+                Assert.That(grounder.enabled, Is.True);
+
+                SetField(manager, "enableFinalIkFootGroundingExperiment", false);
+
+                InvokeFinalIkFootGroundingConfiguration(manager, targetObject);
+
+                Assert.That(grounder.enabled, Is.False, "OFF reconfiguration must disable GrounderBipedIK so it cannot alter the visual A/B baseline.");
+                Assert.That(grounder.weight, Is.EqualTo(0f).Within(0.0001f), "OFF reconfiguration must zero the GrounderBipedIK master weight.");
+                Assert.That(bipedIk.enabled, Is.False, "OFF reconfiguration must disable BipedIK as well; leaving it enabled can keep SolverManager fixTransforms active.");
+                Assert.That(bipedIk.fixTransforms, Is.False, "OFF reconfiguration must make BipedIK transform fixing inert for clean OFF/ON A/B tests.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(managerObject);
+                UnityEngine.Object.DestroyImmediate(targetObject);
+            }
+        }
+
+        [Test]
+        public void Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline()
+        {
+            var managerObject = new GameObject("final ik runtime override manager");
+            var targetObject = new GameObject("final ik runtime override target");
+            try
+            {
+                var manager = managerObject.AddComponent<FileManager>();
+                manager.targetCharacter = targetObject;
+                var bipedIk = targetObject.AddComponent<BipedIK>();
+                var grounder = targetObject.AddComponent<GrounderBipedIK>();
+                grounder.ik = bipedIk;
+                grounder.weight = 0.15f;
+                bipedIk.enabled = true;
+                bipedIk.fixTransforms = true;
+                grounder.enabled = true;
+
+                bool enabledApplied = ApplyFinalIkFootGroundingRuntimeOverride(manager, true);
+                bool disabledApplied = ApplyFinalIkFootGroundingRuntimeOverride(manager, false);
+
+                Assert.That(enabledApplied, Is.True);
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(GetField<bool>(manager, "enableFinalIkFootGroundingExperiment"), Is.False);
+                Assert.That(grounder.enabled, Is.False, "Explicit OFF runtime comparison must disable prior GrounderBipedIK state.");
+                Assert.That(grounder.weight, Is.EqualTo(0f).Within(0.0001f), "Explicit OFF runtime comparison must zero GrounderBipedIK influence.");
+                Assert.That(bipedIk.enabled, Is.False, "Explicit OFF runtime comparison must disable prior BipedIK state.");
+                Assert.That(bipedIk.fixTransforms, Is.False, "Explicit OFF runtime comparison must make BipedIK fixTransforms inert.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(managerObject);
+                UnityEngine.Object.DestroyImmediate(targetObject);
+            }
         }
 
         [Test]
@@ -799,6 +1004,32 @@ namespace Tests.Editor.FBXImporter
                 $"{prefabPath} must keep toe IK export clamp below the 0.12m teleport threshold with margin.");
         }
 
+        private static void AssertFinalIkFootGroundingDefaults(string scenePath)
+        {
+            EditorSceneManager.OpenScene(scenePath);
+
+            FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FileManager.");
+            Assert.That(GetField<bool>(fileManager, "enableFinalIkFootGroundingExperiment"), Is.False, "Final IK foot grounding experiment must stay opt-in.");
+            Assert.That(GetField<float>(fileManager, "finalIkFootGroundingWeight"), Is.LessThanOrEqualTo(0.25f), "Default experiment weight must remain low enough to avoid replacing PoseSpaceRetargeter output.");
+            Assert.That(GetField<float>(fileManager, "finalIkFootGroundingMaxStep"), Is.LessThanOrEqualTo(0.08f), "Default max step must stay below the current A7 guard relaxation boundary.");
+            Assert.That(GetField<float>(fileManager, "finalIkFootGroundingFootRotationWeight"), Is.EqualTo(0f).Within(0.0001f), "Initial experiment must not rotate feet until visual evidence proves it safe.");
+        }
+
+        private static void InvokeFinalIkFootGroundingConfiguration(FileManager manager, GameObject targetObject)
+        {
+            MethodInfo method = typeof(FileManager).GetMethod(
+                "ConfigureFinalIkFootGroundingExperiment",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(GameObject) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "FileManager must expose a narrow Final IK foot grounding configuration seam.");
+            method.Invoke(manager, new object[] { targetObject });
+        }
+
         private static int ResolveReferenceMmdTargetFrameCount(
             string fbxFileName,
             float requestedDurationSeconds,
@@ -890,6 +1121,85 @@ namespace Tests.Editor.FBXImporter
             return (bool)method.Invoke(null, new object[] { isRunning, hasActiveJob, activeJobFinished });
         }
 
+        private static bool ApplyMmdIkDeltaGuardRuntimeOverride(UnityHumanoidVMDRecorder recorder, float overrideLimitVmd)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "ApplyMmdIkDeltaGuardRuntimeOverride",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(UnityHumanoidVMDRecorder), typeof(float) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only IK delta guard override for candidate visual comparisons.");
+
+            return (bool)method.Invoke(null, new object[] { recorder, overrideLimitVmd });
+        }
+
+        private static bool ApplyMmdIkDeltaGuardRuntimeOverride(
+            UnityHumanoidVMDRecorder recorder,
+            float overrideLimitVmd,
+            float recoveryTriggerVmd)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "ApplyMmdIkDeltaGuardRuntimeOverride",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(UnityHumanoidVMDRecorder), typeof(float), typeof(float) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only conditional IK delta recovery override.");
+
+            return (bool)method.Invoke(null, new object[] { recorder, overrideLimitVmd, recoveryTriggerVmd });
+        }
+
+        private static bool ApplyMmdIkDeltaGuardRuntimeOverride(
+            UnityHumanoidVMDRecorder recorder,
+            float overrideLimitVmd,
+            float recoveryTriggerVmd,
+            float recoveryDebtThresholdVmd)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "ApplyMmdIkDeltaGuardRuntimeOverride",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(UnityHumanoidVMDRecorder), typeof(float), typeof(float), typeof(float) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only IK lag-debt recovery override.");
+
+            return (bool)method.Invoke(null, new object[] { recorder, overrideLimitVmd, recoveryTriggerVmd, recoveryDebtThresholdVmd });
+        }
+
+        private static bool ApplyFinalIkFootGroundingRuntimeOverride(FileManager manager, bool enabled)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "ApplyFinalIkFootGroundingRuntimeOverride",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(FileManager), typeof(bool) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only Final IK foot grounding override for OFF/ON visual comparisons.");
+
+            return (bool)method.Invoke(null, new object[] { manager, enabled });
+        }
+
         private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
         {
             Type runnerType = Type.GetType(
@@ -956,6 +1266,17 @@ namespace Tests.Editor.FBXImporter
             Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}' to exist.");
 
             return (T)field.GetValue(instance);
+        }
+
+        private static void SetField<T>(object instance, string fieldName, T value)
+        {
+            Assert.That(instance, Is.Not.Null);
+            FieldInfo field = instance.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}' to exist.");
+
+            field.SetValue(instance, value);
         }
     }
 }

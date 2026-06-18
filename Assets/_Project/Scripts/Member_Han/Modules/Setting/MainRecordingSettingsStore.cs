@@ -108,6 +108,38 @@ namespace Member_Han.Modules.Graphics
                 document.characterModelPath = string.Empty;
             }
 
+            if (document.runtimeState == null)
+            {
+                document.runtimeState = new MainRecordingSettingsRuntimeState();
+            }
+
+            document.runtimeState.Normalize();
+
+            if (document.pendingCommand == null)
+            {
+                document.pendingCommand = new MainRecordingSettingsCommandEnvelope();
+            }
+
+            if (document.pendingCommand.commandId == null)
+            {
+                document.pendingCommand.commandId = string.Empty;
+            }
+
+            if (document.pendingCommand.action == null)
+            {
+                document.pendingCommand.action = string.Empty;
+            }
+
+            if (document.pendingCommand.fbxPath == null)
+            {
+                document.pendingCommand.fbxPath = string.Empty;
+            }
+
+            if (document.pendingCommand.requestedAtUtc == null)
+            {
+                document.pendingCommand.requestedAtUtc = string.Empty;
+            }
+
             return document;
         }
 
