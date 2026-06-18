@@ -615,12 +615,30 @@ public partial class UnityHumanoidVMDRecorder
             return;
         }
 
-        int clamped = ClampMmdIkExportDeltaSpikePositions(
-            positions,
-            safeFrameCount,
-            maxDeltaPerFrame,
-            out float maxBefore,
-            out float maxAfter);
+        int clamped;
+        float maxBefore;
+        float maxAfter;
+        if (UseMmdIkExportDeltaRecoveryLimit)
+        {
+            clamped = ClampMmdIkExportDeltaSpikePositions(
+                positions,
+                safeFrameCount,
+                maxDeltaPerFrame,
+                MmdIkExportDeltaRecoveryLimitPerFrame,
+                MmdIkExportDeltaRecoveryTriggerPerFrame,
+                MmdIkExportDeltaRecoveryDebtThresholdPerFrame,
+                out maxBefore,
+                out maxAfter);
+        }
+        else
+        {
+            clamped = ClampMmdIkExportDeltaSpikePositions(
+                positions,
+                safeFrameCount,
+                maxDeltaPerFrame,
+                out maxBefore,
+                out maxAfter);
+        }
 
         LastMmdIkExportDeltaClampCount += clamped;
         LastMmdIkExportMaxDeltaBefore = Mathf.Max(LastMmdIkExportMaxDeltaBefore, maxBefore);
@@ -635,6 +653,46 @@ public partial class UnityHumanoidVMDRecorder
         out float maxAfter)
     {
         return ClampMmdExportDeltaSpikePositions(positions, safeFrameCount, maxDeltaPerFrame, out maxBefore, out maxAfter);
+    }
+
+    internal static int ClampMmdIkExportDeltaSpikePositions(
+        List<Vector3> positions,
+        int safeFrameCount,
+        float maxDeltaPerFrame,
+        float recoveryMaxDeltaPerFrame,
+        float recoveryTriggerDeltaPerFrame,
+        out float maxBefore,
+        out float maxAfter)
+    {
+        return ClampMmdExportDeltaSpikePositions(
+            positions,
+            safeFrameCount,
+            maxDeltaPerFrame,
+            out maxBefore,
+            out maxAfter,
+            recoveryMaxDeltaPerFrame,
+            recoveryTriggerDeltaPerFrame);
+    }
+
+    internal static int ClampMmdIkExportDeltaSpikePositions(
+        List<Vector3> positions,
+        int safeFrameCount,
+        float maxDeltaPerFrame,
+        float recoveryMaxDeltaPerFrame,
+        float recoveryTriggerDeltaPerFrame,
+        float recoveryDebtThresholdDeltaPerFrame,
+        out float maxBefore,
+        out float maxAfter)
+    {
+        return ClampMmdExportDeltaSpikePositions(
+            positions,
+            safeFrameCount,
+            maxDeltaPerFrame,
+            out maxBefore,
+            out maxAfter,
+            recoveryMaxDeltaPerFrame,
+            recoveryTriggerDeltaPerFrame,
+            recoveryDebtThresholdDeltaPerFrame);
     }
 
     internal static int ClampMmdCenterExportDeltaSpikePositions(
@@ -652,7 +710,10 @@ public partial class UnityHumanoidVMDRecorder
         int safeFrameCount,
         float maxDeltaPerFrame,
         out float maxBefore,
-        out float maxAfter)
+        out float maxAfter,
+        float recoveryMaxDeltaPerFrame = 0f,
+        float recoveryTriggerDeltaPerFrame = 0f,
+        float recoveryDebtThresholdDeltaPerFrame = 0f)
     {
         maxBefore = 0f;
         maxAfter = 0f;
@@ -679,6 +740,11 @@ public partial class UnityHumanoidVMDRecorder
 
         const float serializedFloatSafetyMargin = 0.001f;
         float limit = Mathf.Max(0f, maxDeltaPerFrame - serializedFloatSafetyMargin);
+        bool useRecoveryDebtThreshold = recoveryDebtThresholdDeltaPerFrame > 0f;
+        bool useRecoveryLimit = recoveryMaxDeltaPerFrame > maxDeltaPerFrame &&
+                                (recoveryTriggerDeltaPerFrame > maxDeltaPerFrame || useRecoveryDebtThreshold);
+        float recoveryLimit = Mathf.Max(0f, recoveryMaxDeltaPerFrame - serializedFloatSafetyMargin);
+        List<Vector3> sourcePositions = useRecoveryLimit ? new List<Vector3>(positions) : null;
         int clampedCount = 0;
         for (int i = 1; i < count; i++)
         {
@@ -691,9 +757,28 @@ public partial class UnityHumanoidVMDRecorder
             }
 
             float before = delta.magnitude;
-            if (limit > 0f && before > limit)
+            float effectiveLimit = limit;
+            if (useRecoveryLimit)
             {
-                current = previous + Vector3.ClampMagnitude(delta, limit);
+                Vector3 rawDelta = sourcePositions[i] - sourcePositions[i - 1];
+                Vector3 lagDebt = sourcePositions[i] - previous;
+                bool recoveryTriggeredByRawStep =
+                    recoveryTriggerDeltaPerFrame > maxDeltaPerFrame &&
+                    IsFinite(rawDelta) &&
+                    rawDelta.magnitude > recoveryTriggerDeltaPerFrame;
+                bool recoveryTriggeredByLagDebt =
+                    useRecoveryDebtThreshold &&
+                    IsFinite(lagDebt) &&
+                    lagDebt.magnitude > recoveryDebtThresholdDeltaPerFrame;
+                if (recoveryTriggeredByRawStep || recoveryTriggeredByLagDebt)
+                {
+                    effectiveLimit = recoveryLimit;
+                }
+            }
+
+            if (effectiveLimit > 0f && before > effectiveLimit)
+            {
+                current = previous + Vector3.ClampMagnitude(delta, effectiveLimit);
                 positions[i] = current;
                 clampedCount++;
             }

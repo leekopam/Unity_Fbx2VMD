@@ -33,6 +33,21 @@ namespace Tests.Editor.FBXImporter
                 nameof(YybMmdExportSafetyDefaultsTests.MainRecordingRootMotionPolicy_LimitsPreviewRootStepForTeleportGuard),
                 () => new YybMmdExportSafetyDefaultsTests().MainRecordingRootMotionPolicy_LimitsPreviewRootStepForTeleportGuard());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault),
+                () => new YybMmdExportSafetyDefaultsTests().MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik),
+                () => new YybMmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers),
+                () => new YybMmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline),
+                () => new YybMmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow),
+                () => new YybMmdExportSafetyDefaultsTests().Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(YybMmdExportSafetyDefaultsTests.Given_ControlledImportFbxExists_When_ResolvingYybReferenceClipPath_Then_MatchesMainAutoSmokeInputPriority),
                 () => new YybMmdExportSafetyDefaultsTests().Given_ControlledImportFbxExists_When_ResolvingYybReferenceClipPath_Then_MatchesMainAutoSmokeInputPriority());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +

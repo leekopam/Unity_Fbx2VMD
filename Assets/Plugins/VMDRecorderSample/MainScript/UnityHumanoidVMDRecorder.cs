@@ -243,6 +243,18 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     [Tooltip("Maximum VMD-space movement allowed per frame for toe IK keys.")]
     [Range(0.05f, 2f)] public float MaxMmdToeIkExportDeltaPerFrame = 0.12f;
 
+    [Tooltip("Allows a slightly higher IK export delta only when the raw source foot step is large enough to be a recovery segment. Disabled by default.")]
+    public bool UseMmdIkExportDeltaRecoveryLimit = false;
+
+    [Tooltip("VMD-space raw source foot step that activates the conditional IK recovery limit.")]
+    [Range(0.05f, 2f)] public float MmdIkExportDeltaRecoveryTriggerPerFrame = 0.30f;
+
+    [Tooltip("VMD-space IK export delta used only while the conditional recovery trigger is active.")]
+    [Range(0.05f, 2f)] public float MmdIkExportDeltaRecoveryLimitPerFrame = 0.12f;
+
+    [Tooltip("VMD-space accumulated lag from source IK target that also activates the conditional recovery limit. 0 disables lag-debt recovery.")]
+    [Range(0f, 2f)] public float MmdIkExportDeltaRecoveryDebtThresholdPerFrame = 0f;
+
     public int LastMmdIkExportDeltaClampCount { get; private set; }
     public float LastMmdIkExportMaxDeltaBefore { get; private set; }
     public float LastMmdIkExportMaxDeltaAfter { get; private set; }

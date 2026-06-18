@@ -55,6 +55,34 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void NewFileManager_DefaultsGhostDisplayOff()
+        {
+            var root = new GameObject("New FileManager Ghost Default Test");
+
+            try
+            {
+                FileManager fileManager = root.AddComponent<FileManager>();
+
+                Assert.That(fileManager.showGhostModel, Is.False,
+                    "A newly added FileManager must not show imported Ghost models until the user enables the option.");
+                Assert.That(fileManager.showGhostSkeletonWhenNoRenderers, Is.False,
+                    "Rendererless Ghost skeleton fallback must also default off with the Ghost display option.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void MainImportScenes_DefaultGhostDisplayOff()
+        {
+            AssertSceneGhostDisplayOff(MainAutoScenePath, "Main_Auto");
+            AssertSceneGhostDisplayOff(MainRecordingScenePath, "Main_Recoding");
+            AssertSceneGhostDisplayOff(CaptureScenePath, "FbxImport_Capture");
+        }
+
+        [Test]
         public void MainRecordingScene_HasManualMmdRecordingButtonWiredToTarget()
         {
             EditorSceneManager.OpenScene(MainRecordingScenePath);
@@ -132,6 +160,19 @@ namespace Tests.Editor.FBXImporter
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, "FileManager must expose a scene-level VMD recording mode flag.");
             return (bool)field.GetValue(fileManager);
+        }
+
+        private static void AssertSceneGhostDisplayOff(string scenePath, string sceneName)
+        {
+            EditorSceneManager.OpenScene(scenePath);
+
+            FileManager fileManager = Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, $"{sceneName} must contain FileManager.");
+            Assert.That(fileManager.showGhostModel, Is.False,
+                $"{sceneName} must keep Ghost display off by default; it is only a user-enabled debug option.");
+            Assert.That(fileManager.showGhostSkeletonWhenNoRenderers, Is.False,
+                $"{sceneName} must keep rendererless Ghost skeleton fallback off while Ghost display is disabled.");
         }
 
         private static void AssertSceneDoesNotExposeManualRecordButton(string scenePath, string sceneName)

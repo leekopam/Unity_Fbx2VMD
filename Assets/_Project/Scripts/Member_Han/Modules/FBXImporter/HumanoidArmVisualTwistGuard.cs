@@ -219,8 +219,11 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
+            // 상완/전완 segment가 기준 자세에서 얼마나 비틀렸는지 상대 회전 차이로 구합니다.
             Quaternion currentRelative = GetRelativeRotation(segment.Source, segment.End);
             Quaternion delta = Quaternion.Inverse(segment.BaselineRelativeRotation) * currentRelative;
+
+            // 팔 방향 전체 회전이 아니라 길이축 기준 twist 성분만 뽑아 소매 보조본에 나눠 줍니다.
             delta = ExtractTwist(delta, segment.LocalAxis);
             delta = LimitRotation(delta, segment.MaxDegrees);
 
@@ -237,6 +240,7 @@ namespace Member_Han.Modules.FBXImporter
                     continue;
                 }
 
+                // 보조본이 팔 길이 방향으로 어디에 있는지에 따라 twist 영향도를 분산합니다.
                 float weight = Mathf.Clamp01(node.Weight * segment.Influence);
                 Quaternion distributed = Quaternion.Slerp(Quaternion.identity, delta, weight);
                 ApplySourceRelativeRotation(segment.Source, node, distributed);
@@ -253,6 +257,7 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
+            // source 본 기준 상대 자세를 유지한 채 분산된 twist만 얹어 최종 월드 회전을 만듭니다.
             Quaternion desiredWorldRotation = source.rotation * distributed * node.BaselineSourceRelativeRotation;
             if (!IsFinite(desiredWorldRotation))
             {

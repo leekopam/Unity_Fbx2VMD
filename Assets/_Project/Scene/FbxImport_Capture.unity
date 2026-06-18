@@ -608,8 +608,8 @@ MonoBehaviour:
   logYybArmSleeveAnchorCorrection: 0
   showBoneMappingLog: 0
   showRuntimeAnimationLog: 0
-  showGhostModel: 1
-  showGhostSkeletonWhenNoRenderers: 1
+  showGhostModel: 0
+  showGhostSkeletonWhenNoRenderers: 0
   FingerStretchScale: 1
   FingerSpreadScale: 1
   ThumbStretchScale: 1

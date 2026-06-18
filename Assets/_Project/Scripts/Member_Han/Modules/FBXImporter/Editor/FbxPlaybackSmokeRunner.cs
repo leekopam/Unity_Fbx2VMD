@@ -27,12 +27,15 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private const string RunAllImportFbxHeadCommand = "run_all_import_fbx_31s";
         private const string RunAllImportFbxMiddleCommand = "run_all_import_fbx_middle_31s";
         private const string RunAllImportFbxTailCommand = "run_all_import_fbx_tail_31s";
+        private const string CaptureSatisfactionQuickVmdSmokeCommand = "capture_satisfaction_quick_vmd_smoke_2s";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
         private const string CaptureAntennaTailHelperEvidenceCommand = "capture_antenna_tail_helper_evidence";
         private const string CaptureAntennaTailHelperEvidenceCleanCommand = "capture_antenna_tail_helper_evidence_clean";
         private const string CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand = "capture_antenna_tail_helper_evidence_resume_after_clean";
         private const string SatisfactionFbxFileName = "satisfaction_2.fbx";
+        private const float QuickVmdSmokeDurationSeconds = 2f;
+        private const int QuickVmdSmokeTargetFrameCount = 60;
         private const float SmokeDurationSeconds = 31f;
         private const float SmokeFrameRate = 30f;
         private const float SmokeStartDelaySeconds = 0.2f;
@@ -201,6 +204,17 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             StartSmokeBatch(fileManager, fbxFileNames, FileManager.EditorDiagnosticSmokeSegment.Tail);
         }
 
+        [MenuItem(MenuRoot + "Run satisfaction_2 Quick VMD Smoke 2s", false, 2099)]
+        private static void RunSatisfactionQuickVmdSmoke()
+        {
+            RunSingleSmoke(
+                SatisfactionFbxFileName,
+                QuickVmdSmokeDurationSeconds,
+                enableFingerCloseups: false,
+                sampleTimesOverride: null,
+                mode: "quick-vmd-smoke");
+        }
+
         [MenuItem(MenuRoot + "Run satisfaction_2 31s", false, 2100)]
         private static void RunSatisfactionSmoke()
         {
@@ -343,6 +357,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         [MenuItem(MenuRoot + "Run Snake 31s", true)]
         [MenuItem(MenuRoot + "Run mikumikuni_retake_000 31s", true)]
         [MenuItem(MenuRoot + "Run neo_1_001 31s", true)]
+        [MenuItem(MenuRoot + "Run satisfaction_2 Quick VMD Smoke 2s", true)]
         [MenuItem(MenuRoot + "Capture satisfaction_2 Thumb Evidence 0.6s+1.0s+12.6s+13.1s", true)]
         [MenuItem(MenuRoot + "Capture satisfaction_2 Full Regression Evidence 208s 4K", true)]
         [MenuItem(MenuRoot + "Capture satisfaction_2 Middle Helper Evidence 102.125s", true)]
@@ -485,6 +500,15 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             switch (request.command)
             {
+                case CaptureSatisfactionQuickVmdSmokeCommand:
+                    return TryStartAutomationSingleSmoke(
+                        SatisfactionFbxFileName,
+                        QuickVmdSmokeDurationSeconds,
+                        false,
+                        null,
+                        "quick-vmd-smoke",
+                        FileManager.EditorDiagnosticSmokeSegment.Head,
+                        out message);
                 case CaptureSatisfactionThumbEvidenceCommand:
                     return TryStartAutomationSingleSmoke(
                         "satisfaction_2.fbx",
@@ -806,6 +830,26 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static float[] GetFullRegressionEvidenceSampleTimesForTest()
         {
             return (float[])SatisfactionFullRegressionEvidenceSampleTimes.Clone();
+        }
+
+        private static string GetQuickVmdSmokeCommandForTest()
+        {
+            return CaptureSatisfactionQuickVmdSmokeCommand;
+        }
+
+        private static string GetQuickVmdSmokeFbxFileNameForTest()
+        {
+            return SatisfactionFbxFileName;
+        }
+
+        private static float GetQuickVmdSmokeDurationSecondsForTest()
+        {
+            return QuickVmdSmokeDurationSeconds;
+        }
+
+        private static int GetQuickVmdSmokeTargetFrameCountForTest()
+        {
+            return QuickVmdSmokeTargetFrameCount;
         }
 
         private static void TrackSingleSmoke(FileManager fileManager, string fbxFileName, string mode)

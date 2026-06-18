@@ -687,6 +687,114 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_MmdIkExportRecoveryTrigger_When_RawStepIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt()
+        {
+            var positions = new List<Vector3>
+            {
+                Vector3.zero,
+                new Vector3(0.05f, 0f, 0f),
+                new Vector3(0.5f, 0f, 0f),
+                new Vector3(0.6f, 0f, 0f)
+            };
+
+            MethodInfo method = typeof(UnityHumanoidVMDRecorder).GetMethod(
+                "ClampMmdIkExportDeltaSpikePositions",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                new[]
+                {
+                    typeof(List<Vector3>),
+                    typeof(int),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float).MakeByRefType(),
+                    typeof(float).MakeByRefType()
+                },
+                null);
+
+            Assert.That(method, Is.Not.Null, "IK export clamp needs a conditional recovery limit for large raw foot steps.");
+
+            object[] arguments =
+            {
+                positions,
+                positions.Count,
+                0.11f,
+                0.12f,
+                0.30f,
+                0f,
+                0f
+            };
+
+            int clamped = (int)method.Invoke(null, arguments);
+            float maxBefore = (float)arguments[5];
+            float maxAfter = (float)arguments[6];
+
+            Assert.That(clamped, Is.EqualTo(2));
+            Assert.That(maxBefore, Is.EqualTo(0.45f).Within(0.0001f));
+            Assert.That(maxAfter, Is.LessThan(0.12f));
+            Assert.That(maxAfter, Is.GreaterThan(0.11f));
+            Assert.That(positions[1].x, Is.EqualTo(0.05f).Within(0.0001f));
+            Assert.That(positions[2].x, Is.EqualTo(0.169f).Within(0.0001f));
+            Assert.That(positions[3].x, Is.EqualTo(0.278f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MmdIkExportRecoveryDebt_When_LagDebtIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt()
+        {
+            var positions = new List<Vector3>
+            {
+                Vector3.zero,
+                new Vector3(0.20f, 0f, 0f),
+                new Vector3(0.31f, 0f, 0f),
+                new Vector3(0.42f, 0f, 0f)
+            };
+
+            MethodInfo method = typeof(UnityHumanoidVMDRecorder).GetMethod(
+                "ClampMmdIkExportDeltaSpikePositions",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                new[]
+                {
+                    typeof(List<Vector3>),
+                    typeof(int),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float).MakeByRefType(),
+                    typeof(float).MakeByRefType()
+                },
+                null);
+
+            Assert.That(method, Is.Not.Null, "IK export clamp needs a lag-debt recovery limit for accumulated guard delay.");
+
+            object[] arguments =
+            {
+                positions,
+                positions.Count,
+                0.11f,
+                0.12f,
+                0.30f,
+                0.08f,
+                0f,
+                0f
+            };
+
+            int clamped = (int)method.Invoke(null, arguments);
+            float maxBefore = (float)arguments[6];
+            float maxAfter = (float)arguments[7];
+
+            Assert.That(clamped, Is.EqualTo(3));
+            Assert.That(maxBefore, Is.EqualTo(0.20f).Within(0.0001f));
+            Assert.That(maxAfter, Is.LessThan(0.12f));
+            Assert.That(maxAfter, Is.GreaterThan(0.11f));
+            Assert.That(positions[1].x, Is.EqualTo(0.119f).Within(0.0001f));
+            Assert.That(positions[2].x, Is.EqualTo(0.238f).Within(0.0001f));
+            Assert.That(positions[3].x, Is.EqualTo(0.357f).Within(0.0001f));
+        }
+
+        [Test]
         public void Given_MmdCenterExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep()
         {
             var positions = new List<Vector3>
