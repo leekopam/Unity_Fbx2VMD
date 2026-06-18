@@ -659,6 +659,15 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_QuickVmdSmokeCommand_When_InspectingRunnerPlan_Then_UsesSatisfaction2ForTwoSeconds()
+        {
+            Assert.That(GetRunnerQuickVmdSmokeCommand(), Is.EqualTo("capture_satisfaction_quick_vmd_smoke_2s"));
+            Assert.That(GetRunnerQuickVmdSmokeFbxFileName(), Is.EqualTo("satisfaction_2.fbx"));
+            Assert.That(GetRunnerQuickVmdSmokeDurationSeconds(), Is.EqualTo(2f).Within(0.0001f));
+            Assert.That(GetRunnerQuickVmdSmokeTargetFrameCount(), Is.EqualTo(60));
+        }
+
+        [Test]
         public void Given_RetargeterLegacyState_When_PreparingRecordingStartPose_Then_SamplesRetargeterPlaybackState()
         {
             GameObject ghost = new GameObject("retargeter-prewarm-ghost");
@@ -824,6 +833,30 @@ namespace Tests.Editor.FBXImporter
         {
             MethodInfo method = GetSmokeRunnerMethod("GetFullRegressionEvidenceSampleTimesForTest", Type.EmptyTypes);
             return (float[])method.Invoke(null, Array.Empty<object>());
+        }
+
+        private static string GetRunnerQuickVmdSmokeCommand()
+        {
+            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeCommandForTest", Type.EmptyTypes);
+            return (string)method.Invoke(null, Array.Empty<object>());
+        }
+
+        private static string GetRunnerQuickVmdSmokeFbxFileName()
+        {
+            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeFbxFileNameForTest", Type.EmptyTypes);
+            return (string)method.Invoke(null, Array.Empty<object>());
+        }
+
+        private static float GetRunnerQuickVmdSmokeDurationSeconds()
+        {
+            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeDurationSecondsForTest", Type.EmptyTypes);
+            return (float)method.Invoke(null, Array.Empty<object>());
+        }
+
+        private static int GetRunnerQuickVmdSmokeTargetFrameCount()
+        {
+            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeTargetFrameCountForTest", Type.EmptyTypes);
+            return (int)method.Invoke(null, Array.Empty<object>());
         }
 
         private static MethodInfo GetSmokeRunnerMethod(string methodName, Type[] parameterTypes)

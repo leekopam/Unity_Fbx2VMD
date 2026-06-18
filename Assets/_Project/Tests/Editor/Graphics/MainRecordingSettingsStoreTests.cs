@@ -10,22 +10,25 @@ namespace Tests.Editor.Graphics
         [Test]
         public void Given_SettingsDeliveryPolicy_When_InspectingLayoutSpec_Then_UsesCompanionAndSharedFile()
         {
-            Assert.That(MainRecordingSettingsLayoutSpec.ProductionSurface, Is.EqualTo("companion"));
+            Assert.That(MainRecordingSettingsLayoutSpec.ProductionSurface, Is.EqualTo("electron web companion"));
             Assert.That(MainRecordingSettingsLayoutSpec.FallbackSurface, Does.Contain("popup"));
             Assert.That(MainRecordingSettingsLayoutSpec.DisabledCardCount, Is.GreaterThanOrEqualTo(2));
 
             string policy = MainRecordingSettingsLayoutSpec.DeliveryPolicy;
             Assert.That(policy, Does.Contain("companion"));
+            Assert.That(policy, Does.Contain("Player"));
             Assert.That(policy, Does.Contain("shared settings file"));
-            Assert.That(policy, Does.Contain("no socket"));
+            Assert.That(policy, Does.Contain("HTTP"));
+            Assert.That(policy, Does.Contain("WebSocket"));
         }
 
         [Test]
-        public void Given_EditorSettingsPolicy_When_InspectingLayoutSpec_Then_EditorUsesEditorWindowNotGameViewPopup()
+        public void Given_EditorSettingsPolicy_When_InspectingLayoutSpec_Then_EditorUsesElectronWebLauncherNotGameViewPopup()
         {
-            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurface, Is.EqualTo("editor window"));
-            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Contain("EditorWindow"));
-            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Contain("outside GameView"));
+            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurface, Is.EqualTo("electron web launcher"));
+            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Contain("Electron"));
+            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Contain("Web UI"));
+            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Not.Contain("EditorWindow"));
             Assert.That(
                 MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(
                     requestedOpen: true,
@@ -36,6 +39,12 @@ namespace Tests.Editor.Graphics
                     requestedOpen: true,
                     isEditor: false),
                 Is.True);
+            Assert.That(
+                MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(
+                    requestedOpen: true,
+                    isEditor: false,
+                    isBatchMode: true),
+                Is.False);
         }
 
         [Test]
@@ -87,6 +96,30 @@ namespace Tests.Editor.Graphics
             Assert.That(document.captureWidth, Is.EqualTo(1920));
             Assert.That(document.captureHeight, Is.EqualTo(1080));
             Assert.That(document.openSettingsOnStart, Is.True);
+        }
+
+        [Test]
+        public void Given_DefaultSettingsDocument_When_InspectingCommandEnvelope_Then_KeepsImportCommandContractEmpty()
+        {
+            var document = new MainRecordingSettingsDocument();
+            object command = GetFieldValue(document, "pendingCommand");
+
+            Assert.That(command, Is.Not.Null);
+            Assert.That(GetFieldValue<string>(command, "commandId"), Is.EqualTo(string.Empty));
+            Assert.That(GetFieldValue<string>(command, "action"), Is.EqualTo(string.Empty));
+            Assert.That(GetFieldValue<string>(command, "fbxPath"), Is.EqualTo(string.Empty));
+            Assert.That(GetFieldValue<string>(command, "requestedAtUtc"), Is.EqualTo(string.Empty));
+        }
+
+        [Test]
+        public void Given_DefaultSettingsDocument_When_InspectingRuntimeState_Then_PlayModeIsStopped()
+        {
+            var document = new MainRecordingSettingsDocument();
+            object runtimeState = GetFieldValue(document, "runtimeState");
+
+            Assert.That(runtimeState, Is.Not.Null);
+            Assert.That(GetFieldValue<string>(runtimeState, "playMode"), Is.EqualTo("stopped"));
+            Assert.That(GetFieldValue<string>(runtimeState, "updatedAtUtc"), Is.EqualTo(string.Empty));
         }
 
         [Test]
@@ -176,6 +209,21 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
+        public void Given_SettingsFileWithInvalidRuntimeState_When_Loading_Then_NormalizesPlayModeToStopped()
+        {
+            string folder = CreateTempFolder();
+            string path = Path.Combine(folder, "main-recording-settings.json");
+            File.WriteAllText(path, "{\"schemaVersion\":1,\"runtimeState\":{\"playMode\":\"paused\",\"updatedAtUtc\":100}}");
+
+            var store = new MainRecordingSettingsStore(path);
+            MainRecordingSettingsDocument loaded = store.LoadOrCreateDefault();
+            object runtimeState = GetFieldValue(loaded, "runtimeState");
+
+            Assert.That(GetFieldValue<string>(runtimeState, "playMode"), Is.EqualTo("stopped"));
+            Assert.That(GetFieldValue<string>(runtimeState, "updatedAtUtc"), Is.EqualTo(string.Empty));
+        }
+
+        [Test]
         public void Given_CorruptSettingsFile_When_Loading_Then_BacksUpCorruptFileAndReturnsDefaultDocument()
         {
             string folder = CreateTempFolder();
@@ -215,6 +263,18 @@ namespace Tests.Editor.Graphics
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             return folder;
+        }
+
+        private static object GetFieldValue(object instance, string fieldName)
+        {
+            var field = instance.GetType().GetField(fieldName);
+            Assert.That(field, Is.Not.Null, $"{instance.GetType().FullName}.{fieldName} must exist.");
+            return field.GetValue(instance);
+        }
+
+        private static T GetFieldValue<T>(object instance, string fieldName)
+        {
+            return (T)GetFieldValue(instance, fieldName);
         }
     }
 }

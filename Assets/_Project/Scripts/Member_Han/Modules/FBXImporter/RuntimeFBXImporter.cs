@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.IO;
@@ -795,12 +795,12 @@ namespace Member_Han.Modules.FBXImporter
                 clip.legacy = true;
                 clip.wrapMode = WrapMode.Loop; // 기본 반복 재생
 
-                // 애니메이션 길이 보정
+                // FBX tick → Unity seconds 변환
                 double ticksPerSecond = anim.TicksPerSecond;
                 if (ticksPerSecond <= 1.0)
                 {
                     ticksPerSecond = 60.0;
-                    Debug.LogWarning($"TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 강제합니다.");
+                    Debug.LogWarning($"TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 설정");
                 }
                 float timeScale = 1.0f / (float)ticksPerSecond;
 
@@ -809,7 +809,6 @@ namespace Member_Han.Modules.FBXImporter
                     if (!_nodeMap.TryGetValue(channel.NodeName, out Transform targetNode)) continue;
 
                     string relativePath = GetRelativePath(rootObject.transform, targetNode);
-
                     // 위치 애니메이션
                     if (channel.HasPositionKeys)
                     {
@@ -817,30 +816,18 @@ namespace Member_Han.Modules.FBXImporter
                         {
                             SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
                         }
-                        else if (!_loggedSkippedNonRootPositionCurves)
-                        {
-                            Debug.Log("[RuntimeFBXImporter] Non-root FBX position animation curves were skipped to prevent humanoid arm/leg length deformation during retargeting.");
-                            _loggedSkippedNonRootPositionCurves = true;
-                        }
                     }
-
                     // 회전 애니메이션
                     if (channel.HasRotationKeys)
                     {
                         SetRotationCurves(clip, relativePath, channel.RotationKeys, timeScale);
                     }
-
                     // 스케일 애니메이션
                     if (channel.HasScalingKeys)
                     {
                         if (ImportScaleCurves)
                         {
                             SetScaleCurves(clip, relativePath, channel.ScalingKeys, timeScale);
-                        }
-                        else if (!_loggedSkippedScaleCurves)
-                        {
-                            Debug.Log("[RuntimeFBXImporter] FBX scale animation curves were skipped to prevent target model deformation during humanoid retargeting.");
-                            _loggedSkippedScaleCurves = true;
                         }
                     }
                 }
@@ -880,7 +867,8 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
-        private void SetPositionCurves(AnimationClip clip, string relativePath, List<VectorKey> positionKeys, float timeScale)
+        private void SetPositionCurves(
+            AnimationClip clip, string relativePath, List<VectorKey> positionKeys, float timeScale)
         {
             var curveX = new AnimationCurve();
             var curveY = new AnimationCurve();

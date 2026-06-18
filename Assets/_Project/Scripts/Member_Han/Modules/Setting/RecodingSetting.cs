@@ -93,6 +93,19 @@ public sealed class RecodingSetting : MonoBehaviour
     private DateTime lastSharedSettingsWriteTimeUtc = DateTime.MinValue;
     private float nextSharedSettingsPollTime;
     private string lastAppliedSharedSettingsFbxPath = string.Empty;
+    private string lastHandledSharedSettingsCommandId = string.Empty;
+    private static readonly Func<FileManager, string, bool> DefaultSharedSettingsFbxImportStarter =
+        (fileManager, path) => fileManager.TryStartFbxImportFromSharedSettings(path);
+    private static Func<FileManager, string, bool> sharedSettingsFbxImportStarter =
+        DefaultSharedSettingsFbxImportStarter;
+
+#if UNITY_EDITOR
+    public static Func<FileManager, string, bool> SharedSettingsFbxImportStarterForTests
+    {
+        get => sharedSettingsFbxImportStarter;
+        set => sharedSettingsFbxImportStarter = value ?? DefaultSharedSettingsFbxImportStarter;
+    }
+#endif
 
     private void Reset()
     {
@@ -104,6 +117,11 @@ public sealed class RecodingSetting : MonoBehaviour
 
     private void Awake()
     {
+        if (Application.isPlaying)
+        {
+            WriteRuntimePlayModeStateQuietly(MainRecordingSettingsRuntimeState.Playing);
+        }
+
         if (loadSharedSettingsOnAwake)
         {
             LoadSharedSettings();
@@ -115,9 +133,42 @@ public sealed class RecodingSetting : MonoBehaviour
         }
     }
 
+    private void OnDestroy()
+    {
+        if (Application.isPlaying)
+        {
+            WriteRuntimePlayModeStateQuietly(MainRecordingSettingsRuntimeState.Stopped);
+            if (!Application.isEditor)
+            {
+                MainRecordingSettingsRuntimeLauncher.CloseStartedProcessQuietly();
+            }
+        }
+    }
+
     private void Start()
     {
-        if (MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(openSettingsPopupOnStart, Application.isEditor))
+        if (MainRecordingSettingsRuntimeLauncher.ShouldAutoLaunchForPlayer(
+                openSettingsPopupOnStart,
+                Application.isEditor,
+                Application.isBatchMode))
+        {
+            MainRecordingSettingsActionResult launchResult =
+                MainRecordingSettingsRuntimeLauncher.TryLaunchForPlayer(
+                    openSettingsPopupOnStart,
+                    ResolveSharedSettingsFilePathForExternalLauncher());
+            if (!launchResult.Succeeded)
+            {
+                Debug.LogWarning($"[RecodingSetting] {launchResult.UserMessage}");
+                OpenSettingsPopup();
+            }
+
+            return;
+        }
+
+        if (MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(
+                openSettingsPopupOnStart,
+                Application.isEditor,
+                Application.isBatchMode))
         {
             OpenSettingsPopup();
         }
@@ -217,7 +268,11 @@ public sealed class RecodingSetting : MonoBehaviour
             resolvedSharedSettingsFilePath = sharedSettingsStore.SettingsFilePath;
             MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
             lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
-            return ApplySharedSettingsDocument(document, ResolveRecordingFileManager(), true);
+            return ApplySharedSettingsDocument(
+                document,
+                ResolveRecordingFileManager(),
+                startFbxImport: false,
+                clearPendingCommandWhenSkipped: true);
         }
         catch (Exception exception)
         {
@@ -250,10 +305,37 @@ public sealed class RecodingSetting : MonoBehaviour
         }
     }
 
+    private void WriteRuntimePlayModeStateQuietly(string playMode)
+    {
+        MainRecordingSettingsActionResult result = WriteRuntimePlayModeState(playMode);
+        if (!result.Succeeded)
+        {
+            Debug.LogWarning($"[RecodingSetting] {result.UserMessage}");
+        }
+    }
+
+    private MainRecordingSettingsActionResult WriteRuntimePlayModeState(string playMode)
+    {
+        try
+        {
+            EnsureSharedSettingsStore();
+            MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
+            document.runtimeState = MainRecordingSettingsRuntimeState.Create(playMode, DateTime.UtcNow);
+            sharedSettingsStore.Save(document);
+            lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
+            return MainRecordingSettingsActionResult.Success("Play Mode 상태를 기록했습니다.");
+        }
+        catch (Exception exception)
+        {
+            return MainRecordingSettingsActionResult.Failure($"Play Mode 상태 기록에 실패했습니다: {exception.Message}");
+        }
+    }
+
     public MainRecordingSettingsActionResult ApplySharedSettingsDocument(
         MainRecordingSettingsDocument document,
         FileManager fileManager = null,
-        bool startFbxImport = true)
+        bool startFbxImport = true,
+        bool clearPendingCommandWhenSkipped = false)
     {
         if (document == null)
         {
@@ -274,37 +356,120 @@ public sealed class RecodingSetting : MonoBehaviour
             ApplyDiagnosticsToResolvedFileManager(resolvedFileManager);
         }
 
-        string fbxPath = string.IsNullOrWhiteSpace(document.fbxPath)
-            ? string.Empty
-            : document.fbxPath.Trim();
-        if (string.IsNullOrEmpty(fbxPath))
+        if (TryApplyPendingSharedSettingsCommand(
+                document,
+                resolvedFileManager,
+                startFbxImport,
+                clearPendingCommandWhenSkipped,
+                out MainRecordingSettingsActionResult commandResult))
         {
-            return MainRecordingSettingsActionResult.Success("공유 설정을 적용했습니다.");
+            return commandResult;
+        }
+
+        return MainRecordingSettingsActionResult.Success("공유 설정을 적용했습니다.");
+    }
+
+    private bool TryApplyPendingSharedSettingsCommand(
+        MainRecordingSettingsDocument document,
+        FileManager resolvedFileManager,
+        bool startFbxImport,
+        bool clearPendingCommandWhenSkipped,
+        out MainRecordingSettingsActionResult result)
+    {
+        result = default;
+        MainRecordingSettingsCommandEnvelope command = document.pendingCommand;
+        if (command == null || !command.IsImportFbxCommand())
+        {
+            return false;
+        }
+
+        if (string.Equals(lastHandledSharedSettingsCommandId, command.commandId, StringComparison.Ordinal))
+        {
+            ClearPendingSharedSettingsCommand(document);
+            result = MainRecordingSettingsActionResult.Success("공유 설정 명령을 이미 처리했습니다.");
+            return true;
+        }
+
+        if (!startFbxImport)
+        {
+            if (clearPendingCommandWhenSkipped)
+            {
+                ClearPendingSharedSettingsCommand(document);
+            }
+
+            result = MainRecordingSettingsActionResult.Success("Skipped pending FBX import command during initial settings load.");
+            return true;
+        }
+
+        string commandFbxPath = command.fbxPath;
+        commandFbxPath = string.IsNullOrWhiteSpace(commandFbxPath)
+            ? string.Empty
+            : commandFbxPath.Trim();
+
+        if (string.IsNullOrEmpty(commandFbxPath))
+        {
+            ClearPendingSharedSettingsCommand(document);
+            result = MainRecordingSettingsActionResult.Failure("FBX 명령 경로가 비어 있습니다.");
+            return true;
         }
 
         if (resolvedFileManager == null)
         {
-            return MainRecordingSettingsActionResult.Failure("FBX 설정을 적용할 FileManager를 찾지 못했습니다.");
+            ClearPendingSharedSettingsCommand(document);
+            result = MainRecordingSettingsActionResult.Failure("FBX 명령을 적용할 FileManager를 찾지 못했습니다.");
+            return true;
         }
 
-        if (!File.Exists(fbxPath))
+        if (!File.Exists(commandFbxPath))
         {
-            return MainRecordingSettingsActionResult.Failure($"FBX 파일을 찾을 수 없습니다: {fbxPath}");
+            ClearPendingSharedSettingsCommand(document);
+            result = MainRecordingSettingsActionResult.Failure($"FBX 파일을 찾을 수 없습니다: {commandFbxPath}");
+            return true;
         }
 
-        if (!startFbxImport || string.Equals(lastAppliedSharedSettingsFbxPath, fbxPath, StringComparison.OrdinalIgnoreCase))
+        if (!startFbxImport)
         {
-            return MainRecordingSettingsActionResult.Success("공유 설정을 적용했습니다.");
+            result = MainRecordingSettingsActionResult.Success("공유 FBX 명령을 적용했습니다.");
+            return true;
         }
 
-        bool started = resolvedFileManager.TryStartFbxImportFromSharedSettings(fbxPath);
+        bool started = sharedSettingsFbxImportStarter(resolvedFileManager, commandFbxPath);
         if (!started)
         {
-            return MainRecordingSettingsActionResult.Failure("FBX 가져오기를 시작하지 못했습니다.");
+            ClearPendingSharedSettingsCommand(document);
+            result = MainRecordingSettingsActionResult.Failure("FBX 가져오기를 시작하지 못했습니다.");
+            return true;
         }
 
-        lastAppliedSharedSettingsFbxPath = fbxPath;
-        return MainRecordingSettingsActionResult.Success("FBX 가져오기를 시작했습니다.");
+        lastHandledSharedSettingsCommandId = command.commandId;
+        lastAppliedSharedSettingsFbxPath = commandFbxPath;
+        ClearPendingSharedSettingsCommand(document);
+        result = MainRecordingSettingsActionResult.Success("FBX 가져오기를 시작했습니다.");
+        return true;
+    }
+
+    private void ClearPendingSharedSettingsCommand(MainRecordingSettingsDocument document)
+    {
+        if (document == null)
+        {
+            return;
+        }
+
+        document.pendingCommand = new MainRecordingSettingsCommandEnvelope();
+        if (sharedSettingsStore == null)
+        {
+            return;
+        }
+
+        try
+        {
+            sharedSettingsStore.Save(document);
+            lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"[RecodingSetting] 처리한 FBX 명령을 지우지 못했습니다: {exception.Message}");
+        }
     }
 
     public RecordingCaptureResolutionPlan CreateRecordingCaptureResolutionPlan()
@@ -355,6 +520,26 @@ public sealed class RecodingSetting : MonoBehaviour
     private MainRecordingSettingsStore CreateSharedSettingsStore()
     {
         return new MainRecordingSettingsStore(sharedSettingsFilePathOverride);
+    }
+
+    private string ResolveSharedSettingsFilePathForExternalLauncher()
+    {
+        if (!string.IsNullOrWhiteSpace(resolvedSharedSettingsFilePath))
+        {
+            return resolvedSharedSettingsFilePath;
+        }
+
+        if (sharedSettingsStore != null)
+        {
+            return sharedSettingsStore.SettingsFilePath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(sharedSettingsFilePathOverride))
+        {
+            return sharedSettingsFilePathOverride;
+        }
+
+        return MainRecordingSettingsPathResolver.ResolveSettingsFilePath();
     }
 
     private void EnsureSharedSettingsStore()
@@ -424,4 +609,11 @@ public sealed class RecodingSetting : MonoBehaviour
     {
         return PollSharedSettingsIfChanged();
     }
+
+#if UNITY_EDITOR
+    public MainRecordingSettingsActionResult WriteRuntimePlayModeStateForTests(string playMode)
+    {
+        return WriteRuntimePlayModeState(playMode);
+    }
+#endif
 }

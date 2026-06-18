@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using RootMotion.FinalIK;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -45,6 +46,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private const float DefaultDurationSeconds = 31f;
         private const float DefaultFrameRate = 30f;
         private const float DefaultStartDelaySeconds = 0.2f;
+        private const float NoMmdIkDeltaGuardLimitOverrideVmd = float.NaN;
         private const double PlayModeEntryTimeoutSeconds = 15d;
         private const string RunnerStateSessionKey = "Member_Han.YybVisualComparison.RunnerStateJson";
         private const string ManualTestPrefabNameToken = "testPrefab";
@@ -127,6 +129,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public int targetFrameCount;
             public bool enableFingerCloseups;
             public bool enableRecorderParentFrameIkOffsetsWhenCenterParented;
+            public float mmdIkDeltaGuardLimitOverrideVmd;
+            public float mmdIkDeltaGuardRecoveryTriggerVmd;
+            public float mmdIkDeltaGuardRecoveryDebtThresholdVmd;
+            public bool enableFinalIkFootGroundingRuntimeOverride;
             public bool isRunning;
             public bool activeJobFinished;
             public bool advanceAfterPlayStopPending;
@@ -155,6 +161,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static int _targetFrameCount = Mathf.CeilToInt(DefaultDurationSeconds * DefaultFrameRate);
         private static bool _enableFingerCloseups;
         private static bool _enableRecorderParentFrameIkOffsetsWhenCenterParented = true;
+        private static float _mmdIkDeltaGuardLimitOverrideVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+        private static float _mmdIkDeltaGuardRecoveryTriggerVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+        private static float _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+        private static bool _enableFinalIkFootGroundingRuntimeOverride;
         private static bool _isRunning;
         private static bool _activeJobFinished;
         private static bool _activeJobStartedInPlayMode;
@@ -230,7 +240,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 DefaultFbxFileName,
                 DefaultDurationSeconds,
                 enableFingerCloseups: false,
-                enableRecorderParentFrameIkOffsetsWhenCenterParented: true);
+                enableRecorderParentFrameIkOffsetsWhenCenterParented: true,
+                mmdIkDeltaGuardLimitOverrideVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                enableFinalIkFootGroundingRuntimeOverride: false);
         }
 
         [MenuItem(MenuRoot + "Clear Stale Run State", false, 2139)]
@@ -258,6 +272,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _playModeEntryPending = false;
             _playModeEntryRequestedAt = 0d;
             _activeJobStartedInPlayMode = false;
+            _mmdIkDeltaGuardLimitOverrideVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+            _mmdIkDeltaGuardRecoveryTriggerVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+            _enableFinalIkFootGroundingRuntimeOverride = false;
             _isRunning = false;
             ClearPersistedState();
             AppendRunnerTrace($"stale run state cleared reason={reason}");
@@ -270,11 +288,23 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             bool enableFingerCloseups = GetCommandLineBool("-yybCompareFingerCloseups", false);
             bool enableRecorderParentFrameIkOffsetsWhenCenterParented =
                 GetCommandLineBool("-yybCompareRecorderParentFrameIkOffsetsWhenCenterParented", true);
+            float mmdIkDeltaGuardLimitOverrideVmd =
+                GetCommandLineFloat("-yybCompareMmdIkDeltaGuardLimitVmd", NoMmdIkDeltaGuardLimitOverrideVmd);
+            float mmdIkDeltaGuardRecoveryTriggerVmd =
+                GetCommandLineFloat("-yybCompareMmdIkDeltaGuardRecoveryTriggerVmd", NoMmdIkDeltaGuardLimitOverrideVmd);
+            float mmdIkDeltaGuardRecoveryDebtThresholdVmd =
+                GetCommandLineFloat("-yybCompareMmdIkDeltaGuardRecoveryDebtVmd", NoMmdIkDeltaGuardLimitOverrideVmd);
+            bool enableFinalIkFootGroundingRuntimeOverride =
+                GetCommandLineBool("-yybCompareFinalIkFootGroundingEnabled", false);
             StartRun(
                 fbxFileName,
                 durationSeconds,
                 enableFingerCloseups,
-                enableRecorderParentFrameIkOffsetsWhenCenterParented);
+                enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd,
+                enableFinalIkFootGroundingRuntimeOverride);
         }
 
         public static void RunWithOptions(string fbxFileName, float durationSeconds, bool enableFingerCloseups)
@@ -283,7 +313,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 fbxFileName,
                 durationSeconds,
                 enableFingerCloseups,
-                enableRecorderParentFrameIkOffsetsWhenCenterParented: true);
+                enableRecorderParentFrameIkOffsetsWhenCenterParented: true,
+                mmdIkDeltaGuardLimitOverrideVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                enableFinalIkFootGroundingRuntimeOverride: false);
         }
 
         public static void RunWithOptions(
@@ -296,14 +330,100 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 fbxFileName,
                 durationSeconds,
                 enableFingerCloseups,
-                enableRecorderParentFrameIkOffsetsWhenCenterParented);
+                enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmdIkDeltaGuardLimitOverrideVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                enableFinalIkFootGroundingRuntimeOverride: false);
+        }
+
+        public static void RunWithOptions(
+            string fbxFileName,
+            float durationSeconds,
+            bool enableFingerCloseups,
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented,
+            float mmdIkDeltaGuardLimitOverrideVmd)
+        {
+            StartRun(
+                fbxFileName,
+                durationSeconds,
+                enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                enableFinalIkFootGroundingRuntimeOverride: false);
+        }
+
+        public static void RunWithOptions(
+            string fbxFileName,
+            float durationSeconds,
+            bool enableFingerCloseups,
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented,
+            float mmdIkDeltaGuardLimitOverrideVmd,
+            float mmdIkDeltaGuardRecoveryTriggerVmd)
+        {
+            StartRun(
+                fbxFileName,
+                durationSeconds,
+                enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                enableFinalIkFootGroundingRuntimeOverride: false);
+        }
+
+        public static void RunWithOptions(
+            string fbxFileName,
+            float durationSeconds,
+            bool enableFingerCloseups,
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented,
+            float mmdIkDeltaGuardLimitOverrideVmd,
+            float mmdIkDeltaGuardRecoveryTriggerVmd,
+            float mmdIkDeltaGuardRecoveryDebtThresholdVmd,
+            bool enableFinalIkFootGroundingRuntimeOverride)
+        {
+            StartRun(
+                fbxFileName,
+                durationSeconds,
+                enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd,
+                enableFinalIkFootGroundingRuntimeOverride);
+        }
+
+        public static void RunWithOptions(
+            string fbxFileName,
+            float durationSeconds,
+            bool enableFingerCloseups,
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented,
+            float mmdIkDeltaGuardLimitOverrideVmd,
+            float mmdIkDeltaGuardRecoveryTriggerVmd,
+            bool enableFinalIkFootGroundingRuntimeOverride)
+        {
+            StartRun(
+                fbxFileName,
+                durationSeconds,
+                enableFingerCloseups,
+                enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd: NoMmdIkDeltaGuardLimitOverrideVmd,
+                enableFinalIkFootGroundingRuntimeOverride);
         }
 
         private static void StartRun(
             string fbxFileName,
             float durationSeconds,
             bool enableFingerCloseups,
-            bool enableRecorderParentFrameIkOffsetsWhenCenterParented)
+            bool enableRecorderParentFrameIkOffsetsWhenCenterParented,
+            float mmdIkDeltaGuardLimitOverrideVmd,
+            float mmdIkDeltaGuardRecoveryTriggerVmd,
+            float mmdIkDeltaGuardRecoveryDebtThresholdVmd,
+            bool enableFinalIkFootGroundingRuntimeOverride)
         {
             if (_isRunning)
             {
@@ -320,6 +440,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _targetFrameCount = Mathf.Max(1, Mathf.CeilToInt(_durationSeconds * DefaultFrameRate));
             _enableFingerCloseups = enableFingerCloseups;
             _enableRecorderParentFrameIkOffsetsWhenCenterParented = enableRecorderParentFrameIkOffsetsWhenCenterParented;
+            _mmdIkDeltaGuardLimitOverrideVmd = NormalizeMmdIkDeltaGuardLimitOverride(mmdIkDeltaGuardLimitOverrideVmd);
+            _mmdIkDeltaGuardRecoveryTriggerVmd = NormalizeMmdIkDeltaGuardLimitOverride(mmdIkDeltaGuardRecoveryTriggerVmd);
+            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NormalizeMmdIkDeltaGuardLimitOverride(mmdIkDeltaGuardRecoveryDebtThresholdVmd);
+            _enableFinalIkFootGroundingRuntimeOverride = enableFinalIkFootGroundingRuntimeOverride;
 
             try
             {
@@ -415,10 +539,19 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             Debug.Log(
                 $"[YybVisualComparisonBatchRunner] 시작: fbx={_fbxFileName}, duration={_durationSeconds:F2}s, " +
                 $"targetFrames={_targetFrameCount}, fingerCloseups={_enableFingerCloseups}, " +
-                $"recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented}, batchMode={Application.isBatchMode}");
+                $"recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented}, " +
+                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_mmdIkDeltaGuardLimitOverrideVmd)}, " +
+                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryTriggerVmd)}, " +
+                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryDebtThresholdVmd)}, " +
+                $"finalIkFootGrounding={_enableFinalIkFootGroundingRuntimeOverride}, " +
+                $"batchMode={Application.isBatchMode}");
             AppendRunnerTrace(
                 $"run started fbx={_fbxFileName} duration={_durationSeconds:F2}s " +
-                $"fingerCloseups={_enableFingerCloseups} recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented}");
+                $"fingerCloseups={_enableFingerCloseups} recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented} " +
+                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_mmdIkDeltaGuardLimitOverrideVmd)} " +
+                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryTriggerVmd)} " +
+                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryDebtThresholdVmd)} " +
+                $"finalIkFootGrounding={_enableFinalIkFootGroundingRuntimeOverride}");
 
             if (!Application.isBatchMode && RequestRuntimeDiagnosticScriptRefresh())
             {
@@ -601,6 +734,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 throw new InvalidOperationException($"{_activeJob.SceneName} 씬에서 FileManager를 찾지 못했습니다.");
             }
 
+            ApplyFinalIkFootGroundingRuntimeOverride(
+                _activeFileManager,
+                _enableFinalIkFootGroundingRuntimeOverride);
+
             _activeRecorder = _activeFileManager.targetCharacter != null
                 ? _activeFileManager.targetCharacter.GetComponent<HumanoidSampleCode>()
                 : null;
@@ -611,6 +748,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 {
                     vmdRecorder.EnableParentFrameIkOffsetCompensationWhenCenterParented =
                         _enableRecorderParentFrameIkOffsetsWhenCenterParented;
+                    ApplyMmdIkDeltaGuardRuntimeOverride(
+                        vmdRecorder,
+                        _mmdIkDeltaGuardLimitOverrideVmd,
+                        _mmdIkDeltaGuardRecoveryTriggerVmd,
+                        _mmdIkDeltaGuardRecoveryDebtThresholdVmd);
                     vmdRecorder.IgnoreInitialPosition = true;
                 }
             }
@@ -636,6 +778,110 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
 
             Debug.Log($"[YybVisualComparisonBatchRunner] 시작됨: {_activeJob.DisplayName}");
             AppendRunnerTrace($"job started scene={_activeJob.SceneName} display={_activeJob.DisplayName}");
+        }
+
+        private static bool ApplyMmdIkDeltaGuardRuntimeOverride(
+            UnityHumanoidVMDRecorder recorder,
+            float overrideLimitVmd)
+        {
+            return ApplyMmdIkDeltaGuardRuntimeOverride(
+                recorder,
+                overrideLimitVmd,
+                NoMmdIkDeltaGuardLimitOverrideVmd);
+        }
+
+        private static bool ApplyMmdIkDeltaGuardRuntimeOverride(
+            UnityHumanoidVMDRecorder recorder,
+            float overrideLimitVmd,
+            float recoveryTriggerVmd)
+        {
+            return ApplyMmdIkDeltaGuardRuntimeOverride(
+                recorder,
+                overrideLimitVmd,
+                recoveryTriggerVmd,
+                NoMmdIkDeltaGuardLimitOverrideVmd);
+        }
+
+        private static bool ApplyMmdIkDeltaGuardRuntimeOverride(
+            UnityHumanoidVMDRecorder recorder,
+            float overrideLimitVmd,
+            float recoveryTriggerVmd,
+            float recoveryDebtThresholdVmd)
+        {
+            float normalizedLimit = NormalizeMmdIkDeltaGuardLimitOverride(overrideLimitVmd);
+            if (recorder == null || !HasMmdIkDeltaGuardLimitOverride(normalizedLimit))
+            {
+                return false;
+            }
+
+            recorder.ClampMmdIkExportDeltaSpikes = true;
+            float normalizedRecoveryTrigger = NormalizeMmdIkDeltaGuardLimitOverride(recoveryTriggerVmd);
+            if (HasMmdIkDeltaGuardLimitOverride(normalizedRecoveryTrigger))
+            {
+                recorder.UseMmdIkExportDeltaRecoveryLimit = true;
+                recorder.MmdIkExportDeltaRecoveryLimitPerFrame = normalizedLimit;
+                recorder.MmdIkExportDeltaRecoveryTriggerPerFrame = normalizedRecoveryTrigger;
+                recorder.MmdIkExportDeltaRecoveryDebtThresholdPerFrame =
+                    NormalizeMmdIkDeltaGuardLimitOverride(recoveryDebtThresholdVmd);
+                return true;
+            }
+
+            recorder.UseMmdIkExportDeltaRecoveryLimit = false;
+            recorder.MmdIkExportDeltaRecoveryDebtThresholdPerFrame = 0f;
+            recorder.MaxMmdFootIkExportDeltaPerFrame = normalizedLimit;
+            recorder.MaxMmdToeIkExportDeltaPerFrame = normalizedLimit;
+            return true;
+        }
+
+        private static bool ApplyFinalIkFootGroundingRuntimeOverride(FileManager fileManager, bool enabled)
+        {
+            if (fileManager == null)
+            {
+                return false;
+            }
+
+            fileManager.enableFinalIkFootGroundingExperiment = enabled;
+
+            if (!enabled && fileManager.targetCharacter != null)
+            {
+                GrounderBipedIK grounder = fileManager.targetCharacter.GetComponent<GrounderBipedIK>();
+                if (grounder != null)
+                {
+                    grounder.weight = 0f;
+                    grounder.enabled = false;
+                }
+
+                BipedIK bipedIk = fileManager.targetCharacter.GetComponent<BipedIK>();
+                if (bipedIk != null)
+                {
+                    bipedIk.fixTransforms = false;
+                    bipedIk.enabled = false;
+                }
+            }
+
+            return true;
+        }
+
+        private static float NormalizeMmdIkDeltaGuardLimitOverride(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+            {
+                return NoMmdIkDeltaGuardLimitOverrideVmd;
+            }
+
+            return value;
+        }
+
+        private static bool HasMmdIkDeltaGuardLimitOverride(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value) && value > 0f;
+        }
+
+        private static string FormatRuntimeOverride(float value)
+        {
+            return HasMmdIkDeltaGuardLimitOverride(value)
+                ? value.ToString("0.###", CultureInfo.InvariantCulture)
+                : "none";
         }
 
         private static void StartSubManualJob(string targetNameToken)
@@ -1249,6 +1495,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 targetFrameCount = _targetFrameCount,
                 enableFingerCloseups = _enableFingerCloseups,
                 enableRecorderParentFrameIkOffsetsWhenCenterParented = _enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmdIkDeltaGuardLimitOverrideVmd = _mmdIkDeltaGuardLimitOverrideVmd,
+                mmdIkDeltaGuardRecoveryTriggerVmd = _mmdIkDeltaGuardRecoveryTriggerVmd,
+                mmdIkDeltaGuardRecoveryDebtThresholdVmd = _mmdIkDeltaGuardRecoveryDebtThresholdVmd,
+                enableFinalIkFootGroundingRuntimeOverride = _enableFinalIkFootGroundingRuntimeOverride,
                 isRunning = _isRunning,
                 activeJobFinished = _activeJobFinished,
                 advanceAfterPlayStopPending = _advanceAfterPlayStopPending,
@@ -1306,6 +1556,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _targetFrameCount = Mathf.Max(1, state.targetFrameCount);
             _enableFingerCloseups = state.enableFingerCloseups;
             _enableRecorderParentFrameIkOffsetsWhenCenterParented = state.enableRecorderParentFrameIkOffsetsWhenCenterParented;
+            _mmdIkDeltaGuardLimitOverrideVmd = NormalizeMmdIkDeltaGuardLimitOverride(state.mmdIkDeltaGuardLimitOverrideVmd);
+            _mmdIkDeltaGuardRecoveryTriggerVmd = NormalizeMmdIkDeltaGuardLimitOverride(state.mmdIkDeltaGuardRecoveryTriggerVmd);
+            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NormalizeMmdIkDeltaGuardLimitOverride(state.mmdIkDeltaGuardRecoveryDebtThresholdVmd);
+            _enableFinalIkFootGroundingRuntimeOverride = state.enableFinalIkFootGroundingRuntimeOverride;
             _summarySessionId = state.summarySessionId ?? string.Empty;
             _summaryDirectory = state.summaryDirectory ?? string.Empty;
             _projectRoot = state.projectRoot ?? (Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath);
@@ -1601,6 +1855,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 target_frame_count = summaryTargetFrameCount,
                 finger_closeups = _enableFingerCloseups,
                 recorder_parent_ik_offsets_when_center_parented = _enableRecorderParentFrameIkOffsetsWhenCenterParented,
+                mmd_ik_delta_guard_limit_override_vmd = _mmdIkDeltaGuardLimitOverrideVmd,
+                mmd_ik_delta_guard_recovery_trigger_vmd = _mmdIkDeltaGuardRecoveryTriggerVmd,
+                mmd_ik_delta_guard_recovery_debt_vmd = _mmdIkDeltaGuardRecoveryDebtThresholdVmd,
+                final_ik_foot_grounding_enabled = _enableFinalIkFootGroundingRuntimeOverride,
                 reference_clip_name = _referenceClip != null ? _referenceClip.name : string.Empty,
                 reference_clip_asset_path = _referenceClipAssetPath,
                 results = Results.ToArray(),
@@ -1627,6 +1885,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             builder.AppendLine($"- target frames: `{ResolveSummaryTargetFrameCount()}`");
             builder.AppendLine($"- finger closeups: `{_enableFingerCloseups}`");
             builder.AppendLine($"- recorder parent IK offsets (center-parented): `{_enableRecorderParentFrameIkOffsetsWhenCenterParented}`");
+            builder.AppendLine($"- MMD IK delta guard runtime override VMD: `{FormatRuntimeOverride(_mmdIkDeltaGuardLimitOverrideVmd)}`");
+            builder.AppendLine($"- MMD IK delta guard recovery trigger VMD: `{FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryTriggerVmd)}`");
+            builder.AppendLine($"- MMD IK delta guard recovery debt VMD: `{FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryDebtThresholdVmd)}`");
+            builder.AppendLine($"- Final IK foot grounding runtime override: `{_enableFinalIkFootGroundingRuntimeOverride}`");
             builder.AppendLine($"- reference clip: `{(_referenceClip != null ? _referenceClip.name : "")}`");
             builder.AppendLine($"- reference clip asset: `{EscapeMarkdown(_referenceClipAssetPath)}`");
             builder.AppendLine();
@@ -2706,6 +2968,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public int target_frame_count;
             public bool finger_closeups;
             public bool recorder_parent_ik_offsets_when_center_parented;
+            public float mmd_ik_delta_guard_limit_override_vmd;
+            public float mmd_ik_delta_guard_recovery_trigger_vmd;
+            public float mmd_ik_delta_guard_recovery_debt_vmd;
+            public bool final_ik_foot_grounding_enabled;
             public string reference_clip_name;
             public string reference_clip_asset_path;
             public CaptureResult[] results;

@@ -15,6 +15,7 @@ namespace Member_Han.Modules.Graphics
         [SerializeField] private TMP_InputField captureHeightInput;
         [SerializeField] private Toggle openSettingsOnStartToggle;
         [SerializeField] private Button saveButton;
+        [SerializeField] private Button importFbxButton;
         [SerializeField] private TextMeshProUGUI feedbackText;
 
         private MainRecordingSettingsStore store;
@@ -42,6 +43,7 @@ namespace Member_Han.Modules.Graphics
         {
             ApplyReadableKoreanFonts();
             BindSaveButton();
+            BindImportFbxButton();
             LoadSettings();
         }
 
@@ -94,6 +96,46 @@ namespace Member_Han.Modules.Graphics
             }
         }
 
+        public bool SaveImportFbxCommand()
+        {
+            try
+            {
+                store = CreateStore();
+                ApplyUiToDocument();
+
+                MainRecordingSettingsDocument current = EnsureDocument();
+                string fbxPath = string.IsNullOrWhiteSpace(current.fbxPath)
+                    ? string.Empty
+                    : current.fbxPath.Trim();
+                if (string.IsNullOrEmpty(fbxPath))
+                {
+                    SetStatus("FBX 경로가 비어 있습니다.");
+                    RefreshSaveButtonState();
+                    return false;
+                }
+
+                current.pendingCommand = new MainRecordingSettingsCommandEnvelope
+                {
+                    commandId = Guid.NewGuid().ToString("N"),
+                    action = MainRecordingSettingsCommandEnvelope.ImportFbxAction,
+                    fbxPath = fbxPath,
+                    requestedAtUtc = DateTime.UtcNow.ToString("O"),
+                };
+
+                store.Save(current);
+                SetStatus("FBX 가져오기 명령을 저장했습니다.");
+                RefreshSaveButtonState();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                SetStatus("FBX 가져오기 명령 저장에 실패했습니다.");
+                Debug.LogWarning("[MainRecordingSettingsCompanionController] " + exception.Message);
+                RefreshSaveButtonState();
+                return false;
+            }
+        }
+
         private MainRecordingSettingsStore CreateStore()
         {
             return new MainRecordingSettingsStore(settingsFilePathOverride);
@@ -115,9 +157,25 @@ namespace Member_Han.Modules.Graphics
             saveButton.onClick.AddListener(HandleSaveButtonClicked);
         }
 
+        private void BindImportFbxButton()
+        {
+            if (importFbxButton == null)
+            {
+                return;
+            }
+
+            importFbxButton.onClick.RemoveListener(HandleImportFbxButtonClicked);
+            importFbxButton.onClick.AddListener(HandleImportFbxButtonClicked);
+        }
+
         private void HandleSaveButtonClicked()
         {
             SaveSettings();
+        }
+
+        private void HandleImportFbxButtonClicked()
+        {
+            SaveImportFbxCommand();
         }
 
         private void RefreshUiFromDocument()
@@ -396,6 +454,11 @@ namespace Member_Han.Modules.Graphics
         private bool SaveCurrentDocumentForTests()
         {
             return SaveSettings();
+        }
+
+        private bool SaveImportFbxCommandForTests()
+        {
+            return SaveImportFbxCommand();
         }
 
         private bool IsSaveButtonEnabledForTests()

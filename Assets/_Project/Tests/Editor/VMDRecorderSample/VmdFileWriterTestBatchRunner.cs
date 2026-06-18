@@ -55,6 +55,10 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_ToeIkLocalPosition_When_ParentFootIkMakesEffectiveYBelowFloor_Then_ToeEffectiveYIsClamped);
             RunTest(results, nameof(tests.Given_MmdIkExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep),
                 tests.Given_MmdIkExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep);
+            RunTest(results, nameof(tests.Given_MmdIkExportRecoveryTrigger_When_RawStepIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt),
+                tests.Given_MmdIkExportRecoveryTrigger_When_RawStepIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt);
+            RunTest(results, nameof(tests.Given_MmdIkExportRecoveryDebt_When_LagDebtIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt),
+                tests.Given_MmdIkExportRecoveryDebt_When_LagDebtIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt);
             RunTest(results, nameof(tests.Given_MmdCenterExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep),
                 tests.Given_MmdCenterExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep);
             RunTest(results, nameof(tests.Given_IkClampAndCenterLift_When_ApplyingExportSafetyGuards_Then_ClampRunsBeforeFloorLift),

@@ -13,8 +13,6 @@ namespace Tests.Editor.Graphics
     {
         private const string PreviewWindowTypeName =
             "Member_Han.Modules.Graphics.EditorTools.RecordingPreviewWindow, Assembly-CSharp-Editor";
-        private const string SettingsWindowTypeName =
-            "Member_Han.Modules.Graphics.EditorTools.MainRecordingSettingsWindow, Assembly-CSharp-Editor";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const BindingFlags StaticMembers = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -53,14 +51,14 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
-        public void Given_MainRecordingSettingsWindow_When_InspectingPreviewAction_Then_ConnectsToEditorPreviewOnly()
+        public void Given_RecordingPreviewWindow_When_InspectingMenuContract_Then_IsIndependentFromSettingsSurface()
         {
             Type previewWindowType = RequireType(PreviewWindowTypeName);
-            Type settingsWindowType = RequireType(SettingsWindowTypeName);
 
             Assert.That(InvokeStatic<string>(previewWindowType, "GetWindowTitle"), Is.EqualTo("Recording Preview"));
-            Assert.That(InvokeStatic<string>(settingsWindowType, "GetPreviewActionLabelForTests"), Is.EqualTo("Preview"));
-            Assert.That(InvokeStatic<bool>(settingsWindowType, "CanOpenRecordingPreviewActionForTests"), Is.True);
+            Assert.That(
+                GetStaticMemberValue<string>(previewWindowType, "MenuPath"),
+                Is.EqualTo("Tools/Graphics/Open Recording Preview"));
         }
 
         [Test]

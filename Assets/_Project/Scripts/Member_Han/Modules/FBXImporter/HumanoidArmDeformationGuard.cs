@@ -1189,6 +1189,7 @@ namespace Member_Han.Modules.FBXImporter
             float maxSpreadAngle = Mathf.Clamp(thumbIndexMaxSpreadAngle, 0f, 90f);
             bool useHighRiskManualOverride = false;
             ResolveLinkedPoseSpaceRetargeter();
+            // 수동 기준 포즈에서 위험한 엄지 자세로 판정되면 이 메서드의 제한값을 더 강하게 적용합니다.
             if (linkedPoseSpaceRetargeter != null &&
                 linkedPoseSpaceRetargeter.TryGetHighRiskManualThumbPoseConstraintOverrides(
                     !isRightThumb,
@@ -1225,6 +1226,7 @@ namespace Member_Han.Modules.FBXImporter
                 index != null &&
                 TryNormalize(index.position - hand.position, out indexDirection);
 
+            // 엄지가 검지에서 과하게 벌어지면 검지 방향 쪽으로만 필요한 만큼 당깁니다.
             bool ApplySpreadConstraint(ref Vector3 candidateDirection)
             {
                 if (!hasIndexDirection ||
@@ -1255,6 +1257,7 @@ namespace Member_Han.Modules.FBXImporter
                 return true;
             }
 
+            // 엄지 방향을 손바닥 좌표계로 분해한 뒤 palmNormal 성분만 허용 범위 안에 넣습니다.
             bool ApplyProjectionConstraint(ref Vector3 candidateDirection)
             {
                 if (projectionGuardWeight <= 0f)
@@ -1285,8 +1288,7 @@ namespace Member_Han.Modules.FBXImporter
                 return true;
             }
 
-            // Spread and palm-projection constraints can re-open each other.
-            // Iterate a few times so the final proximal direction honors both.
+            // 벌어짐 제한과 손바닥 투영 제한은 서로 다시 깨뜨릴 수 있어 짧게 반복해 둘 다 만족시키려 합니다.
             for (int pass = 0; pass < 3; pass++)
             {
                 bool changed = false;
@@ -1316,6 +1318,7 @@ namespace Member_Han.Modules.FBXImporter
                 return 0;
             }
 
+            // 방향 차이만 proximal 월드 회전에 얹고, 본 길이나 위치는 직접 바꾸지 않습니다.
             Quaternion correctedWorldRotation = Quaternion.FromToRotation(direction, targetDirection) * proximal.rotation;
             HumanBodyBones proximalBone = isRightThumb ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal;
             if (ShouldPreserveManualThumbWorldRotationCorrection(proximalBone, proximal, correctedWorldRotation))

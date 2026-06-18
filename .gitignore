@@ -133,6 +133,15 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 
 # Local tool dependency caches
 /Tools/**/node_modules/
+/Assets/_Project/Tools/**/node_modules/
+/Assets/_Project/Tools.meta
+/Assets/_Project/Tools/MainRecordingSettings.meta
+/Assets/_Project/Tools/MainRecordingSettings/**/*.meta
+
+# Unity-generated companion script metas are local-only in this workspace.
+/Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsRuntimeState.cs.meta
+/Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingSettingsCompanionLauncher.cs.meta
+/Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingEditorPlayModeGuard.cs.meta
 
 # BEGIN LOCAL PRIVATE WORKFLOW FILES
 /DOCS/Machine_Spirit.md

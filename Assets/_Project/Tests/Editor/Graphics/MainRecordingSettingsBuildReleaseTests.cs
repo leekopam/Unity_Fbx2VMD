@@ -24,6 +24,8 @@ namespace Tests.Editor.Graphics
         private const string FbxImportCaptureScenePath = "Assets/_Project/Scene/FbxImport_Capture.unity";
         private const string CompanionScenePath = "Assets/_Project/Scene/MainRecording_SettingsCompanion.unity";
         private const string ReleaseSmokeScriptPath = "Docs/Machine_Spirit/Tools/Local/scripts/harness/build_main_recording_release_smoke.ps1";
+        private const string ElectronPackageScriptPath = "Assets/_Project/Tools/MainRecordingSettings/scripts/packageElectronRelease.mjs";
+        private const string ElectronPackageJsonPath = "Assets/_Project/Tools/MainRecordingSettings/package.json";
 
         [Test]
         public void Given_BuildSettings_When_InspectingScenes_Then_IncludesCompanionSceneAfterMainRecording()
@@ -144,12 +146,9 @@ namespace Tests.Editor.Graphics
         }
 
         [Test]
-        public void Given_ReleaseBuildRunner_When_InspectingContract_Then_MainAndCompanionOutputsAreSeparate()
+        public void Given_ReleaseBuildRunner_When_InspectingContract_Then_MainAndElectronSettingsOutputsAreSeparate()
         {
             string[] mainScenes = MainRecordingReleaseBuildRunner.MainScenePaths
-                .Select(NormalizePath)
-                .ToArray();
-            string[] companionScenes = MainRecordingReleaseBuildRunner.CompanionScenePaths
                 .Select(NormalizePath)
                 .ToArray();
 
@@ -161,9 +160,28 @@ namespace Tests.Editor.Graphics
                 FbxImportCaptureScenePath,
             }));
             Assert.That(mainScenes, Does.Not.Contain(CompanionScenePath));
-            Assert.That(companionScenes, Is.EqualTo(new[] { CompanionScenePath }));
             Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.MainExecutablePath), Is.EqualTo("Builds/Local/MainRecordingRelease/Unity_Fbx2VMD.exe"));
-            Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.CompanionExecutablePath), Is.EqualTo("Builds/Local/MainRecordingRelease/Unity_Fbx2VMD_Settings.exe"));
+            Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.SettingsPackageDirectory), Is.EqualTo("Builds/Local/MainRecordingRelease/MainRecordingSettings"));
+            Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.SettingsExecutablePath), Is.EqualTo("Builds/Local/MainRecordingRelease/MainRecordingSettings/Unity_Fbx2VMD_Settings.exe"));
+            Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.SettingsResourcesAppPath), Is.EqualTo("Builds/Local/MainRecordingRelease/MainRecordingSettings/resources/app"));
+            Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.SettingsAppArchivePath), Is.EqualTo("Builds/Local/MainRecordingRelease/MainRecordingSettings/resources/app.asar"));
+        }
+
+        [Test]
+        public void Given_ElectronPackageReleaseScript_When_InspectingContents_Then_ProducesSelfContainedSettingsApp()
+        {
+            Assert.That(File.Exists(ElectronPackageScriptPath), Is.True, "Electron release package script must exist.");
+            Assert.That(File.Exists(ElectronPackageJsonPath), Is.True, "Electron package.json must exist.");
+
+            string script = File.ReadAllText(ElectronPackageScriptPath);
+            string packageJson = File.ReadAllText(ElectronPackageJsonPath);
+
+            Assert.That(packageJson, Does.Contain("\"package:release\""));
+            Assert.That(script, Does.Contain("Unity_Fbx2VMD_Settings.exe"));
+            Assert.That(script, Does.Contain("resourcesAppPath"));
+            Assert.That(script, Does.Contain("app.asar"));
+            Assert.That(script, Does.Contain("node_modules/ws"));
+            Assert.That(script, Does.Not.Contain("electron-packager"));
         }
 
         [Test]
@@ -175,7 +193,11 @@ namespace Tests.Editor.Graphics
                 "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsActions.cs",
                 "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsCompanionController.cs",
                 "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsDocument.cs",
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsLaunchPlan.cs",
                 "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsPathResolver.cs",
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsRuntimeBootstrap.cs",
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsRuntimeLauncher.cs",
+                "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsRuntimeState.cs",
                 "Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsStore.cs",
                 "Assets/_Project/Scripts/Member_Han/Modules/Setting/RecodingSetting.cs",
             };
@@ -198,8 +220,31 @@ namespace Tests.Editor.Graphics
             Assert.That(script, Does.Contain("Member_Han.Build.EditorTools.MainRecordingReleaseBuildRunner.BuildWindowsSmoke"));
             Assert.That(script, Does.Contain("Unity_Fbx2VMD.exe"));
             Assert.That(script, Does.Contain("Unity_Fbx2VMD_Settings.exe"));
+            Assert.That(script, Does.Contain("MainRecordingSettings"));
             Assert.That(script, Does.Contain("main_exe_exists"));
             Assert.That(script, Does.Contain("settings_exe_exists"));
+            Assert.That(script, Does.Contain("settings_app_resources_exist"));
+            Assert.That(script, Does.Contain("settings_app_archive_exists"));
+            Assert.That(script, Does.Contain("settings_package_mode"));
+            Assert.That(script, Does.Contain("player_autostart_settings_process_started"));
+            Assert.That(script, Does.Contain("settings_http_health_status"));
+            Assert.That(script, Does.Contain("settings_websocket_status_messages"));
+            Assert.That(script, Does.Contain("settings_process_exited_after_player_close"));
+        }
+
+        [Test]
+        public void Given_ReleaseBuildRunner_When_InspectingContract_Then_RemovesStaleRootSettingsCompanionOutput()
+        {
+            Assert.That(
+                NormalizePath(MainRecordingReleaseBuildRunner.StaleRootSettingsExecutablePath),
+                Is.EqualTo("Builds/Local/MainRecordingRelease/Unity_Fbx2VMD_Settings.exe"));
+            Assert.That(
+                NormalizePath(MainRecordingReleaseBuildRunner.StaleRootSettingsDataDirectory),
+                Is.EqualTo("Builds/Local/MainRecordingRelease/Unity_Fbx2VMD_Settings_Data"));
+
+            string source = File.ReadAllText(
+                "Assets/_Project/Scripts/Member_Han/Build/Editor/MainRecordingReleaseBuildRunner.cs");
+            Assert.That(source, Does.Contain("DeleteStaleRootSettingsCompanionOutputs"));
         }
 
         [Test]

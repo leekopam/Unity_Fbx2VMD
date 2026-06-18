@@ -8,6 +8,8 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Member_Han.Modules.FileSystem;
 using Member_Han.Modules.Graphics;
+using RootMotion;
+using RootMotion.FinalIK;
 
 namespace Member_Han.Modules.FBXImporter
 {
@@ -302,7 +304,7 @@ namespace Member_Han.Modules.FBXImporter
         public bool showGhostModel = false;
 
         [Tooltip("When the imported Ghost has no renderers, draw a simple skeleton fallback so the debug display is still visible.")]
-        public bool showGhostSkeletonWhenNoRenderers = true;
+        public bool showGhostSkeletonWhenNoRenderers = false;
 
         [Header("Golden Hand Settings")]
         [Tooltip("Finger Stretch Scale (Default 1.0)")]
@@ -560,6 +562,31 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("작은 late visual grounding smoothing 보정이 한 프레임에 움직일 수 있는 최대 Y 이동량입니다.")]
         [Range(0.001f, 0.05f)] public float MaxLateVisualGroundingStepPerFrame = 0.003f;
+
+        [Header("Final IK Foot Grounding Experiment")]
+        [Tooltip("Opt-in only. Adds BipedIK + GrounderBipedIK as a low-weight foot contact experiment after PoseSpaceRetargeter.")]
+        public bool enableFinalIkFootGroundingExperiment = false;
+
+        [Tooltip("GrounderBipedIK master weight. Keep low so it cannot replace PoseSpaceRetargeter output.")]
+        [Range(0f, 0.25f)] public float finalIkFootGroundingWeight = 0.15f;
+
+        [Tooltip("Maximum vertical step searched by Final IK grounding.")]
+        [Range(0f, 0.08f)] public float finalIkFootGroundingMaxStep = 0.05f;
+
+        [Tooltip("Approximate foot radius for Final IK grounding ray/capsule casts.")]
+        [Range(0.01f, 0.2f)] public float finalIkFootGroundingFootRadius = 0.06f;
+
+        [Tooltip("Velocity prediction for Final IK grounding. Keep zero until visual evidence proves pre-echo is safe.")]
+        [Range(0f, 0.2f)] public float finalIkFootGroundingPrediction = 0f;
+
+        [Tooltip("Foot rotation correction weight. Keep zero for the first contact-only experiment.")]
+        [Range(0f, 1f)] public float finalIkFootGroundingFootRotationWeight = 0f;
+
+        [Tooltip("Pelvis smoothing damper used by the Final IK grounding solver.")]
+        [Range(0f, 1f)] public float finalIkFootGroundingPelvisDamper = 0.1f;
+
+        [Tooltip("Log when the opt-in Final IK foot grounding experiment is configured.")]
+        public bool logFinalIkFootGroundingExperiment = false;
 
         [Header("Thumb Digital Orthopedics (Offset)")]
         [Tooltip("양손 공통 엄지 회전 Offset입니다. YYB 엄지 기준축이 수동 기준과 다를 때 최종 렌더 포즈의 엄지 첫 관절 기준축을 보정합니다.")]
@@ -1550,7 +1577,7 @@ namespace Member_Han.Modules.FBXImporter
                 string fileName = Path.GetFileName(sourcePath);
                 string targetPath = sourcePath; // 기본값: 원본 경로 사용
 
-                // 파일 복사
+                // 파일 복사본
                 if (saveToImportFolder)
                 {
                     string targetDir = Path.Combine(Application.dataPath, "Resources", IMPORT_FBX_FOLDER);
@@ -1600,7 +1627,7 @@ namespace Member_Han.Modules.FBXImporter
                     // Ghost Container Pattern (스케일 방어막)
                     // Legacy Animation이 실행되면 자식(importedModel)의 Scale은 무조건 1.0으로 강제 원복
                     // 이를 방어하기 위해 부모(Container)에서 0.01로 눌러버리는 구조가 필수
-                    Debug.Log($"[System] 🛡️ Activating Ghost Container... (Scale Lock: 0.01)");
+                    Debug.Log($"[System]  Activating Ghost Container... (Scale Lock: 0.01)");
 
                     // 컨테이너 생성
                     GameObject ghostContainer = new GameObject($"GhostContainer_{importedModel.name}");
@@ -1673,6 +1700,7 @@ namespace Member_Han.Modules.FBXImporter
                     {
                         ConfigureTargetThumbDeformationGuard(targetObject, anim, retargeter);
                     }
+                    ConfigureFinalIkFootGroundingExperiment(targetObject);
 
                     // 지연 녹화 시퀀스 시작
                     var ghostAnim = importedModel.GetComponent<Animation>();
@@ -2661,6 +2689,81 @@ namespace Member_Han.Modules.FBXImporter
             {
                 Debug.Log("[FileManager] 자동 retarget 경로에서 IKControl을 제거합니다.");
                 Destroy(ikControl);
+            }
+
+            ConfigureFinalIkFootGroundingExperiment(targetObject);
+        }
+
+        private void ConfigureFinalIkFootGroundingExperiment(GameObject targetObject)
+        {
+            if (targetObject == null)
+            {
+                return;
+            }
+
+            GrounderBipedIK existingGrounder = targetObject.GetComponent<GrounderBipedIK>();
+            BipedIK existingBipedIk = targetObject.GetComponent<BipedIK>();
+            if (!enableFinalIkFootGroundingExperiment)
+            {
+                if (existingGrounder != null)
+                {
+                    existingGrounder.weight = 0f;
+                    existingGrounder.enabled = false;
+                }
+
+                if (existingBipedIk != null)
+                {
+                    existingBipedIk.fixTransforms = false;
+                    existingBipedIk.enabled = false;
+                }
+
+                return;
+            }
+
+            BipedIK bipedIk = existingBipedIk;
+            if (bipedIk == null)
+            {
+                bipedIk = targetObject.AddComponent<BipedIK>();
+            }
+
+            Animator animator = targetObject.GetComponent<Animator>();
+            if (animator != null && animator.isHuman)
+            {
+                BipedReferences references = bipedIk.references;
+                BipedReferences.AutoDetectReferences(
+                    ref references,
+                    targetObject.transform,
+                    BipedReferences.AutoDetectParams.Default);
+                bipedIk.references = references;
+            }
+
+            bipedIk.SetToDefaults();
+            bipedIk.fixTransforms = true;
+            bipedIk.enabled = true;
+
+            GrounderBipedIK grounder = existingGrounder;
+            if (grounder == null)
+            {
+                grounder = targetObject.AddComponent<GrounderBipedIK>();
+            }
+
+            grounder.ik = bipedIk;
+            grounder.weight = Mathf.Clamp(finalIkFootGroundingWeight, 0f, 0.25f);
+            grounder.spineBend = 0f;
+            grounder.spineSpeed = 0f;
+            grounder.solver.maxStep = Mathf.Clamp(finalIkFootGroundingMaxStep, 0f, 0.08f);
+            grounder.solver.footRadius = Mathf.Clamp(finalIkFootGroundingFootRadius, 0.01f, 0.2f);
+            grounder.solver.prediction = Mathf.Clamp(finalIkFootGroundingPrediction, 0f, 0.2f);
+            grounder.solver.footRotationWeight = Mathf.Clamp01(finalIkFootGroundingFootRotationWeight);
+            grounder.solver.pelvisDamper = Mathf.Clamp01(finalIkFootGroundingPelvisDamper);
+            grounder.enabled = grounder.weight > 0f;
+
+            if (logFinalIkFootGroundingExperiment)
+            {
+                Debug.Log(
+                    $"[FileManager] Final IK foot grounding experiment configured: " +
+                    $"weight={grounder.weight:F3}, maxStep={grounder.solver.maxStep:F3}, " +
+                    $"footRadius={grounder.solver.footRadius:F3}");
             }
         }
 

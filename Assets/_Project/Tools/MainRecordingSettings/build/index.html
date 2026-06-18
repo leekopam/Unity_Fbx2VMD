@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Onboarding Assistant</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="settings-app">
+      <div class="app-shell" data-shell="main-recording-settings" data-active-panel="onboarding">
+        <nav class="rail" aria-label="설정 도구">
+          <button class="rail-button rail-button-active" type="button" aria-label="홈">
+            <span class="rail-cube" aria-hidden="true"></span>
+          </button>
+          <button class="rail-button" type="button" aria-label="계산 도구">
+            <span class="rail-symbol" aria-hidden="true">S</span>
+          </button>
+          <button class="rail-button" type="button" aria-label="조명 도구">
+            <span class="rail-symbol" aria-hidden="true">L</span>
+          </button>
+          <div class="rail-spacer" aria-hidden="true"></div>
+          <button class="rail-button rail-button-dot" type="button" aria-label="메시지">
+            <span class="rail-symbol" aria-hidden="true">M</span>
+          </button>
+          <button class="rail-button" type="button" aria-label="도움말">
+            <span class="rail-symbol" aria-hidden="true">?</span>
+          </button>
+        </nav>
+
+        <aside class="sidebar" aria-label="장면 계층">
+          <button class="sidebar-heading active" type="button" aria-current="page" data-panel-target="onboarding">
+            <span class="sidebar-icon" aria-hidden="true">O</span>
+            <span>Onboarding Assistant</span>
+          </button>
+
+          <section class="tree-section" aria-labelledby="treeCamera">
+            <h2 id="treeCamera">시네마토그래피</h2>
+            <button class="tree-item" type="button" data-panel-target="camera" aria-controls="cameraSettingsPanel">
+              <span class="tree-icon camera-icon" aria-hidden="true"></span>
+              <span>Camera 1</span>
+              <span class="tree-status" aria-hidden="true"></span>
+            </button>
+          </section>
+
+          <section class="tree-section" aria-labelledby="treeEnvironment">
+            <h2 id="treeEnvironment">환경</h2>
+            <button class="tree-item" type="button">
+              <span class="tree-icon cube-icon" aria-hidden="true"></span>
+              <span>Environment</span>
+            </button>
+            <button class="tree-item" type="button">
+              <span class="tree-icon light-icon" aria-hidden="true"></span>
+              <span>Directional Light</span>
+            </button>
+          </section>
+
+          <div class="sidebar-actions" aria-label="편집 도구">
+            <button type="button" aria-label="추가">+</button>
+            <button type="button" aria-label="제거">-</button>
+            <button type="button" aria-label="복제">::</button>
+            <button type="button" aria-label="편집">/</button>
+            <button type="button" aria-label="더 보기">...</button>
+          </div>
+        </aside>
+
+        <section class="content-pane" aria-labelledby="settingsTitle">
+          <header class="content-header">
+            <h1 id="settingsTitle">Onboarding Assistant</h1>
+            <div id="statusBadge" class="status-badge" data-status="idle" aria-label="WebSocket 연결 상태" aria-live="polite">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="statusText">연결 안 됨</span>
+            </div>
+          </header>
+
+          <div class="panel-view" data-panel-view="onboarding">
+            <section class="card-stack" aria-label="설정 시작">
+              <article class="onboarding-card card-primary" data-card="fbx-import">
+                <div class="card-copy">
+                  <h2>FBX 파일 임포트</h2>
+                  <p>FBX 파일을 선택해 프로젝트로 가져오고 모션 캡쳐 설정을 시작합니다.</p>
+                </div>
+                <div class="fbx-action-row">
+                  <button id="importButton" class="card-button card-button-primary" type="button" aria-label="FBX 파일 가져오기">FBX 가져오기</button>
+                </div>
+              </article>
+
+              <article class="onboarding-card card-secondary" data-card="interaction">
+                <div class="card-copy">
+                  <h2>상호작용 설정</h2>
+                  <p>시청자 상호작용 설정은 다음 단계에서 연결합니다.</p>
+                </div>
+                <button class="card-button" type="button" disabled>준비중</button>
+              </article>
+
+              <article class="onboarding-card card-tertiary" data-card="community">
+                <div class="card-copy">
+                  <h2>커뮤니티 참여</h2>
+                  <p>질문이나 의견을 남기는 흐름은 Web UI 기본 구조가 안정된 뒤 확장합니다.</p>
+                </div>
+                <button class="card-button" type="button" disabled>준비중</button>
+              </article>
+            </section>
+
+            <p id="feedback" class="feedback" data-tone="info" role="status" aria-live="polite"></p>
+
+            <section class="event-panel" aria-labelledby="eventLogTitle">
+              <h2 id="eventLogTitle">이벤트 로그</h2>
+              <div id="eventLog" class="event-log" data-empty="true"></div>
+            </section>
+          </div>
+
+          <section id="cameraSettingsPanel" class="panel-view camera-settings-panel" data-panel-view="camera" aria-labelledby="cameraSettingsTitle" hidden>
+            <nav class="anchor-nav" aria-label="Camera 1 설정 섹션">
+              <a href="#cameraLens">렌즈</a>
+              <a href="#cameraMotion">모션</a>
+              <a href="#cameraOutput">출력</a>
+            </nav>
+
+            <div class="detail-header">
+              <p class="detail-kicker">시네마토그래피</p>
+              <h2 id="cameraSettingsTitle">Camera 1 설정</h2>
+            </div>
+
+            <section class="camera-settings-grid" aria-label="Camera 1 설정값">
+              <article id="cameraLens" class="camera-card">
+                <h3>렌즈</h3>
+                <label class="control-group">
+                  화각
+                  <input type="range" min="18" max="85" value="35" aria-label="카메라 화각" />
+                </label>
+                <div class="control-grid">
+                  <label class="control-row">
+                    Near
+                    <input type="number" value="0.3" step="0.1" aria-label="Near clipping plane" />
+                  </label>
+                  <label class="control-row">
+                    Far
+                    <input type="number" value="1000" step="10" aria-label="Far clipping plane" />
+                  </label>
+                </div>
+              </article>
+
+              <article id="cameraMotion" class="camera-card">
+                <h3>모션</h3>
+                <div class="segmented-control" aria-label="카메라 추적 방식">
+                  <button type="button" aria-pressed="true">고정</button>
+                  <button type="button" aria-pressed="false">추적</button>
+                </div>
+                <label class="control-group">
+                  흔들림 보정
+                  <input type="range" min="0" max="100" value="60" aria-label="흔들림 보정" />
+                </label>
+              </article>
+
+              <article id="cameraOutput" class="camera-card">
+                <h3>출력</h3>
+                <div class="control-grid">
+                  <label class="control-row">
+                    Width
+                    <input type="number" value="1920" step="1" aria-label="출력 너비" />
+                  </label>
+                  <label class="control-row">
+                    Height
+                    <input type="number" value="1080" step="1" aria-label="출력 높이" />
+                  </label>
+                </div>
+              </article>
+            </section>
+
+            <details class="detail-accordion">
+              <summary>Camera 1 적용 범위</summary>
+              <p>이 패널은 녹화 카메라 설정을 한 화면에서 조정하기 위한 진입점입니다.</p>
+            </details>
+          </section>
+        </section>
+
+      </div>
+    </main>
+    <script type="module" src="../client/settingsUi.js"></script>
+  </body>
+</html>

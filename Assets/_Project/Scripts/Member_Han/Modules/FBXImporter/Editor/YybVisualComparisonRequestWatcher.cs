@@ -81,6 +81,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public string fbx_file;
             public float duration_seconds = 31f;
             public bool finger_closeups;
+            public float mmd_ik_delta_guard_limit_vmd = float.NaN;
+            public float mmd_ik_delta_guard_recovery_trigger_vmd = float.NaN;
+            public float mmd_ik_delta_guard_recovery_debt_vmd = float.NaN;
+            public bool final_ik_foot_grounding_enabled;
         }
 
         [Serializable]
@@ -246,7 +250,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 YybVisualComparisonBatchRunner.RunWithOptions(
                     request.fbx_file,
                     request.duration_seconds,
-                    request.finger_closeups);
+                    request.finger_closeups,
+                    enableRecorderParentFrameIkOffsetsWhenCenterParented: true,
+                    mmdIkDeltaGuardLimitOverrideVmd: request.mmd_ik_delta_guard_limit_vmd,
+                    mmdIkDeltaGuardRecoveryTriggerVmd: request.mmd_ik_delta_guard_recovery_trigger_vmd,
+                    mmdIkDeltaGuardRecoveryDebtThresholdVmd: request.mmd_ik_delta_guard_recovery_debt_vmd,
+                    enableFinalIkFootGroundingRuntimeOverride: request.final_ik_foot_grounding_enabled);
             }
             catch (Exception ex)
             {
