@@ -37,6 +37,58 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_BodyPositionSpike_When_CalculatingVisualPoseSpikeWeight_Then_UsesStrongOutlierClamp);
             RunTest(results, nameof(tests.Given_MainRecordingHeadSpikeResidualBodyDelta_When_CalculatingVisualPoseSpikeWeight_Then_UsesStrongOutlierClamp),
                 tests.Given_MainRecordingHeadSpikeResidualBodyDelta_When_CalculatingVisualPoseSpikeWeight_Then_UsesStrongOutlierClamp);
+            RunTest(results, nameof(tests.Given_EditorReferenceShoulderMuscle_When_BlendingVisualPoseSpike_Then_PreservesCurrentReferenceValue),
+                tests.Given_EditorReferenceShoulderMuscle_When_BlendingVisualPoseSpike_Then_PreservesCurrentReferenceValue);
+            RunTest(results, nameof(tests.Given_RowLocalForearmStretchSpike_When_BlendingVisualPoseSpikeWithClamp_Then_LimitsBlendAroundCurrent),
+                tests.Given_RowLocalForearmStretchSpike_When_BlendingVisualPoseSpikeWithClamp_Then_LimitsBlendAroundCurrent);
+            RunTest(results, nameof(tests.Given_BodyPoseSpikeForearmStretchRow_When_BlendingVisualPoseSpikeWithClamp_Then_LimitsBlendAroundCurrent),
+                tests.Given_BodyPoseSpikeForearmStretchRow_When_BlendingVisualPoseSpikeWithClamp_Then_LimitsBlendAroundCurrent);
+            RunTest(results, nameof(tests.Given_Frame49StyleForearmValue_When_BlendingVisualPoseSpikeWithClamp_Then_KeepsDefaultSmoothing),
+                tests.Given_Frame49StyleForearmValue_When_BlendingVisualPoseSpikeWithClamp_Then_KeepsDefaultSmoothing);
+            RunTest(results, nameof(tests.Given_EditorReferenceForearmStretchMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference),
+                tests.Given_EditorReferenceForearmStretchMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(tests.Given_EditorReferenceLeftUpperArmTwistMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference),
+                tests.Given_EditorReferenceLeftUpperArmTwistMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(tests.Given_EditorReferenceRightUpperArmTwistMuscle_When_CheckingReferenceUse_Then_UsesReference),
+                tests.Given_EditorReferenceRightUpperArmTwistMuscle_When_CheckingReferenceUse_Then_UsesReference);
+            RunTest(results, nameof(tests.Given_UpperArmTwistPoseInput_When_TransformingRetargetInput_Then_FlipsTwistSign),
+                tests.Given_UpperArmTwistPoseInput_When_TransformingRetargetInput_Then_FlipsTwistSign);
+            RunTest(results, nameof(tests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningRetargetInput_Then_FlipsSignOnly),
+                tests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningRetargetInput_Then_FlipsSignOnly);
+            RunTest(results, nameof(tests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningRetargetInput_Then_KeepsLiveInput),
+                tests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningRetargetInput_Then_KeepsLiveInput);
+            RunTest(results, nameof(tests.Given_RightArmTwistInputSharesModerateOverrangeReferenceSign_When_AligningRetargetInput_Then_FlipsSignOnly),
+                tests.Given_RightArmTwistInputSharesModerateOverrangeReferenceSign_When_AligningRetargetInput_Then_FlipsSignOnly);
+            RunTest(results, nameof(tests.Given_RightArmTwistInputSharesLowerOverrangeReferenceSign_When_AligningRetargetInput_Then_KeepsLiveInput),
+                tests.Given_RightArmTwistInputSharesLowerOverrangeReferenceSign_When_AligningRetargetInput_Then_KeepsLiveInput);
+            RunTest(results, nameof(tests.Given_RightUpperArmTwistReferenceIsModeratelyOverrange_When_CheckingReferenceValueUse_Then_DoesNotUseReference),
+                tests.Given_RightUpperArmTwistReferenceIsModeratelyOverrange_When_CheckingReferenceValueUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(tests.Given_RightUpperArmTwistReferenceIsBounded_When_CheckingReferenceValueUse_Then_UsesReference),
+                tests.Given_RightUpperArmTwistReferenceIsBounded_When_CheckingReferenceValueUse_Then_UsesReference);
+            RunTest(results, nameof(tests.Given_FootHipsAlignedResidualYawCorrection_When_TargetDirectionDiffers_Then_LimitsYawOnlyRotation),
+                tests.Given_FootHipsAlignedResidualYawCorrection_When_TargetDirectionDiffers_Then_LimitsYawOnlyRotation);
+            RunTest(results, nameof(tests.Given_OneFootResidualAlreadyInsideGate_When_ResolvingYawMaxAngle_Then_ProtectsPassingSide),
+                tests.Given_OneFootResidualAlreadyInsideGate_When_ResolvingYawMaxAngle_Then_ProtectsPassingSide);
+            RunTest(results, nameof(tests.Given_HipsLocalReferenceWouldIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate),
+                tests.Given_HipsLocalReferenceWouldIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate);
+            RunTest(results, nameof(tests.Given_HipsLocalReferenceDoesNotIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate),
+                tests.Given_HipsLocalReferenceDoesNotIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate);
+            RunTest(results, nameof(tests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly),
+                tests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly);
+            RunTest(results, nameof(tests.Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis),
+                tests.Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis);
+            RunTest(results, nameof(tests.Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedRowLocalBodyPosition_Then_MovesTowardGhost),
+                tests.Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedRowLocalBodyPosition_Then_MovesTowardGhost);
+            RunTest(results, nameof(tests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput),
+                tests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput);
+            RunTest(results, nameof(tests.Given_ManualAnimatorBodyPositionXzFrameGateBlend_When_ResolvingWeight_Then_RampsAtEdges),
+                tests.Given_ManualAnimatorBodyPositionXzFrameGateBlend_When_ResolvingWeight_Then_RampsAtEdges);
+            RunTest(results, nameof(tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
+                tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
+            RunTest(results, nameof(tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
+                tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
+            RunTest(results, nameof(tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist),
+                tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist);
             RunTest(results, nameof(tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed),
                 tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed);
             RunTest(results, nameof(tests.Given_ZeroPlaybackSpeed_When_CalculatingManualLegacyTime_Then_UsesNormalPlaybackStep),
@@ -49,6 +101,10 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_CurrentTimeAlreadyAdvanced_When_CalculatingManualLegacyTime_Then_DoesNotAdvance);
             RunTest(results, nameof(tests.Given_CurrentTimeLoopedBack_When_CalculatingManualLegacyTime_Then_DoesNotAdvance),
                 tests.Given_CurrentTimeLoopedBack_When_CalculatingManualLegacyTime_Then_DoesNotAdvance);
+            RunTest(results, nameof(tests.Given_TailSegmentWrapsToClipStart_When_CheckingLegacyEndWrap_Then_ClampsToClipEnd),
+                tests.Given_TailSegmentWrapsToClipStart_When_CheckingLegacyEndWrap_Then_ClampsToClipEnd);
+            RunTest(results, nameof(tests.Given_MidClipTimeJumpsBackward_When_CheckingLegacyEndWrap_Then_DoesNotClamp),
+                tests.Given_MidClipTimeJumpsBackward_When_CheckingLegacyEndWrap_Then_DoesNotClamp);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

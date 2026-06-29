@@ -541,6 +541,29 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     DrawProperty("manualAnimatorHipsLocalPositionWeight", "Hips localPosition 보정 강도");
                     DrawProperty("manualAnimatorHipsLocalPositionMaxOffset", "Hips localPosition 최대 보정");
                 }
+                DrawProperty("useManualAnimatorFootLocalRotationReference", "Lower-body localRotation runtime reference");
+                if (GetBool("useManualAnimatorFootLocalRotationReference"))
+                {
+                    DrawProperty("manualAnimatorFootLocalRotationReferenceWeight", "Lower-body localRotation reference weight");
+                }
+                DrawProperty("useManualAnimatorLowerBodySegmentDirectionReference", "Lower-body segment direction runtime reference");
+                if (GetBool("useManualAnimatorLowerBodySegmentDirectionReference"))
+                {
+                    DrawProperty("manualAnimatorLowerBodySegmentDirectionReferenceWeight", "Lower-body segment direction weight");
+                    DrawProperty("manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle", "Lower-body segment direction max angle");
+                    DrawProperty("disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference", "Disable UpperLegToLowerLeg segment direction");
+                    DrawProperty("manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle", "UpperLegToLowerLeg segment direction max angle override");
+                    DrawProperty("disableManualAnimatorLowerLegToFootSegmentDirectionReference", "Disable LowerLegToFoot segment direction");
+                    DrawProperty("manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle", "LowerLegToFoot segment direction max angle override");
+                    DrawProperty("disableManualAnimatorFootToToesSegmentDirectionReference", "Disable FootToToes segment direction");
+                    DrawProperty("manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle", "FootToToes segment direction max angle override");
+                }
+                DrawProperty("useManualAnimatorBipedIkFootPositionReference", "BipedIK foot position runtime reference");
+                if (GetBool("useManualAnimatorBipedIkFootPositionReference"))
+                {
+                    DrawProperty("manualAnimatorBipedIkFootPositionReferenceWeight", "BipedIK foot position reference weight");
+                    DrawProperty("manualAnimatorBipedIkFootPositionReferenceMaxOffset", "BipedIK foot position max offset");
+                }
                 if (GetBool("useManualAnimatorFingerPoseReference"))
                 {
                     EditorGUILayout.HelpBox(
@@ -634,6 +657,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 DrawProperty("YybArmDirectionForearmWeight", "전완 영향도");
                 DrawProperty("YybArmDirectionUpperArmMaxDegrees", "상완 최대 각도");
                 DrawProperty("YybArmDirectionForearmMaxDegrees", "전완 최대 각도");
+                DrawProperty("YybArmDirectionLeftSideWeightScale", "왼쪽 팔 영향도 배율");
+                DrawProperty("YybArmDirectionRightSideWeightScale", "오른쪽 팔 영향도 배율");
                 DrawProperty("logYybArmDirectionRetargetCorrection", "팔 방향 보정 진단 로그");
                 EditorGUI.indentLevel--;
             }
@@ -664,6 +689,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 DrawProperty("YybArmSwingMaxDownDot", "상완 하강 허용치");
                 DrawProperty("YybArmSwingMinHandHorizontalRatio", "손 수평 거리 최소값");
                 DrawProperty("YybArmSwingMaxHandBelowShoulderRatio", "자연 하강 제외 기준");
+                DrawProperty("YybArmSwingHorizontalReachLimitWeight", "수평 reach 제한 강도");
+                DrawProperty("YybArmSwingMaxHandHorizontalReachRatio", "손 수평 reach 최대값");
+                DrawProperty("YybArmSwingRaisedPoseHorizontalReachLimitWeight", "Raised pose reach 제한 강도");
+                DrawProperty("YybArmSwingRaisedPoseMinUpperArmDownDot", "Raised pose 최소 하강 dot");
+                DrawProperty("YybArmSwingRaisedPoseMaxHandBelowShoulderRatio", "Raised pose 아래 위치 제외 기준");
+                DrawProperty("YybArmSwingRaisedPoseMaxHandHorizontalReachRatio", "Raised pose 수평 reach 최대값");
                 DrawProperty("logYybArmSwingLimitCorrection", "상완 하강 제한 진단 로그");
                 EditorGUI.indentLevel--;
             }

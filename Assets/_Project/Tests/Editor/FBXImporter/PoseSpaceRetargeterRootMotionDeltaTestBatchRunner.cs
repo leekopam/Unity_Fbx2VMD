@@ -23,6 +23,8 @@ namespace Tests.Editor.FBXImporter
 
             RunTest(results, nameof(tests.Given_FiniteInputs_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostEditorAndBodyDelta),
                 tests.Given_FiniteInputs_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostEditorAndBodyDelta);
+            RunTest(results, nameof(tests.Given_ZeroMovementScale_When_CalculatingRootMotionDelta_Then_SuppressesGhostEditorAndBodyRootSources),
+                tests.Given_ZeroMovementScale_When_CalculatingRootMotionDelta_Then_SuppressesGhostEditorAndBodyRootSources);
             RunTest(results, nameof(tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN),
                 tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN);
             RunTest(results, nameof(tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_LimitsDeltaAndReportsSpike),

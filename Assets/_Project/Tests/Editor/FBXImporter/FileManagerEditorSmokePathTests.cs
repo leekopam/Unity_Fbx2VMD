@@ -235,18 +235,19 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ControlledSourceAndManualClipExists_When_ResolvingEditorHumanoidReferencePath_Then_UsesControlledSourcePath()
+        public void Given_ControlledSourceAndProjectClipExists_When_ResolvingEditorHumanoidReferencePath_Then_UsesProjectFallbackPath()
         {
             string controlledPath = "Assets/Resources/Import_FBX/dance.fbx";
+            string projectPath = "Assets/_Project/FBX/dance.fbx";
 
             string resolved = ResolveHumanoidReference(
                 controlledPath,
                 controlledPath,
                 @"C:\Project\Assets\Resources\Import_FBX\dance.fbx",
                 controlledPath,
-                "Assets/_Project/FBX/dance.fbx");
+                projectPath);
 
-            Assert.That(resolved, Is.EqualTo(controlledPath));
+            Assert.That(resolved, Is.EqualTo(projectPath));
         }
 
         [Test]

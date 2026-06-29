@@ -3,6 +3,8 @@ using UnityEngine.Playables;
 using UnityEngine.Animations;
 using System;
 using System.Collections.Generic;
+using RootMotion;
+using RootMotion.FinalIK;
 
 namespace Member_Han.Modules.FBXImporter
 {
@@ -14,7 +16,12 @@ namespace Member_Han.Modules.FBXImporter
         private const float RecordingStartHipsBaselineFlipWarningThreshold = 0.02f;
         private const float BodyPositionVisualSpikeThreshold = 0.02f;
         private const float BodyRotationVisualSpikeThresholdDegrees = 25f;
+        private const float FootHipsAlignedResidualYawGateMeters = 0.12f;
+        private const float FootHipsAlignedResidualYawSideGapMeters = 0.005f;
+        private const float FootHipsAlignedResidualYawProtectedMaxAngle = 20f;
+        private const float HipsLocalPositionTargetGapGuardMaxIncreaseMeters = 0.0005f;
         private const string RecordingStartHipsReferenceStagePrewarmComplete = "prewarm-complete";
+        private const int UnresolvedHumanMuscleIndex = -2;
         [Header("--- CORE COMPONENTS ---")]
         public Animator ghostAnimator;  // (Container 내부의 모델)
         public Animator targetAnimator; // 내 캐릭터
@@ -104,6 +111,18 @@ namespace Member_Han.Modules.FBXImporter
 
         public bool useManualAnimatorFullBodyPoseReference = false;
 
+        [Range(0f, 1f)]
+        public float manualAnimatorFullBodyPoseReferenceWeight = 1f;
+
+        [Tooltip("Runtime diagnostic: keep manual full-body reference active but skip lower-body muscles.")]
+        public bool manualAnimatorFullBodyPoseExcludeLowerBodyMuscles = false;
+
+        [Tooltip("Runtime diagnostic: apply manual full-body reference only to lower-body muscles.")]
+        public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnly = false;
+
+        [Tooltip("Runtime diagnostic: apply manual full-body reference only to leg in-out/twist muscles.")]
+        public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly = false;
+
         [Tooltip("Manual Animator finger reference의 엄지 체인 localRotation도 Target에 적용해 모델별 엄지 축 차이를 줄입니다.")]
         public bool useManualAnimatorThumbLocalRotationReference = true;
 
@@ -140,15 +159,38 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Sub_Manual/testPrefab Animator의 HumanPose bodyRotation을 retarget pose 기준으로 사용해 팔꿈치 bend plane 기준축 차이를 줄입니다.")]
         public bool useManualAnimatorBodyRotationReference = true;
 
+        [Range(0f, 1f)]
+        public float manualAnimatorBodyRotationReferenceWeight = 1f;
+
         [Tooltip("preserveTargetBodyPosition=true 일 때 body Y 높이를 수동 기준 Animator의 HumanPose bodyPosition.y로 대체합니다. ghost Legacy-animation bodyPos 스파이크 없이 상체 높이를 애니메이션에 맞게 따라가도록 합니다.")]
         public bool useManualAnimatorBodyPositionYReference = false;
+
+        [Tooltip("Runtime diagnostic: blend HumanPose bodyPosition X/Z toward the manual Animator reference before SetHumanPose.")]
+        public bool useManualAnimatorBodyPositionXzReference = false;
+
+        [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceWeight = 1f;
+
+        [Range(0f, 0.2f)] public float manualAnimatorBodyPositionXzReferenceMaxOffset = 0.025f;
+
+        [Range(0f, 6000f)] public float manualAnimatorBodyPositionXzReferenceFrameGateStart = 0f;
+
+        [Range(0f, 6000f)] public float manualAnimatorBodyPositionXzReferenceFrameGateEnd = 0f;
+
+        [Tooltip("Runtime diagnostic blend width in recorder frames for manual Animator bodyPosition X/Z frame gates. Zero keeps the legacy hard gate.")]
+        [Range(0f, 600f)] public float manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = 0f;
+
+        [Tooltip("Runtime diagnostic scale for the manual Animator bodyPosition X solver-input basis. One keeps the legacy X contribution.")]
+        [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceAxisXScale = 1f;
+
+        [Tooltip("Runtime diagnostic scale for the manual Animator bodyPosition Z solver-input basis. One keeps the legacy Z contribution.")]
+        [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceAxisZScale = 1f;
 
         [Tooltip("수동 기준 Hips localPosition 보정 강도입니다.")]
         [Range(0f, 1f)]
         public float manualAnimatorHipsLocalPositionWeight = 1f;
 
         [Tooltip("프레임당 수동 기준 Hips localPosition으로 이동할 수 있는 최대 보정 거리입니다.")]
-        [Range(0.001f, 0.2f)]
+        [Range(0.001f, 0.5f)]
         public float manualAnimatorHipsLocalPositionMaxOffset = 0.12f;
 
         [Tooltip("Use the manual Animator lowest-foot lift as the grounding target height so jump/foot-height arcs are not flattened to the floor.")]
@@ -161,6 +203,171 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Maximum positive grounding target lift from the manual Animator lowest-foot reference.")]
         [Range(0f, 0.12f)]
         public float manualAnimatorFootHeightGroundingReferenceMaxLift = 0.08f;
+
+        [Tooltip("Apply the manual Animator lower-body leg-chain localRotation to the target as an isolated runtime candidate.")]
+        public bool useManualAnimatorFootLocalRotationReference = false;
+
+        [Tooltip("Blend weight for the manual Animator lower-body leg-chain localRotation reference.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorFootLocalRotationReferenceWeight = 1f;
+
+        [Tooltip("Apply manual Animator lower-body segment directions as an isolated runtime candidate without changing bone lengths or scale.")]
+        public bool useManualAnimatorLowerBodySegmentDirectionReference = false;
+
+        [Tooltip("Blend weight for the manual Animator lower-body segment direction correction.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorLowerBodySegmentDirectionReferenceWeight = 1f;
+
+        [Tooltip("Maximum per-frame lower-body segment direction correction angle in degrees.")]
+        [Range(0f, 20f)]
+        public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 6.2f;
+
+        [Tooltip("Skip only the upper-leg-to-lower-leg segments from the manual Animator lower-body segment direction correction.")]
+        public bool disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = false;
+
+        [Tooltip("Optional upper-leg-to-lower-leg segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
+        [Range(0f, 20f)]
+        public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Skip only the lower-leg-to-foot segments from the manual Animator lower-body segment direction correction.")]
+        public bool disableManualAnimatorLowerLegToFootSegmentDirectionReference = false;
+
+        [Tooltip("Optional lower-leg-to-foot segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
+        [Range(0f, 20f)]
+        public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Optional left lower-leg-to-foot segment direction max angle in degrees. Zero keeps the lower-leg-to-foot segment cap.")]
+        [Range(0f, 20f)]
+        public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Optional right lower-leg-to-foot segment direction max angle in degrees. Zero keeps the lower-leg-to-foot segment cap.")]
+        [Range(0f, 20f)]
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Runtime diagnostic scale for right lower-leg-to-foot correction axis X/Z components. One keeps the original axis.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = 1f;
+
+        [Tooltip("Blend for right lower-leg-to-foot correction strength. The measured default reduces right-foot X/Z residual without worsening hips-aligned foot residual.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.25f;
+
+        [Tooltip("Runtime diagnostic start recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
+        [Range(0f, 2000f)]
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = 0f;
+
+        [Tooltip("Runtime diagnostic end recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
+        [Range(0f, 2000f)]
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = 0f;
+
+        [Tooltip("Runtime diagnostic blend for preserving right foot world rotation after lower-leg-to-foot correction. One keeps the existing endpoint drift.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = 1f;
+
+        [Tooltip("Skip only the foot-to-toes segment from the manual Animator lower-body segment direction correction.")]
+        public bool disableManualAnimatorFootToToesSegmentDirectionReference = false;
+
+        [Tooltip("Optional foot-to-toes-only segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
+        [Range(0f, 20f)]
+        public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Apply a yaw-only upper-leg correction toward the manual Animator hips-relative foot X/Z path.")]
+        public bool useManualAnimatorFootHipsAlignedResidualYawReference = false;
+
+        [Tooltip("Blend weight for the hips-aligned foot X/Z residual yaw correction.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight = 1f;
+
+        [Tooltip("Maximum per-frame yaw correction angle for each upper leg in degrees.")]
+        [Range(0f, 45f)]
+        public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = 15f;
+
+        [Tooltip("Apply manual Animator hips-relative foot positions through BipedIK as an isolated runtime candidate.")]
+        public bool useManualAnimatorBipedIkFootPositionReference = false;
+
+        [Tooltip("Blend weight for manual Animator BipedIK foot position targets.")]
+        [Range(0f, 1f)]
+        public float manualAnimatorBipedIkFootPositionReferenceWeight = 0.65f;
+
+        [Tooltip("Maximum per-frame BipedIK foot target correction distance from the current target foot position.")]
+        [Range(0f, 0.2f)]
+        public float manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0.12f;
+
+        [Tooltip("Apply a right-foot endpoint X/Z correction immediately after SetHumanPose as an isolated runtime candidate.")]
+        public bool usePostSetHumanPoseRightEndpointPositionReference = false;
+
+        [Tooltip("Blend weight for post-SetHumanPose right-foot endpoint X/Z correction.")]
+        [Range(0f, 1f)]
+        public float postSetHumanPoseRightEndpointPositionReferenceWeight = 1f;
+
+        [Tooltip("Maximum per-frame post-SetHumanPose right-foot endpoint X/Z correction distance.")]
+        [Range(0f, 0.2f)]
+        public float postSetHumanPoseRightEndpointPositionReferenceMaxOffset = 0.04f;
+
+        [Tooltip("Scale applied only to positive world-Z endpoint correction after SetHumanPose; 1 keeps existing behavior.")]
+        [Range(0f, 1f)]
+        public float postSetHumanPoseRightEndpointPositionReferencePositiveZScale = 1f;
+
+        [Tooltip("Blend from foot-only endpoint delta to the existing foot/toes average after SetHumanPose; 1 keeps existing behavior.")]
+        [Range(0f, 1f)]
+        public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = 1f;
+
+        [Tooltip("First legacy animation frame for post-SetHumanPose right-foot endpoint correction; 0 with end 0 keeps existing behavior.")]
+        [Range(0f, 6000f)]
+        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = 0f;
+
+        [Tooltip("Last legacy animation frame for post-SetHumanPose right-foot endpoint correction; 0 with start 0 keeps existing behavior.")]
+        [Range(0f, 6000f)]
+        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
+
+        [Tooltip("Runtime diagnostic: apply the post-SetHumanPose endpoint correction to the left foot row instead of the right foot row.")]
+        public bool postSetHumanPoseEndpointPositionUseLeftSide = false;
+
+        [Tooltip("Use the first matched reference foot X/Z offset as the post-SetHumanPose right-foot correction basis.")]
+        public bool usePostSetHumanPoseRightFootEvaluatorXzReference = false;
+
+        [Tooltip("Target normalized right-foot X/Z magnitude for the first-offset evaluator-basis post-SetHumanPose prototype.")]
+        [Range(0f, 0.2f)]
+        public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = 0.049f;
+
+        [Tooltip("Apply a right-foot endpoint X/Z correction immediately before SetHumanPose as an isolated runtime candidate.")]
+        public bool usePreSetHumanPoseRightEndpointPositionReference = false;
+
+        [Tooltip("Blend weight for pre-SetHumanPose right-foot endpoint X/Z correction.")]
+        [Range(0f, 1f)]
+        public float preSetHumanPoseRightEndpointPositionReferenceWeight = 1f;
+
+        [Tooltip("Maximum per-frame pre-SetHumanPose right-foot endpoint X/Z correction distance.")]
+        [Range(0f, 0.2f)]
+        public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset = 0.025f;
+
+        [Tooltip("Scale applied only to positive world-Z endpoint correction before SetHumanPose; 1 keeps existing behavior.")]
+        [Range(0f, 1f)]
+        public float preSetHumanPoseRightEndpointPositionReferencePositiveZScale = 1f;
+
+        [Tooltip("Blend from foot-only endpoint delta to the foot/toes average before SetHumanPose.")]
+        [Range(0f, 1f)]
+        public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = 1f;
+
+        [Tooltip("First legacy animation frame for pre-SetHumanPose right-foot endpoint correction; 0 with end 0 keeps existing behavior.")]
+        [Range(0f, 6000f)]
+        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = 0f;
+
+        [Tooltip("Last legacy animation frame for pre-SetHumanPose right-foot endpoint correction; 0 with start 0 keeps existing behavior.")]
+        [Range(0f, 6000f)]
+        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
+
+        [Tooltip("Runtime diagnostic: apply the pre-SetHumanPose endpoint correction to the left foot row instead of the right foot row.")]
+        public bool preSetHumanPoseEndpointPositionUseLeftSide = false;
+
+        [Tooltip("Runtime diagnostic: use ghost/current endpoint rows as a sign-corrected bodyPosition X/Z translation basis before SetHumanPose.")]
+        public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false;
+
+        [Tooltip("Runtime diagnostic: invert the pre-SetHumanPose endpoint bodyPosition X input delta.")]
+        public bool preSetHumanPoseEndpointPositionInvertBodyPositionX = false;
+
+        [Tooltip("Runtime diagnostic: invert the pre-SetHumanPose endpoint bodyPosition Z input delta.")]
+        public bool preSetHumanPoseEndpointPositionInvertBodyPositionZ = false;
 
         [Tooltip("엄지 시작 위치 보정 강도입니다.")]
         [Range(0f, 1f)]
@@ -250,6 +457,10 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("pose spike smoothing 때 현재 FBX pose를 반영하는 비율입니다.")]
         [Range(0.1f, 1f)]
         public float poseVisualSpikeCurrentWeight = 0.65f;
+
+        [Tooltip("Optional forearm stretch clamp around the current pose during visual spike smoothing. 0 disables the clamp.")]
+        [Range(0f, 1f)]
+        public float poseVisualSpikeForearmStretchClampMaxOffset = 0f;
 
         [Tooltip("이 값보다 큰 muscle delta가 발생하면 frame-time spike가 아니어도 pose smoothing을 적용합니다.")]
         [Range(0.05f, 1f)]
@@ -356,6 +567,371 @@ namespace Member_Han.Modules.FBXImporter
         public float LastRightThumbProximalWorldRotationPreserveLimitedRisk => _lastRightThumbProximalWorldRotationPreserveLimitedRisk;
         public float LastLeftThumbIntermediateWorldRotationPreserveLimitedRisk => _lastLeftThumbIntermediateWorldRotationPreserveLimitedRisk;
         public float LastRightThumbIntermediateWorldRotationPreserveLimitedRisk => _lastRightThumbIntermediateWorldRotationPreserveLimitedRisk;
+        public float LastPoseInputLeftShoulderFrontBackMuscle => _lastPoseInputLeftShoulderFrontBackMuscle;
+        public float LastAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle => _lastAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle;
+        public float LastAfterClampPoseMusclesLeftShoulderFrontBackMuscle => _lastAfterClampPoseMusclesLeftShoulderFrontBackMuscle;
+        public float LastAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle => _lastAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle;
+        public float LastAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle => _lastAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle;
+        public float LastSetHumanPoseInputLeftShoulderFrontBackMuscle => _lastSetHumanPoseInputLeftShoulderFrontBackMuscle;
+        public float LastSetHumanPoseOutputLeftShoulderFrontBackMuscle => _lastSetHumanPoseOutputLeftShoulderFrontBackMuscle;
+        public float LastSetHumanPoseLeftShoulderFrontBackDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputLeftShoulderFrontBackMuscle,
+            _lastSetHumanPoseOutputLeftShoulderFrontBackMuscle);
+        public float LastPoseInputLeftArmTwistMuscle => _lastPoseInputLeftArmTwistMuscle;
+        public float LastAfterEditorMuscleReferenceLeftArmTwistMuscle => _lastAfterEditorMuscleReferenceLeftArmTwistMuscle;
+        public float LastAfterClampPoseMusclesLeftArmTwistMuscle => _lastAfterClampPoseMusclesLeftArmTwistMuscle;
+        public float LastAfterAnatomicalArmGuardLeftArmTwistMuscle => _lastAfterAnatomicalArmGuardLeftArmTwistMuscle;
+        public float LastAfterVisualSpikeSmoothingLeftArmTwistMuscle => _lastAfterVisualSpikeSmoothingLeftArmTwistMuscle;
+        public float LastSetHumanPoseInputLeftArmTwistMuscle => _lastSetHumanPoseInputLeftArmTwistMuscle;
+        public float LastSetHumanPoseOutputLeftArmTwistMuscle => _lastSetHumanPoseOutputLeftArmTwistMuscle;
+        public float LastSetHumanPoseLeftArmTwistDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputLeftArmTwistMuscle,
+            _lastSetHumanPoseOutputLeftArmTwistMuscle);
+        public float LastPoseInputLeftForearmStretchMuscle => _lastPoseInputLeftForearmStretchMuscle;
+        public float LastAfterEditorMuscleReferenceLeftForearmStretchMuscle => _lastAfterEditorMuscleReferenceLeftForearmStretchMuscle;
+        public float LastAfterClampPoseMusclesLeftForearmStretchMuscle => _lastAfterClampPoseMusclesLeftForearmStretchMuscle;
+        public float LastAfterAnatomicalArmGuardLeftForearmStretchMuscle => _lastAfterAnatomicalArmGuardLeftForearmStretchMuscle;
+        public float LastAfterVisualSpikeSmoothingLeftForearmStretchMuscle => _lastAfterVisualSpikeSmoothingLeftForearmStretchMuscle;
+        public float LastSetHumanPoseInputLeftForearmStretchMuscle => _lastSetHumanPoseInputLeftForearmStretchMuscle;
+        public float LastSetHumanPoseOutputLeftForearmStretchMuscle => _lastSetHumanPoseOutputLeftForearmStretchMuscle;
+        public float LastSetHumanPoseLeftForearmStretchDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputLeftForearmStretchMuscle,
+            _lastSetHumanPoseOutputLeftForearmStretchMuscle);
+        public float LastPoseInputRightForearmStretchMuscle => _lastPoseInputRightForearmStretchMuscle;
+        public float LastAfterEditorMuscleReferenceRightForearmStretchMuscle => _lastAfterEditorMuscleReferenceRightForearmStretchMuscle;
+        public float LastAfterClampPoseMusclesRightForearmStretchMuscle => _lastAfterClampPoseMusclesRightForearmStretchMuscle;
+        public float LastAfterAnatomicalArmGuardRightForearmStretchMuscle => _lastAfterAnatomicalArmGuardRightForearmStretchMuscle;
+        public float LastAfterVisualSpikeSmoothingRightForearmStretchMuscle => _lastAfterVisualSpikeSmoothingRightForearmStretchMuscle;
+        public float LastSetHumanPoseInputRightForearmStretchMuscle => _lastSetHumanPoseInputRightForearmStretchMuscle;
+        public float LastSetHumanPoseOutputRightForearmStretchMuscle => _lastSetHumanPoseOutputRightForearmStretchMuscle;
+        public float LastSetHumanPoseRightForearmStretchDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightForearmStretchMuscle,
+            _lastSetHumanPoseOutputRightForearmStretchMuscle);
+        public float LastPoseInputRightArmTwistMuscle => _lastPoseInputRightArmTwistMuscle;
+        public float LastAfterEditorMuscleReferenceRightArmTwistMuscle => _lastAfterEditorMuscleReferenceRightArmTwistMuscle;
+        public float LastAfterClampPoseMusclesRightArmTwistMuscle => _lastAfterClampPoseMusclesRightArmTwistMuscle;
+        public float LastAfterAnatomicalArmGuardRightArmTwistMuscle => _lastAfterAnatomicalArmGuardRightArmTwistMuscle;
+        public float LastAfterVisualSpikeSmoothingRightArmTwistMuscle => _lastAfterVisualSpikeSmoothingRightArmTwistMuscle;
+        public float LastSetHumanPoseInputRightArmTwistMuscle => _lastSetHumanPoseInputRightArmTwistMuscle;
+        public float LastSetHumanPoseOutputRightArmTwistMuscle => _lastSetHumanPoseOutputRightArmTwistMuscle;
+        public float LastSetHumanPoseRightArmTwistDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightArmTwistMuscle,
+            _lastSetHumanPoseOutputRightArmTwistMuscle);
+        public float LastSetHumanPoseInputLeftUpperLegFrontBackMuscle => _lastSetHumanPoseInputLeftUpperLegFrontBackMuscle;
+        public float LastSetHumanPoseOutputLeftUpperLegFrontBackMuscle => _lastSetHumanPoseOutputLeftUpperLegFrontBackMuscle;
+        public float LastSetHumanPoseLeftUpperLegFrontBackDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputLeftUpperLegFrontBackMuscle,
+            _lastSetHumanPoseOutputLeftUpperLegFrontBackMuscle);
+        public float LastSetHumanPoseInputRightUpperLegFrontBackMuscle => _lastSetHumanPoseInputRightUpperLegFrontBackMuscle;
+        public float LastSetHumanPoseOutputRightUpperLegFrontBackMuscle => _lastSetHumanPoseOutputRightUpperLegFrontBackMuscle;
+        public float LastSetHumanPoseRightUpperLegFrontBackDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightUpperLegFrontBackMuscle,
+            _lastSetHumanPoseOutputRightUpperLegFrontBackMuscle);
+        public float LastSetHumanPoseInputLeftLowerLegStretchMuscle => _lastSetHumanPoseInputLeftLowerLegStretchMuscle;
+        public float LastSetHumanPoseOutputLeftLowerLegStretchMuscle => _lastSetHumanPoseOutputLeftLowerLegStretchMuscle;
+        public float LastSetHumanPoseLeftLowerLegStretchDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputLeftLowerLegStretchMuscle,
+            _lastSetHumanPoseOutputLeftLowerLegStretchMuscle);
+        public float LastSetHumanPoseInputRightLowerLegStretchMuscle => _lastSetHumanPoseInputRightLowerLegStretchMuscle;
+        public float LastSetHumanPoseOutputRightLowerLegStretchMuscle => _lastSetHumanPoseOutputRightLowerLegStretchMuscle;
+        public float LastSetHumanPoseRightLowerLegStretchDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightLowerLegStretchMuscle,
+            _lastSetHumanPoseOutputRightLowerLegStretchMuscle);
+        public float LastSetHumanPoseInputLeftFootUpDownMuscle => _lastSetHumanPoseInputLeftFootUpDownMuscle;
+        public float LastSetHumanPoseOutputLeftFootUpDownMuscle => _lastSetHumanPoseOutputLeftFootUpDownMuscle;
+        public float LastSetHumanPoseLeftFootUpDownDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputLeftFootUpDownMuscle,
+            _lastSetHumanPoseOutputLeftFootUpDownMuscle);
+        public float LastSetHumanPoseInputRightFootUpDownMuscle => _lastSetHumanPoseInputRightFootUpDownMuscle;
+        public float LastSetHumanPoseOutputRightFootUpDownMuscle => _lastSetHumanPoseOutputRightFootUpDownMuscle;
+        public float LastSetHumanPoseRightFootUpDownDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightFootUpDownMuscle,
+            _lastSetHumanPoseOutputRightFootUpDownMuscle);
+        public float LastSetHumanPoseInputBodyPositionX => _lastSetHumanPoseInputBodyPosition.x;
+        public float LastSetHumanPoseInputBodyPositionY => _lastSetHumanPoseInputBodyPosition.y;
+        public float LastSetHumanPoseInputBodyPositionZ => _lastSetHumanPoseInputBodyPosition.z;
+        public float LastSetHumanPoseOutputBodyPositionX => _lastSetHumanPoseOutputBodyPosition.x;
+        public float LastSetHumanPoseOutputBodyPositionY => _lastSetHumanPoseOutputBodyPosition.y;
+        public float LastSetHumanPoseOutputBodyPositionZ => _lastSetHumanPoseOutputBodyPosition.z;
+        public float LastSetHumanPoseBodyPositionDeltaXZ => CalculateFiniteXzDelta(
+            _lastSetHumanPoseInputBodyPosition,
+            _lastSetHumanPoseOutputBodyPosition);
+        public float LastSetHumanPoseInputBodyRotationYaw => ReadBodyRotationYaw(_lastSetHumanPoseInputBodyRotation);
+        public float LastSetHumanPoseOutputBodyRotationYaw => ReadBodyRotationYaw(_lastSetHumanPoseOutputBodyRotation);
+        public float LastSetHumanPoseBodyRotationDeltaAngle => CalculateFiniteAngleDelta(
+            _lastSetHumanPoseInputBodyRotation,
+            _lastSetHumanPoseOutputBodyRotation);
+        public float LastSetHumanPosePreSolveGhostRootWorldX => _lastSetHumanPosePreSolveGhostRootWorldPosition.x;
+        public float LastSetHumanPosePreSolveGhostRootWorldY => _lastSetHumanPosePreSolveGhostRootWorldPosition.y;
+        public float LastSetHumanPosePreSolveGhostRootWorldZ => _lastSetHumanPosePreSolveGhostRootWorldPosition.z;
+        public float LastSetHumanPosePreSolveGhostRootYaw => ReadBodyRotationYaw(_lastSetHumanPosePreSolveGhostRootWorldRotation);
+        public float LastSetHumanPosePreSolveTargetRootWorldX => _lastSetHumanPosePreSolveTargetRootWorldPosition.x;
+        public float LastSetHumanPosePreSolveTargetRootWorldY => _lastSetHumanPosePreSolveTargetRootWorldPosition.y;
+        public float LastSetHumanPosePreSolveTargetRootWorldZ => _lastSetHumanPosePreSolveTargetRootWorldPosition.z;
+        public float LastSetHumanPosePreSolveTargetRootYaw => ReadBodyRotationYaw(_lastSetHumanPosePreSolveTargetRootWorldRotation);
+        public float LastSetHumanPosePreSolveTargetHipsWorldX => _lastSetHumanPosePreSolveTargetHipsWorldPosition.x;
+        public float LastSetHumanPosePreSolveTargetHipsWorldY => _lastSetHumanPosePreSolveTargetHipsWorldPosition.y;
+        public float LastSetHumanPosePreSolveTargetHipsWorldZ => _lastSetHumanPosePreSolveTargetHipsWorldPosition.z;
+        public float LastSetHumanPosePreSolveTargetHipsLocalX => _lastSetHumanPosePreSolveTargetHipsLocalPosition.x;
+        public float LastSetHumanPosePreSolveTargetHipsLocalY => _lastSetHumanPosePreSolveTargetHipsLocalPosition.y;
+        public float LastSetHumanPosePreSolveTargetHipsLocalZ => _lastSetHumanPosePreSolveTargetHipsLocalPosition.z;
+        public float LastSetHumanPosePreSolveBodyPositionX => _lastSetHumanPosePreSolveBodyPosition.x;
+        public float LastSetHumanPosePreSolveBodyPositionY => _lastSetHumanPosePreSolveBodyPosition.y;
+        public float LastSetHumanPosePreSolveBodyPositionZ => _lastSetHumanPosePreSolveBodyPosition.z;
+        public float LastSetHumanPosePreSolveBodyRotationYaw => ReadBodyRotationYaw(_lastSetHumanPosePreSolveBodyRotation);
+        public float LastPreSetHumanPoseEndpointBodyPositionBeforeX => _lastPreSetHumanPoseEndpointBodyPositionBefore.x;
+        public float LastPreSetHumanPoseEndpointBodyPositionBeforeZ => _lastPreSetHumanPoseEndpointBodyPositionBefore.z;
+        public float LastPreSetHumanPoseEndpointBodyPositionAfterX => _lastPreSetHumanPoseEndpointBodyPositionAfter.x;
+        public float LastPreSetHumanPoseEndpointBodyPositionAfterZ => _lastPreSetHumanPoseEndpointBodyPositionAfter.z;
+        public float LastPreSetHumanPoseEndpointBodyPositionDeltaX => _lastPreSetHumanPoseEndpointBodyPositionDelta.x;
+        public float LastPreSetHumanPoseEndpointBodyPositionDeltaZ => _lastPreSetHumanPoseEndpointBodyPositionDelta.z;
+        public float LastPreSetHumanPoseEndpointBodyPositionDeltaMagnitudeXZ => CalculateFiniteXzDelta(
+            Vector3.zero,
+            _lastPreSetHumanPoseEndpointBodyPositionDelta);
+        public float LastSetHumanPosePreSolveGhostLeftFootWorldX => _lastSetHumanPosePreSolveGhostEndpointPositions.LeftFoot.x;
+        public float LastSetHumanPosePreSolveGhostLeftFootWorldZ => _lastSetHumanPosePreSolveGhostEndpointPositions.LeftFoot.z;
+        public float LastSetHumanPosePreSolveGhostLeftToesWorldX => _lastSetHumanPosePreSolveGhostEndpointPositions.LeftToes.x;
+        public float LastSetHumanPosePreSolveGhostLeftToesWorldZ => _lastSetHumanPosePreSolveGhostEndpointPositions.LeftToes.z;
+        public float LastSetHumanPosePreSolveCurrentLeftFootWorldX => _lastSetHumanPosePreSolveCurrentEndpointPositions.LeftFoot.x;
+        public float LastSetHumanPosePreSolveCurrentLeftFootWorldZ => _lastSetHumanPosePreSolveCurrentEndpointPositions.LeftFoot.z;
+        public float LastSetHumanPosePreSolveCurrentLeftToesWorldX => _lastSetHumanPosePreSolveCurrentEndpointPositions.LeftToes.x;
+        public float LastSetHumanPosePreSolveCurrentLeftToesWorldZ => _lastSetHumanPosePreSolveCurrentEndpointPositions.LeftToes.z;
+        public float LastSetHumanPosePreSolveTargetLeftFootWorldX => _lastSetHumanPosePreSolveTargetEndpointPositions.LeftFoot.x;
+        public float LastSetHumanPosePreSolveTargetLeftFootWorldZ => _lastSetHumanPosePreSolveTargetEndpointPositions.LeftFoot.z;
+        public float LastSetHumanPosePreSolveTargetLeftToesWorldX => _lastSetHumanPosePreSolveTargetEndpointPositions.LeftToes.x;
+        public float LastSetHumanPosePreSolveTargetLeftToesWorldZ => _lastSetHumanPosePreSolveTargetEndpointPositions.LeftToes.z;
+        public float LastSetHumanPosePreSolveGhostRightFootWorldX => _lastSetHumanPosePreSolveGhostEndpointPositions.RightFoot.x;
+        public float LastSetHumanPosePreSolveGhostRightFootWorldZ => _lastSetHumanPosePreSolveGhostEndpointPositions.RightFoot.z;
+        public float LastSetHumanPosePreSolveGhostRightToesWorldX => _lastSetHumanPosePreSolveGhostEndpointPositions.RightToes.x;
+        public float LastSetHumanPosePreSolveGhostRightToesWorldZ => _lastSetHumanPosePreSolveGhostEndpointPositions.RightToes.z;
+        public float LastSetHumanPosePreSolveCurrentRightFootWorldX => _lastSetHumanPosePreSolveCurrentEndpointPositions.RightFoot.x;
+        public float LastSetHumanPosePreSolveCurrentRightFootWorldZ => _lastSetHumanPosePreSolveCurrentEndpointPositions.RightFoot.z;
+        public float LastSetHumanPosePreSolveCurrentRightToesWorldX => _lastSetHumanPosePreSolveCurrentEndpointPositions.RightToes.x;
+        public float LastSetHumanPosePreSolveCurrentRightToesWorldZ => _lastSetHumanPosePreSolveCurrentEndpointPositions.RightToes.z;
+        public float LastSetHumanPosePreSolveTargetRightFootWorldX => _lastSetHumanPosePreSolveTargetEndpointPositions.RightFoot.x;
+        public float LastSetHumanPosePreSolveTargetRightFootWorldZ => _lastSetHumanPosePreSolveTargetEndpointPositions.RightFoot.z;
+        public float LastSetHumanPosePreSolveTargetRightToesWorldX => _lastSetHumanPosePreSolveTargetEndpointPositions.RightToes.x;
+        public float LastSetHumanPosePreSolveTargetRightToesWorldZ => _lastSetHumanPosePreSolveTargetEndpointPositions.RightToes.z;
+        public float LastSetHumanPoseInputSpineFrontBackMuscle => _lastSetHumanPoseInputSpineFrontBackMuscle;
+        public float LastSetHumanPoseInputSpineLeftRightMuscle => _lastSetHumanPoseInputSpineLeftRightMuscle;
+        public float LastSetHumanPoseInputSpineTwistLeftRightMuscle => _lastSetHumanPoseInputSpineTwistLeftRightMuscle;
+        public float LastSetHumanPoseInputChestFrontBackMuscle => _lastSetHumanPoseInputChestFrontBackMuscle;
+        public float LastSetHumanPoseInputChestLeftRightMuscle => _lastSetHumanPoseInputChestLeftRightMuscle;
+        public float LastSetHumanPoseInputChestTwistLeftRightMuscle => _lastSetHumanPoseInputChestTwistLeftRightMuscle;
+        public float LastSetHumanPoseInputUpperChestFrontBackMuscle => _lastSetHumanPoseInputUpperChestFrontBackMuscle;
+        public float LastSetHumanPoseInputUpperChestLeftRightMuscle => _lastSetHumanPoseInputUpperChestLeftRightMuscle;
+        public float LastSetHumanPoseInputUpperChestTwistLeftRightMuscle => _lastSetHumanPoseInputUpperChestTwistLeftRightMuscle;
+        public float LastSetHumanPoseInputLeftUpperLegInOutMuscle => _lastSetHumanPoseInputLeftUpperLegInOutMuscle;
+        public float LastSetHumanPoseInputRightUpperLegInOutMuscle => _lastSetHumanPoseInputRightUpperLegInOutMuscle;
+        public float LastSetHumanPoseInputLeftUpperLegTwistInOutMuscle => _lastSetHumanPoseInputLeftUpperLegTwistInOutMuscle;
+        public float LastSetHumanPoseInputRightUpperLegTwistInOutMuscle => _lastSetHumanPoseInputRightUpperLegTwistInOutMuscle;
+        public float LastSetHumanPoseInputLeftLowerLegTwistInOutMuscle => _lastSetHumanPoseInputLeftLowerLegTwistInOutMuscle;
+        public float LastSetHumanPoseInputRightLowerLegTwistInOutMuscle => _lastSetHumanPoseInputRightLowerLegTwistInOutMuscle;
+        public float LastSetHumanPoseInputLeftFootTwistInOutMuscle => _lastSetHumanPoseInputLeftFootTwistInOutMuscle;
+        public float LastSetHumanPoseInputRightFootTwistInOutMuscle => _lastSetHumanPoseInputRightFootTwistInOutMuscle;
+        public float LastSetHumanPoseInputLeftToesUpDownMuscle => _lastSetHumanPoseInputLeftToesUpDownMuscle;
+        public float LastSetHumanPoseInputRightToesUpDownMuscle => _lastSetHumanPoseInputRightToesUpDownMuscle;
+        public float LastSetHumanPoseOutputRightUpperLegInOutMuscle => _lastSetHumanPoseOutputRightUpperLegInOutMuscle;
+        public float LastSetHumanPoseRightUpperLegInOutDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightUpperLegInOutMuscle,
+            _lastSetHumanPoseOutputRightUpperLegInOutMuscle);
+        public float LastSetHumanPoseOutputRightUpperLegTwistInOutMuscle => _lastSetHumanPoseOutputRightUpperLegTwistInOutMuscle;
+        public float LastSetHumanPoseRightUpperLegTwistInOutDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightUpperLegTwistInOutMuscle,
+            _lastSetHumanPoseOutputRightUpperLegTwistInOutMuscle);
+        public float LastSetHumanPoseOutputRightLowerLegTwistInOutMuscle => _lastSetHumanPoseOutputRightLowerLegTwistInOutMuscle;
+        public float LastSetHumanPoseRightLowerLegTwistInOutDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightLowerLegTwistInOutMuscle,
+            _lastSetHumanPoseOutputRightLowerLegTwistInOutMuscle);
+        public float LastSetHumanPoseOutputRightFootTwistInOutMuscle => _lastSetHumanPoseOutputRightFootTwistInOutMuscle;
+        public float LastSetHumanPoseRightFootTwistInOutDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightFootTwistInOutMuscle,
+            _lastSetHumanPoseOutputRightFootTwistInOutMuscle);
+        public float LastSetHumanPoseOutputRightToesUpDownMuscle => _lastSetHumanPoseOutputRightToesUpDownMuscle;
+        public float LastSetHumanPoseRightToesUpDownDelta => CalculateFiniteAbsDelta(
+            _lastSetHumanPoseInputRightToesUpDownMuscle,
+            _lastSetHumanPoseOutputRightToesUpDownMuscle);
+        public float LastRetargetStageGhostLeftFootWorldX => _lastRetargetStageGhostEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageGhostLeftFootWorldZ => _lastRetargetStageGhostEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageGhostLeftToesWorldX => _lastRetargetStageGhostEndpointPositions.LeftToes.x;
+        public float LastRetargetStageGhostLeftToesWorldZ => _lastRetargetStageGhostEndpointPositions.LeftToes.z;
+        public float LastRetargetStageGhostRightFootWorldX => _lastRetargetStageGhostEndpointPositions.RightFoot.x;
+        public float LastRetargetStageGhostRightFootWorldZ => _lastRetargetStageGhostEndpointPositions.RightFoot.z;
+        public float LastRetargetStageGhostRightToesWorldX => _lastRetargetStageGhostEndpointPositions.RightToes.x;
+        public float LastRetargetStageGhostRightToesWorldZ => _lastRetargetStageGhostEndpointPositions.RightToes.z;
+        public float LastRetargetStageAfterSetHumanPoseLeftFootWorldX => _lastRetargetStageAfterSetHumanPoseEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageAfterSetHumanPoseLeftFootWorldZ => _lastRetargetStageAfterSetHumanPoseEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageAfterSetHumanPoseLeftToesWorldX => _lastRetargetStageAfterSetHumanPoseEndpointPositions.LeftToes.x;
+        public float LastRetargetStageAfterSetHumanPoseLeftToesWorldZ => _lastRetargetStageAfterSetHumanPoseEndpointPositions.LeftToes.z;
+        public float LastRetargetStageAfterSetHumanPoseRightFootWorldX => _lastRetargetStageAfterSetHumanPoseEndpointPositions.RightFoot.x;
+        public float LastRetargetStageAfterSetHumanPoseRightFootWorldZ => _lastRetargetStageAfterSetHumanPoseEndpointPositions.RightFoot.z;
+        public float LastRetargetStageAfterSetHumanPoseRightToesWorldX => _lastRetargetStageAfterSetHumanPoseEndpointPositions.RightToes.x;
+        public float LastRetargetStageAfterSetHumanPoseRightToesWorldZ => _lastRetargetStageAfterSetHumanPoseEndpointPositions.RightToes.z;
+        public float LastRetargetStageAfterManualReferencesLeftFootWorldX => _lastRetargetStageAfterManualReferencesEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageAfterManualReferencesLeftFootWorldZ => _lastRetargetStageAfterManualReferencesEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageAfterManualReferencesLeftToesWorldX => _lastRetargetStageAfterManualReferencesEndpointPositions.LeftToes.x;
+        public float LastRetargetStageAfterManualReferencesLeftToesWorldZ => _lastRetargetStageAfterManualReferencesEndpointPositions.LeftToes.z;
+        public float LastRetargetStageAfterManualReferencesRightFootWorldX => _lastRetargetStageAfterManualReferencesEndpointPositions.RightFoot.x;
+        public float LastRetargetStageAfterManualReferencesRightFootWorldZ => _lastRetargetStageAfterManualReferencesEndpointPositions.RightFoot.z;
+        public float LastRetargetStageAfterManualReferencesRightToesWorldX => _lastRetargetStageAfterManualReferencesEndpointPositions.RightToes.x;
+        public float LastRetargetStageAfterManualReferencesRightToesWorldZ => _lastRetargetStageAfterManualReferencesEndpointPositions.RightToes.z;
+        public float LastRetargetStageAfterRootRestoreLeftFootWorldX => _lastRetargetStageAfterRootRestoreEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageAfterRootRestoreLeftFootWorldZ => _lastRetargetStageAfterRootRestoreEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageAfterRootRestoreLeftToesWorldX => _lastRetargetStageAfterRootRestoreEndpointPositions.LeftToes.x;
+        public float LastRetargetStageAfterRootRestoreLeftToesWorldZ => _lastRetargetStageAfterRootRestoreEndpointPositions.LeftToes.z;
+        public float LastRetargetStageAfterRootRestoreRightFootWorldX => _lastRetargetStageAfterRootRestoreEndpointPositions.RightFoot.x;
+        public float LastRetargetStageAfterRootRestoreRightFootWorldZ => _lastRetargetStageAfterRootRestoreEndpointPositions.RightFoot.z;
+        public float LastRetargetStageAfterRootRestoreRightToesWorldX => _lastRetargetStageAfterRootRestoreEndpointPositions.RightToes.x;
+        public float LastRetargetStageAfterRootRestoreRightToesWorldZ => _lastRetargetStageAfterRootRestoreEndpointPositions.RightToes.z;
+        public float LastRetargetStageAfterRootDeltaLeftFootWorldX => _lastRetargetStageAfterRootDeltaEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageAfterRootDeltaLeftFootWorldZ => _lastRetargetStageAfterRootDeltaEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageAfterRootDeltaLeftToesWorldX => _lastRetargetStageAfterRootDeltaEndpointPositions.LeftToes.x;
+        public float LastRetargetStageAfterRootDeltaLeftToesWorldZ => _lastRetargetStageAfterRootDeltaEndpointPositions.LeftToes.z;
+        public float LastRetargetStageAfterRootDeltaRightFootWorldX => _lastRetargetStageAfterRootDeltaEndpointPositions.RightFoot.x;
+        public float LastRetargetStageAfterRootDeltaRightFootWorldZ => _lastRetargetStageAfterRootDeltaEndpointPositions.RightFoot.z;
+        public float LastRetargetStageAfterRootDeltaRightToesWorldX => _lastRetargetStageAfterRootDeltaEndpointPositions.RightToes.x;
+        public float LastRetargetStageAfterRootDeltaRightToesWorldZ => _lastRetargetStageAfterRootDeltaEndpointPositions.RightToes.z;
+        public float LastRetargetStageAfterGroundingLeftFootWorldX => _lastRetargetStageAfterGroundingEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageAfterGroundingLeftFootWorldZ => _lastRetargetStageAfterGroundingEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageAfterGroundingLeftToesWorldX => _lastRetargetStageAfterGroundingEndpointPositions.LeftToes.x;
+        public float LastRetargetStageAfterGroundingLeftToesWorldZ => _lastRetargetStageAfterGroundingEndpointPositions.LeftToes.z;
+        public float LastRetargetStageAfterGroundingRightFootWorldX => _lastRetargetStageAfterGroundingEndpointPositions.RightFoot.x;
+        public float LastRetargetStageAfterGroundingRightFootWorldZ => _lastRetargetStageAfterGroundingEndpointPositions.RightFoot.z;
+        public float LastRetargetStageAfterGroundingRightToesWorldX => _lastRetargetStageAfterGroundingEndpointPositions.RightToes.x;
+        public float LastRetargetStageAfterGroundingRightToesWorldZ => _lastRetargetStageAfterGroundingEndpointPositions.RightToes.z;
+        public float LastRetargetStageAfterBipedIKLeftFootWorldX => _lastRetargetStageAfterBipedIKEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageAfterBipedIKLeftFootWorldZ => _lastRetargetStageAfterBipedIKEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageAfterBipedIKLeftToesWorldX => _lastRetargetStageAfterBipedIKEndpointPositions.LeftToes.x;
+        public float LastRetargetStageAfterBipedIKLeftToesWorldZ => _lastRetargetStageAfterBipedIKEndpointPositions.LeftToes.z;
+        public float LastRetargetStageAfterBipedIKRightFootWorldX => _lastRetargetStageAfterBipedIKEndpointPositions.RightFoot.x;
+        public float LastRetargetStageAfterBipedIKRightFootWorldZ => _lastRetargetStageAfterBipedIKEndpointPositions.RightFoot.z;
+        public float LastRetargetStageAfterBipedIKRightToesWorldX => _lastRetargetStageAfterBipedIKEndpointPositions.RightToes.x;
+        public float LastRetargetStageAfterBipedIKRightToesWorldZ => _lastRetargetStageAfterBipedIKEndpointPositions.RightToes.z;
+        public float LastRetargetStageAfterLateVisualGroundingLeftFootWorldX => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.LeftFoot.x;
+        public float LastRetargetStageAfterLateVisualGroundingLeftFootWorldZ => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.LeftFoot.z;
+        public float LastRetargetStageAfterLateVisualGroundingLeftToesWorldX => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.LeftToes.x;
+        public float LastRetargetStageAfterLateVisualGroundingLeftToesWorldZ => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.LeftToes.z;
+        public float LastRetargetStageAfterLateVisualGroundingRightFootWorldX => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.RightFoot.x;
+        public float LastRetargetStageAfterLateVisualGroundingRightFootWorldZ => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.RightFoot.z;
+        public float LastRetargetStageAfterLateVisualGroundingRightToesWorldX => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.RightToes.x;
+        public float LastRetargetStageAfterLateVisualGroundingRightToesWorldZ => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.RightToes.z;
+        public float LastEditorFootLocalRotationLeftFootXzDelta => _lastEditorFootLocalRotationLeftFootXzDelta;
+        public float LastEditorFootLocalRotationRightFootXzDelta => _lastEditorFootLocalRotationRightFootXzDelta;
+        public float LastEditorLowerBodySegmentDirectionLeftFootXzDelta => _lastEditorLowerBodySegmentDirectionLeftFootXzDelta;
+        public float LastEditorLowerBodySegmentDirectionRightFootXzDelta => _lastEditorLowerBodySegmentDirectionRightFootXzDelta;
+        public string LastEditorLowerBodySegmentDirectionMaxCorrectionSegment => _lastEditorLowerBodySegmentDirectionMaxCorrectionSegment;
+        public float LastEditorLowerBodySegmentDirectionMaxCorrectionAngle => _lastEditorLowerBodySegmentDirectionMaxCorrectionAngle;
+        public float LastEditorLowerBodySegmentDirectionMaxPreAngle => _lastEditorLowerBodySegmentDirectionMaxPreAngle;
+        public float LastEditorLowerBodySegmentDirectionMaxPostAngle => _lastEditorLowerBodySegmentDirectionMaxPostAngle;
+        public float LastEditorLowerBodySegmentDirectionMaxCorrectionAxisX => _lastEditorLowerBodySegmentDirectionMaxCorrectionAxis.x;
+        public float LastEditorLowerBodySegmentDirectionMaxCorrectionAxisY => _lastEditorLowerBodySegmentDirectionMaxCorrectionAxis.y;
+        public float LastEditorLowerBodySegmentDirectionMaxCorrectionAxisZ => _lastEditorLowerBodySegmentDirectionMaxCorrectionAxis.z;
+        public float LastEditorLowerBodySegmentDirectionMaxReferenceDirectionX => _lastEditorLowerBodySegmentDirectionMaxReferenceDirection.x;
+        public float LastEditorLowerBodySegmentDirectionMaxReferenceDirectionY => _lastEditorLowerBodySegmentDirectionMaxReferenceDirection.y;
+        public float LastEditorLowerBodySegmentDirectionMaxReferenceDirectionZ => _lastEditorLowerBodySegmentDirectionMaxReferenceDirection.z;
+        public float LastEditorLowerBodySegmentDirectionMaxPreDirectionX => _lastEditorLowerBodySegmentDirectionMaxPreDirection.x;
+        public float LastEditorLowerBodySegmentDirectionMaxPreDirectionY => _lastEditorLowerBodySegmentDirectionMaxPreDirection.y;
+        public float LastEditorLowerBodySegmentDirectionMaxPreDirectionZ => _lastEditorLowerBodySegmentDirectionMaxPreDirection.z;
+        public float LastEditorLowerBodySegmentDirectionMaxPostDirectionX => _lastEditorLowerBodySegmentDirectionMaxPostDirection.x;
+        public float LastEditorLowerBodySegmentDirectionMaxPostDirectionY => _lastEditorLowerBodySegmentDirectionMaxPostDirection.y;
+        public float LastEditorLowerBodySegmentDirectionMaxPostDirectionZ => _lastEditorLowerBodySegmentDirectionMaxPostDirection.z;
+        public float LastEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle => _lastEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle;
+        public float LastEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle => _lastEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle => _lastEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle => _lastEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle => _lastEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle;
+        public float LastEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle => _lastEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle => _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle => _lastEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle => _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle => _lastEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX => _lastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirection.x;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY => _lastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirection.y;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ => _lastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirection.z;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX => _lastEditorLowerBodySegmentDirectionLeftFootToToesPreDirection.x;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY => _lastEditorLowerBodySegmentDirectionLeftFootToToesPreDirection.y;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ => _lastEditorLowerBodySegmentDirectionLeftFootToToesPreDirection.z;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX => _lastEditorLowerBodySegmentDirectionLeftFootToToesPostDirection.x;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY => _lastEditorLowerBodySegmentDirectionLeftFootToToesPostDirection.y;
+        public float LastEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ => _lastEditorLowerBodySegmentDirectionLeftFootToToesPostDirection.z;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX => _lastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirection.x;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY => _lastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirection.y;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ => _lastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirection.z;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesPreDirectionX => _lastEditorLowerBodySegmentDirectionRightFootToToesPreDirection.x;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesPreDirectionY => _lastEditorLowerBodySegmentDirectionRightFootToToesPreDirection.y;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ => _lastEditorLowerBodySegmentDirectionRightFootToToesPreDirection.z;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesPostDirectionX => _lastEditorLowerBodySegmentDirectionRightFootToToesPostDirection.x;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesPostDirectionY => _lastEditorLowerBodySegmentDirectionRightFootToToesPostDirection.y;
+        public float LastEditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ => _lastEditorLowerBodySegmentDirectionRightFootToToesPostDirection.z;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegWorldX => _lastEditorLowerBodySegmentDirectionLeftLowerLegWorldPosition.x;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegWorldY => _lastEditorLowerBodySegmentDirectionLeftLowerLegWorldPosition.y;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegWorldZ => _lastEditorLowerBodySegmentDirectionLeftLowerLegWorldPosition.z;
+        public float LastEditorLowerBodySegmentDirectionLeftFootWorldX => _lastEditorLowerBodySegmentDirectionLeftFootWorldPosition.x;
+        public float LastEditorLowerBodySegmentDirectionLeftFootWorldY => _lastEditorLowerBodySegmentDirectionLeftFootWorldPosition.y;
+        public float LastEditorLowerBodySegmentDirectionLeftFootWorldZ => _lastEditorLowerBodySegmentDirectionLeftFootWorldPosition.z;
+        public float LastEditorLowerBodySegmentDirectionLeftToesWorldX => _lastEditorLowerBodySegmentDirectionLeftToesWorldPosition.x;
+        public float LastEditorLowerBodySegmentDirectionLeftToesWorldY => _lastEditorLowerBodySegmentDirectionLeftToesWorldPosition.y;
+        public float LastEditorLowerBodySegmentDirectionLeftToesWorldZ => _lastEditorLowerBodySegmentDirectionLeftToesWorldPosition.z;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegWorldX => _lastEditorLowerBodySegmentDirectionRightLowerLegWorldPosition.x;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegWorldY => _lastEditorLowerBodySegmentDirectionRightLowerLegWorldPosition.y;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegWorldZ => _lastEditorLowerBodySegmentDirectionRightLowerLegWorldPosition.z;
+        public float LastEditorLowerBodySegmentDirectionRightFootWorldX => _lastEditorLowerBodySegmentDirectionRightFootWorldPosition.x;
+        public float LastEditorLowerBodySegmentDirectionRightFootWorldY => _lastEditorLowerBodySegmentDirectionRightFootWorldPosition.y;
+        public float LastEditorLowerBodySegmentDirectionRightFootWorldZ => _lastEditorLowerBodySegmentDirectionRightFootWorldPosition.z;
+        public float LastEditorLowerBodySegmentDirectionRightToesWorldX => _lastEditorLowerBodySegmentDirectionRightToesWorldPosition.x;
+        public float LastEditorLowerBodySegmentDirectionRightToesWorldY => _lastEditorLowerBodySegmentDirectionRightToesWorldPosition.y;
+        public float LastEditorLowerBodySegmentDirectionRightToesWorldZ => _lastEditorLowerBodySegmentDirectionRightToesWorldPosition.z;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX => _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxis.x;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY => _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxis.y;
+        public float LastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ => _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxis.z;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX => _lastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxis.x;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY => _lastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxis.y;
+        public float LastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ => _lastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxis.z;
+        public float LastEditorLowerBodySegmentDirectionLeftFootForwardX => _lastEditorLowerBodySegmentDirectionLeftFootForward.x;
+        public float LastEditorLowerBodySegmentDirectionLeftFootForwardY => _lastEditorLowerBodySegmentDirectionLeftFootForward.y;
+        public float LastEditorLowerBodySegmentDirectionLeftFootForwardZ => _lastEditorLowerBodySegmentDirectionLeftFootForward.z;
+        public float LastEditorLowerBodySegmentDirectionLeftFootUpX => _lastEditorLowerBodySegmentDirectionLeftFootUp.x;
+        public float LastEditorLowerBodySegmentDirectionLeftFootUpY => _lastEditorLowerBodySegmentDirectionLeftFootUp.y;
+        public float LastEditorLowerBodySegmentDirectionLeftFootUpZ => _lastEditorLowerBodySegmentDirectionLeftFootUp.z;
+        public float LastEditorLowerBodySegmentDirectionRightFootForwardX => _lastEditorLowerBodySegmentDirectionRightFootForward.x;
+        public float LastEditorLowerBodySegmentDirectionRightFootForwardY => _lastEditorLowerBodySegmentDirectionRightFootForward.y;
+        public float LastEditorLowerBodySegmentDirectionRightFootForwardZ => _lastEditorLowerBodySegmentDirectionRightFootForward.z;
+        public float LastEditorLowerBodySegmentDirectionRightFootUpX => _lastEditorLowerBodySegmentDirectionRightFootUp.x;
+        public float LastEditorLowerBodySegmentDirectionRightFootUpY => _lastEditorLowerBodySegmentDirectionRightFootUp.y;
+        public float LastEditorLowerBodySegmentDirectionRightFootUpZ => _lastEditorLowerBodySegmentDirectionRightFootUp.z;
+        public float LastEditorFootHipsAlignedResidualYawLeftFootXzDelta => _lastEditorFootHipsAlignedResidualYawLeftFootXzDelta;
+        public float LastEditorFootHipsAlignedResidualYawRightFootXzDelta => _lastEditorFootHipsAlignedResidualYawRightFootXzDelta;
+        public float LastPostSetHumanPoseRightEndpointDesiredFootWorldX => _lastPostSetHumanPoseRightEndpointDesiredFootWorldPosition.x;
+        public float LastPostSetHumanPoseRightEndpointDesiredFootWorldZ => _lastPostSetHumanPoseRightEndpointDesiredFootWorldPosition.z;
+        public float LastPostSetHumanPoseRightEndpointDesiredToesWorldX => _lastPostSetHumanPoseRightEndpointDesiredToesWorldPosition.x;
+        public float LastPostSetHumanPoseRightEndpointDesiredToesWorldZ => _lastPostSetHumanPoseRightEndpointDesiredToesWorldPosition.z;
+        public float LastPostSetHumanPoseRightEndpointCurrentFootWorldX => _lastPostSetHumanPoseRightEndpointCurrentFootWorldPosition.x;
+        public float LastPostSetHumanPoseRightEndpointCurrentFootWorldZ => _lastPostSetHumanPoseRightEndpointCurrentFootWorldPosition.z;
+        public float LastPostSetHumanPoseRightEndpointCurrentToesWorldX => _lastPostSetHumanPoseRightEndpointCurrentToesWorldPosition.x;
+        public float LastPostSetHumanPoseRightEndpointCurrentToesWorldZ => _lastPostSetHumanPoseRightEndpointCurrentToesWorldPosition.z;
+        public float LastPostSetHumanPoseRightEndpointDeltaBeforeClampX => _lastPostSetHumanPoseRightEndpointDeltaBeforeClamp.x;
+        public float LastPostSetHumanPoseRightEndpointDeltaBeforeClampZ => _lastPostSetHumanPoseRightEndpointDeltaBeforeClamp.z;
+        public float LastPostSetHumanPoseRightEndpointDeltaAfterClampX => _lastPostSetHumanPoseRightEndpointDeltaAfterClamp.x;
+        public float LastPostSetHumanPoseRightEndpointDeltaAfterClampZ => _lastPostSetHumanPoseRightEndpointDeltaAfterClamp.z;
+        public float LastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScaleX => _lastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScale.x;
+        public float LastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScaleZ => _lastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScale.z;
+        public float LastPostSetHumanPoseRightEndpointCorrectionX => _lastPostSetHumanPoseRightEndpointCorrection.x;
+        public float LastPostSetHumanPoseRightEndpointCorrectionZ => _lastPostSetHumanPoseRightEndpointCorrection.z;
+        public float LastPostSetHumanPoseRightEndpointNextFootWorldX => _lastPostSetHumanPoseRightEndpointNextFootWorldPosition.x;
+        public float LastPostSetHumanPoseRightEndpointNextFootWorldZ => _lastPostSetHumanPoseRightEndpointNextFootWorldPosition.z;
+        public float LastPostSetHumanPoseRightEndpointMaxYawAngle => _lastPostSetHumanPoseRightEndpointMaxYawAngle;
+        public float LastPostSetHumanPoseRightEndpointYawCorrectionAngle => _lastPostSetHumanPoseRightEndpointYawCorrectionAngle;
+        public float LastPostSetHumanPoseRightEndpointUpperLegRotationDeltaAngle => _lastPostSetHumanPoseRightEndpointUpperLegRotationDeltaAngle;
+        public float LastPostSetHumanPoseRightEndpointApplied => _lastPostSetHumanPoseRightEndpointApplied;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzReferenceEnabled => _lastPostSetHumanPoseRightEndpointEvaluatorXzReferenceEnabled;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffsetX => _lastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffset.x;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffsetZ => _lastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffset.z;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDeltaX => _lastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDelta.x;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDeltaZ => _lastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDelta.z;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedMagnitude => _lastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDelta.magnitude;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDeltaX => _lastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDelta.x;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDeltaZ => _lastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDelta.z;
+        public float LastPostSetHumanPoseRightEndpointEvaluatorXzTargetMagnitude => _lastPostSetHumanPoseRightEndpointEvaluatorXzTargetMagnitude;
 
         public void ResetPlaybackStabilityMetrics()
         {
@@ -380,6 +956,7 @@ namespace Member_Han.Modules.FBXImporter
             _lastEditorFootHeightGroundingReferenceLift = float.NaN;
             _hasEditorReferenceLowestFootRestY = false;
             _allowEditorFootHeightGroundingReference = true;
+            ResetRetargetPoseStageDiagnostics();
         }
 
         public bool PrepareRecordingStartPose(float startTimeSeconds, float playbackSpeed, bool holdPose)
@@ -632,9 +1209,203 @@ namespace Member_Han.Modules.FBXImporter
         private float _lastRightThumbProximalWorldRotationPreserveLimitedRisk = float.NaN;
         private float _lastLeftThumbIntermediateWorldRotationPreserveLimitedRisk = float.NaN;
         private float _lastRightThumbIntermediateWorldRotationPreserveLimitedRisk = float.NaN;
+        private float _lastPoseInputLeftShoulderFrontBackMuscle = float.NaN;
+        private float _lastAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle = float.NaN;
+        private float _lastAfterClampPoseMusclesLeftShoulderFrontBackMuscle = float.NaN;
+        private float _lastAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle = float.NaN;
+        private float _lastAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftShoulderFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputLeftShoulderFrontBackMuscle = float.NaN;
+        private float _lastPoseInputLeftArmTwistMuscle = float.NaN;
+        private float _lastAfterEditorMuscleReferenceLeftArmTwistMuscle = float.NaN;
+        private float _lastAfterClampPoseMusclesLeftArmTwistMuscle = float.NaN;
+        private float _lastAfterAnatomicalArmGuardLeftArmTwistMuscle = float.NaN;
+        private float _lastAfterVisualSpikeSmoothingLeftArmTwistMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftArmTwistMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputLeftArmTwistMuscle = float.NaN;
+        private float _lastPoseInputLeftForearmStretchMuscle = float.NaN;
+        private float _lastAfterEditorMuscleReferenceLeftForearmStretchMuscle = float.NaN;
+        private float _lastAfterClampPoseMusclesLeftForearmStretchMuscle = float.NaN;
+        private float _lastAfterAnatomicalArmGuardLeftForearmStretchMuscle = float.NaN;
+        private float _lastAfterVisualSpikeSmoothingLeftForearmStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftForearmStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputLeftForearmStretchMuscle = float.NaN;
+        private float _lastPoseInputRightForearmStretchMuscle = float.NaN;
+        private float _lastAfterEditorMuscleReferenceRightForearmStretchMuscle = float.NaN;
+        private float _lastAfterClampPoseMusclesRightForearmStretchMuscle = float.NaN;
+        private float _lastAfterAnatomicalArmGuardRightForearmStretchMuscle = float.NaN;
+        private float _lastAfterVisualSpikeSmoothingRightForearmStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightForearmStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightForearmStretchMuscle = float.NaN;
+        private float _lastPoseInputRightArmTwistMuscle = float.NaN;
+        private float _lastAfterEditorMuscleReferenceRightArmTwistMuscle = float.NaN;
+        private float _lastAfterClampPoseMusclesRightArmTwistMuscle = float.NaN;
+        private float _lastAfterAnatomicalArmGuardRightArmTwistMuscle = float.NaN;
+        private float _lastAfterVisualSpikeSmoothingRightArmTwistMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightArmTwistMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightArmTwistMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftUpperLegFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputLeftUpperLegFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightUpperLegFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightUpperLegFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftLowerLegStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputLeftLowerLegStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightLowerLegStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightLowerLegStretchMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftFootUpDownMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputLeftFootUpDownMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightFootUpDownMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightFootUpDownMuscle = float.NaN;
+        private Vector3 _lastSetHumanPoseInputBodyPosition = BuildNaNVector3();
+        private Vector3 _lastSetHumanPoseOutputBodyPosition = BuildNaNVector3();
+        private Quaternion _lastSetHumanPoseInputBodyRotation = BuildNaNQuaternion();
+        private Quaternion _lastSetHumanPoseOutputBodyRotation = BuildNaNQuaternion();
+        private Vector3 _lastSetHumanPosePreSolveGhostRootWorldPosition = BuildNaNVector3();
+        private Quaternion _lastSetHumanPosePreSolveGhostRootWorldRotation = BuildNaNQuaternion();
+        private Vector3 _lastSetHumanPosePreSolveTargetRootWorldPosition = BuildNaNVector3();
+        private Quaternion _lastSetHumanPosePreSolveTargetRootWorldRotation = BuildNaNQuaternion();
+        private Vector3 _lastSetHumanPosePreSolveTargetHipsWorldPosition = BuildNaNVector3();
+        private Vector3 _lastSetHumanPosePreSolveTargetHipsLocalPosition = BuildNaNVector3();
+        private Vector3 _lastSetHumanPosePreSolveBodyPosition = BuildNaNVector3();
+        private Quaternion _lastSetHumanPosePreSolveBodyRotation = BuildNaNQuaternion();
+        private Vector3 _lastPreSetHumanPoseEndpointBodyPositionBefore = BuildNaNVector3();
+        private Vector3 _lastPreSetHumanPoseEndpointBodyPositionAfter = BuildNaNVector3();
+        private Vector3 _lastPreSetHumanPoseEndpointBodyPositionDelta = BuildNaNVector3();
+        private float _lastSetHumanPoseInputSpineFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseInputSpineLeftRightMuscle = float.NaN;
+        private float _lastSetHumanPoseInputSpineTwistLeftRightMuscle = float.NaN;
+        private float _lastSetHumanPoseInputChestFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseInputChestLeftRightMuscle = float.NaN;
+        private float _lastSetHumanPoseInputChestTwistLeftRightMuscle = float.NaN;
+        private float _lastSetHumanPoseInputUpperChestFrontBackMuscle = float.NaN;
+        private float _lastSetHumanPoseInputUpperChestLeftRightMuscle = float.NaN;
+        private float _lastSetHumanPoseInputUpperChestTwistLeftRightMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftUpperLegInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightUpperLegInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftUpperLegTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightUpperLegTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftLowerLegTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightLowerLegTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftFootTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightFootTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseInputLeftToesUpDownMuscle = float.NaN;
+        private float _lastSetHumanPoseInputRightToesUpDownMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightUpperLegInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightUpperLegTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightLowerLegTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightFootTwistInOutMuscle = float.NaN;
+        private float _lastSetHumanPoseOutputRightToesUpDownMuscle = float.NaN;
+        private float _lastEditorFootLocalRotationLeftFootXzDelta = float.NaN;
+        private float _lastEditorFootLocalRotationRightFootXzDelta = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionLeftFootXzDelta = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionRightFootXzDelta = float.NaN;
+        private string _lastEditorLowerBodySegmentDirectionMaxCorrectionSegment = string.Empty;
+        private float _lastEditorLowerBodySegmentDirectionMaxCorrectionAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionMaxPreAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionMaxPostAngle = float.NaN;
+        private Vector3 _lastEditorLowerBodySegmentDirectionMaxCorrectionAxis = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionMaxReferenceDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionMaxPreDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionMaxPostDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private float _lastEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle = float.NaN;
+        private float _lastEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle = float.NaN;
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftFootToToesPreDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftFootToToesPostDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightFootToToesPreDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightFootToToesPostDirection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftLowerLegWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftFootWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftToesWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightLowerLegWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightFootWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightToesWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxis = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxis = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftFootForward = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionLeftFootUp = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightFootForward = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastEditorLowerBodySegmentDirectionRightFootUp = new Vector3(float.NaN, float.NaN, float.NaN);
+        private float _lastEditorFootHipsAlignedResidualYawLeftFootXzDelta = float.NaN;
+        private float _lastEditorFootHipsAlignedResidualYawRightFootXzDelta = float.NaN;
+        private Vector3 _lastPostSetHumanPoseRightEndpointDesiredFootWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointDesiredToesWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointCurrentFootWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointCurrentToesWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointDeltaBeforeClamp = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointDeltaAfterClamp = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScale = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointCorrection = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointNextFootWorldPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private float _lastPostSetHumanPoseRightEndpointMaxYawAngle = float.NaN;
+        private float _lastPostSetHumanPoseRightEndpointYawCorrectionAngle = float.NaN;
+        private float _lastPostSetHumanPoseRightEndpointUpperLegRotationDeltaAngle = float.NaN;
+        private float _lastPostSetHumanPoseRightEndpointApplied = float.NaN;
+        private float _lastPostSetHumanPoseRightEndpointEvaluatorXzReferenceEnabled = float.NaN;
+        private Vector3 _lastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffset = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDelta = new Vector3(float.NaN, float.NaN, float.NaN);
+        private Vector3 _lastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDelta = new Vector3(float.NaN, float.NaN, float.NaN);
+        private float _lastPostSetHumanPoseRightEndpointEvaluatorXzTargetMagnitude = float.NaN;
+        private bool _hasPostSetHumanPoseRightFootEvaluatorXzFirstOffset;
+        private Vector3 _postSetHumanPoseRightFootEvaluatorXzFirstOffset = new Vector3(float.NaN, float.NaN, float.NaN);
+        private RetargetEndpointStageWorldPositions _lastRetargetStageGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastSetHumanPosePreSolveGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastSetHumanPosePreSolveCurrentEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastSetHumanPosePreSolveTargetEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastRetargetStageAfterSetHumanPoseEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastRetargetStageAfterManualReferencesEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastRetargetStageAfterRootRestoreEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastRetargetStageAfterRootDeltaEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastRetargetStageAfterGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastRetargetStageAfterBipedIKEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private RetargetEndpointStageWorldPositions _lastRetargetStageAfterLateVisualGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private int _setHumanPoseLeftShoulderFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftArmTwistMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftForearmStretchMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightForearmStretchMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightArmTwistMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftUpperLegFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightUpperLegFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftLowerLegStretchMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightLowerLegStretchMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftFootUpDownMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightFootUpDownMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseSpineFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseSpineLeftRightMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseSpineTwistLeftRightMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseChestFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseChestLeftRightMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseChestTwistLeftRightMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseUpperChestFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseUpperChestLeftRightMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseUpperChestTwistLeftRightMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftUpperLegInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightUpperLegInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftUpperLegTwistInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightUpperLegTwistInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftLowerLegTwistInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightLowerLegTwistInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftFootTwistInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightFootTwistInOutMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseLeftToesUpDownMuscleIndex = UnresolvedHumanMuscleIndex;
+        private int _setHumanPoseRightToesUpDownMuscleIndex = UnresolvedHumanMuscleIndex;
         private bool _hasEstimatedFootRadius;
         private float _estimatedFootRadius = DefaultFootRadius;
         private const float DefaultFootRadius = 0.04f;
+        private const float UpperArmTwistReferenceSignMagnitudeTolerance = 0.35f;
+        private const float UpperArmTwistOverrangeReferenceSignMagnitudeTolerance = 1.5f;
+        private const float UpperArmTwistReferenceSignMaxAbs = 2.25f;
+        private const float RightUpperArmTwistReferenceSignMinAbs = 2f;
+        private const float ForearmStretchVisualClampCurrentMax = -0.65f;
         private const float GroundingDirectionReversalStepScale = 0.4f;
         private const float ThumbLocalRotationOvershootRatio = 0.35f;
         private const float ThumbLocalRotationHardOvershootDegrees = 8f;
@@ -677,11 +1448,19 @@ namespace Member_Han.Modules.FBXImporter
         private float _editorReferenceLowestFootRestY;
         private bool _allowEditorFootHeightGroundingReference;
         private bool _editorHandLocalRotationReferenceLogged;
+        private bool _editorFootLocalRotationReferenceLogged;
+        private bool _editorLowerBodySegmentDirectionReferenceLogged;
+        private bool _editorFootHipsAlignedResidualYawReferenceLogged;
         private bool _editorThumbLocalRotationReferenceLogged;
         private bool _editorThumbSegmentDirectionReferenceLogged;
         private bool _editorHandPalmFrameReferenceLogged;
         private bool _editorThumbBasePositionReferenceLogged;
         private bool _editorHipsLocalPositionReferenceLogged;
+        private bool _editorBodyPositionXzReferenceLogged;
+        private bool _editorFootIkPositionReferenceLogged;
+        private BipedIK _editorManualFootBipedIk;
+        private bool _editorManualFootBipedIkCreated;
+        private bool _editorManualFootBipedIkInitiated;
 #else
         private Animator _editorFingerReferenceAnimator;
         private bool _useEditorFingerPoseReference;
@@ -789,6 +1568,13 @@ namespace Member_Han.Modules.FBXImporter
                 thumbStretchOffset = settings.EffectiveThumbStretchOffset;
                 preserveManualFingerReferenceThumbMuscles = settings.preserveManualFingerReferenceThumbMuscles;
                 useManualAnimatorFullBodyPoseReference = settings.useManualAnimatorFullBodyPoseReference;
+                manualAnimatorFullBodyPoseReferenceWeight = Mathf.Clamp01(settings.manualAnimatorFullBodyPoseReferenceWeight);
+                manualAnimatorFullBodyPoseExcludeLowerBodyMuscles =
+                    settings.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles;
+                manualAnimatorFullBodyPoseLowerBodyMusclesOnly =
+                    settings.manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
+                manualAnimatorFullBodyPoseLegTwistMusclesOnly =
+                    settings.manualAnimatorFullBodyPoseLegTwistMusclesOnly;
                 useManualAnimatorThumbLocalRotationReference = settings.useManualAnimatorThumbLocalRotationReference;
                 useManualAnimatorHandLocalRotationReference = settings.useManualAnimatorHandLocalRotationReference;
                 useManualAnimatorThumbSegmentDirectionReference = settings.useManualAnimatorThumbSegmentDirectionReference;
@@ -800,12 +1586,107 @@ namespace Member_Han.Modules.FBXImporter
                 useManualAnimatorThumbBasePositionReference = settings.useManualAnimatorThumbBasePositionReference;
                 useManualAnimatorHipsLocalPositionReference = settings.useManualAnimatorHipsLocalPositionReference;
                 useManualAnimatorBodyRotationReference = settings.useManualAnimatorBodyRotationReference;
+                manualAnimatorBodyRotationReferenceWeight = Mathf.Clamp01(settings.manualAnimatorBodyRotationReferenceWeight);
                 useManualAnimatorBodyPositionYReference = settings.useManualAnimatorBodyPositionYReference;
+                useManualAnimatorBodyPositionXzReference = settings.useManualAnimatorBodyPositionXzReference;
+                manualAnimatorBodyPositionXzReferenceWeight =
+                    Mathf.Clamp01(settings.manualAnimatorBodyPositionXzReferenceWeight);
+                manualAnimatorBodyPositionXzReferenceMaxOffset =
+                    Mathf.Max(0f, settings.manualAnimatorBodyPositionXzReferenceMaxOffset);
+                manualAnimatorBodyPositionXzReferenceFrameGateStart =
+                    Mathf.Max(0f, settings.manualAnimatorBodyPositionXzReferenceFrameGateStart);
+                manualAnimatorBodyPositionXzReferenceFrameGateEnd =
+                    Mathf.Max(0f, settings.manualAnimatorBodyPositionXzReferenceFrameGateEnd);
+                manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames =
+                    Mathf.Max(0f, settings.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames);
+                manualAnimatorBodyPositionXzReferenceAxisXScale =
+                    Mathf.Clamp01(settings.manualAnimatorBodyPositionXzReferenceAxisXScale);
+                manualAnimatorBodyPositionXzReferenceAxisZScale =
+                    Mathf.Clamp01(settings.manualAnimatorBodyPositionXzReferenceAxisZScale);
                 manualAnimatorHipsLocalPositionWeight = Mathf.Clamp01(settings.manualAnimatorHipsLocalPositionWeight);
                 manualAnimatorHipsLocalPositionMaxOffset = Mathf.Max(0.001f, settings.manualAnimatorHipsLocalPositionMaxOffset);
                 useManualAnimatorFootHeightGroundingReference = settings.useManualAnimatorFootHeightGroundingReference;
                 manualAnimatorFootHeightGroundingReferenceWeight = Mathf.Clamp01(settings.manualAnimatorFootHeightGroundingReferenceWeight);
                 manualAnimatorFootHeightGroundingReferenceMaxLift = Mathf.Max(0f, settings.manualAnimatorFootHeightGroundingReferenceMaxLift);
+                useManualAnimatorFootLocalRotationReference = settings.useManualAnimatorFootLocalRotationReference;
+                manualAnimatorFootLocalRotationReferenceWeight = Mathf.Clamp01(settings.manualAnimatorFootLocalRotationReferenceWeight);
+                useManualAnimatorLowerBodySegmentDirectionReference = settings.useManualAnimatorLowerBodySegmentDirectionReference;
+                manualAnimatorLowerBodySegmentDirectionReferenceWeight = Mathf.Clamp01(settings.manualAnimatorLowerBodySegmentDirectionReferenceWeight);
+                manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = Mathf.Max(0f, settings.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle);
+                disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
+                    settings.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
+                manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
+                    Mathf.Max(0f, settings.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle);
+                disableManualAnimatorLowerLegToFootSegmentDirectionReference =
+                    settings.disableManualAnimatorLowerLegToFootSegmentDirectionReference;
+                manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
+                    Mathf.Max(0f, settings.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle);
+                manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
+                    Mathf.Max(0f, settings.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle);
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle =
+                    Mathf.Max(0f, settings.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle);
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale =
+                    Mathf.Clamp01(settings.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale);
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight =
+                    Mathf.Clamp01(settings.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight);
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart =
+                    Mathf.Max(0f, settings.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart);
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd =
+                    Mathf.Max(0f, settings.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
+                    Mathf.Clamp01(settings.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
+                disableManualAnimatorFootToToesSegmentDirectionReference =
+                    settings.disableManualAnimatorFootToToesSegmentDirectionReference;
+                manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
+                    Mathf.Max(0f, settings.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
+                useManualAnimatorFootHipsAlignedResidualYawReference = settings.useManualAnimatorFootHipsAlignedResidualYawReference;
+                manualAnimatorFootHipsAlignedResidualYawReferenceWeight = Mathf.Clamp01(settings.manualAnimatorFootHipsAlignedResidualYawReferenceWeight);
+                manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = Mathf.Max(0f, settings.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle);
+                useManualAnimatorBipedIkFootPositionReference = settings.useManualAnimatorBipedIkFootPositionReference;
+                manualAnimatorBipedIkFootPositionReferenceWeight = Mathf.Clamp01(settings.manualAnimatorBipedIkFootPositionReferenceWeight);
+                manualAnimatorBipedIkFootPositionReferenceMaxOffset = Mathf.Max(0f, settings.manualAnimatorBipedIkFootPositionReferenceMaxOffset);
+                usePostSetHumanPoseRightEndpointPositionReference =
+                    settings.usePostSetHumanPoseRightEndpointPositionReference;
+                postSetHumanPoseRightEndpointPositionReferenceWeight =
+                    Mathf.Clamp01(settings.postSetHumanPoseRightEndpointPositionReferenceWeight);
+                postSetHumanPoseRightEndpointPositionReferenceMaxOffset =
+                    Mathf.Max(0f, settings.postSetHumanPoseRightEndpointPositionReferenceMaxOffset);
+                postSetHumanPoseRightEndpointPositionReferencePositiveZScale =
+                    Mathf.Clamp01(settings.postSetHumanPoseRightEndpointPositionReferencePositiveZScale);
+                postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
+                    Mathf.Clamp01(settings.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight);
+                postSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
+                    Mathf.Max(0f, settings.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
+                postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
+                    Mathf.Max(0f, settings.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
+                postSetHumanPoseEndpointPositionUseLeftSide =
+                    settings.postSetHumanPoseEndpointPositionUseLeftSide;
+                usePostSetHumanPoseRightFootEvaluatorXzReference =
+                    settings.usePostSetHumanPoseRightFootEvaluatorXzReference;
+                postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
+                    Mathf.Max(0f, settings.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude);
+                usePreSetHumanPoseRightEndpointPositionReference =
+                    settings.usePreSetHumanPoseRightEndpointPositionReference;
+                preSetHumanPoseRightEndpointPositionReferenceWeight =
+                    Mathf.Clamp01(settings.preSetHumanPoseRightEndpointPositionReferenceWeight);
+                preSetHumanPoseRightEndpointPositionReferenceMaxOffset =
+                    Mathf.Max(0f, settings.preSetHumanPoseRightEndpointPositionReferenceMaxOffset);
+                preSetHumanPoseRightEndpointPositionReferencePositiveZScale =
+                    Mathf.Clamp01(settings.preSetHumanPoseRightEndpointPositionReferencePositiveZScale);
+                preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
+                    Mathf.Clamp01(settings.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight);
+                preSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
+                    Mathf.Max(0f, settings.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
+                preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
+                    Mathf.Max(0f, settings.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
+                preSetHumanPoseEndpointPositionUseLeftSide =
+                    settings.preSetHumanPoseEndpointPositionUseLeftSide;
+                preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
+                    settings.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
+                preSetHumanPoseEndpointPositionInvertBodyPositionX =
+                    settings.preSetHumanPoseEndpointPositionInvertBodyPositionX;
+                preSetHumanPoseEndpointPositionInvertBodyPositionZ =
+                    settings.preSetHumanPoseEndpointPositionInvertBodyPositionZ;
                 manualAnimatorThumbBasePositionWeight = settings.manualAnimatorThumbBasePositionWeight;
                 manualAnimatorThumbBasePositionMaxOffset = settings.manualAnimatorThumbBasePositionMaxOffset;
                 thumbSpreadMin = settings.ThumbSpreadMin;
@@ -830,6 +1711,8 @@ namespace Member_Han.Modules.FBXImporter
                 legacyAnimationVisualFrameRate = Mathf.Clamp(settings.RetargetVisualClipFrameRate, 15f, 120f);
                 smoothPoseOnLegacyAnimationStepSpike = settings.smoothRetargetPoseOnVisualStepSpike;
                 poseVisualSpikeCurrentWeight = Mathf.Clamp(settings.RetargetPoseVisualSpikeCurrentWeight, 0.1f, 1f);
+                poseVisualSpikeForearmStretchClampMaxOffset =
+                    Mathf.Clamp01(settings.RetargetPoseVisualSpikeForearmStretchClampMaxOffset);
                 poseVisualMuscleDeltaThreshold = Mathf.Clamp(settings.RetargetPoseVisualMuscleDeltaThreshold, 0.05f, 1f);
                 rejectRendererGroundingOutliers = settings.rejectRendererGroundingOutliers;
                 maxRendererFootGroundingSeparation = Mathf.Max(0.02f, settings.MaxRendererFootGroundingSeparation);
@@ -880,6 +1763,21 @@ namespace Member_Han.Modules.FBXImporter
             _legacyAnim = null;
             _addedLegacyAnimationComponent = false;
             _ghostAnimatorWasEnabled = false;
+        }
+
+        private static bool HasLegacyAnimationClipState(Animation legacyAnimation, string stateName)
+        {
+            return legacyAnimation != null &&
+                !string.IsNullOrEmpty(stateName) &&
+                legacyAnimation[stateName] != null;
+        }
+
+        private static void RemoveLegacyAnimationClipStateIfPresent(Animation legacyAnimation, string stateName)
+        {
+            if (HasLegacyAnimationClipState(legacyAnimation, stateName))
+            {
+                legacyAnimation.RemoveClip(stateName);
+            }
         }
 
 #if UNITY_EDITOR
@@ -959,27 +1857,16 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
-        private static bool HasLegacyAnimationClipState(Animation legacyAnimation, string stateName)
-        {
-            return legacyAnimation != null &&
-                !string.IsNullOrEmpty(stateName) &&
-                legacyAnimation[stateName] != null;
-        }
-
-        private static void RemoveLegacyAnimationClipStateIfPresent(Animation legacyAnimation, string stateName)
-        {
-            if (HasLegacyAnimationClipState(legacyAnimation, stateName))
-            {
-                legacyAnimation.RemoveClip(stateName);
-            }
-        }
-
         public void ConfigureEditorHumanoidFingerPoseReference(
             GameObject referencePrefab,
             RuntimeAnimatorController referenceController,
             AnimationClip referenceClip,
             bool enableFingerPoseReference = true,
-            bool enableFullBodyPoseReference = true)
+            bool enableFullBodyPoseReference = true,
+            float fullBodyPoseReferenceWeight = 1f,
+            bool fullBodyPoseExcludeLowerBodyMuscles = false,
+            bool fullBodyPoseLowerBodyMusclesOnly = false,
+            bool fullBodyPoseLegTwistMusclesOnly = false)
         {
             DisposeEditorHumanoidFingerPoseReference();
             _useEditorFingerPoseReference = false;
@@ -990,11 +1877,15 @@ namespace Member_Han.Modules.FBXImporter
             _hasEditorReferenceLowestFootRestY = false;
             _allowEditorFootHeightGroundingReference = false;
             _editorHandLocalRotationReferenceLogged = false;
+            _editorFootLocalRotationReferenceLogged = false;
+            _editorLowerBodySegmentDirectionReferenceLogged = false;
+            _editorFootHipsAlignedResidualYawReferenceLogged = false;
             _editorThumbLocalRotationReferenceLogged = false;
             _editorThumbSegmentDirectionReferenceLogged = false;
             _editorHandPalmFrameReferenceLogged = false;
             _editorThumbBasePositionReferenceLogged = false;
             _editorHipsLocalPositionReferenceLogged = false;
+            _editorBodyPositionXzReferenceLogged = false;
             _editorFingerReferenceMuscleIndices.Clear();
 
             if (referencePrefab == null || referenceController == null || referenceClip == null || !referenceClip.humanMotion)
@@ -1067,6 +1958,10 @@ namespace Member_Han.Modules.FBXImporter
             _editorFingerReferenceHandler = new HumanPoseHandler(_editorFingerReferenceAnimator.avatar, _editorFingerReferenceAnimator.transform);
             _editorFingerReferencePose = new HumanPose();
             useManualAnimatorFullBodyPoseReference = enableFullBodyPoseReference;
+            manualAnimatorFullBodyPoseReferenceWeight = Mathf.Clamp01(fullBodyPoseReferenceWeight);
+            manualAnimatorFullBodyPoseExcludeLowerBodyMuscles = fullBodyPoseExcludeLowerBodyMuscles;
+            manualAnimatorFullBodyPoseLowerBodyMusclesOnly = fullBodyPoseLowerBodyMusclesOnly;
+            manualAnimatorFullBodyPoseLegTwistMusclesOnly = fullBodyPoseLegTwistMusclesOnly;
             _useEditorFingerPoseReference = ShouldUseEditorPoseReference(
                 enableFingerPoseReference,
                 useManualAnimatorFullBodyPoseReference,
@@ -1082,7 +1977,6 @@ namespace Member_Han.Modules.FBXImporter
                 _editorReferenceHipsRestLocalPosition = refHipsRest.localPosition;
                 _hasEditorReferenceHipsRestLocalPosition = true;
             }
-
             Debug.Log($"[PoseSpaceRetargeter] Manual Animator finger reference ready: prefab={referencePrefab.name}, controller={referenceController.name}, state={stateName}, clip={referenceClip.name}, muscles={_editorFingerReferenceMuscleIndices.Count}, hipsRest={(_hasEditorReferenceHipsRestLocalPosition ? _editorReferenceHipsRestLocalPosition.y.ToString("F4") : "N/A")}");
         }
 
@@ -1142,7 +2036,9 @@ namespace Member_Han.Modules.FBXImporter
             _scaleRatio = CalculateSafeScaleRatio(ghostHip, targetHip);
 
             // 포즈(근육) 동기화
+            ResetRetargetPoseStageDiagnostics();
             _ghostHandler.GetHumanPose(ref _humanPose);
+            _lastRetargetStageGhostEndpointPositions = CaptureEndpointStageWorldPositions(ghostAnimator);
             if (!IsFinite(_humanPose))
             {
                 LogPoseWarning("Ghost HumanPose contains non-finite values. Skipping this retarget frame.");
@@ -1150,13 +2046,22 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
+            TransformRetargetPoseInputMuscles(ref _humanPose);
+#if UNITY_EDITOR
+            AlignRetargetPoseInputWithEditorHumanoidMuscleReference(ref _humanPose);
+#endif
+            CapturePoseInputDiagnostics(_humanPose);
             ApplyEditorHumanoidMuscleReference(ref _humanPose);
+            CaptureAfterEditorMuscleReferenceDiagnostics(_humanPose);
             ApplyEditorHumanoidFingerPoseReference(ref _humanPose);
             ApplyEditorHumanoidBodyRotationReference(ref _humanPose);
             ApplyThumbAnatomicalGuard(ref _humanPose, ShouldApplyThumbStretchOffset());
             ClampPoseMuscles(ref _humanPose);
+            CaptureAfterClampPoseMusclesDiagnostics(_humanPose);
             ApplyAnatomicalArmGuard(ref _humanPose);
+            CaptureAfterAnatomicalArmGuardDiagnostics(_humanPose);
             SmoothPoseOnVisualSpike(ref _humanPose);
+            CaptureAfterVisualSpikeSmoothingDiagnostics(_humanPose);
             Quaternion poseRootRotation = _humanPose.bodyRotation;
             if (preserveFbxRootRotation && !_hasPoseRootRotationCorrection && IsFinite(poseRootRotation) && _legacyAnim != null && _legacyAnim.isPlaying)
             {
@@ -1190,6 +2095,35 @@ namespace Member_Han.Modules.FBXImporter
             {
                 bodyPos.y *= _scaleRatio;
             }
+#if UNITY_EDITOR
+            float manualBodyPositionXzFrameGateWeight =
+                ResolveManualAnimatorBodyPositionXzFrameGateWeight();
+            if (useManualAnimatorBodyPositionXzReference &&
+                manualBodyPositionXzFrameGateWeight > 0f &&
+                _hasEditorReferenceBodyPosition &&
+                TryCalculateManualAnimatorBodyPositionXzReference(
+                    bodyPos,
+                    _editorReferenceBodyPosition,
+                    manualAnimatorBodyPositionXzReferenceWeight * manualBodyPositionXzFrameGateWeight,
+                    manualAnimatorBodyPositionXzReferenceMaxOffset,
+                    manualAnimatorBodyPositionXzReferenceAxisXScale,
+                    manualAnimatorBodyPositionXzReferenceAxisZScale,
+                    out Vector3 manualBodyPositionXz))
+            {
+                bodyPos = manualBodyPositionXz;
+                if (!_editorBodyPositionXzReferenceLogged)
+                {
+                    Debug.Log(
+                        $"[PoseSpaceRetargeter] Manual Animator bodyPosition X/Z reference applied. " +
+                        $"weight={manualAnimatorBodyPositionXzReferenceWeight:F2}, " +
+                        $"maxOffset={manualAnimatorBodyPositionXzReferenceMaxOffset:F3}m, " +
+                        $"frameGate={manualAnimatorBodyPositionXzReferenceFrameGateStart:F0}-{manualAnimatorBodyPositionXzReferenceFrameGateEnd:F0}, " +
+                        $"blendFrames={manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames:F0}, " +
+                        $"axisScale={manualAnimatorBodyPositionXzReferenceAxisXScale:F2}/{manualAnimatorBodyPositionXzReferenceAxisZScale:F2}");
+                    _editorBodyPositionXzReferenceLogged = true;
+                }
+            }
+#endif
             if (!IsFinite(bodyPos))
             {
                 LogPoseWarning("Retarget body position became non-finite. Skipping this retarget frame.");
@@ -1209,13 +2143,29 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             Vector3 targetPositionBeforePose = targetAnimator.transform.position;
+            _lastSetHumanPosePreSolveCurrentEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+#if UNITY_EDITOR
+            ApplyPreSetHumanPoseSignCorrectedRowLocalBodyPositionReference(ref _humanPose);
+            if (!preSetHumanPoseEndpointPositionUseGhostCurrentBasis)
+            {
+                ApplyPreSetHumanPoseRightEndpointPositionReference();
+            }
+#endif
+            CaptureSetHumanPoseInputDiagnostics(_humanPose);
             _targetHandler.SetHumanPose(ref _humanPose);
+            CaptureSetHumanPoseOutputDiagnostics();
+            _lastRetargetStageAfterSetHumanPoseEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
             ClampAppliedTargetPose();
             RestoreTargetHumanoidLocalPositions();
 #if UNITY_EDITOR
             ApplyEditorHumanoidHipsLocalPositionReference();
+            ApplyEditorHumanoidFootLocalRotationReference();
+            ApplyEditorHumanoidLowerBodySegmentDirectionReference();
+            ApplyEditorHumanoidFootHipsAlignedResidualYawReference();
+            ApplyPostSetHumanPoseRightEndpointPositionReference();
             ApplyEditorHumanoidThumbBasePositionReference();
 #endif
+            _lastRetargetStageAfterManualReferencesEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
             ClampTargetHipsLocalPositionSpike();
             ClampTargetThumbLocalRotations();
 #if UNITY_EDITOR
@@ -1239,6 +2189,7 @@ namespace Member_Han.Modules.FBXImporter
                 rootMotionCarrierPositionBeforePose,
                 targetAnimator.transform.position,
                 useBodyPositionXZRootMotion);
+            _lastRetargetStageAfterRootRestoreEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
 
             // 월드 회전 동기화 (180도 문제 해결)
             if (preserveFbxRootRotation && _hasPoseRootRotationCorrection && IsFinite(poseRootRotation))
@@ -1300,6 +2251,7 @@ namespace Member_Han.Modules.FBXImporter
 
             // 이동 적용
             targetAnimator.transform.position += targetDelta;
+            _lastRetargetStageAfterRootDeltaEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
 
             // 위치 갱신
             _prevGhostPos = ghostAnimator.transform.position;
@@ -1309,8 +2261,13 @@ namespace Member_Han.Modules.FBXImporter
             {
                 ApplyRaycastGrounding();
             }
+            _lastRetargetStageAfterGroundingEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
 
             RestoreTargetLocalScales();
+#if UNITY_EDITOR
+            ApplyEditorHumanoidBipedIkFootPositionReference();
+#endif
+            _lastRetargetStageAfterBipedIKEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
         }
 
         private static Vector3 CalculateRetargetRootDelta(
@@ -1398,6 +2355,21 @@ namespace Member_Han.Modules.FBXImporter
                 _legacyAnim.Sample();
             }
 
+            float maxStep = 1f / Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
+            if (TryClampLegacyAnimationEndWrap(
+                currentTime,
+                _previousLegacyAnimationTime,
+                length,
+                maxStep,
+                out float clampedEndTime))
+            {
+                currentTime = clampedEndTime;
+                state.enabled = true;
+                state.time = currentTime;
+                state.speed = 0f;
+                _legacyAnim.Sample();
+            }
+
             if (currentTime + 0.0001f < _previousLegacyAnimationTime)
             {
                 _previousLegacyAnimationTime = currentTime;
@@ -1406,7 +2378,6 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            float maxStep = 1f / Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
             float step = currentTime - _previousLegacyAnimationTime;
             _lastLegacyAnimationStep = step;
             _maxLegacyAnimationStep = Mathf.Max(_maxLegacyAnimationStep, step);
@@ -1461,6 +2432,36 @@ namespace Member_Han.Modules.FBXImporter
             return true;
         }
 
+        private static bool TryClampLegacyAnimationEndWrap(
+            float currentTime,
+            float previousTime,
+            float length,
+            float maxStep,
+            out float clampedTime)
+        {
+            clampedTime = currentTime;
+
+            if (!IsFinite(currentTime) ||
+                !IsFinite(previousTime) ||
+                !IsFinite(length) ||
+                !IsFinite(maxStep) ||
+                length <= 0f ||
+                maxStep <= 0f ||
+                currentTime + 0.0001f >= previousTime)
+            {
+                return false;
+            }
+
+            float endWindow = Mathf.Max(0.01f, maxStep * 2f + 0.005f);
+            if (previousTime < length - endWindow || currentTime > endWindow)
+            {
+                return false;
+            }
+
+            clampedTime = length;
+            return true;
+        }
+
         private void SmoothPoseOnVisualSpike(ref HumanPose pose)
         {
             if (!smoothPoseOnLegacyAnimationStepSpike || pose.muscles == null || pose.muscles.Length == 0)
@@ -1507,9 +2508,24 @@ namespace Member_Han.Modules.FBXImporter
                     bodyPositionDelta,
                     bodyRotationDelta,
                     _legacyAnimationStepSpikeThisFrame);
+                bool useEditorHumanoidMuscleReference = false;
+#if UNITY_EDITOR
+                useEditorHumanoidMuscleReference = _useEditorHumanoidMuscleReference;
+#endif
                 for (int i = 0; i < pose.muscles.Length; i++)
                 {
-                    pose.muscles[i] = Mathf.Lerp(_previousVisualPoseMuscles[i], pose.muscles[i], currentWeight);
+                    bool hasEditorHumanoidMuscleReferenceCurve = false;
+#if UNITY_EDITOR
+                    hasEditorHumanoidMuscleReferenceCurve = _editorHumanoidMuscleCurves.ContainsKey(i);
+#endif
+                    pose.muscles[i] = BlendVisualPoseSpikeMuscle(
+                        _previousVisualPoseMuscles[i],
+                        pose.muscles[i],
+                        currentWeight,
+                        i,
+                        useEditorHumanoidMuscleReference,
+                        hasEditorHumanoidMuscleReferenceCurve,
+                        poseVisualSpikeForearmStretchClampMaxOffset);
                 }
 
                 pose.bodyPosition = Vector3.Lerp(_previousVisualPoseBodyPosition, pose.bodyPosition, currentWeight);
@@ -1538,6 +2554,85 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return currentWeight;
+        }
+
+        private static float BlendVisualPoseSpikeMuscle(
+            float previousValue,
+            float currentValue,
+            float currentWeight,
+            int muscleIndex,
+            bool useEditorHumanoidMuscleReference,
+            bool hasEditorHumanoidMuscleReferenceCurve,
+            float forearmStretchClampMaxOffset)
+        {
+            if (ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
+                muscleIndex,
+                useEditorHumanoidMuscleReference,
+                hasEditorHumanoidMuscleReferenceCurve))
+            {
+                return currentValue;
+            }
+
+            float blended = Mathf.Lerp(previousValue, currentValue, currentWeight);
+            return ClampForearmStretchVisualSpikeBlend(
+                previousValue,
+                currentValue,
+                blended,
+                muscleIndex,
+                forearmStretchClampMaxOffset);
+        }
+
+        private static float ClampForearmStretchVisualSpikeBlend(
+            float previousValue,
+            float currentValue,
+            float blendedValue,
+            int muscleIndex,
+            float maxOffset)
+        {
+            if (maxOffset <= 0f ||
+                !IsForearmStretchMuscleIndex(muscleIndex) ||
+                !IsFinite(previousValue) ||
+                !IsFinite(currentValue) ||
+                !IsFinite(blendedValue))
+            {
+                return blendedValue;
+            }
+
+            if (currentValue > ForearmStretchVisualClampCurrentMax)
+            {
+                return blendedValue;
+            }
+
+            float safeOffset = Mathf.Clamp01(maxOffset);
+            return Mathf.Clamp(
+                blendedValue,
+                currentValue - safeOffset,
+                currentValue + safeOffset);
+        }
+
+        private static bool ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
+            int muscleIndex,
+            bool useEditorHumanoidMuscleReference,
+            bool hasEditorHumanoidMuscleReferenceCurve)
+        {
+#if UNITY_EDITOR
+            return useEditorHumanoidMuscleReference &&
+                hasEditorHumanoidMuscleReferenceCurve &&
+                ShouldUseEditorHumanoidMuscleReference(muscleIndex);
+#else
+            return false;
+#endif
+        }
+
+        private static bool IsForearmStretchMuscleIndex(int muscleIndex)
+        {
+            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
+            {
+                return false;
+            }
+
+            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
+            return normalized.Contains("forearm") && normalized.Contains("stretch");
         }
 
         private static bool ShouldSmoothVisualPoseSpike(
@@ -1587,8 +2682,194 @@ namespace Member_Han.Modules.FBXImporter
             _previousVisualPoseBodyRotation = Quaternion.identity;
         }
 
-#if UNITY_EDITOR
         private void ApplyEditorHumanoidMuscleReference(ref HumanPose pose)
+        {
+#if UNITY_EDITOR
+            ApplyEditorHumanoidMuscleReferenceEditor(ref pose);
+#endif
+        }
+
+        private void ApplyEditorHumanoidFingerPoseReference(ref HumanPose pose)
+        {
+#if UNITY_EDITOR
+            ApplyEditorHumanoidFingerPoseReferenceEditor(ref pose);
+#endif
+        }
+
+        private void ApplyEditorHumanoidBodyRotationReference(ref HumanPose pose)
+        {
+#if UNITY_EDITOR
+            ApplyEditorHumanoidBodyRotationReferenceEditor(ref pose);
+#endif
+        }
+
+        private void ResetLastEditorHipsLocalReferenceDiagnostics()
+        {
+            _lastEditorHipsLocalReferenceBeforeLocalY = float.NaN;
+            _lastEditorHipsLocalReferenceAfterLocalY = float.NaN;
+            _lastEditorHipsLocalReferenceDeltaY = float.NaN;
+        }
+
+        private void ResetRecordingStartHipsBaselineDiagnostics()
+        {
+            _recordingStartRootY = float.NaN;
+            _recordingStartBodyPositionY = float.NaN;
+            _recordingStartHipsLocalY = float.NaN;
+            _recordingStartHipsY = float.NaN;
+            _recordingStartHipsReferenceBeforeLocalY = float.NaN;
+            _recordingStartHipsReferenceAfterLocalY = float.NaN;
+            _recordingStartHipsReferenceDeltaY = float.NaN;
+            _recordingStartHipsReferenceFlipDetected = false;
+            _recordingStartHipsReferenceStage = string.Empty;
+        }
+
+        private bool TryGetTargetBodyPositionY(out float bodyPositionY)
+        {
+            bodyPositionY = float.NaN;
+            if (_targetHandler == null)
+            {
+                return false;
+            }
+
+            HumanPose targetPose = new HumanPose();
+            _targetHandler.GetHumanPose(ref targetPose);
+            if (!IsFinite(targetPose.bodyPosition))
+            {
+                return false;
+            }
+
+            bodyPositionY = targetPose.bodyPosition.y;
+            return true;
+        }
+
+        private static bool IsRecordingStartHipsBaselineFlip(float beforeLocalY, float afterLocalY, float warningThreshold)
+        {
+            if (!IsFinite(beforeLocalY) || !IsFinite(afterLocalY) || !IsFinite(warningThreshold))
+            {
+                return false;
+            }
+
+            return Mathf.Abs(afterLocalY - beforeLocalY) > Mathf.Max(0f, warningThreshold);
+        }
+
+        private bool ShouldSuppressCompetingManualThumbOverride(bool leftHand)
+        {
+#if UNITY_EDITOR
+            return ShouldSuppressCompetingManualThumbOverrideEditor(leftHand);
+#else
+            return false;
+#endif
+        }
+
+        private bool ShouldKeepDetachedHelperManualThumbOverrides(bool leftHand)
+        {
+#if UNITY_EDITOR
+            return ShouldKeepDetachedHelperManualThumbOverridesEditor(leftHand);
+#else
+            return false;
+#endif
+        }
+
+        public bool TryGetHighRiskManualThumbPoseConstraintOverrides(
+            bool leftHand,
+            out float projectionMin,
+            out float projectionMax,
+            out float maxSpreadAngle)
+        {
+#if UNITY_EDITOR
+            return TryGetHighRiskManualThumbPoseConstraintOverridesEditor(
+                leftHand,
+                out projectionMin,
+                out projectionMax,
+                out maxSpreadAngle);
+#else
+            projectionMin = 0f;
+            projectionMax = 0f;
+            maxSpreadAngle = 0f;
+            return false;
+#endif
+        }
+
+        public string BuildThumbHelperRelationshipDebugSummary(bool leftHand)
+        {
+#if UNITY_EDITOR
+            return BuildThumbHelperRelationshipDebugSummaryEditor(leftHand);
+#else
+            return leftHand
+                ? "side=L, state=editor-only"
+                : "side=R, state=editor-only";
+#endif
+        }
+
+        private Transform GetCachedThumbBaseHelper(bool leftHand)
+        {
+#if UNITY_EDITOR
+            return GetCachedThumbBaseHelperEditor(leftHand);
+#else
+            return null;
+#endif
+        }
+
+        private Transform GetCachedExplicitThumbBaseSource(bool leftHand)
+        {
+#if UNITY_EDITOR
+            return GetCachedExplicitThumbBaseSourceEditor(leftHand);
+#else
+            return null;
+#endif
+        }
+
+        private bool TryEvaluateThumbManualReferenceFrameDeviation(
+            bool leftHand,
+            Transform targetThumb,
+            Quaternion candidateWorldRotation,
+            out float currentDeviation,
+            out float candidateDeviation)
+        {
+#if UNITY_EDITOR
+            return TryEvaluateThumbManualReferenceFrameDeviationEditor(
+                leftHand,
+                targetThumb,
+                candidateWorldRotation,
+                out currentDeviation,
+                out candidateDeviation);
+#else
+            currentDeviation = float.NaN;
+            candidateDeviation = float.NaN;
+            return false;
+#endif
+        }
+
+        private bool TryEvaluateCurrentThumbReferenceFrameDelta(
+            bool leftHand,
+            out float spreadDelta,
+            out float projectionDelta)
+        {
+#if UNITY_EDITOR
+            return TryEvaluateCurrentThumbReferenceFrameDeltaEditor(leftHand, out spreadDelta, out projectionDelta);
+#else
+            spreadDelta = float.NaN;
+            projectionDelta = float.NaN;
+            return false;
+#endif
+        }
+
+        private bool TryEvaluateThumbLocalRotationOverrideRisk(
+            bool leftHand,
+            Transform targetThumb,
+            Quaternion candidateRotation,
+            out float risk)
+        {
+#if UNITY_EDITOR
+            return TryEvaluateThumbLocalRotationOverrideRiskEditor(leftHand, targetThumb, candidateRotation, out risk);
+#else
+            risk = float.NaN;
+            return false;
+#endif
+        }
+
+#if UNITY_EDITOR
+        private void ApplyEditorHumanoidMuscleReferenceEditor(ref HumanPose pose)
         {
             if (!_useEditorHumanoidMuscleReference || pose.muscles == null || _editorHumanoidMuscleCurves.Count == 0)
             {
@@ -1603,12 +2884,13 @@ namespace Member_Han.Modules.FBXImporter
                     continue;
                 }
 
-                if (!ShouldUseEditorHumanoidMuscleReference(pair.Key))
+                float referenceValue = pair.Value.Evaluate(time);
+                if (!ShouldApplyEditorHumanoidMuscleReferenceValue(pair.Key, referenceValue))
                 {
                     continue;
                 }
 
-                pose.muscles[pair.Key] = pair.Value.Evaluate(time);
+                pose.muscles[pair.Key] = referenceValue;
             }
 
             if (!_editorHumanoidMuscleReferenceLogged)
@@ -1618,7 +2900,7 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
-        private void ApplyEditorHumanoidFingerPoseReference(ref HumanPose pose)
+        private void ApplyEditorHumanoidFingerPoseReferenceEditor(ref HumanPose pose)
         {
             if (!_useEditorFingerPoseReference ||
                 pose.muscles == null ||
@@ -1643,10 +2925,21 @@ namespace Member_Han.Modules.FBXImporter
 
             if (useManualAnimatorFullBodyPoseReference)
             {
+                float weight = Mathf.Clamp01(manualAnimatorFullBodyPoseReferenceWeight);
+                if (weight <= 0f)
+                {
+                    return;
+                }
+
                 int count = Mathf.Min(pose.muscles.Length, _editorFingerReferencePose.muscles.Length);
                 for (int i = 0; i < count; i++)
                 {
-                    pose.muscles[i] = _editorFingerReferencePose.muscles[i];
+                    if (!ShouldApplyManualFullBodyPoseReferenceMuscle(i))
+                    {
+                        continue;
+                    }
+
+                    pose.muscles[i] = Mathf.Lerp(pose.muscles[i], _editorFingerReferencePose.muscles[i], weight);
                 }
             }
             else
@@ -1667,14 +2960,18 @@ namespace Member_Han.Modules.FBXImporter
             {
                 float time = GetLegacyAnimationTime();
                 string scope = useManualAnimatorFullBodyPoseReference ? "full-body muscle" : "finger";
-                Debug.Log($"[PoseSpaceRetargeter] Manual Animator {scope} reference applied at t={time:F3}s.");
+                string weightSuffix = useManualAnimatorFullBodyPoseReference
+                    ? $", weight={Mathf.Clamp01(manualAnimatorFullBodyPoseReferenceWeight):F2}"
+                    : string.Empty;
+                Debug.Log($"[PoseSpaceRetargeter] Manual Animator {scope} reference applied at t={time:F3}s{weightSuffix}.");
                 _editorFingerPoseReferenceLogged = true;
             }
         }
 
-        private void ApplyEditorHumanoidBodyRotationReference(ref HumanPose pose)
+        private void ApplyEditorHumanoidBodyRotationReferenceEditor(ref HumanPose pose)
         {
             if (!useManualAnimatorBodyRotationReference ||
+                manualAnimatorBodyRotationReferenceWeight <= 0f ||
                 _editorFingerReferenceAnimator == null ||
                 _editorFingerReferenceHandler == null)
             {
@@ -1693,7 +2990,8 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            pose.bodyRotation = referenceBodyRotation;
+            float weight = Mathf.Clamp01(manualAnimatorBodyRotationReferenceWeight);
+            pose.bodyRotation = Quaternion.Slerp(pose.bodyRotation, referenceBodyRotation, weight);
 
             Vector3 refBodyPos = _editorFingerReferencePose.bodyPosition;
             if (IsFinite(refBodyPos) && refBodyPos.y > 0.01f)
@@ -1704,7 +3002,7 @@ namespace Member_Han.Modules.FBXImporter
             if (!_editorBodyRotationReferenceLogged)
             {
                 float time = GetLegacyAnimationTime();
-                Debug.Log($"[PoseSpaceRetargeter] Manual Animator bodyRotation reference applied at t={time:F3}s.");
+                Debug.Log($"[PoseSpaceRetargeter] Manual Animator bodyRotation reference applied at t={time:F3}s, weight={weight:F2}.");
                 _editorBodyRotationReferenceLogged = true;
             }
         }
@@ -1747,6 +3045,10 @@ namespace Member_Han.Modules.FBXImporter
 
             Vector3 refCurrentLocalPosition = referenceHips.localPosition;
             Vector3 currentLocalPosition = targetHips.localPosition;
+            Vector3 ghostRightFootPosition = ReadAnimatorBoneWorldPosition(ghostAnimator, HumanBodyBones.RightFoot);
+            Vector3 ghostRightToesPosition = ReadAnimatorBoneWorldPosition(ghostAnimator, HumanBodyBones.RightToes);
+            Vector3 beforeRightFootPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightFoot);
+            Vector3 beforeRightToesPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightToes);
             // Delta 방식: testprefab의 clip 시작 대비 현재 변위만 YYB 자연 위치에 더한다.
             // 절대 복사는 모델 비율 차이(YYB Hips Y≈1.024 vs testprefab≈1.056)로 인해 YYB Hips를 잘못된 높이로 강제한다.
             if (!TryCalculateEditorHipsLocalPositionReference(
@@ -1763,8 +3065,24 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
-            RecordEditorHipsLocalReferenceDiagnostics(currentLocalPosition, nextLocalPosition);
             targetHips.localPosition = nextLocalPosition;
+            Vector3 afterRightFootPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightFoot);
+            Vector3 afterRightToesPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightToes);
+            if (!ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
+                ghostRightFootPosition,
+                ghostRightToesPosition,
+                beforeRightFootPosition,
+                beforeRightToesPosition,
+                afterRightFootPosition,
+                afterRightToesPosition,
+                HipsLocalPositionTargetGapGuardMaxIncreaseMeters))
+            {
+                targetHips.localPosition = currentLocalPosition;
+                RecordEditorHipsLocalReferenceDiagnostics(currentLocalPosition, currentLocalPosition);
+                return;
+            }
+
+            RecordEditorHipsLocalReferenceDiagnostics(currentLocalPosition, nextLocalPosition);
             if (!_editorHipsLocalPositionReferenceLogged)
             {
                 Debug.Log($"[PoseSpaceRetargeter] Manual Animator Hips localPosition reference applied. weight={manualAnimatorHipsLocalPositionWeight:F2}, maxOffset={manualAnimatorHipsLocalPositionMaxOffset:F3}m");
@@ -1851,6 +3169,64 @@ namespace Member_Han.Modules.FBXImporter
             return true;
         }
 
+        private static bool ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
+            Vector3 ghostRightFootPosition,
+            Vector3 ghostRightToesPosition,
+            Vector3 beforeRightFootPosition,
+            Vector3 beforeRightToesPosition,
+            Vector3 afterRightFootPosition,
+            Vector3 afterRightToesPosition,
+            float maxAllowedIncrease)
+        {
+            if (!TryCalculateRightEndpointTargetGap(
+                    ghostRightFootPosition,
+                    ghostRightToesPosition,
+                    beforeRightFootPosition,
+                    beforeRightToesPosition,
+                    out float beforeGap) ||
+                !TryCalculateRightEndpointTargetGap(
+                    ghostRightFootPosition,
+                    ghostRightToesPosition,
+                    afterRightFootPosition,
+                    afterRightToesPosition,
+                    out float afterGap))
+            {
+                return true;
+            }
+
+            return afterGap <= beforeGap + Mathf.Max(0f, maxAllowedIncrease);
+        }
+
+        private static bool TryCalculateRightEndpointTargetGap(
+            Vector3 ghostRightFootPosition,
+            Vector3 ghostRightToesPosition,
+            Vector3 targetRightFootPosition,
+            Vector3 targetRightToesPosition,
+            out float gap)
+        {
+            gap = float.NaN;
+            if (!TryCalculateXzDistance(ghostRightFootPosition, targetRightFootPosition, out float footGap) ||
+                !TryCalculateXzDistance(ghostRightToesPosition, targetRightToesPosition, out float toesGap))
+            {
+                return false;
+            }
+
+            gap = Mathf.Max(footGap, toesGap);
+            return IsFinite(gap);
+        }
+
+        private static bool TryCalculateXzDistance(Vector3 a, Vector3 b, out float distance)
+        {
+            distance = float.NaN;
+            if (!IsFinite(a) || !IsFinite(b))
+            {
+                return false;
+            }
+
+            distance = Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
+            return IsFinite(distance);
+        }
+
         private void RecordEditorHipsLocalReferenceDiagnostics(Vector3 beforeLocalPosition, Vector3 afterLocalPosition)
         {
             _lastEditorHipsLocalReferenceBeforeLocalY = IsFinite(beforeLocalPosition) ? beforeLocalPosition.y : float.NaN;
@@ -1859,55 +3235,6 @@ namespace Member_Han.Modules.FBXImporter
                 IsFinite(_lastEditorHipsLocalReferenceBeforeLocalY) && IsFinite(_lastEditorHipsLocalReferenceAfterLocalY)
                     ? _lastEditorHipsLocalReferenceAfterLocalY - _lastEditorHipsLocalReferenceBeforeLocalY
                     : float.NaN;
-        }
-
-        private static bool IsRecordingStartHipsBaselineFlip(float beforeLocalY, float afterLocalY, float warningThreshold)
-        {
-            if (!IsFinite(beforeLocalY) || !IsFinite(afterLocalY) || !IsFinite(warningThreshold))
-            {
-                return false;
-            }
-
-            return Mathf.Abs(afterLocalY - beforeLocalY) > Mathf.Max(0f, warningThreshold);
-        }
-
-        private bool TryGetTargetBodyPositionY(out float bodyPositionY)
-        {
-            bodyPositionY = float.NaN;
-            if (_targetHandler == null)
-            {
-                return false;
-            }
-
-            HumanPose targetPose = new HumanPose();
-            _targetHandler.GetHumanPose(ref targetPose);
-            if (!IsFinite(targetPose.bodyPosition))
-            {
-                return false;
-            }
-
-            bodyPositionY = targetPose.bodyPosition.y;
-            return true;
-        }
-
-        private void ResetLastEditorHipsLocalReferenceDiagnostics()
-        {
-            _lastEditorHipsLocalReferenceBeforeLocalY = float.NaN;
-            _lastEditorHipsLocalReferenceAfterLocalY = float.NaN;
-            _lastEditorHipsLocalReferenceDeltaY = float.NaN;
-        }
-
-        private void ResetRecordingStartHipsBaselineDiagnostics()
-        {
-            _recordingStartRootY = float.NaN;
-            _recordingStartBodyPositionY = float.NaN;
-            _recordingStartHipsLocalY = float.NaN;
-            _recordingStartHipsY = float.NaN;
-            _recordingStartHipsReferenceBeforeLocalY = float.NaN;
-            _recordingStartHipsReferenceAfterLocalY = float.NaN;
-            _recordingStartHipsReferenceDeltaY = float.NaN;
-            _recordingStartHipsReferenceFlipDetected = false;
-            _recordingStartHipsReferenceStage = string.Empty;
         }
 
         private void ApplyEditorHumanoidHandLocalRotationReference()
@@ -1959,6 +3286,1971 @@ namespace Member_Han.Modules.FBXImporter
 
             target.localRotation = sourceRotation;
             return 1;
+        }
+
+        private void ApplyEditorHumanoidFootLocalRotationReference()
+        {
+            if (!useManualAnimatorFootLocalRotationReference ||
+                manualAnimatorFootLocalRotationReferenceWeight <= 0f ||
+                _editorFingerReferenceAnimator == null ||
+                targetAnimator == null)
+            {
+                return;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator())
+            {
+                return;
+            }
+
+            CaptureTargetFootPositions(out Vector3 leftFootBefore, out Vector3 rightFootBefore);
+            int changed = 0;
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftUpperLeg);
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightUpperLeg);
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftLowerLeg);
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightLowerLeg);
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftFoot);
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightFoot);
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftToes);
+            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightToes);
+            RecordEditorFootLocalRotationReferenceDiagnostics(leftFootBefore, rightFootBefore);
+
+            if (changed > 0 && !_editorFootLocalRotationReferenceLogged)
+            {
+                Debug.Log($"[PoseSpaceRetargeter] Manual Animator lower-body localRotation reference applied. bones={changed}, weight={manualAnimatorFootLocalRotationReferenceWeight:F2}");
+                _editorFootLocalRotationReferenceLogged = true;
+            }
+        }
+
+        private int ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones footBone)
+        {
+            Transform source = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
+            Transform target = targetAnimator.GetBoneTransform(footBone);
+            if (source == null || target == null)
+            {
+                return 0;
+            }
+
+            if (!TryCalculateEditorFootLocalRotationReference(
+                    source.localRotation,
+                    target.localRotation,
+                    manualAnimatorFootLocalRotationReferenceWeight,
+                    out Quaternion nextLocalRotation))
+            {
+                return 0;
+            }
+
+            target.localRotation = nextLocalRotation;
+            return 1;
+        }
+
+        private static bool TryCalculateEditorFootLocalRotationReference(
+            Quaternion referenceLocalRotation,
+            Quaternion currentLocalRotation,
+            float weight,
+            out Quaternion nextLocalRotation)
+        {
+            nextLocalRotation = currentLocalRotation;
+            if (!IsFinite(referenceLocalRotation) || !IsFinite(currentLocalRotation))
+            {
+                return false;
+            }
+
+            if (Quaternion.Angle(currentLocalRotation, referenceLocalRotation) <= 0.001f)
+            {
+                return false;
+            }
+
+            nextLocalRotation = Quaternion.Slerp(currentLocalRotation, referenceLocalRotation, Mathf.Clamp01(weight));
+            if (!IsFinite(nextLocalRotation))
+            {
+                nextLocalRotation = currentLocalRotation;
+                return false;
+            }
+
+            return true;
+        }
+
+        private void CaptureTargetFootPositions(out Vector3 leftFootPosition, out Vector3 rightFootPosition)
+        {
+            leftFootPosition = ReadTargetBoneWorldPosition(HumanBodyBones.LeftFoot);
+            rightFootPosition = ReadTargetBoneWorldPosition(HumanBodyBones.RightFoot);
+        }
+
+        private Vector3 ReadTargetBoneWorldPosition(HumanBodyBones bone)
+        {
+            if (targetAnimator == null)
+            {
+                return BuildNaNVector3();
+            }
+
+            Transform targetBone = targetAnimator.GetBoneTransform(bone);
+            return targetBone != null ? targetBone.position : BuildNaNVector3();
+        }
+
+        private static Vector3 ReadAnimatorBoneWorldPosition(Animator animator, HumanBodyBones bone)
+        {
+            if (animator == null)
+            {
+                return BuildNaNVector3();
+            }
+
+            Transform targetBone = animator.GetBoneTransform(bone);
+            return targetBone != null ? targetBone.position : BuildNaNVector3();
+        }
+
+        private static Vector3 ReadAnimatorBoneLocalPosition(Animator animator, HumanBodyBones bone)
+        {
+            if (animator == null)
+            {
+                return BuildNaNVector3();
+            }
+
+            Transform targetBone = animator.GetBoneTransform(bone);
+            if (targetBone == null)
+            {
+                return BuildNaNVector3();
+            }
+
+            Vector3 localPosition = targetBone.localPosition;
+            return IsFinite(localPosition) ? localPosition : BuildNaNVector3();
+        }
+
+        private static Vector3 ReadAnimatorRootWorldPosition(Animator animator)
+        {
+            if (animator == null)
+            {
+                return BuildNaNVector3();
+            }
+
+            Vector3 position = animator.transform.position;
+            return IsFinite(position) ? position : BuildNaNVector3();
+        }
+
+        private static Quaternion ReadAnimatorRootWorldRotation(Animator animator)
+        {
+            if (animator == null)
+            {
+                return BuildNaNQuaternion();
+            }
+
+            Quaternion rotation = animator.transform.rotation;
+            return IsFinite(rotation) ? rotation : BuildNaNQuaternion();
+        }
+
+        private static RetargetEndpointStageWorldPositions CaptureEndpointStageWorldPositions(Animator animator)
+        {
+            return new RetargetEndpointStageWorldPositions
+            {
+                LeftFoot = ReadAnimatorBoneWorldPosition(animator, HumanBodyBones.LeftFoot),
+                LeftToes = ReadAnimatorBoneWorldPosition(animator, HumanBodyBones.LeftToes),
+                RightFoot = ReadAnimatorBoneWorldPosition(animator, HumanBodyBones.RightFoot),
+                RightToes = ReadAnimatorBoneWorldPosition(animator, HumanBodyBones.RightToes)
+            };
+        }
+
+        private void RecordEditorFootLocalRotationReferenceDiagnostics(Vector3 leftFootBefore, Vector3 rightFootBefore)
+        {
+            _lastEditorFootLocalRotationLeftFootXzDelta = CalculateTargetFootXzDelta(leftFootBefore, HumanBodyBones.LeftFoot);
+            _lastEditorFootLocalRotationRightFootXzDelta = CalculateTargetFootXzDelta(rightFootBefore, HumanBodyBones.RightFoot);
+        }
+
+        private void RecordEditorLowerBodySegmentDirectionReferenceDiagnostics(Vector3 leftFootBefore, Vector3 rightFootBefore)
+        {
+            _lastEditorLowerBodySegmentDirectionLeftFootXzDelta = CalculateTargetFootXzDelta(leftFootBefore, HumanBodyBones.LeftFoot);
+            _lastEditorLowerBodySegmentDirectionRightFootXzDelta = CalculateTargetFootXzDelta(rightFootBefore, HumanBodyBones.RightFoot);
+            RecordEditorLowerBodySegmentDirectionEndpointDiagnostics();
+        }
+
+        private void RecordEditorFootHipsAlignedResidualYawReferenceDiagnostics(Vector3 leftFootBefore, Vector3 rightFootBefore)
+        {
+            _lastEditorFootHipsAlignedResidualYawLeftFootXzDelta = CalculateTargetFootXzDelta(leftFootBefore, HumanBodyBones.LeftFoot);
+            _lastEditorFootHipsAlignedResidualYawRightFootXzDelta = CalculateTargetFootXzDelta(rightFootBefore, HumanBodyBones.RightFoot);
+        }
+
+        private float CalculateTargetFootXzDelta(Vector3 beforePosition, HumanBodyBones footBone)
+        {
+            Vector3 afterPosition = ReadTargetBoneWorldPosition(footBone);
+            if (!IsFinite(beforePosition) || !IsFinite(afterPosition))
+            {
+                return float.NaN;
+            }
+
+            Vector2 beforeXz = new Vector2(beforePosition.x, beforePosition.z);
+            Vector2 afterXz = new Vector2(afterPosition.x, afterPosition.z);
+            return Vector2.Distance(beforeXz, afterXz);
+        }
+
+        private struct RetargetEndpointStageWorldPositions
+        {
+            public Vector3 LeftFoot;
+            public Vector3 LeftToes;
+            public Vector3 RightFoot;
+            public Vector3 RightToes;
+
+            public static RetargetEndpointStageWorldPositions Empty => new RetargetEndpointStageWorldPositions
+            {
+                LeftFoot = BuildNaNVector3(),
+                LeftToes = BuildNaNVector3(),
+                RightFoot = BuildNaNVector3(),
+                RightToes = BuildNaNVector3()
+            };
+        }
+
+        private struct PostSetHumanPoseEndpointPositionDiagnostics
+        {
+            public Vector3 DesiredFootPosition;
+            public Vector3 DesiredToesPosition;
+            public Vector3 CurrentFootPosition;
+            public Vector3 CurrentToesPosition;
+            public Vector3 EndpointDeltaBeforeClamp;
+            public Vector3 EndpointDeltaAfterClamp;
+            public Vector3 EndpointDeltaAfterPositiveZScale;
+            public Vector3 Correction;
+            public Vector3 NextFootPosition;
+            public float EvaluatorXzReferenceEnabled;
+            public Vector3 EvaluatorXzFirstOffset;
+            public Vector3 EvaluatorXzNormalizedDelta;
+            public Vector3 EvaluatorXzDesiredNormalizedDelta;
+            public float EvaluatorXzTargetMagnitude;
+
+            public static PostSetHumanPoseEndpointPositionDiagnostics Empty => new PostSetHumanPoseEndpointPositionDiagnostics
+            {
+                DesiredFootPosition = BuildNaNVector3(),
+                DesiredToesPosition = BuildNaNVector3(),
+                CurrentFootPosition = BuildNaNVector3(),
+                CurrentToesPosition = BuildNaNVector3(),
+                EndpointDeltaBeforeClamp = BuildNaNVector3(),
+                EndpointDeltaAfterClamp = BuildNaNVector3(),
+                EndpointDeltaAfterPositiveZScale = BuildNaNVector3(),
+                Correction = BuildNaNVector3(),
+                NextFootPosition = BuildNaNVector3(),
+                EvaluatorXzReferenceEnabled = float.NaN,
+                EvaluatorXzFirstOffset = BuildNaNVector3(),
+                EvaluatorXzNormalizedDelta = BuildNaNVector3(),
+                EvaluatorXzDesiredNormalizedDelta = BuildNaNVector3(),
+                EvaluatorXzTargetMagnitude = float.NaN
+            };
+        }
+
+        private static Vector3 BuildNaNVector3()
+        {
+            return new Vector3(float.NaN, float.NaN, float.NaN);
+        }
+
+        private static Quaternion BuildNaNQuaternion()
+        {
+            return new Quaternion(float.NaN, float.NaN, float.NaN, float.NaN);
+        }
+
+        private void ResetPostSetHumanPoseRightEndpointPositionDiagnostics()
+        {
+            _lastPostSetHumanPoseRightEndpointDesiredFootWorldPosition = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointDesiredToesWorldPosition = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointCurrentFootWorldPosition = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointCurrentToesWorldPosition = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointDeltaBeforeClamp = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointDeltaAfterClamp = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScale = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointCorrection = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointNextFootWorldPosition = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointMaxYawAngle = float.NaN;
+            _lastPostSetHumanPoseRightEndpointYawCorrectionAngle = float.NaN;
+            _lastPostSetHumanPoseRightEndpointUpperLegRotationDeltaAngle = float.NaN;
+            _lastPostSetHumanPoseRightEndpointApplied = float.NaN;
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzReferenceEnabled = float.NaN;
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffset = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDelta = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDelta = BuildNaNVector3();
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzTargetMagnitude = float.NaN;
+        }
+
+        private void RecordPostSetHumanPoseRightEndpointPositionDiagnostics(
+            PostSetHumanPoseEndpointPositionDiagnostics diagnostics,
+            float maxYawAngle,
+            float yawCorrectionAngle,
+            float upperLegRotationDeltaAngle,
+            float applied)
+        {
+            _lastPostSetHumanPoseRightEndpointDesiredFootWorldPosition = diagnostics.DesiredFootPosition;
+            _lastPostSetHumanPoseRightEndpointDesiredToesWorldPosition = diagnostics.DesiredToesPosition;
+            _lastPostSetHumanPoseRightEndpointCurrentFootWorldPosition = diagnostics.CurrentFootPosition;
+            _lastPostSetHumanPoseRightEndpointCurrentToesWorldPosition = diagnostics.CurrentToesPosition;
+            _lastPostSetHumanPoseRightEndpointDeltaBeforeClamp = diagnostics.EndpointDeltaBeforeClamp;
+            _lastPostSetHumanPoseRightEndpointDeltaAfterClamp = diagnostics.EndpointDeltaAfterClamp;
+            _lastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScale = diagnostics.EndpointDeltaAfterPositiveZScale;
+            _lastPostSetHumanPoseRightEndpointCorrection = diagnostics.Correction;
+            _lastPostSetHumanPoseRightEndpointNextFootWorldPosition = diagnostics.NextFootPosition;
+            _lastPostSetHumanPoseRightEndpointMaxYawAngle = maxYawAngle;
+            _lastPostSetHumanPoseRightEndpointYawCorrectionAngle = yawCorrectionAngle;
+            _lastPostSetHumanPoseRightEndpointUpperLegRotationDeltaAngle = upperLegRotationDeltaAngle;
+            _lastPostSetHumanPoseRightEndpointApplied = applied;
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzReferenceEnabled = diagnostics.EvaluatorXzReferenceEnabled;
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffset = diagnostics.EvaluatorXzFirstOffset;
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDelta = diagnostics.EvaluatorXzNormalizedDelta;
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDelta = diagnostics.EvaluatorXzDesiredNormalizedDelta;
+            _lastPostSetHumanPoseRightEndpointEvaluatorXzTargetMagnitude = diagnostics.EvaluatorXzTargetMagnitude;
+        }
+
+        private void RecordEditorLowerBodySegmentDirectionEndpointDiagnostics()
+        {
+            _lastEditorLowerBodySegmentDirectionLeftLowerLegWorldPosition = ReadTargetBoneWorldPosition(HumanBodyBones.LeftLowerLeg);
+            _lastEditorLowerBodySegmentDirectionLeftFootWorldPosition = ReadTargetBoneWorldPosition(HumanBodyBones.LeftFoot);
+            _lastEditorLowerBodySegmentDirectionLeftToesWorldPosition = ReadTargetBoneWorldPosition(HumanBodyBones.LeftToes);
+            _lastEditorLowerBodySegmentDirectionRightLowerLegWorldPosition = ReadTargetBoneWorldPosition(HumanBodyBones.RightLowerLeg);
+            _lastEditorLowerBodySegmentDirectionRightFootWorldPosition = ReadTargetBoneWorldPosition(HumanBodyBones.RightFoot);
+            _lastEditorLowerBodySegmentDirectionRightToesWorldPosition = ReadTargetBoneWorldPosition(HumanBodyBones.RightToes);
+            _lastEditorLowerBodySegmentDirectionLeftFootForward = ReadTargetBoneWorldForward(HumanBodyBones.LeftFoot);
+            _lastEditorLowerBodySegmentDirectionLeftFootUp = ReadTargetBoneWorldUp(HumanBodyBones.LeftFoot);
+            _lastEditorLowerBodySegmentDirectionRightFootForward = ReadTargetBoneWorldForward(HumanBodyBones.RightFoot);
+            _lastEditorLowerBodySegmentDirectionRightFootUp = ReadTargetBoneWorldUp(HumanBodyBones.RightFoot);
+        }
+
+        private Vector3 ReadTargetBoneWorldForward(HumanBodyBones bone)
+        {
+            Transform targetBone = targetAnimator != null ? targetAnimator.GetBoneTransform(bone) : null;
+            return targetBone != null && IsFinite(targetBone.forward) ? targetBone.forward : BuildNaNVector3();
+        }
+
+        private Vector3 ReadTargetBoneWorldUp(HumanBodyBones bone)
+        {
+            Transform targetBone = targetAnimator != null ? targetAnimator.GetBoneTransform(bone) : null;
+            return targetBone != null && IsFinite(targetBone.up) ? targetBone.up : BuildNaNVector3();
+        }
+
+        private void ApplyEditorHumanoidLowerBodySegmentDirectionReference()
+        {
+            if (!useManualAnimatorLowerBodySegmentDirectionReference ||
+                manualAnimatorLowerBodySegmentDirectionReferenceWeight <= 0f ||
+                _editorFingerReferenceAnimator == null ||
+                targetAnimator == null)
+            {
+                return;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator())
+            {
+                return;
+            }
+
+            float weight = Mathf.Clamp01(manualAnimatorLowerBodySegmentDirectionReferenceWeight);
+            float maxAngle = Mathf.Max(0f, manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle);
+            float upperLegToLowerLegMaxAngle = ResolveManualAnimatorUpperLegToLowerLegSegmentDirectionMaxAngle(maxAngle);
+            float lowerLegToFootMaxAngle = ResolveManualAnimatorLowerLegToFootSegmentDirectionMaxAngle(maxAngle);
+            float footToToesMaxAngle = ResolveManualAnimatorFootToToesSegmentDirectionMaxAngle(maxAngle);
+            CaptureTargetFootPositions(out Vector3 leftFootBefore, out Vector3 rightFootBefore);
+            ResetEditorLowerBodySegmentDirectionDetailedDiagnostics();
+            int changed = 0;
+            if (!disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference)
+            {
+                changed += AlignEditorHumanoidLowerBodySegmentDirection(HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, weight, upperLegToLowerLegMaxAngle);
+                changed += AlignEditorHumanoidLowerBodySegmentDirection(HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, weight, upperLegToLowerLegMaxAngle);
+            }
+
+            if (!disableManualAnimatorLowerLegToFootSegmentDirectionReference)
+            {
+                changed += AlignEditorHumanoidLowerBodySegmentDirection(
+                    HumanBodyBones.LeftLowerLeg,
+                    HumanBodyBones.LeftFoot,
+                    weight,
+                    ResolveManualAnimatorLowerLegToFootSegmentDirectionMaxAngle(lowerLegToFootMaxAngle, rightSide: false));
+                changed += AlignEditorHumanoidLowerBodySegmentDirection(
+                    HumanBodyBones.RightLowerLeg,
+                    HumanBodyBones.RightFoot,
+                    ResolveManualAnimatorRightLowerLegToFootSegmentDirectionBlendWeight(weight),
+                    ResolveManualAnimatorLowerLegToFootSegmentDirectionMaxAngle(lowerLegToFootMaxAngle, rightSide: true),
+                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
+                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
+            }
+
+            if (!disableManualAnimatorFootToToesSegmentDirectionReference)
+            {
+                changed += AlignEditorHumanoidLowerBodySegmentDirection(HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes, weight, footToToesMaxAngle);
+                changed += AlignEditorHumanoidLowerBodySegmentDirection(HumanBodyBones.RightFoot, HumanBodyBones.RightToes, weight, footToToesMaxAngle);
+            }
+
+            RecordEditorLowerBodySegmentDirectionReferenceDiagnostics(leftFootBefore, rightFootBefore);
+
+            if (changed > 0 && !_editorLowerBodySegmentDirectionReferenceLogged)
+            {
+                Debug.Log($"[PoseSpaceRetargeter] Manual Animator lower-body segment direction reference applied. segments={changed}, weight={weight:F2}, maxAngle={maxAngle:F1}deg");
+                _editorLowerBodySegmentDirectionReferenceLogged = true;
+            }
+        }
+
+        private float ResolveManualAnimatorUpperLegToLowerLegSegmentDirectionMaxAngle(float fallbackMaxAngle)
+        {
+            float segmentMaxAngle = Mathf.Max(0f, manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle);
+            return segmentMaxAngle > 0f ? segmentMaxAngle : fallbackMaxAngle;
+        }
+
+        private float ResolveManualAnimatorLowerLegToFootSegmentDirectionMaxAngle(float fallbackMaxAngle)
+        {
+            float segmentMaxAngle = Mathf.Max(0f, manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle);
+            return segmentMaxAngle > 0f ? segmentMaxAngle : fallbackMaxAngle;
+        }
+
+        private float ResolveManualAnimatorLowerLegToFootSegmentDirectionMaxAngle(
+            float fallbackMaxAngle,
+            bool rightSide)
+        {
+            float sideMaxAngle = Mathf.Max(
+                0f,
+                rightSide
+                    ? manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle
+                    : manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle);
+            if (rightSide && sideMaxAngle > 0f && !ShouldApplyManualAnimatorRightLowerLegToFootFrameGate())
+            {
+                sideMaxAngle = 0f;
+            }
+
+            return sideMaxAngle > 0f
+                ? sideMaxAngle
+                : ResolveManualAnimatorLowerLegToFootSegmentDirectionMaxAngle(fallbackMaxAngle);
+        }
+
+        private bool ShouldApplyManualAnimatorRightLowerLegToFootFrameGate()
+        {
+            float start = Mathf.Max(0f, manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart);
+            float end = Mathf.Max(0f, manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
+            if (start <= 0f && end <= 0f)
+            {
+                return true;
+            }
+
+            if (end < start || end <= 0f)
+            {
+                return true;
+            }
+
+            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
+            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+        }
+
+        private bool ShouldApplyPostSetHumanPoseRightEndpointPositionFrameGate()
+        {
+            float start = Mathf.Max(0f, postSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
+            float end = Mathf.Max(0f, postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
+            if (start <= 0f && end <= 0f)
+            {
+                return true;
+            }
+
+            if (end < start || end <= 0f)
+            {
+                return true;
+            }
+
+            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
+            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+        }
+
+        private bool ShouldApplyPreSetHumanPoseRightEndpointPositionFrameGate()
+        {
+            float start = Mathf.Max(0f, preSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
+            float end = Mathf.Max(0f, preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
+            if (start <= 0f && end <= 0f)
+            {
+                return true;
+            }
+
+            if (end < start || end <= 0f)
+            {
+                return true;
+            }
+
+            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
+            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+        }
+
+        private float ResolveManualAnimatorBodyPositionXzFrameGateWeight()
+        {
+            float start = Mathf.Max(0f, manualAnimatorBodyPositionXzReferenceFrameGateStart);
+            float end = Mathf.Max(0f, manualAnimatorBodyPositionXzReferenceFrameGateEnd);
+            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
+            float currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            return CalculateManualAnimatorBodyPositionXzFrameGateWeight(
+                currentFrame,
+                start,
+                end,
+                Mathf.Max(0f, manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames));
+        }
+
+        private static float CalculateManualAnimatorBodyPositionXzFrameGateWeight(
+            float currentFrame,
+            float startFrame,
+            float endFrame,
+            float blendFrames)
+        {
+            float start = Mathf.Max(0f, Mathf.Round(startFrame));
+            float end = Mathf.Max(0f, Mathf.Round(endFrame));
+            if (start <= 0f && end <= 0f)
+            {
+                return 1f;
+            }
+
+            if (end < start || end <= 0f)
+            {
+                return 1f;
+            }
+
+            float blend = Mathf.Max(0f, blendFrames);
+            if (blend <= 0f)
+            {
+                return currentFrame >= start && currentFrame <= end ? 1f : 0f;
+            }
+
+            if (currentFrame >= start && currentFrame <= end)
+            {
+                return 1f;
+            }
+
+            if (currentFrame < start)
+            {
+                float fadeStart = start - blend;
+                if (currentFrame <= fadeStart)
+                {
+                    return 0f;
+                }
+
+                return Mathf.Clamp01((currentFrame - fadeStart) / blend);
+            }
+
+            float fadeEnd = end + blend;
+            if (currentFrame >= fadeEnd)
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp01((fadeEnd - currentFrame) / blend);
+        }
+
+        private float ResolveManualAnimatorRightLowerLegToFootSegmentDirectionBlendWeight(float fallbackWeight)
+        {
+            return Mathf.Clamp01(fallbackWeight) *
+                Mathf.Clamp01(manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight);
+        }
+
+        private float ResolveManualAnimatorFootToToesSegmentDirectionMaxAngle(float fallbackMaxAngle)
+        {
+            float footToToesMaxAngle = Mathf.Max(0f, manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
+            return footToToesMaxAngle > 0f ? footToToesMaxAngle : fallbackMaxAngle;
+        }
+
+        private int AlignEditorHumanoidLowerBodySegmentDirection(
+            HumanBodyBones parentBone,
+            HumanBodyBones childBone,
+            float weight,
+            float maxAngle,
+            float correctionAxisXzScale = 1f,
+            float childWorldRotationBlendWeight = 1f)
+        {
+            Transform targetParent = targetAnimator.GetBoneTransform(parentBone);
+            Transform targetChild = targetAnimator.GetBoneTransform(childBone);
+            Transform referenceParent = _editorFingerReferenceAnimator.GetBoneTransform(parentBone);
+            Transform referenceChild = _editorFingerReferenceAnimator.GetBoneTransform(childBone);
+            if (targetParent == null || targetChild == null || referenceParent == null || referenceChild == null)
+            {
+                return 0;
+            }
+
+            Vector3 currentSegment = targetChild.position - targetParent.position;
+            Vector3 referenceSegment = referenceChild.position - referenceParent.position;
+            if (!TryNormalize(currentSegment, out Vector3 currentDirection) ||
+                !TryNormalize(referenceSegment, out Vector3 referenceDirection))
+            {
+                return 0;
+            }
+
+            Vector3 referenceRootDirection = _editorFingerReferenceAnimator.transform.InverseTransformDirection(referenceDirection).normalized;
+            Vector3 desiredWorldDirection = targetAnimator.transform.TransformDirection(referenceRootDirection).normalized;
+            if (!IsFinite(referenceRootDirection) || !IsFinite(desiredWorldDirection))
+            {
+                return 0;
+            }
+
+            Quaternion currentParentRotation = targetParent.rotation;
+            Quaternion childWorldRotationBefore = targetChild.rotation;
+            Quaternion childLocalRotationBefore = targetChild.localRotation;
+            float preAngle = Vector3.Angle(currentDirection, desiredWorldDirection);
+            if (!TryCalculateEditorLowerBodySegmentDirectionReference(
+                    desiredWorldDirection,
+                    currentDirection,
+                    currentParentRotation,
+                    weight,
+                    maxAngle,
+                    correctionAxisXzScale,
+                    out Quaternion nextWorldRotation))
+            {
+                return 0;
+            }
+
+            targetParent.rotation = nextWorldRotation;
+            float clampedChildWorldRotationBlend = Mathf.Clamp01(childWorldRotationBlendWeight);
+            if (clampedChildWorldRotationBlend < 0.9999f)
+            {
+                targetChild.rotation = Quaternion.Slerp(
+                    childWorldRotationBefore,
+                    targetChild.rotation,
+                    clampedChildWorldRotationBlend);
+            }
+
+            Vector3 postSegment = targetChild.position - targetParent.position;
+            if (TryNormalize(postSegment, out Vector3 postDirection))
+            {
+                Quaternion correction = nextWorldRotation * Quaternion.Inverse(currentParentRotation);
+                float correctionAngle = Quaternion.Angle(Quaternion.identity, correction);
+                float parentWorldRotationDeltaAngle = Quaternion.Angle(currentParentRotation, targetParent.rotation);
+                float childLocalRotationDeltaAngle = Quaternion.Angle(childLocalRotationBefore, targetChild.localRotation);
+                float postAngle = Vector3.Angle(postDirection, desiredWorldDirection);
+                RecordEditorLowerBodySegmentDirectionSegmentDiagnostics(
+                    parentBone,
+                    childBone,
+                    correctionAngle,
+                    parentWorldRotationDeltaAngle,
+                    childLocalRotationDeltaAngle,
+                    preAngle,
+                    postAngle,
+                    ReadFiniteCorrectionAxis(correction),
+                    desiredWorldDirection,
+                    currentDirection,
+                    postDirection);
+            }
+
+            return 1;
+        }
+
+        private void ResetEditorLowerBodySegmentDirectionDetailedDiagnostics()
+        {
+            _lastEditorLowerBodySegmentDirectionMaxCorrectionSegment = string.Empty;
+            _lastEditorLowerBodySegmentDirectionMaxCorrectionAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionMaxPreAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionMaxPostAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionMaxCorrectionAxis = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionMaxReferenceDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionMaxPreDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionMaxPostDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle = float.NaN;
+            _lastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftFootToToesPreDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftFootToToesPostDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightFootToToesPreDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightFootToToesPostDirection = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftLowerLegWorldPosition = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftFootWorldPosition = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftToesWorldPosition = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightLowerLegWorldPosition = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightFootWorldPosition = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightToesWorldPosition = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxis = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxis = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftFootForward = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionLeftFootUp = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightFootForward = BuildNaNVector3();
+            _lastEditorLowerBodySegmentDirectionRightFootUp = BuildNaNVector3();
+        }
+
+        private void RecordEditorLowerBodySegmentDirectionSegmentDiagnostics(
+            HumanBodyBones parentBone,
+            HumanBodyBones childBone,
+            float correctionAngle,
+            float parentWorldRotationDeltaAngle,
+            float childLocalRotationDeltaAngle,
+            float preAngle,
+            float postAngle,
+            Vector3 correctionAxis,
+            Vector3 referenceDirection,
+            Vector3 preDirection,
+            Vector3 postDirection)
+        {
+            string segmentName = BuildLowerBodySegmentName(parentBone, childBone);
+            SetEditorLowerBodySegmentDirectionCorrectionAngle(segmentName, correctionAngle);
+            SetEditorLowerBodySegmentDirectionCouplingDiagnostics(
+                segmentName,
+                parentWorldRotationDeltaAngle,
+                childLocalRotationDeltaAngle,
+                correctionAxis,
+                referenceDirection,
+                preDirection,
+                postDirection);
+            if (!IsFinite(correctionAngle) ||
+                (!float.IsNaN(_lastEditorLowerBodySegmentDirectionMaxCorrectionAngle) &&
+                    correctionAngle <= _lastEditorLowerBodySegmentDirectionMaxCorrectionAngle))
+            {
+                return;
+            }
+
+            _lastEditorLowerBodySegmentDirectionMaxCorrectionSegment = segmentName;
+            _lastEditorLowerBodySegmentDirectionMaxCorrectionAngle = correctionAngle;
+            _lastEditorLowerBodySegmentDirectionMaxPreAngle = preAngle;
+            _lastEditorLowerBodySegmentDirectionMaxPostAngle = postAngle;
+            _lastEditorLowerBodySegmentDirectionMaxCorrectionAxis = correctionAxis;
+            _lastEditorLowerBodySegmentDirectionMaxReferenceDirection = referenceDirection;
+            _lastEditorLowerBodySegmentDirectionMaxPreDirection = preDirection;
+            _lastEditorLowerBodySegmentDirectionMaxPostDirection = postDirection;
+        }
+
+        private void SetEditorLowerBodySegmentDirectionCouplingDiagnostics(
+            string segmentName,
+            float parentWorldRotationDeltaAngle,
+            float childLocalRotationDeltaAngle,
+            Vector3 correctionAxis,
+            Vector3 referenceDirection,
+            Vector3 preDirection,
+            Vector3 postDirection)
+        {
+            switch (segmentName)
+            {
+                case "LeftLowerLegToFoot":
+                    _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle = parentWorldRotationDeltaAngle;
+                    _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle = childLocalRotationDeltaAngle;
+                    _lastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxis = correctionAxis;
+                    break;
+                case "RightLowerLegToFoot":
+                    _lastEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle = parentWorldRotationDeltaAngle;
+                    _lastEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle = childLocalRotationDeltaAngle;
+                    _lastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxis = correctionAxis;
+                    break;
+                case "LeftFootToToes":
+                    _lastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirection = referenceDirection;
+                    _lastEditorLowerBodySegmentDirectionLeftFootToToesPreDirection = preDirection;
+                    _lastEditorLowerBodySegmentDirectionLeftFootToToesPostDirection = postDirection;
+                    break;
+                case "RightFootToToes":
+                    _lastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirection = referenceDirection;
+                    _lastEditorLowerBodySegmentDirectionRightFootToToesPreDirection = preDirection;
+                    _lastEditorLowerBodySegmentDirectionRightFootToToesPostDirection = postDirection;
+                    break;
+            }
+        }
+
+        private void SetEditorLowerBodySegmentDirectionCorrectionAngle(string segmentName, float correctionAngle)
+        {
+            switch (segmentName)
+            {
+                case "LeftUpperLegToLowerLeg":
+                    _lastEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle = correctionAngle;
+                    break;
+                case "RightUpperLegToLowerLeg":
+                    _lastEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle = correctionAngle;
+                    break;
+                case "LeftLowerLegToFoot":
+                    _lastEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle = correctionAngle;
+                    break;
+                case "RightLowerLegToFoot":
+                    _lastEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle = correctionAngle;
+                    break;
+                case "LeftFootToToes":
+                    _lastEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle = correctionAngle;
+                    break;
+                case "RightFootToToes":
+                    _lastEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle = correctionAngle;
+                    break;
+            }
+        }
+
+        private static string BuildLowerBodySegmentName(HumanBodyBones parentBone, HumanBodyBones childBone)
+        {
+            if (parentBone == HumanBodyBones.LeftUpperLeg && childBone == HumanBodyBones.LeftLowerLeg)
+            {
+                return "LeftUpperLegToLowerLeg";
+            }
+
+            if (parentBone == HumanBodyBones.RightUpperLeg && childBone == HumanBodyBones.RightLowerLeg)
+            {
+                return "RightUpperLegToLowerLeg";
+            }
+
+            if (parentBone == HumanBodyBones.LeftLowerLeg && childBone == HumanBodyBones.LeftFoot)
+            {
+                return "LeftLowerLegToFoot";
+            }
+
+            if (parentBone == HumanBodyBones.RightLowerLeg && childBone == HumanBodyBones.RightFoot)
+            {
+                return "RightLowerLegToFoot";
+            }
+
+            if (parentBone == HumanBodyBones.LeftFoot && childBone == HumanBodyBones.LeftToes)
+            {
+                return "LeftFootToToes";
+            }
+
+            if (parentBone == HumanBodyBones.RightFoot && childBone == HumanBodyBones.RightToes)
+            {
+                return "RightFootToToes";
+            }
+
+            return $"{parentBone}To{childBone}";
+        }
+
+        private static Vector3 ReadFiniteCorrectionAxis(Quaternion correction)
+        {
+            if (!IsFinite(correction))
+            {
+                return BuildNaNVector3();
+            }
+
+            correction.ToAngleAxis(out float angle, out Vector3 axis);
+            if (!IsFinite(angle) || angle <= 0.001f || !IsFinite(axis))
+            {
+                return BuildNaNVector3();
+            }
+
+            return axis.normalized;
+        }
+
+        private static bool TryCalculateEditorLowerBodySegmentDirectionReference(
+            Vector3 referenceSegmentDirection,
+            Vector3 currentSegmentDirection,
+            Quaternion currentParentWorldRotation,
+            float weight,
+            float maxAngleDegrees,
+            float correctionAxisXzScale,
+            out Quaternion nextParentWorldRotation)
+        {
+            nextParentWorldRotation = currentParentWorldRotation;
+            if (!IsFinite(referenceSegmentDirection) ||
+                !IsFinite(currentSegmentDirection) ||
+                !IsFinite(currentParentWorldRotation) ||
+                !TryNormalize(referenceSegmentDirection, out Vector3 referenceDirection) ||
+                !TryNormalize(currentSegmentDirection, out Vector3 currentDirection))
+            {
+                return false;
+            }
+
+            Quaternion correction = Quaternion.FromToRotation(currentDirection, referenceDirection);
+            if (!IsFinite(correction))
+            {
+                return false;
+            }
+
+            float maxAngle = Mathf.Max(0f, maxAngleDegrees);
+            if (maxAngle > 0f)
+            {
+                float angle = Quaternion.Angle(Quaternion.identity, correction);
+                if (angle > maxAngle)
+                {
+                    correction = Quaternion.Slerp(Quaternion.identity, correction, maxAngle / angle);
+                }
+            }
+
+            correction = ScaleCorrectionAxisXz(correction, correctionAxisXzScale);
+            if (!IsFinite(correction))
+            {
+                return false;
+            }
+
+            float clampedWeight = Mathf.Clamp01(weight);
+            if (clampedWeight < 0.999f)
+            {
+                correction = Quaternion.Slerp(Quaternion.identity, correction, clampedWeight);
+            }
+
+            nextParentWorldRotation = correction * currentParentWorldRotation;
+            if (!IsFinite(nextParentWorldRotation) ||
+                Quaternion.Angle(currentParentWorldRotation, nextParentWorldRotation) <= 0.001f)
+            {
+                nextParentWorldRotation = currentParentWorldRotation;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static Quaternion ScaleCorrectionAxisXz(Quaternion correction, float axisXzScale)
+        {
+            float scale = Mathf.Clamp01(axisXzScale);
+            if (scale >= 0.999f)
+            {
+                return correction;
+            }
+
+            correction.ToAngleAxis(out float angle, out Vector3 axis);
+            if (!IsFinite(angle) || angle <= 0.001f || !IsFinite(axis))
+            {
+                return correction;
+            }
+
+            Vector3 scaledAxis = new Vector3(axis.x * scale, axis.y, axis.z * scale);
+            if (!TryNormalize(scaledAxis, out Vector3 normalizedAxis))
+            {
+                return Quaternion.identity;
+            }
+
+            return Quaternion.AngleAxis(angle, normalizedAxis);
+        }
+
+        private void ApplyEditorHumanoidFootHipsAlignedResidualYawReference()
+        {
+            if (!useManualAnimatorFootHipsAlignedResidualYawReference ||
+                manualAnimatorFootHipsAlignedResidualYawReferenceWeight <= 0f ||
+                _editorFingerReferenceAnimator == null ||
+                targetAnimator == null)
+            {
+                return;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator())
+            {
+                return;
+            }
+
+            Transform referenceHips = _editorFingerReferenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            if (referenceHips == null || targetHips == null)
+            {
+                return;
+            }
+
+            float weight = Mathf.Clamp01(manualAnimatorFootHipsAlignedResidualYawReferenceWeight);
+            float maxAngle = Mathf.Max(0f, manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle);
+            float leftResidual = float.NaN;
+            float rightResidual = float.NaN;
+            TryCalculateEditorFootHipsAlignedResidualForBone(
+                HumanBodyBones.LeftFoot,
+                referenceHips,
+                targetHips,
+                out leftResidual);
+            TryCalculateEditorFootHipsAlignedResidualForBone(
+                HumanBodyBones.RightFoot,
+                referenceHips,
+                targetHips,
+                out rightResidual);
+
+            bool leftDominantResidual = IsFinite(leftResidual) &&
+                (!IsFinite(rightResidual) || leftResidual > rightResidual);
+            bool rightDominantResidual = IsFinite(rightResidual) &&
+                (!IsFinite(leftResidual) || rightResidual > leftResidual);
+            float leftMaxAngle = ResolveEditorFootHipsAlignedResidualYawSideAwareMaxAngle(
+                leftResidual,
+                rightResidual,
+                maxAngle,
+                leftDominantResidual);
+            float rightMaxAngle = ResolveEditorFootHipsAlignedResidualYawSideAwareMaxAngle(
+                rightResidual,
+                leftResidual,
+                maxAngle,
+                rightDominantResidual);
+            CaptureTargetFootPositions(out Vector3 leftFootBefore, out Vector3 rightFootBefore);
+            int changed = 0;
+            changed += ApplyEditorHumanoidFootHipsAlignedResidualYawReferenceBone(
+                HumanBodyBones.LeftUpperLeg,
+                HumanBodyBones.LeftFoot,
+                referenceHips,
+                targetHips,
+                weight,
+                leftMaxAngle);
+            changed += ApplyEditorHumanoidFootHipsAlignedResidualYawReferenceBone(
+                HumanBodyBones.RightUpperLeg,
+                HumanBodyBones.RightFoot,
+                referenceHips,
+                targetHips,
+                weight,
+                rightMaxAngle);
+            RecordEditorFootHipsAlignedResidualYawReferenceDiagnostics(leftFootBefore, rightFootBefore);
+
+            if (changed > 0 && !_editorFootHipsAlignedResidualYawReferenceLogged)
+            {
+                Debug.Log($"[PoseSpaceRetargeter] Manual Animator hips-aligned foot X/Z residual yaw reference applied. feet={changed}, weight={weight:F2}, maxAngle={maxAngle:F1}deg");
+                _editorFootHipsAlignedResidualYawReferenceLogged = true;
+            }
+        }
+
+        private bool TryCalculateEditorFootHipsAlignedResidualForBone(
+            HumanBodyBones footBone,
+            Transform referenceHips,
+            Transform targetHips,
+            out float residual)
+        {
+            residual = float.NaN;
+            Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
+            if (targetFoot == null ||
+                !TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                    footBone,
+                    referenceHips,
+                    targetHips,
+                    targetFoot,
+                    out Vector3 desiredFootPosition))
+            {
+                return false;
+            }
+
+            Vector3 residualVector = desiredFootPosition - targetFoot.position;
+            residualVector.y = 0f;
+            residual = residualVector.magnitude;
+            return IsFinite(residual);
+        }
+
+        private int ApplyEditorHumanoidFootHipsAlignedResidualYawReferenceBone(
+            HumanBodyBones upperLegBone,
+            HumanBodyBones footBone,
+            Transform referenceHips,
+            Transform targetHips,
+            float weight,
+            float maxAngle)
+        {
+            Transform targetUpperLeg = targetAnimator.GetBoneTransform(upperLegBone);
+            Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
+            Transform referenceFoot = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
+            if (targetUpperLeg == null || targetFoot == null || referenceFoot == null)
+            {
+                return 0;
+            }
+
+            if (!TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                    footBone,
+                    referenceHips,
+                    targetHips,
+                    targetFoot,
+                    out Vector3 desiredFootPosition))
+            {
+                return 0;
+            }
+
+            if (!TryCalculateEditorFootHipsAlignedResidualYawReference(
+                    desiredFootPosition,
+                    targetFoot.position,
+                    targetUpperLeg.position,
+                    targetUpperLeg.rotation,
+                    weight,
+                    maxAngle,
+                    out Quaternion nextWorldRotation))
+            {
+                return 0;
+            }
+
+            targetUpperLeg.rotation = nextWorldRotation;
+            return 1;
+        }
+
+        private bool TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+            HumanBodyBones footBone,
+            Transform referenceHips,
+            Transform targetHips,
+            Transform targetFoot,
+            out Vector3 desiredFootPosition)
+        {
+            desiredFootPosition = targetFoot != null ? targetFoot.position : Vector3.zero;
+            if (_editorFingerReferenceAnimator == null ||
+                targetAnimator == null ||
+                referenceHips == null ||
+                targetHips == null ||
+                targetFoot == null)
+            {
+                return false;
+            }
+
+            Transform referenceFoot = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
+            if (referenceFoot == null)
+            {
+                return false;
+            }
+
+            Vector3 referenceOffset = referenceFoot.position - referenceHips.position;
+            if (!IsFinite(referenceOffset))
+            {
+                return false;
+            }
+
+            Vector3 referenceRootOffset = _editorFingerReferenceAnimator.transform.InverseTransformVector(referenceOffset);
+            Vector3 desiredTargetOffset = targetAnimator.transform.TransformVector(referenceRootOffset);
+            if (!IsFinite(desiredTargetOffset))
+            {
+                return false;
+            }
+
+            desiredFootPosition = targetHips.position + desiredTargetOffset;
+            desiredFootPosition.y = targetFoot.position.y;
+            return IsFinite(desiredFootPosition);
+        }
+
+        private static bool TryCalculateEditorFootHipsAlignedResidualYawReference(
+            Vector3 desiredFootPosition,
+            Vector3 currentFootPosition,
+            Vector3 pivotPosition,
+            Quaternion currentParentWorldRotation,
+            float weight,
+            float maxAngleDegrees,
+            out Quaternion nextParentWorldRotation)
+        {
+            return TryCalculateEditorFootHipsAlignedResidualYawReference(
+                desiredFootPosition,
+                currentFootPosition,
+                pivotPosition,
+                currentParentWorldRotation,
+                weight,
+                maxAngleDegrees,
+                out nextParentWorldRotation,
+                out _);
+        }
+
+        private static bool TryCalculateEditorFootHipsAlignedResidualYawReference(
+            Vector3 desiredFootPosition,
+            Vector3 currentFootPosition,
+            Vector3 pivotPosition,
+            Quaternion currentParentWorldRotation,
+            float weight,
+            float maxAngleDegrees,
+            out Quaternion nextParentWorldRotation,
+            out float yawCorrectionAngle)
+        {
+            nextParentWorldRotation = currentParentWorldRotation;
+            yawCorrectionAngle = float.NaN;
+            if (!IsFinite(desiredFootPosition) ||
+                !IsFinite(currentFootPosition) ||
+                !IsFinite(pivotPosition) ||
+                !IsFinite(currentParentWorldRotation))
+            {
+                return false;
+            }
+
+            Vector3 currentOffset = currentFootPosition - pivotPosition;
+            Vector3 desiredOffset = desiredFootPosition - pivotPosition;
+            currentOffset.y = 0f;
+            desiredOffset.y = 0f;
+            if (!TryNormalize(currentOffset, out Vector3 currentDirection) ||
+                !TryNormalize(desiredOffset, out Vector3 desiredDirection))
+            {
+                return false;
+            }
+
+            Quaternion correction = Quaternion.FromToRotation(currentDirection, desiredDirection);
+            if (!IsFinite(correction))
+            {
+                return false;
+            }
+
+            float maxAngle = Mathf.Max(0f, maxAngleDegrees);
+            if (maxAngle > 0f)
+            {
+                float angle = Quaternion.Angle(Quaternion.identity, correction);
+                if (angle > maxAngle)
+                {
+                    correction = Quaternion.Slerp(Quaternion.identity, correction, maxAngle / angle);
+                }
+            }
+
+            float clampedWeight = Mathf.Clamp01(weight);
+            if (clampedWeight < 0.999f)
+            {
+                correction = Quaternion.Slerp(Quaternion.identity, correction, clampedWeight);
+            }
+            yawCorrectionAngle = Quaternion.Angle(Quaternion.identity, correction);
+
+            if (yawCorrectionAngle <= 0.001f)
+            {
+                return false;
+            }
+
+            nextParentWorldRotation = correction * currentParentWorldRotation;
+            if (!IsFinite(nextParentWorldRotation) ||
+                Quaternion.Angle(currentParentWorldRotation, nextParentWorldRotation) <= 0.001f)
+            {
+                nextParentWorldRotation = currentParentWorldRotation;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static float ResolveEditorFootHipsAlignedResidualYawSideAwareMaxAngle(
+            float thisFootResidual,
+            float otherFootResidual,
+            float requestedMaxAngle,
+            bool isThisFootDominantResidual)
+        {
+            float maxAngle = Mathf.Max(0f, requestedMaxAngle);
+            if (maxAngle <= FootHipsAlignedResidualYawProtectedMaxAngle ||
+                !IsFinite(thisFootResidual) ||
+                !IsFinite(otherFootResidual) ||
+                isThisFootDominantResidual)
+            {
+                return maxAngle;
+            }
+
+            bool thisFootAlreadyPassing = thisFootResidual <= FootHipsAlignedResidualYawGateMeters;
+            bool otherFootStillFailing = otherFootResidual > FootHipsAlignedResidualYawGateMeters;
+            bool meaningfulSideGap = otherFootResidual - thisFootResidual >= FootHipsAlignedResidualYawSideGapMeters;
+            if (thisFootAlreadyPassing && otherFootStillFailing && meaningfulSideGap)
+            {
+                return Mathf.Min(maxAngle, FootHipsAlignedResidualYawProtectedMaxAngle);
+            }
+
+            return maxAngle;
+        }
+
+        private void ApplyPreSetHumanPoseRightEndpointPositionReference()
+        {
+            if (!usePreSetHumanPoseRightEndpointPositionReference ||
+                preSetHumanPoseRightEndpointPositionReferenceWeight <= 0f ||
+                preSetHumanPoseRightEndpointPositionReferenceMaxOffset <= 0f ||
+                _editorFingerReferenceAnimator == null ||
+                targetAnimator == null)
+            {
+                return;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator())
+            {
+                return;
+            }
+
+            Transform referenceHips = _editorFingerReferenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            bool useLeftSide = preSetHumanPoseEndpointPositionUseLeftSide;
+            HumanBodyBones footBone = useLeftSide ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot;
+            HumanBodyBones toesBone = useLeftSide ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes;
+            HumanBodyBones upperLegBone = useLeftSide ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg;
+            Transform targetUpperLeg = targetAnimator.GetBoneTransform(upperLegBone);
+            Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
+            Transform targetToes = targetAnimator.GetBoneTransform(toesBone);
+            if (referenceHips == null ||
+                targetHips == null ||
+                targetUpperLeg == null ||
+                targetFoot == null)
+            {
+                return;
+            }
+
+            if (!ShouldApplyPreSetHumanPoseRightEndpointPositionFrameGate())
+            {
+                return;
+            }
+
+            if (!TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                    footBone,
+                    referenceHips,
+                    targetHips,
+                    targetFoot,
+                    out Vector3 desiredFootPosition))
+            {
+                return;
+            }
+
+            Vector3 desiredToesPosition = BuildNaNVector3();
+            if (targetToes != null)
+            {
+                TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                    toesBone,
+                    referenceHips,
+                    targetHips,
+                    targetToes,
+                    out desiredToesPosition);
+            }
+
+            if (!TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                    desiredFootPosition,
+                    desiredToesPosition,
+                    targetFoot.position,
+                    targetToes != null ? targetToes.position : BuildNaNVector3(),
+                    preSetHumanPoseRightEndpointPositionReferenceWeight,
+                    preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
+                    preSetHumanPoseRightEndpointPositionReferencePositiveZScale,
+                    preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
+                    out Vector3 nextFootPosition))
+            {
+                return;
+            }
+
+            float maxAngleDegrees = CalculateEndpointPositionMaxYawAngle(
+                targetFoot.position,
+                targetUpperLeg.position,
+                preSetHumanPoseRightEndpointPositionReferenceMaxOffset);
+            if (!TryCalculateEditorFootHipsAlignedResidualYawReference(
+                    nextFootPosition,
+                    targetFoot.position,
+                    targetUpperLeg.position,
+                    targetUpperLeg.rotation,
+                    1f,
+                    maxAngleDegrees,
+                    out Quaternion nextWorldRotation,
+                    out _))
+            {
+                return;
+            }
+
+            targetUpperLeg.rotation = nextWorldRotation;
+        }
+
+        private void ApplyPreSetHumanPoseSignCorrectedRowLocalBodyPositionReference(ref HumanPose pose)
+        {
+            ResetPreSetHumanPoseEndpointBodyPositionDiagnostics();
+            if (!usePreSetHumanPoseRightEndpointPositionReference ||
+                !preSetHumanPoseEndpointPositionUseGhostCurrentBasis ||
+                preSetHumanPoseRightEndpointPositionReferenceWeight <= 0f ||
+                preSetHumanPoseRightEndpointPositionReferenceMaxOffset <= 0f ||
+                ghostAnimator == null ||
+                targetAnimator == null ||
+                !IsFinite(pose.bodyPosition))
+            {
+                return;
+            }
+
+            if (!ShouldApplyPreSetHumanPoseRightEndpointPositionFrameGate())
+            {
+                return;
+            }
+
+            RetargetEndpointStageWorldPositions ghostPositions = CaptureEndpointStageWorldPositions(ghostAnimator);
+            RetargetEndpointStageWorldPositions currentPositions = _lastSetHumanPosePreSolveCurrentEndpointPositions;
+            bool useLeftSide = preSetHumanPoseEndpointPositionUseLeftSide;
+            Vector3 ghostFootPosition = useLeftSide ? ghostPositions.LeftFoot : ghostPositions.RightFoot;
+            Vector3 currentFootPosition = useLeftSide ? currentPositions.LeftFoot : currentPositions.RightFoot;
+            Vector3 bodyPositionBefore = pose.bodyPosition;
+
+            if (TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
+                    bodyPositionBefore,
+                    ghostFootPosition,
+                    currentFootPosition,
+                    preSetHumanPoseRightEndpointPositionReferenceWeight,
+                    preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
+                    axisXScale: 1f,
+                    axisZScale: 1f,
+                    invertX: preSetHumanPoseEndpointPositionInvertBodyPositionX,
+                    invertZ: preSetHumanPoseEndpointPositionInvertBodyPositionZ,
+                    out Vector3 nextBodyPosition))
+            {
+                CapturePreSetHumanPoseEndpointBodyPositionDiagnostics(bodyPositionBefore, nextBodyPosition);
+                pose.bodyPosition = nextBodyPosition;
+            }
+        }
+
+        private void ResetPreSetHumanPoseEndpointBodyPositionDiagnostics()
+        {
+            _lastPreSetHumanPoseEndpointBodyPositionBefore = BuildNaNVector3();
+            _lastPreSetHumanPoseEndpointBodyPositionAfter = BuildNaNVector3();
+            _lastPreSetHumanPoseEndpointBodyPositionDelta = BuildNaNVector3();
+        }
+
+        private void CapturePreSetHumanPoseEndpointBodyPositionDiagnostics(Vector3 before, Vector3 after)
+        {
+            if (!IsFinite(before) || !IsFinite(after))
+            {
+                ResetPreSetHumanPoseEndpointBodyPositionDiagnostics();
+                return;
+            }
+
+            _lastPreSetHumanPoseEndpointBodyPositionBefore = before;
+            _lastPreSetHumanPoseEndpointBodyPositionAfter = after;
+            _lastPreSetHumanPoseEndpointBodyPositionDelta = after - before;
+        }
+
+        private void ApplyPostSetHumanPoseRightEndpointPositionReference()
+        {
+            ResetPostSetHumanPoseRightEndpointPositionDiagnostics();
+            if (!usePostSetHumanPoseRightFootEvaluatorXzReference)
+            {
+                _hasPostSetHumanPoseRightFootEvaluatorXzFirstOffset = false;
+                _postSetHumanPoseRightFootEvaluatorXzFirstOffset = BuildNaNVector3();
+            }
+
+            if (!usePostSetHumanPoseRightEndpointPositionReference ||
+                postSetHumanPoseRightEndpointPositionReferenceWeight <= 0f ||
+                postSetHumanPoseRightEndpointPositionReferenceMaxOffset <= 0f ||
+                _editorFingerReferenceAnimator == null ||
+                targetAnimator == null)
+            {
+                return;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator())
+            {
+                return;
+            }
+
+            Transform referenceHips = _editorFingerReferenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            bool useLeftSide = postSetHumanPoseEndpointPositionUseLeftSide;
+            HumanBodyBones footBone = useLeftSide ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot;
+            HumanBodyBones toesBone = useLeftSide ? HumanBodyBones.LeftToes : HumanBodyBones.RightToes;
+            HumanBodyBones upperLegBone = useLeftSide ? HumanBodyBones.LeftUpperLeg : HumanBodyBones.RightUpperLeg;
+            Transform referenceFoot = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
+            Transform targetUpperLeg = targetAnimator.GetBoneTransform(upperLegBone);
+            Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
+            Transform targetToes = targetAnimator.GetBoneTransform(toesBone);
+            if (referenceHips == null ||
+                targetHips == null ||
+                targetUpperLeg == null ||
+                targetFoot == null)
+            {
+                return;
+            }
+
+            Vector3 evaluatorXzFirstOffset = BuildNaNVector3();
+            if (usePostSetHumanPoseRightFootEvaluatorXzReference)
+            {
+                if (referenceFoot == null ||
+                    !TryResolvePostSetHumanPoseRightFootEvaluatorXzFirstOffset(
+                        referenceFoot.position,
+                        targetFoot.position,
+                        out evaluatorXzFirstOffset))
+                {
+                    return;
+                }
+            }
+
+            if (!ShouldApplyPostSetHumanPoseRightEndpointPositionFrameGate())
+            {
+                return;
+            }
+
+            Vector3 nextFootPosition;
+            PostSetHumanPoseEndpointPositionDiagnostics endpointDiagnostics;
+            bool calculated;
+            if (usePostSetHumanPoseRightFootEvaluatorXzReference)
+            {
+                calculated = TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
+                    referenceFoot.position,
+                    targetFoot.position,
+                    evaluatorXzFirstOffset,
+                    postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
+                    postSetHumanPoseRightEndpointPositionReferenceWeight,
+                    postSetHumanPoseRightEndpointPositionReferenceMaxOffset,
+                    out nextFootPosition,
+                    out endpointDiagnostics);
+            }
+            else
+            {
+                if (!TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                        footBone,
+                        referenceHips,
+                        targetHips,
+                        targetFoot,
+                        out Vector3 desiredFootPosition))
+                {
+                    return;
+                }
+
+                Vector3 desiredToesPosition = BuildNaNVector3();
+                if (targetToes != null)
+                {
+                    TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                        toesBone,
+                        referenceHips,
+                        targetHips,
+                        targetToes,
+                        out desiredToesPosition);
+                }
+
+                calculated = TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                    desiredFootPosition,
+                    desiredToesPosition,
+                    targetFoot.position,
+                    targetToes != null ? targetToes.position : BuildNaNVector3(),
+                    postSetHumanPoseRightEndpointPositionReferenceWeight,
+                    postSetHumanPoseRightEndpointPositionReferenceMaxOffset,
+                    postSetHumanPoseRightEndpointPositionReferencePositiveZScale,
+                    postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
+                    out nextFootPosition,
+                    out endpointDiagnostics);
+            }
+
+            if (!calculated)
+            {
+                RecordPostSetHumanPoseRightEndpointPositionDiagnostics(
+                    endpointDiagnostics,
+                    maxYawAngle: float.NaN,
+                    yawCorrectionAngle: float.NaN,
+                    upperLegRotationDeltaAngle: float.NaN,
+                    applied: 0f);
+                return;
+            }
+
+            float maxAngleDegrees = CalculateEndpointPositionMaxYawAngle(
+                targetFoot.position,
+                targetUpperLeg.position,
+                postSetHumanPoseRightEndpointPositionReferenceMaxOffset);
+            if (!TryCalculateEditorFootHipsAlignedResidualYawReference(
+                    nextFootPosition,
+                    targetFoot.position,
+                    targetUpperLeg.position,
+                    targetUpperLeg.rotation,
+                    1f,
+                    maxAngleDegrees,
+                    out Quaternion nextWorldRotation,
+                    out float yawCorrectionAngle))
+            {
+                RecordPostSetHumanPoseRightEndpointPositionDiagnostics(
+                    endpointDiagnostics,
+                    maxAngleDegrees,
+                    yawCorrectionAngle,
+                    upperLegRotationDeltaAngle: float.NaN,
+                    applied: 0f);
+                return;
+            }
+
+            float upperLegRotationDeltaAngle = Quaternion.Angle(targetUpperLeg.rotation, nextWorldRotation);
+            RecordPostSetHumanPoseRightEndpointPositionDiagnostics(
+                endpointDiagnostics,
+                maxAngleDegrees,
+                yawCorrectionAngle,
+                upperLegRotationDeltaAngle,
+                applied: 1f);
+
+            targetUpperLeg.rotation = nextWorldRotation;
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+            Vector3 desiredFootPosition,
+            Vector3 desiredToesPosition,
+            Vector3 currentFootPosition,
+            Vector3 currentToesPosition,
+            float weight,
+            float maxOffset,
+            float positiveZScale,
+            out Vector3 nextFootPosition)
+        {
+            return TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                desiredFootPosition,
+                desiredToesPosition,
+                currentFootPosition,
+                currentToesPosition,
+                weight,
+                maxOffset,
+                positiveZScale,
+                toesBlendWeight: 1f,
+                out nextFootPosition);
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+            Vector3 desiredFootPosition,
+            Vector3 desiredToesPosition,
+            Vector3 currentFootPosition,
+            Vector3 currentToesPosition,
+            float weight,
+            float maxOffset,
+            float positiveZScale,
+            float toesBlendWeight,
+            out Vector3 nextFootPosition)
+        {
+            return TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                desiredFootPosition,
+                desiredToesPosition,
+                currentFootPosition,
+                currentToesPosition,
+                weight,
+                maxOffset,
+                positiveZScale,
+                toesBlendWeight,
+                out nextFootPosition,
+                out _);
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+            Vector3 desiredFootPosition,
+            Vector3 desiredToesPosition,
+            Vector3 currentFootPosition,
+            Vector3 currentToesPosition,
+            float weight,
+            float maxOffset,
+            float positiveZScale,
+            float toesBlendWeight,
+            out Vector3 nextFootPosition,
+            out PostSetHumanPoseEndpointPositionDiagnostics diagnostics)
+        {
+            nextFootPosition = currentFootPosition;
+            diagnostics = PostSetHumanPoseEndpointPositionDiagnostics.Empty;
+            diagnostics.DesiredFootPosition = desiredFootPosition;
+            diagnostics.DesiredToesPosition = desiredToesPosition;
+            diagnostics.CurrentFootPosition = currentFootPosition;
+            diagnostics.CurrentToesPosition = currentToesPosition;
+
+            if (!IsFinite(desiredFootPosition) ||
+                !IsFinite(currentFootPosition))
+            {
+                return false;
+            }
+
+            Vector3 footDelta = desiredFootPosition - currentFootPosition;
+            footDelta.y = 0f;
+            Vector3 endpointDelta = footDelta;
+            if (IsFinite(desiredToesPosition) && IsFinite(currentToesPosition))
+            {
+                Vector3 toesDelta = desiredToesPosition - currentToesPosition;
+                toesDelta.y = 0f;
+                Vector3 averagedEndpointDelta = (footDelta + toesDelta) * 0.5f;
+                endpointDelta = Vector3.Lerp(footDelta, averagedEndpointDelta, Mathf.Clamp01(toesBlendWeight));
+            }
+            diagnostics.EndpointDeltaBeforeClamp = endpointDelta;
+
+            if (!IsFinite(endpointDelta) || endpointDelta.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                endpointDelta = Vector3.ClampMagnitude(endpointDelta, clampedMaxOffset);
+            }
+            diagnostics.EndpointDeltaAfterClamp = endpointDelta;
+
+            if (endpointDelta.z > 0f)
+            {
+                endpointDelta.z *= Mathf.Clamp01(positiveZScale);
+            }
+            diagnostics.EndpointDeltaAfterPositiveZScale = endpointDelta;
+
+            Vector3 correction = endpointDelta * Mathf.Clamp01(weight);
+            correction.y = 0f;
+            diagnostics.Correction = correction;
+            if (!IsFinite(correction) || correction.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            nextFootPosition = currentFootPosition + correction;
+            nextFootPosition.y = currentFootPosition.y;
+            diagnostics.NextFootPosition = nextFootPosition;
+            return IsFinite(nextFootPosition);
+        }
+
+        private bool TryResolvePostSetHumanPoseRightFootEvaluatorXzFirstOffset(
+            Vector3 referenceFootPosition,
+            Vector3 currentFootPosition,
+            out Vector3 firstOffset)
+        {
+            firstOffset = _postSetHumanPoseRightFootEvaluatorXzFirstOffset;
+            if (!IsFinite(referenceFootPosition) || !IsFinite(currentFootPosition))
+            {
+                return false;
+            }
+
+            if (!_hasPostSetHumanPoseRightFootEvaluatorXzFirstOffset ||
+                !IsFinite(_postSetHumanPoseRightFootEvaluatorXzFirstOffset))
+            {
+                _postSetHumanPoseRightFootEvaluatorXzFirstOffset = currentFootPosition - referenceFootPosition;
+                _postSetHumanPoseRightFootEvaluatorXzFirstOffset.y = 0f;
+                _hasPostSetHumanPoseRightFootEvaluatorXzFirstOffset =
+                    IsFinite(_postSetHumanPoseRightFootEvaluatorXzFirstOffset);
+            }
+
+            firstOffset = _postSetHumanPoseRightFootEvaluatorXzFirstOffset;
+            return _hasPostSetHumanPoseRightFootEvaluatorXzFirstOffset && IsFinite(firstOffset);
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
+            Vector3 referenceFootPosition,
+            Vector3 currentFootPosition,
+            Vector3 firstMatchedFootOffset,
+            float targetMagnitude,
+            float weight,
+            float maxOffset,
+            out Vector3 nextFootPosition)
+        {
+            return TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
+                referenceFootPosition,
+                currentFootPosition,
+                firstMatchedFootOffset,
+                targetMagnitude,
+                weight,
+                maxOffset,
+                out nextFootPosition,
+                out _);
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
+            Vector3 referenceFootPosition,
+            Vector3 currentFootPosition,
+            Vector3 firstMatchedFootOffset,
+            float targetMagnitude,
+            float weight,
+            float maxOffset,
+            out Vector3 nextFootPosition,
+            out PostSetHumanPoseEndpointPositionDiagnostics diagnostics)
+        {
+            nextFootPosition = currentFootPosition;
+            diagnostics = PostSetHumanPoseEndpointPositionDiagnostics.Empty;
+            diagnostics.CurrentFootPosition = currentFootPosition;
+            diagnostics.CurrentToesPosition = BuildNaNVector3();
+            diagnostics.EvaluatorXzReferenceEnabled = 1f;
+            diagnostics.EvaluatorXzFirstOffset = firstMatchedFootOffset;
+            diagnostics.EvaluatorXzTargetMagnitude = Mathf.Max(0f, targetMagnitude);
+
+            if (!IsFinite(referenceFootPosition) ||
+                !IsFinite(currentFootPosition) ||
+                !IsFinite(firstMatchedFootOffset))
+            {
+                return false;
+            }
+
+            Vector3 normalizedDelta = currentFootPosition - referenceFootPosition - firstMatchedFootOffset;
+            normalizedDelta.y = 0f;
+            diagnostics.EvaluatorXzNormalizedDelta = normalizedDelta;
+            diagnostics.DesiredToesPosition = BuildNaNVector3();
+            if (!IsFinite(normalizedDelta) || normalizedDelta.sqrMagnitude <= 0.00000001f)
+            {
+                diagnostics.DesiredFootPosition = currentFootPosition;
+                return false;
+            }
+
+            float magnitude = normalizedDelta.magnitude;
+            float clampedTargetMagnitude = Mathf.Max(0f, targetMagnitude);
+            if (!IsFinite(magnitude) || magnitude <= clampedTargetMagnitude || magnitude <= 0f)
+            {
+                diagnostics.DesiredFootPosition = currentFootPosition;
+                return false;
+            }
+
+            Vector3 desiredNormalizedDelta = normalizedDelta * (clampedTargetMagnitude / magnitude);
+            diagnostics.EvaluatorXzDesiredNormalizedDelta = desiredNormalizedDelta;
+            Vector3 correction = desiredNormalizedDelta - normalizedDelta;
+            correction.y = 0f;
+            diagnostics.EndpointDeltaBeforeClamp = correction;
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                correction = Vector3.ClampMagnitude(correction, clampedMaxOffset);
+            }
+            diagnostics.EndpointDeltaAfterClamp = correction;
+            diagnostics.EndpointDeltaAfterPositiveZScale = correction;
+
+            correction *= Mathf.Clamp01(weight);
+            correction.y = 0f;
+            diagnostics.Correction = correction;
+            if (!IsFinite(correction) || correction.sqrMagnitude <= 0.00000001f)
+            {
+                diagnostics.DesiredFootPosition = currentFootPosition;
+                return false;
+            }
+
+            nextFootPosition = currentFootPosition + correction;
+            nextFootPosition.y = currentFootPosition.y;
+            diagnostics.DesiredFootPosition = nextFootPosition;
+            diagnostics.NextFootPosition = nextFootPosition;
+            return IsFinite(nextFootPosition);
+        }
+
+        private static float CalculateEndpointPositionMaxYawAngle(
+            Vector3 currentFootPosition,
+            Vector3 pivotPosition,
+            float maxOffset)
+        {
+            Vector3 currentOffset = currentFootPosition - pivotPosition;
+            currentOffset.y = 0f;
+            float radius = currentOffset.magnitude;
+            if (!IsFinite(currentOffset) || radius <= 0.0001f)
+            {
+                return 0f;
+            }
+
+            float normalizedOffset = Mathf.Clamp01(Mathf.Max(0f, maxOffset) / radius);
+            if (normalizedOffset <= 0f)
+            {
+                return 0f;
+            }
+
+            return Mathf.Asin(normalizedOffset) * Mathf.Rad2Deg;
+        }
+
+        private void ApplyEditorHumanoidBipedIkFootPositionReference()
+        {
+            if (!useManualAnimatorBipedIkFootPositionReference ||
+                manualAnimatorBipedIkFootPositionReferenceWeight <= 0f ||
+                _editorFingerReferenceAnimator == null ||
+                targetAnimator == null)
+            {
+                DisableOwnedEditorManualFootBipedIk();
+                return;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator())
+            {
+                return;
+            }
+
+            BipedIK bipedIk = EnsureEditorManualFootBipedIk();
+            if (bipedIk == null)
+            {
+                return;
+            }
+
+            Transform referenceHips = _editorFingerReferenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            if (referenceHips == null || targetHips == null)
+            {
+                return;
+            }
+
+            int changed = 0;
+            changed += ApplyEditorHumanoidBipedIkFootPositionReferenceGoal(
+                bipedIk,
+                AvatarIKGoal.LeftFoot,
+                HumanBodyBones.LeftFoot,
+                referenceHips,
+                targetHips);
+            changed += ApplyEditorHumanoidBipedIkFootPositionReferenceGoal(
+                bipedIk,
+                AvatarIKGoal.RightFoot,
+                HumanBodyBones.RightFoot,
+                referenceHips,
+                targetHips);
+
+            if (changed <= 0)
+            {
+                return;
+            }
+
+            bipedIk.UpdateSolverExternal();
+            if (!_editorFootIkPositionReferenceLogged)
+            {
+                Debug.Log($"[PoseSpaceRetargeter] Manual Animator BipedIK foot position reference applied. feet={changed}, weight={manualAnimatorBipedIkFootPositionReferenceWeight:F2}, maxOffset={manualAnimatorBipedIkFootPositionReferenceMaxOffset:F3}m");
+                _editorFootIkPositionReferenceLogged = true;
+            }
+        }
+
+        private BipedIK EnsureEditorManualFootBipedIk()
+        {
+            if (targetAnimator == null)
+            {
+                return null;
+            }
+
+            if (_editorManualFootBipedIk == null)
+            {
+                _editorManualFootBipedIk = targetAnimator.GetComponent<BipedIK>();
+                if (_editorManualFootBipedIk == null)
+                {
+                    _editorManualFootBipedIk = targetAnimator.gameObject.AddComponent<BipedIK>();
+                    _editorManualFootBipedIkCreated = true;
+                }
+                _editorManualFootBipedIkInitiated = false;
+            }
+
+            if (_editorManualFootBipedIk == null)
+            {
+                return null;
+            }
+
+            if (targetAnimator.isHuman)
+            {
+                BipedReferences references = _editorManualFootBipedIk.references;
+                BipedReferences.AutoDetectReferences(
+                    ref references,
+                    targetAnimator.transform,
+                    BipedReferences.AutoDetectParams.Default);
+                _editorManualFootBipedIk.references = references;
+            }
+
+            _editorManualFootBipedIk.enabled = true;
+            _editorManualFootBipedIk.fixTransforms = false;
+            if (!_editorManualFootBipedIkInitiated)
+            {
+                _editorManualFootBipedIk.InitiateBipedIK();
+                _editorManualFootBipedIkInitiated = true;
+            }
+            _editorManualFootBipedIk.SetIKRotationWeight(AvatarIKGoal.LeftFoot, 0f);
+            _editorManualFootBipedIk.SetIKRotationWeight(AvatarIKGoal.RightFoot, 0f);
+            _editorManualFootBipedIk.solvers.leftFoot.maintainRotationWeight = 1f;
+            _editorManualFootBipedIk.solvers.rightFoot.maintainRotationWeight = 1f;
+            return _editorManualFootBipedIk;
+        }
+
+        private void DisableOwnedEditorManualFootBipedIk()
+        {
+            if (_editorManualFootBipedIk == null)
+            {
+                return;
+            }
+
+            _editorManualFootBipedIk.SetIKPositionWeight(AvatarIKGoal.LeftFoot, 0f);
+            _editorManualFootBipedIk.SetIKPositionWeight(AvatarIKGoal.RightFoot, 0f);
+            _editorManualFootBipedIk.SetIKRotationWeight(AvatarIKGoal.LeftFoot, 0f);
+            _editorManualFootBipedIk.SetIKRotationWeight(AvatarIKGoal.RightFoot, 0f);
+            if (_editorManualFootBipedIkCreated)
+            {
+                _editorManualFootBipedIk.fixTransforms = false;
+                _editorManualFootBipedIk.enabled = false;
+            }
+        }
+
+        private int ApplyEditorHumanoidBipedIkFootPositionReferenceGoal(
+            BipedIK bipedIk,
+            AvatarIKGoal goal,
+            HumanBodyBones footBone,
+            Transform referenceHips,
+            Transform targetHips)
+        {
+            Transform referenceFoot = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
+            Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
+            if (referenceFoot == null || targetFoot == null)
+            {
+                bipedIk.SetIKPositionWeight(goal, 0f);
+                return 0;
+            }
+
+            if (!TryCalculateEditorFootIkPositionReference(
+                    referenceFoot.position,
+                    referenceHips.position,
+                    targetFoot.position,
+                    targetHips.position,
+                    manualAnimatorBipedIkFootPositionReferenceWeight,
+                    manualAnimatorBipedIkFootPositionReferenceMaxOffset,
+                    out Vector3 nextPosition))
+            {
+                bipedIk.SetIKPositionWeight(goal, 0f);
+                return 0;
+            }
+
+            bipedIk.SetIKPosition(goal, nextPosition);
+            bipedIk.SetIKPositionWeight(goal, 1f);
+            return 1;
+        }
+
+        private static bool TryCalculateEditorFootIkPositionReference(
+            Vector3 referenceFootPosition,
+            Vector3 referenceHipsPosition,
+            Vector3 currentFootPosition,
+            Vector3 targetHipsPosition,
+            float weight,
+            float maxOffset,
+            out Vector3 nextPosition)
+        {
+            nextPosition = currentFootPosition;
+            if (!IsFinite(referenceFootPosition) ||
+                !IsFinite(referenceHipsPosition) ||
+                !IsFinite(currentFootPosition) ||
+                !IsFinite(targetHipsPosition))
+            {
+                return false;
+            }
+
+            Vector3 desiredPosition = targetHipsPosition + (referenceFootPosition - referenceHipsPosition);
+            Vector3 delta = desiredPosition - currentFootPosition;
+            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                delta = Vector3.ClampMagnitude(delta, clampedMaxOffset);
+            }
+
+            nextPosition = currentFootPosition + delta * Mathf.Clamp01(weight);
+            if (!IsFinite(nextPosition))
+            {
+                nextPosition = currentFootPosition;
+                return false;
+            }
+
+            return true;
         }
 
         private void ApplyEditorHumanoidThumbLocalRotationReference()
@@ -2291,7 +5583,7 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
-        private bool ShouldSuppressCompetingManualThumbOverride(bool leftHand)
+        private bool ShouldSuppressCompetingManualThumbOverrideEditor(bool leftHand)
         {
             if (!TryEvaluateThumbManualOverrideRisk(leftHand, out float risk) ||
                 risk < ManualThumbOverrideSuppressRiskThreshold)
@@ -2302,7 +5594,7 @@ namespace Member_Han.Modules.FBXImporter
             return !ShouldKeepDetachedHelperManualThumbOverrides(leftHand);
         }
 
-        private bool ShouldKeepDetachedHelperManualThumbOverrides(bool leftHand)
+        private bool ShouldKeepDetachedHelperManualThumbOverridesEditor(bool leftHand)
         {
             HumanBodyBones proximalBone = leftHand ? HumanBodyBones.LeftThumbProximal : HumanBodyBones.RightThumbProximal;
             if (!HasDetachedThumbBaseHelperRelationship(proximalBone, leftHand) ||
@@ -2315,7 +5607,7 @@ namespace Member_Han.Modules.FBXImporter
                 projectionDelta <= ManualThumbDetachedHelperOverrideKeepProjectionDeltaMax;
         }
 
-        public bool TryGetHighRiskManualThumbPoseConstraintOverrides(
+        private bool TryGetHighRiskManualThumbPoseConstraintOverridesEditor(
             bool leftHand,
             out float projectionMin,
             out float projectionMax,
@@ -2335,7 +5627,7 @@ namespace Member_Han.Modules.FBXImporter
                 risk >= ManualThumbPoseShapingSuppressMaxRisk;
         }
 
-        public string BuildThumbHelperRelationshipDebugSummary(bool leftHand)
+        private string BuildThumbHelperRelationshipDebugSummaryEditor(bool leftHand)
         {
             Transform helperTransform = GetCachedThumbBaseHelper(leftHand);
             Transform sourceTransform = GetCachedExplicitThumbBaseSource(leftHand);
@@ -2565,7 +5857,7 @@ namespace Member_Han.Modules.FBXImporter
             }
         }
 
-        private Transform GetCachedThumbBaseHelper(bool leftHand)
+        private Transform GetCachedThumbBaseHelperEditor(bool leftHand)
         {
             if (_cachedThumbBaseHelpers.TryGetValue(leftHand, out Transform helperTransform) && helperTransform != null)
             {
@@ -2581,7 +5873,7 @@ namespace Member_Han.Modules.FBXImporter
             return null;
         }
 
-        private Transform GetCachedExplicitThumbBaseSource(bool leftHand)
+        private Transform GetCachedExplicitThumbBaseSourceEditor(bool leftHand)
         {
             if (_cachedThumbBaseExplicitSources.TryGetValue(leftHand, out Transform sourceTransform) && sourceTransform != null)
             {
@@ -2979,7 +6271,11 @@ namespace Member_Han.Modules.FBXImporter
             _useEditorFingerPoseReference = false;
             _editorBodyRotationReferenceLogged = false;
             _editorHandLocalRotationReferenceLogged = false;
+            _editorFootLocalRotationReferenceLogged = false;
+            _editorLowerBodySegmentDirectionReferenceLogged = false;
+            _editorFootHipsAlignedResidualYawReferenceLogged = false;
             _editorHipsLocalPositionReferenceLogged = false;
+            _editorBodyPositionXzReferenceLogged = false;
             _hasEditorReferenceBodyPosition = false;
             _hasEditorReferenceHipsRestLocalPosition = false;
             _hasEditorReferenceLowestFootRestY = false;
@@ -3024,6 +6320,61 @@ namespace Member_Han.Modules.FBXImporter
                    normalized.Contains("little");
         }
 
+        private bool ShouldApplyManualFullBodyPoseReferenceMuscle(int muscleIndex)
+        {
+            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
+            {
+                return true;
+            }
+
+            bool isLowerBody = IsLowerBodyMuscle(HumanTrait.MuscleName[muscleIndex]);
+            if (manualAnimatorFullBodyPoseLegTwistMusclesOnly)
+            {
+                return IsLegTwistOrInOutMuscle(HumanTrait.MuscleName[muscleIndex]);
+            }
+
+            if (manualAnimatorFullBodyPoseLowerBodyMusclesOnly)
+            {
+                return isLowerBody;
+            }
+
+            return !manualAnimatorFullBodyPoseExcludeLowerBodyMuscles || !isLowerBody;
+        }
+
+        private static bool IsLowerBodyMuscle(string muscleName)
+        {
+            if (string.IsNullOrEmpty(muscleName))
+            {
+                return false;
+            }
+
+            string normalized = NormalizeEditorMuscleName(muscleName);
+            return normalized.Contains("upperleg") ||
+                   normalized.Contains("lowerleg") ||
+                   normalized.Contains("foot") ||
+                   normalized.Contains("toes");
+        }
+
+        private static bool IsLegTwistOrInOutMuscle(string muscleName)
+        {
+            if (string.IsNullOrEmpty(muscleName))
+            {
+                return false;
+            }
+
+            string normalized = NormalizeEditorMuscleName(muscleName);
+            bool isLeg = normalized.Contains("upperleg") ||
+                         normalized.Contains("lowerleg") ||
+                         normalized.Contains("foot");
+            if (!isLeg)
+            {
+                return false;
+            }
+
+            return normalized.Contains("inout") ||
+                   normalized.Contains("twist");
+        }
+
         private float GetLegacyAnimationTime()
         {
             if (_legacyAnim == null)
@@ -3040,6 +6391,29 @@ namespace Member_Han.Modules.FBXImporter
             return Mathf.Clamp(state.time, 0f, Mathf.Max(0f, state.length));
         }
 
+        private void AlignRetargetPoseInputWithEditorHumanoidMuscleReference(ref HumanPose pose)
+        {
+            if (!_useEditorHumanoidMuscleReference || pose.muscles == null || _editorHumanoidMuscleCurves.Count == 0)
+            {
+                return;
+            }
+
+            float time = GetLegacyAnimationTime();
+            foreach (KeyValuePair<int, AnimationCurve> pair in _editorHumanoidMuscleCurves)
+            {
+                if (pair.Key < 0 || pair.Key >= pose.muscles.Length || pair.Value == null)
+                {
+                    continue;
+                }
+
+                float referenceValue = pair.Value.Evaluate(time);
+                pose.muscles[pair.Key] = AlignRetargetPoseInputWithEditorReference(
+                    pair.Key,
+                    pose.muscles[pair.Key],
+                    referenceValue);
+            }
+        }
+
         private static bool ShouldUseEditorHumanoidMuscleReference(int muscleIndex)
         {
             if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
@@ -3048,6 +6422,16 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
+            if (IsLeftUpperArmTwistMuscle(normalized))
+            {
+                return false;
+            }
+
+            if (normalized.Contains("forearm") && normalized.Contains("stretch"))
+            {
+                return false;
+            }
+
             return normalized.Contains("shoulder") ||
                    normalized.Contains("arm") ||
                    normalized.Contains("forearm") ||
@@ -3057,6 +6441,113 @@ namespace Member_Han.Modules.FBXImporter
                    normalized.Contains("middle") ||
                    normalized.Contains("ring") ||
                    normalized.Contains("little");
+        }
+
+        private static bool ShouldApplyEditorHumanoidMuscleReferenceValue(int muscleIndex, float referenceValue)
+        {
+            if (!ShouldUseEditorHumanoidMuscleReference(muscleIndex) || !IsFinite(referenceValue))
+            {
+                return false;
+            }
+
+            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
+            if (IsRightUpperArmTwistMuscle(normalized) && Mathf.Abs(referenceValue) > 1f)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void TransformRetargetPoseInputMuscles(ref HumanPose pose)
+        {
+            if (pose.muscles == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < pose.muscles.Length; i++)
+            {
+                pose.muscles[i] = TransformRetargetPoseInputMuscleValue(i, pose.muscles[i]);
+            }
+        }
+
+        private static float TransformRetargetPoseInputMuscleValue(int muscleIndex, float value)
+        {
+            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
+            {
+                return value;
+            }
+
+            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
+            if (IsLeftUpperArmTwistMuscle(normalized))
+            {
+                return -value;
+            }
+
+            return value;
+        }
+
+        private static float AlignRetargetPoseInputWithEditorReference(int muscleIndex, float value, float referenceValue)
+        {
+            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
+            {
+                return value;
+            }
+
+            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
+            bool isLeftUpperArmTwist = IsLeftUpperArmTwistMuscle(normalized);
+            bool isRightUpperArmTwist = IsRightUpperArmTwistMuscle(normalized);
+            if ((!isLeftUpperArmTwist && !isRightUpperArmTwist) ||
+                !IsFinite(value) ||
+                !IsFinite(referenceValue) ||
+                Mathf.Approximately(value, 0f) ||
+                Mathf.Approximately(referenceValue, 0f))
+            {
+                return value;
+            }
+
+            float absReference = Mathf.Abs(referenceValue);
+            float magnitudeTolerance = absReference <= 1f
+                ? UpperArmTwistReferenceSignMagnitudeTolerance
+                : UpperArmTwistOverrangeReferenceSignMagnitudeTolerance;
+            if (absReference > UpperArmTwistReferenceSignMaxAbs ||
+                Mathf.Abs(Mathf.Abs(value) - absReference) > magnitudeTolerance)
+            {
+                return value;
+            }
+
+            if (isLeftUpperArmTwist && Mathf.Sign(value) != Mathf.Sign(referenceValue))
+            {
+                return -value;
+            }
+
+            if (isRightUpperArmTwist &&
+                absReference >= RightUpperArmTwistReferenceSignMinAbs &&
+                Mathf.Sign(value) == Mathf.Sign(referenceValue))
+            {
+                return -value;
+            }
+
+            return value;
+        }
+
+        private static bool IsLeftUpperArmTwistMuscle(string normalizedMuscleName)
+        {
+            return !string.IsNullOrEmpty(normalizedMuscleName) &&
+                normalizedMuscleName.Contains("left") &&
+                normalizedMuscleName.Contains("arm") &&
+                normalizedMuscleName.Contains("twist") &&
+                !normalizedMuscleName.Contains("forearm");
+        }
+
+        private static bool IsRightUpperArmTwistMuscle(string normalizedMuscleName)
+        {
+            return !string.IsNullOrEmpty(normalizedMuscleName) &&
+                normalizedMuscleName.Contains("right") &&
+                normalizedMuscleName.Contains("arm") &&
+                normalizedMuscleName.Contains("twist") &&
+                !normalizedMuscleName.Contains("forearm");
         }
 
         private static int FindHumanMuscleIndex(string muscleName)
@@ -3094,116 +6585,6 @@ namespace Member_Han.Modules.FBXImporter
                 .Replace("righthandring", "rightring")
                 .Replace("righthandlittle", "rightlittle");
             return normalized;
-        }
-#else
-        private static void RemoveLegacyAnimationClipStateIfPresent(Animation legacyAnimation, string stateName)
-        {
-            if (legacyAnimation != null &&
-                !string.IsNullOrEmpty(stateName) &&
-                legacyAnimation[stateName] != null)
-            {
-                legacyAnimation.RemoveClip(stateName);
-            }
-        }
-
-        private void ApplyEditorHumanoidMuscleReference(ref HumanPose pose)
-        {
-        }
-
-        private void ApplyEditorHumanoidFingerPoseReference(ref HumanPose pose)
-        {
-        }
-
-        private void ApplyEditorHumanoidBodyRotationReference(ref HumanPose pose)
-        {
-        }
-
-        private void ResetLastEditorHipsLocalReferenceDiagnostics()
-        {
-            _lastEditorHipsLocalReferenceBeforeLocalY = float.NaN;
-            _lastEditorHipsLocalReferenceAfterLocalY = float.NaN;
-            _lastEditorHipsLocalReferenceDeltaY = float.NaN;
-        }
-
-        private void ResetRecordingStartHipsBaselineDiagnostics()
-        {
-            _recordingStartRootY = float.NaN;
-            _recordingStartBodyPositionY = float.NaN;
-            _recordingStartHipsLocalY = float.NaN;
-            _recordingStartHipsY = float.NaN;
-            _recordingStartHipsReferenceBeforeLocalY = float.NaN;
-            _recordingStartHipsReferenceAfterLocalY = float.NaN;
-            _recordingStartHipsReferenceDeltaY = float.NaN;
-            _recordingStartHipsReferenceFlipDetected = false;
-            _recordingStartHipsReferenceStage = string.Empty;
-        }
-
-        private bool TryGetTargetBodyPositionY(out float bodyPositionY)
-        {
-            bodyPositionY = float.NaN;
-            if (_targetHandler == null)
-            {
-                return false;
-            }
-
-            HumanPose targetPose = new HumanPose();
-            _targetHandler.GetHumanPose(ref targetPose);
-            if (!IsFinite(targetPose.bodyPosition))
-            {
-                return false;
-            }
-
-            bodyPositionY = targetPose.bodyPosition.y;
-            return true;
-        }
-
-        private static bool IsRecordingStartHipsBaselineFlip(float beforeLocalY, float afterLocalY, float warningThreshold)
-        {
-            if (!IsFinite(beforeLocalY) || !IsFinite(afterLocalY) || !IsFinite(warningThreshold))
-            {
-                return false;
-            }
-
-            return Mathf.Abs(afterLocalY - beforeLocalY) > Mathf.Max(0f, warningThreshold);
-        }
-
-        private bool ShouldSuppressCompetingManualThumbOverride(bool leftHand)
-        {
-            return false;
-        }
-
-        private bool ShouldKeepDetachedHelperManualThumbOverrides(bool leftHand)
-        {
-            return false;
-        }
-
-        public bool TryGetHighRiskManualThumbPoseConstraintOverrides(
-            bool leftHand,
-            out float projectionMin,
-            out float projectionMax,
-            out float maxSpreadAngle)
-        {
-            projectionMin = 0f;
-            projectionMax = 0f;
-            maxSpreadAngle = 0f;
-            return false;
-        }
-
-        public string BuildThumbHelperRelationshipDebugSummary(bool leftHand)
-        {
-            return leftHand
-                ? "side=L, state=editor-only"
-                : "side=R, state=editor-only";
-        }
-
-        private Transform GetCachedThumbBaseHelper(bool leftHand)
-        {
-            return null;
-        }
-
-        private Transform GetCachedExplicitThumbBaseSource(bool leftHand)
-        {
-            return null;
         }
 #endif
 
@@ -3520,6 +6901,137 @@ namespace Member_Han.Modules.FBXImporter
             return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
         }
 
+        private static bool TryCalculateManualAnimatorBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 referenceBodyPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            out Vector3 nextBodyPosition)
+        {
+            nextBodyPosition = currentBodyPosition;
+            if (!IsFinite(currentBodyPosition) || !IsFinite(referenceBodyPosition))
+            {
+                return false;
+            }
+
+            float clampedWeight = Mathf.Clamp01(weight);
+            if (clampedWeight <= 0f)
+            {
+                return false;
+            }
+
+            Vector3 delta = new Vector3(
+                (referenceBodyPosition.x - currentBodyPosition.x) * Mathf.Clamp01(axisXScale),
+                0f,
+                (referenceBodyPosition.z - currentBodyPosition.z) * Mathf.Clamp01(axisZScale));
+            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                float magnitude = delta.magnitude;
+                if (magnitude > clampedMaxOffset)
+                {
+                    delta = delta / magnitude * clampedMaxOffset;
+                }
+            }
+
+            nextBodyPosition = new Vector3(
+                currentBodyPosition.x + delta.x * clampedWeight,
+                currentBodyPosition.y,
+                currentBodyPosition.z + delta.z * clampedWeight);
+            return IsFinite(nextBodyPosition);
+        }
+
+        private static bool TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 ghostFootPosition,
+            Vector3 currentFootPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            out Vector3 nextBodyPosition)
+        {
+            return TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
+                currentBodyPosition,
+                ghostFootPosition,
+                currentFootPosition,
+                weight,
+                maxOffset,
+                axisXScale,
+                axisZScale,
+                invertX: false,
+                invertZ: false,
+                out nextBodyPosition);
+        }
+
+        private static bool TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 ghostFootPosition,
+            Vector3 currentFootPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            bool invertX,
+            bool invertZ,
+            out Vector3 nextBodyPosition)
+        {
+            nextBodyPosition = currentBodyPosition;
+            if (!IsFinite(currentBodyPosition) ||
+                !IsFinite(ghostFootPosition) ||
+                !IsFinite(currentFootPosition))
+            {
+                return false;
+            }
+
+            float clampedWeight = Mathf.Clamp01(weight);
+            if (clampedWeight <= 0f)
+            {
+                return false;
+            }
+
+            Vector3 delta = ghostFootPosition - currentFootPosition;
+            delta = new Vector3(
+                delta.x * Mathf.Clamp01(axisXScale),
+                0f,
+                delta.z * Mathf.Clamp01(axisZScale));
+            if (invertX)
+            {
+                delta.x = -delta.x;
+            }
+            if (invertZ)
+            {
+                delta.z = -delta.z;
+            }
+            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                float magnitude = delta.magnitude;
+                if (magnitude > clampedMaxOffset)
+                {
+                    delta = delta / magnitude * clampedMaxOffset;
+                }
+            }
+
+            nextBodyPosition = new Vector3(
+                currentBodyPosition.x + delta.x * clampedWeight,
+                currentBodyPosition.y,
+                currentBodyPosition.z + delta.z * clampedWeight);
+            return IsFinite(nextBodyPosition);
+        }
+
         private static bool IsFinite(HumanPose pose)
         {
             if (!IsFinite(pose.bodyPosition) || !IsFinite(pose.bodyRotation))
@@ -3541,6 +7053,847 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return true;
+        }
+
+        private void ResetRetargetPoseStageDiagnostics()
+        {
+            _lastPoseInputLeftShoulderFrontBackMuscle = float.NaN;
+            _lastAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle = float.NaN;
+            _lastAfterClampPoseMusclesLeftShoulderFrontBackMuscle = float.NaN;
+            _lastAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle = float.NaN;
+            _lastAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftShoulderFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftShoulderFrontBackMuscle = float.NaN;
+            _lastPoseInputLeftArmTwistMuscle = float.NaN;
+            _lastAfterEditorMuscleReferenceLeftArmTwistMuscle = float.NaN;
+            _lastAfterClampPoseMusclesLeftArmTwistMuscle = float.NaN;
+            _lastAfterAnatomicalArmGuardLeftArmTwistMuscle = float.NaN;
+            _lastAfterVisualSpikeSmoothingLeftArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftArmTwistMuscle = float.NaN;
+            _lastPoseInputLeftForearmStretchMuscle = float.NaN;
+            _lastAfterEditorMuscleReferenceLeftForearmStretchMuscle = float.NaN;
+            _lastAfterClampPoseMusclesLeftForearmStretchMuscle = float.NaN;
+            _lastAfterAnatomicalArmGuardLeftForearmStretchMuscle = float.NaN;
+            _lastAfterVisualSpikeSmoothingLeftForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftForearmStretchMuscle = float.NaN;
+            _lastPoseInputRightForearmStretchMuscle = float.NaN;
+            _lastAfterEditorMuscleReferenceRightForearmStretchMuscle = float.NaN;
+            _lastAfterClampPoseMusclesRightForearmStretchMuscle = float.NaN;
+            _lastAfterAnatomicalArmGuardRightForearmStretchMuscle = float.NaN;
+            _lastAfterVisualSpikeSmoothingRightForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputRightForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightForearmStretchMuscle = float.NaN;
+            _lastPoseInputRightArmTwistMuscle = float.NaN;
+            _lastAfterEditorMuscleReferenceRightArmTwistMuscle = float.NaN;
+            _lastAfterClampPoseMusclesRightArmTwistMuscle = float.NaN;
+            _lastAfterAnatomicalArmGuardRightArmTwistMuscle = float.NaN;
+            _lastAfterVisualSpikeSmoothingRightArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseInputRightArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputRightUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputRightLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseInputRightFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseInputBodyPosition = BuildNaNVector3();
+            _lastSetHumanPoseOutputBodyPosition = BuildNaNVector3();
+            _lastSetHumanPoseInputBodyRotation = BuildNaNQuaternion();
+            _lastSetHumanPoseOutputBodyRotation = BuildNaNQuaternion();
+            ResetSetHumanPosePreSolveBasisDiagnostics();
+            ResetSetHumanPoseExtendedInputDiagnostics();
+            _lastEditorFootLocalRotationLeftFootXzDelta = float.NaN;
+            _lastEditorFootLocalRotationRightFootXzDelta = float.NaN;
+            _lastEditorLowerBodySegmentDirectionLeftFootXzDelta = float.NaN;
+            _lastEditorLowerBodySegmentDirectionRightFootXzDelta = float.NaN;
+            ResetEditorLowerBodySegmentDirectionDetailedDiagnostics();
+            _lastEditorFootHipsAlignedResidualYawLeftFootXzDelta = float.NaN;
+            _lastEditorFootHipsAlignedResidualYawRightFootXzDelta = float.NaN;
+            ResetPostSetHumanPoseRightEndpointPositionDiagnostics();
+            _lastRetargetStageGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastSetHumanPosePreSolveGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastSetHumanPosePreSolveTargetEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastRetargetStageAfterSetHumanPoseEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastRetargetStageAfterManualReferencesEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastRetargetStageAfterRootRestoreEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastRetargetStageAfterRootDeltaEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastRetargetStageAfterGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastRetargetStageAfterBipedIKEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastRetargetStageAfterLateVisualGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        }
+
+        private void CapturePoseInputDiagnostics(HumanPose pose)
+        {
+            _lastPoseInputLeftShoulderFrontBackMuscle = ReadLeftShoulderFrontBackMuscle(pose);
+            _lastPoseInputLeftArmTwistMuscle = ReadLeftArmTwistMuscle(pose);
+            _lastPoseInputLeftForearmStretchMuscle = ReadLeftForearmStretchMuscle(pose);
+            _lastPoseInputRightForearmStretchMuscle = ReadRightForearmStretchMuscle(pose);
+            _lastPoseInputRightArmTwistMuscle = ReadRightArmTwistMuscle(pose);
+        }
+
+        private void CaptureAfterEditorMuscleReferenceDiagnostics(HumanPose pose)
+        {
+            _lastAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle = ReadLeftShoulderFrontBackMuscle(pose);
+            _lastAfterEditorMuscleReferenceLeftArmTwistMuscle = ReadLeftArmTwistMuscle(pose);
+            _lastAfterEditorMuscleReferenceLeftForearmStretchMuscle = ReadLeftForearmStretchMuscle(pose);
+            _lastAfterEditorMuscleReferenceRightForearmStretchMuscle = ReadRightForearmStretchMuscle(pose);
+            _lastAfterEditorMuscleReferenceRightArmTwistMuscle = ReadRightArmTwistMuscle(pose);
+        }
+
+        private void CaptureAfterClampPoseMusclesDiagnostics(HumanPose pose)
+        {
+            _lastAfterClampPoseMusclesLeftShoulderFrontBackMuscle = ReadLeftShoulderFrontBackMuscle(pose);
+            _lastAfterClampPoseMusclesLeftArmTwistMuscle = ReadLeftArmTwistMuscle(pose);
+            _lastAfterClampPoseMusclesLeftForearmStretchMuscle = ReadLeftForearmStretchMuscle(pose);
+            _lastAfterClampPoseMusclesRightForearmStretchMuscle = ReadRightForearmStretchMuscle(pose);
+            _lastAfterClampPoseMusclesRightArmTwistMuscle = ReadRightArmTwistMuscle(pose);
+        }
+
+        private void CaptureAfterAnatomicalArmGuardDiagnostics(HumanPose pose)
+        {
+            _lastAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle = ReadLeftShoulderFrontBackMuscle(pose);
+            _lastAfterAnatomicalArmGuardLeftArmTwistMuscle = ReadLeftArmTwistMuscle(pose);
+            _lastAfterAnatomicalArmGuardLeftForearmStretchMuscle = ReadLeftForearmStretchMuscle(pose);
+            _lastAfterAnatomicalArmGuardRightForearmStretchMuscle = ReadRightForearmStretchMuscle(pose);
+            _lastAfterAnatomicalArmGuardRightArmTwistMuscle = ReadRightArmTwistMuscle(pose);
+        }
+
+        private void CaptureAfterVisualSpikeSmoothingDiagnostics(HumanPose pose)
+        {
+            _lastAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle = ReadLeftShoulderFrontBackMuscle(pose);
+            _lastAfterVisualSpikeSmoothingLeftArmTwistMuscle = ReadLeftArmTwistMuscle(pose);
+            _lastAfterVisualSpikeSmoothingLeftForearmStretchMuscle = ReadLeftForearmStretchMuscle(pose);
+            _lastAfterVisualSpikeSmoothingRightForearmStretchMuscle = ReadRightForearmStretchMuscle(pose);
+            _lastAfterVisualSpikeSmoothingRightArmTwistMuscle = ReadRightArmTwistMuscle(pose);
+        }
+
+        private void CaptureSetHumanPoseInputDiagnostics(HumanPose pose)
+        {
+            _lastSetHumanPoseInputLeftShoulderFrontBackMuscle = ReadLeftShoulderFrontBackMuscle(pose);
+            _lastSetHumanPoseOutputLeftShoulderFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftArmTwistMuscle = ReadLeftArmTwistMuscle(pose);
+            _lastSetHumanPoseOutputLeftArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftForearmStretchMuscle = ReadLeftForearmStretchMuscle(pose);
+            _lastSetHumanPoseOutputLeftForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputRightForearmStretchMuscle = ReadRightForearmStretchMuscle(pose);
+            _lastSetHumanPoseOutputRightForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputRightArmTwistMuscle = ReadRightArmTwistMuscle(pose);
+            _lastSetHumanPoseOutputRightArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftUpperLegFrontBackMuscle = ReadLeftUpperLegFrontBackMuscle(pose);
+            _lastSetHumanPoseOutputLeftUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputRightUpperLegFrontBackMuscle = ReadRightUpperLegFrontBackMuscle(pose);
+            _lastSetHumanPoseOutputRightUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftLowerLegStretchMuscle = ReadLeftLowerLegStretchMuscle(pose);
+            _lastSetHumanPoseOutputLeftLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputRightLowerLegStretchMuscle = ReadRightLowerLegStretchMuscle(pose);
+            _lastSetHumanPoseOutputRightLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftFootUpDownMuscle = ReadLeftFootUpDownMuscle(pose);
+            _lastSetHumanPoseOutputLeftFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseInputRightFootUpDownMuscle = ReadRightFootUpDownMuscle(pose);
+            _lastSetHumanPoseOutputRightFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseInputBodyPosition = IsFinite(pose.bodyPosition) ? pose.bodyPosition : BuildNaNVector3();
+            _lastSetHumanPoseOutputBodyPosition = BuildNaNVector3();
+            _lastSetHumanPoseInputBodyRotation = IsFinite(pose.bodyRotation) ? pose.bodyRotation : BuildNaNQuaternion();
+            _lastSetHumanPoseOutputBodyRotation = BuildNaNQuaternion();
+            CaptureSetHumanPosePreSolveBasisDiagnostics(pose);
+            CaptureSetHumanPoseExtendedInputDiagnostics(pose);
+        }
+
+        private void ResetSetHumanPosePreSolveBasisDiagnostics()
+        {
+            _lastSetHumanPosePreSolveGhostRootWorldPosition = BuildNaNVector3();
+            _lastSetHumanPosePreSolveGhostRootWorldRotation = BuildNaNQuaternion();
+            _lastSetHumanPosePreSolveTargetRootWorldPosition = BuildNaNVector3();
+            _lastSetHumanPosePreSolveTargetRootWorldRotation = BuildNaNQuaternion();
+            _lastSetHumanPosePreSolveTargetHipsWorldPosition = BuildNaNVector3();
+            _lastSetHumanPosePreSolveTargetHipsLocalPosition = BuildNaNVector3();
+            _lastSetHumanPosePreSolveBodyPosition = BuildNaNVector3();
+            _lastSetHumanPosePreSolveBodyRotation = BuildNaNQuaternion();
+            _lastSetHumanPosePreSolveGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastSetHumanPosePreSolveCurrentEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            _lastSetHumanPosePreSolveTargetEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            ResetPreSetHumanPoseEndpointBodyPositionDiagnostics();
+        }
+
+        private void CaptureSetHumanPosePreSolveBasisDiagnostics(HumanPose pose)
+        {
+            _lastSetHumanPosePreSolveGhostRootWorldPosition = ReadAnimatorRootWorldPosition(ghostAnimator);
+            _lastSetHumanPosePreSolveGhostRootWorldRotation = ReadAnimatorRootWorldRotation(ghostAnimator);
+            _lastSetHumanPosePreSolveTargetRootWorldPosition = ReadAnimatorRootWorldPosition(targetAnimator);
+            _lastSetHumanPosePreSolveTargetRootWorldRotation = ReadAnimatorRootWorldRotation(targetAnimator);
+            _lastSetHumanPosePreSolveTargetHipsWorldPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.Hips);
+            _lastSetHumanPosePreSolveTargetHipsLocalPosition = ReadAnimatorBoneLocalPosition(targetAnimator, HumanBodyBones.Hips);
+            _lastSetHumanPosePreSolveBodyPosition = IsFinite(pose.bodyPosition) ? pose.bodyPosition : BuildNaNVector3();
+            _lastSetHumanPosePreSolveBodyRotation = IsFinite(pose.bodyRotation) ? pose.bodyRotation : BuildNaNQuaternion();
+            _lastSetHumanPosePreSolveGhostEndpointPositions = CaptureEndpointStageWorldPositions(ghostAnimator);
+            _lastSetHumanPosePreSolveTargetEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+        }
+
+        private void ResetSetHumanPoseExtendedInputDiagnostics()
+        {
+            _lastSetHumanPoseInputSpineFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputSpineLeftRightMuscle = float.NaN;
+            _lastSetHumanPoseInputSpineTwistLeftRightMuscle = float.NaN;
+            _lastSetHumanPoseInputChestFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputChestLeftRightMuscle = float.NaN;
+            _lastSetHumanPoseInputChestTwistLeftRightMuscle = float.NaN;
+            _lastSetHumanPoseInputUpperChestFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseInputUpperChestLeftRightMuscle = float.NaN;
+            _lastSetHumanPoseInputUpperChestTwistLeftRightMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftUpperLegInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputRightUpperLegInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftUpperLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputRightUpperLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftLowerLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputRightLowerLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftFootTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputRightFootTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseInputLeftToesUpDownMuscle = float.NaN;
+            _lastSetHumanPoseInputRightToesUpDownMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightUpperLegInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightUpperLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightLowerLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightFootTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightToesUpDownMuscle = float.NaN;
+        }
+
+        private void CaptureSetHumanPoseExtendedInputDiagnostics(HumanPose pose)
+        {
+            _lastSetHumanPoseInputSpineFrontBackMuscle = ReadSpineFrontBackMuscle(pose);
+            _lastSetHumanPoseInputSpineLeftRightMuscle = ReadSpineLeftRightMuscle(pose);
+            _lastSetHumanPoseInputSpineTwistLeftRightMuscle = ReadSpineTwistLeftRightMuscle(pose);
+            _lastSetHumanPoseInputChestFrontBackMuscle = ReadChestFrontBackMuscle(pose);
+            _lastSetHumanPoseInputChestLeftRightMuscle = ReadChestLeftRightMuscle(pose);
+            _lastSetHumanPoseInputChestTwistLeftRightMuscle = ReadChestTwistLeftRightMuscle(pose);
+            _lastSetHumanPoseInputUpperChestFrontBackMuscle = ReadUpperChestFrontBackMuscle(pose);
+            _lastSetHumanPoseInputUpperChestLeftRightMuscle = ReadUpperChestLeftRightMuscle(pose);
+            _lastSetHumanPoseInputUpperChestTwistLeftRightMuscle = ReadUpperChestTwistLeftRightMuscle(pose);
+            _lastSetHumanPoseInputLeftUpperLegInOutMuscle = ReadLeftUpperLegInOutMuscle(pose);
+            _lastSetHumanPoseInputRightUpperLegInOutMuscle = ReadRightUpperLegInOutMuscle(pose);
+            _lastSetHumanPoseInputLeftUpperLegTwistInOutMuscle = ReadLeftUpperLegTwistInOutMuscle(pose);
+            _lastSetHumanPoseInputRightUpperLegTwistInOutMuscle = ReadRightUpperLegTwistInOutMuscle(pose);
+            _lastSetHumanPoseInputLeftLowerLegTwistInOutMuscle = ReadLeftLowerLegTwistInOutMuscle(pose);
+            _lastSetHumanPoseInputRightLowerLegTwistInOutMuscle = ReadRightLowerLegTwistInOutMuscle(pose);
+            _lastSetHumanPoseInputLeftFootTwistInOutMuscle = ReadLeftFootTwistInOutMuscle(pose);
+            _lastSetHumanPoseInputRightFootTwistInOutMuscle = ReadRightFootTwistInOutMuscle(pose);
+            _lastSetHumanPoseInputLeftToesUpDownMuscle = ReadLeftToesUpDownMuscle(pose);
+            _lastSetHumanPoseInputRightToesUpDownMuscle = ReadRightToesUpDownMuscle(pose);
+        }
+
+        private void CaptureSetHumanPoseOutputDiagnostics()
+        {
+            _lastSetHumanPoseOutputLeftShoulderFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightForearmStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightArmTwistMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightUpperLegFrontBackMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightLowerLegStretchMuscle = float.NaN;
+            _lastSetHumanPoseOutputLeftFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightFootUpDownMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightUpperLegInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightUpperLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightLowerLegTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightFootTwistInOutMuscle = float.NaN;
+            _lastSetHumanPoseOutputRightToesUpDownMuscle = float.NaN;
+            _lastSetHumanPoseOutputBodyPosition = BuildNaNVector3();
+            _lastSetHumanPoseOutputBodyRotation = BuildNaNQuaternion();
+            if (_targetHandler == null)
+            {
+                return;
+            }
+
+            _targetHandler.GetHumanPose(ref _appliedTargetPose);
+            _lastSetHumanPoseOutputLeftShoulderFrontBackMuscle = ReadLeftShoulderFrontBackMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputLeftArmTwistMuscle = ReadLeftArmTwistMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputLeftForearmStretchMuscle = ReadLeftForearmStretchMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightForearmStretchMuscle = ReadRightForearmStretchMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightArmTwistMuscle = ReadRightArmTwistMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputLeftUpperLegFrontBackMuscle = ReadLeftUpperLegFrontBackMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightUpperLegFrontBackMuscle = ReadRightUpperLegFrontBackMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputLeftLowerLegStretchMuscle = ReadLeftLowerLegStretchMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightLowerLegStretchMuscle = ReadRightLowerLegStretchMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputLeftFootUpDownMuscle = ReadLeftFootUpDownMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightFootUpDownMuscle = ReadRightFootUpDownMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightUpperLegInOutMuscle = ReadRightUpperLegInOutMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightUpperLegTwistInOutMuscle = ReadRightUpperLegTwistInOutMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightLowerLegTwistInOutMuscle = ReadRightLowerLegTwistInOutMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightFootTwistInOutMuscle = ReadRightFootTwistInOutMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputRightToesUpDownMuscle = ReadRightToesUpDownMuscle(_appliedTargetPose);
+            _lastSetHumanPoseOutputBodyPosition = IsFinite(_appliedTargetPose.bodyPosition)
+                ? _appliedTargetPose.bodyPosition
+                : BuildNaNVector3();
+            _lastSetHumanPoseOutputBodyRotation = IsFinite(_appliedTargetPose.bodyRotation)
+                ? _appliedTargetPose.bodyRotation
+                : BuildNaNQuaternion();
+        }
+
+        private float ReadLeftShoulderFrontBackMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftShoulderFrontBackMuscleIndex());
+        }
+
+        private float ReadRightForearmStretchMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightForearmStretchMuscleIndex());
+        }
+
+        private float ReadLeftForearmStretchMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftForearmStretchMuscleIndex());
+        }
+
+        private float ReadLeftArmTwistMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftArmTwistMuscleIndex());
+        }
+
+        private float ReadRightArmTwistMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightArmTwistMuscleIndex());
+        }
+
+        private float ReadLeftUpperLegFrontBackMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftUpperLegFrontBackMuscleIndex());
+        }
+
+        private float ReadRightUpperLegFrontBackMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightUpperLegFrontBackMuscleIndex());
+        }
+
+        private float ReadLeftLowerLegStretchMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftLowerLegStretchMuscleIndex());
+        }
+
+        private float ReadRightLowerLegStretchMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightLowerLegStretchMuscleIndex());
+        }
+
+        private float ReadLeftFootUpDownMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftFootUpDownMuscleIndex());
+        }
+
+        private float ReadRightFootUpDownMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightFootUpDownMuscleIndex());
+        }
+
+        private float ReadSpineFrontBackMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseSpineFrontBackMuscleIndex());
+        }
+
+        private float ReadSpineLeftRightMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseSpineLeftRightMuscleIndex());
+        }
+
+        private float ReadSpineTwistLeftRightMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseSpineTwistLeftRightMuscleIndex());
+        }
+
+        private float ReadChestFrontBackMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseChestFrontBackMuscleIndex());
+        }
+
+        private float ReadChestLeftRightMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseChestLeftRightMuscleIndex());
+        }
+
+        private float ReadChestTwistLeftRightMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseChestTwistLeftRightMuscleIndex());
+        }
+
+        private float ReadUpperChestFrontBackMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseUpperChestFrontBackMuscleIndex());
+        }
+
+        private float ReadUpperChestLeftRightMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseUpperChestLeftRightMuscleIndex());
+        }
+
+        private float ReadUpperChestTwistLeftRightMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseUpperChestTwistLeftRightMuscleIndex());
+        }
+
+        private float ReadLeftUpperLegInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftUpperLegInOutMuscleIndex());
+        }
+
+        private float ReadRightUpperLegInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightUpperLegInOutMuscleIndex());
+        }
+
+        private float ReadLeftUpperLegTwistInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftUpperLegTwistInOutMuscleIndex());
+        }
+
+        private float ReadRightUpperLegTwistInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightUpperLegTwistInOutMuscleIndex());
+        }
+
+        private float ReadLeftLowerLegTwistInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftLowerLegTwistInOutMuscleIndex());
+        }
+
+        private float ReadRightLowerLegTwistInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightLowerLegTwistInOutMuscleIndex());
+        }
+
+        private float ReadLeftFootTwistInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftFootTwistInOutMuscleIndex());
+        }
+
+        private float ReadRightFootTwistInOutMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightFootTwistInOutMuscleIndex());
+        }
+
+        private float ReadLeftToesUpDownMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseLeftToesUpDownMuscleIndex());
+        }
+
+        private float ReadRightToesUpDownMuscle(HumanPose pose)
+        {
+            return ReadHumanMuscleValue(pose, GetSetHumanPoseRightToesUpDownMuscleIndex());
+        }
+
+        private int GetSetHumanPoseLeftShoulderFrontBackMuscleIndex()
+        {
+            if (_setHumanPoseLeftShoulderFrontBackMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftShoulderFrontBackMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "shoulder", "frontback");
+            }
+
+            return _setHumanPoseLeftShoulderFrontBackMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftArmTwistMuscleIndex()
+        {
+            if (_setHumanPoseLeftArmTwistMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftArmTwistMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "arm", "twist");
+            }
+
+            return _setHumanPoseLeftArmTwistMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightForearmStretchMuscleIndex()
+        {
+            if (_setHumanPoseRightForearmStretchMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightForearmStretchMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "forearm", "stretch");
+            }
+
+            return _setHumanPoseRightForearmStretchMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftForearmStretchMuscleIndex()
+        {
+            if (_setHumanPoseLeftForearmStretchMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftForearmStretchMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "forearm", "stretch");
+            }
+
+            return _setHumanPoseLeftForearmStretchMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightArmTwistMuscleIndex()
+        {
+            if (_setHumanPoseRightArmTwistMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightArmTwistMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "arm", "twist");
+            }
+
+            return _setHumanPoseRightArmTwistMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftUpperLegFrontBackMuscleIndex()
+        {
+            if (_setHumanPoseLeftUpperLegFrontBackMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftUpperLegFrontBackMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "upperleg", "frontback");
+            }
+
+            return _setHumanPoseLeftUpperLegFrontBackMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightUpperLegFrontBackMuscleIndex()
+        {
+            if (_setHumanPoseRightUpperLegFrontBackMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightUpperLegFrontBackMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "upperleg", "frontback");
+            }
+
+            return _setHumanPoseRightUpperLegFrontBackMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftLowerLegStretchMuscleIndex()
+        {
+            if (_setHumanPoseLeftLowerLegStretchMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftLowerLegStretchMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "lowerleg", "stretch");
+            }
+
+            return _setHumanPoseLeftLowerLegStretchMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightLowerLegStretchMuscleIndex()
+        {
+            if (_setHumanPoseRightLowerLegStretchMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightLowerLegStretchMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "lowerleg", "stretch");
+            }
+
+            return _setHumanPoseRightLowerLegStretchMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftFootUpDownMuscleIndex()
+        {
+            if (_setHumanPoseLeftFootUpDownMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftFootUpDownMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "foot", "updown");
+            }
+
+            return _setHumanPoseLeftFootUpDownMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightFootUpDownMuscleIndex()
+        {
+            if (_setHumanPoseRightFootUpDownMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightFootUpDownMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "foot", "updown");
+            }
+
+            return _setHumanPoseRightFootUpDownMuscleIndex;
+        }
+
+        private int GetSetHumanPoseSpineFrontBackMuscleIndex()
+        {
+            if (_setHumanPoseSpineFrontBackMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseSpineFrontBackMuscleIndex =
+                    FindHumanMuscleIndexByTokens("spine", "frontback");
+            }
+
+            return _setHumanPoseSpineFrontBackMuscleIndex;
+        }
+
+        private int GetSetHumanPoseSpineLeftRightMuscleIndex()
+        {
+            if (_setHumanPoseSpineLeftRightMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseSpineLeftRightMuscleIndex =
+                    FindHumanMuscleIndexByTokens("spine", "leftright");
+            }
+
+            return _setHumanPoseSpineLeftRightMuscleIndex;
+        }
+
+        private int GetSetHumanPoseSpineTwistLeftRightMuscleIndex()
+        {
+            if (_setHumanPoseSpineTwistLeftRightMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseSpineTwistLeftRightMuscleIndex =
+                    FindHumanMuscleIndexByTokens("spine", "twist");
+            }
+
+            return _setHumanPoseSpineTwistLeftRightMuscleIndex;
+        }
+
+        private int GetSetHumanPoseChestFrontBackMuscleIndex()
+        {
+            if (_setHumanPoseChestFrontBackMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseChestFrontBackMuscleIndex =
+                    FindHumanMuscleIndexByTokens("chest", "frontback");
+            }
+
+            return _setHumanPoseChestFrontBackMuscleIndex;
+        }
+
+        private int GetSetHumanPoseChestLeftRightMuscleIndex()
+        {
+            if (_setHumanPoseChestLeftRightMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseChestLeftRightMuscleIndex =
+                    FindHumanMuscleIndexByTokens("chest", "leftright");
+            }
+
+            return _setHumanPoseChestLeftRightMuscleIndex;
+        }
+
+        private int GetSetHumanPoseChestTwistLeftRightMuscleIndex()
+        {
+            if (_setHumanPoseChestTwistLeftRightMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseChestTwistLeftRightMuscleIndex =
+                    FindHumanMuscleIndexByTokens("chest", "twist");
+            }
+
+            return _setHumanPoseChestTwistLeftRightMuscleIndex;
+        }
+
+        private int GetSetHumanPoseUpperChestFrontBackMuscleIndex()
+        {
+            if (_setHumanPoseUpperChestFrontBackMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseUpperChestFrontBackMuscleIndex =
+                    FindHumanMuscleIndexByTokens("upperchest", "frontback");
+            }
+
+            return _setHumanPoseUpperChestFrontBackMuscleIndex;
+        }
+
+        private int GetSetHumanPoseUpperChestLeftRightMuscleIndex()
+        {
+            if (_setHumanPoseUpperChestLeftRightMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseUpperChestLeftRightMuscleIndex =
+                    FindHumanMuscleIndexByTokens("upperchest", "leftright");
+            }
+
+            return _setHumanPoseUpperChestLeftRightMuscleIndex;
+        }
+
+        private int GetSetHumanPoseUpperChestTwistLeftRightMuscleIndex()
+        {
+            if (_setHumanPoseUpperChestTwistLeftRightMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseUpperChestTwistLeftRightMuscleIndex =
+                    FindHumanMuscleIndexByTokens("upperchest", "twist");
+            }
+
+            return _setHumanPoseUpperChestTwistLeftRightMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftUpperLegInOutMuscleIndex()
+        {
+            if (_setHumanPoseLeftUpperLegInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftUpperLegInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "upperleg", "inout");
+            }
+
+            return _setHumanPoseLeftUpperLegInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightUpperLegInOutMuscleIndex()
+        {
+            if (_setHumanPoseRightUpperLegInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightUpperLegInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "upperleg", "inout");
+            }
+
+            return _setHumanPoseRightUpperLegInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftUpperLegTwistInOutMuscleIndex()
+        {
+            if (_setHumanPoseLeftUpperLegTwistInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftUpperLegTwistInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "upperleg", "twist");
+            }
+
+            return _setHumanPoseLeftUpperLegTwistInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightUpperLegTwistInOutMuscleIndex()
+        {
+            if (_setHumanPoseRightUpperLegTwistInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightUpperLegTwistInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "upperleg", "twist");
+            }
+
+            return _setHumanPoseRightUpperLegTwistInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftLowerLegTwistInOutMuscleIndex()
+        {
+            if (_setHumanPoseLeftLowerLegTwistInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftLowerLegTwistInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "lowerleg", "twist");
+            }
+
+            return _setHumanPoseLeftLowerLegTwistInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightLowerLegTwistInOutMuscleIndex()
+        {
+            if (_setHumanPoseRightLowerLegTwistInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightLowerLegTwistInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "lowerleg", "twist");
+            }
+
+            return _setHumanPoseRightLowerLegTwistInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftFootTwistInOutMuscleIndex()
+        {
+            if (_setHumanPoseLeftFootTwistInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftFootTwistInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "foot", "twist");
+            }
+
+            return _setHumanPoseLeftFootTwistInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightFootTwistInOutMuscleIndex()
+        {
+            if (_setHumanPoseRightFootTwistInOutMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightFootTwistInOutMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "foot", "twist");
+            }
+
+            return _setHumanPoseRightFootTwistInOutMuscleIndex;
+        }
+
+        private int GetSetHumanPoseLeftToesUpDownMuscleIndex()
+        {
+            if (_setHumanPoseLeftToesUpDownMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseLeftToesUpDownMuscleIndex =
+                    FindHumanMuscleIndexByTokens("left", "toes", "updown");
+            }
+
+            return _setHumanPoseLeftToesUpDownMuscleIndex;
+        }
+
+        private int GetSetHumanPoseRightToesUpDownMuscleIndex()
+        {
+            if (_setHumanPoseRightToesUpDownMuscleIndex == UnresolvedHumanMuscleIndex)
+            {
+                _setHumanPoseRightToesUpDownMuscleIndex =
+                    FindHumanMuscleIndexByTokens("right", "toes", "updown");
+            }
+
+            return _setHumanPoseRightToesUpDownMuscleIndex;
+        }
+
+        private static float ReadHumanMuscleValue(HumanPose pose, int muscleIndex)
+        {
+            if (pose.muscles == null || muscleIndex < 0 || muscleIndex >= pose.muscles.Length)
+            {
+                return float.NaN;
+            }
+
+            float value = pose.muscles[muscleIndex];
+            return IsFinite(value) ? value : float.NaN;
+        }
+
+        private static float CalculateFiniteAbsDelta(float a, float b)
+        {
+            return IsFinite(a) && IsFinite(b) ? Mathf.Abs(a - b) : float.NaN;
+        }
+
+        private static float CalculateFiniteXzDelta(Vector3 a, Vector3 b)
+        {
+            if (!IsFinite(a) || !IsFinite(b))
+            {
+                return float.NaN;
+            }
+
+            float deltaX = b.x - a.x;
+            float deltaZ = b.z - a.z;
+            return Mathf.Sqrt(deltaX * deltaX + deltaZ * deltaZ);
+        }
+
+        private static float CalculateFiniteAngleDelta(Quaternion a, Quaternion b)
+        {
+            return IsFinite(a) && IsFinite(b) ? Quaternion.Angle(a, b) : float.NaN;
+        }
+
+        private static float ReadBodyRotationYaw(Quaternion rotation)
+        {
+            return IsFinite(rotation) ? rotation.eulerAngles.y : float.NaN;
+        }
+
+        private static int FindHumanMuscleIndexByTokens(params string[] tokens)
+        {
+            if (tokens == null || tokens.Length == 0)
+            {
+                return -1;
+            }
+
+            for (int i = 0; i < HumanTrait.MuscleCount; i++)
+            {
+                string normalized = NormalizeHumanMuscleNameForDiagnostics(HumanTrait.MuscleName[i]);
+                bool matched = true;
+                foreach (string token in tokens)
+                {
+                    if (!normalized.Contains(NormalizeHumanMuscleNameForDiagnostics(token)))
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+
+                if (matched)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static string NormalizeHumanMuscleNameForDiagnostics(string value)
+        {
+            return string.IsNullOrEmpty(value)
+                ? string.Empty
+                : value.Replace(" ", string.Empty)
+                    .Replace(".", string.Empty)
+                    .Replace("-", string.Empty)
+                    .Replace("_", string.Empty)
+                    .ToLowerInvariant();
         }
 
         private void ClampPoseMuscles(ref HumanPose pose)
@@ -4345,7 +8698,7 @@ namespace Member_Han.Modules.FBXImporter
         }
 
 #if UNITY_EDITOR
-        private bool TryEvaluateThumbManualReferenceFrameDeviation(
+        private bool TryEvaluateThumbManualReferenceFrameDeviationEditor(
             bool leftHand,
             Transform targetThumb,
             Quaternion candidateWorldRotation,
@@ -4452,7 +8805,7 @@ namespace Member_Han.Modules.FBXImporter
             return spreadDeviation + projectionDeviation * 100f;
         }
 
-        private bool TryEvaluateCurrentThumbReferenceFrameDelta(
+        private bool TryEvaluateCurrentThumbReferenceFrameDeltaEditor(
             bool leftHand,
             out float spreadDelta,
             out float projectionDelta)
@@ -4475,7 +8828,7 @@ namespace Member_Han.Modules.FBXImporter
             return IsFinite(spreadDelta) && IsFinite(projectionDelta);
         }
 
-        private bool TryEvaluateThumbLocalRotationOverrideRisk(
+        private bool TryEvaluateThumbLocalRotationOverrideRiskEditor(
             bool leftHand,
             Transform targetThumb,
             Quaternion candidateRotation,
@@ -4497,38 +8850,6 @@ namespace Member_Han.Modules.FBXImporter
             {
                 targetThumb.localRotation = originalRotation;
             }
-        }
-#else
-        private bool TryEvaluateThumbManualReferenceFrameDeviation(
-            bool leftHand,
-            Transform targetThumb,
-            Quaternion candidateWorldRotation,
-            out float currentDeviation,
-            out float candidateDeviation)
-        {
-            currentDeviation = float.NaN;
-            candidateDeviation = float.NaN;
-            return false;
-        }
-
-        private bool TryEvaluateCurrentThumbReferenceFrameDelta(
-            bool leftHand,
-            out float spreadDelta,
-            out float projectionDelta)
-        {
-            spreadDelta = float.NaN;
-            projectionDelta = float.NaN;
-            return false;
-        }
-
-        private bool TryEvaluateThumbLocalRotationOverrideRisk(
-            bool leftHand,
-            Transform targetThumb,
-            Quaternion candidateRotation,
-            out float risk)
-        {
-            risk = float.NaN;
-            return false;
         }
 #endif
 
@@ -5601,105 +9922,115 @@ namespace Member_Han.Modules.FBXImporter
 
         public void ApplyLateVisualGroundingCorrection()
         {
-            if (!_isInitialized || !useSmartGrounding || !enableLateVisualGroundingCorrection || targetAnimator == null)
+            try
             {
-                return;
-            }
-
-            if (freezeRootYAfterInitialGrounding && _groundingInitialized && _hasFrozenGroundingRootY)
-            {
-                Vector3 frozenPos = targetAnimator.transform.position;
-                frozenPos.y = _frozenGroundingRootY;
-                if (IsFinite(frozenPos))
+                if (!_isInitialized || !useSmartGrounding || !enableLateVisualGroundingCorrection || targetAnimator == null)
                 {
-                    targetAnimator.transform.position = frozenPos;
+                    return;
                 }
 
-                _lateVisualGroundingInitialized = true;
-                _lastGroundingVerticalStep = 0f;
-                return;
-            }
-
-            if (!TryGetLowestFootBottomY(out float lowestFootBottomY))
-            {
-                return;
-            }
-
-            float rendererMinY = ResolveGroundingContactBottomY(lowestFootBottomY);
-
-            float targetGroundY = 0.0f;
-            float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + groundOffset);
-            _lastGroundingTargetY = targetGroundY;
-            _lastGroundingLowestFootBottomY = rendererMinY;
-
-            if (!TryCalculateGroundingAdjustment(targetHeight, rendererMinY, out float residual))
-            {
-                LogPoseWarning("Late visual grounding residual became non-finite. Skipping final grounding for this frame.");
-                return;
-            }
-
-            if (ShouldSkipLateVisualGroundingForActiveVerticalStep(
-                residual,
-                smoothLateVisualGroundingCorrection,
-                _lastGroundingVerticalStep))
-            {
-                _lateVisualGroundingInitialized = true;
-                return;
-            }
-
-            if (!TryCalculateLateVisualGroundingEffectiveResidual(
-                residual,
-                smoothLateVisualGroundingCorrection,
-                groundingDeadZone,
-                maxLateVisualGroundingCorrection,
-                out float effectiveResidual,
-                out bool exceededMaxCorrection))
-            {
-                if (exceededMaxCorrection && !_lateVisualGroundingWarningLogged)
+                if (freezeRootYAfterInitialGrounding && _groundingInitialized && _hasFrozenGroundingRootY)
                 {
-                    float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
-                    Debug.LogWarning($"[PoseSpaceRetargeter] Late visual grounding residual {residual:F3}m exceeded max {maxCorrection:F3}m. Skipping this frame to avoid collapsing a real jump.");
-                    _lateVisualGroundingWarningLogged = true;
+                    Vector3 frozenPos = targetAnimator.transform.position;
+                    frozenPos.y = _frozenGroundingRootY;
+                    if (IsFinite(frozenPos))
+                    {
+                        targetAnimator.transform.position = frozenPos;
+                    }
+
+                    _lateVisualGroundingInitialized = true;
+                    _lastGroundingVerticalStep = 0f;
+                    return;
                 }
 
+                if (!TryGetLowestFootBottomY(out float lowestFootBottomY))
+                {
+                    return;
+                }
+
+                float rendererMinY = ResolveGroundingContactBottomY(lowestFootBottomY);
+
+                float targetGroundY = 0.0f;
+                float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + groundOffset);
+                _lastGroundingTargetY = targetGroundY;
+                _lastGroundingLowestFootBottomY = rendererMinY;
+
+                if (!TryCalculateGroundingAdjustment(targetHeight, rendererMinY, out float residual))
+                {
+                    LogPoseWarning("Late visual grounding residual became non-finite. Skipping final grounding for this frame.");
+                    return;
+                }
+
+                if (ShouldSkipLateVisualGroundingForActiveVerticalStep(
+                    residual,
+                    smoothLateVisualGroundingCorrection,
+                    _lastGroundingVerticalStep))
+                {
+                    _lateVisualGroundingInitialized = true;
+                    return;
+                }
+
+                if (!TryCalculateLateVisualGroundingEffectiveResidual(
+                    residual,
+                    smoothLateVisualGroundingCorrection,
+                    groundingDeadZone,
+                    maxLateVisualGroundingCorrection,
+                    out float effectiveResidual,
+                    out bool exceededMaxCorrection))
+                {
+                    if (exceededMaxCorrection && !_lateVisualGroundingWarningLogged)
+                    {
+                        float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
+                        Debug.LogWarning($"[PoseSpaceRetargeter] Late visual grounding residual {residual:F3}m exceeded max {maxCorrection:F3}m. Skipping this frame to avoid collapsing a real jump.");
+                        _lateVisualGroundingWarningLogged = true;
+                    }
+
+                    _lateVisualGroundingInitialized = true;
+                    return;
+                }
+
+                Vector3 currentPos = targetAnimator.transform.position;
+                if (!IsFinite(currentPos))
+                {
+                    LogPoseWarning("Target position became non-finite before late visual grounding. Skipping final grounding for this frame.");
+                    return;
+                }
+
+                float appliedResidual = CalculateLateVisualGroundingStep(effectiveResidual);
+                if (Mathf.Abs(appliedResidual) <= 0.000001f)
+                {
+                    return;
+                }
+
+                if (!TryCalculateLateVisualGroundingAppliedPosition(currentPos, appliedResidual, out Vector3 appliedPosition))
+                {
+                    LogPoseWarning("Target position became non-finite after late visual grounding. Skipping final grounding for this frame.");
+                    return;
+                }
+
+                targetAnimator.transform.position = appliedPosition;
                 _lateVisualGroundingInitialized = true;
-                return;
-            }
 
-            Vector3 currentPos = targetAnimator.transform.position;
-            if (!IsFinite(currentPos))
-            {
-                LogPoseWarning("Target position became non-finite before late visual grounding. Skipping final grounding for this frame.");
-                return;
+                _lastGroundingAdjustment = appliedResidual;
+                _maxGroundingAdjustment = Mathf.Max(_maxGroundingAdjustment, Mathf.Abs(appliedResidual));
+                _lastGroundingVerticalStep = appliedResidual;
+                _maxGroundingVerticalStep = Mathf.Max(_maxGroundingVerticalStep, Mathf.Abs(appliedResidual));
+                if (_groundingInitialized)
+                {
+                    _maxGroundingVerticalStepAfterInitial = Mathf.Max(_maxGroundingVerticalStepAfterInitial, Mathf.Abs(appliedResidual));
+                }
+                else
+                {
+                    _groundingInitialized = true;
+                    _initialGroundingVerticalStep = appliedResidual;
+                }
             }
-
-            float appliedResidual = CalculateLateVisualGroundingStep(effectiveResidual);
-            if (Mathf.Abs(appliedResidual) <= 0.000001f)
+            finally
             {
-                return;
-            }
-
-            if (!TryCalculateLateVisualGroundingAppliedPosition(currentPos, appliedResidual, out Vector3 appliedPosition))
-            {
-                LogPoseWarning("Target position became non-finite after late visual grounding. Skipping final grounding for this frame.");
-                return;
-            }
-
-            targetAnimator.transform.position = appliedPosition;
-            _lateVisualGroundingInitialized = true;
-
-            _lastGroundingAdjustment = appliedResidual;
-            _maxGroundingAdjustment = Mathf.Max(_maxGroundingAdjustment, Mathf.Abs(appliedResidual));
-            _lastGroundingVerticalStep = appliedResidual;
-            _maxGroundingVerticalStep = Mathf.Max(_maxGroundingVerticalStep, Mathf.Abs(appliedResidual));
-            if (_groundingInitialized)
-            {
-                _maxGroundingVerticalStepAfterInitial = Mathf.Max(_maxGroundingVerticalStepAfterInitial, Mathf.Abs(appliedResidual));
-            }
-            else
-            {
-                _groundingInitialized = true;
-                _initialGroundingVerticalStep = appliedResidual;
+                if (targetAnimator != null)
+                {
+                    _lastRetargetStageAfterLateVisualGroundingEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+                }
             }
         }
 

@@ -33,6 +33,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_NonFiniteReference_When_CalculatingHipsLocalPosition_Then_ReturnsFalseAndKeepsCurrent);
             RunTest(results, nameof(tests.Given_RecordingStartHipsLocalBaselineChangesPastThreshold_When_CheckingFlip_Then_ReportsFlip),
                 tests.Given_RecordingStartHipsLocalBaselineChangesPastThreshold_When_CheckingFlip_Then_ReportsFlip);
+            RunTest(results, nameof(tests.Given_FootLocalRotationReference_When_CalculatingBlend_Then_SlerpsTowardReference),
+                tests.Given_FootLocalRotationReference_When_CalculatingBlend_Then_SlerpsTowardReference);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

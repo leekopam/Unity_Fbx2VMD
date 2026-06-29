@@ -541,25 +541,25 @@ MonoBehaviour:
   useEditorHumanoidRootTranslationReference: 0
   editorHumanoidRootTranslationWeight: 0.25
   editorHumanoidRootTranslationCurrentWeight: 0.35
-  useManualAnimatorFingerPoseReference: 1
+  useManualAnimatorFingerPoseReference: 0
   useManualAnimatorFullBodyPoseReference: 0
-  useManualAnimatorBodyRotationReference: 1
-  useManualAnimatorBodyPositionYReference: 1
+  useManualAnimatorBodyRotationReference: 0
+  useManualAnimatorBodyPositionYReference: 0
   useManualAnimatorHipsLocalPositionReference: 0
   manualAnimatorHipsLocalPositionWeight: 1
   manualAnimatorHipsLocalPositionMaxOffset: 0.12
   useManualAnimatorFootHeightGroundingReference: 0
   manualAnimatorFootHeightGroundingReferenceWeight: 1
   manualAnimatorFootHeightGroundingReferenceMaxLift: 0.08
-  useManualAnimatorThumbLocalRotationReference: 1
-  useManualAnimatorHandLocalRotationReference: 1
-  useManualAnimatorThumbSegmentDirectionReference: 1
+  useManualAnimatorThumbLocalRotationReference: 0
+  useManualAnimatorHandLocalRotationReference: 0
+  useManualAnimatorThumbSegmentDirectionReference: 0
   manualAnimatorThumbSegmentDirectionWeight: 1
-  useManualAnimatorThumbHandDirectionReference: 1
+  useManualAnimatorThumbHandDirectionReference: 0
   manualAnimatorThumbHandDirectionWeight: 0.5
-  useManualAnimatorHandPalmFrameReference: 1
+  useManualAnimatorHandPalmFrameReference: 0
   manualAnimatorHandPalmFrameWeight: 1
-  useManualAnimatorThumbBasePositionReference: 1
+  useManualAnimatorThumbBasePositionReference: 0
   manualAnimatorThumbBasePositionWeight: 1
   manualAnimatorThumbBasePositionMaxOffset: 0.04
   manualFingerReferencePrefab: {fileID: 0}
@@ -615,7 +615,7 @@ MonoBehaviour:
   ThumbStretchScale: 1
   ThumbSpreadScale: 1
   enableThumbAnatomicalGuard: 1
-  preserveManualFingerReferenceThumbMuscles: 1
+  preserveManualFingerReferenceThumbMuscles: 0
   ThumbStretchMin: -2.1
   ThumbStretchMax: 1
   ThumbSpreadMin: -0.9
