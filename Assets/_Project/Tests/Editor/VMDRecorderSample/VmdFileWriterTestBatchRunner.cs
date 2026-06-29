@@ -59,6 +59,12 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_MmdIkExportRecoveryTrigger_When_RawStepIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt);
             RunTest(results, nameof(tests.Given_MmdIkExportRecoveryDebt_When_LagDebtIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt),
                 tests.Given_MmdIkExportRecoveryDebt_When_LagDebtIsLarge_Then_UsesRecoveryLimitWithoutExceedingIt);
+            RunTest(results, nameof(tests.Given_MmdIkExportRecoveryHold_When_RawStepTriggers_Then_KeepsRecoveryLimitForTriggerInclusiveHoldWindow),
+                tests.Given_MmdIkExportRecoveryHold_When_RawStepTriggers_Then_KeepsRecoveryLimitForTriggerInclusiveHoldWindow);
+            RunTest(results, nameof(tests.Given_LargeFootIkExportStep_When_BuildingDynamicIkFrames_Then_DisablesThatSideUntilStable),
+                tests.Given_LargeFootIkExportStep_When_BuildingDynamicIkFrames_Then_DisablesThatSideUntilStable);
+            RunTest(results, nameof(tests.Given_DynamicIkFrames_When_WritingVmd_Then_IKFooterPreservesPerFrameStates),
+                tests.Given_DynamicIkFrames_When_WritingVmd_Then_IKFooterPreservesPerFrameStates);
             RunTest(results, nameof(tests.Given_MmdCenterExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep),
                 tests.Given_MmdCenterExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep);
             RunTest(results, nameof(tests.Given_IkClampAndCenterLift_When_ApplyingExportSafetyGuards_Then_ClampRunsBeforeFloorLift),

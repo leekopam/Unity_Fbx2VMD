@@ -122,36 +122,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!21 &87938401
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
-  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties:
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1 &158675713
 GameObject:
   m_ObjectHideFlags: 0
@@ -384,36 +354,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
---- !u!21 &455998340
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
-  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties:
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1 &643269947 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6818878734488371576, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
@@ -571,25 +511,38 @@ MonoBehaviour:
   useEditorHumanoidRootTranslationReference: 0
   editorHumanoidRootTranslationWeight: 0.25
   editorHumanoidRootTranslationCurrentWeight: 0.35
-  useManualAnimatorFingerPoseReference: 1
-  useManualAnimatorFullBodyPoseReference: 0
+  useManualAnimatorFingerPoseReference: 0
+  useManualAnimatorFullBodyPoseReference: 1
+  manualAnimatorFullBodyPoseReferenceWeight: 1
   useManualAnimatorBodyRotationReference: 1
-  useManualAnimatorBodyPositionYReference: 1
+  manualAnimatorBodyRotationReferenceWeight: 1
+  useManualAnimatorBodyPositionYReference: 0
   useManualAnimatorHipsLocalPositionReference: 0
   manualAnimatorHipsLocalPositionWeight: 1
   manualAnimatorHipsLocalPositionMaxOffset: 0.12
   useManualAnimatorFootHeightGroundingReference: 0
   manualAnimatorFootHeightGroundingReferenceWeight: 1
   manualAnimatorFootHeightGroundingReferenceMaxLift: 0.08
-  useManualAnimatorThumbLocalRotationReference: 1
+  useManualAnimatorFootLocalRotationReference: 1
+  manualAnimatorFootLocalRotationReferenceWeight: 1
+  useManualAnimatorLowerBodySegmentDirectionReference: 1
+  manualAnimatorLowerBodySegmentDirectionReferenceWeight: 1
+  manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle: 60
+  useManualAnimatorFootHipsAlignedResidualYawReference: 1
+  manualAnimatorFootHipsAlignedResidualYawReferenceWeight: 1
+  manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle: 45
+  useManualAnimatorBipedIkFootPositionReference: 0
+  manualAnimatorBipedIkFootPositionReferenceWeight: 0.65
+  manualAnimatorBipedIkFootPositionReferenceMaxOffset: 0.12
+  useManualAnimatorThumbLocalRotationReference: 0
   useManualAnimatorHandLocalRotationReference: 1
-  useManualAnimatorThumbSegmentDirectionReference: 1
+  useManualAnimatorThumbSegmentDirectionReference: 0
   manualAnimatorThumbSegmentDirectionWeight: 1
-  useManualAnimatorThumbHandDirectionReference: 1
+  useManualAnimatorThumbHandDirectionReference: 0
   manualAnimatorThumbHandDirectionWeight: 0.5
-  useManualAnimatorHandPalmFrameReference: 1
+  useManualAnimatorHandPalmFrameReference: 0
   manualAnimatorHandPalmFrameWeight: 1
-  useManualAnimatorThumbBasePositionReference: 1
+  useManualAnimatorThumbBasePositionReference: 0
   manualAnimatorThumbBasePositionWeight: 1
   manualAnimatorThumbBasePositionMaxOffset: 0.04
   manualFingerReferencePrefab: {fileID: 0}
@@ -618,6 +571,8 @@ MonoBehaviour:
   YybArmDirectionForearmWeight: 0.75
   YybArmDirectionUpperArmMaxDegrees: 65
   YybArmDirectionForearmMaxDegrees: 85
+  YybArmDirectionLeftSideWeightScale: 1
+  YybArmDirectionRightSideWeightScale: 1
   logYybArmDirectionRetargetCorrection: 0
   enableYybArmVisualTwistCorrection: 1
   YybArmVisualUpperArmInfluence: 0.35
@@ -625,14 +580,20 @@ MonoBehaviour:
   YybArmVisualUpperArmMaxDegrees: 45
   YybArmVisualForearmMaxDegrees: 75
   logYybArmVisualTwistCorrection: 0
-  enableYybArmSwingLimitCorrection: 0
-  YybArmSwingLimitWeight: 0.85
-  YybArmSwingMaxDownDot: 0.68
+  enableYybArmSwingLimitCorrection: 1
+  YybArmSwingLimitWeight: 0.6
+  YybArmSwingMaxDownDot: 0.75
   YybArmSwingMinHandHorizontalRatio: 0.05
-  YybArmSwingMaxHandBelowShoulderRatio: 0.75
+  YybArmSwingMaxHandBelowShoulderRatio: 1.5
+  YybArmSwingHorizontalReachLimitWeight: 1
+  YybArmSwingMaxHandHorizontalReachRatio: 0.08
+  YybArmSwingRaisedPoseHorizontalReachLimitWeight: 0.25
+  YybArmSwingRaisedPoseMinUpperArmDownDot: 0.55
+  YybArmSwingRaisedPoseMaxHandBelowShoulderRatio: 0.05
+  YybArmSwingRaisedPoseMaxHandHorizontalReachRatio: 0.55
   logYybArmSwingLimitCorrection: 0
   enableYybArmSleeveAnchorCorrection: 1
-  YybArmSleeveAnchorInfluence: 0.85
+  YybArmSleeveAnchorInfluence: 0.825
   YybArmShoulderCapAnchorInfluence: 0
   YybArmSleeveAnchorMaxDegrees: 85
   logYybArmSleeveAnchorCorrection: 0
@@ -645,7 +606,7 @@ MonoBehaviour:
   ThumbStretchScale: 1
   ThumbSpreadScale: 1
   enableThumbAnatomicalGuard: 1
-  preserveManualFingerReferenceThumbMuscles: 1
+  preserveManualFingerReferenceThumbMuscles: 0
   ThumbStretchMin: -2.1
   ThumbStretchMax: 1
   ThumbSpreadMin: -0.9
@@ -675,9 +636,9 @@ MonoBehaviour:
   thumbWebbingCreaseMaxPositionOffset: 0.0012
   enableThumbVisualLengthGuard: 1
   ThumbProjectionMinPalmNormal: 0.358
-  ThumbProjectionMaxPalmNormal: 0.58
+  ThumbProjectionMaxPalmNormal: 0.5
   ThumbProjectionGuardWeight: 1
-  ThumbIndexMaxSpreadAngle: 70
+  ThumbIndexMaxSpreadAngle: 50
   ThumbIndexSpreadGuardWeight: 1
   ThumbMaxSegmentBendAngle: 10
   ThumbSegmentStraightenWeight: 0.9

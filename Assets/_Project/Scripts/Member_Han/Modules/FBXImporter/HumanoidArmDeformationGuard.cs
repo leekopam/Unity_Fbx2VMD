@@ -606,6 +606,7 @@ namespace Member_Han.Modules.FBXImporter
         private const float ThumbWebbingDynamicMinLocalAngle = 4f;
         private const float ThumbWebbingDynamicMinPositionOffset = 0.0015f;
         private const float ManualThumbReferenceMinProximalMaxLocalAngle = 28f;
+        private const float ManualThumbProjectionPreserveSmokeRiskLimit = 0.35f;
 
         private static readonly HumanBodyBones[] ThumbBones =
         {
@@ -1186,7 +1187,8 @@ namespace Member_Han.Modules.FBXImporter
 
             float minNormal = Mathf.Clamp01(thumbProjectionMinPalmNormal);
             float maxNormal = Mathf.Clamp(Mathf.Max(thumbProjectionMaxPalmNormal, minNormal), 0f, 1f);
-            float maxSpreadAngle = Mathf.Clamp(thumbIndexMaxSpreadAngle, 0f, 90f);
+            float configuredMaxSpreadAngle = Mathf.Clamp(thumbIndexMaxSpreadAngle, 0f, 90f);
+            float maxSpreadAngle = configuredMaxSpreadAngle;
             bool useHighRiskManualOverride = false;
             ResolveLinkedPoseSpaceRetargeter();
             // 수동 기준 포즈에서 위험한 엄지 자세로 판정되면 이 메서드의 제한값을 더 강하게 적용합니다.
@@ -1200,7 +1202,7 @@ namespace Member_Han.Modules.FBXImporter
                 useHighRiskManualOverride = true;
                 minNormal = Mathf.Clamp01(overrideMinNormal);
                 maxNormal = Mathf.Clamp(Mathf.Max(overrideMaxNormal, minNormal), 0f, 1f);
-                maxSpreadAngle = Mathf.Clamp(overrideMaxSpreadAngle, 0f, 90f);
+                maxSpreadAngle = ResolveManualOverrideMaxSpreadAngle(configuredMaxSpreadAngle, overrideMaxSpreadAngle);
             }
 
             Transform hand = targetAnimator.GetBoneTransform(isRightThumb ? HumanBodyBones.RightHand : HumanBodyBones.LeftHand);
@@ -1319,9 +1321,17 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             // 방향 차이만 proximal 월드 회전에 얹고, 본 길이나 위치는 직접 바꾸지 않습니다.
+            bool bypassManualProjectionPreserve =
+                useHighRiskManualOverride &&
+                ShouldBypassManualThumbProjectionPreserveForSmokeRisk(
+                    Vector3.Dot(direction, palmNormal),
+                    minNormal,
+                    maxNormal);
+
             Quaternion correctedWorldRotation = Quaternion.FromToRotation(direction, targetDirection) * proximal.rotation;
             HumanBodyBones proximalBone = isRightThumb ? HumanBodyBones.RightThumbProximal : HumanBodyBones.LeftThumbProximal;
-            if (ShouldPreserveManualThumbWorldRotationCorrection(proximalBone, proximal, correctedWorldRotation))
+            if (!bypassManualProjectionPreserve &&
+                ShouldPreserveManualThumbWorldRotationCorrection(proximalBone, proximal, correctedWorldRotation))
             {
                 RecordThumbProjectionCorrection(isRightThumb, true);
                 return 0;
@@ -1330,6 +1340,24 @@ namespace Member_Han.Modules.FBXImporter
             ApplyWorldRotationCorrection(proximal, correctedWorldRotation);
             RecordThumbProjectionCorrection(isRightThumb, false);
             return 1;
+        }
+
+        private static float ResolveManualOverrideMaxSpreadAngle(float configuredMaxSpreadAngle, float overrideMaxSpreadAngle)
+        {
+            float configured = Mathf.Clamp(configuredMaxSpreadAngle, 0f, 90f);
+            float overrideValue = Mathf.Clamp(overrideMaxSpreadAngle, 0f, 90f);
+            return Mathf.Min(configured, overrideValue);
+        }
+
+        private static bool ShouldBypassManualThumbProjectionPreserveForSmokeRisk(
+            float currentProjection,
+            float minNormal,
+            float maxNormal)
+        {
+            float minValue = Mathf.Clamp01(minNormal);
+            float maxValue = Mathf.Clamp(Mathf.Max(maxNormal, minValue), 0f, 1f);
+            float risk = RiskOutsideRange(currentProjection, minValue, maxValue, 1f);
+            return IsFinite(risk) && risk > ManualThumbProjectionPreserveSmokeRiskLimit;
         }
 
         private int StraightenThumbSegmentBend(Transform proximal, Transform intermediate, Transform distal, bool isRightThumb)

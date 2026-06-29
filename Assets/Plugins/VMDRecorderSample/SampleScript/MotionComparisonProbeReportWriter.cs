@@ -299,8 +299,31 @@ internal sealed class MotionComparisonFrameQualitySummary
     public int candidate_yyb_sleeve_thickness_risk_missing_frames;
     public float candidate_yyb_max_sleeve_thickness_risk;
     public int candidate_vmd_bone_frames;
+    public int candidate_vmd_max_bone_frame_index;
     public int candidate_vmd_center_spike_frames;
     public int candidate_vmd_foot_ik_spike_frames;
+    public int candidate_arm_motion_frames;
+    public int candidate_leg_motion_frames;
+    public float candidate_arm_motion_root_travel;
+    public float candidate_leg_motion_root_travel;
+    public float candidate_limb_motion_root_travel;
+    public float max_candidate_limb_motion_root_step;
+    public float max_same_frame_arm_pose_delta;
+    public float max_same_frame_leg_pose_delta;
+    public float max_same_frame_limb_pose_delta;
+    public float max_same_frame_guard_normalized_arm_pose_delta;
+    public float max_same_frame_guard_normalized_limb_pose_delta;
+    public int raw_limb_pose_delta_saturated_frame_count;
+    public float raw_limb_pose_delta_excess_over_guard_normalized;
+    public string raw_limb_pose_delta_saturation_basis;
+    public int pre_retarget_start_compared_frames;
+    public float pre_retarget_start_max_same_frame_arm_pose_delta;
+    public float pre_retarget_start_max_same_frame_limb_pose_delta;
+    public float pre_retarget_start_max_same_frame_guard_normalized_arm_pose_delta;
+    public float pre_retarget_start_max_same_frame_guard_normalized_limb_pose_delta;
+    public int pre_retarget_start_max_same_frame_limb_pose_delta_recorder_frame;
+    public int pre_retarget_start_max_same_frame_limb_pose_delta_candidate_recorder_frame;
+    public string pre_retarget_start_evaluation_basis;
     public float min_baseline_foot_bottom_y;
     public float min_candidate_foot_bottom_y;
     public float min_candidate_foot_bottom_ground_gap;
@@ -311,6 +334,9 @@ internal sealed class MotionComparisonFrameQualitySummary
     public int max_same_frame_hips_y_delta_candidate_recorder_frame;
     public float max_same_frame_body_position_y_delta;
     public float max_same_frame_hips_local_y_delta;
+    public float max_same_frame_hips_xz_delta;
+    public int max_same_frame_hips_xz_delta_recorder_frame;
+    public int max_same_frame_hips_xz_delta_candidate_recorder_frame;
     public float max_same_frame_grounding_vertical_step_delta;
     public float max_same_frame_foot_height_reference_lift_delta;
     public float max_same_frame_candidate_grounding_vertical_step_change;
@@ -322,6 +348,35 @@ internal sealed class MotionComparisonFrameQualitySummary
     public float max_same_frame_foot_bottom_y_delta;
     public int max_same_frame_foot_bottom_y_delta_recorder_frame;
     public int max_same_frame_foot_bottom_y_delta_candidate_recorder_frame;
+    public float max_same_frame_left_foot_xz_delta;
+    public float max_same_frame_right_foot_xz_delta;
+    public float max_same_frame_foot_xz_delta;
+    public int max_same_frame_foot_xz_delta_recorder_frame;
+    public int max_same_frame_foot_xz_delta_candidate_recorder_frame;
+    public string max_same_frame_foot_xz_delta_side;
+    public float max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range;
+    public int max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_recorder_frame;
+    public int max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_candidate_recorder_frame;
+    public string max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_side;
+    public float max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range;
+    public int max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_recorder_frame;
+    public int max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_candidate_recorder_frame;
+    public string max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_side;
+    public float max_same_frame_foot_xz_delta_after_hips_xz_alignment;
+    public float max_same_frame_foot_xz_delta_after_hips_xz_alignment_x;
+    public float max_same_frame_foot_xz_delta_after_hips_xz_alignment_z;
+    public float max_same_frame_foot_xz_delta_after_hips_xz_alignment_angle_degrees;
+    public int max_same_frame_foot_xz_delta_after_hips_xz_alignment_recorder_frame;
+    public int max_same_frame_foot_xz_delta_after_hips_xz_alignment_candidate_recorder_frame;
+    public string max_same_frame_foot_xz_delta_after_hips_xz_alignment_side;
+    public float max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range;
+    public int max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_recorder_frame;
+    public int max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_candidate_recorder_frame;
+    public string max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_side;
+    public float max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range;
+    public int max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_recorder_frame;
+    public int max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_candidate_recorder_frame;
+    public string max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_side;
     public string vertical_solve_prototype_status;
     public string vertical_solve_prototype_status_reason;
     public string vertical_solve_prototype_basis;
@@ -440,16 +495,106 @@ internal static class MotionComparisonProbeReportWriter
     private const float QualitySameFrameHipsYFailThreshold = QualityTeleportStepThreshold;
     private const float QualitySameFrameFootBottomYWarnThreshold = 0.035f;
     private const float QualitySameFrameFootBottomYFailThreshold = 0.05f;
+    private const float QualitySameFrameFootXzWarnThreshold = 0.05f;
+    private const float QualitySameFrameFootXzFailThreshold = QualityTeleportStepThreshold;
     private const float QualityYybDeformationRiskFailThreshold = 0.35f;
     private const float QualityYybSleeveThicknessRiskFailThreshold = 0.35f;
+    private const float QualityLimbMotionSignalThreshold = 0.005f;
+    private const float QualityStationaryLimbRootTravelFailThreshold = 0.01f;
+    private const float QualitySameFrameLimbPoseDeltaFailThreshold = 1.0f;
+    private const float QualityGuardNormalizedHumanMuscleLimit = 1.0f;
+    private const float QualityGuardNormalizedUpperArmTwistMuscleLimit = 0.75f;
+    private const float QualityGuardNormalizedForearmTwistMuscleLimit = 0.5f;
     private const int QualityMetricFrameMatchTolerance = 1;
     private const float VerticalSolvePrototypeMaxCorrectionY = 0.08f;
-    private const float VerticalSolveArtifactMaxCorrectionY = 0.085f;
+    private const float VerticalSolveArtifactMaxCorrectionY = 0.52f;
     private const float VerticalSolvePostprocessSafetyMarginY = 0.0005f;
-    private const string MainRecordingMovingRootEvaluationRole = "main_recording_moving_root_metrics";
+    private const float HorizontalFootSolvePostprocessSafetyMarginXZ = 0.001f;
+    private const uint VerticalSolveVisibleIkCarrierSearchFrameWindow = 5u;
+    private static readonly string[] VerticalSolveCorrectionDiagnosticColumns =
+    {
+        "verticalSolveCorrectionHipsY",
+        "verticalSolveCorrectionFootBottomY",
+        "verticalSolveCorrectionLeftFootX",
+        "verticalSolveCorrectionLeftFootZ",
+        "verticalSolveCorrectionRightFootX",
+        "verticalSolveCorrectionRightFootZ",
+        "verticalSolveHorizontalFootTargetMagnitude",
+        "verticalSolveLeftFootNormalizedDeltaX",
+        "verticalSolveLeftFootNormalizedDeltaZ",
+        "verticalSolveLeftFootNormalizedMagnitude",
+        "verticalSolveRightFootNormalizedDeltaX",
+        "verticalSolveRightFootNormalizedDeltaZ",
+        "verticalSolveRightFootNormalizedMagnitude",
+        "verticalSolveCorrectionSource"
+    };
+
     private const string ScreenshotIndexCsvHeader = "label,scene,reason,recorderFrame,view,path";
-    private const string MetricsCsvHeader = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,retargetRootDeltaLast,retargetRootDeltaMax,retargetRootDeltaSkippedCount,retargetPoseRootDeltaLast,retargetPoseRootDeltaMax,retargetPoseRootClampCount,retargetGroundingAdjustmentLast,retargetGroundingAdjustmentMax,retargetGroundingStepClampCount,retargetGroundingSmoothedCount,retargetGroundingVerticalStepLast,retargetGroundingVerticalStepMax,retargetGroundingInitialVerticalStep,retargetGroundingVerticalStepAfterInitialMax,retargetGroundingTargetY,retargetGroundingLowestFootBottomY,retargetGroundingMaxStepPerFrame,retargetGroundingLastStepToMaxStepRatio,retargetGroundingLastStepAtMaxStep,retargetRecordingStartRootY,retargetRecordingStartBodyPositionY,retargetRecordingStartHipsLocalY,retargetRecordingStartHipsY,retargetRecordingStartHipsReferenceBeforeLocalY,retargetRecordingStartHipsReferenceAfterLocalY,retargetRecordingStartHipsReferenceDeltaY,retargetRecordingStartHipsReferenceFlipDetected,retargetRecordingStartHipsReferenceStage,bodyPositionY,hipsLocalY,retargetFootHeightReferenceLift,hipsY,lowestFootY,lowestFootBottomY,meshBoundsMinY,meshBoundsMaxY,footBottomGroundGap,meshBoundsGroundGap,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftHandTorsoSignedClearance,rightHandTorsoSignedClearance,minHandTorsoSignedClearance,handTorsoPenetrationRisk,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
+    private const string MetricsCsvHeader = "label,scene,reason,elapsed,timeSinceLevelLoad,frameCount,recorderFrame,animationTimeSource,animationClipName,animationClipTime,animationClipLength,animationNormalizedTime,rootX,rootY,rootZ,rootYaw,retargetRootDeltaLast,retargetRootDeltaMax,retargetRootDeltaSkippedCount,retargetPoseRootDeltaLast,retargetPoseRootDeltaMax,retargetPoseRootClampCount,retargetGroundingAdjustmentLast,retargetGroundingAdjustmentMax,retargetGroundingStepClampCount,retargetGroundingSmoothedCount,retargetGroundingVerticalStepLast,retargetGroundingVerticalStepMax,retargetGroundingInitialVerticalStep,retargetGroundingVerticalStepAfterInitialMax,retargetGroundingTargetY,retargetGroundingLowestFootBottomY,retargetGroundingMaxStepPerFrame,retargetGroundingLastStepToMaxStepRatio,retargetGroundingLastStepAtMaxStep,retargetRecordingStartRootY,retargetRecordingStartBodyPositionY,retargetRecordingStartHipsLocalY,retargetRecordingStartHipsY,retargetRecordingStartHipsReferenceBeforeLocalY,retargetRecordingStartHipsReferenceAfterLocalY,retargetRecordingStartHipsReferenceDeltaY,retargetRecordingStartHipsReferenceFlipDetected,retargetRecordingStartHipsReferenceStage,retargetPoseInputLeftShoulderFrontBackMuscle,retargetAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle,retargetAfterClampPoseMusclesLeftShoulderFrontBackMuscle,retargetAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle,retargetAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle,retargetSetHumanPoseInputLeftShoulderFrontBackMuscle,retargetSetHumanPoseOutputLeftShoulderFrontBackMuscle,retargetSetHumanPoseLeftShoulderFrontBackDelta,retargetPoseInputLeftArmTwistMuscle,retargetAfterEditorMuscleReferenceLeftArmTwistMuscle,retargetAfterClampPoseMusclesLeftArmTwistMuscle,retargetAfterAnatomicalArmGuardLeftArmTwistMuscle,retargetAfterVisualSpikeSmoothingLeftArmTwistMuscle,retargetSetHumanPoseInputLeftArmTwistMuscle,retargetSetHumanPoseOutputLeftArmTwistMuscle,retargetSetHumanPoseLeftArmTwistDelta,retargetPoseInputLeftForearmStretchMuscle,retargetAfterEditorMuscleReferenceLeftForearmStretchMuscle,retargetAfterClampPoseMusclesLeftForearmStretchMuscle,retargetAfterAnatomicalArmGuardLeftForearmStretchMuscle,retargetAfterVisualSpikeSmoothingLeftForearmStretchMuscle,retargetSetHumanPoseInputLeftForearmStretchMuscle,retargetSetHumanPoseOutputLeftForearmStretchMuscle,retargetSetHumanPoseLeftForearmStretchDelta,retargetPoseInputRightForearmStretchMuscle,retargetAfterEditorMuscleReferenceRightForearmStretchMuscle,retargetAfterClampPoseMusclesRightForearmStretchMuscle,retargetAfterAnatomicalArmGuardRightForearmStretchMuscle,retargetAfterVisualSpikeSmoothingRightForearmStretchMuscle,retargetSetHumanPoseInputRightForearmStretchMuscle,retargetSetHumanPoseOutputRightForearmStretchMuscle,retargetSetHumanPoseRightForearmStretchDelta,retargetPoseInputRightArmTwistMuscle,retargetAfterEditorMuscleReferenceRightArmTwistMuscle,retargetAfterClampPoseMusclesRightArmTwistMuscle,retargetAfterAnatomicalArmGuardRightArmTwistMuscle,retargetAfterVisualSpikeSmoothingRightArmTwistMuscle,retargetSetHumanPoseInputRightArmTwistMuscle,retargetSetHumanPoseOutputRightArmTwistMuscle,retargetSetHumanPoseRightArmTwistDelta,retargetSetHumanPoseInputLeftUpperLegFrontBackMuscle,retargetSetHumanPoseOutputLeftUpperLegFrontBackMuscle,retargetSetHumanPoseLeftUpperLegFrontBackDelta,retargetSetHumanPoseInputRightUpperLegFrontBackMuscle,retargetSetHumanPoseOutputRightUpperLegFrontBackMuscle,retargetSetHumanPoseRightUpperLegFrontBackDelta,retargetSetHumanPoseInputLeftLowerLegStretchMuscle,retargetSetHumanPoseOutputLeftLowerLegStretchMuscle,retargetSetHumanPoseLeftLowerLegStretchDelta,retargetSetHumanPoseInputRightLowerLegStretchMuscle,retargetSetHumanPoseOutputRightLowerLegStretchMuscle,retargetSetHumanPoseRightLowerLegStretchDelta,retargetSetHumanPoseInputLeftFootUpDownMuscle,retargetSetHumanPoseOutputLeftFootUpDownMuscle,retargetSetHumanPoseLeftFootUpDownDelta,retargetSetHumanPoseInputRightFootUpDownMuscle,retargetSetHumanPoseOutputRightFootUpDownMuscle,retargetSetHumanPoseRightFootUpDownDelta,bodyPositionY,hipsLocalY,retargetFootHeightReferenceLift,hipsX,hipsZ,hipsY,lowestFootY,lowestFootBottomY,leftFootX,leftFootZ,rightFootX,rightFootZ,meshBoundsMinY,meshBoundsMaxY,footBottomGroundGap,meshBoundsGroundGap,cameraFacingDot,maxScaleDelta,leftUpperArmScale,rightUpperArmScale,leftUpperLegScale,rightUpperLegScale,leftArmLength,rightArmLength,leftLegLength,rightLegLength,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,leftElbowBendForward,rightElbowBendForward,leftKneeBendForward,rightKneeBendForward,leftElbowBendOffsetForward,rightElbowBendOffsetForward,leftKneeBendOffsetForward,rightKneeBendOffsetForward,leftUpperArmDownDot,rightUpperArmDownDot,leftHandHorizontalRatio,rightHandHorizontalRatio,leftHandBelowShoulderRatio,rightHandBelowShoulderRatio,leftHandTorsoSignedClearance,rightHandTorsoSignedClearance,minHandTorsoSignedClearance,handTorsoPenetrationRisk,leftShoulderDownUpMuscle,leftShoulderFrontBackMuscle,leftArmDownUpMuscle,leftArmFrontBackMuscle,leftArmTwistMuscle,armSwingGuardLeftApplied,armSwingGuardLeftHorizontalReachApplied,armSwingGuardLeftRaisedReachApplied,armSwingGuardLeftForearmStretchBefore,armSwingGuardLeftForearmStretchAfter,armSwingGuardLeftForearmStretchDelta,leftForearmStretchMuscle,leftForearmTwistMuscle,rightShoulderDownUpMuscle,rightShoulderFrontBackMuscle,rightArmDownUpMuscle,rightArmFrontBackMuscle,rightArmTwistMuscle,armSwingGuardRightApplied,armSwingGuardRightHorizontalReachApplied,armSwingGuardRightRaisedReachApplied,armSwingGuardRightForearmStretchBefore,armSwingGuardRightForearmStretchAfter,armSwingGuardRightForearmStretchDelta,rightForearmStretchMuscle,rightForearmTwistMuscle,leftThumb1StretchMuscle,leftThumbSpreadMuscle,leftIndex1StretchMuscle,leftIndexSpreadMuscle,leftMiddle1StretchMuscle,leftMiddleSpreadMuscle,leftRing1StretchMuscle,leftRingSpreadMuscle,leftLittle1StretchMuscle,leftLittleSpreadMuscle,rightThumb1StretchMuscle,rightThumbSpreadMuscle,rightIndex1StretchMuscle,rightIndexSpreadMuscle,rightMiddle1StretchMuscle,rightMiddleSpreadMuscle,rightRing1StretchMuscle,rightRingSpreadMuscle,rightLittle1StretchMuscle,rightLittleSpreadMuscle,spineLocalEuler,chestLocalEuler,upperChestLocalEuler,leftShoulderLocalEuler,rightShoulderLocalEuler,leftUpperArmLocalEuler,rightUpperArmLocalEuler,leftLowerArmLocalEuler,rightLowerArmLocalEuler,leftHandLocalEuler,rightHandLocalEuler,leftThumbProximalLocalEuler,leftIndexProximalLocalEuler,leftMiddleProximalLocalEuler,leftRingProximalLocalEuler,leftLittleProximalLocalEuler,rightThumbProximalLocalEuler,rightIndexProximalLocalEuler,rightMiddleProximalLocalEuler,rightRingProximalLocalEuler,rightLittleProximalLocalEuler";
     private const string YybDiagnosticMetricsCsvHeader = "leftThumbIndexSpreadAngle,rightThumbIndexSpreadAngle,leftThumbPalmProjection,rightThumbPalmProjection,leftThumbSpreadRisk,rightThumbSpreadRisk,leftThumbProjectionRisk,rightThumbProjectionRisk,leftThumbHelperSourceDistance,rightThumbHelperSourceDistance,leftThumbHelperSourceDistanceDelta,rightThumbHelperSourceDistanceDelta,leftThumbHelperSourceRotationDelta,rightThumbHelperSourceRotationDelta,leftThumbHelperSeparationRisk,rightThumbHelperSeparationRisk,leftWebbingRisk,rightWebbingRisk,leftArmTwistRisk,rightArmTwistRisk,leftSleeveAnchorRisk,rightSleeveAnchorRisk,leftSleeveAnchorDistance,rightSleeveAnchorDistance,leftSleeveThicknessRatio,rightSleeveThicknessRatio,leftSleeveThicknessRisk,rightSleeveThicknessRisk,leftYybDeformationRisk,rightYybDeformationRisk,yybMaxDeformationRisk,thumbGuardManualReferenceConfigured,thumbGuardManualReferenceActive,thumbGuardPoseShapingSuppressed,thumbGuardLeftPoseShapingSuppressed,thumbGuardRightPoseShapingSuppressed,thumbGuardProjectionWeight,thumbGuardLeftProjectionWeight,thumbGuardRightProjectionWeight,thumbGuardIndexSpreadWeight,thumbGuardLeftIndexSpreadWeight,thumbGuardRightIndexSpreadWeight,thumbGuardSegmentStraightenWeight,thumbGuardLeftSegmentStraightenWeight,thumbGuardRightSegmentStraightenWeight,thumbGuardLeftProjectionCorrectionApplyCount,thumbGuardRightProjectionCorrectionApplyCount,thumbGuardLeftProjectionCorrectionPreserveCount,thumbGuardRightProjectionCorrectionPreserveCount,thumbGuardLeftSegmentStraightenApplyCount,thumbGuardRightSegmentStraightenApplyCount,thumbGuardLeftSegmentStraightenPreserveCount,thumbGuardRightSegmentStraightenPreserveCount,thumbGuardLeftLocalRotationGuardClampCount,thumbGuardRightLocalRotationGuardClampCount,thumbGuardLeftLocalRotationGuardPreserveCount,thumbGuardRightLocalRotationGuardPreserveCount,thumbGuardLeftLocalRotationGuardCurrentRisk,thumbGuardRightLocalRotationGuardCurrentRisk,thumbGuardLeftLocalRotationGuardLimitedRisk,thumbGuardRightLocalRotationGuardLimitedRisk,thumbGuardLeftWorldRotationSuppressCompetingOverride,thumbGuardRightWorldRotationSuppressCompetingOverride,thumbGuardLeftWorldRotationKeepDetachedHelperOverride,thumbGuardRightWorldRotationKeepDetachedHelperOverride,thumbGuardLeftWorldRotationCurrentReferenceFrameDeviation,thumbGuardRightWorldRotationCurrentReferenceFrameDeviation,thumbGuardLeftWorldRotationCandidateReferenceFrameDeviation,thumbGuardRightWorldRotationCandidateReferenceFrameDeviation,thumbGuardLeftProximalWorldRotationPreserveReason,thumbGuardRightProximalWorldRotationPreserveReason,thumbGuardLeftIntermediateWorldRotationPreserveReason,thumbGuardRightIntermediateWorldRotationPreserveReason,thumbGuardLeftProximalWorldRotationCurrentReferenceAngle,thumbGuardRightProximalWorldRotationCurrentReferenceAngle,thumbGuardLeftIntermediateWorldRotationCurrentReferenceAngle,thumbGuardRightIntermediateWorldRotationCurrentReferenceAngle,thumbGuardLeftProximalWorldRotationCandidateReferenceAngle,thumbGuardRightProximalWorldRotationCandidateReferenceAngle,thumbGuardLeftIntermediateWorldRotationCandidateReferenceAngle,thumbGuardRightIntermediateWorldRotationCandidateReferenceAngle,thumbGuardLeftProximalWorldRotationPreserveCurrentRisk,thumbGuardRightProximalWorldRotationPreserveCurrentRisk,thumbGuardLeftIntermediateWorldRotationPreserveCurrentRisk,thumbGuardRightIntermediateWorldRotationPreserveCurrentRisk,thumbGuardLeftProximalWorldRotationPreserveLimitedRisk,thumbGuardRightProximalWorldRotationPreserveLimitedRisk,thumbGuardLeftIntermediateWorldRotationPreserveLimitedRisk,thumbGuardRightIntermediateWorldRotationPreserveLimitedRisk,thumbGuardHelperSyncEnabled,thumbGuardHelperPositionSyncEnabled,thumbGuardHelperSyncWeight,thumbGuardHelperMaxLocalAngle,thumbGuardPalmStabilizeEnabled,thumbGuardPalmStabilizeWeight,thumbGuardPalmStabilizeMaxLocalAngle,thumbGuardWebbingStabilizeEnabled,thumbGuardWebbingStabilizeWeight,thumbGuardWebbingMaxLocalAngle,thumbGuardWebbingMaxPositionOffset";
+    private const string RetargetEndpointStageDiagnosticsCsvHeader =
+        "retargetStageGhostLeftFootWorldX,retargetStageGhostLeftFootWorldZ,retargetStageGhostLeftToesWorldX,retargetStageGhostLeftToesWorldZ," +
+        "retargetStageGhostRightFootWorldX,retargetStageGhostRightFootWorldZ,retargetStageGhostRightToesWorldX,retargetStageGhostRightToesWorldZ," +
+        "retargetStageAfterSetHumanPoseLeftFootWorldX,retargetStageAfterSetHumanPoseLeftFootWorldZ,retargetStageAfterSetHumanPoseLeftToesWorldX,retargetStageAfterSetHumanPoseLeftToesWorldZ," +
+        "retargetStageAfterSetHumanPoseRightFootWorldX,retargetStageAfterSetHumanPoseRightFootWorldZ,retargetStageAfterSetHumanPoseRightToesWorldX,retargetStageAfterSetHumanPoseRightToesWorldZ," +
+        "retargetStageAfterManualReferencesLeftFootWorldX,retargetStageAfterManualReferencesLeftFootWorldZ,retargetStageAfterManualReferencesLeftToesWorldX,retargetStageAfterManualReferencesLeftToesWorldZ," +
+        "retargetStageAfterManualReferencesRightFootWorldX,retargetStageAfterManualReferencesRightFootWorldZ,retargetStageAfterManualReferencesRightToesWorldX,retargetStageAfterManualReferencesRightToesWorldZ," +
+        "retargetStageAfterRootRestoreLeftFootWorldX,retargetStageAfterRootRestoreLeftFootWorldZ,retargetStageAfterRootRestoreLeftToesWorldX,retargetStageAfterRootRestoreLeftToesWorldZ," +
+        "retargetStageAfterRootRestoreRightFootWorldX,retargetStageAfterRootRestoreRightFootWorldZ,retargetStageAfterRootRestoreRightToesWorldX,retargetStageAfterRootRestoreRightToesWorldZ," +
+        "retargetStageAfterRootDeltaLeftFootWorldX,retargetStageAfterRootDeltaLeftFootWorldZ,retargetStageAfterRootDeltaLeftToesWorldX,retargetStageAfterRootDeltaLeftToesWorldZ," +
+        "retargetStageAfterRootDeltaRightFootWorldX,retargetStageAfterRootDeltaRightFootWorldZ,retargetStageAfterRootDeltaRightToesWorldX,retargetStageAfterRootDeltaRightToesWorldZ," +
+        "retargetStageAfterGroundingLeftFootWorldX,retargetStageAfterGroundingLeftFootWorldZ,retargetStageAfterGroundingLeftToesWorldX,retargetStageAfterGroundingLeftToesWorldZ," +
+        "retargetStageAfterGroundingRightFootWorldX,retargetStageAfterGroundingRightFootWorldZ,retargetStageAfterGroundingRightToesWorldX,retargetStageAfterGroundingRightToesWorldZ";
+    private const string LowerBodyPostPoseDiagnosticsCsvHeader =
+        "retargetEditorFootLocalRotationLeftFootXzDelta,retargetEditorFootLocalRotationRightFootXzDelta," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootXzDelta,retargetEditorLowerBodySegmentDirectionRightFootXzDelta," +
+        "retargetEditorLowerBodySegmentDirectionMaxCorrectionSegment,retargetEditorLowerBodySegmentDirectionMaxCorrectionAngle," +
+        "retargetEditorLowerBodySegmentDirectionMaxPreAngle,retargetEditorLowerBodySegmentDirectionMaxPostAngle," +
+        "retargetEditorLowerBodySegmentDirectionMaxCorrectionAxisX,retargetEditorLowerBodySegmentDirectionMaxCorrectionAxisY,retargetEditorLowerBodySegmentDirectionMaxCorrectionAxisZ," +
+        "retargetEditorLowerBodySegmentDirectionMaxReferenceDirectionX,retargetEditorLowerBodySegmentDirectionMaxReferenceDirectionY,retargetEditorLowerBodySegmentDirectionMaxReferenceDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionMaxPreDirectionX,retargetEditorLowerBodySegmentDirectionMaxPreDirectionY,retargetEditorLowerBodySegmentDirectionMaxPreDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionMaxPostDirectionX,retargetEditorLowerBodySegmentDirectionMaxPostDirectionY,retargetEditorLowerBodySegmentDirectionMaxPostDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle,retargetEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle," +
+        "retargetEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle,retargetEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle,retargetEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle," +
+        "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle,retargetEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle," +
+        "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle,retargetEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX,retargetEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY,retargetEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX,retargetEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY,retargetEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX,retargetEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY,retargetEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX,retargetEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY,retargetEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionRightFootToToesPreDirectionX,retargetEditorLowerBodySegmentDirectionRightFootToToesPreDirectionY,retargetEditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionRightFootToToesPostDirectionX,retargetEditorLowerBodySegmentDirectionRightFootToToesPostDirectionY,retargetEditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftLowerLegWorldX,retargetEditorLowerBodySegmentDirectionLeftLowerLegWorldY,retargetEditorLowerBodySegmentDirectionLeftLowerLegWorldZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootWorldX,retargetEditorLowerBodySegmentDirectionLeftFootWorldY,retargetEditorLowerBodySegmentDirectionLeftFootWorldZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftToesWorldX,retargetEditorLowerBodySegmentDirectionLeftToesWorldY,retargetEditorLowerBodySegmentDirectionLeftToesWorldZ," +
+        "retargetEditorLowerBodySegmentDirectionRightLowerLegWorldX,retargetEditorLowerBodySegmentDirectionRightLowerLegWorldY,retargetEditorLowerBodySegmentDirectionRightLowerLegWorldZ," +
+        "retargetEditorLowerBodySegmentDirectionRightFootWorldX,retargetEditorLowerBodySegmentDirectionRightFootWorldY,retargetEditorLowerBodySegmentDirectionRightFootWorldZ," +
+        "retargetEditorLowerBodySegmentDirectionRightToesWorldX,retargetEditorLowerBodySegmentDirectionRightToesWorldY,retargetEditorLowerBodySegmentDirectionRightToesWorldZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX,retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY,retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ," +
+        "retargetEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX,retargetEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY,retargetEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootForwardX,retargetEditorLowerBodySegmentDirectionLeftFootForwardY,retargetEditorLowerBodySegmentDirectionLeftFootForwardZ," +
+        "retargetEditorLowerBodySegmentDirectionLeftFootUpX,retargetEditorLowerBodySegmentDirectionLeftFootUpY,retargetEditorLowerBodySegmentDirectionLeftFootUpZ," +
+        "retargetEditorLowerBodySegmentDirectionRightFootForwardX,retargetEditorLowerBodySegmentDirectionRightFootForwardY,retargetEditorLowerBodySegmentDirectionRightFootForwardZ," +
+        "retargetEditorLowerBodySegmentDirectionRightFootUpX,retargetEditorLowerBodySegmentDirectionRightFootUpY,retargetEditorLowerBodySegmentDirectionRightFootUpZ," +
+        "retargetEditorFootHipsAlignedResidualYawLeftFootXzDelta,retargetEditorFootHipsAlignedResidualYawRightFootXzDelta," +
+        "retargetPostSetRightEndpointDesiredFootWorldX,retargetPostSetRightEndpointDesiredFootWorldZ," +
+        "retargetPostSetRightEndpointDesiredToesWorldX,retargetPostSetRightEndpointDesiredToesWorldZ," +
+        "retargetPostSetRightEndpointCurrentFootWorldX,retargetPostSetRightEndpointCurrentFootWorldZ," +
+        "retargetPostSetRightEndpointCurrentToesWorldX,retargetPostSetRightEndpointCurrentToesWorldZ," +
+        "retargetPostSetRightEndpointDeltaBeforeClampX,retargetPostSetRightEndpointDeltaBeforeClampZ," +
+        "retargetPostSetRightEndpointDeltaAfterClampX,retargetPostSetRightEndpointDeltaAfterClampZ," +
+        "retargetPostSetRightEndpointDeltaAfterPositiveZScaleX,retargetPostSetRightEndpointDeltaAfterPositiveZScaleZ," +
+        "retargetPostSetRightEndpointCorrectionX,retargetPostSetRightEndpointCorrectionZ," +
+        "retargetPostSetRightEndpointNextFootWorldX,retargetPostSetRightEndpointNextFootWorldZ," +
+        "retargetPostSetRightEndpointMaxYawAngle,retargetPostSetRightEndpointYawCorrectionAngle," +
+        "retargetPostSetRightEndpointUpperLegRotationDeltaAngle,retargetPostSetRightEndpointApplied," +
+        "retargetPostSetRightEndpointEvaluatorXzReferenceEnabled," +
+        "retargetPostSetRightEndpointEvaluatorXzFirstOffsetX,retargetPostSetRightEndpointEvaluatorXzFirstOffsetZ," +
+        "retargetPostSetRightEndpointEvaluatorXzNormalizedDeltaX,retargetPostSetRightEndpointEvaluatorXzNormalizedDeltaZ," +
+        "retargetPostSetRightEndpointEvaluatorXzNormalizedMagnitude," +
+        "retargetPostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaX,retargetPostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaZ," +
+        "retargetPostSetRightEndpointEvaluatorXzTargetMagnitude";
     private const string SessionManifestArtifactsHeading = "## \uc0b0\ucd9c\ubb3c";
     private const string SessionManifestArtifactsTableHeader = "| \uc5ed\ud560 | \uacbd\ub85c |";
     private const string SessionManifestArtifactsTableSeparator = "|---|---|";
@@ -882,7 +1027,7 @@ internal static class MotionComparisonProbeReportWriter
 
     internal static string BuildMetricsCsvHeader()
     {
-        return MetricsCsvHeader + "," + YybDiagnosticMetricsCsvHeader;
+        return MetricsCsvHeader + "," + YybDiagnosticMetricsCsvHeader + "," + RetargetEndpointStageDiagnosticsCsvHeader + "," + LowerBodyPostPoseDiagnosticsCsvHeader;
     }
 
     internal static MotionComparisonFrameQualitySummary BuildFrameQualitySummary(
@@ -960,8 +1105,30 @@ internal static class MotionComparisonProbeReportWriter
             candidate_yyb_sleeve_thickness_risk_missing_frames = candidate.YybSleeveThicknessRiskMissingFrameCount,
             candidate_yyb_max_sleeve_thickness_risk = candidate.MaxYybSleeveThicknessRisk,
             candidate_vmd_bone_frames = vmd.BoneFrameCount,
+            candidate_vmd_max_bone_frame_index = vmd.MaxBoneFrameIndex,
             candidate_vmd_center_spike_frames = vmd.CenterSpikeFrameCount,
             candidate_vmd_foot_ik_spike_frames = vmd.FootIkSpikeFrameCount,
+            candidate_arm_motion_frames = candidate.ArmMotionFrameCount,
+            candidate_leg_motion_frames = candidate.LegMotionFrameCount,
+            candidate_arm_motion_root_travel = candidate.ArmMotionRootTravel,
+            candidate_leg_motion_root_travel = candidate.LegMotionRootTravel,
+            candidate_limb_motion_root_travel = candidate.LimbMotionRootTravel,
+            max_candidate_limb_motion_root_step = candidate.MaxLimbMotionRootStep,
+            max_same_frame_arm_pose_delta = float.NaN,
+            max_same_frame_leg_pose_delta = float.NaN,
+            max_same_frame_limb_pose_delta = float.NaN,
+            max_same_frame_guard_normalized_arm_pose_delta = float.NaN,
+            max_same_frame_guard_normalized_limb_pose_delta = float.NaN,
+            raw_limb_pose_delta_excess_over_guard_normalized = float.NaN,
+            raw_limb_pose_delta_saturation_basis = "",
+            pre_retarget_start_compared_frames = 0,
+            pre_retarget_start_max_same_frame_arm_pose_delta = float.NaN,
+            pre_retarget_start_max_same_frame_limb_pose_delta = float.NaN,
+            pre_retarget_start_max_same_frame_guard_normalized_arm_pose_delta = float.NaN,
+            pre_retarget_start_max_same_frame_guard_normalized_limb_pose_delta = float.NaN,
+            pre_retarget_start_max_same_frame_limb_pose_delta_recorder_frame = -1,
+            pre_retarget_start_max_same_frame_limb_pose_delta_candidate_recorder_frame = -1,
+            pre_retarget_start_evaluation_basis = "reason=start samples are captured before retarget LateUpdate stage diagnostics and are reported as pre-retarget start diagnostics outside the stationary naturalness gate",
             min_baseline_foot_bottom_y = baseline.MinFootBottomY,
             min_candidate_foot_bottom_y = candidate.MinFootBottomY,
             min_candidate_foot_bottom_ground_gap = candidate.MinFootBottomGroundGap,
@@ -972,6 +1139,9 @@ internal static class MotionComparisonProbeReportWriter
             max_same_frame_hips_y_delta_candidate_recorder_frame = -1,
             max_same_frame_body_position_y_delta = float.NaN,
             max_same_frame_hips_local_y_delta = float.NaN,
+            max_same_frame_hips_xz_delta = float.NaN,
+            max_same_frame_hips_xz_delta_recorder_frame = -1,
+            max_same_frame_hips_xz_delta_candidate_recorder_frame = -1,
             max_same_frame_grounding_vertical_step_delta = float.NaN,
             max_same_frame_foot_height_reference_lift_delta = float.NaN,
             max_same_frame_candidate_grounding_vertical_step_change = float.NaN,
@@ -983,6 +1153,35 @@ internal static class MotionComparisonProbeReportWriter
             max_same_frame_foot_bottom_y_delta = float.NaN,
             max_same_frame_foot_bottom_y_delta_recorder_frame = -1,
             max_same_frame_foot_bottom_y_delta_candidate_recorder_frame = -1,
+            max_same_frame_left_foot_xz_delta = float.NaN,
+            max_same_frame_right_foot_xz_delta = float.NaN,
+            max_same_frame_foot_xz_delta = float.NaN,
+            max_same_frame_foot_xz_delta_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_candidate_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_side = "",
+            max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range = float.NaN,
+            max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_candidate_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_side = "",
+            max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range = float.NaN,
+            max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_candidate_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_side = "",
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment = float.NaN,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_x = float.NaN,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_z = float.NaN,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_angle_degrees = float.NaN,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_candidate_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_side = "",
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range = float.NaN,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_candidate_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_side = "",
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range = float.NaN,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_candidate_recorder_frame = -1,
+            max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_side = "",
             vertical_solve_prototype_status = "not_evaluated",
             vertical_solve_prototype_status_reason = "",
             vertical_solve_prototype_basis = "metrics-stage prototype only; applies bounded per-frame Hips/foot vertical deltas without changing live retarget output",
@@ -1001,7 +1200,7 @@ internal static class MotionComparisonProbeReportWriter
             vertical_solve_postprocess_metrics_csv = BuildVerticalSolvePostprocessMetricsCsvPath(candidateMetricsCsvPath),
             vertical_solve_postprocess_status = "not_evaluated",
             vertical_solve_postprocess_status_reason = "",
-            vertical_solve_postprocess_basis = "metrics-stage postprocess artifact; original frame_quality status remains measured from the unmodified candidate metrics",
+            vertical_solve_postprocess_basis = "metrics-stage postprocess artifact; applies bounded vertical and horizontal foot carrier deltas while original frame_quality status remains measured from the unmodified candidate metrics",
             vertical_solve_postprocess_max_same_frame_hips_y_delta = float.NaN,
             vertical_solve_postprocess_max_same_frame_foot_bottom_y_delta = float.NaN,
             vertical_solve_postprocess_max_same_frame_root_position_delta = float.NaN,
@@ -1014,7 +1213,7 @@ internal static class MotionComparisonProbeReportWriter
             vertical_solve_corrected_candidate_manifest_path = BuildVerticalSolveCorrectedCandidateManifestPath(candidateMetricsCsvPath),
             vertical_solve_corrected_candidate_status = "not_evaluated",
             vertical_solve_corrected_candidate_status_reason = "",
-            vertical_solve_corrected_candidate_basis = "explicit corrected candidate metrics/VMD artifact generated from the bounded vertical solve and evaluated with the same raw frame_quality evaluator",
+            vertical_solve_corrected_candidate_basis = "explicit corrected candidate metrics/VMD artifact generated from the bounded vertical solve and horizontal foot carrier solve, then evaluated with the same raw frame_quality evaluator",
             vertical_solve_corrected_candidate_max_same_frame_hips_y_delta = float.NaN,
             vertical_solve_corrected_candidate_max_same_frame_foot_bottom_y_delta = float.NaN,
             vertical_solve_corrected_candidate_max_same_frame_root_position_delta = float.NaN,
@@ -1127,7 +1326,7 @@ internal static class MotionComparisonProbeReportWriter
             evaluateVerticalSolvePostprocess: false);
         correctedSummary.frame_quality_evaluation_role = "corrected_candidate_metrics";
         correctedSummary.frame_quality_evaluation_basis =
-            "same raw frame_quality evaluator over the explicit corrected candidate metrics/VMD artifact; original raw candidate summary remains separate";
+            "same raw frame_quality evaluator over the explicit corrected candidate metrics/VMD artifact; bounded vertical and horizontal foot carrier corrections remain separate from the raw candidate summary";
         return true;
     }
 
@@ -1155,6 +1354,33 @@ internal static class MotionComparisonProbeReportWriter
         string integratedManifestPath = BuildVerticalSolveIntegratedManifestPath(rawSummary.candidate_metrics_csv);
         try
         {
+            if (IsCurrentVerticalSolvePrimaryExportPromotion(
+                    rawSummary,
+                    diagnosticMetricsPath,
+                    diagnosticVmdPath,
+                    integratedManifestPath))
+            {
+                FileInfo currentPromotedVmd = new FileInfo(rawSummary.candidate_vmd_path);
+                promotion = new VerticalSolvePrimaryExportPromotion
+                {
+                    raw_metrics_csv = rawSummary.candidate_metrics_csv,
+                    raw_vmd_path = rawSummary.candidate_vmd_path,
+                    raw_diagnostic_metrics_csv = diagnosticMetricsPath,
+                    raw_diagnostic_vmd_path = diagnosticVmdPath,
+                    corrected_metrics_csv = rawSummary.vertical_solve_corrected_candidate_metrics_csv,
+                    corrected_vmd_path = rawSummary.vertical_solve_corrected_candidate_vmd_path,
+                    integrated_manifest_path = integratedManifestPath,
+                    promoted_vmd_bytes = currentPromotedVmd.Exists ? currentPromotedVmd.Length : 0L
+                };
+                return promotion.promoted_vmd_bytes > 0L;
+            }
+
+            if (!FilesDiffer(rawSummary.candidate_metrics_csv, rawSummary.vertical_solve_corrected_candidate_metrics_csv) ||
+                !FilesDiffer(rawSummary.candidate_vmd_path, rawSummary.vertical_solve_corrected_candidate_vmd_path))
+            {
+                return false;
+            }
+
             EnsureParentDirectoryExists(diagnosticMetricsPath);
             EnsureParentDirectoryExists(diagnosticVmdPath);
             File.Copy(rawSummary.candidate_metrics_csv, diagnosticMetricsPath, overwrite: true);
@@ -1175,7 +1401,9 @@ internal static class MotionComparisonProbeReportWriter
                 promoted_vmd_bytes = promotedVmd.Exists ? promotedVmd.Length : 0L
             };
             WriteVerticalSolveIntegratedPrimaryExportManifest(promotion, rawSummary);
-            return promotion.promoted_vmd_bytes > 0L;
+            return promotion.promoted_vmd_bytes > 0L &&
+                FilesDiffer(rawSummary.candidate_metrics_csv, diagnosticMetricsPath) &&
+                FilesDiffer(rawSummary.candidate_vmd_path, diagnosticVmdPath);
         }
         catch (Exception ex)
         {
@@ -1183,6 +1411,38 @@ internal static class MotionComparisonProbeReportWriter
             promotion = null;
             return false;
         }
+    }
+
+    private static bool IsCurrentVerticalSolvePrimaryExportPromotion(
+        MotionComparisonFrameQualitySummary summary,
+        string diagnosticMetricsPath,
+        string diagnosticVmdPath,
+        string integratedManifestPath)
+    {
+        if (summary == null ||
+            string.IsNullOrWhiteSpace(diagnosticMetricsPath) ||
+            string.IsNullOrWhiteSpace(diagnosticVmdPath) ||
+            string.IsNullOrWhiteSpace(integratedManifestPath) ||
+            !File.Exists(summary.candidate_metrics_csv) ||
+            !File.Exists(summary.candidate_vmd_path) ||
+            !File.Exists(diagnosticMetricsPath) ||
+            !File.Exists(diagnosticVmdPath) ||
+            !File.Exists(integratedManifestPath))
+        {
+            return false;
+        }
+
+        DateTime manifestWriteTimeUtc = File.GetLastWriteTimeUtc(integratedManifestPath);
+        DateTime promotedMetricsWriteTimeUtc = File.GetLastWriteTimeUtc(summary.candidate_metrics_csv);
+        DateTime promotedVmdWriteTimeUtc = File.GetLastWriteTimeUtc(summary.candidate_vmd_path);
+        if (manifestWriteTimeUtc < promotedMetricsWriteTimeUtc ||
+            manifestWriteTimeUtc < promotedVmdWriteTimeUtc)
+        {
+            return false;
+        }
+
+        return FilesDiffer(summary.candidate_metrics_csv, diagnosticMetricsPath) &&
+            FilesDiffer(summary.candidate_vmd_path, diagnosticVmdPath);
     }
 
     internal static MotionComparisonFrameQualitySummary[] BuildFrameQualityEvaluationEntries(
@@ -1193,18 +1453,7 @@ internal static class MotionComparisonProbeReportWriter
             return Array.Empty<MotionComparisonFrameQualitySummary>();
         }
 
-        if (string.Equals(
-                rawSummary.frame_quality_evaluation_role,
-                MainRecordingMovingRootEvaluationRole,
-                StringComparison.Ordinal))
-        {
-            return new[] { rawSummary };
-        }
-
-        if (string.Equals(
-                rawSummary.frame_quality_evaluation_role,
-                "main_auto_integrated_vertical_solve_metrics",
-                StringComparison.Ordinal))
+        if (IsIntegratedVerticalSolvePrimaryRole(rawSummary.frame_quality_evaluation_role))
         {
             return new[] { rawSummary };
         }
@@ -1222,20 +1471,10 @@ internal static class MotionComparisonProbeReportWriter
         return new[] { rawSummary, correctedSummary };
     }
 
-    internal static void MarkIntentionalMovingRootStageMotion(MotionComparisonFrameQualitySummary summary)
+    private static bool IsIntegratedVerticalSolvePrimaryRole(string role)
     {
-        if (summary == null)
-        {
-            return;
-        }
-
-        summary.frame_quality_evaluation_role = MainRecordingMovingRootEvaluationRole;
-        summary.frame_quality_evaluation_basis =
-            "Main_recoding stage preview intentionally follows FBX X/Z root motion; same-frame root path and relative foot-bottom deltas are reported but excluded from the stationary-root gate, while retarget root, root-step/VMD center/IK spikes, below-floor, and hips gates remain enforced";
-        ApplyFrameQualityStatus(
-            summary,
-            allowSameFrameRootPositionDelta: true,
-            allowRelativeFootBottomDelta: true);
+        return string.Equals(role, "main_auto_integrated_vertical_solve_metrics", StringComparison.Ordinal) ||
+            string.Equals(role, "vmd_replay_integrated_vertical_solve_metrics", StringComparison.Ordinal);
     }
 
     private static string BuildVerticalSolvePostprocessCandidateLabel(string candidateLabel)
@@ -1270,6 +1509,10 @@ internal static class MotionComparisonProbeReportWriter
             return;
         }
 
+        bool hasCandidateVmdWriteTime = File.Exists(candidateVmdPath);
+        DateTime candidateVmdWriteTimeUtc = hasCandidateVmdWriteTime
+            ? File.GetLastWriteTimeUtc(candidateVmdPath)
+            : DateTime.MinValue;
         string bestReportPath = "";
         MmdAutomationReportForSummary bestReport = null;
         DateTime bestWriteTimeUtc = DateTime.MinValue;
@@ -1281,6 +1524,11 @@ internal static class MotionComparisonProbeReportWriter
             }
 
             DateTime writeTimeUtc = File.GetLastWriteTimeUtc(reportPath);
+            if (hasCandidateVmdWriteTime && writeTimeUtc < candidateVmdWriteTimeUtc)
+            {
+                continue;
+            }
+
             if (bestReport == null || writeTimeUtc >= bestWriteTimeUtc)
             {
                 bestReport = report;
@@ -1449,6 +1697,15 @@ internal static class MotionComparisonProbeReportWriter
         float rootOffsetX = 0f;
         float rootOffsetY = 0f;
         float rootOffsetZ = 0f;
+        bool hasHipsXzOffset = false;
+        float hipsXOffset = 0f;
+        float hipsZOffset = 0f;
+        bool hasLeftFootXzOffset = false;
+        float leftFootXOffset = 0f;
+        float leftFootZOffset = 0f;
+        bool hasRightFootXzOffset = false;
+        float rightFootXOffset = 0f;
+        float rightFootZOffset = 0f;
         bool hasVerticalOffset = false;
         float hipsYOffset = 0f;
         float footBottomYOffset = 0f;
@@ -1490,6 +1747,8 @@ internal static class MotionComparisonProbeReportWriter
         int maxPrototypeFootCorrectionCandidateRecorderFrame = -1;
         float maxPrototypeHipsCorrection = float.NaN;
         float maxPrototypeFootCorrection = float.NaN;
+        int rawLimbPoseDeltaSaturatedFrameCount = 0;
+        float maxRawLimbPoseDeltaExcessOverGuardNormalized = float.NaN;
         foreach (int frame in baselineFrames)
         {
             MetricsCsvFrame baselineFrame = baseline.Frames[frame];
@@ -1526,6 +1785,178 @@ internal static class MotionComparisonProbeReportWriter
                     rootDeltaX - rootOffsetX,
                     rootDeltaY - rootOffsetY,
                     rootDeltaZ - rootOffsetZ));
+            float hipsDeltaX = candidateFrame.HipsX - baselineFrame.HipsX;
+            float hipsDeltaZ = candidateFrame.HipsZ - baselineFrame.HipsZ;
+            if (!hasHipsXzOffset && IsFinite(hipsDeltaX) && IsFinite(hipsDeltaZ))
+            {
+                hipsXOffset = hipsDeltaX;
+                hipsZOffset = hipsDeltaZ;
+                hasHipsXzOffset = true;
+            }
+
+            float normalizedHipsDeltaX = hasHipsXzOffset && IsFinite(hipsDeltaX)
+                ? hipsDeltaX - hipsXOffset
+                : float.NaN;
+            float normalizedHipsDeltaZ = hasHipsXzOffset && IsFinite(hipsDeltaZ)
+                ? hipsDeltaZ - hipsZOffset
+                : float.NaN;
+            float hipsXzDelta = hasHipsXzOffset
+                ? Distance(0f, 0f, 0f, normalizedHipsDeltaX, 0f, normalizedHipsDeltaZ)
+                : float.NaN;
+            UpdateMaxHipsXzDelta(
+                summary,
+                hipsXzDelta,
+                frame,
+                candidateRecorderFrame);
+
+            float leftFootDeltaX = candidateFrame.LeftFootX - baselineFrame.LeftFootX;
+            float leftFootDeltaZ = candidateFrame.LeftFootZ - baselineFrame.LeftFootZ;
+            if (!hasLeftFootXzOffset && IsFinite(leftFootDeltaX) && IsFinite(leftFootDeltaZ))
+            {
+                leftFootXOffset = leftFootDeltaX;
+                leftFootZOffset = leftFootDeltaZ;
+                hasLeftFootXzOffset = true;
+            }
+
+            float leftFootXzDelta = hasLeftFootXzOffset
+                ? Distance(0f, 0f, 0f, leftFootDeltaX - leftFootXOffset, 0f, leftFootDeltaZ - leftFootZOffset)
+                : float.NaN;
+            float leftFootPostprocessCorrectionX = 0f;
+            float leftFootPostprocessCorrectionZ = 0f;
+            float leftFootPostprocessInputX = float.NaN;
+            float leftFootPostprocessInputZ = float.NaN;
+            if (IsFinite(leftFootXzDelta))
+            {
+                float normalizedLeftFootDeltaX = leftFootDeltaX - leftFootXOffset;
+                float normalizedLeftFootDeltaZ = leftFootDeltaZ - leftFootZOffset;
+                if (TryResolveHorizontalFootPostprocessCorrection(
+                    summary,
+                    normalizedLeftFootDeltaX,
+                    normalizedLeftFootDeltaZ,
+                    candidateRecorderFrame,
+                    out leftFootPostprocessCorrectionX,
+                    out leftFootPostprocessCorrectionZ))
+                {
+                    leftFootPostprocessInputX = normalizedLeftFootDeltaX;
+                    leftFootPostprocessInputZ = normalizedLeftFootDeltaZ;
+                }
+
+                summary.max_same_frame_left_foot_xz_delta =
+                    MaxFinite(summary.max_same_frame_left_foot_xz_delta, leftFootXzDelta);
+                UpdateMaxFootXzDelta(
+                    summary,
+                    "left",
+                    leftFootXzDelta,
+                    frame,
+                    candidateRecorderFrame);
+                UpdateMaxHipsAlignedFootXzDelta(
+                    summary,
+                    "left",
+                    leftFootDeltaX - leftFootXOffset,
+                    leftFootDeltaZ - leftFootZOffset,
+                    normalizedHipsDeltaX,
+                    normalizedHipsDeltaZ,
+                    frame,
+                    candidateRecorderFrame);
+            }
+
+            float rightFootDeltaX = candidateFrame.RightFootX - baselineFrame.RightFootX;
+            float rightFootDeltaZ = candidateFrame.RightFootZ - baselineFrame.RightFootZ;
+            if (!hasRightFootXzOffset && IsFinite(rightFootDeltaX) && IsFinite(rightFootDeltaZ))
+            {
+                rightFootXOffset = rightFootDeltaX;
+                rightFootZOffset = rightFootDeltaZ;
+                hasRightFootXzOffset = true;
+            }
+
+            float rightFootXzDelta = hasRightFootXzOffset
+                ? Distance(0f, 0f, 0f, rightFootDeltaX - rightFootXOffset, 0f, rightFootDeltaZ - rightFootZOffset)
+                : float.NaN;
+            float rightFootPostprocessCorrectionX = 0f;
+            float rightFootPostprocessCorrectionZ = 0f;
+            float rightFootPostprocessInputX = float.NaN;
+            float rightFootPostprocessInputZ = float.NaN;
+            if (IsFinite(rightFootXzDelta))
+            {
+                float normalizedRightFootDeltaX = rightFootDeltaX - rightFootXOffset;
+                float normalizedRightFootDeltaZ = rightFootDeltaZ - rightFootZOffset;
+                if (TryResolveHorizontalFootPostprocessCorrection(
+                    summary,
+                    normalizedRightFootDeltaX,
+                    normalizedRightFootDeltaZ,
+                    candidateRecorderFrame,
+                    out rightFootPostprocessCorrectionX,
+                    out rightFootPostprocessCorrectionZ))
+                {
+                    rightFootPostprocessInputX = normalizedRightFootDeltaX;
+                    rightFootPostprocessInputZ = normalizedRightFootDeltaZ;
+                }
+
+                summary.max_same_frame_right_foot_xz_delta =
+                    MaxFinite(summary.max_same_frame_right_foot_xz_delta, rightFootXzDelta);
+                UpdateMaxFootXzDelta(
+                    summary,
+                    "right",
+                    rightFootXzDelta,
+                    frame,
+                    candidateRecorderFrame);
+                UpdateMaxHipsAlignedFootXzDelta(
+                    summary,
+                    "right",
+                    rightFootDeltaX - rightFootXOffset,
+                    rightFootDeltaZ - rightFootZOffset,
+                    normalizedHipsDeltaX,
+                    normalizedHipsDeltaZ,
+                    frame,
+                    candidateRecorderFrame);
+            }
+
+            float armPoseDelta = CalculateArmMotionSignal(baselineFrame, candidateFrame);
+            float guardNormalizedArmPoseDelta = CalculateGuardNormalizedArmMotionSignal(baselineFrame, candidateFrame);
+            float legPoseDelta = CalculateLegMotionSignal(baselineFrame, candidateFrame);
+            float limbPoseDelta = MaxFinite(armPoseDelta, legPoseDelta);
+            float guardNormalizedLimbPoseDelta = MaxFinite(guardNormalizedArmPoseDelta, legPoseDelta);
+            if (IsPreRetargetStartComparisonSample(baselineFrame, candidateFrame))
+            {
+                summary.pre_retarget_start_compared_frames++;
+                summary.pre_retarget_start_max_same_frame_arm_pose_delta = MaxFinite(
+                    summary.pre_retarget_start_max_same_frame_arm_pose_delta,
+                    armPoseDelta);
+                summary.pre_retarget_start_max_same_frame_guard_normalized_arm_pose_delta = MaxFinite(
+                    summary.pre_retarget_start_max_same_frame_guard_normalized_arm_pose_delta,
+                    guardNormalizedArmPoseDelta);
+                summary.pre_retarget_start_max_same_frame_guard_normalized_limb_pose_delta = MaxFinite(
+                    summary.pre_retarget_start_max_same_frame_guard_normalized_limb_pose_delta,
+                    guardNormalizedLimbPoseDelta);
+                UpdateMaxFiniteWithFrame(
+                    limbPoseDelta,
+                    frame,
+                    candidateRecorderFrame,
+                    ref summary.pre_retarget_start_max_same_frame_limb_pose_delta,
+                    ref summary.pre_retarget_start_max_same_frame_limb_pose_delta_recorder_frame,
+                    ref summary.pre_retarget_start_max_same_frame_limb_pose_delta_candidate_recorder_frame);
+            }
+            else
+            {
+                summary.max_same_frame_arm_pose_delta = MaxFinite(summary.max_same_frame_arm_pose_delta, armPoseDelta);
+                summary.max_same_frame_leg_pose_delta = MaxFinite(summary.max_same_frame_leg_pose_delta, legPoseDelta);
+                summary.max_same_frame_limb_pose_delta = MaxFinite(summary.max_same_frame_limb_pose_delta, limbPoseDelta);
+                summary.max_same_frame_guard_normalized_arm_pose_delta = MaxFinite(
+                    summary.max_same_frame_guard_normalized_arm_pose_delta,
+                    guardNormalizedArmPoseDelta);
+                summary.max_same_frame_guard_normalized_limb_pose_delta = MaxFinite(
+                    summary.max_same_frame_guard_normalized_limb_pose_delta,
+                    guardNormalizedLimbPoseDelta);
+                if (ExceedsThreshold(limbPoseDelta, QualitySameFrameLimbPoseDeltaFailThreshold) &&
+                    !ExceedsThreshold(guardNormalizedLimbPoseDelta, QualitySameFrameLimbPoseDeltaFailThreshold))
+                {
+                    rawLimbPoseDeltaSaturatedFrameCount++;
+                    maxRawLimbPoseDeltaExcessOverGuardNormalized = MaxFinite(
+                        maxRawLimbPoseDeltaExcessOverGuardNormalized,
+                        limbPoseDelta - guardNormalizedLimbPoseDelta);
+                }
+            }
+
             UpdateOffsetNormalizedDelta(
                 baselineFrame.RootY,
                 candidateFrame.RootY,
@@ -1606,22 +2037,42 @@ internal static class MotionComparisonProbeReportWriter
                 ? normalizedFootBottomYDelta + prototypeFootCorrection
                 : float.NaN;
             if (verticalSolveCorrections != null &&
-                IsFinite(prototypeHipsCorrection) &&
-                IsFinite(prototypeFootCorrection))
+                (HasNonZeroCorrection(leftFootPostprocessCorrectionX) ||
+                 HasNonZeroCorrection(leftFootPostprocessCorrectionZ) ||
+                 HasNonZeroCorrection(rightFootPostprocessCorrectionX) ||
+                 HasNonZeroCorrection(rightFootPostprocessCorrectionZ) ||
+                 (IsFinite(prototypeHipsCorrection) && IsFinite(prototypeFootCorrection))))
             {
-                float postprocessHipsCorrection = ResolveBoundedVerticalSolveCorrection(
-                    normalizedHipsYDelta,
-                    Mathf.Max(0f, QualitySameFrameHipsYWarnThreshold - VerticalSolvePostprocessSafetyMarginY),
-                    VerticalSolveArtifactMaxCorrectionY);
-                float postprocessFootCorrection = ResolveBoundedVerticalSolveCorrection(
-                    normalizedFootBottomYDelta,
-                    Mathf.Max(0f, QualitySameFrameFootBottomYWarnThreshold - VerticalSolvePostprocessSafetyMarginY),
-                    VerticalSolveArtifactMaxCorrectionY);
-                postprocessFootCorrection = ClampFootVerticalSolveCorrectionToFloor(
-                    postprocessFootCorrection,
-                    candidateFrame);
+                float postprocessHipsCorrection = 0f;
+                float postprocessFootCorrection = 0f;
+                if (IsFinite(prototypeHipsCorrection) && IsFinite(prototypeFootCorrection))
+                {
+                    postprocessHipsCorrection = ResolveBoundedVerticalSolveCorrection(
+                        normalizedHipsYDelta,
+                        Mathf.Max(0f, QualitySameFrameHipsYWarnThreshold - VerticalSolvePostprocessSafetyMarginY),
+                        VerticalSolveArtifactMaxCorrectionY);
+                    postprocessFootCorrection = ResolveBoundedVerticalSolveCorrection(
+                        normalizedFootBottomYDelta,
+                        Mathf.Max(0f, QualitySameFrameFootBottomYWarnThreshold - VerticalSolvePostprocessSafetyMarginY),
+                        VerticalSolveArtifactMaxCorrectionY);
+                    postprocessFootCorrection = ClampFootVerticalSolveCorrectionToFloor(
+                        postprocessFootCorrection,
+                        candidateFrame);
+                }
+
                 verticalSolveCorrections[candidateRecorderFrame] =
-                    new VerticalSolveFrameCorrection(postprocessHipsCorrection, postprocessFootCorrection);
+                    new VerticalSolveFrameCorrection(
+                        postprocessHipsCorrection,
+                        postprocessFootCorrection,
+                        leftFootPostprocessCorrectionX,
+                        leftFootPostprocessCorrectionZ,
+                        rightFootPostprocessCorrectionX,
+                        rightFootPostprocessCorrectionZ,
+                        leftFootPostprocessInputX,
+                        leftFootPostprocessInputZ,
+                        rightFootPostprocessInputX,
+                        rightFootPostprocessInputZ,
+                        ResolveHorizontalFootPostprocessTargetMagnitude());
             }
 
             maxPrototypeHipsYDelta = MaxFinite(maxPrototypeHipsYDelta, Math.Abs(prototypeHipsYDelta));
@@ -1733,6 +2184,12 @@ internal static class MotionComparisonProbeReportWriter
         summary.vertical_solve_prototype_foot_correction_y = canUseVerticalOffset
             ? maxPrototypeFootCorrection
             : float.NaN;
+        summary.raw_limb_pose_delta_saturated_frame_count = rawLimbPoseDeltaSaturatedFrameCount;
+        summary.raw_limb_pose_delta_excess_over_guard_normalized =
+            maxRawLimbPoseDeltaExcessOverGuardNormalized;
+        summary.raw_limb_pose_delta_saturation_basis = rawLimbPoseDeltaSaturatedFrameCount > 0
+            ? "raw limb pose delta exceeded threshold while guard-normalized limb pose delta stayed within threshold; this remains a diagnostic for saturated humanoid muscle decomposition and is not promoted as the visible-safe limb naturalness gate"
+            : "";
 
         foreach (int frame in candidate.Frames.Keys)
         {
@@ -1784,7 +2241,8 @@ internal static class MotionComparisonProbeReportWriter
             verticalSolveCorrections,
             out int correctedVmdFrameCount,
             out int safetyLimitedVmdFrameCount,
-            out long correctedVmdBytes);
+            out long correctedVmdBytes,
+            out List<VerticalSolveVmdSafetyLimitDetail> correctedVmdSafetyLimitDetails);
         string correctedVmdPathForEvaluation = hasCorrectedVmd
             ? summary.vertical_solve_corrected_candidate_vmd_path
             : candidateVmdPath;
@@ -1797,7 +2255,8 @@ internal static class MotionComparisonProbeReportWriter
             correctedRows,
             correctedVmdFrameCount,
             safetyLimitedVmdFrameCount,
-            correctedVmdBytes);
+            correctedVmdBytes,
+            correctedVmdSafetyLimitDetails);
 
         MotionComparisonFrameQualitySummary postprocessed = BuildFrameQualitySummary(
             baselineLabel,
@@ -2011,17 +2470,85 @@ internal static class MotionComparisonProbeReportWriter
             .Replace("\n", "\\n");
     }
 
+    private static bool FilesDiffer(string leftPath, string rightPath)
+    {
+        if (string.IsNullOrWhiteSpace(leftPath) ||
+            string.IsNullOrWhiteSpace(rightPath) ||
+            !File.Exists(leftPath) ||
+            !File.Exists(rightPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            if (string.Equals(
+                    Path.GetFullPath(leftPath),
+                    Path.GetFullPath(rightPath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+        catch
+        {
+            if (string.Equals(leftPath, rightPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        FileInfo left = new FileInfo(leftPath);
+        FileInfo right = new FileInfo(rightPath);
+        if (left.Length != right.Length)
+        {
+            return true;
+        }
+
+        const int bufferSize = 81920;
+        byte[] leftBuffer = new byte[bufferSize];
+        byte[] rightBuffer = new byte[bufferSize];
+        using (FileStream leftStream = File.OpenRead(leftPath))
+        using (FileStream rightStream = File.OpenRead(rightPath))
+        {
+            while (true)
+            {
+                int leftRead = leftStream.Read(leftBuffer, 0, leftBuffer.Length);
+                int rightRead = rightStream.Read(rightBuffer, 0, rightBuffer.Length);
+                if (leftRead != rightRead)
+                {
+                    return true;
+                }
+
+                if (leftRead == 0)
+                {
+                    return false;
+                }
+
+                for (int i = 0; i < leftRead; i++)
+                {
+                    if (leftBuffer[i] != rightBuffer[i])
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
     private static bool TryWriteVerticalSolveCorrectedCandidateVmdArtifact(
         string sourceVmdPath,
         string outputVmdPath,
         IReadOnlyDictionary<int, VerticalSolveFrameCorrection> verticalSolveCorrections,
         out int correctedFrameCount,
         out int safetyLimitedFrameCount,
-        out long fileSizeBytes)
+        out long fileSizeBytes,
+        out List<VerticalSolveVmdSafetyLimitDetail> safetyLimitDetails)
     {
         correctedFrameCount = 0;
         safetyLimitedFrameCount = 0;
         fileSizeBytes = 0L;
+        safetyLimitDetails = new List<VerticalSolveVmdSafetyLimitDetail>();
         if (string.IsNullOrWhiteSpace(sourceVmdPath) ||
             string.IsNullOrWhiteSpace(outputVmdPath) ||
             verticalSolveCorrections == null ||
@@ -2082,6 +2609,7 @@ internal static class MotionComparisonProbeReportWriter
         Dictionary<uint, int> centerCarrierCountByFrame = CountCenterCarriersByFrame(rewriteFrames);
         Dictionary<uint, float> minEffectiveFootIkYByFrame = BuildMinEffectiveFootIkYByFrame(rewriteFrames);
         Dictionary<string, List<VmdRewriteFrame>> carrierFramesByBone = BuildCarrierFramesByBone(rewriteFrames);
+        List<VmdIkStateFrame> ikStateFrames = ReadVmdIkStateFrames(bytes, offset);
         foreach (List<VmdRewriteFrame> frames in carrierFramesByBone.Values)
         {
             frames.Sort((left, right) => left.Frame.CompareTo(right.Frame));
@@ -2099,46 +2627,147 @@ internal static class MotionComparisonProbeReportWriter
                     correction,
                     centerCarrierCountByFrame,
                     minEffectiveFootIkYByFrame);
-                if (!IsFinite(requestedDeltaY) || Math.Abs(requestedDeltaY) <= 0f)
+                ResolveRequestedCorrectedVmdDeltaXZ(
+                    frame,
+                    correction,
+                    out float requestedDeltaX,
+                    out float requestedDeltaZ);
+                if ((!IsFinite(requestedDeltaY) || Math.Abs(requestedDeltaY) <= 0f) &&
+                    (!IsFinite(requestedDeltaX) || Math.Abs(requestedDeltaX) <= 0f) &&
+                    (!IsFinite(requestedDeltaZ) || Math.Abs(requestedDeltaZ) <= 0f))
                 {
                     continue;
                 }
 
-                float safeDeltaY = ClampVmdCarrierDeltaToStepSafety(
+                requestedDeltaY = ClampCenterCarrierDeltaToFloor(
                     frame,
-                    i > 0 ? frames[i - 1] : null,
-                    i + 1 < frames.Count ? frames[i + 1] : null,
-                    requestedDeltaY);
-                safeDeltaY = ClampCenterCarrierDeltaToFloor(
-                    frame,
-                    safeDeltaY,
+                    requestedDeltaY,
                     centerCarrierCountByFrame,
                     minEffectiveFootIkYByFrame);
-                if (!IsFinite(safeDeltaY) || Math.Abs(safeDeltaY) <= 0f)
+                VmdRewriteFrame writeFrame = frame;
+                int writeFrameIndex = i;
+                if (TryResolveVisibleFootIkCarrierFrame(
+                        frames,
+                        i,
+                        ikStateFrames,
+                        requestedDeltaX,
+                        requestedDeltaY,
+                        requestedDeltaZ,
+                        out int visibleFrameIndex))
+                {
+                    writeFrameIndex = visibleFrameIndex;
+                    writeFrame = frames[writeFrameIndex];
+                }
+
+                if (writeFrameIndex == i &&
+                    IsDisabledFootIkHorizontalCarrierFrame(frame, ikStateFrames, requestedDeltaX, requestedDeltaY, requestedDeltaZ))
                 {
                     safetyLimitedFrameCount++;
+                    safetyLimitDetails.Add(VerticalSolveVmdSafetyLimitDetail.Create(
+                        frame,
+                        "ik_disabled_no_visible_carrier",
+                        requestedDeltaX,
+                        requestedDeltaY,
+                        requestedDeltaZ,
+                        0f,
+                        0f,
+                        0f));
                     continue;
                 }
 
-                if (Math.Abs(safeDeltaY - requestedDeltaY) > 0.000001f)
+                if (!TryClampVmdCarrierDeltasToStepSafety(
+                        writeFrame,
+                        writeFrameIndex > 0 ? frames[writeFrameIndex - 1] : null,
+                        writeFrameIndex + 1 < frames.Count ? frames[writeFrameIndex + 1] : null,
+                        ikStateFrames,
+                        requestedDeltaX,
+                        requestedDeltaY,
+                        requestedDeltaZ,
+                        out float safeDeltaX,
+                        out float safeDeltaY,
+                        out float safeDeltaZ))
                 {
                     safetyLimitedFrameCount++;
+                    safetyLimitDetails.Add(VerticalSolveVmdSafetyLimitDetail.Create(
+                        writeFrame,
+                        "step_safety_rejected",
+                        requestedDeltaX,
+                        requestedDeltaY,
+                        requestedDeltaZ,
+                        0f,
+                        0f,
+                        0f));
+                    continue;
                 }
 
-                int yOffset = frame.Offset + 23;
-                byte[] yBytes = BitConverter.GetBytes(frame.Y + safeDeltaY);
-                Buffer.BlockCopy(yBytes, 0, bytes, yOffset, yBytes.Length);
+                if (!HasNonZeroCorrection(safeDeltaX) &&
+                    !HasNonZeroCorrection(safeDeltaY) &&
+                    !HasNonZeroCorrection(safeDeltaZ))
+                {
+                    safetyLimitedFrameCount++;
+                    safetyLimitDetails.Add(VerticalSolveVmdSafetyLimitDetail.Create(
+                        writeFrame,
+                        "step_safety_zeroed",
+                        requestedDeltaX,
+                        requestedDeltaY,
+                        requestedDeltaZ,
+                        safeDeltaX,
+                        safeDeltaY,
+                        safeDeltaZ));
+                    continue;
+                }
+
+                if (Math.Abs(safeDeltaX - requestedDeltaX) > 0.000001f ||
+                    Math.Abs(safeDeltaY - requestedDeltaY) > 0.000001f ||
+                    Math.Abs(safeDeltaZ - requestedDeltaZ) > 0.000001f)
+                {
+                    safetyLimitedFrameCount++;
+                    safetyLimitDetails.Add(VerticalSolveVmdSafetyLimitDetail.Create(
+                        writeFrame,
+                        "step_safety_scaled",
+                        requestedDeltaX,
+                        requestedDeltaY,
+                        requestedDeltaZ,
+                        safeDeltaX,
+                        safeDeltaY,
+                        safeDeltaZ));
+                }
+
+                if (HasNonZeroCorrection(safeDeltaX))
+                {
+                    int xOffset = writeFrame.Offset + 19;
+                    byte[] xBytes = BitConverter.GetBytes(writeFrame.X + safeDeltaX);
+                    Buffer.BlockCopy(xBytes, 0, bytes, xOffset, xBytes.Length);
+                }
+
+                if (HasNonZeroCorrection(safeDeltaY))
+                {
+                    int yOffset = writeFrame.Offset + 23;
+                    byte[] yBytes = BitConverter.GetBytes(writeFrame.Y + safeDeltaY);
+                    Buffer.BlockCopy(yBytes, 0, bytes, yOffset, yBytes.Length);
+                }
+
+                if (HasNonZeroCorrection(safeDeltaZ))
+                {
+                    int zOffset = writeFrame.Offset + 27;
+                    byte[] zBytes = BitConverter.GetBytes(writeFrame.Z + safeDeltaZ);
+                    Buffer.BlockCopy(zBytes, 0, bytes, zOffset, zBytes.Length);
+                }
+
                 correctedFrameCount++;
             }
         }
 
-        if (correctedFrameCount <= 0)
+        EnsureParentDirectoryExists(outputVmdPath);
+        if (correctedFrameCount > 0)
         {
-            return false;
+            File.WriteAllBytes(outputVmdPath, bytes);
+        }
+        else
+        {
+            File.Copy(sourceVmdPath, outputVmdPath, overwrite: true);
         }
 
-        EnsureParentDirectoryExists(outputVmdPath);
-        File.WriteAllBytes(outputVmdPath, bytes);
         FileInfo fileInfo = new FileInfo(outputVmdPath);
         fileSizeBytes = fileInfo.Exists ? fileInfo.Length : 0L;
         return fileSizeBytes > 0L;
@@ -2191,6 +2820,35 @@ internal static class MotionComparisonProbeReportWriter
         }
 
         return footDeltaY;
+    }
+
+    private static void ResolveRequestedCorrectedVmdDeltaXZ(
+        VmdRewriteFrame frame,
+        VerticalSolveFrameCorrection correction,
+        out float deltaX,
+        out float deltaZ)
+    {
+        deltaX = 0f;
+        deltaZ = 0f;
+        if (frame == null ||
+            !frame.IsFootIkCarrier ||
+            string.IsNullOrEmpty(frame.Side))
+        {
+            return;
+        }
+
+        if (string.Equals(frame.Side, "left", StringComparison.Ordinal))
+        {
+            deltaX = correction.LeftFootX;
+            deltaZ = correction.LeftFootZ;
+            return;
+        }
+
+        if (string.Equals(frame.Side, "right", StringComparison.Ordinal))
+        {
+            deltaX = correction.RightFootX;
+            deltaZ = correction.RightFootZ;
+        }
     }
 
     private static Dictionary<uint, int> CountCenterCarriersByFrame(IReadOnlyList<VmdRewriteFrame> frames)
@@ -2339,6 +2997,110 @@ internal static class MotionComparisonProbeReportWriter
         return Math.Max(deltaY, minDeltaY);
     }
 
+    private static bool TryResolveVisibleFootIkCarrierFrame(
+        IReadOnlyList<VmdRewriteFrame> frames,
+        int sourceIndex,
+        List<VmdIkStateFrame> ikStateFrames,
+        float requestedDeltaX,
+        float requestedDeltaY,
+        float requestedDeltaZ,
+        out int visibleFrameIndex)
+    {
+        visibleFrameIndex = sourceIndex;
+        if (frames == null ||
+            sourceIndex < 0 ||
+            sourceIndex >= frames.Count)
+        {
+            return false;
+        }
+
+        VmdRewriteFrame source = frames[sourceIndex];
+        if (source == null ||
+            !source.IsFootIkCarrier ||
+            string.IsNullOrEmpty(source.Side) ||
+            IsVmdIkEnabledAtFrame(ikStateFrames, source.BoneName, source.Frame) ||
+            HasNonZeroCorrection(requestedDeltaY) ||
+            (!HasNonZeroCorrection(requestedDeltaX) && !HasNonZeroCorrection(requestedDeltaZ)))
+        {
+            return false;
+        }
+
+        int bestIndex = -1;
+        uint bestDistance = uint.MaxValue;
+        for (int i = 0; i < frames.Count; i++)
+        {
+            if (i == sourceIndex)
+            {
+                continue;
+            }
+
+            VmdRewriteFrame candidate = frames[i];
+            if (candidate == null ||
+                !candidate.IsFootIkCarrier ||
+                !string.Equals(candidate.Side, source.Side, StringComparison.Ordinal) ||
+                !IsVmdIkEnabledAtFrame(ikStateFrames, candidate.BoneName, candidate.Frame))
+            {
+                continue;
+            }
+
+            uint distance = candidate.Frame > source.Frame
+                ? candidate.Frame - source.Frame
+                : source.Frame - candidate.Frame;
+            if (distance == 0u ||
+                distance > VerticalSolveVisibleIkCarrierSearchFrameWindow ||
+                distance > bestDistance)
+            {
+                continue;
+            }
+
+            if (!TryClampVmdCarrierDeltasToStepSafety(
+                    candidate,
+                    i > 0 ? frames[i - 1] : null,
+                    i + 1 < frames.Count ? frames[i + 1] : null,
+                    ikStateFrames,
+                    requestedDeltaX,
+                    requestedDeltaY,
+                    requestedDeltaZ,
+                    out float safeDeltaX,
+                    out float safeDeltaY,
+                    out float safeDeltaZ) ||
+                (!HasNonZeroCorrection(safeDeltaX) &&
+                 !HasNonZeroCorrection(safeDeltaY) &&
+                 !HasNonZeroCorrection(safeDeltaZ)))
+            {
+                continue;
+            }
+
+            if (distance < bestDistance || bestIndex < 0 || candidate.Frame >= source.Frame)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex < 0)
+        {
+            return false;
+        }
+
+        visibleFrameIndex = bestIndex;
+        return true;
+    }
+
+    private static bool IsDisabledFootIkHorizontalCarrierFrame(
+        VmdRewriteFrame frame,
+        List<VmdIkStateFrame> ikStateFrames,
+        float requestedDeltaX,
+        float requestedDeltaY,
+        float requestedDeltaZ)
+    {
+        return frame != null &&
+            frame.IsFootIkCarrier &&
+            !IsVmdIkEnabledAtFrame(ikStateFrames, frame.BoneName, frame.Frame) &&
+            !HasNonZeroCorrection(requestedDeltaY) &&
+            (HasNonZeroCorrection(requestedDeltaX) || HasNonZeroCorrection(requestedDeltaZ));
+    }
+
     private static float ResolveVerticalSolveFloorSafeY()
     {
         return QualityFloorTolerance + VerticalSolvePostprocessSafetyMarginY;
@@ -2371,6 +3133,139 @@ internal static class MotionComparisonProbeReportWriter
         return true;
     }
 
+    private static bool TryClampVmdCarrierDeltasToStepSafety(
+        VmdRewriteFrame frame,
+        VmdRewriteFrame previous,
+        VmdRewriteFrame next,
+        List<VmdIkStateFrame> ikStateFrames,
+        float requestedDeltaX,
+        float requestedDeltaY,
+        float requestedDeltaZ,
+        out float safeDeltaX,
+        out float safeDeltaY,
+        out float safeDeltaZ)
+    {
+        VmdRewriteFrame previousForSafety = ShouldCheckPreviousVmdCarrierStep(frame, ikStateFrames) ? previous : null;
+        VmdRewriteFrame nextForSafety = ShouldCheckNextVmdCarrierStep(next, ikStateFrames) ? next : null;
+        return TryClampVmdCarrierDeltasToStepSafety(
+            frame,
+            previousForSafety,
+            nextForSafety,
+            requestedDeltaX,
+            requestedDeltaY,
+            requestedDeltaZ,
+            out safeDeltaX,
+            out safeDeltaY,
+            out safeDeltaZ);
+    }
+
+    private static bool ShouldCheckPreviousVmdCarrierStep(VmdRewriteFrame frame, List<VmdIkStateFrame> ikStateFrames)
+    {
+        return frame == null ||
+            !frame.IsFootIkCarrier ||
+            IsVmdIkEnabledAtFrame(ikStateFrames, frame.BoneName, frame.Frame);
+    }
+
+    private static bool ShouldCheckNextVmdCarrierStep(VmdRewriteFrame next, List<VmdIkStateFrame> ikStateFrames)
+    {
+        return next == null ||
+            !next.IsFootIkCarrier ||
+            IsVmdIkEnabledAtFrame(ikStateFrames, next.BoneName, next.Frame);
+    }
+
+    private static bool TryClampVmdCarrierDeltasToStepSafety(
+        VmdRewriteFrame frame,
+        VmdRewriteFrame previous,
+        VmdRewriteFrame next,
+        float requestedDeltaX,
+        float requestedDeltaY,
+        float requestedDeltaZ,
+        out float safeDeltaX,
+        out float safeDeltaY,
+        out float safeDeltaZ)
+    {
+        safeDeltaX = 0f;
+        safeDeltaY = 0f;
+        safeDeltaZ = 0f;
+        if (frame == null ||
+            !IsFinite(requestedDeltaX) ||
+            !IsFinite(requestedDeltaY) ||
+            !IsFinite(requestedDeltaZ))
+        {
+            return false;
+        }
+
+        if (IsVmdCarrierStepSafe(frame, previous, next, requestedDeltaX, requestedDeltaY, requestedDeltaZ))
+        {
+            safeDeltaX = requestedDeltaX;
+            safeDeltaY = requestedDeltaY;
+            safeDeltaZ = requestedDeltaZ;
+            return true;
+        }
+
+        float low = 0f;
+        float high = 1f;
+        for (int i = 0; i < 16; i++)
+        {
+            float scale = (low + high) * 0.5f;
+            if (IsVmdCarrierStepSafe(
+                    frame,
+                    previous,
+                    next,
+                    requestedDeltaX * scale,
+                    requestedDeltaY * scale,
+                    requestedDeltaZ * scale))
+            {
+                low = scale;
+            }
+            else
+            {
+                high = scale;
+            }
+        }
+
+        if (low <= 0f)
+        {
+            return false;
+        }
+
+        safeDeltaX = requestedDeltaX * low;
+        safeDeltaY = requestedDeltaY * low;
+        safeDeltaZ = requestedDeltaZ * low;
+        return true;
+    }
+
+    private static bool IsVmdCarrierStepSafe(
+        VmdRewriteFrame frame,
+        VmdRewriteFrame previous,
+        VmdRewriteFrame next,
+        float deltaX,
+        float deltaY,
+        float deltaZ)
+    {
+        return IsVmdCarrierStepSafe(frame, previous, deltaX, deltaY, deltaZ) &&
+            IsVmdCarrierStepSafe(frame, next, deltaX, deltaY, deltaZ);
+    }
+
+    private static bool IsVmdCarrierStepSafe(
+        VmdRewriteFrame frame,
+        VmdRewriteFrame neighbor,
+        float deltaX,
+        float deltaY,
+        float deltaZ)
+    {
+        if (neighbor == null)
+        {
+            return true;
+        }
+
+        float limit = Math.Max(0f, QualityTeleportStepThreshold - VerticalSolvePostprocessSafetyMarginY);
+        float dx = frame.X + deltaX - neighbor.X;
+        float dy = frame.Y + deltaY - neighbor.Y;
+        float dz = frame.Z + deltaZ - neighbor.Z;
+        return Distance(0f, 0f, 0f, dx, dy, dz) <= limit;
+    }
+
     private static void WriteVerticalSolveCorrectedCandidateManifest(
         string manifestPath,
         string rawCandidateMetricsCsvPath,
@@ -2380,7 +3275,8 @@ internal static class MotionComparisonProbeReportWriter
         int correctedRows,
         int correctedVmdChangedFrames,
         int correctedVmdSafetyLimitedFrames,
-        long correctedVmdBytes)
+        long correctedVmdBytes,
+        IReadOnlyList<VerticalSolveVmdSafetyLimitDetail> correctedVmdSafetyLimitDetails)
     {
         if (string.IsNullOrWhiteSpace(manifestPath))
         {
@@ -2399,10 +3295,54 @@ internal static class MotionComparisonProbeReportWriter
             "\"corrected_metric_rows\":" + correctedRows.ToString(CultureInfo.InvariantCulture) + "," +
             "\"corrected_vmd_changed_frames\":" + correctedVmdChangedFrames.ToString(CultureInfo.InvariantCulture) + "," +
             "\"corrected_vmd_safety_limited_frames\":" + correctedVmdSafetyLimitedFrames.ToString(CultureInfo.InvariantCulture) + "," +
+            "\"corrected_vmd_safety_limited_frame_details\":" + BuildVerticalSolveVmdSafetyLimitDetailsJson(correctedVmdSafetyLimitDetails) + "," +
             "\"corrected_vmd_bytes\":" + correctedVmdBytes.ToString(CultureInfo.InvariantCulture) + "," +
             "\"frame_quality_evaluator\":\"raw_frame_quality_evaluator\"" +
             "}";
         File.WriteAllText(manifestPath, json, Encoding.UTF8);
+    }
+
+    private static string BuildVerticalSolveVmdSafetyLimitDetailsJson(
+        IReadOnlyList<VerticalSolveVmdSafetyLimitDetail> details)
+    {
+        if (details == null || details.Count == 0)
+        {
+            return "[]";
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.Append('[');
+        for (int i = 0; i < details.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append(',');
+            }
+
+            VerticalSolveVmdSafetyLimitDetail detail = details[i];
+            builder.Append('{');
+            builder.Append("\"frame\":").Append(detail.Frame.ToString(CultureInfo.InvariantCulture)).Append(',');
+            builder.Append("\"bone\":\"").Append(EscapeJson(detail.BoneName)).Append("\",");
+            builder.Append("\"side\":\"").Append(EscapeJson(detail.Side)).Append("\",");
+            builder.Append("\"reason\":\"").Append(EscapeJson(detail.Reason)).Append("\",");
+            builder.Append("\"requested_delta_x\":").Append(FormatJsonFloat(detail.RequestedDeltaX)).Append(',');
+            builder.Append("\"requested_delta_y\":").Append(FormatJsonFloat(detail.RequestedDeltaY)).Append(',');
+            builder.Append("\"requested_delta_z\":").Append(FormatJsonFloat(detail.RequestedDeltaZ)).Append(',');
+            builder.Append("\"safe_delta_x\":").Append(FormatJsonFloat(detail.SafeDeltaX)).Append(',');
+            builder.Append("\"safe_delta_y\":").Append(FormatJsonFloat(detail.SafeDeltaY)).Append(',');
+            builder.Append("\"safe_delta_z\":").Append(FormatJsonFloat(detail.SafeDeltaZ));
+            builder.Append('}');
+        }
+
+        builder.Append(']');
+        return builder.ToString();
+    }
+
+    private static string FormatJsonFloat(float value)
+    {
+        return IsFinite(value)
+            ? value.ToString("G9", CultureInfo.InvariantCulture)
+            : "null";
     }
 
     private static string EscapeJson(string value)
@@ -2441,7 +3381,9 @@ internal static class MotionComparisonProbeReportWriter
             return false;
         }
 
-        string[] headers = SplitCsvLine(lines[0]);
+        string[] headers = AppendMissingCsvColumns(
+            SplitCsvLine(lines[0]),
+            VerticalSolveCorrectionDiagnosticColumns);
         Dictionary<string, int> columns = BuildColumnLookup(headers);
         if (!columns.ContainsKey("recorderFrame") ||
             !columns.ContainsKey("hipsY") ||
@@ -2452,7 +3394,7 @@ internal static class MotionComparisonProbeReportWriter
 
         var output = new List<string>
         {
-            lines[0]
+            BuildCsvLine(headers, headers.Length)
         };
         for (int lineIndex = 1; lineIndex < lines.Length; lineIndex++)
         {
@@ -2481,6 +3423,11 @@ internal static class MotionComparisonProbeReportWriter
                 changed |= TryApplyMetricsCsvFloatDelta(values, columns, "lowestFootBottomY", correction.FootBottomY);
                 changed |= TryApplyMetricsCsvFloatDelta(values, columns, "lowestFootY", correction.FootBottomY);
                 changed |= TryApplyMetricsCsvFloatDelta(values, columns, "footBottomGroundGap", correction.FootBottomY);
+                changed |= TryApplyMetricsCsvFloatDelta(values, columns, "leftFootX", correction.LeftFootX);
+                changed |= TryApplyMetricsCsvFloatDelta(values, columns, "leftFootZ", correction.LeftFootZ);
+                changed |= TryApplyMetricsCsvFloatDelta(values, columns, "rightFootX", correction.RightFootX);
+                changed |= TryApplyMetricsCsvFloatDelta(values, columns, "rightFootZ", correction.RightFootZ);
+                WriteVerticalSolveCorrectionDiagnostics(values, columns, correction);
                 if (changed)
                 {
                     correctedRows++;
@@ -2493,6 +3440,120 @@ internal static class MotionComparisonProbeReportWriter
         EnsureParentDirectoryExists(outputPath);
         File.WriteAllLines(outputPath, output, Encoding.UTF8);
         return correctedRows > 0 && File.Exists(outputPath);
+    }
+
+    private static string[] AppendMissingCsvColumns(string[] headers, string[] additionalColumns)
+    {
+        var output = new List<string>(headers ?? Array.Empty<string>());
+        var seen = new HashSet<string>(output, StringComparer.Ordinal);
+        if (additionalColumns == null)
+        {
+            return output.ToArray();
+        }
+
+        for (int i = 0; i < additionalColumns.Length; i++)
+        {
+            string column = additionalColumns[i];
+            if (!string.IsNullOrWhiteSpace(column) && seen.Add(column))
+            {
+                output.Add(column);
+            }
+        }
+
+        return output.ToArray();
+    }
+
+    private static void WriteVerticalSolveCorrectionDiagnostics(
+        string[] values,
+        Dictionary<string, int> columns,
+        VerticalSolveFrameCorrection correction)
+    {
+        SetMetricsCsvFloat(values, columns, "verticalSolveCorrectionHipsY", correction.HipsY);
+        SetMetricsCsvFloat(values, columns, "verticalSolveCorrectionFootBottomY", correction.FootBottomY);
+        SetMetricsCsvFloat(values, columns, "verticalSolveCorrectionLeftFootX", correction.LeftFootX);
+        SetMetricsCsvFloat(values, columns, "verticalSolveCorrectionLeftFootZ", correction.LeftFootZ);
+        SetMetricsCsvFloat(values, columns, "verticalSolveCorrectionRightFootX", correction.RightFootX);
+        SetMetricsCsvFloat(values, columns, "verticalSolveCorrectionRightFootZ", correction.RightFootZ);
+        SetMetricsCsvFloat(values, columns, "verticalSolveHorizontalFootTargetMagnitude", correction.HorizontalFootTargetMagnitude);
+        SetMetricsCsvFloat(values, columns, "verticalSolveLeftFootNormalizedDeltaX", correction.LeftFootNormalizedDeltaX);
+        SetMetricsCsvFloat(values, columns, "verticalSolveLeftFootNormalizedDeltaZ", correction.LeftFootNormalizedDeltaZ);
+        SetMetricsCsvFloat(
+            values,
+            columns,
+            "verticalSolveLeftFootNormalizedMagnitude",
+            CalculateHorizontalMagnitude(correction.LeftFootNormalizedDeltaX, correction.LeftFootNormalizedDeltaZ));
+        SetMetricsCsvFloat(values, columns, "verticalSolveRightFootNormalizedDeltaX", correction.RightFootNormalizedDeltaX);
+        SetMetricsCsvFloat(values, columns, "verticalSolveRightFootNormalizedDeltaZ", correction.RightFootNormalizedDeltaZ);
+        SetMetricsCsvFloat(
+            values,
+            columns,
+            "verticalSolveRightFootNormalizedMagnitude",
+            CalculateHorizontalMagnitude(correction.RightFootNormalizedDeltaX, correction.RightFootNormalizedDeltaZ));
+        SetMetricsCsvString(values, columns, "verticalSolveCorrectionSource", ResolveVerticalSolveCorrectionSource(correction));
+    }
+
+    private static float CalculateHorizontalMagnitude(float x, float z)
+    {
+        return IsFinite(x) && IsFinite(z)
+            ? Distance(0f, 0f, 0f, x, 0f, z)
+            : float.NaN;
+    }
+
+    private static string ResolveVerticalSolveCorrectionSource(VerticalSolveFrameCorrection correction)
+    {
+        bool hasVertical = HasNonZeroCorrection(correction.HipsY) || HasNonZeroCorrection(correction.FootBottomY);
+        bool hasHorizontal = HasNonZeroCorrection(correction.LeftFootX) ||
+            HasNonZeroCorrection(correction.LeftFootZ) ||
+            HasNonZeroCorrection(correction.RightFootX) ||
+            HasNonZeroCorrection(correction.RightFootZ);
+        if (hasVertical && hasHorizontal)
+        {
+            return "vertical_and_horizontal_foot_xz";
+        }
+
+        if (hasHorizontal)
+        {
+            return "horizontal_foot_xz";
+        }
+
+        if (hasVertical)
+        {
+            return "vertical";
+        }
+
+        return "";
+    }
+
+    private static void SetMetricsCsvFloat(
+        string[] values,
+        Dictionary<string, int> columns,
+        string columnName,
+        float value)
+    {
+        if (!columns.TryGetValue(columnName, out int index) ||
+            index < 0 ||
+            index >= values.Length)
+        {
+            return;
+        }
+
+        values[index] = IsFinite(value) ? FormatMetricsCsvFloat(value) : "";
+    }
+
+    private static void SetMetricsCsvString(
+        string[] values,
+        Dictionary<string, int> columns,
+        string columnName,
+        string value)
+    {
+        if (!columns.TryGetValue(columnName, out int index) ||
+            index < 0 ||
+            index >= values.Length)
+        {
+            return;
+        }
+
+        values[index] = value ?? "";
     }
 
     private static bool TryApplyMetricsCsvFloatDelta(
@@ -2642,6 +3703,17 @@ internal static class MotionComparisonProbeReportWriter
         return string.Equals((reason ?? "").Trim(), "finish", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsPreRetargetStartComparisonSample(MetricsCsvFrame baselineFrame, MetricsCsvFrame candidateFrame)
+    {
+        return IsSamplingStartReason(baselineFrame.Reason) &&
+            IsSamplingStartReason(candidateFrame.Reason);
+    }
+
+    private static bool IsSamplingStartReason(string reason)
+    {
+        return string.Equals((reason ?? "").Trim(), "start", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void ApplyFrameQualityStatus(
         MotionComparisonFrameQualitySummary summary,
         bool allowSameFrameRootPositionDelta = false,
@@ -2725,6 +3797,22 @@ internal static class MotionComparisonProbeReportWriter
             }
         }
 
+        if (IsMainRecordingStationaryPreviewCandidate(summary) &&
+            ExceedsThreshold(summary.candidate_limb_motion_root_travel, QualityStationaryLimbRootTravelFailThreshold))
+        {
+            reasons.Add("stationary preview limb-motion root travel threshold exceeded");
+            fail = true;
+        }
+
+        float limbPoseGateDelta = IsFinite(summary.max_same_frame_guard_normalized_limb_pose_delta)
+            ? summary.max_same_frame_guard_normalized_limb_pose_delta
+            : summary.max_same_frame_limb_pose_delta;
+        if (ExceedsThreshold(limbPoseGateDelta, QualitySameFrameLimbPoseDeltaFailThreshold))
+        {
+            reasons.Add("same-frame limb pose delta threshold exceeded");
+            fail = true;
+        }
+
         if (ExceedsThreshold(summary.max_same_frame_hips_y_delta, QualitySameFrameHipsYFailThreshold))
         {
             reasons.Add("same-frame hips Y delta fail threshold exceeded");
@@ -2761,6 +3849,18 @@ internal static class MotionComparisonProbeReportWriter
             }
         }
 
+        float sameFrameFootXzGateDelta = GetSameFrameFootXzDeltaForGate(summary);
+        if (ExceedsThreshold(sameFrameFootXzGateDelta, QualitySameFrameFootXzFailThreshold))
+        {
+            reasons.Add("same-frame foot XZ delta fail threshold exceeded");
+            fail = true;
+        }
+        else if (ExceedsThreshold(sameFrameFootXzGateDelta, QualitySameFrameFootXzWarnThreshold))
+        {
+            reasons.Add("same-frame foot XZ delta warning threshold exceeded");
+            warn = true;
+        }
+
         if (reasons.Count == 0 &&
             (summary.missing_baseline_frames > 0 || summary.missing_candidate_frames > 0 || summary.candidate_vmd_bone_frames == 0))
         {
@@ -2783,11 +3883,42 @@ internal static class MotionComparisonProbeReportWriter
         summary.status_reason = string.Join("; ", reasons.ToArray());
     }
 
+    private static float GetSameFrameFootXzDeltaForGate(MotionComparisonFrameQualitySummary summary)
+    {
+        if (summary != null &&
+            summary.candidate_vmd_max_bone_frame_index >= 0 &&
+            IsFinite(summary.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range))
+        {
+            return summary.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range;
+        }
+
+        return summary != null ? summary.max_same_frame_foot_xz_delta : float.NaN;
+    }
+
     private static bool IsYybFrameQualityCandidate(MotionComparisonFrameQualitySummary summary)
     {
         return summary != null &&
             (MatchesYybModelName(summary.candidate_label) ||
              MatchesYybModelName(Path.GetFileNameWithoutExtension(summary.candidate_metrics_csv)));
+    }
+
+    private static bool IsMainRecordingStationaryPreviewCandidate(MotionComparisonFrameQualitySummary summary)
+    {
+        if (summary == null)
+        {
+            return false;
+        }
+
+        string label = NormalizeDiagnosticTransformName(summary.candidate_label);
+        string metricsPath = NormalizeDiagnosticTransformName(summary.candidate_metrics_csv);
+        bool isMainRecording =
+            label.Contains("main_recoding") ||
+            label.Contains("main_recording") ||
+            metricsPath.Contains("main_recoding") ||
+            metricsPath.Contains("main-recording") ||
+            metricsPath.Contains("main_recording");
+        bool isReplay = label.Contains("vmd replay") || metricsPath.Contains("vmd-replay");
+        return isMainRecording && !isReplay;
     }
 
     private static void ApplyVerticalSolvePrototypeStatus(MotionComparisonFrameQualitySummary summary)
@@ -2927,12 +4058,42 @@ internal static class MotionComparisonProbeReportWriter
                 HipsLocalY = ReadFloat(values, columns, "hipsLocalY"),
                 GroundingVerticalStepLast = ReadFloat(values, columns, "retargetGroundingVerticalStepLast"),
                 FootHeightReferenceLift = ReadFloat(values, columns, "retargetFootHeightReferenceLift"),
+                HipsX = ReadFloat(values, columns, "hipsX"),
+                HipsZ = ReadFloat(values, columns, "hipsZ"),
                 HipsY = ReadFloat(values, columns, "hipsY"),
                 LowestFootBottomY = ReadFloat(values, columns, "lowestFootBottomY"),
                 FootBottomGroundGap = ReadFloat(values, columns, "footBottomGroundGap"),
+                LeftFootX = ReadFloat(values, columns, "leftFootX"),
+                LeftFootZ = ReadFloat(values, columns, "leftFootZ"),
+                RightFootX = ReadFloat(values, columns, "rightFootX"),
+                RightFootZ = ReadFloat(values, columns, "rightFootZ"),
                 RetargetRootDeltaMax = ReadFloat(values, columns, "retargetRootDeltaMax"),
                 RetargetPoseDeltaMax = ReadFloat(values, columns, "retargetPoseRootDeltaMax"),
                 GroundingVerticalStepMax = ReadFloat(values, columns, "retargetGroundingVerticalStepMax"),
+                LeftShoulderDownUpMuscle = ReadFloat(values, columns, "leftShoulderDownUpMuscle"),
+                LeftShoulderFrontBackMuscle = ReadFloat(values, columns, "leftShoulderFrontBackMuscle"),
+                LeftArmDownUpMuscle = ReadFloat(values, columns, "leftArmDownUpMuscle"),
+                LeftArmFrontBackMuscle = ReadFloat(values, columns, "leftArmFrontBackMuscle"),
+                LeftArmTwistMuscle = ReadFloat(values, columns, "leftArmTwistMuscle"),
+                LeftForearmStretchMuscle = ReadFloat(values, columns, "leftForearmStretchMuscle"),
+                LeftForearmTwistMuscle = ReadFloat(values, columns, "leftForearmTwistMuscle"),
+                RightShoulderDownUpMuscle = ReadFloat(values, columns, "rightShoulderDownUpMuscle"),
+                RightShoulderFrontBackMuscle = ReadFloat(values, columns, "rightShoulderFrontBackMuscle"),
+                RightArmDownUpMuscle = ReadFloat(values, columns, "rightArmDownUpMuscle"),
+                RightArmFrontBackMuscle = ReadFloat(values, columns, "rightArmFrontBackMuscle"),
+                RightArmTwistMuscle = ReadFloat(values, columns, "rightArmTwistMuscle"),
+                RightForearmStretchMuscle = ReadFloat(values, columns, "rightForearmStretchMuscle"),
+                RightForearmTwistMuscle = ReadFloat(values, columns, "rightForearmTwistMuscle"),
+                LeftElbowAngle = ReadFloat(values, columns, "leftElbowAngle"),
+                RightElbowAngle = ReadFloat(values, columns, "rightElbowAngle"),
+                LeftKneeAngle = ReadFloat(values, columns, "leftKneeAngle"),
+                RightKneeAngle = ReadFloat(values, columns, "rightKneeAngle"),
+                LeftHandHorizontalRatio = ReadFloat(values, columns, "leftHandHorizontalRatio"),
+                RightHandHorizontalRatio = ReadFloat(values, columns, "rightHandHorizontalRatio"),
+                LeftHandBelowShoulderRatio = ReadFloat(values, columns, "leftHandBelowShoulderRatio"),
+                RightHandBelowShoulderRatio = ReadFloat(values, columns, "rightHandBelowShoulderRatio"),
+                LeftHandTorsoSignedClearance = ReadFloat(values, columns, "leftHandTorsoSignedClearance"),
+                RightHandTorsoSignedClearance = ReadFloat(values, columns, "rightHandTorsoSignedClearance"),
                 YybMaxDeformationRisk = ReadFloat(values, columns, "yybMaxDeformationRisk"),
                 LeftSleeveThicknessRisk = ReadFloat(values, columns, "leftSleeveThicknessRisk"),
                 RightSleeveThicknessRisk = ReadFloat(values, columns, "rightSleeveThicknessRisk")
@@ -2948,6 +4109,7 @@ internal static class MotionComparisonProbeReportWriter
     {
         VmdQualityMetrics metrics = new VmdQualityMetrics
         {
+            MaxBoneFrameIndex = -1,
             MaxCenterStep = float.NaN,
             MaxFootIkStep = float.NaN,
             MinFootIkY = float.NaN,
@@ -2977,6 +4139,11 @@ internal static class MotionComparisonProbeReportWriter
         {
             string boneName = ReadPaddedShiftJis(bytes, offset, 15);
             uint frame = BitConverter.ToUInt32(bytes, offset + 15);
+            if (frame <= int.MaxValue)
+            {
+                metrics.MaxBoneFrameIndex = Math.Max(metrics.MaxBoneFrameIndex, (int)frame);
+            }
+
             float x = BitConverter.ToSingle(bytes, offset + 19);
             float y = BitConverter.ToSingle(bytes, offset + 23);
             float z = BitConverter.ToSingle(bytes, offset + 27);
@@ -3002,9 +4169,13 @@ internal static class MotionComparisonProbeReportWriter
             }
         }
 
+        List<VmdIkStateFrame> ikStateFrames = ReadVmdIkStateFrames(bytes, offset);
         metrics.BoneFrameCount = (int)Math.Min(boneFrameCount, int.MaxValue);
         metrics.MaxCenterStep = CalculateMaxVmdStep(centerFrames, out metrics.CenterSpikeFrameCount);
-        metrics.MaxFootIkStep = CalculateMaxVmdStep(footIkFrames, out metrics.FootIkSpikeFrameCount);
+        metrics.MaxFootIkStep = CalculateMaxVmdStep(
+            footIkFrames,
+            out metrics.FootIkSpikeFrameCount,
+            (boneName, frameIndex) => IsVmdIkEnabledAtFrame(ikStateFrames, boneName, frameIndex));
         metrics.MinEffectiveFootIkY = CalculateMinEffectiveFootIkY(centerFrames, footIkFramesBySide, toeIkFramesBySide);
         return metrics;
     }
@@ -3100,12 +4271,16 @@ internal static class MotionComparisonProbeReportWriter
         frames.Add(frame);
     }
 
-    private static float CalculateMaxVmdStep(Dictionary<string, List<VmdPositionFrame>> framesByBone, out int spikeFrameCount)
+    private static float CalculateMaxVmdStep(
+        Dictionary<string, List<VmdPositionFrame>> framesByBone,
+        out int spikeFrameCount,
+        Func<string, uint, bool> shouldCountSpike = null)
     {
         spikeFrameCount = 0;
         float maxStep = float.NaN;
-        foreach (List<VmdPositionFrame> frames in framesByBone.Values)
+        foreach (KeyValuePair<string, List<VmdPositionFrame>> framesByBoneEntry in framesByBone)
         {
+            List<VmdPositionFrame> frames = framesByBoneEntry.Value;
             frames.Sort((left, right) => left.Frame.CompareTo(right.Frame));
             for (int i = 1; i < frames.Count; i++)
             {
@@ -3117,7 +4292,8 @@ internal static class MotionComparisonProbeReportWriter
                     frames[i].Y,
                     frames[i].Z);
                 maxStep = MaxFinite(maxStep, step);
-                if (IsTeleportStep(step))
+                if (IsTeleportStep(step) &&
+                    (shouldCountSpike == null || shouldCountSpike(framesByBoneEntry.Key, frames[i].Frame)))
                 {
                     spikeFrameCount++;
                 }
@@ -3125,6 +4301,214 @@ internal static class MotionComparisonProbeReportWriter
         }
 
         return maxStep;
+    }
+
+    private static List<VmdIkStateFrame> ReadVmdIkStateFrames(byte[] bytes, int offset)
+    {
+        List<VmdIkStateFrame> frames = new List<VmdIkStateFrame>();
+        if (bytes == null || offset < 0 || offset >= bytes.Length)
+        {
+            return frames;
+        }
+
+        if (!TrySkipVmdSection(bytes, ref offset, 23) ||
+            !TrySkipVmdSection(bytes, ref offset, 61) ||
+            !TrySkipVmdSection(bytes, ref offset, 28) ||
+            !TrySkipVmdSection(bytes, ref offset, 9) ||
+            !TryReadUInt32(bytes, ref offset, out uint displayFrameCount))
+        {
+            return frames;
+        }
+
+        for (uint displayIndex = 0; displayIndex < displayFrameCount; displayIndex++)
+        {
+            if (!TryReadUInt32(bytes, ref offset, out uint frameIndex) ||
+                !TryReadByte(bytes, ref offset, out _) ||
+                !TryReadUInt32(bytes, ref offset, out uint ikCount))
+            {
+                return frames;
+            }
+
+            bool leftFootEnabled = true;
+            bool leftToeEnabled = true;
+            bool rightFootEnabled = true;
+            bool rightToeEnabled = true;
+            for (uint ikIndex = 0; ikIndex < ikCount; ikIndex++)
+            {
+                if (offset + 21 > bytes.Length)
+                {
+                    return frames;
+                }
+
+                string ikName = ReadPaddedShiftJis(bytes, offset, 20);
+                offset += 20;
+                if (!TryReadByte(bytes, ref offset, out byte enabledByte))
+                {
+                    return frames;
+                }
+
+                bool enabled = enabledByte != 0;
+                if (string.Equals(ikName, "\u5de6\u8db3\uff29\uff2b", StringComparison.Ordinal) ||
+                    string.Equals(ikName, "LeftFootIK", StringComparison.Ordinal))
+                {
+                    leftFootEnabled = enabled;
+                }
+                else if (string.Equals(ikName, "\u5de6\u3064\u307e\u5148\uff29\uff2b", StringComparison.Ordinal) ||
+                    string.Equals(ikName, "LeftToeIK", StringComparison.Ordinal))
+                {
+                    leftToeEnabled = enabled;
+                }
+                else if (string.Equals(ikName, "\u53f3\u8db3\uff29\uff2b", StringComparison.Ordinal) ||
+                    string.Equals(ikName, "RightFootIK", StringComparison.Ordinal))
+                {
+                    rightFootEnabled = enabled;
+                }
+                else if (string.Equals(ikName, "\u53f3\u3064\u307e\u5148\uff29\uff2b", StringComparison.Ordinal) ||
+                    string.Equals(ikName, "RightToeIK", StringComparison.Ordinal))
+                {
+                    rightToeEnabled = enabled;
+                }
+            }
+
+            frames.Add(new VmdIkStateFrame(
+                frameIndex,
+                leftFootEnabled,
+                leftToeEnabled,
+                rightFootEnabled,
+                rightToeEnabled));
+        }
+
+        frames.Sort((left, right) => left.Frame.CompareTo(right.Frame));
+        return frames;
+    }
+
+    private static bool TrySkipVmdSection(byte[] bytes, ref int offset, int bytesPerFrame)
+    {
+        if (!TryReadUInt32(bytes, ref offset, out uint frameCount))
+        {
+            return false;
+        }
+
+        long nextOffset = (long)offset + (long)frameCount * bytesPerFrame;
+        if (nextOffset > bytes.Length || nextOffset > int.MaxValue)
+        {
+            return false;
+        }
+
+        offset = (int)nextOffset;
+        return true;
+    }
+
+    private static bool TryResolveHorizontalFootPostprocessCorrection(
+        MotionComparisonFrameQualitySummary summary,
+        float normalizedFootDeltaX,
+        float normalizedFootDeltaZ,
+        int candidateRecorderFrame,
+        out float correctionX,
+        out float correctionZ)
+    {
+        correctionX = 0f;
+        correctionZ = 0f;
+        if (!IsFinite(normalizedFootDeltaX) ||
+            !IsFinite(normalizedFootDeltaZ) ||
+            !TryGetCandidateVmdFrameRangeBucket(summary, candidateRecorderFrame, out bool withinFrameRange) ||
+            !withinFrameRange)
+        {
+            return false;
+        }
+
+        float magnitude = Distance(0f, 0f, 0f, normalizedFootDeltaX, 0f, normalizedFootDeltaZ);
+        float targetMagnitude = ResolveHorizontalFootPostprocessTargetMagnitude();
+        if (!IsFinite(magnitude) || magnitude <= targetMagnitude || magnitude <= 0f)
+        {
+            return false;
+        }
+
+        float scale = targetMagnitude / magnitude;
+        correctionX = (normalizedFootDeltaX * scale) - normalizedFootDeltaX;
+        correctionZ = (normalizedFootDeltaZ * scale) - normalizedFootDeltaZ;
+        return HasNonZeroCorrection(correctionX) || HasNonZeroCorrection(correctionZ);
+    }
+
+    private static float ResolveHorizontalFootPostprocessTargetMagnitude()
+    {
+        return Mathf.Max(0f, QualitySameFrameFootXzWarnThreshold - HorizontalFootSolvePostprocessSafetyMarginXZ);
+    }
+
+    private static bool HasNonZeroCorrection(float value)
+    {
+        return IsFinite(value) && Math.Abs(value) > 0.000001f;
+    }
+
+    private static bool TryReadUInt32(byte[] bytes, ref int offset, out uint value)
+    {
+        value = 0;
+        if (bytes == null || offset < 0 || offset + 4 > bytes.Length)
+        {
+            return false;
+        }
+
+        value = BitConverter.ToUInt32(bytes, offset);
+        offset += 4;
+        return true;
+    }
+
+    private static bool TryReadByte(byte[] bytes, ref int offset, out byte value)
+    {
+        value = 0;
+        if (bytes == null || offset < 0 || offset >= bytes.Length)
+        {
+            return false;
+        }
+
+        value = bytes[offset];
+        offset++;
+        return true;
+    }
+
+    private static bool IsVmdIkEnabledAtFrame(
+        List<VmdIkStateFrame> ikStateFrames,
+        string boneName,
+        uint frameIndex)
+    {
+        if (ikStateFrames == null || ikStateFrames.Count == 0)
+        {
+            return true;
+        }
+
+        VmdIkStateFrame active = default;
+        bool hasActive = false;
+        foreach (VmdIkStateFrame stateFrame in ikStateFrames)
+        {
+            if (stateFrame.Frame > frameIndex)
+            {
+                break;
+            }
+
+            active = stateFrame;
+            hasActive = true;
+        }
+
+        if (!hasActive)
+        {
+            return true;
+        }
+
+        if (TryGetFootIkSide(boneName, out string footSide))
+        {
+            return string.Equals(footSide, "left", StringComparison.Ordinal)
+                ? active.LeftFootEnabled
+                : active.RightFootEnabled;
+        }
+
+        if (TryGetToeIkSide(boneName, out string toeSide))
+        {
+            return string.Equals(toeSide, "left", StringComparison.Ordinal)
+                ? active.LeftToeEnabled
+                : active.RightToeEnabled;
+        }
+
+        return true;
     }
 
     private static Dictionary<string, int> BuildColumnLookup(string[] headers)
@@ -3360,6 +4744,219 @@ internal static class MotionComparisonProbeReportWriter
             currentBaselineRecorderFrame = baselineRecorderFrame;
             currentCandidateRecorderFrame = candidateRecorderFrame;
         }
+    }
+
+    private static void UpdateMaxFootXzDelta(
+        MotionComparisonFrameQualitySummary summary,
+        string side,
+        float candidate,
+        int baselineRecorderFrame,
+        int candidateRecorderFrame)
+    {
+        if (summary == null || !IsFinite(candidate))
+        {
+            return;
+        }
+
+        if (!IsFinite(summary.max_same_frame_foot_xz_delta) ||
+            candidate > summary.max_same_frame_foot_xz_delta)
+        {
+            summary.max_same_frame_foot_xz_delta = candidate;
+            summary.max_same_frame_foot_xz_delta_recorder_frame = baselineRecorderFrame;
+            summary.max_same_frame_foot_xz_delta_candidate_recorder_frame = candidateRecorderFrame;
+            summary.max_same_frame_foot_xz_delta_side = side ?? "";
+        }
+
+        UpdateMaxFootXzDeltaByVmdFrameRange(
+            summary,
+            side,
+            candidate,
+            baselineRecorderFrame,
+            candidateRecorderFrame);
+    }
+
+    private static void UpdateMaxFootXzDeltaByVmdFrameRange(
+        MotionComparisonFrameQualitySummary summary,
+        string side,
+        float candidate,
+        int baselineRecorderFrame,
+        int candidateRecorderFrame)
+    {
+        if (!TryGetCandidateVmdFrameRangeBucket(summary, candidateRecorderFrame, out bool withinFrameRange))
+        {
+            return;
+        }
+
+        if (withinFrameRange)
+        {
+            UpdateMaxFootXzDeltaRangeFields(
+                side,
+                candidate,
+                baselineRecorderFrame,
+                candidateRecorderFrame,
+                ref summary.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range,
+                ref summary.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_recorder_frame,
+                ref summary.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_candidate_recorder_frame,
+                ref summary.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_side);
+            return;
+        }
+
+        UpdateMaxFootXzDeltaRangeFields(
+            side,
+            candidate,
+            baselineRecorderFrame,
+            candidateRecorderFrame,
+            ref summary.max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range,
+            ref summary.max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_recorder_frame,
+            ref summary.max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_candidate_recorder_frame,
+            ref summary.max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_side);
+    }
+
+    private static void UpdateMaxFootXzDeltaRangeFields(
+        string side,
+        float candidate,
+        int baselineRecorderFrame,
+        int candidateRecorderFrame,
+        ref float current,
+        ref int currentBaselineRecorderFrame,
+        ref int currentCandidateRecorderFrame,
+        ref string currentSide)
+    {
+        if (!IsFinite(candidate))
+        {
+            return;
+        }
+
+        if (!IsFinite(current) || candidate > current)
+        {
+            current = candidate;
+            currentBaselineRecorderFrame = baselineRecorderFrame;
+            currentCandidateRecorderFrame = candidateRecorderFrame;
+            currentSide = side ?? "";
+        }
+    }
+
+    private static bool TryGetCandidateVmdFrameRangeBucket(
+        MotionComparisonFrameQualitySummary summary,
+        int candidateRecorderFrame,
+        out bool withinFrameRange)
+    {
+        withinFrameRange = false;
+        if (summary == null ||
+            summary.candidate_vmd_max_bone_frame_index < 0 ||
+            candidateRecorderFrame < 0)
+        {
+            return false;
+        }
+
+        withinFrameRange = candidateRecorderFrame <= summary.candidate_vmd_max_bone_frame_index;
+        return true;
+    }
+
+    private static void UpdateMaxHipsXzDelta(
+        MotionComparisonFrameQualitySummary summary,
+        float candidate,
+        int baselineRecorderFrame,
+        int candidateRecorderFrame)
+    {
+        if (summary == null || !IsFinite(candidate))
+        {
+            return;
+        }
+
+        if (!IsFinite(summary.max_same_frame_hips_xz_delta) ||
+            candidate > summary.max_same_frame_hips_xz_delta)
+        {
+            summary.max_same_frame_hips_xz_delta = candidate;
+            summary.max_same_frame_hips_xz_delta_recorder_frame = baselineRecorderFrame;
+            summary.max_same_frame_hips_xz_delta_candidate_recorder_frame = candidateRecorderFrame;
+        }
+    }
+
+    private static void UpdateMaxHipsAlignedFootXzDelta(
+        MotionComparisonFrameQualitySummary summary,
+        string side,
+        float normalizedFootDeltaX,
+        float normalizedFootDeltaZ,
+        float normalizedHipsDeltaX,
+        float normalizedHipsDeltaZ,
+        int baselineRecorderFrame,
+        int candidateRecorderFrame)
+    {
+        if (summary == null ||
+            !IsFinite(normalizedFootDeltaX) ||
+            !IsFinite(normalizedFootDeltaZ) ||
+            !IsFinite(normalizedHipsDeltaX) ||
+            !IsFinite(normalizedHipsDeltaZ))
+        {
+            return;
+        }
+
+        float residualX = normalizedFootDeltaX - normalizedHipsDeltaX;
+        float residualZ = normalizedFootDeltaZ - normalizedHipsDeltaZ;
+        float candidate = Distance(
+            0f,
+            0f,
+            0f,
+            residualX,
+            0f,
+            residualZ);
+        if (!IsFinite(summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment) ||
+            candidate > summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment)
+        {
+            summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment = candidate;
+            summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_x = residualX;
+            summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_z = residualZ;
+            summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_angle_degrees =
+                Mathf.Atan2(residualZ, residualX) * Mathf.Rad2Deg;
+            summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_recorder_frame = baselineRecorderFrame;
+            summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_candidate_recorder_frame = candidateRecorderFrame;
+            summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_side = side ?? "";
+        }
+
+        UpdateMaxHipsAlignedFootXzDeltaByVmdFrameRange(
+            summary,
+            side,
+            candidate,
+            baselineRecorderFrame,
+            candidateRecorderFrame);
+    }
+
+    private static void UpdateMaxHipsAlignedFootXzDeltaByVmdFrameRange(
+        MotionComparisonFrameQualitySummary summary,
+        string side,
+        float candidate,
+        int baselineRecorderFrame,
+        int candidateRecorderFrame)
+    {
+        if (!TryGetCandidateVmdFrameRangeBucket(summary, candidateRecorderFrame, out bool withinFrameRange))
+        {
+            return;
+        }
+
+        if (withinFrameRange)
+        {
+            UpdateMaxFootXzDeltaRangeFields(
+                side,
+                candidate,
+                baselineRecorderFrame,
+                candidateRecorderFrame,
+                ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range,
+                ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_recorder_frame,
+                ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_candidate_recorder_frame,
+                ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range_side);
+            return;
+        }
+
+        UpdateMaxFootXzDeltaRangeFields(
+            side,
+            candidate,
+            baselineRecorderFrame,
+            candidateRecorderFrame,
+            ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range,
+            ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_recorder_frame,
+            ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_candidate_recorder_frame,
+            ref summary.max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range_side);
     }
 
     private static void UpdateOffsetNormalizedDelta(
@@ -3817,9 +5414,15 @@ internal static class MotionComparisonProbeReportWriter
         public int YybDeformationRiskMissingFrameCount;
         public int YybSleeveThicknessRiskFrameCount;
         public int YybSleeveThicknessRiskMissingFrameCount;
+        public int ArmMotionFrameCount;
+        public int LegMotionFrameCount;
         public float MinFootBottomY = float.NaN;
         public float MinFootBottomGroundGap = float.NaN;
         public float MaxRootStep = float.NaN;
+        public float ArmMotionRootTravel;
+        public float LegMotionRootTravel;
+        public float LimbMotionRootTravel;
+        public float MaxLimbMotionRootStep;
         public float MaxRetargetRootDelta = float.NaN;
         public float MaxRetargetPoseDelta = float.NaN;
         public float MaxGroundingVerticalStep = float.NaN;
@@ -3851,9 +5454,15 @@ internal static class MotionComparisonProbeReportWriter
             YybDeformationRiskMissingFrameCount = 0;
             YybSleeveThicknessRiskFrameCount = 0;
             YybSleeveThicknessRiskMissingFrameCount = 0;
+            ArmMotionFrameCount = 0;
+            LegMotionFrameCount = 0;
             MinFootBottomY = float.NaN;
             MinFootBottomGroundGap = float.NaN;
             MaxRootStep = float.NaN;
+            ArmMotionRootTravel = 0f;
+            LegMotionRootTravel = 0f;
+            LimbMotionRootTravel = 0f;
+            MaxLimbMotionRootStep = 0f;
             MaxRetargetRootDelta = float.NaN;
             MaxRetargetPoseDelta = float.NaN;
             MaxGroundingVerticalStep = float.NaN;
@@ -3933,11 +5542,177 @@ internal static class MotionComparisonProbeReportWriter
                     }
                 }
 
+                if (hasPrevious)
+                {
+                    float sampledRootStep = Distance(
+                        previous.RootX,
+                        previous.RootY,
+                        previous.RootZ,
+                        frame.RootX,
+                        frame.RootY,
+                        frame.RootZ);
+                    float armMotionSignal = CalculateArmMotionSignal(previous, frame);
+                    float legMotionSignal = CalculateLegMotionSignal(previous, frame);
+                    bool hasArmMotion = ExceedsThreshold(armMotionSignal, QualityLimbMotionSignalThreshold);
+                    bool hasLegMotion = ExceedsThreshold(legMotionSignal, QualityLimbMotionSignalThreshold);
+
+                    if (hasArmMotion)
+                    {
+                        ArmMotionFrameCount++;
+                        if (IsFinite(sampledRootStep))
+                        {
+                            ArmMotionRootTravel += sampledRootStep;
+                        }
+                    }
+
+                    if (hasLegMotion)
+                    {
+                        LegMotionFrameCount++;
+                        if (IsFinite(sampledRootStep))
+                        {
+                            LegMotionRootTravel += sampledRootStep;
+                        }
+                    }
+
+                    if ((hasArmMotion || hasLegMotion) && IsFinite(sampledRootStep))
+                    {
+                        LimbMotionRootTravel += sampledRootStep;
+                        MaxLimbMotionRootStep = MaxFinite(MaxLimbMotionRootStep, sampledRootStep);
+                    }
+                }
+
                 previous = frame;
                 hasPrevious = true;
             }
         }
     }
+
+    private static float CalculateArmMotionSignal(MetricsCsvFrame previous, MetricsCsvFrame current)
+    {
+        float max = float.NaN;
+        max = MaxAbsDelta(max, previous.LeftShoulderDownUpMuscle, current.LeftShoulderDownUpMuscle);
+        max = MaxAbsDelta(max, previous.LeftShoulderFrontBackMuscle, current.LeftShoulderFrontBackMuscle);
+        max = MaxAbsDelta(max, previous.LeftArmDownUpMuscle, current.LeftArmDownUpMuscle);
+        max = MaxAbsDelta(max, previous.LeftArmFrontBackMuscle, current.LeftArmFrontBackMuscle);
+        max = MaxAbsDelta(max, previous.LeftArmTwistMuscle, current.LeftArmTwistMuscle);
+        max = MaxAbsDelta(max, previous.LeftForearmStretchMuscle, current.LeftForearmStretchMuscle);
+        max = MaxAbsDelta(max, previous.LeftForearmTwistMuscle, current.LeftForearmTwistMuscle);
+        max = MaxAbsDelta(max, previous.RightShoulderDownUpMuscle, current.RightShoulderDownUpMuscle);
+        max = MaxAbsDelta(max, previous.RightShoulderFrontBackMuscle, current.RightShoulderFrontBackMuscle);
+        max = MaxAbsDelta(max, previous.RightArmDownUpMuscle, current.RightArmDownUpMuscle);
+        max = MaxAbsDelta(max, previous.RightArmFrontBackMuscle, current.RightArmFrontBackMuscle);
+        max = MaxAbsDelta(max, previous.RightArmTwistMuscle, current.RightArmTwistMuscle);
+        max = MaxAbsDelta(max, previous.RightForearmStretchMuscle, current.RightForearmStretchMuscle);
+        max = MaxAbsDelta(max, previous.RightForearmTwistMuscle, current.RightForearmTwistMuscle);
+        max = MaxNormalizedAngleDelta(max, previous.LeftElbowAngle, current.LeftElbowAngle);
+        max = MaxNormalizedAngleDelta(max, previous.RightElbowAngle, current.RightElbowAngle);
+        max = MaxAbsDelta(max, previous.LeftHandHorizontalRatio, current.LeftHandHorizontalRatio);
+        max = MaxAbsDelta(max, previous.RightHandHorizontalRatio, current.RightHandHorizontalRatio);
+        max = MaxAbsDelta(max, previous.LeftHandBelowShoulderRatio, current.LeftHandBelowShoulderRatio);
+        max = MaxAbsDelta(max, previous.RightHandBelowShoulderRatio, current.RightHandBelowShoulderRatio);
+        max = MaxAbsDelta(max, previous.LeftHandTorsoSignedClearance, current.LeftHandTorsoSignedClearance);
+        max = MaxAbsDelta(max, previous.RightHandTorsoSignedClearance, current.RightHandTorsoSignedClearance);
+        return max;
+    }
+
+    private static float CalculateGuardNormalizedArmMotionSignal(MetricsCsvFrame previous, MetricsCsvFrame current)
+    {
+        float max = float.NaN;
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.LeftShoulderDownUpMuscle, current.LeftShoulderDownUpMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.LeftShoulderFrontBackMuscle, current.LeftShoulderFrontBackMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.LeftArmDownUpMuscle, current.LeftArmDownUpMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.LeftArmFrontBackMuscle, current.LeftArmFrontBackMuscle);
+        max = MaxGuardNormalizedUpperArmTwistDelta(max, previous.LeftArmTwistMuscle, current.LeftArmTwistMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.LeftForearmStretchMuscle, current.LeftForearmStretchMuscle);
+        max = MaxGuardNormalizedForearmTwistDelta(max, previous.LeftForearmTwistMuscle, current.LeftForearmTwistMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.RightShoulderDownUpMuscle, current.RightShoulderDownUpMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.RightShoulderFrontBackMuscle, current.RightShoulderFrontBackMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.RightArmDownUpMuscle, current.RightArmDownUpMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.RightArmFrontBackMuscle, current.RightArmFrontBackMuscle);
+        max = MaxGuardNormalizedUpperArmTwistDelta(max, previous.RightArmTwistMuscle, current.RightArmTwistMuscle);
+        max = MaxGuardNormalizedHumanMuscleDelta(max, previous.RightForearmStretchMuscle, current.RightForearmStretchMuscle);
+        max = MaxGuardNormalizedForearmTwistDelta(max, previous.RightForearmTwistMuscle, current.RightForearmTwistMuscle);
+        max = MaxNormalizedAngleDelta(max, previous.LeftElbowAngle, current.LeftElbowAngle);
+        max = MaxNormalizedAngleDelta(max, previous.RightElbowAngle, current.RightElbowAngle);
+        max = MaxAbsDelta(max, previous.LeftHandHorizontalRatio, current.LeftHandHorizontalRatio);
+        max = MaxAbsDelta(max, previous.RightHandHorizontalRatio, current.RightHandHorizontalRatio);
+        max = MaxAbsDelta(max, previous.LeftHandBelowShoulderRatio, current.LeftHandBelowShoulderRatio);
+        max = MaxAbsDelta(max, previous.RightHandBelowShoulderRatio, current.RightHandBelowShoulderRatio);
+        max = MaxAbsDelta(max, previous.LeftHandTorsoSignedClearance, current.LeftHandTorsoSignedClearance);
+        max = MaxAbsDelta(max, previous.RightHandTorsoSignedClearance, current.RightHandTorsoSignedClearance);
+        return max;
+    }
+
+    private static float CalculateLegMotionSignal(MetricsCsvFrame previous, MetricsCsvFrame current)
+    {
+        float max = float.NaN;
+        max = MaxNormalizedAngleDelta(max, previous.LeftKneeAngle, current.LeftKneeAngle);
+        max = MaxNormalizedAngleDelta(max, previous.RightKneeAngle, current.RightKneeAngle);
+        return max;
+    }
+
+    private static float MaxAbsDelta(float currentMax, float previous, float current)
+    {
+        if (!IsFinite(previous) || !IsFinite(current))
+        {
+            return currentMax;
+        }
+
+        return MaxFinite(currentMax, Math.Abs(current - previous));
+    }
+
+    private static float MaxGuardNormalizedHumanMuscleDelta(float currentMax, float previous, float current)
+    {
+        return MaxGuardNormalizedMuscleDelta(currentMax, previous, current, QualityGuardNormalizedHumanMuscleLimit);
+    }
+
+    private static float MaxGuardNormalizedUpperArmTwistDelta(float currentMax, float previous, float current)
+    {
+        return MaxGuardNormalizedMuscleDelta(currentMax, previous, current, QualityGuardNormalizedUpperArmTwistMuscleLimit);
+    }
+
+    private static float MaxGuardNormalizedForearmTwistDelta(float currentMax, float previous, float current)
+    {
+        return MaxGuardNormalizedMuscleDelta(currentMax, previous, current, QualityGuardNormalizedForearmTwistMuscleLimit);
+    }
+
+    private static float MaxGuardNormalizedMuscleDelta(float currentMax, float previous, float current, float limit)
+    {
+        if (!IsFinite(previous) || !IsFinite(current))
+        {
+            return currentMax;
+        }
+
+        float normalizedPrevious = Clamp(previous, -limit, limit);
+        float normalizedCurrent = Clamp(current, -limit, limit);
+        return MaxFinite(currentMax, Math.Abs(normalizedCurrent - normalizedPrevious));
+    }
+
+    private static float Clamp(float value, float min, float max)
+    {
+        if (value < min)
+        {
+            return min;
+        }
+
+        if (value > max)
+        {
+            return max;
+        }
+
+        return value;
+    }
+
+    private static float MaxNormalizedAngleDelta(float currentMax, float previous, float current)
+    {
+        if (!IsFinite(previous) || !IsFinite(current))
+        {
+            return currentMax;
+        }
+
+        return MaxFinite(currentMax, Math.Abs(current - previous) / 180f);
+    }
+
 
     private struct MetricsCsvFrame
     {
@@ -3959,12 +5734,42 @@ internal static class MotionComparisonProbeReportWriter
         public float HipsLocalY;
         public float GroundingVerticalStepLast;
         public float FootHeightReferenceLift;
+        public float HipsX;
+        public float HipsZ;
         public float HipsY;
         public float LowestFootBottomY;
         public float FootBottomGroundGap;
+        public float LeftFootX;
+        public float LeftFootZ;
+        public float RightFootX;
+        public float RightFootZ;
         public float RetargetRootDeltaMax;
         public float RetargetPoseDeltaMax;
         public float GroundingVerticalStepMax;
+        public float LeftShoulderDownUpMuscle;
+        public float LeftShoulderFrontBackMuscle;
+        public float LeftArmDownUpMuscle;
+        public float LeftArmFrontBackMuscle;
+        public float LeftArmTwistMuscle;
+        public float LeftForearmStretchMuscle;
+        public float LeftForearmTwistMuscle;
+        public float RightShoulderDownUpMuscle;
+        public float RightShoulderFrontBackMuscle;
+        public float RightArmDownUpMuscle;
+        public float RightArmFrontBackMuscle;
+        public float RightArmTwistMuscle;
+        public float RightForearmStretchMuscle;
+        public float RightForearmTwistMuscle;
+        public float LeftElbowAngle;
+        public float RightElbowAngle;
+        public float LeftKneeAngle;
+        public float RightKneeAngle;
+        public float LeftHandHorizontalRatio;
+        public float RightHandHorizontalRatio;
+        public float LeftHandBelowShoulderRatio;
+        public float RightHandBelowShoulderRatio;
+        public float LeftHandTorsoSignedClearance;
+        public float RightHandTorsoSignedClearance;
         public float YybMaxDeformationRisk;
         public float LeftSleeveThicknessRisk;
         public float RightSleeveThicknessRisk;
@@ -3974,11 +5779,83 @@ internal static class MotionComparisonProbeReportWriter
     {
         public readonly float HipsY;
         public readonly float FootBottomY;
+        public readonly float LeftFootX;
+        public readonly float LeftFootZ;
+        public readonly float RightFootX;
+        public readonly float RightFootZ;
+        public readonly float LeftFootNormalizedDeltaX;
+        public readonly float LeftFootNormalizedDeltaZ;
+        public readonly float RightFootNormalizedDeltaX;
+        public readonly float RightFootNormalizedDeltaZ;
+        public readonly float HorizontalFootTargetMagnitude;
 
         public VerticalSolveFrameCorrection(float hipsY, float footBottomY)
+            : this(
+                hipsY,
+                footBottomY,
+                0f,
+                0f,
+                0f,
+                0f,
+                float.NaN,
+                float.NaN,
+                float.NaN,
+                float.NaN,
+                float.NaN)
+        {
+        }
+
+        public VerticalSolveFrameCorrection(
+            float hipsY,
+            float footBottomY,
+            float leftFootX,
+            float leftFootZ,
+            float rightFootX,
+            float rightFootZ)
+            : this(
+                hipsY,
+                footBottomY,
+                leftFootX,
+                leftFootZ,
+                rightFootX,
+                rightFootZ,
+                float.NaN,
+                float.NaN,
+                float.NaN,
+                float.NaN,
+                HasNonZeroCorrection(leftFootX) ||
+                HasNonZeroCorrection(leftFootZ) ||
+                HasNonZeroCorrection(rightFootX) ||
+                HasNonZeroCorrection(rightFootZ)
+                    ? ResolveHorizontalFootPostprocessTargetMagnitude()
+                    : float.NaN)
+        {
+        }
+
+        public VerticalSolveFrameCorrection(
+            float hipsY,
+            float footBottomY,
+            float leftFootX,
+            float leftFootZ,
+            float rightFootX,
+            float rightFootZ,
+            float leftFootNormalizedDeltaX,
+            float leftFootNormalizedDeltaZ,
+            float rightFootNormalizedDeltaX,
+            float rightFootNormalizedDeltaZ,
+            float horizontalFootTargetMagnitude)
         {
             HipsY = hipsY;
             FootBottomY = footBottomY;
+            LeftFootX = leftFootX;
+            LeftFootZ = leftFootZ;
+            RightFootX = rightFootX;
+            RightFootZ = rightFootZ;
+            LeftFootNormalizedDeltaX = leftFootNormalizedDeltaX;
+            LeftFootNormalizedDeltaZ = leftFootNormalizedDeltaZ;
+            RightFootNormalizedDeltaX = rightFootNormalizedDeltaX;
+            RightFootNormalizedDeltaZ = rightFootNormalizedDeltaZ;
+            HorizontalFootTargetMagnitude = horizontalFootTargetMagnitude;
         }
     }
 
@@ -4017,6 +5894,67 @@ internal static class MotionComparisonProbeReportWriter
         }
     }
 
+    private readonly struct VerticalSolveVmdSafetyLimitDetail
+    {
+        public readonly uint Frame;
+        public readonly string BoneName;
+        public readonly string Side;
+        public readonly string Reason;
+        public readonly float RequestedDeltaX;
+        public readonly float RequestedDeltaY;
+        public readonly float RequestedDeltaZ;
+        public readonly float SafeDeltaX;
+        public readonly float SafeDeltaY;
+        public readonly float SafeDeltaZ;
+
+        private VerticalSolveVmdSafetyLimitDetail(
+            uint frame,
+            string boneName,
+            string side,
+            string reason,
+            float requestedDeltaX,
+            float requestedDeltaY,
+            float requestedDeltaZ,
+            float safeDeltaX,
+            float safeDeltaY,
+            float safeDeltaZ)
+        {
+            Frame = frame;
+            BoneName = boneName ?? string.Empty;
+            Side = side ?? string.Empty;
+            Reason = reason ?? string.Empty;
+            RequestedDeltaX = requestedDeltaX;
+            RequestedDeltaY = requestedDeltaY;
+            RequestedDeltaZ = requestedDeltaZ;
+            SafeDeltaX = safeDeltaX;
+            SafeDeltaY = safeDeltaY;
+            SafeDeltaZ = safeDeltaZ;
+        }
+
+        public static VerticalSolveVmdSafetyLimitDetail Create(
+            VmdRewriteFrame frame,
+            string reason,
+            float requestedDeltaX,
+            float requestedDeltaY,
+            float requestedDeltaZ,
+            float safeDeltaX,
+            float safeDeltaY,
+            float safeDeltaZ)
+        {
+            return new VerticalSolveVmdSafetyLimitDetail(
+                frame != null ? frame.Frame : 0u,
+                frame != null ? frame.BoneName : string.Empty,
+                frame != null ? frame.Side : string.Empty,
+                reason,
+                requestedDeltaX,
+                requestedDeltaY,
+                requestedDeltaZ,
+                safeDeltaX,
+                safeDeltaY,
+                safeDeltaZ);
+        }
+    }
+
     private struct VmdPositionFrame
     {
         public readonly uint Frame;
@@ -4033,9 +5971,33 @@ internal static class MotionComparisonProbeReportWriter
         }
     }
 
+    private struct VmdIkStateFrame
+    {
+        public readonly uint Frame;
+        public readonly bool LeftFootEnabled;
+        public readonly bool LeftToeEnabled;
+        public readonly bool RightFootEnabled;
+        public readonly bool RightToeEnabled;
+
+        public VmdIkStateFrame(
+            uint frame,
+            bool leftFootEnabled,
+            bool leftToeEnabled,
+            bool rightFootEnabled,
+            bool rightToeEnabled)
+        {
+            Frame = frame;
+            LeftFootEnabled = leftFootEnabled;
+            LeftToeEnabled = leftToeEnabled;
+            RightFootEnabled = rightFootEnabled;
+            RightToeEnabled = rightToeEnabled;
+        }
+    }
+
     private struct VmdQualityMetrics
     {
         public int BoneFrameCount;
+        public int MaxBoneFrameIndex;
         public int CenterSpikeFrameCount;
         public int FootIkSpikeFrameCount;
         public float MaxCenterStep;
