@@ -123,21 +123,45 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void MainRecordingScene_UsesManualFullBodyPoseReferenceForLowerBodyArcGuard()
+        public void MainRecordingScene_DoesNotReplaceImportedFbxPoseWithManualFullBodyReference()
         {
             EditorSceneManager.OpenScene(MainRecordingScenePath);
 
             FileManager fileManager = Object.FindObjectOfType<FileManager>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FileManager for FBX selection/import.");
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True,
-                "A7 lower-body arc guard requires the Sub_Manual/testPrefab full-body muscle reference before retarget export.");
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True,
-                "The full-body reference must keep using the same manual body/root orientation basis.");
-            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.True,
-                "A7 Hips path probe points to the manual Hips/model-root relation as the only single-component hypothesis under threshold.");
-            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.True,
-                "The A7 candidate must preserve the moving-root path already approved for A6/A8 separation.");
+            Assert.That(fileManager.useManualAnimatorFingerPoseReference, Is.False,
+                "Main_Recoding must not copy manual finger pose into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.False,
+                "Main_Recoding must preserve the imported FBX full-body pose during normal Play/import playback.");
+            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.False,
+                "Main_Recoding must not copy manual body rotation into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorBodyPositionYReference, Is.False,
+                "Main_Recoding must not copy manual body Y into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.False,
+                "Main_Recoding must not copy manual Hips local position into the default playback/import path.");
+            Assert.That(fileManager.useManualAnimatorThumbLocalRotationReference, Is.False,
+                "Main_Recoding must not copy manual thumb local rotation into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorHandLocalRotationReference, Is.False,
+                "Main_Recoding must not copy manual hand local rotation into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorThumbSegmentDirectionReference, Is.False,
+                "Main_Recoding must not copy manual thumb segment directions into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorThumbHandDirectionReference, Is.False,
+                "Main_Recoding must not copy manual thumb-hand directions into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorHandPalmFrameReference, Is.False,
+                "Main_Recoding must not copy manual palm frame into the normal Play/import path.");
+            Assert.That(fileManager.useManualAnimatorThumbBasePositionReference, Is.False,
+                "Main_Recoding must not copy manual thumb base position into the normal Play/import path.");
+            Assert.That(fileManager.preserveManualFingerReferenceThumbMuscles, Is.False,
+                "Main_Recoding must not preserve manual thumb muscles while the manual finger reference is disabled.");
+            Assert.That(fileManager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.12f).Within(0.0001f),
+                "Main_Recoding keeps only the conservative serialized Hips reference cap while the reference is disabled.");
+            Assert.That(fileManager.MovementScaleMultiplier, Is.EqualTo(0f).Within(0.0001f),
+                "Main_Recoding must keep the visible root carrier stationary so arm motion does not move the whole character in an arc.");
+            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.False,
+                "Main_Recoding must not add bodyPosition X/Z root motion to the stationary preview carrier.");
+            Assert.That(fileManager.useEditorHumanoidRootTranslationReference, Is.False,
+                "Main_Recoding must not add Humanoid RootT translation to the stationary preview carrier.");
         }
 
         [Test]

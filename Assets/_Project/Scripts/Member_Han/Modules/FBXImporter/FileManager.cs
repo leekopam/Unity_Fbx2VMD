@@ -95,15 +95,25 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0.05f, 1f)] public float editorHumanoidRootTranslationCurrentWeight = 0.35f;
 
         [Tooltip("손가락은 Sub_Manual/testPrefab Animator가 평가한 HumanPose 값을 기준으로 덮어씁니다.")]
-        public bool useManualAnimatorFingerPoseReference = true;
+        public bool useManualAnimatorFingerPoseReference = false;
 
         public bool useManualAnimatorFullBodyPoseReference = false;
 
+        [Range(0f, 1f)] public float manualAnimatorFullBodyPoseReferenceWeight = 1f;
+
+        [Tooltip("Runtime diagnostic: keep the manual Animator full-body reference active but skip lower-body muscles.")]
+        public bool manualAnimatorFullBodyPoseExcludeLowerBodyMuscles = false;
+
+        [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to lower-body muscles.")]
+        public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnly = false;
+
         [Tooltip("Sub_Manual/testPrefab Animator의 HumanPose bodyRotation을 retarget pose 기준으로 사용해 팔꿈치 bend plane 기준축 차이를 줄입니다.")]
-        public bool useManualAnimatorBodyRotationReference = true;
+        public bool useManualAnimatorBodyRotationReference = false;
+
+        [Range(0f, 1f)] public float manualAnimatorBodyRotationReferenceWeight = 1f;
 
         [Tooltip("preserveRetargetBodyPosition=true 일 때 body Y를 수동 기준 Animator bodyPosition.y로 대체합니다. ghost Legacy-animation bodyPos.y 스파이크 없이 상체 높이를 애니메이션에 맞게 따라가도록 합니다.")]
-        public bool useManualAnimatorBodyPositionYReference = true;
+        public bool useManualAnimatorBodyPositionYReference = false;
 
         [Tooltip("수동 기준 Animator의 Hips localPosition을 target Hips에 선택적으로 적용해 Main_Auto의 몸통 경로 편차를 A/B 검증합니다. 활성 시 testprefab Hips delta가 YYB에 전달되어 오히려 발 호 궤적이 심해지므로 기본 비활성화합니다.")]
         public bool useManualAnimatorHipsLocalPositionReference = false;
@@ -112,7 +122,7 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0f, 1f)] public float manualAnimatorHipsLocalPositionWeight = 1f;
 
         [Tooltip("프레임당 수동 기준 Hips localPosition으로 이동할 수 있는 최대 보정 거리입니다.")]
-        [Range(0.001f, 0.2f)] public float manualAnimatorHipsLocalPositionMaxOffset = 0.12f;
+        [Range(0.001f, 0.5f)] public float manualAnimatorHipsLocalPositionMaxOffset = 0.12f;
 
         [Tooltip("수동 기준 Animator의 lowest-foot 상승량을 접지 목표 높이에 반영해 Main_Auto가 점프/발 높이 호를 바닥으로 평탄화하지 않도록 합니다.")]
         public bool useManualAnimatorFootHeightGroundingReference = false;
@@ -123,32 +133,131 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("수동 기준 lowest-foot에서 접지 목표 높이로 반영할 수 있는 최대 양수 상승량입니다.")]
         [Range(0f, 0.12f)] public float manualAnimatorFootHeightGroundingReferenceMaxLift = 0.08f;
 
+        [Tooltip("Apply the manual Animator lower-body leg-chain localRotation to the target as an isolated runtime candidate.")]
+        public bool useManualAnimatorFootLocalRotationReference = false;
+
+        [Tooltip("Blend weight for the manual Animator lower-body leg-chain localRotation reference.")]
+        [Range(0f, 1f)] public float manualAnimatorFootLocalRotationReferenceWeight = 1f;
+
+        [Tooltip("Apply manual Animator lower-body segment directions as an isolated runtime candidate without changing bone lengths or scale.")]
+        public bool useManualAnimatorLowerBodySegmentDirectionReference = false;
+
+        [Tooltip("Blend weight for the manual Animator lower-body segment direction correction.")]
+        [Range(0f, 1f)] public float manualAnimatorLowerBodySegmentDirectionReferenceWeight = 1f;
+
+        [Tooltip("Maximum per-frame lower-body segment direction correction angle in degrees.")]
+        [Range(0f, 20f)] public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 6.2f;
+
+        [Tooltip("Skip only the upper-leg-to-lower-leg segments from the manual Animator lower-body segment direction correction.")]
+        public bool disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = false;
+
+        [Tooltip("Optional upper-leg-to-lower-leg segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
+        [Range(0f, 20f)] public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Skip only the lower-leg-to-foot segments from the manual Animator lower-body segment direction correction.")]
+        public bool disableManualAnimatorLowerLegToFootSegmentDirectionReference = false;
+
+        [Tooltip("Optional lower-leg-to-foot segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
+        [Range(0f, 20f)] public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Optional left lower-leg-to-foot segment direction max angle in degrees. Zero keeps the lower-leg-to-foot segment cap.")]
+        [Range(0f, 20f)] public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Optional right lower-leg-to-foot segment direction max angle in degrees. Zero keeps the lower-leg-to-foot segment cap.")]
+        [Range(0f, 20f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Runtime diagnostic scale for right lower-leg-to-foot correction axis X/Z components. One keeps the original axis.")]
+        [Range(0f, 1f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = 1f;
+
+        [Tooltip("Runtime diagnostic blend for right lower-leg-to-foot correction strength. One keeps the existing correction.")]
+        [Range(0f, 1f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 1f;
+
+        [Tooltip("Runtime diagnostic start recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
+        [Range(0f, 2000f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = 0f;
+
+        [Tooltip("Runtime diagnostic end recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
+        [Range(0f, 2000f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = 0f;
+
+        [Tooltip("Runtime diagnostic blend for preserving right foot world rotation after lower-leg-to-foot correction. One keeps the existing endpoint drift.")]
+        [Range(0f, 1f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = 1f;
+
+        [Tooltip("Skip only the foot-to-toes segment from the manual Animator lower-body segment direction correction.")]
+        public bool disableManualAnimatorFootToToesSegmentDirectionReference = false;
+
+        [Tooltip("Optional foot-to-toes-only segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
+        [Range(0f, 20f)] public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
+
+        [Tooltip("Apply a yaw-only upper-leg correction toward the manual Animator hips-relative foot X/Z path.")]
+        public bool useManualAnimatorFootHipsAlignedResidualYawReference = false;
+
+        [Tooltip("Blend weight for the hips-aligned foot X/Z residual yaw correction.")]
+        [Range(0f, 1f)] public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight = 1f;
+
+        [Tooltip("Maximum per-frame yaw correction angle for each upper leg in degrees.")]
+        [Range(0f, 45f)] public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = 15f;
+
+        [Tooltip("Apply manual Animator hips-relative foot positions through BipedIK as an isolated runtime candidate.")]
+        public bool useManualAnimatorBipedIkFootPositionReference = false;
+
+        [Tooltip("Blend weight for manual Animator BipedIK foot position targets.")]
+        [Range(0f, 1f)] public float manualAnimatorBipedIkFootPositionReferenceWeight = 0.65f;
+
+        [Tooltip("Maximum per-frame BipedIK foot target correction distance from the current target foot position.")]
+        [Range(0f, 0.2f)] public float manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0.12f;
+
+        [Tooltip("Apply a right-foot endpoint X/Z correction immediately after SetHumanPose as an isolated runtime candidate.")]
+        public bool usePostSetHumanPoseRightEndpointPositionReference = false;
+
+        [Tooltip("Blend weight for post-SetHumanPose right-foot endpoint X/Z correction.")]
+        [Range(0f, 1f)] public float postSetHumanPoseRightEndpointPositionReferenceWeight = 1f;
+
+        [Tooltip("Maximum per-frame post-SetHumanPose right-foot endpoint X/Z correction distance.")]
+        [Range(0f, 0.2f)] public float postSetHumanPoseRightEndpointPositionReferenceMaxOffset = 0.04f;
+
+        [Tooltip("Scale applied only to positive world-Z endpoint correction after SetHumanPose; 1 keeps existing behavior.")]
+        [Range(0f, 1f)] public float postSetHumanPoseRightEndpointPositionReferencePositiveZScale = 1f;
+
+        [Tooltip("Blend from foot-only endpoint delta to the existing foot/toes average after SetHumanPose; 1 keeps existing behavior.")]
+        [Range(0f, 1f)] public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = 1f;
+
+        [Tooltip("First legacy animation frame for post-SetHumanPose right-foot endpoint correction; 0 with end 0 keeps existing behavior.")]
+        [Range(0f, 6000f)] public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = 0f;
+
+        [Tooltip("Last legacy animation frame for post-SetHumanPose right-foot endpoint correction; 0 with start 0 keeps existing behavior.")]
+        [Range(0f, 6000f)] public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
+
+        [Tooltip("Use the first matched reference foot X/Z offset as the post-SetHumanPose right-foot correction basis.")]
+        public bool usePostSetHumanPoseRightFootEvaluatorXzReference = false;
+
+        [Tooltip("Target normalized right-foot X/Z magnitude for the first-offset evaluator-basis post-SetHumanPose prototype.")]
+        [Range(0f, 0.2f)] public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = 0.049f;
+
         [Tooltip("엄지 체인의 localRotation도 Sub_Manual/testPrefab Animator가 같은 FBX clip에서 평가한 값을 기준으로 덮어씁니다. YYB와 testPrefab의 Humanoid muscle은 같지만 엄지 로컬 축 해석이 달라 보일 때 사용합니다.")]
-        public bool useManualAnimatorThumbLocalRotationReference = true;
+        public bool useManualAnimatorThumbLocalRotationReference = false;
 
         [Tooltip("손목 localRotation을 Sub_Manual/testPrefab Animator가 같은 FBX clip에서 평가한 값을 기준으로 덮어씁니다. t13.2 hand pose parity 회귀 보호용입니다.")]
-        public bool useManualAnimatorHandLocalRotationReference = true;
+        public bool useManualAnimatorHandLocalRotationReference = false;
 
         [Tooltip("엄지 세그먼트 방향을 Sub_Manual/testPrefab의 손 기준 방향에 맞춥니다. 모델별 bind axis 차이 때문에 localRotation 숫자가 같아도 손 모양이 달라질 때 사용합니다.")]
-        public bool useManualAnimatorThumbSegmentDirectionReference = true;
+        public bool useManualAnimatorThumbSegmentDirectionReference = false;
 
         [Tooltip("엄지 세그먼트 방향 보정 강도입니다. 1이면 testPrefab 손 기준 방향에 맞추고, 0이면 보정하지 않습니다.")]
         [Range(0f, 1f)] public float manualAnimatorThumbSegmentDirectionWeight = 1f;
 
         [Tooltip("손바닥 기준 Hand->ThumbIntermediate 방향을 Sub_Manual/testPrefab의 손 기준 방향에 맞춥니다. 엄지 시작 방향이 손바닥 밖으로 탈골된 것처럼 보일 때 사용합니다.")]
-        public bool useManualAnimatorThumbHandDirectionReference = true;
+        public bool useManualAnimatorThumbHandDirectionReference = false;
 
         [Tooltip("손바닥 기준 엄지 시작 방향 보정 강도입니다. 1이면 testPrefab의 Hand->ThumbIntermediate 방향에 맞춥니다.")]
         [Range(0f, 1f)] public float manualAnimatorThumbHandDirectionWeight = 1f;
 
         [Tooltip("손바닥 전체 프레임을 Sub_Manual/testPrefab의 손바닥 방향에 맞춥니다. MMD 기준과 손목/엄지 뿌리 실루엣이 다를 때 사용합니다.")]
-        public bool useManualAnimatorHandPalmFrameReference = true;
+        public bool useManualAnimatorHandPalmFrameReference = false;
 
         [Tooltip("손바닥 프레임 보정 강도입니다. MMD 396프레임 직접 비교 기준으로 기본값은 1.00입니다.")]
         [Range(0f, 1f)] public float manualAnimatorHandPalmFrameWeight = 1f;
 
         [Tooltip("엄지 첫 본 위치를 Sub_Manual/testPrefab의 손 기준 위치 비율로 맞춥니다. YYB 엄지 시작부가 손바닥 안쪽으로 붙어 보일 때 사용합니다.")]
-        public bool useManualAnimatorThumbBasePositionReference = true;
+        public bool useManualAnimatorThumbBasePositionReference = false;
 
         [Tooltip("엄지 첫 본 위치 보정 강도입니다. 1이면 testPrefab 손 기준 위치 비율을 그대로 적용합니다.")]
         [Range(0f, 1f)] public float manualAnimatorThumbBasePositionWeight = 1f;
@@ -237,6 +346,12 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("전완이 한 프레임에 따라갈 수 있는 최대 각도입니다.")]
         [Range(0f, 120f)] public float YybArmDirectionForearmMaxDegrees = 85f;
 
+        [Tooltip("YYB 팔 방향 보정의 왼쪽 팔 영향도 배율입니다.")]
+        [Range(0f, 1f)] public float YybArmDirectionLeftSideWeightScale = 1f;
+
+        [Tooltip("YYB 팔 방향 보정의 오른쪽 팔 영향도 배율입니다.")]
+        [Range(0f, 1f)] public float YybArmDirectionRightSideWeightScale = 1f;
+
         [Tooltip("YYB 팔 방향 보정 구성 로그를 출력합니다.")]
         public bool logYybArmDirectionRetargetCorrection = false;
 
@@ -274,6 +389,26 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("손이 어깨보다 팔 길이 대비 이 비율보다 더 낮으면 자연스럽게 내려간 팔로 보고 보정하지 않습니다.")]
         [Range(0f, 1.5f)] public float YybArmSwingMaxHandBelowShoulderRatio = 0.75f;
+
+        [Tooltip("손이 몸 밖으로 과하게 벌어진 경우 수평 reach를 제한하는 보정 강도입니다. 0이면 비활성화합니다.")]
+        [Range(0f, 1f)] public float YybArmSwingHorizontalReachLimitWeight = 0f;
+
+        [Tooltip("팔 길이 대비 허용할 최대 손 수평 reach입니다. 0이면 수평 reach 제한을 사용하지 않습니다.")]
+        [Range(0f, 1.5f)] public float YybArmSwingMaxHandHorizontalReachRatio = 0f;
+
+        [Tooltip("Horizontal reach only below-shoulder gate. 0 keeps using YybArmSwingMaxHandBelowShoulderRatio.")]
+        [Range(0f, 1.5f)] public float YybArmSwingHorizontalReachMaxHandBelowShoulderRatio = 0f;
+
+        [Tooltip("Horizontal reach 적용 뒤 팔꿈치 각도가 이 값보다 작으면 해당 reach 보정을 되돌립니다. 0이면 비활성화합니다.")]
+        [Range(0f, 180f)] public float YybArmSwingHorizontalReachMinElbowAngleAfterApply = 0f;
+
+        [Range(0f, 1f)] public float YybArmSwingRaisedPoseHorizontalReachLimitWeight = 0f;
+
+        [Range(0f, 1f)] public float YybArmSwingRaisedPoseMinUpperArmDownDot = 0.55f;
+
+        [Range(0f, 1.5f)] public float YybArmSwingRaisedPoseMaxHandBelowShoulderRatio = 0.05f;
+
+        [Range(0f, 1.5f)] public float YybArmSwingRaisedPoseMaxHandHorizontalReachRatio = 0f;
 
         [Tooltip("YYB 상완 하강 제한 보정 로그를 출력합니다.")]
         public bool logYybArmSwingLimitCorrection = false;
@@ -323,7 +458,7 @@ namespace Member_Han.Modules.FBXImporter
         public bool enableThumbAnatomicalGuard = true;
 
         [Tooltip("Manual Animator finger reference를 사용할 때는 엄지 stretch offset을 추가하지 않고 수동 기준 엄지 muscle을 보존합니다.")]
-        public bool preserveManualFingerReferenceThumbMuscles = true;
+        public bool preserveManualFingerReferenceThumbMuscles = false;
 
         [Tooltip("엄지 굽힘 muscle 최소값입니다. 값이 너무 낮으면 엄지가 손바닥 안쪽으로 과하게 접힐 수 있습니다.")]
         [Range(-2.5f, 0f)] public float ThumbStretchMin = -2.1f;
@@ -502,6 +637,9 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("pose spike smoothing 때 현재 FBX pose를 반영하는 비율입니다. 1에 가까울수록 원본 모션을 더 보존하고, 낮을수록 pop을 더 줄입니다.")]
         [Range(0.1f, 1f)] public float RetargetPoseVisualSpikeCurrentWeight = 0.65f;
 
+        [Tooltip("Optional forearm stretch clamp around the current pose during visual spike smoothing. 0 disables the clamp.")]
+        [Range(0f, 1f)] public float RetargetPoseVisualSpikeForearmStretchClampMaxOffset = 0f;
+
         [Tooltip("이 값보다 큰 muscle delta가 발생하면 frame-time spike가 아니어도 pose smoothing을 적용합니다.")]
         [Range(0.05f, 1f)] public float RetargetPoseVisualMuscleDeltaThreshold = 0.35f;
 
@@ -510,7 +648,7 @@ namespace Member_Han.Modules.FBXImporter
         [Range(-0.5f, 0.5f)] public float HeightOffset = 0.0f;
 
         [Tooltip("보폭 비율 (1.0 = 자동, 미끄러지면 조절)")]
-        [Range(0.8f, 1.2f)] public float MovementScaleMultiplier = 1.0f;
+        [Range(0f, 1.2f)] public float MovementScaleMultiplier = 1.0f;
 
         [Header("Root Motion Spike Guard")]
         [Tooltip("FBX root delta가 한 프레임에 과도하게 튀면 순간이동으로 보고 해당 프레임의 추가 root 이동을 무시합니다.")]
@@ -647,7 +785,11 @@ namespace Member_Han.Modules.FBXImporter
         private bool _editorSmokeCaptureResolutionOverrideActive;
         private int _editorSmokeCaptureWidth;
         private int _editorSmokeCaptureHeight;
+        private float _editorSmokeDiagnosticScreenshotPaddingOverride = float.NaN;
+        private float _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride = float.NaN;
         private bool _editorSmokeUseKnownMmdReferenceTiming;
+        private float _editorSmokeRecordingStartTimeOverrideSeconds = float.NaN;
+        private float _editorSmokeRecordingPlaybackSpeedOverride = float.NaN;
         private Coroutine _editorDiagnosticBatchAdvanceCoroutine;
 #endif
         #endregion
@@ -768,7 +910,11 @@ namespace Member_Han.Modules.FBXImporter
             EditorDiagnosticSmokeSegment segment = EditorDiagnosticSmokeSegment.Head,
             float[] sampleTimesOverride = null,
             int captureWidthOverride = 0,
-            int captureHeightOverride = 0)
+            int captureHeightOverride = 0,
+            float diagnosticScreenshotPaddingOverride = float.NaN,
+            float diagnosticScreenshotVerticalViewportCenterOverride = float.NaN,
+            float recordingStartTimeOverrideSeconds = float.NaN,
+            float recordingPlaybackSpeedOverride = float.NaN)
         {
             if (_isProcessing)
             {
@@ -811,12 +957,21 @@ namespace Member_Han.Modules.FBXImporter
                 captureHeightOverride,
                 out _editorSmokeCaptureWidth,
                 out _editorSmokeCaptureHeight);
+            _editorSmokeDiagnosticScreenshotPaddingOverride =
+                NormalizeEditorSmokeDiagnosticScreenshotPaddingOverride(diagnosticScreenshotPaddingOverride);
+            _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride =
+                NormalizeEditorSmokeDiagnosticScreenshotVerticalViewportCenterOverride(
+                    diagnosticScreenshotVerticalViewportCenterOverride);
             _editorSmokeUseKnownMmdReferenceTiming = ShouldUseKnownMmdReferenceTimingForEditorSmoke(
                 Path.GetFileNameWithoutExtension(sourcePath),
                 safeDuration,
                 safeTargetFrameCount,
                 EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
                 useKnownMmdReferenceTiming);
+            _editorSmokeRecordingStartTimeOverrideSeconds =
+                NormalizeEditorSmokeStartTimeOverride(recordingStartTimeOverrideSeconds);
+            _editorSmokeRecordingPlaybackSpeedOverride =
+                NormalizeEditorSmokePlaybackSpeedOverride(recordingPlaybackSpeedOverride);
 
             Debug.Log(
                 $"[FileManager] Editor smoke 진단 시작: FBX={Path.GetFileName(sourcePath)}, " +
@@ -980,7 +1135,51 @@ namespace Member_Han.Modules.FBXImporter
             _editorSmokeCaptureResolutionOverrideActive = false;
             _editorSmokeCaptureWidth = 0;
             _editorSmokeCaptureHeight = 0;
+            _editorSmokeDiagnosticScreenshotPaddingOverride = float.NaN;
+            _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride = float.NaN;
             _editorSmokeUseKnownMmdReferenceTiming = false;
+            _editorSmokeRecordingStartTimeOverrideSeconds = float.NaN;
+            _editorSmokeRecordingPlaybackSpeedOverride = float.NaN;
+        }
+
+        private static float NormalizeEditorSmokeStartTimeOverride(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f)
+            {
+                return float.NaN;
+            }
+
+            return value;
+        }
+
+        private static float NormalizeEditorSmokePlaybackSpeedOverride(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+            {
+                return float.NaN;
+            }
+
+            return Mathf.Max(0.0001f, value);
+        }
+
+        private static float NormalizeEditorSmokeDiagnosticScreenshotPaddingOverride(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+            {
+                return float.NaN;
+            }
+
+            return Mathf.Clamp(value, 0.25f, 2f);
+        }
+
+        private static float NormalizeEditorSmokeDiagnosticScreenshotVerticalViewportCenterOverride(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                return float.NaN;
+            }
+
+            return Mathf.Clamp01(value);
         }
 
         public void ScheduleEditorDiagnosticBatchAdvance(Action continuation)
@@ -1932,10 +2131,18 @@ namespace Member_Han.Modules.FBXImporter
                 _activeRecorderController = recorderController;
                 _activeRecorderController.RecordingFinished += OnRecordingFinished;
                 RecordingCaptureResolutionPlan recordingCapturePlan;
+                float diagnosticScreenshotPadding = 1.8f;
+                float diagnosticScreenshotVerticalViewportCenter = 0.28f;
 #if UNITY_EDITOR
                 recordingCapturePlan = _editorSmokeCaptureResolutionOverrideActive
                     ? RecordingCaptureResolution.CreateCustomPlan(_editorSmokeCaptureWidth, _editorSmokeCaptureHeight)
                     : CreateRecordingCaptureResolutionPlan();
+                diagnosticScreenshotPadding = float.IsNaN(_editorSmokeDiagnosticScreenshotPaddingOverride)
+                    ? diagnosticScreenshotPadding
+                    : _editorSmokeDiagnosticScreenshotPaddingOverride;
+                diagnosticScreenshotVerticalViewportCenter = float.IsNaN(_editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride)
+                    ? diagnosticScreenshotVerticalViewportCenter
+                    : _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride;
 #else
                 recordingCapturePlan = CreateRecordingCaptureResolutionPlan();
 #endif
@@ -1945,13 +2152,32 @@ namespace Member_Han.Modules.FBXImporter
                     enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics,
                     diagnosticSampleTimesOverride,
                     recordingCapturePlan.Width,
-                    recordingCapturePlan.Height);
+                    recordingCapturePlan.Height,
+                    diagnosticScreenshotPadding,
+                    diagnosticScreenshotVerticalViewportCenter);
 #if UNITY_EDITOR
                 if (_editorSmokeRecordingOverrideActive)
                 {
                     float requestedDuration = Mathf.Max(0.1f, _editorSmokeDurationSeconds);
+                    bool hasEditorSmokeTimingOverride =
+                        !float.IsNaN(_editorSmokeRecordingStartTimeOverrideSeconds) ||
+                        !float.IsNaN(_editorSmokeRecordingPlaybackSpeedOverride);
                     recordingStartTime = CalculateEditorSmokeStartTime(clip, requestedDuration, _editorSmokeSegment);
-                    float remainingLength = Mathf.Max(0.1f, clip.length - recordingStartTime);
+                    if (!float.IsNaN(_editorSmokeRecordingStartTimeOverrideSeconds))
+                    {
+                        recordingStartTime = Mathf.Clamp(
+                            _editorSmokeRecordingStartTimeOverrideSeconds,
+                            0f,
+                            Mathf.Max(0f, clip.length));
+                    }
+
+                    if (!float.IsNaN(_editorSmokeRecordingPlaybackSpeedOverride))
+                    {
+                        recordingPlaybackSpeed = _editorSmokeRecordingPlaybackSpeedOverride;
+                    }
+
+                    float safePlaybackSpeed = Mathf.Max(0.0001f, recordingPlaybackSpeed);
+                    float remainingLength = Mathf.Max(0.1f, (clip.length - recordingStartTime) / safePlaybackSpeed);
                     recordingLength = Mathf.Min(requestedDuration, remainingLength);
                     recordingTargetFrameCount = Mathf.Min(
                         Mathf.Max(1, _editorSmokeTargetFrameCount),
@@ -1964,7 +2190,8 @@ namespace Member_Han.Modules.FBXImporter
                         $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
                         $"targetFrameCount={recordingTargetFrameCount}");
 
-                    if (TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+                    if (!hasEditorSmokeTimingOverride &&
+                        TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
                         outputBaseName,
                         clip.length,
                         recordingLength,
@@ -3015,6 +3242,8 @@ namespace Member_Han.Modules.FBXImporter
                 YybArmDirectionForearmWeight,
                 YybArmDirectionUpperArmMaxDegrees,
                 YybArmDirectionForearmMaxDegrees,
+                YybArmDirectionLeftSideWeightScale,
+                YybArmDirectionRightSideWeightScale,
                 logYybArmDirectionRetargetCorrection);
 
             if (!configured)
@@ -3057,6 +3286,14 @@ namespace Member_Han.Modules.FBXImporter
                 YybArmSwingMaxDownDot,
                 YybArmSwingMinHandHorizontalRatio,
                 YybArmSwingMaxHandBelowShoulderRatio,
+                YybArmSwingHorizontalReachLimitWeight,
+                YybArmSwingMaxHandHorizontalReachRatio,
+                YybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
+                YybArmSwingHorizontalReachMinElbowAngleAfterApply,
+                YybArmSwingRaisedPoseHorizontalReachLimitWeight,
+                YybArmSwingRaisedPoseMinUpperArmDownDot,
+                YybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
+                YybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
                 logYybArmSwingLimitCorrection);
 
             return swingLimitGuard;
@@ -3597,7 +3834,13 @@ namespace Member_Han.Modules.FBXImporter
                     !useManualAnimatorFullBodyPoseReference &&
                     !useManualAnimatorHipsLocalPositionReference &&
                     !useManualAnimatorBodyRotationReference &&
-                    !useManualAnimatorHandLocalRotationReference) ||
+                    !useManualAnimatorHandLocalRotationReference &&
+                    !useManualAnimatorFootLocalRotationReference &&
+                    !useManualAnimatorLowerBodySegmentDirectionReference &&
+                    !useManualAnimatorFootHipsAlignedResidualYawReference &&
+                    !usePostSetHumanPoseRightEndpointPositionReference &&
+                    !usePostSetHumanPoseRightFootEvaluatorXzReference &&
+                    !useManualAnimatorBipedIkFootPositionReference) ||
                 retargeter == null ||
                 referenceClip == null)
             {
@@ -3635,7 +3878,10 @@ namespace Member_Han.Modules.FBXImporter
                 referenceController,
                 referenceClip,
                 useManualAnimatorFingerPoseReference,
-                useManualAnimatorFullBodyPoseReference);
+                useManualAnimatorFullBodyPoseReference,
+                manualAnimatorFullBodyPoseReferenceWeight,
+                manualAnimatorFullBodyPoseExcludeLowerBodyMuscles,
+                manualAnimatorFullBodyPoseLowerBodyMusclesOnly);
         }
 
         private static string ResolveEditorHumanoidReferencePath(string importedFilePath, string sourceFilePath)
@@ -3656,7 +3902,7 @@ namespace Member_Han.Modules.FBXImporter
             string sourceFileName,
             Func<string, bool> hasHumanoidAnimationClip)
         {
-            if (hasHumanoidAnimationClip(sourceRelativePath))
+            if (!IsControlledImportAssetPath(sourceRelativePath) && hasHumanoidAnimationClip(sourceRelativePath))
             {
                 return sourceRelativePath;
             }

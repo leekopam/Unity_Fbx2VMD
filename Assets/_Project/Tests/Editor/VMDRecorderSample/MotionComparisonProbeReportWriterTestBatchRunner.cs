@@ -25,6 +25,8 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_ScreenshotIndexRow_When_BuildCsvLine_Then_EscapesQuotesAndCommas);
             RunTest(results, nameof(tests.Given_NewMotionComparisonProbe_When_InspectingFullBodyScreenshotPadding_Then_MatchesReferenceMp4LongShotFraming),
                 tests.Given_NewMotionComparisonProbe_When_InspectingFullBodyScreenshotPadding_Then_MatchesReferenceMp4LongShotFraming);
+            RunTest(results, nameof(tests.Given_NewMotionComparisonProbe_When_ResettingDefaultSampleTimes_Then_CoversReferenceMp4CurrentClipSamples),
+                tests.Given_NewMotionComparisonProbe_When_ResettingDefaultSampleTimes_Then_CoversReferenceMp4CurrentClipSamples);
             RunTest(results, nameof(tests.Given_MetricsCsvValues_When_FormattersRun_Then_UseInvariantCsvAndBlankInvalidNumbers),
                 tests.Given_MetricsCsvValues_When_FormattersRun_Then_UseInvariantCsvAndBlankInvalidNumbers);
             RunTest(results, nameof(tests.Given_CsvInteger_When_FormatCsvInt_Then_UsesInvariantDigits),
@@ -107,6 +109,26 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_SessionTimestamp_When_BuildSessionTimeLabels_Then_UsesInvariantManifestFormats);
             RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_KeepsColumnOrderAndCount),
                 tests.Given_MetricsCsvHeader_When_BuildHeader_Then_KeepsColumnOrderAndCount);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesPostSetRightEndpointDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesPostSetRightEndpointDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRetargetPoseStageDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRetargetPoseStageDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftArmTwistRetargetPoseStageDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftArmTwistRetargetPoseStageDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftForearmRetargetPoseStageDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftForearmRetargetPoseStageDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRightForearmRetargetPoseStageDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRightForearmRetargetPoseStageDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSetHumanPoseBoundaryDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSetHumanPoseBoundaryDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftForearmSetHumanPoseBoundaryDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftForearmSetHumanPoseBoundaryDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesArmSwingGuardBoundaryDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesArmSwingGuardBoundaryDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLowerBodyPostPoseDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLowerBodyPostPoseDiagnostics);
+            RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRetargetEndpointStageDiagnostics),
+                tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRetargetEndpointStageDiagnostics);
             RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSleeveThicknessDiagnostics),
                 tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSleeveThicknessDiagnostics);
             RunTest(results, nameof(tests.Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesHipsYContributionDiagnostics),
@@ -141,6 +163,16 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_MetricSamplesDriftByOneRecorderFrame_When_BuildFrameQualitySummary_Then_ComparesNearestFrame);
             RunTest(results, nameof(tests.Given_SparseMetricsCsvsWithSameFrameRootDelta_When_BuildFrameQualitySummary_Then_FailsGate),
                 tests.Given_SparseMetricsCsvsWithSameFrameRootDelta_When_BuildFrameQualitySummary_Then_FailsGate);
+            RunTest(results, nameof(tests.Given_SameFrameFootXzArcDelta_When_BuildFrameQualitySummary_Then_ReportsHorizontalFootGate),
+                tests.Given_SameFrameFootXzArcDelta_When_BuildFrameQualitySummary_Then_ReportsHorizontalFootGate);
+            RunTest(results, nameof(tests.Given_HipsHorizontalMotionExplainsPartOfFootXzDelta_When_BuildFrameQualitySummary_Then_ReportsHipsAlignedFootResidual),
+                tests.Given_HipsHorizontalMotionExplainsPartOfFootXzDelta_When_BuildFrameQualitySummary_Then_ReportsHipsAlignedFootResidual);
+            RunTest(results, nameof(tests.Given_FinalFootXzSampleFallsOutsideVmdExportRange_When_BuildFrameQualitySummary_Then_UsesInsideRangeForFootXzGateAndReportsOutsideSample),
+                tests.Given_FinalFootXzSampleFallsOutsideVmdExportRange_When_BuildFrameQualitySummary_Then_UsesInsideRangeForFootXzGateAndReportsOutsideSample);
+            RunTest(results, nameof(tests.Given_FootXzWarningWithinVmdRange_When_BuildingEvaluationEntries_Then_CorrectedCandidateReducesFootCarrierXzBelowWarning),
+                tests.Given_FootXzWarningWithinVmdRange_When_BuildingEvaluationEntries_Then_CorrectedCandidateReducesFootCarrierXzBelowWarning);
+            RunTest(results, nameof(tests.Given_FootXzCorrectionFrameHasDisabledIk_When_NearbyIkFrameCanCarryDelta_Then_CorrectedVmdUsesVisibleCarrierFrame),
+                tests.Given_FootXzCorrectionFrameHasDisabledIk_When_NearbyIkFrameCanCarryDelta_Then_CorrectedVmdUsesVisibleCarrierFrame);
             RunTest(results, nameof(tests.Given_YybCandidateRiskColumnWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
                 tests.Given_YybCandidateRiskColumnWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
             RunTest(results, nameof(tests.Given_YybCandidateWithoutRiskColumn_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
@@ -151,12 +183,26 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_YybCandidateSleeveThicknessRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
             RunTest(results, nameof(tests.Given_YybCandidateRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate),
                 tests.Given_YybCandidateRiskExceedsThreshold_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate);
-            RunTest(results, nameof(tests.Given_MainRecordingMovingRootStageMotion_When_MarkingIntentionalRootPath_Then_AllowsRootPathDeltaOnly),
-                tests.Given_MainRecordingMovingRootStageMotion_When_MarkingIntentionalRootPath_Then_AllowsRootPathDeltaOnly);
-            RunTest(results, nameof(tests.Given_MainRecordingMovingRootStageMotionWithRetargetRootSpike_When_MarkingIntentionalRootPath_Then_StillFails),
-                tests.Given_MainRecordingMovingRootStageMotionWithRetargetRootSpike_When_MarkingIntentionalRootPath_Then_StillFails);
-            RunTest(results, nameof(tests.Given_MainRecordingMovingRootStageMotionWithFloorFailure_When_MarkingIntentionalRootPath_Then_StillFails),
-                tests.Given_MainRecordingMovingRootStageMotionWithFloorFailure_When_MarkingIntentionalRootPath_Then_StillFails);
+            RunTest(results, nameof(tests.Given_MainRecordingRootPathDelta_When_BuildFrameQualitySummary_Then_FailsStationaryPreviewGate),
+                tests.Given_MainRecordingRootPathDelta_When_BuildFrameQualitySummary_Then_FailsStationaryPreviewGate);
+            RunTest(results, nameof(tests.Given_MainRecordingArmMotionWithSmallRootDrift_When_BuildFrameQualitySummary_Then_FailsLimbIsolationGate),
+                tests.Given_MainRecordingArmMotionWithSmallRootDrift_When_BuildFrameQualitySummary_Then_FailsLimbIsolationGate);
+            RunTest(results, nameof(tests.Given_MainRecordingSameFrameLimbPoseGap_When_BuildFrameQualitySummary_Then_FailsNaturalnessGate),
+                tests.Given_MainRecordingSameFrameLimbPoseGap_When_BuildFrameQualitySummary_Then_FailsNaturalnessGate);
+            RunTest(results, nameof(tests.Given_StartSampleHasPreRetargetArmPoseGap_When_BuildFrameQualitySummary_Then_BucketsStartOutsideNaturalnessGate),
+                tests.Given_StartSampleHasPreRetargetArmPoseGap_When_BuildFrameQualitySummary_Then_BucketsStartOutsideNaturalnessGate);
+            RunTest(results, nameof(tests.Given_BaselineArmTwistOutsideSafetyRange_When_BuildFrameQualitySummary_Then_GuardNormalizedNaturalnessGatePasses),
+                tests.Given_BaselineArmTwistOutsideSafetyRange_When_BuildFrameQualitySummary_Then_GuardNormalizedNaturalnessGatePasses);
+            RunTest(results, nameof(tests.Given_ForearmTwistFullRangeFlipWithStableVisualPose_When_BuildFrameQualitySummary_Then_GuardNormalizedNaturalnessGatePasses),
+                tests.Given_ForearmTwistFullRangeFlipWithStableVisualPose_When_BuildFrameQualitySummary_Then_GuardNormalizedNaturalnessGatePasses);
+            RunTest(results, nameof(tests.Given_RawForearmTwistSaturatesButGatePasses_When_BuildFrameQualitySummary_Then_ReportsRawLimbPoseSaturation),
+                tests.Given_RawForearmTwistSaturatesButGatePasses_When_BuildFrameQualitySummary_Then_ReportsRawLimbPoseSaturation);
+            RunTest(results, nameof(tests.Given_SafeArmTwistSignFlip_When_BuildFrameQualitySummary_Then_FailsGuardNormalizedNaturalnessGate),
+                tests.Given_SafeArmTwistSignFlip_When_BuildFrameQualitySummary_Then_FailsGuardNormalizedNaturalnessGate);
+            RunTest(results, nameof(tests.Given_MainRecordingRootPathDeltaWithRetargetRootSpike_When_BuildFrameQualitySummary_Then_FailsRootSpikeGate),
+                tests.Given_MainRecordingRootPathDeltaWithRetargetRootSpike_When_BuildFrameQualitySummary_Then_FailsRootSpikeGate);
+            RunTest(results, nameof(tests.Given_MainRecordingRootPathDeltaWithFloorFailure_When_BuildFrameQualitySummary_Then_FailsFloorAndStationaryRootGates),
+                tests.Given_MainRecordingRootPathDeltaWithFloorFailure_When_BuildFrameQualitySummary_Then_FailsFloorAndStationaryRootGates);
             RunTest(results, nameof(tests.Given_ConstantSceneRootOffset_When_BuildFrameQualitySummary_Then_DoesNotFailRootDeltaGate),
                 tests.Given_ConstantSceneRootOffset_When_BuildFrameQualitySummary_Then_DoesNotFailRootDeltaGate);
             RunTest(results, nameof(tests.Given_ConstantVerticalModelOffset_When_BuildFrameQualitySummary_Then_DoesNotWarnHipsOrFootGate),
@@ -187,8 +233,12 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_CorrectedMetricsArtifact_When_BuildingFrameQualityEvaluationEntries_Then_CorrectedEntryUsesExplicitVmdArtifactAndManifest);
             RunTest(results, nameof(tests.Given_CorrectedCandidatePasses_When_PromotingToPrimaryExport_Then_RewritesMainAutoPathsAndPreservesRawDiagnostics),
                 tests.Given_CorrectedCandidatePasses_When_PromotingToPrimaryExport_Then_RewritesMainAutoPathsAndPreservesRawDiagnostics);
+            RunTest(results, nameof(tests.Given_PrimaryExportPromotionRunsTwice_When_RawDiagnosticsExist_Then_DoesNotOverwriteRawDiagnostics),
+                tests.Given_PrimaryExportPromotionRunsTwice_When_RawDiagnosticsExist_Then_DoesNotOverwriteRawDiagnostics);
             RunTest(results, nameof(tests.Given_IntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsPrimaryAsOnlyAcceptanceEntry),
                 tests.Given_IntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsPrimaryAsOnlyAcceptanceEntry);
+            RunTest(results, nameof(tests.Given_VmdReplayIntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsReplayPrimaryAsOnlyDiagnosticEntry),
+                tests.Given_VmdReplayIntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsReplayPrimaryAsOnlyDiagnosticEntry);
             RunTest(results, nameof(tests.Given_VerticalSolveWouldCreateUnsafeVmdCarrierStep_When_BuildingEvaluationEntries_Then_CorrectedVmdStaysWithinSafetyGates),
                 tests.Given_VerticalSolveWouldCreateUnsafeVmdCarrierStep_When_BuildingEvaluationEntries_Then_CorrectedVmdStaysWithinSafetyGates);
             RunTest(results, nameof(tests.Given_FootVerticalSolveWouldSinkEffectiveVmdIk_When_BuildingEvaluationEntries_Then_CorrectedVmdPreservesFloorMargin),
@@ -199,6 +249,8 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_CenterLiftKeepsEffectiveFootIkAboveFloor_When_BuildFrameQualitySummary_Then_DoesNotFailBelowFloorGate);
             RunTest(results, nameof(tests.Given_VmdFrames_When_BuildFrameQualitySummary_Then_ReportsCenterAndFootIkExportDelta),
                 tests.Given_VmdFrames_When_BuildFrameQualitySummary_Then_ReportsCenterAndFootIkExportDelta);
+            RunTest(results, nameof(tests.Given_FootIkStepWhileIkIsDisabled_When_BuildFrameQualitySummary_Then_DoesNotCountVisualFootIkSpike),
+                tests.Given_FootIkStepWhileIkIsDisabled_When_BuildFrameQualitySummary_Then_DoesNotCountVisualFootIkSpike);
             RunTest(results, nameof(tests.Given_MmdAutomationEvidence_When_AttachLatestMmdAutomationEvidence_Then_UpdatesStatusAndRelativePaths),
                 tests.Given_MmdAutomationEvidence_When_AttachLatestMmdAutomationEvidence_Then_UpdatesStatusAndRelativePaths);
             RunTest(results, nameof(tests.Given_MmdAutomationEvidenceWithProjectRelativeArtifactPaths_When_AttachLatestMmdAutomationEvidence_Then_ResolvesScreenshotPath),
@@ -207,6 +259,8 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_MmdAutomationEvidenceWithReportRelativeRunDir_When_AttachLatestMmdAutomationEvidence_Then_ResolvesRunDirPath);
             RunTest(results, nameof(tests.Given_ReportRelativeScreenshotAlsoExistsAtProjectRoot_When_AttachLatestMmdAutomationEvidence_Then_PrefersReportDirectory),
                 tests.Given_ReportRelativeScreenshotAlsoExistsAtProjectRoot_When_AttachLatestMmdAutomationEvidence_Then_PrefersReportDirectory);
+            RunTest(results, nameof(tests.Given_StaleMmdAutomationEvidence_When_AttachLatestMmdAutomationEvidence_Then_LeavesSummaryAsNotRun),
+                tests.Given_StaleMmdAutomationEvidence_When_AttachLatestMmdAutomationEvidence_Then_LeavesSummaryAsNotRun);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

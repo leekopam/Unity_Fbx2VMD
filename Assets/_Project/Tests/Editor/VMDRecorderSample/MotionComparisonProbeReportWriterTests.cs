@@ -56,6 +56,31 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_NewMotionComparisonProbe_When_ResettingDefaultSampleTimes_Then_CoversReferenceMp4CurrentClipSamples()
+        {
+            var probeObject = new GameObject("MotionComparisonProbe sample time test");
+            try
+            {
+                var probe = probeObject.AddComponent<MotionComparisonProbe>();
+                probe.ResetSampleTimesToDefault();
+
+                FieldInfo field = typeof(MotionComparisonProbe).GetField(
+                    "sampleTimes",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(field, Is.Not.Null, "MotionComparisonProbe must keep sample times as a serialized field.");
+                Assert.That(
+                    (float[])field.GetValue(probe),
+                    Is.EqualTo(new[] { 0f, 3f, 6f, 10f, 13.2f, 20f, 30f, 60f, 120f }).Within(0.0001f),
+                    "Default screenshots must cover the ref MP4 current-clip samples so visual framing diagnostics do not miss 6s/20s evidence.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(probeObject);
+            }
+        }
+
+        [Test]
         public void Given_MetricsCsvValues_When_FormattersRun_Then_UseInvariantCsvAndBlankInvalidNumbers()
         {
             Assert.That(MotionComparisonProbeReportWriter.FormatMetricsCsvText("hello, \"world\""), Is.EqualTo("\"hello, \"\"world\"\"\""));
@@ -739,13 +764,441 @@ namespace Tests.Editor.VMDRecorderSample
         {
             string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
 
-            Assert.That(columns.Length, Is.EqualTo(241));
+            Assert.That(columns.Length, Is.EqualTo(482));
             Assert.That(columns[0], Is.EqualTo("label"));
             Assert.That(columns[1], Is.EqualTo("scene"));
             Assert.That(columns[2], Is.EqualTo("reason"));
-            Assert.That(columns[140], Is.EqualTo("rightLittleProximalLocalEuler"));
-            Assert.That(columns[141], Is.EqualTo("leftThumbIndexSpreadAngle"));
-            Assert.That(columns[columns.Length - 1], Is.EqualTo("thumbGuardWebbingMaxPositionOffset"));
+            Assert.That(columns[Array.IndexOf(columns, "retargetFootHeightReferenceLift") + 1], Is.EqualTo("hipsX"));
+            Assert.That(columns[Array.IndexOf(columns, "hipsX") + 1], Is.EqualTo("hipsZ"));
+            Assert.That(columns[Array.IndexOf(columns, "hipsZ") + 1], Is.EqualTo("hipsY"));
+            Assert.That(columns[Array.IndexOf(columns, "lowestFootBottomY") + 1], Is.EqualTo("leftFootX"));
+            Assert.That(columns[Array.IndexOf(columns, "leftFootX") + 1], Is.EqualTo("leftFootZ"));
+            Assert.That(columns[Array.IndexOf(columns, "leftFootZ") + 1], Is.EqualTo("rightFootX"));
+            Assert.That(columns[Array.IndexOf(columns, "rightFootX") + 1], Is.EqualTo("rightFootZ"));
+            int lastBaseMetricsIndex = Array.IndexOf(columns, "rightLittleProximalLocalEuler");
+            Assert.That(lastBaseMetricsIndex, Is.GreaterThan(0));
+            Assert.That(columns[lastBaseMetricsIndex + 1], Is.EqualTo("leftThumbIndexSpreadAngle"));
+            Assert.That(columns[Array.IndexOf(columns, "retargetStageGhostLeftFootWorldX") - 1], Is.EqualTo("thumbGuardWebbingMaxPositionOffset"));
+            Assert.That(columns[Array.IndexOf(columns, "retargetEditorFootLocalRotationLeftFootXzDelta") - 1], Is.EqualTo("retargetStageAfterGroundingRightToesWorldZ"));
+            Assert.That(columns[columns.Length - 1], Is.EqualTo("retargetPostSetRightEndpointEvaluatorXzTargetMagnitude"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesPostSetRightEndpointDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int firstPostSetIndex = Array.IndexOf(columns, "retargetPostSetRightEndpointDesiredFootWorldX");
+
+            Assert.That(firstPostSetIndex, Is.GreaterThan(0));
+            Assert.That(columns[firstPostSetIndex - 1], Is.EqualTo("retargetEditorFootHipsAlignedResidualYawRightFootXzDelta"));
+
+            string[] expectedColumns =
+            {
+                "retargetPostSetRightEndpointDesiredFootWorldX",
+                "retargetPostSetRightEndpointDesiredFootWorldZ",
+                "retargetPostSetRightEndpointDesiredToesWorldX",
+                "retargetPostSetRightEndpointDesiredToesWorldZ",
+                "retargetPostSetRightEndpointCurrentFootWorldX",
+                "retargetPostSetRightEndpointCurrentFootWorldZ",
+                "retargetPostSetRightEndpointCurrentToesWorldX",
+                "retargetPostSetRightEndpointCurrentToesWorldZ",
+                "retargetPostSetRightEndpointDeltaBeforeClampX",
+                "retargetPostSetRightEndpointDeltaBeforeClampZ",
+                "retargetPostSetRightEndpointDeltaAfterClampX",
+                "retargetPostSetRightEndpointDeltaAfterClampZ",
+                "retargetPostSetRightEndpointDeltaAfterPositiveZScaleX",
+                "retargetPostSetRightEndpointDeltaAfterPositiveZScaleZ",
+                "retargetPostSetRightEndpointCorrectionX",
+                "retargetPostSetRightEndpointCorrectionZ",
+                "retargetPostSetRightEndpointNextFootWorldX",
+                "retargetPostSetRightEndpointNextFootWorldZ",
+                "retargetPostSetRightEndpointMaxYawAngle",
+                "retargetPostSetRightEndpointYawCorrectionAngle",
+                "retargetPostSetRightEndpointUpperLegRotationDeltaAngle",
+                "retargetPostSetRightEndpointApplied",
+                "retargetPostSetRightEndpointEvaluatorXzReferenceEnabled",
+                "retargetPostSetRightEndpointEvaluatorXzFirstOffsetX",
+                "retargetPostSetRightEndpointEvaluatorXzFirstOffsetZ",
+                "retargetPostSetRightEndpointEvaluatorXzNormalizedDeltaX",
+                "retargetPostSetRightEndpointEvaluatorXzNormalizedDeltaZ",
+                "retargetPostSetRightEndpointEvaluatorXzNormalizedMagnitude",
+                "retargetPostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaX",
+                "retargetPostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaZ",
+                "retargetPostSetRightEndpointEvaluatorXzTargetMagnitude"
+            };
+
+            for (int i = 0; i < expectedColumns.Length; i++)
+            {
+                Assert.That(columns[firstPostSetIndex + i], Is.EqualTo(expectedColumns[i]));
+            }
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRetargetPoseStageDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 58], Is.EqualTo("retargetPoseInputLeftShoulderFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 57], Is.EqualTo("retargetAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 56], Is.EqualTo("retargetAfterClampPoseMusclesLeftShoulderFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 55], Is.EqualTo("retargetAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 54], Is.EqualTo("retargetAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftArmTwistRetargetPoseStageDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 50], Is.EqualTo("retargetPoseInputLeftArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 49], Is.EqualTo("retargetAfterEditorMuscleReferenceLeftArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 48], Is.EqualTo("retargetAfterClampPoseMusclesLeftArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 47], Is.EqualTo("retargetAfterAnatomicalArmGuardLeftArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 46], Is.EqualTo("retargetAfterVisualSpikeSmoothingLeftArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 45], Is.EqualTo("retargetSetHumanPoseInputLeftArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 44], Is.EqualTo("retargetSetHumanPoseOutputLeftArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 43], Is.EqualTo("retargetSetHumanPoseLeftArmTwistDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftForearmRetargetPoseStageDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 42], Is.EqualTo("retargetPoseInputLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 41], Is.EqualTo("retargetAfterEditorMuscleReferenceLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 40], Is.EqualTo("retargetAfterClampPoseMusclesLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 39], Is.EqualTo("retargetAfterAnatomicalArmGuardLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 38], Is.EqualTo("retargetAfterVisualSpikeSmoothingLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 37], Is.EqualTo("retargetSetHumanPoseInputLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 36], Is.EqualTo("retargetSetHumanPoseOutputLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 35], Is.EqualTo("retargetSetHumanPoseLeftForearmStretchDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRightForearmRetargetPoseStageDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 34], Is.EqualTo("retargetPoseInputRightForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 33], Is.EqualTo("retargetAfterEditorMuscleReferenceRightForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 32], Is.EqualTo("retargetAfterClampPoseMusclesRightForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 31], Is.EqualTo("retargetAfterAnatomicalArmGuardRightForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 30], Is.EqualTo("retargetAfterVisualSpikeSmoothingRightForearmStretchMuscle"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRightArmTwistRetargetPoseStageDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 26], Is.EqualTo("retargetPoseInputRightArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 25], Is.EqualTo("retargetAfterEditorMuscleReferenceRightArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 24], Is.EqualTo("retargetAfterClampPoseMusclesRightArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 23], Is.EqualTo("retargetAfterAnatomicalArmGuardRightArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 22], Is.EqualTo("retargetAfterVisualSpikeSmoothingRightArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 21], Is.EqualTo("retargetSetHumanPoseInputRightArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 20], Is.EqualTo("retargetSetHumanPoseOutputRightArmTwistMuscle"));
+            Assert.That(columns[bodyIndex - 19], Is.EqualTo("retargetSetHumanPoseRightArmTwistDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesSetHumanPoseBoundaryDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 53], Is.EqualTo("retargetSetHumanPoseInputLeftShoulderFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 52], Is.EqualTo("retargetSetHumanPoseOutputLeftShoulderFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 51], Is.EqualTo("retargetSetHumanPoseLeftShoulderFrontBackDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLeftForearmSetHumanPoseBoundaryDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 37], Is.EqualTo("retargetSetHumanPoseInputLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 36], Is.EqualTo("retargetSetHumanPoseOutputLeftForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 35], Is.EqualTo("retargetSetHumanPoseLeftForearmStretchDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesArmSwingGuardBoundaryDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int leftForearmIndex = Array.IndexOf(columns, "leftForearmStretchMuscle");
+            int rightForearmIndex = Array.IndexOf(columns, "rightForearmStretchMuscle");
+
+            Assert.That(leftForearmIndex, Is.GreaterThan(0));
+            Assert.That(columns[leftForearmIndex - 6], Is.EqualTo("armSwingGuardLeftApplied"));
+            Assert.That(columns[leftForearmIndex - 5], Is.EqualTo("armSwingGuardLeftHorizontalReachApplied"));
+            Assert.That(columns[leftForearmIndex - 4], Is.EqualTo("armSwingGuardLeftRaisedReachApplied"));
+            Assert.That(columns[leftForearmIndex - 3], Is.EqualTo("armSwingGuardLeftForearmStretchBefore"));
+            Assert.That(columns[leftForearmIndex - 2], Is.EqualTo("armSwingGuardLeftForearmStretchAfter"));
+            Assert.That(columns[leftForearmIndex - 1], Is.EqualTo("armSwingGuardLeftForearmStretchDelta"));
+            Assert.That(rightForearmIndex, Is.GreaterThan(leftForearmIndex));
+            Assert.That(columns[rightForearmIndex - 6], Is.EqualTo("armSwingGuardRightApplied"));
+            Assert.That(columns[rightForearmIndex - 5], Is.EqualTo("armSwingGuardRightHorizontalReachApplied"));
+            Assert.That(columns[rightForearmIndex - 4], Is.EqualTo("armSwingGuardRightRaisedReachApplied"));
+            Assert.That(columns[rightForearmIndex - 3], Is.EqualTo("armSwingGuardRightForearmStretchBefore"));
+            Assert.That(columns[rightForearmIndex - 2], Is.EqualTo("armSwingGuardRightForearmStretchAfter"));
+            Assert.That(columns[rightForearmIndex - 1], Is.EqualTo("armSwingGuardRightForearmStretchDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRightForearmSetHumanPoseBoundaryDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 29], Is.EqualTo("retargetSetHumanPoseInputRightForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 28], Is.EqualTo("retargetSetHumanPoseOutputRightForearmStretchMuscle"));
+            Assert.That(columns[bodyIndex - 27], Is.EqualTo("retargetSetHumanPoseRightForearmStretchDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLowerBodySetHumanPoseBoundaryDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
+
+            Assert.That(bodyIndex, Is.GreaterThan(0));
+            Assert.That(columns[bodyIndex - 18], Is.EqualTo("retargetSetHumanPoseInputLeftUpperLegFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 17], Is.EqualTo("retargetSetHumanPoseOutputLeftUpperLegFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 16], Is.EqualTo("retargetSetHumanPoseLeftUpperLegFrontBackDelta"));
+            Assert.That(columns[bodyIndex - 15], Is.EqualTo("retargetSetHumanPoseInputRightUpperLegFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 14], Is.EqualTo("retargetSetHumanPoseOutputRightUpperLegFrontBackMuscle"));
+            Assert.That(columns[bodyIndex - 13], Is.EqualTo("retargetSetHumanPoseRightUpperLegFrontBackDelta"));
+            Assert.That(columns[bodyIndex - 12], Is.EqualTo("retargetSetHumanPoseInputLeftLowerLegStretchMuscle"));
+            Assert.That(columns[bodyIndex - 11], Is.EqualTo("retargetSetHumanPoseOutputLeftLowerLegStretchMuscle"));
+            Assert.That(columns[bodyIndex - 10], Is.EqualTo("retargetSetHumanPoseLeftLowerLegStretchDelta"));
+            Assert.That(columns[bodyIndex - 9], Is.EqualTo("retargetSetHumanPoseInputRightLowerLegStretchMuscle"));
+            Assert.That(columns[bodyIndex - 8], Is.EqualTo("retargetSetHumanPoseOutputRightLowerLegStretchMuscle"));
+            Assert.That(columns[bodyIndex - 7], Is.EqualTo("retargetSetHumanPoseRightLowerLegStretchDelta"));
+            Assert.That(columns[bodyIndex - 6], Is.EqualTo("retargetSetHumanPoseInputLeftFootUpDownMuscle"));
+            Assert.That(columns[bodyIndex - 5], Is.EqualTo("retargetSetHumanPoseOutputLeftFootUpDownMuscle"));
+            Assert.That(columns[bodyIndex - 4], Is.EqualTo("retargetSetHumanPoseLeftFootUpDownDelta"));
+            Assert.That(columns[bodyIndex - 3], Is.EqualTo("retargetSetHumanPoseInputRightFootUpDownMuscle"));
+            Assert.That(columns[bodyIndex - 2], Is.EqualTo("retargetSetHumanPoseOutputRightFootUpDownMuscle"));
+            Assert.That(columns[bodyIndex - 1], Is.EqualTo("retargetSetHumanPoseRightFootUpDownDelta"));
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesLowerBodyPostPoseDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            string[] expectedSuffix =
+            {
+                "retargetEditorFootLocalRotationLeftFootXzDelta",
+                "retargetEditorFootLocalRotationRightFootXzDelta",
+                "retargetEditorLowerBodySegmentDirectionLeftFootXzDelta",
+                "retargetEditorLowerBodySegmentDirectionRightFootXzDelta",
+                "retargetEditorLowerBodySegmentDirectionMaxCorrectionSegment",
+                "retargetEditorLowerBodySegmentDirectionMaxCorrectionAngle",
+                "retargetEditorLowerBodySegmentDirectionMaxPreAngle",
+                "retargetEditorLowerBodySegmentDirectionMaxPostAngle",
+                "retargetEditorLowerBodySegmentDirectionMaxCorrectionAxisX",
+                "retargetEditorLowerBodySegmentDirectionMaxCorrectionAxisY",
+                "retargetEditorLowerBodySegmentDirectionMaxCorrectionAxisZ",
+                "retargetEditorLowerBodySegmentDirectionMaxReferenceDirectionX",
+                "retargetEditorLowerBodySegmentDirectionMaxReferenceDirectionY",
+                "retargetEditorLowerBodySegmentDirectionMaxReferenceDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionMaxPreDirectionX",
+                "retargetEditorLowerBodySegmentDirectionMaxPreDirectionY",
+                "retargetEditorLowerBodySegmentDirectionMaxPreDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionMaxPostDirectionX",
+                "retargetEditorLowerBodySegmentDirectionMaxPostDirectionY",
+                "retargetEditorLowerBodySegmentDirectionMaxPostDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle",
+                "retargetEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle",
+                "retargetEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY",
+                "retargetEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesPreDirectionX",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesPreDirectionY",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesPostDirectionX",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesPostDirectionY",
+                "retargetEditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegWorldX",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegWorldY",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegWorldZ",
+                "retargetEditorLowerBodySegmentDirectionLeftFootWorldX",
+                "retargetEditorLowerBodySegmentDirectionLeftFootWorldY",
+                "retargetEditorLowerBodySegmentDirectionLeftFootWorldZ",
+                "retargetEditorLowerBodySegmentDirectionLeftToesWorldX",
+                "retargetEditorLowerBodySegmentDirectionLeftToesWorldY",
+                "retargetEditorLowerBodySegmentDirectionLeftToesWorldZ",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegWorldX",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegWorldY",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegWorldZ",
+                "retargetEditorLowerBodySegmentDirectionRightFootWorldX",
+                "retargetEditorLowerBodySegmentDirectionRightFootWorldY",
+                "retargetEditorLowerBodySegmentDirectionRightFootWorldZ",
+                "retargetEditorLowerBodySegmentDirectionRightToesWorldX",
+                "retargetEditorLowerBodySegmentDirectionRightToesWorldY",
+                "retargetEditorLowerBodySegmentDirectionRightToesWorldZ",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY",
+                "retargetEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY",
+                "retargetEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ",
+                "retargetEditorLowerBodySegmentDirectionLeftFootForwardX",
+                "retargetEditorLowerBodySegmentDirectionLeftFootForwardY",
+                "retargetEditorLowerBodySegmentDirectionLeftFootForwardZ",
+                "retargetEditorLowerBodySegmentDirectionLeftFootUpX",
+                "retargetEditorLowerBodySegmentDirectionLeftFootUpY",
+                "retargetEditorLowerBodySegmentDirectionLeftFootUpZ",
+                "retargetEditorLowerBodySegmentDirectionRightFootForwardX",
+                "retargetEditorLowerBodySegmentDirectionRightFootForwardY",
+                "retargetEditorLowerBodySegmentDirectionRightFootForwardZ",
+                "retargetEditorLowerBodySegmentDirectionRightFootUpX",
+                "retargetEditorLowerBodySegmentDirectionRightFootUpY",
+                "retargetEditorLowerBodySegmentDirectionRightFootUpZ",
+                "retargetEditorFootHipsAlignedResidualYawLeftFootXzDelta",
+                "retargetEditorFootHipsAlignedResidualYawRightFootXzDelta",
+                "retargetPostSetRightEndpointDesiredFootWorldX",
+                "retargetPostSetRightEndpointDesiredFootWorldZ",
+                "retargetPostSetRightEndpointDesiredToesWorldX",
+                "retargetPostSetRightEndpointDesiredToesWorldZ",
+                "retargetPostSetRightEndpointCurrentFootWorldX",
+                "retargetPostSetRightEndpointCurrentFootWorldZ",
+                "retargetPostSetRightEndpointCurrentToesWorldX",
+                "retargetPostSetRightEndpointCurrentToesWorldZ",
+                "retargetPostSetRightEndpointDeltaBeforeClampX",
+                "retargetPostSetRightEndpointDeltaBeforeClampZ",
+                "retargetPostSetRightEndpointDeltaAfterClampX",
+                "retargetPostSetRightEndpointDeltaAfterClampZ",
+                "retargetPostSetRightEndpointDeltaAfterPositiveZScaleX",
+                "retargetPostSetRightEndpointDeltaAfterPositiveZScaleZ",
+                "retargetPostSetRightEndpointCorrectionX",
+                "retargetPostSetRightEndpointCorrectionZ",
+                "retargetPostSetRightEndpointNextFootWorldX",
+                "retargetPostSetRightEndpointNextFootWorldZ",
+                "retargetPostSetRightEndpointMaxYawAngle",
+                "retargetPostSetRightEndpointYawCorrectionAngle",
+                "retargetPostSetRightEndpointUpperLegRotationDeltaAngle",
+                "retargetPostSetRightEndpointApplied",
+                "retargetPostSetRightEndpointEvaluatorXzReferenceEnabled",
+                "retargetPostSetRightEndpointEvaluatorXzFirstOffsetX",
+                "retargetPostSetRightEndpointEvaluatorXzFirstOffsetZ",
+                "retargetPostSetRightEndpointEvaluatorXzNormalizedDeltaX",
+                "retargetPostSetRightEndpointEvaluatorXzNormalizedDeltaZ",
+                "retargetPostSetRightEndpointEvaluatorXzNormalizedMagnitude",
+                "retargetPostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaX",
+                "retargetPostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaZ",
+                "retargetPostSetRightEndpointEvaluatorXzTargetMagnitude"
+            };
+
+            int suffixStart = columns.Length - expectedSuffix.Length;
+            Assert.That(suffixStart, Is.GreaterThan(0));
+            for (int i = 0; i < expectedSuffix.Length; i++)
+            {
+                Assert.That(columns[suffixStart + i], Is.EqualTo(expectedSuffix[i]));
+            }
+        }
+
+        [Test]
+        public void Given_MetricsCsvHeader_When_BuildHeader_Then_IncludesRetargetEndpointStageDiagnostics()
+        {
+            string[] columns = MotionComparisonProbeReportWriter.BuildMetricsCsvHeader().Split(',');
+            int firstStageIndex = Array.IndexOf(columns, "retargetStageGhostLeftFootWorldX");
+            int postPoseIndex = Array.IndexOf(columns, "retargetEditorFootLocalRotationLeftFootXzDelta");
+
+            Assert.That(firstStageIndex, Is.GreaterThan(0));
+            Assert.That(postPoseIndex, Is.GreaterThan(firstStageIndex));
+
+            string[] expectedColumns =
+            {
+                "retargetStageGhostLeftFootWorldX",
+                "retargetStageGhostLeftFootWorldZ",
+                "retargetStageGhostLeftToesWorldX",
+                "retargetStageGhostLeftToesWorldZ",
+                "retargetStageGhostRightFootWorldX",
+                "retargetStageGhostRightFootWorldZ",
+                "retargetStageGhostRightToesWorldX",
+                "retargetStageGhostRightToesWorldZ",
+                "retargetStageAfterSetHumanPoseLeftFootWorldX",
+                "retargetStageAfterSetHumanPoseLeftFootWorldZ",
+                "retargetStageAfterSetHumanPoseLeftToesWorldX",
+                "retargetStageAfterSetHumanPoseLeftToesWorldZ",
+                "retargetStageAfterSetHumanPoseRightFootWorldX",
+                "retargetStageAfterSetHumanPoseRightFootWorldZ",
+                "retargetStageAfterSetHumanPoseRightToesWorldX",
+                "retargetStageAfterSetHumanPoseRightToesWorldZ",
+                "retargetStageAfterManualReferencesLeftFootWorldX",
+                "retargetStageAfterManualReferencesLeftFootWorldZ",
+                "retargetStageAfterManualReferencesLeftToesWorldX",
+                "retargetStageAfterManualReferencesLeftToesWorldZ",
+                "retargetStageAfterManualReferencesRightFootWorldX",
+                "retargetStageAfterManualReferencesRightFootWorldZ",
+                "retargetStageAfterManualReferencesRightToesWorldX",
+                "retargetStageAfterManualReferencesRightToesWorldZ",
+                "retargetStageAfterRootRestoreLeftFootWorldX",
+                "retargetStageAfterRootRestoreLeftFootWorldZ",
+                "retargetStageAfterRootRestoreLeftToesWorldX",
+                "retargetStageAfterRootRestoreLeftToesWorldZ",
+                "retargetStageAfterRootRestoreRightFootWorldX",
+                "retargetStageAfterRootRestoreRightFootWorldZ",
+                "retargetStageAfterRootRestoreRightToesWorldX",
+                "retargetStageAfterRootRestoreRightToesWorldZ",
+                "retargetStageAfterRootDeltaLeftFootWorldX",
+                "retargetStageAfterRootDeltaLeftFootWorldZ",
+                "retargetStageAfterRootDeltaLeftToesWorldX",
+                "retargetStageAfterRootDeltaLeftToesWorldZ",
+                "retargetStageAfterRootDeltaRightFootWorldX",
+                "retargetStageAfterRootDeltaRightFootWorldZ",
+                "retargetStageAfterRootDeltaRightToesWorldX",
+                "retargetStageAfterRootDeltaRightToesWorldZ",
+                "retargetStageAfterGroundingLeftFootWorldX",
+                "retargetStageAfterGroundingLeftFootWorldZ",
+                "retargetStageAfterGroundingLeftToesWorldX",
+                "retargetStageAfterGroundingLeftToesWorldZ",
+                "retargetStageAfterGroundingRightFootWorldX",
+                "retargetStageAfterGroundingRightFootWorldZ",
+                "retargetStageAfterGroundingRightToesWorldX",
+                "retargetStageAfterGroundingRightToesWorldZ"
+            };
+
+            for (int i = 0; i < expectedColumns.Length; i++)
+            {
+                Assert.That(columns[firstStageIndex + i], Is.EqualTo(expectedColumns[i]));
+            }
+
+            Assert.That(columns[firstStageIndex + expectedColumns.Length], Is.EqualTo("retargetEditorFootLocalRotationLeftFootXzDelta"));
         }
 
         [Test]
@@ -783,9 +1236,11 @@ namespace Tests.Editor.VMDRecorderSample
             int hipsIndex = Array.IndexOf(columns, "hipsY");
 
             Assert.That(hipsIndex, Is.GreaterThan(0));
-            Assert.That(columns[hipsIndex - 3], Is.EqualTo("bodyPositionY"));
-            Assert.That(columns[hipsIndex - 2], Is.EqualTo("hipsLocalY"));
-            Assert.That(columns[hipsIndex - 1], Is.EqualTo("retargetFootHeightReferenceLift"));
+            Assert.That(columns[hipsIndex - 5], Is.EqualTo("bodyPositionY"));
+            Assert.That(columns[hipsIndex - 4], Is.EqualTo("hipsLocalY"));
+            Assert.That(columns[hipsIndex - 3], Is.EqualTo("retargetFootHeightReferenceLift"));
+            Assert.That(columns[hipsIndex - 2], Is.EqualTo("hipsX"));
+            Assert.That(columns[hipsIndex - 1], Is.EqualTo("hipsZ"));
         }
 
         [Test]
@@ -795,15 +1250,15 @@ namespace Tests.Editor.VMDRecorderSample
             int bodyIndex = Array.IndexOf(columns, "bodyPositionY");
 
             Assert.That(bodyIndex, Is.GreaterThan(0));
-            Assert.That(columns[bodyIndex - 9], Is.EqualTo("retargetRecordingStartRootY"));
-            Assert.That(columns[bodyIndex - 8], Is.EqualTo("retargetRecordingStartBodyPositionY"));
-            Assert.That(columns[bodyIndex - 7], Is.EqualTo("retargetRecordingStartHipsLocalY"));
-            Assert.That(columns[bodyIndex - 6], Is.EqualTo("retargetRecordingStartHipsY"));
-            Assert.That(columns[bodyIndex - 5], Is.EqualTo("retargetRecordingStartHipsReferenceBeforeLocalY"));
-            Assert.That(columns[bodyIndex - 4], Is.EqualTo("retargetRecordingStartHipsReferenceAfterLocalY"));
-            Assert.That(columns[bodyIndex - 3], Is.EqualTo("retargetRecordingStartHipsReferenceDeltaY"));
-            Assert.That(columns[bodyIndex - 2], Is.EqualTo("retargetRecordingStartHipsReferenceFlipDetected"));
-            Assert.That(columns[bodyIndex - 1], Is.EqualTo("retargetRecordingStartHipsReferenceStage"));
+            Assert.That(columns[bodyIndex - 67], Is.EqualTo("retargetRecordingStartRootY"));
+            Assert.That(columns[bodyIndex - 66], Is.EqualTo("retargetRecordingStartBodyPositionY"));
+            Assert.That(columns[bodyIndex - 65], Is.EqualTo("retargetRecordingStartHipsLocalY"));
+            Assert.That(columns[bodyIndex - 64], Is.EqualTo("retargetRecordingStartHipsY"));
+            Assert.That(columns[bodyIndex - 63], Is.EqualTo("retargetRecordingStartHipsReferenceBeforeLocalY"));
+            Assert.That(columns[bodyIndex - 62], Is.EqualTo("retargetRecordingStartHipsReferenceAfterLocalY"));
+            Assert.That(columns[bodyIndex - 61], Is.EqualTo("retargetRecordingStartHipsReferenceDeltaY"));
+            Assert.That(columns[bodyIndex - 60], Is.EqualTo("retargetRecordingStartHipsReferenceFlipDetected"));
+            Assert.That(columns[bodyIndex - 59], Is.EqualTo("retargetRecordingStartHipsReferenceStage"));
         }
 
         [Test]
@@ -1352,6 +1807,387 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_SameFrameFootXzArcDelta_When_BuildFrameQualitySummary_Then_ReportsHorizontalFootGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithFootXz(
+                    baselinePath,
+                    FootXzRow("manual", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    FootXzRow("manual", 300, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMetricsCsvWithFootXz(
+                    candidatePath,
+                    FootXzRow("main", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    FootXzRow("main", 300, 0f, 0f, 0f, 0.18f, 0f, 0.04f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("same-frame foot XZ delta fail threshold exceeded"));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_left_foot_xz_delta"), Is.EqualTo(0.18f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_right_foot_xz_delta"), Is.EqualTo(0.04f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta"), Is.EqualTo(0.18f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_foot_xz_delta_recorder_frame"), Is.EqualTo(300));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_foot_xz_delta_candidate_recorder_frame"), Is.EqualTo(300));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_foot_xz_delta_side"), Is.EqualTo("left"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_HipsHorizontalMotionExplainsPartOfFootXzDelta_When_BuildFrameQualitySummary_Then_ReportsHipsAlignedFootResidual()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsAndFootXz(
+                    baselinePath,
+                    HipsAndFootXzRow("manual", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 300, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMetricsCsvWithHipsAndFootXz(
+                    candidatePath,
+                    HipsAndFootXzRow("main", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("main", 300, 0.10f, 0f, 0.18f, 0f, 0.12f, 0f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 300, 0.01f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0.01f, 0f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_hips_xz_delta"), Is.EqualTo(0.10f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_hips_xz_delta_recorder_frame"), Is.EqualTo(300));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta"), Is.EqualTo(0.18f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment"), Is.EqualTo(0.08f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment_x"), Is.EqualTo(0.08f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment_z"), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment_angle_degrees"), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment_recorder_frame"), Is.EqualTo(300));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment_side"), Is.EqualTo("left"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_FinalFootXzSampleFallsOutsideVmdExportRange_When_BuildFrameQualitySummary_Then_UsesInsideRangeForFootXzGateAndReportsOutsideSample()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsAndFootXz(
+                    baselinePath,
+                    HipsAndFootXzRow("manual", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 900, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 930, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMetricsCsvWithHipsAndFootXz(
+                    candidatePath,
+                    HipsAndFootXzRow("main", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("main", 900, 0.02f, 0f, 0.06f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("main", 930, 0.03f, 0f, 0.18f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 900, 0.01f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 900, 0.01f, 0f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 931,
+                        candidateRecordedFrameCount: 931,
+                        targetFrameCount: 931);
+
+                Assert.That(summary.status, Is.EqualTo("warn"));
+                Assert.That(summary.status_reason, Does.Contain("same-frame foot XZ delta warning threshold exceeded"));
+                Assert.That(summary.status_reason, Does.Not.Contain("same-frame foot XZ delta fail threshold exceeded"));
+                Assert.That(GetSummaryField<int>(summary, "candidate_vmd_max_bone_frame_index"), Is.EqualTo(900));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta"), Is.EqualTo(0.18f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range"), Is.EqualTo(0.06f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_recorder_frame"), Is.EqualTo(900));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_side"), Is.EqualTo("left"));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range"), Is.EqualTo(0.18f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_foot_xz_delta_outside_candidate_vmd_frame_range_recorder_frame"), Is.EqualTo(930));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment_within_candidate_vmd_frame_range"), Is.EqualTo(0.04f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_foot_xz_delta_after_hips_xz_alignment_outside_candidate_vmd_frame_range"), Is.EqualTo(0.15f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_FootXzWarningWithinVmdRange_When_BuildingEvaluationEntries_Then_CorrectedCandidateReducesFootCarrierXzBelowWarning()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsAndFootXz(
+                    baselinePath,
+                    HipsAndFootXzRow("manual", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 600, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 900, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMetricsCsvWithHipsAndFootXz(
+                    candidatePath,
+                    HipsAndFootXzRow("main", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("main", 600, 0f, 0f, 0f, 0f, 0.016073f, 0.095016f),
+                    HipsAndFootXzRow("main", 900, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 600, 0.01f, 0f, 0f),
+                    VmdFrame("Center", 900, 0.02f, 0f, 0f),
+                    VmdFrame("RightFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("RightFootIK", 600, 0.01f, 0.05f, 0f),
+                    VmdFrame("RightFootIK", 900, 0.02f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+
+                MotionComparisonFrameQualitySummary[] entries =
+                    MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(raw);
+
+                Assert.That(raw.status, Is.EqualTo("warn"));
+                Assert.That(raw.status_reason, Does.Contain("same-frame foot XZ delta warning threshold exceeded"));
+                Assert.That(raw.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range, Is.EqualTo(0.0963659f).Within(0.0001f));
+                Assert.That(raw.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_recorder_frame, Is.EqualTo(600));
+                Assert.That(raw.max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range_side, Is.EqualTo("right"));
+                Assert.That(entries, Has.Length.EqualTo(2));
+                Assert.That(entries[1].status, Is.EqualTo("pass"));
+                Assert.That(entries[1].max_same_frame_foot_xz_delta_within_candidate_vmd_frame_range, Is.LessThanOrEqualTo(0.0495f));
+                Assert.That(entries[1].candidate_vmd_foot_ik_spike_frames, Is.EqualTo(0));
+                Assert.That(entries[1].candidate_vmd_center_spike_frames, Is.EqualTo(0));
+                Assert.That(entries[1].candidate_below_floor_metric_frames, Is.EqualTo(0));
+                Assert.That(File.Exists(entries[1].candidate_vmd_path), Is.True);
+                Assert.That(
+                    Convert.ToBase64String(File.ReadAllBytes(entries[1].candidate_vmd_path)),
+                    Is.Not.EqualTo(Convert.ToBase64String(File.ReadAllBytes(vmdPath))),
+                    "The corrected candidate must carry the horizontal foot X/Z delta into the VMD foot IK carrier.");
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_FootXzCorrectionFrameHasDisabledIk_When_NearbyIkFrameCanCarryDelta_Then_CorrectedVmdUsesVisibleCarrierFrame()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsAndFootXz(
+                    baselinePath,
+                    HipsAndFootXzRow("manual", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 900, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 903, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMetricsCsvWithHipsAndFootXz(
+                    candidatePath,
+                    HipsAndFootXzRow("main", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("main", 900, 0f, 0f, 0f, 0f, 0.13f, 0f),
+                    HipsAndFootXzRow("main", 903, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    new[]
+                    {
+                        VmdFrame("Center", 899, 0f, 0f, 0f),
+                        VmdFrame("Center", 900, 0f, 0f, 0f),
+                        VmdFrame("Center", 903, 0f, 0f, 0f),
+                        VmdFrame("Center", 904, 0f, 0f, 0f),
+                        VmdFrame("RightFootIK", 899, -0.08f, 0.05f, 0f),
+                        VmdFrame("RightFootIK", 900, 0f, 0.05f, 0f),
+                        VmdFrame("RightFootIK", 903, 0.08f, 0.05f, 0f),
+                        VmdFrame("RightFootIK", 904, 0.02f, 0.05f, 0f)
+                    },
+                    new[]
+                    {
+                        VmdIkFrame.Enabled(0),
+                        new VmdIkFrame(899, leftFootEnabled: true, leftToeEnabled: true, rightFootEnabled: false, rightToeEnabled: true),
+                        new VmdIkFrame(903, leftFootEnabled: true, leftToeEnabled: true, rightFootEnabled: true, rightToeEnabled: true),
+                        new VmdIkFrame(904, leftFootEnabled: true, leftToeEnabled: true, rightFootEnabled: false, rightToeEnabled: true)
+                    });
+
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 904,
+                        candidateRecordedFrameCount: 904,
+                        targetFrameCount: 904);
+
+                MotionComparisonFrameQualitySummary[] entries =
+                    MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(raw);
+
+                Assert.That(entries, Has.Length.EqualTo(2));
+                Assert.That(entries[1].status, Is.EqualTo("pass"));
+                Assert.That(entries[1].candidate_vmd_foot_ik_spike_frames, Is.EqualTo(0));
+                Assert.That(
+                    Convert.ToBase64String(File.ReadAllBytes(entries[1].candidate_vmd_path)),
+                    Is.Not.EqualTo(Convert.ToBase64String(File.ReadAllBytes(vmdPath))),
+                    "The corrected VMD must not remain a raw copy when a nearby enabled IK frame can carry the horizontal foot correction safely.");
+                Assert.That(ReadMinimalVmdX(entries[1].candidate_vmd_path, "RightFootIK", 900), Is.EqualTo(0f).Within(0.000001f));
+                Assert.That(ReadMinimalVmdX(entries[1].candidate_vmd_path, "RightFootIK", 903), Is.LessThan(0.001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_FootXzCorrectedCandidate_When_WritingCorrectedMetrics_Then_WritesHorizontalCorrectionDiagnostics()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsAndFootXz(
+                    baselinePath,
+                    HipsAndFootXzRow("manual", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 600, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("manual", 900, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMetricsCsvWithHipsAndFootXz(
+                    candidatePath,
+                    HipsAndFootXzRow("main", 0, 0f, 0f, 0f, 0f, 0f, 0f),
+                    HipsAndFootXzRow("main", 600, 0f, 0f, 0f, 0f, 0.016073f, 0.095016f),
+                    HipsAndFootXzRow("main", 900, 0f, 0f, 0f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 600, 0.01f, 0f, 0f),
+                    VmdFrame("Center", 900, 0.02f, 0f, 0f),
+                    VmdFrame("RightFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("RightFootIK", 600, 0.01f, 0.05f, 0f),
+                    VmdFrame("RightFootIK", 900, 0.02f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+
+                string correctedPath = GetSummaryField<string>(raw, "vertical_solve_corrected_candidate_metrics_csv");
+                Assert.That(File.Exists(correctedPath), Is.True);
+                Dictionary<string, string> correctedFrame = ReadCsvRowByRecorderFrame(correctedPath, 600);
+
+                Assert.That(ParseTestFloat(correctedFrame["verticalSolveCorrectionRightFootX"]), Is.EqualTo(-0.0079f).Within(0.000001f));
+                Assert.That(ParseTestFloat(correctedFrame["verticalSolveCorrectionRightFootZ"]), Is.EqualTo(-0.046702f).Within(0.000001f));
+                Assert.That(ParseTestFloat(correctedFrame["verticalSolveRightFootNormalizedDeltaX"]), Is.EqualTo(0.016073f).Within(0.000001f));
+                Assert.That(ParseTestFloat(correctedFrame["verticalSolveRightFootNormalizedDeltaZ"]), Is.EqualTo(0.095016f).Within(0.000001f));
+                Assert.That(ParseTestFloat(correctedFrame["verticalSolveRightFootNormalizedMagnitude"]), Is.EqualTo(0.0963659f).Within(0.0001f));
+                Assert.That(ParseTestFloat(correctedFrame["verticalSolveHorizontalFootTargetMagnitude"]), Is.EqualTo(0.049f).Within(0.000001f));
+                Assert.That(correctedFrame["verticalSolveCorrectionSource"], Is.EqualTo("horizontal_foot_xz"));
+                Assert.That(ParseTestFloat(correctedFrame["rightFootX"]), Is.EqualTo(0.008173f).Within(0.000001f));
+                Assert.That(ParseTestFloat(correctedFrame["rightFootZ"]), Is.EqualTo(0.048314f).Within(0.000001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public void Given_YybCandidateRiskColumnWithoutFiniteValues_When_BuildFrameQualitySummary_Then_FailsDiagnosticGate()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
@@ -1612,7 +2448,7 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
-        public void Given_MainRecordingMovingRootStageMotion_When_MarkingIntentionalRootPath_Then_AllowsRootPathDeltaOnly()
+        public void Given_MainRecordingRootPathDelta_When_BuildFrameQualitySummary_Then_FailsStationaryPreviewGate()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
             string baselinePath = Path.Combine(root, "manual.csv");
@@ -1653,13 +2489,7 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(summary.max_same_frame_root_position_delta, Is.EqualTo(0.75f).Within(0.0001f));
                 Assert.That(summary.candidate_retarget_root_delta_max, Is.EqualTo(0.08f).Within(0.0001f));
                 Assert.That(summary.max_same_frame_foot_bottom_y_delta, Is.EqualTo(0.066f).Within(0.0001f));
-
-                MotionComparisonProbeReportWriter.MarkIntentionalMovingRootStageMotion(summary);
-
-                Assert.That(summary.status, Is.EqualTo("pass"));
-                Assert.That(summary.status_reason, Does.Contain("intentional moving-root stage path"));
-                Assert.That(summary.frame_quality_evaluation_role, Is.EqualTo("main_recording_moving_root_metrics"));
-                Assert.That(summary.max_same_frame_root_position_delta, Is.EqualTo(0.75f).Within(0.0001f));
+                Assert.That(summary.frame_quality_evaluation_role, Is.EqualTo("raw_candidate_metrics"));
             }
             finally
             {
@@ -1671,7 +2501,383 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
-        public void Given_MainRecordingMovingRootStageMotionWithRetargetRootSpike_When_MarkingIntentionalRootPath_Then_StillFails()
+        public void Given_MainRecordingArmMotionWithSmallRootDrift_When_BuildFrameQualitySummary_Then_FailsLimbIsolationGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithLimbMotionAndYybDiagnostics(
+                    baselinePath,
+                    LimbMotionRow("manual", 0, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("manual", 1, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("manual", 2, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"));
+                WriteMetricsCsvWithLimbMotionAndYybDiagnostics(
+                    candidatePath,
+                    LimbMotionRow("main-recording", 0, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("main-recording", 1, 0.006f, 0.08f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("main-recording", 2, 0.012f, 0.18f, 0f, 10f, 10f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 2, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 2, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB 자동 경로",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 3,
+                        candidateRecordedFrameCount: 3,
+                        targetFrameCount: 3);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("stationary preview limb-motion root travel threshold exceeded"));
+                Assert.That(GetSummaryField<int>(summary, "candidate_arm_motion_frames"), Is.EqualTo(2));
+                Assert.That(GetSummaryField<int>(summary, "candidate_leg_motion_frames"), Is.EqualTo(0));
+                Assert.That(GetSummaryField<float>(summary, "candidate_arm_motion_root_travel"), Is.EqualTo(0.012f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "candidate_leg_motion_root_travel"), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "candidate_limb_motion_root_travel"), Is.EqualTo(0.012f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_MainRecordingSameFrameLimbPoseGap_When_BuildFrameQualitySummary_Then_FailsNaturalnessGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithLimbMotionAndYybDiagnostics(
+                    baselinePath,
+                    LimbMotionRow("manual", 0, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("manual", 1, 0f, -0.2f, 0f, 10f, 10f, "0", "0", "0"));
+                WriteMetricsCsvWithLimbMotionAndYybDiagnostics(
+                    candidatePath,
+                    LimbMotionRow("main-recording", 0, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("main-recording", 1, 0f, 1f, 0f, 10f, 10f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 1, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB 자동 경로",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 2,
+                        candidateRecordedFrameCount: 2,
+                        targetFrameCount: 2);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("same-frame limb pose delta threshold exceeded"));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_leg_pose_delta"), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_arm_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_limb_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_StartSampleHasPreRetargetArmPoseGap_When_BuildFrameQualitySummary_Then_BucketsStartOutsideNaturalnessGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithReasonAndForearmStretchDiagnostics(
+                    baselinePath,
+                    ForearmStretchReasonRow("manual", "start", 0, 0f, "0", "0", "0"),
+                    ForearmStretchReasonRow("manual", "t94.392", 180, 0f, "0", "0", "0"));
+                WriteMetricsCsvWithReasonAndForearmStretchDiagnostics(
+                    candidatePath,
+                    ForearmStretchReasonRow("main-recording", "start", 0, 1.2f, "0", "0", "0"),
+                    ForearmStretchReasonRow("main-recording", "t94.392", 180, 0.625f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 180, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 180, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB 자동 경로",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 181,
+                        candidateRecordedFrameCount: 181,
+                        targetFrameCount: 181);
+
+                Assert.That(summary.status, Is.EqualTo("pass"));
+                Assert.That(summary.status_reason, Does.Not.Contain("same-frame limb pose delta threshold exceeded"));
+                Assert.That(summary.compared_frames, Is.EqualTo(2));
+                Assert.That(GetSummaryField<int>(summary, "pre_retarget_start_compared_frames"), Is.EqualTo(1));
+                Assert.That(GetSummaryField<float>(summary, "pre_retarget_start_max_same_frame_arm_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "pre_retarget_start_max_same_frame_limb_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "pre_retarget_start_max_same_frame_limb_pose_delta_recorder_frame"), Is.EqualTo(0));
+                Assert.That(GetSummaryField<int>(summary, "pre_retarget_start_max_same_frame_limb_pose_delta_candidate_recorder_frame"), Is.EqualTo(0));
+                Assert.That(GetSummaryField<string>(summary, "pre_retarget_start_evaluation_basis"), Does.Contain("pre-retarget"));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(0.625f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_delta"), Is.EqualTo(0.625f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_limb_pose_delta"), Is.EqualTo(0.625f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_BaselineArmTwistOutsideSafetyRange_When_BuildFrameQualitySummary_Then_GuardNormalizedNaturalnessGatePasses()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    baselinePath,
+                    ArmPoseRow("manual", 0, 0f, -1.998689f, "0", "0", "0"),
+                    ArmPoseRow("manual", 1, 0f, -1.998689f, "0", "0", "0"));
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    candidatePath,
+                    ArmPoseRow("main-recording", 0, 0f, -0.65f, "0", "0", "0"),
+                    ArmPoseRow("main-recording", 1, 0f, -0.65f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 1, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1, 0f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB ?먮룞 寃쎈줈",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 2,
+                        candidateRecordedFrameCount: 2,
+                        targetFrameCount: 2);
+
+                Assert.That(summary.status, Is.EqualTo("pass"));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(1.348689f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_delta"), Is.EqualTo(1.348689f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_arm_pose_delta"), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_limb_pose_delta"), Is.EqualTo(0f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_ForearmTwistFullRangeFlipWithStableVisualPose_When_BuildFrameQualitySummary_Then_GuardNormalizedNaturalnessGatePasses()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    baselinePath,
+                    ArmPoseRow("manual", 0, 0f, -0.678063f, "0", "0", "0"),
+                    ArmPoseRow("manual", 1, 0f, -0.678063f, "0", "0", "0"));
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    candidatePath,
+                    ArmPoseRow("main-recording", 0, 0f, 0.65094f, "0", "0", "0"),
+                    ArmPoseRow("main-recording", 1, 0f, 0.65094f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 1, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1, 0f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual YYB",
+                        baselinePath,
+                        "Main_Recoding YYB 자동 경로",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 2,
+                        candidateRecordedFrameCount: 2,
+                        targetFrameCount: 2);
+
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(1.329003f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_arm_pose_delta"), Is.EqualTo(1.0f).Within(0.0001f));
+                Assert.That(summary.status, Is.EqualTo("pass"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_RawForearmTwistSaturatesButGatePasses_When_BuildFrameQualitySummary_Then_ReportsRawLimbPoseSaturation()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    baselinePath,
+                    ArmPoseRow("manual", 0, 0f, -0.678063f, "0", "0", "0"),
+                    ArmPoseRow("manual", 1, 0f, -0.678063f, "0", "0", "0"));
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    candidatePath,
+                    ArmPoseRow("main-recording", 0, 0f, 0.65094f, "0", "0", "0"),
+                    ArmPoseRow("main-recording", 1, 0f, 0.65094f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 1, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1, 0f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual YYB",
+                        baselinePath,
+                        "Main_Recoding YYB",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 2,
+                        candidateRecordedFrameCount: 2,
+                        targetFrameCount: 2);
+
+                Assert.That(summary.status, Is.EqualTo("pass"));
+                Assert.That(GetSummaryField<int>(summary, "raw_limb_pose_delta_saturated_frame_count"), Is.EqualTo(2));
+                Assert.That(GetSummaryField<float>(summary, "raw_limb_pose_delta_excess_over_guard_normalized"), Is.EqualTo(0.329003f).Within(0.0001f));
+                Assert.That(GetSummaryField<string>(summary, "raw_limb_pose_delta_saturation_basis"), Does.Contain("raw limb pose delta"));
+                Assert.That(GetSummaryField<string>(summary, "raw_limb_pose_delta_saturation_basis"), Does.Contain("guard-normalized"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_SafeArmTwistSignFlip_When_BuildFrameQualitySummary_Then_FailsGuardNormalizedNaturalnessGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    baselinePath,
+                    ArmPoseRow("manual", 0, 0.75f, 0f, "0", "0", "0"),
+                    ArmPoseRow("manual", 1, 0.75f, 0f, "0", "0", "0"));
+                WriteMetricsCsvWithArmPoseDiagnostics(
+                    candidatePath,
+                    ArmPoseRow("main-recording", 0, -0.75f, 0f, "0", "0", "0"),
+                    ArmPoseRow("main-recording", 1, -0.75f, 0f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 1, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1, 0f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB ?먮룞 寃쎈줈",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 2,
+                        candidateRecordedFrameCount: 2,
+                        targetFrameCount: 2);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("same-frame limb pose delta threshold exceeded"));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_arm_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_limb_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_MainRecordingRootPathDeltaWithRetargetRootSpike_When_BuildFrameQualitySummary_Then_FailsRootSpikeGate()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
             string baselinePath = Path.Combine(root, "manual.csv");
@@ -1707,8 +2913,6 @@ namespace Tests.Editor.VMDRecorderSample
                         candidateRecordedFrameCount: 301,
                         targetFrameCount: 301);
 
-                MotionComparisonProbeReportWriter.MarkIntentionalMovingRootStageMotion(summary);
-
                 Assert.That(summary.status, Is.EqualTo("fail"));
                 Assert.That(summary.status_reason, Does.Contain("one-frame root/center/IK teleport threshold exceeded"));
                 Assert.That(summary.status_reason, Does.Not.Contain("moving-root retarget root delta"));
@@ -1724,7 +2928,7 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
-        public void Given_MainRecordingMovingRootStageMotionWithFloorFailure_When_MarkingIntentionalRootPath_Then_StillFails()
+        public void Given_MainRecordingRootPathDeltaWithFloorFailure_When_BuildFrameQualitySummary_Then_FailsFloorAndStationaryRootGates()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
             string baselinePath = Path.Combine(root, "manual.csv");
@@ -1760,11 +2964,9 @@ namespace Tests.Editor.VMDRecorderSample
                         candidateRecordedFrameCount: 301,
                         targetFrameCount: 301);
 
-                MotionComparisonProbeReportWriter.MarkIntentionalMovingRootStageMotion(summary);
-
                 Assert.That(summary.status, Is.EqualTo("fail"));
                 Assert.That(summary.status_reason, Does.Contain("below-floor foot/IK sample detected"));
-                Assert.That(summary.status_reason, Does.Not.Contain("same-frame root position delta threshold exceeded"));
+                Assert.That(summary.status_reason, Does.Contain("same-frame root position delta threshold exceeded"));
             }
             finally
             {
@@ -2447,6 +3649,69 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_CorrectedMetricsPassButNoVmdCarrierChanges_When_BuildingFrameQualityEvaluationEntries_Then_CorrectedEntryKeepsExplicitVmdArtifact()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsContributors(
+                    baselinePath,
+                    HipsContributionRow("manual", 0, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 900, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 1800, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f));
+                WriteMetricsCsvWithHipsContributors(
+                    candidatePath,
+                    HipsContributionRow("main", 0, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.25f, 0.25f),
+                    HipsContributionRow("main", 900, 0f, 1.05f, 0f, 0.64f, 0.61f, 0.000f, 0.000f, 1.12f, 0.302f, 0.302f),
+                    HipsContributionRow("main", 1800, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.25f, 0.25f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Spine", 0, 0f, 0f, 0f),
+                    VmdFrame("Spine", 900, 0.01f, 0f, 0f));
+
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+
+                MotionComparisonFrameQualitySummary[] entries =
+                    MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(raw);
+
+                string correctedVmdPath = GetSummaryField<string>(raw, "vertical_solve_corrected_candidate_vmd_path");
+                string manifestPath = GetSummaryField<string>(raw, "vertical_solve_corrected_candidate_manifest_path");
+                Assert.That(raw.status, Is.EqualTo("fail"));
+                Assert.That(raw.vertical_solve_corrected_candidate_status, Is.EqualTo("pass"));
+                Assert.That(entries, Has.Length.EqualTo(2));
+                Assert.That(entries[1].status, Is.EqualTo("pass"));
+                Assert.That(entries[1].candidate_vmd_path, Is.EqualTo(correctedVmdPath));
+                Assert.That(File.Exists(correctedVmdPath), Is.True, "Corrected candidate must keep an explicit VMD artifact even when no carrier frame needs rewriting.");
+                Assert.That(
+                    Convert.ToBase64String(File.ReadAllBytes(correctedVmdPath)),
+                    Is.EqualTo(Convert.ToBase64String(File.ReadAllBytes(vmdPath))),
+                    "No-carrier corrected VMD should be a traceable raw copy paired with corrected metrics.");
+                Assert.That(File.ReadAllText(manifestPath), Does.Contain("\"corrected_vmd_changed_frames\":0"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public void Given_CorrectedArtifactFootDeltaNeedsMoreThanPrototypeCap_When_BuildingEvaluationEntries_Then_PostprocessUsesArtifactCap()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
@@ -2490,6 +3755,70 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(entries[0].status, Is.EqualTo("fail"));
                 Assert.That(entries[1].status, Is.EqualTo("pass"));
                 Assert.That(entries[1].max_same_frame_foot_bottom_y_delta, Is.EqualTo(0.0345f).Within(0.0001f));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_MainAutoSizedVerticalMismatch_When_BuildingEvaluationEntries_Then_CorrectedCandidatePassesMetricsAndVmdSafety()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsContributors(
+                    baselinePath,
+                    HipsContributionRow("manual", 0, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 900, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 1800, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f));
+                WriteMetricsCsvWithHipsContributors(
+                    candidatePath,
+                    HipsContributionRow("main", 0, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.25f, 0.25f),
+                    HipsContributionRow("main", 900, 0f, 1.05f, 0f, 1.005693f, 1.005693f, 0.000f, 0.000f, 1.505693f, 0.795391f, 0.795391f),
+                    HipsContributionRow("main", 1800, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.25f, 0.25f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 899, 0f, 1.00f, 0f),
+                    VmdFrame("Center", 900, 0f, 1.00f, 0f),
+                    VmdFrame("Center", 901, 0f, 1.00f, 0f),
+                    VmdFrame("LeftFootIK", 899, 0f, 0.70f, 0f),
+                    VmdFrame("LeftFootIK", 900, 0f, 0.70f, 0f),
+                    VmdFrame("LeftFootIK", 901, 0f, 0.70f, 0f));
+
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+
+                MotionComparisonFrameQualitySummary[] entries =
+                    MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(raw);
+
+                Assert.That(raw.status, Is.EqualTo("fail"));
+                Assert.That(raw.max_same_frame_hips_y_delta, Is.EqualTo(0.455693f).Within(0.0001f));
+                Assert.That(raw.max_same_frame_foot_bottom_y_delta, Is.EqualTo(0.545391f).Within(0.0001f));
+                Assert.That(entries, Has.Length.EqualTo(2));
+                Assert.That(entries[1].status, Is.EqualTo("pass"));
+                Assert.That(entries[1].max_same_frame_hips_y_delta, Is.EqualTo(0.0395f).Within(0.0001f));
+                Assert.That(entries[1].max_same_frame_foot_bottom_y_delta, Is.EqualTo(0.0345f).Within(0.0001f));
+                Assert.That(entries[1].candidate_vmd_center_spike_frames, Is.EqualTo(0));
+                Assert.That(entries[1].candidate_vmd_foot_ik_spike_frames, Is.EqualTo(0));
+                Assert.That(entries[1].min_candidate_vmd_effective_foot_ik_y, Is.GreaterThanOrEqualTo(-0.001f));
             }
             finally
             {
@@ -2735,6 +4064,74 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_PrimaryExportPromotionRunsTwice_When_RawDiagnosticsExist_Then_DoesNotOverwriteRawDiagnostics()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsContributors(
+                    baselinePath,
+                    HipsContributionRow("manual", 0, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 900, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 1800, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f));
+                WriteMetricsCsvWithHipsContributors(
+                    candidatePath,
+                    HipsContributionRow("main", 0, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.25f, 0.25f),
+                    HipsContributionRow("main", 900, 0f, 1.05f, 0f, 0.64f, 0.61f, 0.000f, 0.000f, 1.12f, 0.302f, 0.302f),
+                    HipsContributionRow("main", 1800, 0f, 1.05f, 0f, 0.62f, 0.58f, 0.000f, 0.000f, 1.12f, 0.25f, 0.25f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 900, 0.01f, 0f, 0f),
+                    VmdFrame("Center", 1800, 0.02f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 900, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1800, 0.02f, 0.05f, 0f));
+
+                string rawCandidateCsv = File.ReadAllText(candidatePath);
+                string rawCandidateVmd = Convert.ToBase64String(File.ReadAllBytes(vmdPath));
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+
+                bool firstPromotion = MotionComparisonProbeReportWriter.TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
+                    raw,
+                    out VerticalSolvePrimaryExportPromotion first);
+                bool secondPromotion = MotionComparisonProbeReportWriter.TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
+                    raw,
+                    out VerticalSolvePrimaryExportPromotion second);
+
+                Assert.That(firstPromotion, Is.True);
+                Assert.That(secondPromotion, Is.True);
+                Assert.That(second.raw_diagnostic_metrics_csv, Is.EqualTo(first.raw_diagnostic_metrics_csv));
+                Assert.That(second.raw_diagnostic_vmd_path, Is.EqualTo(first.raw_diagnostic_vmd_path));
+                Assert.That(File.ReadAllText(second.raw_diagnostic_metrics_csv), Is.EqualTo(rawCandidateCsv));
+                Assert.That(Convert.ToBase64String(File.ReadAllBytes(second.raw_diagnostic_vmd_path)), Is.EqualTo(rawCandidateVmd));
+                Assert.That(File.ReadAllText(candidatePath), Is.Not.EqualTo(rawCandidateCsv));
+                Assert.That(Convert.ToBase64String(File.ReadAllBytes(vmdPath)), Is.Not.EqualTo(rawCandidateVmd));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public void Given_IntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsPrimaryAsOnlyAcceptanceEntry()
         {
             var integrated = new MotionComparisonFrameQualitySummary
@@ -2758,6 +4155,70 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_VmdReplayIntegratedPrimarySummary_When_BuildingEvaluationEntries_Then_KeepsReplayPrimaryAsOnlyDiagnosticEntry()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "vmd-replay.csv");
+            string vmdPath = Path.Combine(root, "vmd-replay.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsContributors(
+                    baselinePath,
+                    HipsContributionRow("manual", 0, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 900, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 1800, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f));
+                WriteMetricsCsvWithHipsContributors(
+                    candidatePath,
+                    HipsContributionRow("vmd-replay", 0, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.25f, 0.25f),
+                    HipsContributionRow("vmd-replay", 900, 0f, 1.05f, 0f, 0.64f, 0.61f, 0.000f, 0.000f, 1.12f, 0.302f, 0.302f),
+                    HipsContributionRow("vmd-replay", 1800, 0f, 1.05f, 0f, 0.62f, 0.58f, 0.000f, 0.000f, 1.12f, 0.25f, 0.25f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 900, 0.01f, 0f, 0f),
+                    VmdFrame("Center", 1800, 0.02f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 900, 0.01f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1800, 0.02f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary replayIntegrated =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "vmd-replay",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 901,
+                        candidateRecordedFrameCount: 901,
+                        targetFrameCount: 901);
+
+                Assert.That(replayIntegrated.status, Is.EqualTo("fail"));
+                Assert.That(replayIntegrated.vertical_solve_corrected_candidate_status, Is.EqualTo("pass"));
+
+                replayIntegrated.frame_quality_evaluation_role = "vmd_replay_integrated_vertical_solve_metrics";
+                replayIntegrated.frame_quality_evaluation_basis =
+                    "primary VMD replay diagnostic output after bounded vertical solve promotion";
+
+                MotionComparisonFrameQualitySummary[] entries =
+                    MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(replayIntegrated);
+
+                Assert.That(entries, Has.Length.EqualTo(1));
+                Assert.That(entries[0], Is.SameAs(replayIntegrated));
+                Assert.That(entries[0].frame_quality_evaluation_role, Is.EqualTo("vmd_replay_integrated_vertical_solve_metrics"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public void Given_VerticalSolveWouldCreateUnsafeVmdCarrierStep_When_BuildingEvaluationEntries_Then_CorrectedVmdStaysWithinSafetyGates()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
@@ -2778,9 +4239,9 @@ namespace Tests.Editor.VMDRecorderSample
                     HipsContributionRow("main", 900, 0f, 1.05f, 0f, 0.64f, 0.61f, 0.000f, 0.000f, 1.1695f, 0.25f, 0.25f));
                 WriteMinimalVmd(
                     vmdPath,
-                    VmdFrame("Center", 899, 0f, 0.09f, 0f),
+                    VmdFrame("Center", 899, 0.118f, 0.05f, 0f),
                     VmdFrame("Center", 900, 0f, 0.05f, 0f),
-                    VmdFrame("Center", 901, 0f, 0.09f, 0f),
+                    VmdFrame("Center", 901, -0.118f, 0.05f, 0f),
                     VmdFrame("LeftFootIK", 899, 0f, 0f, 0f),
                     VmdFrame("LeftFootIK", 900, 0f, 0f, 0f),
                     VmdFrame("LeftFootIK", 901, 0f, 0f, 0f));
@@ -2805,9 +4266,12 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(entries[1].candidate_vmd_center_spike_frames, Is.EqualTo(0));
                 Assert.That(entries[1].candidate_vmd_foot_ik_spike_frames, Is.EqualTo(0));
                 Assert.That(entries[1].min_candidate_vmd_effective_foot_ik_y, Is.GreaterThanOrEqualTo(-0.001f));
-                Assert.That(
-                    File.ReadAllText(GetSummaryField<string>(raw, "vertical_solve_corrected_candidate_manifest_path")),
-                    Does.Contain("\"corrected_vmd_safety_limited_frames\":"));
+                string manifest = File.ReadAllText(GetSummaryField<string>(raw, "vertical_solve_corrected_candidate_manifest_path"));
+                Assert.That(manifest, Does.Contain("\"corrected_vmd_safety_limited_frames\":"));
+                Assert.That(manifest, Does.Contain("\"corrected_vmd_safety_limited_frame_details\""));
+                Assert.That(manifest, Does.Contain("\"reason\":\"step_safety"));
+                Assert.That(manifest, Does.Contain("\"bone\":\"Center\""));
+                Assert.That(manifest, Does.Contain("\"frame\":900"));
             }
             finally
             {
@@ -3016,6 +4480,55 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(summary.min_candidate_vmd_foot_ik_y, Is.EqualTo(-0.03f).Within(0.0001f));
                 Assert.That(summary.candidate_vmd_center_spike_frames, Is.EqualTo(1));
                 Assert.That(summary.candidate_vmd_foot_ik_spike_frames, Is.EqualTo(1));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_FootIkStepWhileIkIsDisabled_When_BuildFrameQualitySummary_Then_DoesNotCountVisualFootIkSpike()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsv(baselinePath, Row("manual", 0, 0f, 1f, 0f, 1f, 0f, 0f, 0f, 0f, 0f));
+                WriteMetricsCsv(candidatePath, Row("main", 0, 0f, 1f, 0f, 1f, 0f, 0f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    new[]
+                    {
+                        VmdFrame("LeftFootIK", 0, 0f, 0f, 0f),
+                        VmdFrame("LeftFootIK", 1, 0f, 0f, 0.4f)
+                    },
+                    new[]
+                    {
+                        VmdIkFrame.Enabled(0),
+                        new VmdIkFrame(1, leftFootEnabled: false, leftToeEnabled: false, rightFootEnabled: true, rightToeEnabled: true)
+                    });
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 1,
+                        candidateRecordedFrameCount: 1,
+                        targetFrameCount: 1);
+
+                Assert.That(summary.max_candidate_vmd_foot_ik_step, Is.EqualTo(0.4f).Within(0.0001f));
+                Assert.That(summary.candidate_vmd_foot_ik_spike_frames, Is.EqualTo(0));
             }
             finally
             {
@@ -3257,6 +4770,56 @@ namespace Tests.Editor.VMDRecorderSample
             }
         }
 
+        [Test]
+        public void Given_StaleMmdAutomationEvidence_When_AttachLatestMmdAutomationEvidence_Then_LeavesSummaryAsNotRun()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string relativeCandidateVmdPath = "Assets/VMDRecorderSample/smoke_satisfaction_2_31s.vmd";
+            string candidateVmdPath = Path.Combine(root, relativeCandidateVmdPath.Replace("/", Path.DirectorySeparatorChar.ToString()));
+            string runDir = Path.Combine(root, "Docs", "Machine_Spirit", "Local", "MMDQASessions", "automation_runs", "stale-run");
+            string reportPath = Path.Combine(runDir, "report.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(candidateVmdPath));
+            Directory.CreateDirectory(runDir);
+
+            try
+            {
+                File.WriteAllBytes(candidateVmdPath, new byte[] { 1 });
+                File.WriteAllText(
+                    reportPath,
+                    "{\n" +
+                    "  \"status\": \"warning\",\n" +
+                    "  \"finished_at\": \"2026-05-18T08:48:46\",\n" +
+                    "  \"config\": { \"motion_vmd\": \"" + JsonPath(relativeCandidateVmdPath) + "\" },\n" +
+                    "  \"artifacts\": { \"report_path\": \"" + JsonPath(reportPath) + "\", \"run_dir\": \"" + JsonPath(runDir) + "\" },\n" +
+                    "  \"steps\": []\n" +
+                    "}\n");
+                File.SetLastWriteTimeUtc(reportPath, new DateTime(2026, 5, 18, 0, 0, 0, DateTimeKind.Utc));
+                File.SetLastWriteTimeUtc(candidateVmdPath, new DateTime(2026, 6, 24, 0, 0, 0, DateTimeKind.Utc));
+                MotionComparisonFrameQualitySummary summary = new MotionComparisonFrameQualitySummary
+                {
+                    candidate_vmd_path = candidateVmdPath,
+                    mmd_result_status = "not_run",
+                    mmd_finished_at = ""
+                };
+
+                MotionComparisonProbeReportWriter.AttachLatestMmdAutomationEvidence(
+                    summary,
+                    projectRoot: root,
+                    automationRunsRoot: Path.Combine(root, "Docs", "Machine_Spirit", "Local", "MMDQASessions", "automation_runs"));
+
+                Assert.That(summary.mmd_result_status, Is.EqualTo("not_run"));
+                Assert.That(summary.mmd_finished_at, Is.Empty);
+                Assert.That(summary.mmd_report_path, Is.Null.Or.Empty);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
         private static string[] Row(
             string label,
             int recorderFrame,
@@ -3486,6 +5049,41 @@ namespace Tests.Editor.VMDRecorderSample
             return (value ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
         }
 
+        private static Dictionary<string, string> ReadCsvRowByRecorderFrame(string path, int recorderFrame)
+        {
+            string[] lines = File.ReadAllLines(path);
+            string[] headers = lines[0].Split(',');
+            int recorderFrameColumn = Array.IndexOf(headers, "recorderFrame");
+            Assert.That(recorderFrameColumn, Is.GreaterThanOrEqualTo(0));
+
+            for (int lineIndex = 1; lineIndex < lines.Length; lineIndex++)
+            {
+                string[] values = lines[lineIndex].Split(',');
+                if (values.Length <= recorderFrameColumn ||
+                    !int.TryParse(values[recorderFrameColumn], out int rowRecorderFrame) ||
+                    rowRecorderFrame != recorderFrame)
+                {
+                    continue;
+                }
+
+                var row = new Dictionary<string, string>();
+                for (int columnIndex = 0; columnIndex < headers.Length; columnIndex++)
+                {
+                    row[headers[columnIndex]] = columnIndex < values.Length ? values[columnIndex] : "";
+                }
+
+                return row;
+            }
+
+            Assert.Fail($"CSV row not found for recorderFrame {recorderFrame}");
+            return null;
+        }
+
+        private static float ParseTestFloat(string value)
+        {
+            return float.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         private static void WriteMetricsCsv(string path, params string[][] rows)
         {
             var lines = new List<string>
@@ -3528,6 +5126,76 @@ namespace Tests.Editor.VMDRecorderSample
             File.WriteAllLines(path, lines);
         }
 
+        private static void WriteMetricsCsvWithFootXz(string path, params string[][] rows)
+        {
+            var lines = new List<string>
+            {
+                "label,recorderFrame,rootX,rootY,rootZ,hipsY,lowestFootBottomY,leftFootX,leftFootZ,rightFootX,rightFootZ,footBottomGroundGap,retargetRootDeltaMax,retargetPoseRootDeltaMax,retargetGroundingVerticalStepMax"
+            };
+            foreach (string[] row in rows)
+            {
+                lines.Add(string.Join(",", row));
+            }
+
+            File.WriteAllLines(path, lines);
+        }
+
+        private static void WriteMetricsCsvWithHipsAndFootXz(string path, params string[][] rows)
+        {
+            var lines = new List<string>
+            {
+                "label,recorderFrame,rootX,rootY,rootZ,hipsX,hipsZ,hipsY,lowestFootBottomY,leftFootX,leftFootZ,rightFootX,rightFootZ,footBottomGroundGap,retargetRootDeltaMax,retargetPoseRootDeltaMax,retargetGroundingVerticalStepMax"
+            };
+            foreach (string[] row in rows)
+            {
+                lines.Add(string.Join(",", row));
+            }
+
+            File.WriteAllLines(path, lines);
+        }
+
+        private static void WriteMetricsCsvWithLimbMotionAndYybDiagnostics(string path, params string[][] rows)
+        {
+            var lines = new List<string>
+            {
+                "label,recorderFrame,rootX,rootY,rootZ,hipsY,lowestFootBottomY,footBottomGroundGap,retargetRootDeltaMax,retargetPoseRootDeltaMax,retargetGroundingVerticalStepMax,leftArmDownUpMuscle,rightArmDownUpMuscle,leftElbowAngle,rightElbowAngle,leftKneeAngle,rightKneeAngle,yybMaxDeformationRisk,leftSleeveThicknessRisk,rightSleeveThicknessRisk"
+            };
+            foreach (string[] row in rows)
+            {
+                lines.Add(string.Join(",", row));
+            }
+
+            File.WriteAllLines(path, lines);
+        }
+
+        private static void WriteMetricsCsvWithArmPoseDiagnostics(string path, params string[][] rows)
+        {
+            var lines = new List<string>
+            {
+                "label,recorderFrame,rootX,rootY,rootZ,hipsY,lowestFootBottomY,footBottomGroundGap,retargetRootDeltaMax,retargetPoseRootDeltaMax,retargetGroundingVerticalStepMax,leftArmTwistMuscle,leftForearmTwistMuscle,yybMaxDeformationRisk,leftSleeveThicknessRisk,rightSleeveThicknessRisk"
+            };
+            foreach (string[] row in rows)
+            {
+                lines.Add(string.Join(",", row));
+            }
+
+            File.WriteAllLines(path, lines);
+        }
+
+        private static void WriteMetricsCsvWithReasonAndForearmStretchDiagnostics(string path, params string[][] rows)
+        {
+            var lines = new List<string>
+            {
+                "label,reason,recorderFrame,rootX,rootY,rootZ,hipsY,lowestFootBottomY,footBottomGroundGap,retargetRootDeltaMax,retargetPoseRootDeltaMax,retargetGroundingVerticalStepMax,leftForearmStretchMuscle,yybMaxDeformationRisk,leftSleeveThicknessRisk,rightSleeveThicknessRisk"
+            };
+            foreach (string[] row in rows)
+            {
+                lines.Add(string.Join(",", row));
+            }
+
+            File.WriteAllLines(path, lines);
+        }
+
         private static void WriteMetricsCsvWithHipsContributors(string path, params string[][] rows)
         {
             var lines = new List<string>
@@ -3540,6 +5208,69 @@ namespace Tests.Editor.VMDRecorderSample
             }
 
             File.WriteAllLines(path, lines);
+        }
+
+        private static string[] FootXzRow(
+            string label,
+            int recorderFrame,
+            float rootX,
+            float rootY,
+            float rootZ,
+            float leftFootX,
+            float leftFootZ,
+            float rightFootX,
+            float rightFootZ = 0f)
+        {
+            return new[]
+            {
+                label,
+                recorderFrame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rootX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rootY.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rootZ.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "1",
+                "0.08",
+                leftFootX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                leftFootZ.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rightFootX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rightFootZ.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0.08",
+                "0",
+                "0",
+                "0"
+            };
+        }
+
+        private static string[] HipsAndFootXzRow(
+            string label,
+            int recorderFrame,
+            float hipsX,
+            float hipsZ,
+            float leftFootX,
+            float leftFootZ,
+            float rightFootX,
+            float rightFootZ)
+        {
+            return new[]
+            {
+                label,
+                recorderFrame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0",
+                "0",
+                "0",
+                hipsX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                hipsZ.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "1",
+                "0.08",
+                leftFootX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                leftFootZ.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rightFootX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rightFootZ.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0.08",
+                "0",
+                "0",
+                "0"
+            };
         }
 
         private static string[] YybRiskAndSleeveThicknessRow(
@@ -3568,6 +5299,66 @@ namespace Tests.Editor.VMDRecorderSample
             };
         }
 
+        private static string[] ArmPoseRow(
+            string label,
+            int recorderFrame,
+            float leftArmTwistMuscle,
+            float leftForearmTwistMuscle,
+            string yybMaxDeformationRisk,
+            string leftSleeveThicknessRisk,
+            string rightSleeveThicknessRisk)
+        {
+            return new[]
+            {
+                label,
+                recorderFrame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0",
+                "1",
+                "0",
+                "1",
+                "0.08",
+                "0.08",
+                "0",
+                "0",
+                "0",
+                leftArmTwistMuscle.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                leftForearmTwistMuscle.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                yybMaxDeformationRisk ?? "",
+                leftSleeveThicknessRisk ?? "",
+                rightSleeveThicknessRisk ?? ""
+            };
+        }
+
+        private static string[] ForearmStretchReasonRow(
+            string label,
+            string reason,
+            int recorderFrame,
+            float leftForearmStretchMuscle,
+            string yybMaxDeformationRisk,
+            string leftSleeveThicknessRisk,
+            string rightSleeveThicknessRisk)
+        {
+            return new[]
+            {
+                label,
+                reason,
+                recorderFrame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0",
+                "1",
+                "0",
+                "1",
+                "0.08",
+                "0.08",
+                "0",
+                "0",
+                "0",
+                leftForearmStretchMuscle.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                yybMaxDeformationRisk ?? "",
+                leftSleeveThicknessRisk ?? "",
+                rightSleeveThicknessRisk ?? ""
+            };
+        }
+
         private static string[] YybRiskRow(string label, int recorderFrame, string yybMaxDeformationRisk)
         {
             return new[]
@@ -3584,6 +5375,43 @@ namespace Tests.Editor.VMDRecorderSample
                 "0",
                 "0",
                 yybMaxDeformationRisk ?? ""
+            };
+        }
+
+        private static string[] LimbMotionRow(
+            string label,
+            int recorderFrame,
+            float rootX,
+            float leftArmDownUpMuscle,
+            float rightArmDownUpMuscle,
+            float leftKneeAngle,
+            float rightKneeAngle,
+            string yybMaxDeformationRisk,
+            string leftSleeveThicknessRisk,
+            string rightSleeveThicknessRisk)
+        {
+            return new[]
+            {
+                label,
+                recorderFrame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rootX.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "1",
+                "0",
+                "1",
+                "0.08",
+                "0.08",
+                "0",
+                "0",
+                "0",
+                leftArmDownUpMuscle.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rightArmDownUpMuscle.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "0",
+                "0",
+                leftKneeAngle.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                rightKneeAngle.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                yybMaxDeformationRisk ?? "",
+                leftSleeveThicknessRisk ?? "",
+                rightSleeveThicknessRisk ?? ""
             };
         }
 
@@ -3630,6 +5458,56 @@ namespace Tests.Editor.VMDRecorderSample
             }
         }
 
+        private static void WriteMinimalVmd(
+            string path,
+            IReadOnlyList<VmdTestFrame> frames,
+            IReadOnlyList<VmdIkFrame> ikFrames)
+        {
+            using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write))
+            using (var writer = new BinaryWriter(stream))
+            {
+                IReadOnlyList<VmdTestFrame> boneFrames = frames ?? Array.Empty<VmdTestFrame>();
+                IReadOnlyList<VmdIkFrame> footerFrames = ikFrames ?? Array.Empty<VmdIkFrame>();
+
+                WritePaddedShiftJis(writer, "Vocaloid Motion Data 0002", 30);
+                WritePaddedShiftJis(writer, "test", 20);
+                writer.Write((uint)boneFrames.Count);
+                foreach (VmdTestFrame frame in boneFrames)
+                {
+                    WritePaddedShiftJis(writer, frame.BoneName, 15);
+                    writer.Write(frame.Frame);
+                    writer.Write(frame.X);
+                    writer.Write(frame.Y);
+                    writer.Write(frame.Z);
+                    writer.Write(0f);
+                    writer.Write(0f);
+                    writer.Write(0f);
+                    writer.Write(1f);
+                    writer.Write(new byte[64]);
+                }
+
+                writer.Write((uint)0);
+                writer.Write((uint)0);
+                writer.Write((uint)0);
+                writer.Write((uint)0);
+                writer.Write((uint)footerFrames.Count);
+                foreach (VmdIkFrame frame in footerFrames)
+                {
+                    writer.Write(frame.FrameIndex);
+                    writer.Write((byte)1);
+                    writer.Write((uint)4);
+                    WritePaddedShiftJis(writer, "\u5de6\u8db3\uff29\uff2b", 20);
+                    writer.Write((byte)(frame.LeftFootEnabled ? 1 : 0));
+                    WritePaddedShiftJis(writer, "\u5de6\u3064\u307e\u5148\uff29\uff2b", 20);
+                    writer.Write((byte)(frame.LeftToeEnabled ? 1 : 0));
+                    WritePaddedShiftJis(writer, "\u53f3\u8db3\uff29\uff2b", 20);
+                    writer.Write((byte)(frame.RightFootEnabled ? 1 : 0));
+                    WritePaddedShiftJis(writer, "\u53f3\u3064\u307e\u5148\uff29\uff2b", 20);
+                    writer.Write((byte)(frame.RightToeEnabled ? 1 : 0));
+                }
+            }
+        }
+
         private static void WritePaddedShiftJis(BinaryWriter writer, string value, int byteLength)
         {
             byte[] bytes = Encoding.GetEncoding("shift_jis").GetBytes(value);
@@ -3640,7 +5518,17 @@ namespace Tests.Editor.VMDRecorderSample
             }
         }
 
+        private static float ReadMinimalVmdX(string path, string boneName, uint frame)
+        {
+            return ReadMinimalVmdPositionComponent(path, boneName, frame, 19);
+        }
+
         private static float ReadMinimalVmdY(string path, string boneName, uint frame)
+        {
+            return ReadMinimalVmdPositionComponent(path, boneName, frame, 23);
+        }
+
+        private static float ReadMinimalVmdPositionComponent(string path, string boneName, uint frame, int componentOffset)
         {
             byte[] bytes = File.ReadAllBytes(path);
             const int headerLength = 50;
@@ -3667,7 +5555,7 @@ namespace Tests.Editor.VMDRecorderSample
                 uint currentFrame = BitConverter.ToUInt32(bytes, offset + 15);
                 if (string.Equals(currentBoneName, boneName, StringComparison.Ordinal) && currentFrame == frame)
                 {
-                    return BitConverter.ToSingle(bytes, offset + 23);
+                    return BitConverter.ToSingle(bytes, offset + componentOffset);
                 }
             }
 

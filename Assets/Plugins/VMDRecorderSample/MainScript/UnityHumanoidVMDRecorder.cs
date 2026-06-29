@@ -255,6 +255,18 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     [Tooltip("VMD-space accumulated lag from source IK target that also activates the conditional recovery limit. 0 disables lag-debt recovery.")]
     [Range(0f, 2f)] public float MmdIkExportDeltaRecoveryDebtThresholdPerFrame = 0f;
 
+    [Tooltip("Total frames in the conditional IK recovery hold window, including the triggering raw source foot step. 0 disables hold-window recovery.")]
+    [Range(0, 30)] public int MmdIkExportDeltaRecoveryHoldFrames = 0;
+
+    [Tooltip("Writes per-frame MMD IK ON/OFF keys so large swing-phase foot IK target steps do not pull the model through the target.")]
+    public bool UseMmdIkDynamicToggleOnLargeExportSteps = false;
+
+    [Tooltip("VMD-space foot IK step that temporarily disables the matching foot/toe IK pair when dynamic IK toggles are enabled.")]
+    [Range(0.05f, 2f)] public float MmdIkDynamicToggleFootStepThreshold = 0.12f;
+
+    [Tooltip("VMD-space toe IK step that temporarily disables the matching foot/toe IK pair when dynamic IK toggles are enabled.")]
+    [Range(0.05f, 2f)] public float MmdIkDynamicToggleToeStepThreshold = 0.12f;
+
     public int LastMmdIkExportDeltaClampCount { get; private set; }
     public float LastMmdIkExportMaxDeltaBefore { get; private set; }
     public float LastMmdIkExportMaxDeltaAfter { get; private set; }

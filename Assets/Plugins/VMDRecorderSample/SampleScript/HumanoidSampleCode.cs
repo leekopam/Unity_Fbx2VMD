@@ -32,6 +32,8 @@ public class HumanoidSampleCode : MonoBehaviour
     [SerializeField] private bool probeFingerCloseups = true;
     [SerializeField, Min(128)] private int probeScreenshotWidth = 960;
     [SerializeField, Min(128)] private int probeScreenshotHeight = 960;
+    [SerializeField, Range(MinProbeScreenshotPadding, MaxProbeScreenshotPadding)] private float probeScreenshotPadding = DefaultProbeScreenshotPadding;
+    [SerializeField, Range(MinProbeScreenshotVerticalViewportCenter, MaxProbeScreenshotVerticalViewportCenter)] private float probeScreenshotVerticalViewportCenter = DefaultProbeScreenshotVerticalViewportCenter;
 
     [HideInInspector] public int StopRecordingTime = 0;
     [HideInInspector] public bool AutoStartRecording = false;
@@ -42,6 +44,8 @@ public class HumanoidSampleCode : MonoBehaviour
     public string LastSavedFilePath => _lastSavedFilePath;
     public int ProbeScreenshotWidth => probeScreenshotWidth;
     public int ProbeScreenshotHeight => probeScreenshotHeight;
+    public float ProbeScreenshotPadding => probeScreenshotPadding;
+    public float ProbeScreenshotVerticalViewportCenter => probeScreenshotVerticalViewportCenter;
 
     private bool _isRecordingSessionActive = false;
     private bool _isSaving = false;
@@ -69,6 +73,12 @@ public class HumanoidSampleCode : MonoBehaviour
     private const int MinProbeScreenshotHeight = 128;
     private const int MaxProbeScreenshotWidth = 7680;
     private const int MaxProbeScreenshotHeight = 4320;
+    private const float DefaultProbeScreenshotPadding = 1.8f;
+    private const float DefaultProbeScreenshotVerticalViewportCenter = 0.28f;
+    private const float MinProbeScreenshotPadding = 0.25f;
+    private const float MaxProbeScreenshotPadding = 2f;
+    private const float MinProbeScreenshotVerticalViewportCenter = 0f;
+    private const float MaxProbeScreenshotVerticalViewportCenter = 1f;
     private const string KoreanProgressTextSample = "가나다파일선택녹화저장완료오류";
     private static readonly string[] KoreanUiFontNames =
     {
@@ -282,11 +292,14 @@ public class HumanoidSampleCode : MonoBehaviour
         bool useCaptureFramerateForRegression,
         float[] sampleTimesOverride = null,
         int screenshotWidth = 960,
-        int screenshotHeight = 960)
+        int screenshotHeight = 960,
+        float screenshotPadding = DefaultProbeScreenshotPadding,
+        float screenshotVerticalViewportCenter = DefaultProbeScreenshotVerticalViewportCenter)
     {
         enableMotionComparisonProbe = enableProbe;
         probeFingerCloseups = enableFingerCloseups;
         SetProbeScreenshotCaptureResolution(screenshotWidth, screenshotHeight);
+        SetProbeScreenshotFraming(screenshotPadding, screenshotVerticalViewportCenter);
         _probeSampleTimesOverride = sampleTimesOverride != null && sampleTimesOverride.Length > 0
             ? (float[])sampleTimesOverride.Clone()
             : null;
@@ -307,6 +320,32 @@ public class HumanoidSampleCode : MonoBehaviour
     {
         probeScreenshotWidth = Mathf.Clamp(width, MinProbeScreenshotWidth, MaxProbeScreenshotWidth);
         probeScreenshotHeight = Mathf.Clamp(height, MinProbeScreenshotHeight, MaxProbeScreenshotHeight);
+    }
+
+    public void SetProbeScreenshotFraming(float padding, float verticalViewportCenter)
+    {
+        probeScreenshotPadding = NormalizeProbeScreenshotPadding(padding);
+        probeScreenshotVerticalViewportCenter = NormalizeProbeScreenshotVerticalViewportCenter(verticalViewportCenter);
+    }
+
+    private static float NormalizeProbeScreenshotPadding(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+        {
+            return DefaultProbeScreenshotPadding;
+        }
+
+        return Mathf.Clamp(value, MinProbeScreenshotPadding, MaxProbeScreenshotPadding);
+    }
+
+    private static float NormalizeProbeScreenshotVerticalViewportCenter(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+        {
+            return DefaultProbeScreenshotVerticalViewportCenter;
+        }
+
+        return Mathf.Clamp(value, MinProbeScreenshotVerticalViewportCenter, MaxProbeScreenshotVerticalViewportCenter);
     }
 
     private bool ShouldFinishCurrentSessionByRecordedFrameCount()
@@ -340,6 +379,7 @@ public class HumanoidSampleCode : MonoBehaviour
 
         string probeLabel = string.IsNullOrWhiteSpace(label) ? ModelName : label;
         probe.SetScreenshotCaptureResolution(probeScreenshotWidth, probeScreenshotHeight);
+        probe.SetScreenshotFraming(probeScreenshotPadding, probeScreenshotVerticalViewportCenter);
         probe.SetFingerCloseups(probeFingerCloseups);
         if (_probeSampleTimesOverride != null && _probeSampleTimesOverride.Length > 0)
         {

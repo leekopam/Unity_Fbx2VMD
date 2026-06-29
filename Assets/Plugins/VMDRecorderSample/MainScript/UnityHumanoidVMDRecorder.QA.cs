@@ -85,5 +85,4 @@ public partial class UnityHumanoidVMDRecorder
         captureFramerateApplied = false;
     }
 
-
 }
