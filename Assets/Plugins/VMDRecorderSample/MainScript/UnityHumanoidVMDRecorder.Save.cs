@@ -54,6 +54,13 @@ public partial class UnityHumanoidVMDRecorder
         }
 
         ApplyMmdExportSafetyGuards(safeFrameCount);
+        IReadOnlyList<VmdIkFrame> ikFrames = UseMmdIkDynamicToggleOnLargeExportSteps
+            ? BuildMmdIkToggleFramesFromExportSteps(
+                positionDictionarySaved,
+                safeFrameCount,
+                MmdIkDynamicToggleFootStepThreshold,
+                MmdIkDynamicToggleToeStepThreshold)
+            : null;
         exportIkSourceDiagnosticSamplesSaved = BuildFinalExportIkSourceDiagnosticSamples(
             exportIkSourceDiagnosticSamplesSaved,
             positionDictionarySaved,
@@ -88,7 +95,8 @@ public partial class UnityHumanoidVMDRecorder
                     UseCenterAsParentOfAll,
                     RouteHumanoidCenterToGroove,
                     CenterNameString,
-                    GrooveNameString));
+                    GrooveNameString,
+                    ikFrames));
 
             FileInfo fileInfo = new FileInfo(filePath);
             if (!fileInfo.Exists || fileInfo.Length <= 0)
@@ -575,6 +583,11 @@ public partial class UnityHumanoidVMDRecorder
             return;
         }
 
+        if (UseMmdIkDynamicToggleOnLargeExportSteps)
+        {
+            return;
+        }
+
         ApplyMmdIkExportDeltaSpikeGuard((BoneNames)2, MaxMmdFootIkExportDeltaPerFrame, safeFrameCount);
         ApplyMmdIkExportDeltaSpikeGuard((BoneNames)3, MaxMmdFootIkExportDeltaPerFrame, safeFrameCount);
         ApplyMmdIkExportDeltaSpikeGuard((BoneNames)4, MaxMmdToeIkExportDeltaPerFrame, safeFrameCount);
@@ -627,6 +640,7 @@ public partial class UnityHumanoidVMDRecorder
                 MmdIkExportDeltaRecoveryLimitPerFrame,
                 MmdIkExportDeltaRecoveryTriggerPerFrame,
                 MmdIkExportDeltaRecoveryDebtThresholdPerFrame,
+                MmdIkExportDeltaRecoveryHoldFrames,
                 out maxBefore,
                 out maxAfter);
         }
@@ -695,6 +709,29 @@ public partial class UnityHumanoidVMDRecorder
             recoveryDebtThresholdDeltaPerFrame);
     }
 
+    internal static int ClampMmdIkExportDeltaSpikePositions(
+        List<Vector3> positions,
+        int safeFrameCount,
+        float maxDeltaPerFrame,
+        float recoveryMaxDeltaPerFrame,
+        float recoveryTriggerDeltaPerFrame,
+        float recoveryDebtThresholdDeltaPerFrame,
+        int recoveryHoldFrames,
+        out float maxBefore,
+        out float maxAfter)
+    {
+        return ClampMmdExportDeltaSpikePositions(
+            positions,
+            safeFrameCount,
+            maxDeltaPerFrame,
+            out maxBefore,
+            out maxAfter,
+            recoveryMaxDeltaPerFrame,
+            recoveryTriggerDeltaPerFrame,
+            recoveryDebtThresholdDeltaPerFrame,
+            recoveryHoldFrames);
+    }
+
     internal static int ClampMmdCenterExportDeltaSpikePositions(
         List<Vector3> positions,
         int safeFrameCount,
@@ -705,6 +742,52 @@ public partial class UnityHumanoidVMDRecorder
         return ClampMmdExportDeltaSpikePositions(positions, safeFrameCount, maxDeltaPerFrame, out maxBefore, out maxAfter);
     }
 
+    internal static IReadOnlyList<VmdIkFrame> BuildMmdIkToggleFramesFromExportSteps(
+        IReadOnlyDictionary<BoneNames, List<Vector3>> positionsByBone,
+        int safeFrameCount,
+        float footStepThresholdVmd,
+        float toeStepThresholdVmd)
+    {
+        var frames = new List<VmdIkFrame> { VmdIkFrame.Enabled(0) };
+        if (positionsByBone == null || safeFrameCount <= 1)
+        {
+            return frames;
+        }
+
+        float footThreshold = Mathf.Max(0f, footStepThresholdVmd);
+        float toeThreshold = Mathf.Max(0f, toeStepThresholdVmd);
+        bool previousLeftEnabled = true;
+        bool previousRightEnabled = true;
+
+        for (int i = 1; i < safeFrameCount; i++)
+        {
+            bool leftStepIsLarge =
+                ExportStepExceedsThreshold(positionsByBone, (BoneNames)2, i, footThreshold) ||
+                ExportStepExceedsThreshold(positionsByBone, (BoneNames)4, i, toeThreshold);
+            bool rightStepIsLarge =
+                ExportStepExceedsThreshold(positionsByBone, (BoneNames)3, i, footThreshold) ||
+                ExportStepExceedsThreshold(positionsByBone, (BoneNames)5, i, toeThreshold);
+
+            bool leftEnabled = !leftStepIsLarge;
+            bool rightEnabled = !rightStepIsLarge;
+            if (leftEnabled == previousLeftEnabled && rightEnabled == previousRightEnabled)
+            {
+                continue;
+            }
+
+            frames.Add(new VmdIkFrame(
+                (uint)i,
+                leftFootEnabled: leftEnabled,
+                leftToeEnabled: leftEnabled,
+                rightFootEnabled: rightEnabled,
+                rightToeEnabled: rightEnabled));
+            previousLeftEnabled = leftEnabled;
+            previousRightEnabled = rightEnabled;
+        }
+
+        return frames;
+    }
+
     private static int ClampMmdExportDeltaSpikePositions(
         List<Vector3> positions,
         int safeFrameCount,
@@ -713,7 +796,8 @@ public partial class UnityHumanoidVMDRecorder
         out float maxAfter,
         float recoveryMaxDeltaPerFrame = 0f,
         float recoveryTriggerDeltaPerFrame = 0f,
-        float recoveryDebtThresholdDeltaPerFrame = 0f)
+        float recoveryDebtThresholdDeltaPerFrame = 0f,
+        int recoveryHoldFrames = 0)
     {
         maxBefore = 0f;
         maxAfter = 0f;
@@ -745,6 +829,8 @@ public partial class UnityHumanoidVMDRecorder
                                 (recoveryTriggerDeltaPerFrame > maxDeltaPerFrame || useRecoveryDebtThreshold);
         float recoveryLimit = Mathf.Max(0f, recoveryMaxDeltaPerFrame - serializedFloatSafetyMargin);
         List<Vector3> sourcePositions = useRecoveryLimit ? new List<Vector3>(positions) : null;
+        int recoveryHoldFrameCount = Math.Max(0, recoveryHoldFrames);
+        int remainingRecoveryHoldFrames = 0;
         int clampedCount = 0;
         for (int i = 1; i < count; i++)
         {
@@ -770,7 +856,13 @@ public partial class UnityHumanoidVMDRecorder
                     useRecoveryDebtThreshold &&
                     IsFinite(lagDebt) &&
                     lagDebt.magnitude > recoveryDebtThresholdDeltaPerFrame;
-                if (recoveryTriggeredByRawStep || recoveryTriggeredByLagDebt)
+                if (recoveryTriggeredByRawStep && recoveryHoldFrameCount > 0)
+                {
+                    remainingRecoveryHoldFrames = Math.Max(remainingRecoveryHoldFrames, recoveryHoldFrameCount);
+                }
+
+                bool recoveryTriggeredByHoldWindow = remainingRecoveryHoldFrames > 0;
+                if (recoveryTriggeredByRawStep || recoveryTriggeredByLagDebt || recoveryTriggeredByHoldWindow)
                 {
                     effectiveLimit = recoveryLimit;
                 }
@@ -781,6 +873,11 @@ public partial class UnityHumanoidVMDRecorder
                 current = previous + Vector3.ClampMagnitude(delta, effectiveLimit);
                 positions[i] = current;
                 clampedCount++;
+            }
+
+            if (remainingRecoveryHoldFrames > 0)
+            {
+                remainingRecoveryHoldFrames--;
             }
         }
 
@@ -794,6 +891,26 @@ public partial class UnityHumanoidVMDRecorder
         }
 
         return clampedCount;
+    }
+
+    private static bool ExportStepExceedsThreshold(
+        IReadOnlyDictionary<BoneNames, List<Vector3>> positionsByBone,
+        BoneNames boneName,
+        int frameIndex,
+        float threshold)
+    {
+        if (threshold <= 0f ||
+            positionsByBone == null ||
+            !positionsByBone.TryGetValue(boneName, out var positions) ||
+            positions == null ||
+            frameIndex <= 0 ||
+            frameIndex >= positions.Count)
+        {
+            return false;
+        }
+
+        Vector3 delta = positions[frameIndex] - positions[frameIndex - 1];
+        return IsFinite(delta) && delta.magnitude > threshold;
     }
 
     private static bool IsFinite(Vector3 value)

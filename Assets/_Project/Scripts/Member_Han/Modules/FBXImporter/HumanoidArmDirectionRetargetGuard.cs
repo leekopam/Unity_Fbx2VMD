@@ -22,6 +22,12 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0f, 120f)]
         public float forearmMaxDegrees = 85f;
 
+        [Range(0f, 1f)]
+        public float leftSideWeightScale = 1f;
+
+        [Range(0f, 1f)]
+        public float rightSideWeightScale = 1f;
+
         public bool logConfiguration = false;
 
         private Animator _ghostAnimator;
@@ -60,6 +66,12 @@ namespace Member_Han.Modules.FBXImporter
                 return;
             }
 
+            if (!HasLiveRuntimeState())
+            {
+                DisableCorrection();
+                return;
+            }
+
             foreach (SegmentMapping segment in _segments)
             {
                 ApplySegment(segment);
@@ -75,12 +87,37 @@ namespace Member_Han.Modules.FBXImporter
             float nextForearmMaxDegrees,
             bool nextLogConfiguration)
         {
+            return Configure(
+                ghostAnimator,
+                targetAnimator,
+                nextUpperArmWeight,
+                nextForearmWeight,
+                nextUpperArmMaxDegrees,
+                nextForearmMaxDegrees,
+                1f,
+                1f,
+                nextLogConfiguration);
+        }
+
+        public bool Configure(
+            Animator ghostAnimator,
+            Animator targetAnimator,
+            float nextUpperArmWeight,
+            float nextForearmWeight,
+            float nextUpperArmMaxDegrees,
+            float nextForearmMaxDegrees,
+            float nextLeftSideWeightScale,
+            float nextRightSideWeightScale,
+            bool nextLogConfiguration)
+        {
             _ghostAnimator = ghostAnimator;
             _targetAnimator = targetAnimator != null ? targetAnimator : GetComponent<Animator>();
             upperArmWeight = Mathf.Clamp01(nextUpperArmWeight);
             forearmWeight = Mathf.Clamp01(nextForearmWeight);
             upperArmMaxDegrees = Mathf.Clamp(nextUpperArmMaxDegrees, 0f, 120f);
             forearmMaxDegrees = Mathf.Clamp(nextForearmMaxDegrees, 0f, 120f);
+            leftSideWeightScale = Mathf.Clamp01(nextLeftSideWeightScale);
+            rightSideWeightScale = Mathf.Clamp01(nextRightSideWeightScale);
             logConfiguration = nextLogConfiguration;
             _warningLogged = false;
             _segments.Clear();
@@ -88,10 +125,10 @@ namespace Member_Han.Modules.FBXImporter
             _configured = IsValidHumanoid(_ghostAnimator) && IsValidHumanoid(_targetAnimator);
             if (_configured)
             {
-                AddSegment(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, upperArmWeight, upperArmMaxDegrees);
-                AddSegment(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, upperArmWeight, upperArmMaxDegrees);
-                AddSegment(HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, forearmWeight, forearmMaxDegrees);
-                AddSegment(HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, forearmWeight, forearmMaxDegrees);
+                AddSegment(HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, upperArmWeight * leftSideWeightScale, upperArmMaxDegrees);
+                AddSegment(HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, upperArmWeight * rightSideWeightScale, upperArmMaxDegrees);
+                AddSegment(HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, forearmWeight * leftSideWeightScale, forearmMaxDegrees);
+                AddSegment(HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, forearmWeight * rightSideWeightScale, forearmMaxDegrees);
                 _configured = _segments.Count > 0;
             }
 
@@ -99,10 +136,17 @@ namespace Member_Han.Modules.FBXImporter
 
             if (logConfiguration)
             {
-                Debug.Log($"[HumanoidArmDirectionRetargetGuard] Arm direction retarget configured={_configured}, segments={_segments.Count}");
+                Debug.Log($"[HumanoidArmDirectionRetargetGuard] Arm direction retarget configured={_configured}, segments={_segments.Count}, sideScales={leftSideWeightScale:F2}/{rightSideWeightScale:F2}");
             }
 
             return _configured;
+        }
+
+        private bool HasLiveRuntimeState()
+        {
+            return IsValidHumanoid(_ghostAnimator) &&
+                   IsValidHumanoid(_targetAnimator) &&
+                   _segments.Count > 0;
         }
 
         public void DisableCorrection()

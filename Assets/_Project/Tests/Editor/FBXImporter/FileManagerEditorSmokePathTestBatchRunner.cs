@@ -33,8 +33,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_PathLikeInput_When_ResolvingEditorSmokeFbxPath_Then_UsesOnlyFileNameForFallback);
             RunTest(results, nameof(tests.Given_ProjectSourceHasHumanoidClip_When_ResolvingEditorHumanoidReferencePath_Then_UsesSourcePath),
                 tests.Given_ProjectSourceHasHumanoidClip_When_ResolvingEditorHumanoidReferencePath_Then_UsesSourcePath);
-            RunTest(results, nameof(tests.Given_ControlledSourceAndManualClipExists_When_ResolvingEditorHumanoidReferencePath_Then_UsesControlledSourcePath),
-                tests.Given_ControlledSourceAndManualClipExists_When_ResolvingEditorHumanoidReferencePath_Then_UsesControlledSourcePath);
+            RunTest(results, nameof(tests.Given_ControlledSourceAndProjectClipExists_When_ResolvingEditorHumanoidReferencePath_Then_UsesProjectFallbackPath),
+                tests.Given_ControlledSourceAndProjectClipExists_When_ResolvingEditorHumanoidReferencePath_Then_UsesProjectFallbackPath);
             RunTest(results, nameof(tests.Given_ControlledSourceOnlyHasClip_When_ResolvingEditorHumanoidReferencePath_Then_FallsBackToControlledSourcePath),
                 tests.Given_ControlledSourceOnlyHasClip_When_ResolvingEditorHumanoidReferencePath_Then_FallsBackToControlledSourcePath);
             RunTest(results, nameof(tests.Given_ImportedPathHasOnlyHumanoidClip_When_ResolvingEditorHumanoidReferencePath_Then_UsesImportedPath),

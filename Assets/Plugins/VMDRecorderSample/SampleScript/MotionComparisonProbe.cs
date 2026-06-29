@@ -8,15 +8,21 @@ using UnityEngine.SceneManagement;
 [DefaultExecutionOrder(30000)]
 public class MotionComparisonProbe : MonoBehaviour
 {
-    private static readonly float[] DefaultSampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
+    private static readonly float[] DefaultSampleTimes = { 0f, 3f, 6f, 10f, 13.2f, 20f, 30f, 60f, 120f };
     private const string PoseSpaceRetargeterLegacyClipStateName = "__PoseSpaceRetargeter_GhostClip";
     private const int MinScreenshotWidth = 128;
     private const int MinScreenshotHeight = 128;
     private const int MaxScreenshotWidth = 7680;
     private const int MaxScreenshotHeight = 4320;
+    private const float DefaultScreenshotPadding = 1.8f;
+    private const float DefaultScreenshotVerticalViewportCenter = 0.28f;
+    private const float MinScreenshotPadding = 0.25f;
+    private const float MaxScreenshotPadding = 2f;
+    private const float MinScreenshotVerticalViewportCenter = 0f;
+    private const float MaxScreenshotVerticalViewportCenter = 1f;
 
     [SerializeField] private string comparisonLabel = "";
-    [SerializeField] private float[] sampleTimes = { 0f, 3f, 10f, 13.2f, 30f, 60f, 120f };
+    [SerializeField] private float[] sampleTimes = { 0f, 3f, 6f, 10f, 13.2f, 20f, 30f, 60f, 120f };
     [SerializeField] private bool sampleByAnimationClipTime = true;
     [SerializeField] private bool logSamples = true;
     [SerializeField] private bool captureSampleScreenshots = true;
@@ -24,8 +30,8 @@ public class MotionComparisonProbe : MonoBehaviour
     [SerializeField] private bool captureYybDiagnosticOnlyMetrics = true;
     [SerializeField, Min(MinScreenshotWidth)] private int screenshotWidth = 960;
     [SerializeField, Min(MinScreenshotHeight)] private int screenshotHeight = 960;
-    [SerializeField, Range(1f, 2f)] private float screenshotPadding = 1.8f;
-    [SerializeField, Range(0.2f, 0.6f)] private float screenshotVerticalViewportCenter = 0.28f;
+    [SerializeField, Range(MinScreenshotPadding, MaxScreenshotPadding)] private float screenshotPadding = DefaultScreenshotPadding;
+    [SerializeField, Range(MinScreenshotVerticalViewportCenter, MaxScreenshotVerticalViewportCenter)] private float screenshotVerticalViewportCenter = DefaultScreenshotVerticalViewportCenter;
     [SerializeField, Range(1f, 4f)] private float fingerCloseupPadding = 1.6f;
 
     private const float DiagnosticFootRadius = 0.04f;
@@ -138,6 +144,8 @@ public class MotionComparisonProbe : MonoBehaviour
     public bool IsSampling => _isSampling;
     public int ScreenshotWidth => screenshotWidth;
     public int ScreenshotHeight => screenshotHeight;
+    public float ScreenshotPadding => screenshotPadding;
+    public float ScreenshotVerticalViewportCenter => screenshotVerticalViewportCenter;
     public float MaxThumbSpreadRisk => _maxThumbSpreadRisk;
     public float MaxThumbProjectionRisk => _maxThumbProjectionRisk;
     public float MaxThumbHelperSeparationRisk => _maxThumbHelperSeparationRisk;
@@ -162,6 +170,32 @@ public class MotionComparisonProbe : MonoBehaviour
     {
         screenshotWidth = Mathf.Clamp(width, MinScreenshotWidth, MaxScreenshotWidth);
         screenshotHeight = Mathf.Clamp(height, MinScreenshotHeight, MaxScreenshotHeight);
+    }
+
+    public void SetScreenshotFraming(float padding, float verticalViewportCenter)
+    {
+        screenshotPadding = NormalizeScreenshotPadding(padding);
+        screenshotVerticalViewportCenter = NormalizeScreenshotVerticalViewportCenter(verticalViewportCenter);
+    }
+
+    private static float NormalizeScreenshotPadding(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+        {
+            return DefaultScreenshotPadding;
+        }
+
+        return Mathf.Clamp(value, MinScreenshotPadding, MaxScreenshotPadding);
+    }
+
+    private static float NormalizeScreenshotVerticalViewportCenter(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value))
+        {
+            return DefaultScreenshotVerticalViewportCenter;
+        }
+
+        return Mathf.Clamp(value, MinScreenshotVerticalViewportCenter, MaxScreenshotVerticalViewportCenter);
     }
 
     private static float[] NormalizeSampleTimes(IEnumerable<float> customSampleTimes)
@@ -200,6 +234,32 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         return deduplicated.ToArray();
+    }
+
+    internal static float ResolveDiagnosticSampleClock(
+        bool sampleByAnimationClipTime,
+        bool recorderUsesCaptureFramerate,
+        float[] configuredSampleTimes,
+        int recorderFrame,
+        float animationClipTime,
+        float elapsedFallback)
+    {
+        if (!sampleByAnimationClipTime)
+        {
+            return elapsedFallback;
+        }
+
+        if (float.IsNaN(animationClipTime) || float.IsInfinity(animationClipTime))
+        {
+            return elapsedFallback;
+        }
+
+        if (elapsedFallback > 0.25f && animationClipTime <= 0.0001f)
+        {
+            return elapsedFallback;
+        }
+
+        return animationClipTime;
     }
 
     public void StartSampling(string labelOverride = "")
@@ -247,6 +307,7 @@ public class MotionComparisonProbe : MonoBehaviour
             Debug.LogWarning(MotionComparisonProbeReportWriter.BuildNonZeroRecorderFrameStartWarningMessage(_recorder.FrameNumber));
         }
 
+        PreparePlaybackProbeForMotionComparisonSample();
         SampleNow(MotionComparisonProbeReportWriter.BuildSamplingStartReason());
         SkipElapsedSampleTimes(GetCurrentSampleClock(0f));
     }
@@ -280,6 +341,7 @@ public class MotionComparisonProbe : MonoBehaviour
             return;
         }
 
+        PreparePlaybackProbeForMotionComparisonSample();
         PoseMetrics metrics = CaptureMetrics(reason);
         UpdateRiskSummary(metrics.YybDiagnostics, false, reason, metrics.AnimationClipTime, metrics.RecorderFrame);
         MotionComparisonProbeReportWriter.AppendMetricsCsvLine(_csvPath, metrics.ToCsvLine());
@@ -360,6 +422,15 @@ public class MotionComparisonProbe : MonoBehaviour
         }
     }
 
+    private void PreparePlaybackProbeForMotionComparisonSample()
+    {
+        VmdPlaybackProbe playbackProbe = GetComponent<VmdPlaybackProbe>();
+        if (playbackProbe != null)
+        {
+            playbackProbe.PrepareForMotionComparisonSample();
+        }
+    }
+
     private float GetCurrentSampleClock(float elapsedFallback)
     {
         if (!sampleByAnimationClipTime)
@@ -368,17 +439,13 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         AnimationTimeMetrics animationTime = CaptureAnimationTimeMetrics();
-        if (float.IsNaN(animationTime.ClipTime) || float.IsInfinity(animationTime.ClipTime))
-        {
-            return elapsedFallback;
-        }
-
-        if (elapsedFallback > 0.25f && animationTime.ClipTime <= 0.0001f)
-        {
-            return elapsedFallback;
-        }
-
-        return animationTime.ClipTime;
+        return ResolveDiagnosticSampleClock(
+            sampleByAnimationClipTime,
+            _recorder != null && _recorder.UseCaptureFramerateDuringRecording,
+            sampleTimes,
+            _recorder != null ? _recorder.FrameNumber : -1,
+            animationTime.ClipTime,
+            elapsedFallback);
     }
 
     private PoseMetrics CaptureMetrics(string reason)
@@ -387,6 +454,8 @@ public class MotionComparisonProbe : MonoBehaviour
         Transform hips = GetBone(HumanBodyBones.Hips);
         Transform leftFoot = GetBone(HumanBodyBones.LeftFoot);
         Transform rightFoot = GetBone(HumanBodyBones.RightFoot);
+        Vector3 leftFootPosition = leftFoot != null ? leftFoot.position : EmptyVector();
+        Vector3 rightFootPosition = rightFoot != null ? rightFoot.position : EmptyVector();
 
         float lowestFootY = float.NaN;
         if (leftFoot != null && rightFoot != null)
@@ -410,6 +479,7 @@ public class MotionComparisonProbe : MonoBehaviour
         float groundY = float.IsNaN(rootSpikeMetrics.LastGroundingTargetY) ? 0f : rootSpikeMetrics.LastGroundingTargetY;
         float bodyPositionY = CaptureBodyPositionY();
         float hipsLocalY = hips != null ? hips.localPosition.y : float.NaN;
+        Vector3 hipsPosition = hips != null ? hips.position : EmptyVector();
         float meshBoundsMinY = float.NaN;
         float meshBoundsMaxY = float.NaN;
         if (TryGetRendererBounds(out Bounds rendererBounds))
@@ -419,6 +489,7 @@ public class MotionComparisonProbe : MonoBehaviour
         }
 
         ThumbGuardDiagnostics thumbGuardDiagnostics = CaptureThumbGuardDiagnostics();
+        ArmSwingGuardDiagnostics armSwingGuardDiagnostics = CaptureArmSwingGuardDiagnostics();
         YybDiagnosticMetrics yybDiagnostics = captureYybDiagnosticOnlyMetrics
             ? CaptureYybDiagnosticMetrics(armMuscles)
             : YybDiagnosticMetrics.Empty;
@@ -443,9 +514,12 @@ public class MotionComparisonProbe : MonoBehaviour
             RootSpike = rootSpikeMetrics,
             BodyPositionY = bodyPositionY,
             HipsLocalY = hipsLocalY,
+            HipsPosition = hipsPosition,
             HipsY = hips != null ? hips.position.y : float.NaN,
             LowestFootY = lowestFootY,
             LowestFootBottomY = lowestFootBottomY,
+            LeftFootPosition = leftFootPosition,
+            RightFootPosition = rightFootPosition,
             MeshBoundsMinY = meshBoundsMinY,
             MeshBoundsMaxY = meshBoundsMaxY,
             FootBottomGroundGap = float.IsNaN(lowestFootBottomY) ? float.NaN : lowestFootBottomY - groundY,
@@ -517,6 +591,7 @@ public class MotionComparisonProbe : MonoBehaviour
             RightArmTwistMuscle = armMuscles.RightArmTwist,
             RightForearmStretchMuscle = armMuscles.RightForearmStretch,
             RightForearmTwistMuscle = armMuscles.RightForearmTwist,
+            ArmSwingGuard = armSwingGuardDiagnostics,
             LeftThumb1StretchMuscle = fingers.LeftThumb1Stretch,
             LeftThumbSpreadMuscle = fingers.LeftThumbSpread,
             LeftIndex1StretchMuscle = fingers.LeftIndex1Stretch,
@@ -731,9 +806,296 @@ public class MotionComparisonProbe : MonoBehaviour
             RecordingStartHipsReferenceDeltaY = ReadFloatProperty(type, retargeter, "RecordingStartHipsReferenceDeltaY"),
             RecordingStartHipsReferenceFlipDetected = ReadIntProperty(type, retargeter, "RecordingStartHipsReferenceFlipDetected"),
             RecordingStartHipsReferenceStage = ReadStringProperty(type, retargeter, "RecordingStartHipsReferenceStage"),
+            PoseInputLeftShoulderFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastPoseInputLeftShoulderFrontBackMuscle"),
+            AfterEditorMuscleReferenceLeftShoulderFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastAfterEditorMuscleReferenceLeftShoulderFrontBackMuscle"),
+            AfterClampPoseMusclesLeftShoulderFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastAfterClampPoseMusclesLeftShoulderFrontBackMuscle"),
+            AfterAnatomicalArmGuardLeftShoulderFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastAfterAnatomicalArmGuardLeftShoulderFrontBackMuscle"),
+            AfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastAfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle"),
+            SetHumanPoseInputLeftShoulderFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftShoulderFrontBackMuscle"),
+            SetHumanPoseOutputLeftShoulderFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputLeftShoulderFrontBackMuscle"),
+            SetHumanPoseLeftShoulderFrontBackDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseLeftShoulderFrontBackDelta"),
+            PoseInputLeftArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastPoseInputLeftArmTwistMuscle"),
+            AfterEditorMuscleReferenceLeftArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterEditorMuscleReferenceLeftArmTwistMuscle"),
+            AfterClampPoseMusclesLeftArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterClampPoseMusclesLeftArmTwistMuscle"),
+            AfterAnatomicalArmGuardLeftArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterAnatomicalArmGuardLeftArmTwistMuscle"),
+            AfterVisualSpikeSmoothingLeftArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterVisualSpikeSmoothingLeftArmTwistMuscle"),
+            SetHumanPoseInputLeftArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftArmTwistMuscle"),
+            SetHumanPoseOutputLeftArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputLeftArmTwistMuscle"),
+            SetHumanPoseLeftArmTwistDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseLeftArmTwistDelta"),
+            PoseInputLeftForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastPoseInputLeftForearmStretchMuscle"),
+            AfterEditorMuscleReferenceLeftForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterEditorMuscleReferenceLeftForearmStretchMuscle"),
+            AfterClampPoseMusclesLeftForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterClampPoseMusclesLeftForearmStretchMuscle"),
+            AfterAnatomicalArmGuardLeftForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterAnatomicalArmGuardLeftForearmStretchMuscle"),
+            AfterVisualSpikeSmoothingLeftForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterVisualSpikeSmoothingLeftForearmStretchMuscle"),
+            SetHumanPoseInputLeftForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftForearmStretchMuscle"),
+            SetHumanPoseOutputLeftForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputLeftForearmStretchMuscle"),
+            SetHumanPoseLeftForearmStretchDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseLeftForearmStretchDelta"),
+            PoseInputRightForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastPoseInputRightForearmStretchMuscle"),
+            AfterEditorMuscleReferenceRightForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterEditorMuscleReferenceRightForearmStretchMuscle"),
+            AfterClampPoseMusclesRightForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterClampPoseMusclesRightForearmStretchMuscle"),
+            AfterAnatomicalArmGuardRightForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterAnatomicalArmGuardRightForearmStretchMuscle"),
+            AfterVisualSpikeSmoothingRightForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastAfterVisualSpikeSmoothingRightForearmStretchMuscle"),
+            SetHumanPoseInputRightForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightForearmStretchMuscle"),
+            SetHumanPoseOutputRightForearmStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightForearmStretchMuscle"),
+            SetHumanPoseRightForearmStretchDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightForearmStretchDelta"),
+            PoseInputRightArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastPoseInputRightArmTwistMuscle"),
+            AfterEditorMuscleReferenceRightArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterEditorMuscleReferenceRightArmTwistMuscle"),
+            AfterClampPoseMusclesRightArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterClampPoseMusclesRightArmTwistMuscle"),
+            AfterAnatomicalArmGuardRightArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterAnatomicalArmGuardRightArmTwistMuscle"),
+            AfterVisualSpikeSmoothingRightArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastAfterVisualSpikeSmoothingRightArmTwistMuscle"),
+            SetHumanPoseInputRightArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightArmTwistMuscle"),
+            SetHumanPoseOutputRightArmTwistMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightArmTwistMuscle"),
+            SetHumanPoseRightArmTwistDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightArmTwistDelta"),
+            SetHumanPoseInputLeftUpperLegFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftUpperLegFrontBackMuscle"),
+            SetHumanPoseOutputLeftUpperLegFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputLeftUpperLegFrontBackMuscle"),
+            SetHumanPoseLeftUpperLegFrontBackDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseLeftUpperLegFrontBackDelta"),
+            SetHumanPoseInputRightUpperLegFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightUpperLegFrontBackMuscle"),
+            SetHumanPoseOutputRightUpperLegFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightUpperLegFrontBackMuscle"),
+            SetHumanPoseRightUpperLegFrontBackDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightUpperLegFrontBackDelta"),
+            SetHumanPoseInputLeftLowerLegStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftLowerLegStretchMuscle"),
+            SetHumanPoseOutputLeftLowerLegStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputLeftLowerLegStretchMuscle"),
+            SetHumanPoseLeftLowerLegStretchDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseLeftLowerLegStretchDelta"),
+            SetHumanPoseInputRightLowerLegStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightLowerLegStretchMuscle"),
+            SetHumanPoseOutputRightLowerLegStretchMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightLowerLegStretchMuscle"),
+            SetHumanPoseRightLowerLegStretchDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightLowerLegStretchDelta"),
+            SetHumanPoseInputLeftFootUpDownMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftFootUpDownMuscle"),
+            SetHumanPoseOutputLeftFootUpDownMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputLeftFootUpDownMuscle"),
+            SetHumanPoseLeftFootUpDownDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseLeftFootUpDownDelta"),
+            SetHumanPoseInputRightFootUpDownMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightFootUpDownMuscle"),
+            SetHumanPoseOutputRightFootUpDownMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightFootUpDownMuscle"),
+            SetHumanPoseRightFootUpDownDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightFootUpDownDelta"),
+            SetHumanPoseInputBodyPositionX = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputBodyPositionX"),
+            SetHumanPoseInputBodyPositionY = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputBodyPositionY"),
+            SetHumanPoseInputBodyPositionZ = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputBodyPositionZ"),
+            SetHumanPoseOutputBodyPositionX = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputBodyPositionX"),
+            SetHumanPoseOutputBodyPositionY = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputBodyPositionY"),
+            SetHumanPoseOutputBodyPositionZ = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputBodyPositionZ"),
+            SetHumanPoseBodyPositionDeltaXZ = ReadFloatProperty(type, retargeter, "LastSetHumanPoseBodyPositionDeltaXZ"),
+            SetHumanPoseInputBodyRotationYaw = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputBodyRotationYaw"),
+            SetHumanPoseOutputBodyRotationYaw = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputBodyRotationYaw"),
+            SetHumanPoseBodyRotationDeltaAngle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseBodyRotationDeltaAngle"),
+            SetHumanPosePreSolveGhostRootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRootWorldX"),
+            SetHumanPosePreSolveGhostRootWorldY = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRootWorldY"),
+            SetHumanPosePreSolveGhostRootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRootWorldZ"),
+            SetHumanPosePreSolveGhostRootYaw = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRootYaw"),
+            SetHumanPosePreSolveTargetRootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRootWorldX"),
+            SetHumanPosePreSolveTargetRootWorldY = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRootWorldY"),
+            SetHumanPosePreSolveTargetRootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRootWorldZ"),
+            SetHumanPosePreSolveTargetRootYaw = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRootYaw"),
+            SetHumanPosePreSolveTargetHipsWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetHipsWorldX"),
+            SetHumanPosePreSolveTargetHipsWorldY = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetHipsWorldY"),
+            SetHumanPosePreSolveTargetHipsWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetHipsWorldZ"),
+            SetHumanPosePreSolveTargetHipsLocalX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetHipsLocalX"),
+            SetHumanPosePreSolveTargetHipsLocalY = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetHipsLocalY"),
+            SetHumanPosePreSolveTargetHipsLocalZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetHipsLocalZ"),
+            SetHumanPosePreSolveBodyPositionX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveBodyPositionX"),
+            SetHumanPosePreSolveBodyPositionY = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveBodyPositionY"),
+            SetHumanPosePreSolveBodyPositionZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveBodyPositionZ"),
+            SetHumanPosePreSolveBodyRotationYaw = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveBodyRotationYaw"),
+            PreSetHumanPoseEndpointBodyPositionBeforeX = ReadFloatProperty(type, retargeter, "LastPreSetHumanPoseEndpointBodyPositionBeforeX"),
+            PreSetHumanPoseEndpointBodyPositionBeforeZ = ReadFloatProperty(type, retargeter, "LastPreSetHumanPoseEndpointBodyPositionBeforeZ"),
+            PreSetHumanPoseEndpointBodyPositionAfterX = ReadFloatProperty(type, retargeter, "LastPreSetHumanPoseEndpointBodyPositionAfterX"),
+            PreSetHumanPoseEndpointBodyPositionAfterZ = ReadFloatProperty(type, retargeter, "LastPreSetHumanPoseEndpointBodyPositionAfterZ"),
+            PreSetHumanPoseEndpointBodyPositionDeltaX = ReadFloatProperty(type, retargeter, "LastPreSetHumanPoseEndpointBodyPositionDeltaX"),
+            PreSetHumanPoseEndpointBodyPositionDeltaZ = ReadFloatProperty(type, retargeter, "LastPreSetHumanPoseEndpointBodyPositionDeltaZ"),
+            PreSetHumanPoseEndpointBodyPositionDeltaMagnitudeXZ = ReadFloatProperty(type, retargeter, "LastPreSetHumanPoseEndpointBodyPositionDeltaMagnitudeXZ"),
+            SetHumanPosePreSolveGhostLeftFootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostLeftFootWorldX"),
+            SetHumanPosePreSolveGhostLeftFootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostLeftFootWorldZ"),
+            SetHumanPosePreSolveGhostLeftToesWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostLeftToesWorldX"),
+            SetHumanPosePreSolveGhostLeftToesWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostLeftToesWorldZ"),
+            SetHumanPosePreSolveCurrentLeftFootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentLeftFootWorldX"),
+            SetHumanPosePreSolveCurrentLeftFootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentLeftFootWorldZ"),
+            SetHumanPosePreSolveCurrentLeftToesWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentLeftToesWorldX"),
+            SetHumanPosePreSolveCurrentLeftToesWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentLeftToesWorldZ"),
+            SetHumanPosePreSolveTargetLeftFootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetLeftFootWorldX"),
+            SetHumanPosePreSolveTargetLeftFootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetLeftFootWorldZ"),
+            SetHumanPosePreSolveTargetLeftToesWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetLeftToesWorldX"),
+            SetHumanPosePreSolveTargetLeftToesWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetLeftToesWorldZ"),
+            SetHumanPosePreSolveGhostRightFootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRightFootWorldX"),
+            SetHumanPosePreSolveGhostRightFootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRightFootWorldZ"),
+            SetHumanPosePreSolveGhostRightToesWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRightToesWorldX"),
+            SetHumanPosePreSolveGhostRightToesWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveGhostRightToesWorldZ"),
+            SetHumanPosePreSolveCurrentRightFootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentRightFootWorldX"),
+            SetHumanPosePreSolveCurrentRightFootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentRightFootWorldZ"),
+            SetHumanPosePreSolveCurrentRightToesWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentRightToesWorldX"),
+            SetHumanPosePreSolveCurrentRightToesWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveCurrentRightToesWorldZ"),
+            SetHumanPosePreSolveTargetRightFootWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRightFootWorldX"),
+            SetHumanPosePreSolveTargetRightFootWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRightFootWorldZ"),
+            SetHumanPosePreSolveTargetRightToesWorldX = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRightToesWorldX"),
+            SetHumanPosePreSolveTargetRightToesWorldZ = ReadFloatProperty(type, retargeter, "LastSetHumanPosePreSolveTargetRightToesWorldZ"),
+            SetHumanPoseInputSpineFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputSpineFrontBackMuscle"),
+            SetHumanPoseInputSpineLeftRightMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputSpineLeftRightMuscle"),
+            SetHumanPoseInputSpineTwistLeftRightMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputSpineTwistLeftRightMuscle"),
+            SetHumanPoseInputChestFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputChestFrontBackMuscle"),
+            SetHumanPoseInputChestLeftRightMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputChestLeftRightMuscle"),
+            SetHumanPoseInputChestTwistLeftRightMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputChestTwistLeftRightMuscle"),
+            SetHumanPoseInputUpperChestFrontBackMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputUpperChestFrontBackMuscle"),
+            SetHumanPoseInputUpperChestLeftRightMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputUpperChestLeftRightMuscle"),
+            SetHumanPoseInputUpperChestTwistLeftRightMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputUpperChestTwistLeftRightMuscle"),
+            SetHumanPoseInputLeftUpperLegInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftUpperLegInOutMuscle"),
+            SetHumanPoseInputRightUpperLegInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightUpperLegInOutMuscle"),
+            SetHumanPoseInputLeftUpperLegTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftUpperLegTwistInOutMuscle"),
+            SetHumanPoseInputRightUpperLegTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightUpperLegTwistInOutMuscle"),
+            SetHumanPoseInputLeftLowerLegTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftLowerLegTwistInOutMuscle"),
+            SetHumanPoseInputRightLowerLegTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightLowerLegTwistInOutMuscle"),
+            SetHumanPoseInputLeftFootTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftFootTwistInOutMuscle"),
+            SetHumanPoseInputRightFootTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightFootTwistInOutMuscle"),
+            SetHumanPoseInputLeftToesUpDownMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputLeftToesUpDownMuscle"),
+            SetHumanPoseInputRightToesUpDownMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseInputRightToesUpDownMuscle"),
+            SetHumanPoseOutputRightUpperLegInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightUpperLegInOutMuscle"),
+            SetHumanPoseRightUpperLegInOutDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightUpperLegInOutDelta"),
+            SetHumanPoseOutputRightUpperLegTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightUpperLegTwistInOutMuscle"),
+            SetHumanPoseRightUpperLegTwistInOutDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightUpperLegTwistInOutDelta"),
+            SetHumanPoseOutputRightLowerLegTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightLowerLegTwistInOutMuscle"),
+            SetHumanPoseRightLowerLegTwistInOutDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightLowerLegTwistInOutDelta"),
+            SetHumanPoseOutputRightFootTwistInOutMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightFootTwistInOutMuscle"),
+            SetHumanPoseRightFootTwistInOutDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightFootTwistInOutDelta"),
+            SetHumanPoseOutputRightToesUpDownMuscle = ReadFloatProperty(type, retargeter, "LastSetHumanPoseOutputRightToesUpDownMuscle"),
+            SetHumanPoseRightToesUpDownDelta = ReadFloatProperty(type, retargeter, "LastSetHumanPoseRightToesUpDownDelta"),
+            RetargetStageGhost = ReadRetargetEndpointStage(type, retargeter, "Ghost"),
+            RetargetStageAfterSetHumanPose = ReadRetargetEndpointStage(type, retargeter, "AfterSetHumanPose"),
+            RetargetStageAfterManualReferences = ReadRetargetEndpointStage(type, retargeter, "AfterManualReferences"),
+            RetargetStageAfterRootRestore = ReadRetargetEndpointStage(type, retargeter, "AfterRootRestore"),
+            RetargetStageAfterRootDelta = ReadRetargetEndpointStage(type, retargeter, "AfterRootDelta"),
+            RetargetStageAfterGrounding = ReadRetargetEndpointStage(type, retargeter, "AfterGrounding"),
+            RetargetStageAfterBipedIK = ReadRetargetEndpointStage(type, retargeter, "AfterBipedIK"),
+            RetargetStageAfterLateVisualGrounding = ReadRetargetEndpointStage(type, retargeter, "AfterLateVisualGrounding"),
+            EditorFootLocalRotationLeftFootXzDelta = ReadFloatProperty(type, retargeter, "LastEditorFootLocalRotationLeftFootXzDelta"),
+            EditorFootLocalRotationRightFootXzDelta = ReadFloatProperty(type, retargeter, "LastEditorFootLocalRotationRightFootXzDelta"),
+            EditorLowerBodySegmentDirectionLeftFootXzDelta = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootXzDelta"),
+            EditorLowerBodySegmentDirectionRightFootXzDelta = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootXzDelta"),
+            EditorLowerBodySegmentDirectionMaxCorrectionSegment = ReadStringProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxCorrectionSegment"),
+            EditorLowerBodySegmentDirectionMaxCorrectionAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxCorrectionAngle"),
+            EditorLowerBodySegmentDirectionMaxPreAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPreAngle"),
+            EditorLowerBodySegmentDirectionMaxPostAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPostAngle"),
+            EditorLowerBodySegmentDirectionMaxCorrectionAxisX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxCorrectionAxisX"),
+            EditorLowerBodySegmentDirectionMaxCorrectionAxisY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxCorrectionAxisY"),
+            EditorLowerBodySegmentDirectionMaxCorrectionAxisZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxCorrectionAxisZ"),
+            EditorLowerBodySegmentDirectionMaxReferenceDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxReferenceDirectionX"),
+            EditorLowerBodySegmentDirectionMaxReferenceDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxReferenceDirectionY"),
+            EditorLowerBodySegmentDirectionMaxReferenceDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxReferenceDirectionZ"),
+            EditorLowerBodySegmentDirectionMaxPreDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPreDirectionX"),
+            EditorLowerBodySegmentDirectionMaxPreDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPreDirectionY"),
+            EditorLowerBodySegmentDirectionMaxPreDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPreDirectionZ"),
+            EditorLowerBodySegmentDirectionMaxPostDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPostDirectionX"),
+            EditorLowerBodySegmentDirectionMaxPostDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPostDirectionY"),
+            EditorLowerBodySegmentDirectionMaxPostDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionMaxPostDirectionZ"),
+            EditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle"),
+            EditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle"),
+            EditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle"),
+            EditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle"),
+            EditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle"),
+            EditorLowerBodySegmentDirectionRightFootToesCorrectionAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToesCorrectionAngle"),
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle"),
+            EditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle"),
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle"),
+            EditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle"),
+            EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX"),
+            EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY"),
+            EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ"),
+            EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX"),
+            EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY"),
+            EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ"),
+            EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX"),
+            EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY"),
+            EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ"),
+            EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX"),
+            EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY"),
+            EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ"),
+            EditorLowerBodySegmentDirectionRightFootToToesPreDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesPreDirectionX"),
+            EditorLowerBodySegmentDirectionRightFootToToesPreDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesPreDirectionY"),
+            EditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ"),
+            EditorLowerBodySegmentDirectionRightFootToToesPostDirectionX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesPostDirectionX"),
+            EditorLowerBodySegmentDirectionRightFootToToesPostDirectionY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesPostDirectionY"),
+            EditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ"),
+            EditorLowerBodySegmentDirectionLeftLowerLegWorldX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegWorldX"),
+            EditorLowerBodySegmentDirectionLeftLowerLegWorldY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegWorldY"),
+            EditorLowerBodySegmentDirectionLeftLowerLegWorldZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegWorldZ"),
+            EditorLowerBodySegmentDirectionLeftFootWorldX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootWorldX"),
+            EditorLowerBodySegmentDirectionLeftFootWorldY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootWorldY"),
+            EditorLowerBodySegmentDirectionLeftFootWorldZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootWorldZ"),
+            EditorLowerBodySegmentDirectionLeftToesWorldX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftToesWorldX"),
+            EditorLowerBodySegmentDirectionLeftToesWorldY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftToesWorldY"),
+            EditorLowerBodySegmentDirectionLeftToesWorldZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftToesWorldZ"),
+            EditorLowerBodySegmentDirectionRightLowerLegWorldX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegWorldX"),
+            EditorLowerBodySegmentDirectionRightLowerLegWorldY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegWorldY"),
+            EditorLowerBodySegmentDirectionRightLowerLegWorldZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegWorldZ"),
+            EditorLowerBodySegmentDirectionRightFootWorldX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootWorldX"),
+            EditorLowerBodySegmentDirectionRightFootWorldY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootWorldY"),
+            EditorLowerBodySegmentDirectionRightFootWorldZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootWorldZ"),
+            EditorLowerBodySegmentDirectionRightToesWorldX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightToesWorldX"),
+            EditorLowerBodySegmentDirectionRightToesWorldY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightToesWorldY"),
+            EditorLowerBodySegmentDirectionRightToesWorldZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightToesWorldZ"),
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX"),
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY"),
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ"),
+            EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX"),
+            EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY"),
+            EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ"),
+            EditorLowerBodySegmentDirectionLeftFootForwardX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootForwardX"),
+            EditorLowerBodySegmentDirectionLeftFootForwardY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootForwardY"),
+            EditorLowerBodySegmentDirectionLeftFootForwardZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootForwardZ"),
+            EditorLowerBodySegmentDirectionLeftFootUpX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootUpX"),
+            EditorLowerBodySegmentDirectionLeftFootUpY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootUpY"),
+            EditorLowerBodySegmentDirectionLeftFootUpZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionLeftFootUpZ"),
+            EditorLowerBodySegmentDirectionRightFootForwardX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootForwardX"),
+            EditorLowerBodySegmentDirectionRightFootForwardY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootForwardY"),
+            EditorLowerBodySegmentDirectionRightFootForwardZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootForwardZ"),
+            EditorLowerBodySegmentDirectionRightFootUpX = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootUpX"),
+            EditorLowerBodySegmentDirectionRightFootUpY = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootUpY"),
+            EditorLowerBodySegmentDirectionRightFootUpZ = ReadFloatProperty(type, retargeter, "LastEditorLowerBodySegmentDirectionRightFootUpZ"),
+            EditorFootHipsAlignedResidualYawLeftFootXzDelta = ReadFloatProperty(type, retargeter, "LastEditorFootHipsAlignedResidualYawLeftFootXzDelta"),
+            EditorFootHipsAlignedResidualYawRightFootXzDelta = ReadFloatProperty(type, retargeter, "LastEditorFootHipsAlignedResidualYawRightFootXzDelta"),
+            PostSetRightEndpointDesiredFootWorldX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDesiredFootWorldX"),
+            PostSetRightEndpointDesiredFootWorldZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDesiredFootWorldZ"),
+            PostSetRightEndpointDesiredToesWorldX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDesiredToesWorldX"),
+            PostSetRightEndpointDesiredToesWorldZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDesiredToesWorldZ"),
+            PostSetRightEndpointCurrentFootWorldX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointCurrentFootWorldX"),
+            PostSetRightEndpointCurrentFootWorldZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointCurrentFootWorldZ"),
+            PostSetRightEndpointCurrentToesWorldX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointCurrentToesWorldX"),
+            PostSetRightEndpointCurrentToesWorldZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointCurrentToesWorldZ"),
+            PostSetRightEndpointDeltaBeforeClampX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDeltaBeforeClampX"),
+            PostSetRightEndpointDeltaBeforeClampZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDeltaBeforeClampZ"),
+            PostSetRightEndpointDeltaAfterClampX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDeltaAfterClampX"),
+            PostSetRightEndpointDeltaAfterClampZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDeltaAfterClampZ"),
+            PostSetRightEndpointDeltaAfterPositiveZScaleX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScaleX"),
+            PostSetRightEndpointDeltaAfterPositiveZScaleZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointDeltaAfterPositiveZScaleZ"),
+            PostSetRightEndpointCorrectionX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointCorrectionX"),
+            PostSetRightEndpointCorrectionZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointCorrectionZ"),
+            PostSetRightEndpointNextFootWorldX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointNextFootWorldX"),
+            PostSetRightEndpointNextFootWorldZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointNextFootWorldZ"),
+            PostSetRightEndpointMaxYawAngle = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointMaxYawAngle"),
+            PostSetRightEndpointYawCorrectionAngle = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointYawCorrectionAngle"),
+            PostSetRightEndpointUpperLegRotationDeltaAngle = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointUpperLegRotationDeltaAngle"),
+            PostSetRightEndpointApplied = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointApplied"),
+            PostSetRightEndpointEvaluatorXzReferenceEnabled = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzReferenceEnabled"),
+            PostSetRightEndpointEvaluatorXzFirstOffsetX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffsetX"),
+            PostSetRightEndpointEvaluatorXzFirstOffsetZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzFirstOffsetZ"),
+            PostSetRightEndpointEvaluatorXzNormalizedDeltaX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDeltaX"),
+            PostSetRightEndpointEvaluatorXzNormalizedDeltaZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedDeltaZ"),
+            PostSetRightEndpointEvaluatorXzNormalizedMagnitude = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzNormalizedMagnitude"),
+            PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaX = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDeltaX"),
+            PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaZ = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzDesiredNormalizedDeltaZ"),
+            PostSetRightEndpointEvaluatorXzTargetMagnitude = ReadFloatProperty(type, retargeter, "LastPostSetHumanPoseRightEndpointEvaluatorXzTargetMagnitude"),
             GroundingMaxStepPerFrame = groundingMaxStepPerFrame,
             GroundingLastStepToMaxStepRatio = CalculateStepToMaxRatio(lastGroundingVerticalStep, groundingMaxStepPerFrame),
             GroundingLastStepAtMaxStep = IsStepAtMax(lastGroundingVerticalStep, groundingMaxStepPerFrame) ? 1 : 0
+        };
+    }
+
+    private static RetargetEndpointStageMetrics ReadRetargetEndpointStage(Type type, object retargeter, string stageName)
+    {
+        string prefix = "LastRetargetStage" + stageName;
+        return new RetargetEndpointStageMetrics
+        {
+            LeftFootWorldX = ReadFloatProperty(type, retargeter, prefix + "LeftFootWorldX"),
+            LeftFootWorldZ = ReadFloatProperty(type, retargeter, prefix + "LeftFootWorldZ"),
+            LeftToesWorldX = ReadFloatProperty(type, retargeter, prefix + "LeftToesWorldX"),
+            LeftToesWorldZ = ReadFloatProperty(type, retargeter, prefix + "LeftToesWorldZ"),
+            RightFootWorldX = ReadFloatProperty(type, retargeter, prefix + "RightFootWorldX"),
+            RightFootWorldZ = ReadFloatProperty(type, retargeter, prefix + "RightFootWorldZ"),
+            RightToesWorldX = ReadFloatProperty(type, retargeter, prefix + "RightToesWorldX"),
+            RightToesWorldZ = ReadFloatProperty(type, retargeter, prefix + "RightToesWorldZ")
         };
     }
 
@@ -1065,6 +1427,50 @@ public class MotionComparisonProbe : MonoBehaviour
         foreach (Component component in components)
         {
             if (component != null && component.GetType().Name == "HumanoidThumbDeformationGuard")
+            {
+                return component;
+            }
+        }
+
+        return null;
+    }
+
+    private ArmSwingGuardDiagnostics CaptureArmSwingGuardDiagnostics()
+    {
+        ArmSwingGuardDiagnostics metrics = ArmSwingGuardDiagnostics.Empty;
+        Component guard = FindArmSwingLimitGuardForCurrentAnimator();
+        if (guard == null)
+        {
+            return metrics;
+        }
+
+        Type guardType = guard.GetType();
+        metrics.LeftApplied = ReadIntMemberAsFloat(guardType, guard, "LastLeftApplied");
+        metrics.LeftHorizontalReachApplied = ReadIntMemberAsFloat(guardType, guard, "LastLeftHorizontalReachApplied");
+        metrics.LeftRaisedReachApplied = ReadIntMemberAsFloat(guardType, guard, "LastLeftRaisedReachApplied");
+        metrics.LeftForearmStretchBefore = ReadFloatMember(guardType, guard, "LastLeftForearmStretchBefore");
+        metrics.LeftForearmStretchAfter = ReadFloatMember(guardType, guard, "LastLeftForearmStretchAfter");
+        metrics.LeftForearmStretchDelta = ReadFloatMember(guardType, guard, "LastLeftForearmStretchDelta");
+        metrics.RightApplied = ReadIntMemberAsFloat(guardType, guard, "LastRightApplied");
+        metrics.RightHorizontalReachApplied = ReadIntMemberAsFloat(guardType, guard, "LastRightHorizontalReachApplied");
+        metrics.RightRaisedReachApplied = ReadIntMemberAsFloat(guardType, guard, "LastRightRaisedReachApplied");
+        metrics.RightForearmStretchBefore = ReadFloatMember(guardType, guard, "LastRightForearmStretchBefore");
+        metrics.RightForearmStretchAfter = ReadFloatMember(guardType, guard, "LastRightForearmStretchAfter");
+        metrics.RightForearmStretchDelta = ReadFloatMember(guardType, guard, "LastRightForearmStretchDelta");
+        return metrics;
+    }
+
+    private Component FindArmSwingLimitGuardForCurrentAnimator()
+    {
+        if (_animator == null)
+        {
+            return null;
+        }
+
+        Component[] components = _animator.gameObject.GetComponents<Component>();
+        foreach (Component component in components)
+        {
+            if (component != null && component.GetType().Name == "HumanoidArmSwingLimitGuard")
             {
                 return component;
             }
@@ -2856,6 +3262,38 @@ public class MotionComparisonProbe : MonoBehaviour
         };
     }
 
+    private struct ArmSwingGuardDiagnostics
+    {
+        public float LeftApplied;
+        public float LeftHorizontalReachApplied;
+        public float LeftRaisedReachApplied;
+        public float LeftForearmStretchBefore;
+        public float LeftForearmStretchAfter;
+        public float LeftForearmStretchDelta;
+        public float RightApplied;
+        public float RightHorizontalReachApplied;
+        public float RightRaisedReachApplied;
+        public float RightForearmStretchBefore;
+        public float RightForearmStretchAfter;
+        public float RightForearmStretchDelta;
+
+        public static ArmSwingGuardDiagnostics Empty => new ArmSwingGuardDiagnostics
+        {
+            LeftApplied = float.NaN,
+            LeftHorizontalReachApplied = float.NaN,
+            LeftRaisedReachApplied = float.NaN,
+            LeftForearmStretchBefore = float.NaN,
+            LeftForearmStretchAfter = float.NaN,
+            LeftForearmStretchDelta = float.NaN,
+            RightApplied = float.NaN,
+            RightHorizontalReachApplied = float.NaN,
+            RightRaisedReachApplied = float.NaN,
+            RightForearmStretchBefore = float.NaN,
+            RightForearmStretchAfter = float.NaN,
+            RightForearmStretchDelta = float.NaN
+        };
+    }
+
     private struct AnimationTimeMetrics
     {
         public string Source;
@@ -3082,6 +3520,30 @@ public class MotionComparisonProbe : MonoBehaviour
         };
     }
 
+    private struct RetargetEndpointStageMetrics
+    {
+        public float LeftFootWorldX;
+        public float LeftFootWorldZ;
+        public float LeftToesWorldX;
+        public float LeftToesWorldZ;
+        public float RightFootWorldX;
+        public float RightFootWorldZ;
+        public float RightToesWorldX;
+        public float RightToesWorldZ;
+
+        public static RetargetEndpointStageMetrics Empty => new RetargetEndpointStageMetrics
+        {
+            LeftFootWorldX = float.NaN,
+            LeftFootWorldZ = float.NaN,
+            LeftToesWorldX = float.NaN,
+            LeftToesWorldZ = float.NaN,
+            RightFootWorldX = float.NaN,
+            RightFootWorldZ = float.NaN,
+            RightToesWorldX = float.NaN,
+            RightToesWorldZ = float.NaN
+        };
+    }
+
     private struct RootSpikeMetrics
     {
         public float LastRootDeltaMagnitude;
@@ -3110,6 +3572,277 @@ public class MotionComparisonProbe : MonoBehaviour
         public float RecordingStartHipsReferenceDeltaY;
         public int RecordingStartHipsReferenceFlipDetected;
         public string RecordingStartHipsReferenceStage;
+        public float PoseInputLeftShoulderFrontBackMuscle;
+        public float AfterEditorMuscleReferenceLeftShoulderFrontBackMuscle;
+        public float AfterClampPoseMusclesLeftShoulderFrontBackMuscle;
+        public float AfterAnatomicalArmGuardLeftShoulderFrontBackMuscle;
+        public float AfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle;
+        public float SetHumanPoseInputLeftShoulderFrontBackMuscle;
+        public float SetHumanPoseOutputLeftShoulderFrontBackMuscle;
+        public float SetHumanPoseLeftShoulderFrontBackDelta;
+        public float PoseInputLeftArmTwistMuscle;
+        public float AfterEditorMuscleReferenceLeftArmTwistMuscle;
+        public float AfterClampPoseMusclesLeftArmTwistMuscle;
+        public float AfterAnatomicalArmGuardLeftArmTwistMuscle;
+        public float AfterVisualSpikeSmoothingLeftArmTwistMuscle;
+        public float SetHumanPoseInputLeftArmTwistMuscle;
+        public float SetHumanPoseOutputLeftArmTwistMuscle;
+        public float SetHumanPoseLeftArmTwistDelta;
+        public float PoseInputLeftForearmStretchMuscle;
+        public float AfterEditorMuscleReferenceLeftForearmStretchMuscle;
+        public float AfterClampPoseMusclesLeftForearmStretchMuscle;
+        public float AfterAnatomicalArmGuardLeftForearmStretchMuscle;
+        public float AfterVisualSpikeSmoothingLeftForearmStretchMuscle;
+        public float SetHumanPoseInputLeftForearmStretchMuscle;
+        public float SetHumanPoseOutputLeftForearmStretchMuscle;
+        public float SetHumanPoseLeftForearmStretchDelta;
+        public float PoseInputRightForearmStretchMuscle;
+        public float AfterEditorMuscleReferenceRightForearmStretchMuscle;
+        public float AfterClampPoseMusclesRightForearmStretchMuscle;
+        public float AfterAnatomicalArmGuardRightForearmStretchMuscle;
+        public float AfterVisualSpikeSmoothingRightForearmStretchMuscle;
+        public float SetHumanPoseInputRightForearmStretchMuscle;
+        public float SetHumanPoseOutputRightForearmStretchMuscle;
+        public float SetHumanPoseRightForearmStretchDelta;
+        public float PoseInputRightArmTwistMuscle;
+        public float AfterEditorMuscleReferenceRightArmTwistMuscle;
+        public float AfterClampPoseMusclesRightArmTwistMuscle;
+        public float AfterAnatomicalArmGuardRightArmTwistMuscle;
+        public float AfterVisualSpikeSmoothingRightArmTwistMuscle;
+        public float SetHumanPoseInputRightArmTwistMuscle;
+        public float SetHumanPoseOutputRightArmTwistMuscle;
+        public float SetHumanPoseRightArmTwistDelta;
+        public float SetHumanPoseInputLeftUpperLegFrontBackMuscle;
+        public float SetHumanPoseOutputLeftUpperLegFrontBackMuscle;
+        public float SetHumanPoseLeftUpperLegFrontBackDelta;
+        public float SetHumanPoseInputRightUpperLegFrontBackMuscle;
+        public float SetHumanPoseOutputRightUpperLegFrontBackMuscle;
+        public float SetHumanPoseRightUpperLegFrontBackDelta;
+        public float SetHumanPoseInputLeftLowerLegStretchMuscle;
+        public float SetHumanPoseOutputLeftLowerLegStretchMuscle;
+        public float SetHumanPoseLeftLowerLegStretchDelta;
+        public float SetHumanPoseInputRightLowerLegStretchMuscle;
+        public float SetHumanPoseOutputRightLowerLegStretchMuscle;
+        public float SetHumanPoseRightLowerLegStretchDelta;
+        public float SetHumanPoseInputLeftFootUpDownMuscle;
+        public float SetHumanPoseOutputLeftFootUpDownMuscle;
+        public float SetHumanPoseLeftFootUpDownDelta;
+        public float SetHumanPoseInputRightFootUpDownMuscle;
+        public float SetHumanPoseOutputRightFootUpDownMuscle;
+        public float SetHumanPoseRightFootUpDownDelta;
+        public float SetHumanPoseInputBodyPositionX;
+        public float SetHumanPoseInputBodyPositionY;
+        public float SetHumanPoseInputBodyPositionZ;
+        public float SetHumanPoseOutputBodyPositionX;
+        public float SetHumanPoseOutputBodyPositionY;
+        public float SetHumanPoseOutputBodyPositionZ;
+        public float SetHumanPoseBodyPositionDeltaXZ;
+        public float SetHumanPoseInputBodyRotationYaw;
+        public float SetHumanPoseOutputBodyRotationYaw;
+        public float SetHumanPoseBodyRotationDeltaAngle;
+        public float SetHumanPosePreSolveGhostRootWorldX;
+        public float SetHumanPosePreSolveGhostRootWorldY;
+        public float SetHumanPosePreSolveGhostRootWorldZ;
+        public float SetHumanPosePreSolveGhostRootYaw;
+        public float SetHumanPosePreSolveTargetRootWorldX;
+        public float SetHumanPosePreSolveTargetRootWorldY;
+        public float SetHumanPosePreSolveTargetRootWorldZ;
+        public float SetHumanPosePreSolveTargetRootYaw;
+        public float SetHumanPosePreSolveTargetHipsWorldX;
+        public float SetHumanPosePreSolveTargetHipsWorldY;
+        public float SetHumanPosePreSolveTargetHipsWorldZ;
+        public float SetHumanPosePreSolveTargetHipsLocalX;
+        public float SetHumanPosePreSolveTargetHipsLocalY;
+        public float SetHumanPosePreSolveTargetHipsLocalZ;
+        public float SetHumanPosePreSolveBodyPositionX;
+        public float SetHumanPosePreSolveBodyPositionY;
+        public float SetHumanPosePreSolveBodyPositionZ;
+        public float SetHumanPosePreSolveBodyRotationYaw;
+        public float PreSetHumanPoseEndpointBodyPositionBeforeX;
+        public float PreSetHumanPoseEndpointBodyPositionBeforeZ;
+        public float PreSetHumanPoseEndpointBodyPositionAfterX;
+        public float PreSetHumanPoseEndpointBodyPositionAfterZ;
+        public float PreSetHumanPoseEndpointBodyPositionDeltaX;
+        public float PreSetHumanPoseEndpointBodyPositionDeltaZ;
+        public float PreSetHumanPoseEndpointBodyPositionDeltaMagnitudeXZ;
+        public float SetHumanPosePreSolveGhostLeftFootWorldX;
+        public float SetHumanPosePreSolveGhostLeftFootWorldZ;
+        public float SetHumanPosePreSolveGhostLeftToesWorldX;
+        public float SetHumanPosePreSolveGhostLeftToesWorldZ;
+        public float SetHumanPosePreSolveCurrentLeftFootWorldX;
+        public float SetHumanPosePreSolveCurrentLeftFootWorldZ;
+        public float SetHumanPosePreSolveCurrentLeftToesWorldX;
+        public float SetHumanPosePreSolveCurrentLeftToesWorldZ;
+        public float SetHumanPosePreSolveTargetLeftFootWorldX;
+        public float SetHumanPosePreSolveTargetLeftFootWorldZ;
+        public float SetHumanPosePreSolveTargetLeftToesWorldX;
+        public float SetHumanPosePreSolveTargetLeftToesWorldZ;
+        public float SetHumanPosePreSolveGhostRightFootWorldX;
+        public float SetHumanPosePreSolveGhostRightFootWorldZ;
+        public float SetHumanPosePreSolveGhostRightToesWorldX;
+        public float SetHumanPosePreSolveGhostRightToesWorldZ;
+        public float SetHumanPosePreSolveCurrentRightFootWorldX;
+        public float SetHumanPosePreSolveCurrentRightFootWorldZ;
+        public float SetHumanPosePreSolveCurrentRightToesWorldX;
+        public float SetHumanPosePreSolveCurrentRightToesWorldZ;
+        public float SetHumanPosePreSolveTargetRightFootWorldX;
+        public float SetHumanPosePreSolveTargetRightFootWorldZ;
+        public float SetHumanPosePreSolveTargetRightToesWorldX;
+        public float SetHumanPosePreSolveTargetRightToesWorldZ;
+        public float SetHumanPoseInputSpineFrontBackMuscle;
+        public float SetHumanPoseInputSpineLeftRightMuscle;
+        public float SetHumanPoseInputSpineTwistLeftRightMuscle;
+        public float SetHumanPoseInputChestFrontBackMuscle;
+        public float SetHumanPoseInputChestLeftRightMuscle;
+        public float SetHumanPoseInputChestTwistLeftRightMuscle;
+        public float SetHumanPoseInputUpperChestFrontBackMuscle;
+        public float SetHumanPoseInputUpperChestLeftRightMuscle;
+        public float SetHumanPoseInputUpperChestTwistLeftRightMuscle;
+        public float SetHumanPoseInputLeftUpperLegInOutMuscle;
+        public float SetHumanPoseInputRightUpperLegInOutMuscle;
+        public float SetHumanPoseInputLeftUpperLegTwistInOutMuscle;
+        public float SetHumanPoseInputRightUpperLegTwistInOutMuscle;
+        public float SetHumanPoseInputLeftLowerLegTwistInOutMuscle;
+        public float SetHumanPoseInputRightLowerLegTwistInOutMuscle;
+        public float SetHumanPoseInputLeftFootTwistInOutMuscle;
+        public float SetHumanPoseInputRightFootTwistInOutMuscle;
+        public float SetHumanPoseInputLeftToesUpDownMuscle;
+        public float SetHumanPoseInputRightToesUpDownMuscle;
+        public float SetHumanPoseOutputRightUpperLegInOutMuscle;
+        public float SetHumanPoseRightUpperLegInOutDelta;
+        public float SetHumanPoseOutputRightUpperLegTwistInOutMuscle;
+        public float SetHumanPoseRightUpperLegTwistInOutDelta;
+        public float SetHumanPoseOutputRightLowerLegTwistInOutMuscle;
+        public float SetHumanPoseRightLowerLegTwistInOutDelta;
+        public float SetHumanPoseOutputRightFootTwistInOutMuscle;
+        public float SetHumanPoseRightFootTwistInOutDelta;
+        public float SetHumanPoseOutputRightToesUpDownMuscle;
+        public float SetHumanPoseRightToesUpDownDelta;
+        public RetargetEndpointStageMetrics RetargetStageGhost;
+        public RetargetEndpointStageMetrics RetargetStageAfterSetHumanPose;
+        public RetargetEndpointStageMetrics RetargetStageAfterManualReferences;
+        public RetargetEndpointStageMetrics RetargetStageAfterRootRestore;
+        public RetargetEndpointStageMetrics RetargetStageAfterRootDelta;
+        public RetargetEndpointStageMetrics RetargetStageAfterGrounding;
+        public RetargetEndpointStageMetrics RetargetStageAfterBipedIK;
+        public RetargetEndpointStageMetrics RetargetStageAfterLateVisualGrounding;
+        public float EditorFootLocalRotationLeftFootXzDelta;
+        public float EditorFootLocalRotationRightFootXzDelta;
+        public float EditorLowerBodySegmentDirectionLeftFootXzDelta;
+        public float EditorLowerBodySegmentDirectionRightFootXzDelta;
+        public string EditorLowerBodySegmentDirectionMaxCorrectionSegment;
+        public float EditorLowerBodySegmentDirectionMaxCorrectionAngle;
+        public float EditorLowerBodySegmentDirectionMaxPreAngle;
+        public float EditorLowerBodySegmentDirectionMaxPostAngle;
+        public float EditorLowerBodySegmentDirectionMaxCorrectionAxisX;
+        public float EditorLowerBodySegmentDirectionMaxCorrectionAxisY;
+        public float EditorLowerBodySegmentDirectionMaxCorrectionAxisZ;
+        public float EditorLowerBodySegmentDirectionMaxReferenceDirectionX;
+        public float EditorLowerBodySegmentDirectionMaxReferenceDirectionY;
+        public float EditorLowerBodySegmentDirectionMaxReferenceDirectionZ;
+        public float EditorLowerBodySegmentDirectionMaxPreDirectionX;
+        public float EditorLowerBodySegmentDirectionMaxPreDirectionY;
+        public float EditorLowerBodySegmentDirectionMaxPreDirectionZ;
+        public float EditorLowerBodySegmentDirectionMaxPostDirectionX;
+        public float EditorLowerBodySegmentDirectionMaxPostDirectionY;
+        public float EditorLowerBodySegmentDirectionMaxPostDirectionZ;
+        public float EditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle;
+        public float EditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle;
+        public float EditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle;
+        public float EditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle;
+        public float EditorLowerBodySegmentDirectionRightFootToesCorrectionAngle;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle;
+        public float EditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle;
+        public float EditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY;
+        public float EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ;
+        public float EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX;
+        public float EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY;
+        public float EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ;
+        public float EditorLowerBodySegmentDirectionRightFootToToesPreDirectionX;
+        public float EditorLowerBodySegmentDirectionRightFootToToesPreDirectionY;
+        public float EditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ;
+        public float EditorLowerBodySegmentDirectionRightFootToToesPostDirectionX;
+        public float EditorLowerBodySegmentDirectionRightFootToToesPostDirectionY;
+        public float EditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegWorldX;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegWorldY;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegWorldZ;
+        public float EditorLowerBodySegmentDirectionLeftFootWorldX;
+        public float EditorLowerBodySegmentDirectionLeftFootWorldY;
+        public float EditorLowerBodySegmentDirectionLeftFootWorldZ;
+        public float EditorLowerBodySegmentDirectionLeftToesWorldX;
+        public float EditorLowerBodySegmentDirectionLeftToesWorldY;
+        public float EditorLowerBodySegmentDirectionLeftToesWorldZ;
+        public float EditorLowerBodySegmentDirectionRightLowerLegWorldX;
+        public float EditorLowerBodySegmentDirectionRightLowerLegWorldY;
+        public float EditorLowerBodySegmentDirectionRightLowerLegWorldZ;
+        public float EditorLowerBodySegmentDirectionRightFootWorldX;
+        public float EditorLowerBodySegmentDirectionRightFootWorldY;
+        public float EditorLowerBodySegmentDirectionRightFootWorldZ;
+        public float EditorLowerBodySegmentDirectionRightToesWorldX;
+        public float EditorLowerBodySegmentDirectionRightToesWorldY;
+        public float EditorLowerBodySegmentDirectionRightToesWorldZ;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY;
+        public float EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ;
+        public float EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX;
+        public float EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY;
+        public float EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ;
+        public float EditorLowerBodySegmentDirectionLeftFootForwardX;
+        public float EditorLowerBodySegmentDirectionLeftFootForwardY;
+        public float EditorLowerBodySegmentDirectionLeftFootForwardZ;
+        public float EditorLowerBodySegmentDirectionLeftFootUpX;
+        public float EditorLowerBodySegmentDirectionLeftFootUpY;
+        public float EditorLowerBodySegmentDirectionLeftFootUpZ;
+        public float EditorLowerBodySegmentDirectionRightFootForwardX;
+        public float EditorLowerBodySegmentDirectionRightFootForwardY;
+        public float EditorLowerBodySegmentDirectionRightFootForwardZ;
+        public float EditorLowerBodySegmentDirectionRightFootUpX;
+        public float EditorLowerBodySegmentDirectionRightFootUpY;
+        public float EditorLowerBodySegmentDirectionRightFootUpZ;
+        public float EditorFootHipsAlignedResidualYawLeftFootXzDelta;
+        public float EditorFootHipsAlignedResidualYawRightFootXzDelta;
+        public float PostSetRightEndpointDesiredFootWorldX;
+        public float PostSetRightEndpointDesiredFootWorldZ;
+        public float PostSetRightEndpointDesiredToesWorldX;
+        public float PostSetRightEndpointDesiredToesWorldZ;
+        public float PostSetRightEndpointCurrentFootWorldX;
+        public float PostSetRightEndpointCurrentFootWorldZ;
+        public float PostSetRightEndpointCurrentToesWorldX;
+        public float PostSetRightEndpointCurrentToesWorldZ;
+        public float PostSetRightEndpointDeltaBeforeClampX;
+        public float PostSetRightEndpointDeltaBeforeClampZ;
+        public float PostSetRightEndpointDeltaAfterClampX;
+        public float PostSetRightEndpointDeltaAfterClampZ;
+        public float PostSetRightEndpointDeltaAfterPositiveZScaleX;
+        public float PostSetRightEndpointDeltaAfterPositiveZScaleZ;
+        public float PostSetRightEndpointCorrectionX;
+        public float PostSetRightEndpointCorrectionZ;
+        public float PostSetRightEndpointNextFootWorldX;
+        public float PostSetRightEndpointNextFootWorldZ;
+        public float PostSetRightEndpointMaxYawAngle;
+        public float PostSetRightEndpointYawCorrectionAngle;
+        public float PostSetRightEndpointUpperLegRotationDeltaAngle;
+        public float PostSetRightEndpointApplied;
+        public float PostSetRightEndpointEvaluatorXzReferenceEnabled;
+        public float PostSetRightEndpointEvaluatorXzFirstOffsetX;
+        public float PostSetRightEndpointEvaluatorXzFirstOffsetZ;
+        public float PostSetRightEndpointEvaluatorXzNormalizedDeltaX;
+        public float PostSetRightEndpointEvaluatorXzNormalizedDeltaZ;
+        public float PostSetRightEndpointEvaluatorXzNormalizedMagnitude;
+        public float PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaX;
+        public float PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaZ;
+        public float PostSetRightEndpointEvaluatorXzTargetMagnitude;
         public float GroundingMaxStepPerFrame;
         public float GroundingLastStepToMaxStepRatio;
         public int GroundingLastStepAtMaxStep;
@@ -3142,6 +3875,277 @@ public class MotionComparisonProbe : MonoBehaviour
             RecordingStartHipsReferenceDeltaY = float.NaN,
             RecordingStartHipsReferenceFlipDetected = -1,
             RecordingStartHipsReferenceStage = "",
+            PoseInputLeftShoulderFrontBackMuscle = float.NaN,
+            AfterEditorMuscleReferenceLeftShoulderFrontBackMuscle = float.NaN,
+            AfterClampPoseMusclesLeftShoulderFrontBackMuscle = float.NaN,
+            AfterAnatomicalArmGuardLeftShoulderFrontBackMuscle = float.NaN,
+            AfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle = float.NaN,
+            SetHumanPoseInputLeftShoulderFrontBackMuscle = float.NaN,
+            SetHumanPoseOutputLeftShoulderFrontBackMuscle = float.NaN,
+            SetHumanPoseLeftShoulderFrontBackDelta = float.NaN,
+            PoseInputLeftArmTwistMuscle = float.NaN,
+            AfterEditorMuscleReferenceLeftArmTwistMuscle = float.NaN,
+            AfterClampPoseMusclesLeftArmTwistMuscle = float.NaN,
+            AfterAnatomicalArmGuardLeftArmTwistMuscle = float.NaN,
+            AfterVisualSpikeSmoothingLeftArmTwistMuscle = float.NaN,
+            SetHumanPoseInputLeftArmTwistMuscle = float.NaN,
+            SetHumanPoseOutputLeftArmTwistMuscle = float.NaN,
+            SetHumanPoseLeftArmTwistDelta = float.NaN,
+            PoseInputLeftForearmStretchMuscle = float.NaN,
+            AfterEditorMuscleReferenceLeftForearmStretchMuscle = float.NaN,
+            AfterClampPoseMusclesLeftForearmStretchMuscle = float.NaN,
+            AfterAnatomicalArmGuardLeftForearmStretchMuscle = float.NaN,
+            AfterVisualSpikeSmoothingLeftForearmStretchMuscle = float.NaN,
+            SetHumanPoseInputLeftForearmStretchMuscle = float.NaN,
+            SetHumanPoseOutputLeftForearmStretchMuscle = float.NaN,
+            SetHumanPoseLeftForearmStretchDelta = float.NaN,
+            PoseInputRightForearmStretchMuscle = float.NaN,
+            AfterEditorMuscleReferenceRightForearmStretchMuscle = float.NaN,
+            AfterClampPoseMusclesRightForearmStretchMuscle = float.NaN,
+            AfterAnatomicalArmGuardRightForearmStretchMuscle = float.NaN,
+            AfterVisualSpikeSmoothingRightForearmStretchMuscle = float.NaN,
+            SetHumanPoseInputRightForearmStretchMuscle = float.NaN,
+            SetHumanPoseOutputRightForearmStretchMuscle = float.NaN,
+            SetHumanPoseRightForearmStretchDelta = float.NaN,
+            PoseInputRightArmTwistMuscle = float.NaN,
+            AfterEditorMuscleReferenceRightArmTwistMuscle = float.NaN,
+            AfterClampPoseMusclesRightArmTwistMuscle = float.NaN,
+            AfterAnatomicalArmGuardRightArmTwistMuscle = float.NaN,
+            AfterVisualSpikeSmoothingRightArmTwistMuscle = float.NaN,
+            SetHumanPoseInputRightArmTwistMuscle = float.NaN,
+            SetHumanPoseOutputRightArmTwistMuscle = float.NaN,
+            SetHumanPoseRightArmTwistDelta = float.NaN,
+            SetHumanPoseInputLeftUpperLegFrontBackMuscle = float.NaN,
+            SetHumanPoseOutputLeftUpperLegFrontBackMuscle = float.NaN,
+            SetHumanPoseLeftUpperLegFrontBackDelta = float.NaN,
+            SetHumanPoseInputRightUpperLegFrontBackMuscle = float.NaN,
+            SetHumanPoseOutputRightUpperLegFrontBackMuscle = float.NaN,
+            SetHumanPoseRightUpperLegFrontBackDelta = float.NaN,
+            SetHumanPoseInputLeftLowerLegStretchMuscle = float.NaN,
+            SetHumanPoseOutputLeftLowerLegStretchMuscle = float.NaN,
+            SetHumanPoseLeftLowerLegStretchDelta = float.NaN,
+            SetHumanPoseInputRightLowerLegStretchMuscle = float.NaN,
+            SetHumanPoseOutputRightLowerLegStretchMuscle = float.NaN,
+            SetHumanPoseRightLowerLegStretchDelta = float.NaN,
+            SetHumanPoseInputLeftFootUpDownMuscle = float.NaN,
+            SetHumanPoseOutputLeftFootUpDownMuscle = float.NaN,
+            SetHumanPoseLeftFootUpDownDelta = float.NaN,
+            SetHumanPoseInputRightFootUpDownMuscle = float.NaN,
+            SetHumanPoseOutputRightFootUpDownMuscle = float.NaN,
+            SetHumanPoseRightFootUpDownDelta = float.NaN,
+            SetHumanPoseInputBodyPositionX = float.NaN,
+            SetHumanPoseInputBodyPositionY = float.NaN,
+            SetHumanPoseInputBodyPositionZ = float.NaN,
+            SetHumanPoseOutputBodyPositionX = float.NaN,
+            SetHumanPoseOutputBodyPositionY = float.NaN,
+            SetHumanPoseOutputBodyPositionZ = float.NaN,
+            SetHumanPoseBodyPositionDeltaXZ = float.NaN,
+            SetHumanPoseInputBodyRotationYaw = float.NaN,
+            SetHumanPoseOutputBodyRotationYaw = float.NaN,
+            SetHumanPoseBodyRotationDeltaAngle = float.NaN,
+            SetHumanPosePreSolveGhostRootWorldX = float.NaN,
+            SetHumanPosePreSolveGhostRootWorldY = float.NaN,
+            SetHumanPosePreSolveGhostRootWorldZ = float.NaN,
+            SetHumanPosePreSolveGhostRootYaw = float.NaN,
+            SetHumanPosePreSolveTargetRootWorldX = float.NaN,
+            SetHumanPosePreSolveTargetRootWorldY = float.NaN,
+            SetHumanPosePreSolveTargetRootWorldZ = float.NaN,
+            SetHumanPosePreSolveTargetRootYaw = float.NaN,
+            SetHumanPosePreSolveTargetHipsWorldX = float.NaN,
+            SetHumanPosePreSolveTargetHipsWorldY = float.NaN,
+            SetHumanPosePreSolveTargetHipsWorldZ = float.NaN,
+            SetHumanPosePreSolveTargetHipsLocalX = float.NaN,
+            SetHumanPosePreSolveTargetHipsLocalY = float.NaN,
+            SetHumanPosePreSolveTargetHipsLocalZ = float.NaN,
+            SetHumanPosePreSolveBodyPositionX = float.NaN,
+            SetHumanPosePreSolveBodyPositionY = float.NaN,
+            SetHumanPosePreSolveBodyPositionZ = float.NaN,
+            SetHumanPosePreSolveBodyRotationYaw = float.NaN,
+            PreSetHumanPoseEndpointBodyPositionBeforeX = float.NaN,
+            PreSetHumanPoseEndpointBodyPositionBeforeZ = float.NaN,
+            PreSetHumanPoseEndpointBodyPositionAfterX = float.NaN,
+            PreSetHumanPoseEndpointBodyPositionAfterZ = float.NaN,
+            PreSetHumanPoseEndpointBodyPositionDeltaX = float.NaN,
+            PreSetHumanPoseEndpointBodyPositionDeltaZ = float.NaN,
+            PreSetHumanPoseEndpointBodyPositionDeltaMagnitudeXZ = float.NaN,
+            SetHumanPosePreSolveGhostLeftFootWorldX = float.NaN,
+            SetHumanPosePreSolveGhostLeftFootWorldZ = float.NaN,
+            SetHumanPosePreSolveGhostLeftToesWorldX = float.NaN,
+            SetHumanPosePreSolveGhostLeftToesWorldZ = float.NaN,
+            SetHumanPosePreSolveCurrentLeftFootWorldX = float.NaN,
+            SetHumanPosePreSolveCurrentLeftFootWorldZ = float.NaN,
+            SetHumanPosePreSolveCurrentLeftToesWorldX = float.NaN,
+            SetHumanPosePreSolveCurrentLeftToesWorldZ = float.NaN,
+            SetHumanPosePreSolveTargetLeftFootWorldX = float.NaN,
+            SetHumanPosePreSolveTargetLeftFootWorldZ = float.NaN,
+            SetHumanPosePreSolveTargetLeftToesWorldX = float.NaN,
+            SetHumanPosePreSolveTargetLeftToesWorldZ = float.NaN,
+            SetHumanPosePreSolveGhostRightFootWorldX = float.NaN,
+            SetHumanPosePreSolveGhostRightFootWorldZ = float.NaN,
+            SetHumanPosePreSolveGhostRightToesWorldX = float.NaN,
+            SetHumanPosePreSolveGhostRightToesWorldZ = float.NaN,
+            SetHumanPosePreSolveCurrentRightFootWorldX = float.NaN,
+            SetHumanPosePreSolveCurrentRightFootWorldZ = float.NaN,
+            SetHumanPosePreSolveCurrentRightToesWorldX = float.NaN,
+            SetHumanPosePreSolveCurrentRightToesWorldZ = float.NaN,
+            SetHumanPosePreSolveTargetRightFootWorldX = float.NaN,
+            SetHumanPosePreSolveTargetRightFootWorldZ = float.NaN,
+            SetHumanPosePreSolveTargetRightToesWorldX = float.NaN,
+            SetHumanPosePreSolveTargetRightToesWorldZ = float.NaN,
+            SetHumanPoseInputSpineFrontBackMuscle = float.NaN,
+            SetHumanPoseInputSpineLeftRightMuscle = float.NaN,
+            SetHumanPoseInputSpineTwistLeftRightMuscle = float.NaN,
+            SetHumanPoseInputChestFrontBackMuscle = float.NaN,
+            SetHumanPoseInputChestLeftRightMuscle = float.NaN,
+            SetHumanPoseInputChestTwistLeftRightMuscle = float.NaN,
+            SetHumanPoseInputUpperChestFrontBackMuscle = float.NaN,
+            SetHumanPoseInputUpperChestLeftRightMuscle = float.NaN,
+            SetHumanPoseInputUpperChestTwistLeftRightMuscle = float.NaN,
+            SetHumanPoseInputLeftUpperLegInOutMuscle = float.NaN,
+            SetHumanPoseInputRightUpperLegInOutMuscle = float.NaN,
+            SetHumanPoseInputLeftUpperLegTwistInOutMuscle = float.NaN,
+            SetHumanPoseInputRightUpperLegTwistInOutMuscle = float.NaN,
+            SetHumanPoseInputLeftLowerLegTwistInOutMuscle = float.NaN,
+            SetHumanPoseInputRightLowerLegTwistInOutMuscle = float.NaN,
+            SetHumanPoseInputLeftFootTwistInOutMuscle = float.NaN,
+            SetHumanPoseInputRightFootTwistInOutMuscle = float.NaN,
+            SetHumanPoseInputLeftToesUpDownMuscle = float.NaN,
+            SetHumanPoseInputRightToesUpDownMuscle = float.NaN,
+            SetHumanPoseOutputRightUpperLegInOutMuscle = float.NaN,
+            SetHumanPoseRightUpperLegInOutDelta = float.NaN,
+            SetHumanPoseOutputRightUpperLegTwistInOutMuscle = float.NaN,
+            SetHumanPoseRightUpperLegTwistInOutDelta = float.NaN,
+            SetHumanPoseOutputRightLowerLegTwistInOutMuscle = float.NaN,
+            SetHumanPoseRightLowerLegTwistInOutDelta = float.NaN,
+            SetHumanPoseOutputRightFootTwistInOutMuscle = float.NaN,
+            SetHumanPoseRightFootTwistInOutDelta = float.NaN,
+            SetHumanPoseOutputRightToesUpDownMuscle = float.NaN,
+            SetHumanPoseRightToesUpDownDelta = float.NaN,
+            RetargetStageGhost = RetargetEndpointStageMetrics.Empty,
+            RetargetStageAfterSetHumanPose = RetargetEndpointStageMetrics.Empty,
+            RetargetStageAfterManualReferences = RetargetEndpointStageMetrics.Empty,
+            RetargetStageAfterRootRestore = RetargetEndpointStageMetrics.Empty,
+            RetargetStageAfterRootDelta = RetargetEndpointStageMetrics.Empty,
+            RetargetStageAfterGrounding = RetargetEndpointStageMetrics.Empty,
+            RetargetStageAfterBipedIK = RetargetEndpointStageMetrics.Empty,
+            RetargetStageAfterLateVisualGrounding = RetargetEndpointStageMetrics.Empty,
+            EditorFootLocalRotationLeftFootXzDelta = float.NaN,
+            EditorFootLocalRotationRightFootXzDelta = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootXzDelta = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootXzDelta = float.NaN,
+            EditorLowerBodySegmentDirectionMaxCorrectionSegment = "",
+            EditorLowerBodySegmentDirectionMaxCorrectionAngle = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPreAngle = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPostAngle = float.NaN,
+            EditorLowerBodySegmentDirectionMaxCorrectionAxisX = float.NaN,
+            EditorLowerBodySegmentDirectionMaxCorrectionAxisY = float.NaN,
+            EditorLowerBodySegmentDirectionMaxCorrectionAxisZ = float.NaN,
+            EditorLowerBodySegmentDirectionMaxReferenceDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionMaxReferenceDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionMaxReferenceDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPreDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPreDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPreDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPostDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPostDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionMaxPostDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle = float.NaN,
+            EditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToesCorrectionAngle = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesPreDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesPreDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesPostDirectionX = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesPostDirectionY = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegWorldX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegWorldY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegWorldZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootWorldX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootWorldY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootWorldZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftToesWorldX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftToesWorldY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftToesWorldZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegWorldX = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegWorldY = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegWorldZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootWorldX = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootWorldY = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootWorldZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightToesWorldX = float.NaN,
+            EditorLowerBodySegmentDirectionRightToesWorldY = float.NaN,
+            EditorLowerBodySegmentDirectionRightToesWorldZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY = float.NaN,
+            EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootForwardX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootForwardY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootForwardZ = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootUpX = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootUpY = float.NaN,
+            EditorLowerBodySegmentDirectionLeftFootUpZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootForwardX = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootForwardY = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootForwardZ = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootUpX = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootUpY = float.NaN,
+            EditorLowerBodySegmentDirectionRightFootUpZ = float.NaN,
+            EditorFootHipsAlignedResidualYawLeftFootXzDelta = float.NaN,
+            EditorFootHipsAlignedResidualYawRightFootXzDelta = float.NaN,
+            PostSetRightEndpointDesiredFootWorldX = float.NaN,
+            PostSetRightEndpointDesiredFootWorldZ = float.NaN,
+            PostSetRightEndpointDesiredToesWorldX = float.NaN,
+            PostSetRightEndpointDesiredToesWorldZ = float.NaN,
+            PostSetRightEndpointCurrentFootWorldX = float.NaN,
+            PostSetRightEndpointCurrentFootWorldZ = float.NaN,
+            PostSetRightEndpointCurrentToesWorldX = float.NaN,
+            PostSetRightEndpointCurrentToesWorldZ = float.NaN,
+            PostSetRightEndpointDeltaBeforeClampX = float.NaN,
+            PostSetRightEndpointDeltaBeforeClampZ = float.NaN,
+            PostSetRightEndpointDeltaAfterClampX = float.NaN,
+            PostSetRightEndpointDeltaAfterClampZ = float.NaN,
+            PostSetRightEndpointDeltaAfterPositiveZScaleX = float.NaN,
+            PostSetRightEndpointDeltaAfterPositiveZScaleZ = float.NaN,
+            PostSetRightEndpointCorrectionX = float.NaN,
+            PostSetRightEndpointCorrectionZ = float.NaN,
+            PostSetRightEndpointNextFootWorldX = float.NaN,
+            PostSetRightEndpointNextFootWorldZ = float.NaN,
+            PostSetRightEndpointMaxYawAngle = float.NaN,
+            PostSetRightEndpointYawCorrectionAngle = float.NaN,
+            PostSetRightEndpointUpperLegRotationDeltaAngle = float.NaN,
+            PostSetRightEndpointApplied = float.NaN,
+            PostSetRightEndpointEvaluatorXzReferenceEnabled = float.NaN,
+            PostSetRightEndpointEvaluatorXzFirstOffsetX = float.NaN,
+            PostSetRightEndpointEvaluatorXzFirstOffsetZ = float.NaN,
+            PostSetRightEndpointEvaluatorXzNormalizedDeltaX = float.NaN,
+            PostSetRightEndpointEvaluatorXzNormalizedDeltaZ = float.NaN,
+            PostSetRightEndpointEvaluatorXzNormalizedMagnitude = float.NaN,
+            PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaX = float.NaN,
+            PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaZ = float.NaN,
+            PostSetRightEndpointEvaluatorXzTargetMagnitude = float.NaN,
             GroundingMaxStepPerFrame = float.NaN,
             GroundingLastStepToMaxStepRatio = float.NaN,
             GroundingLastStepAtMaxStep = -1
@@ -3240,9 +4244,12 @@ public class MotionComparisonProbe : MonoBehaviour
         public RootSpikeMetrics RootSpike;
         public float BodyPositionY;
         public float HipsLocalY;
+        public Vector3 HipsPosition;
         public float HipsY;
         public float LowestFootY;
         public float LowestFootBottomY;
+        public Vector3 LeftFootPosition;
+        public Vector3 RightFootPosition;
         public float MeshBoundsMinY;
         public float MeshBoundsMaxY;
         public float FootBottomGroundGap;
@@ -3314,6 +4321,7 @@ public class MotionComparisonProbe : MonoBehaviour
         public float RightArmTwistMuscle;
         public float RightForearmStretchMuscle;
         public float RightForearmTwistMuscle;
+        public ArmSwingGuardDiagnostics ArmSwingGuard;
         public float LeftThumb1StretchMuscle;
         public float LeftThumbSpreadMuscle;
         public float LeftIndex1StretchMuscle;
@@ -3384,12 +4392,76 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(RootSpike.RecordingStartHipsReferenceDeltaY),
                 I(RootSpike.RecordingStartHipsReferenceFlipDetected),
                 Escape(RootSpike.RecordingStartHipsReferenceStage),
+                F(RootSpike.PoseInputLeftShoulderFrontBackMuscle),
+                F(RootSpike.AfterEditorMuscleReferenceLeftShoulderFrontBackMuscle),
+                F(RootSpike.AfterClampPoseMusclesLeftShoulderFrontBackMuscle),
+                F(RootSpike.AfterAnatomicalArmGuardLeftShoulderFrontBackMuscle),
+                F(RootSpike.AfterVisualSpikeSmoothingLeftShoulderFrontBackMuscle),
+                F(RootSpike.SetHumanPoseInputLeftShoulderFrontBackMuscle),
+                F(RootSpike.SetHumanPoseOutputLeftShoulderFrontBackMuscle),
+                F(RootSpike.SetHumanPoseLeftShoulderFrontBackDelta),
+                F(RootSpike.PoseInputLeftArmTwistMuscle),
+                F(RootSpike.AfterEditorMuscleReferenceLeftArmTwistMuscle),
+                F(RootSpike.AfterClampPoseMusclesLeftArmTwistMuscle),
+                F(RootSpike.AfterAnatomicalArmGuardLeftArmTwistMuscle),
+                F(RootSpike.AfterVisualSpikeSmoothingLeftArmTwistMuscle),
+                F(RootSpike.SetHumanPoseInputLeftArmTwistMuscle),
+                F(RootSpike.SetHumanPoseOutputLeftArmTwistMuscle),
+                F(RootSpike.SetHumanPoseLeftArmTwistDelta),
+                F(RootSpike.PoseInputLeftForearmStretchMuscle),
+                F(RootSpike.AfterEditorMuscleReferenceLeftForearmStretchMuscle),
+                F(RootSpike.AfterClampPoseMusclesLeftForearmStretchMuscle),
+                F(RootSpike.AfterAnatomicalArmGuardLeftForearmStretchMuscle),
+                F(RootSpike.AfterVisualSpikeSmoothingLeftForearmStretchMuscle),
+                F(RootSpike.SetHumanPoseInputLeftForearmStretchMuscle),
+                F(RootSpike.SetHumanPoseOutputLeftForearmStretchMuscle),
+                F(RootSpike.SetHumanPoseLeftForearmStretchDelta),
+                F(RootSpike.PoseInputRightForearmStretchMuscle),
+                F(RootSpike.AfterEditorMuscleReferenceRightForearmStretchMuscle),
+                F(RootSpike.AfterClampPoseMusclesRightForearmStretchMuscle),
+                F(RootSpike.AfterAnatomicalArmGuardRightForearmStretchMuscle),
+                F(RootSpike.AfterVisualSpikeSmoothingRightForearmStretchMuscle),
+                F(RootSpike.SetHumanPoseInputRightForearmStretchMuscle),
+                F(RootSpike.SetHumanPoseOutputRightForearmStretchMuscle),
+                F(RootSpike.SetHumanPoseRightForearmStretchDelta),
+                F(RootSpike.PoseInputRightArmTwistMuscle),
+                F(RootSpike.AfterEditorMuscleReferenceRightArmTwistMuscle),
+                F(RootSpike.AfterClampPoseMusclesRightArmTwistMuscle),
+                F(RootSpike.AfterAnatomicalArmGuardRightArmTwistMuscle),
+                F(RootSpike.AfterVisualSpikeSmoothingRightArmTwistMuscle),
+                F(RootSpike.SetHumanPoseInputRightArmTwistMuscle),
+                F(RootSpike.SetHumanPoseOutputRightArmTwistMuscle),
+                F(RootSpike.SetHumanPoseRightArmTwistDelta),
+                F(RootSpike.SetHumanPoseInputLeftUpperLegFrontBackMuscle),
+                F(RootSpike.SetHumanPoseOutputLeftUpperLegFrontBackMuscle),
+                F(RootSpike.SetHumanPoseLeftUpperLegFrontBackDelta),
+                F(RootSpike.SetHumanPoseInputRightUpperLegFrontBackMuscle),
+                F(RootSpike.SetHumanPoseOutputRightUpperLegFrontBackMuscle),
+                F(RootSpike.SetHumanPoseRightUpperLegFrontBackDelta),
+                F(RootSpike.SetHumanPoseInputLeftLowerLegStretchMuscle),
+                F(RootSpike.SetHumanPoseOutputLeftLowerLegStretchMuscle),
+                F(RootSpike.SetHumanPoseLeftLowerLegStretchDelta),
+                F(RootSpike.SetHumanPoseInputRightLowerLegStretchMuscle),
+                F(RootSpike.SetHumanPoseOutputRightLowerLegStretchMuscle),
+                F(RootSpike.SetHumanPoseRightLowerLegStretchDelta),
+                F(RootSpike.SetHumanPoseInputLeftFootUpDownMuscle),
+                F(RootSpike.SetHumanPoseOutputLeftFootUpDownMuscle),
+                F(RootSpike.SetHumanPoseLeftFootUpDownDelta),
+                F(RootSpike.SetHumanPoseInputRightFootUpDownMuscle),
+                F(RootSpike.SetHumanPoseOutputRightFootUpDownMuscle),
+                F(RootSpike.SetHumanPoseRightFootUpDownDelta),
                 F(BodyPositionY),
                 F(HipsLocalY),
                 F(RootSpike.FootHeightReferenceLift),
+                F(HipsPosition.x),
+                F(HipsPosition.z),
                 F(HipsY),
                 F(LowestFootY),
                 F(LowestFootBottomY),
+                F(LeftFootPosition.x),
+                F(LeftFootPosition.z),
+                F(RightFootPosition.x),
+                F(RightFootPosition.z),
                 F(MeshBoundsMinY),
                 F(MeshBoundsMaxY),
                 F(FootBottomGroundGap),
@@ -3431,6 +4503,12 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(LeftArmDownUpMuscle),
                 F(LeftArmFrontBackMuscle),
                 F(LeftArmTwistMuscle),
+                F(ArmSwingGuard.LeftApplied),
+                F(ArmSwingGuard.LeftHorizontalReachApplied),
+                F(ArmSwingGuard.LeftRaisedReachApplied),
+                F(ArmSwingGuard.LeftForearmStretchBefore),
+                F(ArmSwingGuard.LeftForearmStretchAfter),
+                F(ArmSwingGuard.LeftForearmStretchDelta),
                 F(LeftForearmStretchMuscle),
                 F(LeftForearmTwistMuscle),
                 F(RightShoulderDownUpMuscle),
@@ -3438,6 +4516,12 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(RightArmDownUpMuscle),
                 F(RightArmFrontBackMuscle),
                 F(RightArmTwistMuscle),
+                F(ArmSwingGuard.RightApplied),
+                F(ArmSwingGuard.RightHorizontalReachApplied),
+                F(ArmSwingGuard.RightRaisedReachApplied),
+                F(ArmSwingGuard.RightForearmStretchBefore),
+                F(ArmSwingGuard.RightForearmStretchAfter),
+                F(ArmSwingGuard.RightForearmStretchDelta),
                 F(RightForearmStretchMuscle),
                 F(RightForearmTwistMuscle),
                 F(LeftThumb1StretchMuscle),
@@ -3580,7 +4664,451 @@ public class MotionComparisonProbe : MonoBehaviour
                 F(ThumbGuard.WebbingStabilizeEnabled),
                 F(ThumbGuard.WebbingStabilizeWeight),
                 F(ThumbGuard.WebbingMaxLocalAngle),
-                F(ThumbGuard.WebbingMaxPositionOffset));
+                F(ThumbGuard.WebbingMaxPositionOffset),
+                F(RootSpike.RetargetStageGhost.LeftFootWorldX),
+                F(RootSpike.RetargetStageGhost.LeftFootWorldZ),
+                F(RootSpike.RetargetStageGhost.LeftToesWorldX),
+                F(RootSpike.RetargetStageGhost.LeftToesWorldZ),
+                F(RootSpike.RetargetStageGhost.RightFootWorldX),
+                F(RootSpike.RetargetStageGhost.RightFootWorldZ),
+                F(RootSpike.RetargetStageGhost.RightToesWorldX),
+                F(RootSpike.RetargetStageGhost.RightToesWorldZ),
+                F(RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX),
+                F(RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ),
+                F(RootSpike.RetargetStageAfterSetHumanPose.LeftToesWorldX),
+                F(RootSpike.RetargetStageAfterSetHumanPose.LeftToesWorldZ),
+                F(RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX),
+                F(RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ),
+                F(RootSpike.RetargetStageAfterSetHumanPose.RightToesWorldX),
+                F(RootSpike.RetargetStageAfterSetHumanPose.RightToesWorldZ),
+                F(RootSpike.RetargetStageAfterManualReferences.LeftFootWorldX),
+                F(RootSpike.RetargetStageAfterManualReferences.LeftFootWorldZ),
+                F(RootSpike.RetargetStageAfterManualReferences.LeftToesWorldX),
+                F(RootSpike.RetargetStageAfterManualReferences.LeftToesWorldZ),
+                F(RootSpike.RetargetStageAfterManualReferences.RightFootWorldX),
+                F(RootSpike.RetargetStageAfterManualReferences.RightFootWorldZ),
+                F(RootSpike.RetargetStageAfterManualReferences.RightToesWorldX),
+                F(RootSpike.RetargetStageAfterManualReferences.RightToesWorldZ),
+                F(RootSpike.RetargetStageAfterRootRestore.LeftFootWorldX),
+                F(RootSpike.RetargetStageAfterRootRestore.LeftFootWorldZ),
+                F(RootSpike.RetargetStageAfterRootRestore.LeftToesWorldX),
+                F(RootSpike.RetargetStageAfterRootRestore.LeftToesWorldZ),
+                F(RootSpike.RetargetStageAfterRootRestore.RightFootWorldX),
+                F(RootSpike.RetargetStageAfterRootRestore.RightFootWorldZ),
+                F(RootSpike.RetargetStageAfterRootRestore.RightToesWorldX),
+                F(RootSpike.RetargetStageAfterRootRestore.RightToesWorldZ),
+                F(RootSpike.RetargetStageAfterRootDelta.LeftFootWorldX),
+                F(RootSpike.RetargetStageAfterRootDelta.LeftFootWorldZ),
+                F(RootSpike.RetargetStageAfterRootDelta.LeftToesWorldX),
+                F(RootSpike.RetargetStageAfterRootDelta.LeftToesWorldZ),
+                F(RootSpike.RetargetStageAfterRootDelta.RightFootWorldX),
+                F(RootSpike.RetargetStageAfterRootDelta.RightFootWorldZ),
+                F(RootSpike.RetargetStageAfterRootDelta.RightToesWorldX),
+                F(RootSpike.RetargetStageAfterRootDelta.RightToesWorldZ),
+                F(RootSpike.RetargetStageAfterGrounding.LeftFootWorldX),
+                F(RootSpike.RetargetStageAfterGrounding.LeftFootWorldZ),
+                F(RootSpike.RetargetStageAfterGrounding.LeftToesWorldX),
+                F(RootSpike.RetargetStageAfterGrounding.LeftToesWorldZ),
+                F(RootSpike.RetargetStageAfterGrounding.RightFootWorldX),
+                F(RootSpike.RetargetStageAfterGrounding.RightFootWorldZ),
+                F(RootSpike.RetargetStageAfterGrounding.RightToesWorldX),
+                F(RootSpike.RetargetStageAfterGrounding.RightToesWorldZ),
+                F(RootSpike.RetargetStageAfterBipedIK.LeftFootWorldX),
+                F(RootSpike.RetargetStageAfterBipedIK.LeftFootWorldZ),
+                F(RootSpike.RetargetStageAfterBipedIK.LeftToesWorldX),
+                F(RootSpike.RetargetStageAfterBipedIK.LeftToesWorldZ),
+                F(RootSpike.RetargetStageAfterBipedIK.RightFootWorldX),
+                F(RootSpike.RetargetStageAfterBipedIK.RightFootWorldZ),
+                F(RootSpike.RetargetStageAfterBipedIK.RightToesWorldX),
+                F(RootSpike.RetargetStageAfterBipedIK.RightToesWorldZ),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.LeftFootWorldX),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.LeftFootWorldZ),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.LeftToesWorldX),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.LeftToesWorldZ),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.RightFootWorldX),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.RightFootWorldZ),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.RightToesWorldX),
+                F(RootSpike.RetargetStageAfterLateVisualGrounding.RightToesWorldZ),
+                F(RootSpike.EditorFootLocalRotationLeftFootXzDelta),
+                F(RootSpike.EditorFootLocalRotationRightFootXzDelta),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootXzDelta),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootXzDelta),
+                Escape(RootSpike.EditorLowerBodySegmentDirectionMaxCorrectionSegment),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxCorrectionAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPreAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPostAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxCorrectionAxisX),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxCorrectionAxisY),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxCorrectionAxisZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxReferenceDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxReferenceDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxReferenceDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPreDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPreDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPreDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPostDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPostDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionMaxPostDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftUpperLegLowerLegCorrectionAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightUpperLegLowerLegCorrectionAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegFootCorrectionAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegFootCorrectionAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToesCorrectionAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToesCorrectionAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegToFootParentWorldRotationDeltaAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegToFootParentWorldRotationDeltaAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegToFootChildFootLocalRotationDeltaAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegToFootChildFootLocalRotationDeltaAngle),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesReferenceDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesPreDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootToToesPostDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesReferenceDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesPreDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesPreDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesPreDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesPostDirectionX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesPostDirectionY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootToToesPostDirectionZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegWorldX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegWorldY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegWorldZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootWorldX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootWorldY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootWorldZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftToesWorldX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftToesWorldY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftToesWorldZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegWorldX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegWorldY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegWorldZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootWorldX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootWorldY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootWorldZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightToesWorldX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightToesWorldY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightToesWorldZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftLowerLegToFootCorrectionAxisZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightLowerLegToFootCorrectionAxisZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootForwardX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootForwardY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootForwardZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootUpX),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootUpY),
+                F(RootSpike.EditorLowerBodySegmentDirectionLeftFootUpZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootForwardX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootForwardY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootForwardZ),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootUpX),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootUpY),
+                F(RootSpike.EditorLowerBodySegmentDirectionRightFootUpZ),
+                F(RootSpike.EditorFootHipsAlignedResidualYawLeftFootXzDelta),
+                F(RootSpike.EditorFootHipsAlignedResidualYawRightFootXzDelta),
+                F(RootSpike.PostSetRightEndpointDesiredFootWorldX),
+                F(RootSpike.PostSetRightEndpointDesiredFootWorldZ),
+                F(RootSpike.PostSetRightEndpointDesiredToesWorldX),
+                F(RootSpike.PostSetRightEndpointDesiredToesWorldZ),
+                F(RootSpike.PostSetRightEndpointCurrentFootWorldX),
+                F(RootSpike.PostSetRightEndpointCurrentFootWorldZ),
+                F(RootSpike.PostSetRightEndpointCurrentToesWorldX),
+                F(RootSpike.PostSetRightEndpointCurrentToesWorldZ),
+                F(RootSpike.PostSetRightEndpointDeltaBeforeClampX),
+                F(RootSpike.PostSetRightEndpointDeltaBeforeClampZ),
+                F(RootSpike.PostSetRightEndpointDeltaAfterClampX),
+                F(RootSpike.PostSetRightEndpointDeltaAfterClampZ),
+                F(RootSpike.PostSetRightEndpointDeltaAfterPositiveZScaleX),
+                F(RootSpike.PostSetRightEndpointDeltaAfterPositiveZScaleZ),
+                F(RootSpike.PostSetRightEndpointCorrectionX),
+                F(RootSpike.PostSetRightEndpointCorrectionZ),
+                F(RootSpike.PostSetRightEndpointNextFootWorldX),
+                F(RootSpike.PostSetRightEndpointNextFootWorldZ),
+                F(RootSpike.PostSetRightEndpointMaxYawAngle),
+                F(RootSpike.PostSetRightEndpointYawCorrectionAngle),
+                F(RootSpike.PostSetRightEndpointUpperLegRotationDeltaAngle),
+                F(RootSpike.PostSetRightEndpointApplied),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzReferenceEnabled),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzFirstOffsetX),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzFirstOffsetZ),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzNormalizedDeltaX),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzNormalizedDeltaZ),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzNormalizedMagnitude),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaX),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzDesiredNormalizedDeltaZ),
+                F(RootSpike.PostSetRightEndpointEvaluatorXzTargetMagnitude),
+                F(RootSpike.SetHumanPoseInputBodyPositionX),
+                F(RootSpike.SetHumanPoseInputBodyPositionY),
+                F(RootSpike.SetHumanPoseInputBodyPositionZ),
+                F(RootSpike.SetHumanPoseOutputBodyPositionX),
+                F(RootSpike.SetHumanPoseOutputBodyPositionY),
+                F(RootSpike.SetHumanPoseOutputBodyPositionZ),
+                F(FiniteDelta(
+                    RootSpike.SetHumanPoseInputBodyPositionX,
+                    RootSpike.SetHumanPoseOutputBodyPositionX)),
+                F(FiniteDelta(
+                    RootSpike.SetHumanPoseInputBodyPositionZ,
+                    RootSpike.SetHumanPoseOutputBodyPositionZ)),
+                F(RootSpike.SetHumanPoseBodyPositionDeltaXZ),
+                F(RootSpike.SetHumanPoseInputBodyRotationYaw),
+                F(RootSpike.SetHumanPoseOutputBodyRotationYaw),
+                F(RootSpike.SetHumanPoseBodyRotationDeltaAngle),
+                F(RootSpike.SetHumanPosePreSolveGhostRootWorldX),
+                F(RootSpike.SetHumanPosePreSolveGhostRootWorldY),
+                F(RootSpike.SetHumanPosePreSolveGhostRootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveGhostRootYaw),
+                F(RootSpike.SetHumanPosePreSolveTargetRootWorldX),
+                F(RootSpike.SetHumanPosePreSolveTargetRootWorldY),
+                F(RootSpike.SetHumanPosePreSolveTargetRootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveTargetRootYaw),
+                F(RootSpike.SetHumanPosePreSolveTargetHipsWorldX),
+                F(RootSpike.SetHumanPosePreSolveTargetHipsWorldY),
+                F(RootSpike.SetHumanPosePreSolveTargetHipsWorldZ),
+                F(RootSpike.SetHumanPosePreSolveTargetHipsLocalX),
+                F(RootSpike.SetHumanPosePreSolveTargetHipsLocalY),
+                F(RootSpike.SetHumanPosePreSolveTargetHipsLocalZ),
+                F(RootSpike.SetHumanPosePreSolveBodyPositionX),
+                F(RootSpike.SetHumanPosePreSolveBodyPositionY),
+                F(RootSpike.SetHumanPosePreSolveBodyPositionZ),
+                F(RootSpike.SetHumanPosePreSolveBodyRotationYaw),
+                F(RootSpike.PreSetHumanPoseEndpointBodyPositionBeforeX),
+                F(RootSpike.PreSetHumanPoseEndpointBodyPositionBeforeZ),
+                F(RootSpike.PreSetHumanPoseEndpointBodyPositionAfterX),
+                F(RootSpike.PreSetHumanPoseEndpointBodyPositionAfterZ),
+                F(RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaX),
+                F(RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaZ),
+                F(RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaMagnitudeXZ),
+                F(FiniteXzDelta(
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ,
+                    axis: "x")),
+                F(FiniteXzDelta(
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ,
+                    axis: "z")),
+                F(FiniteXzDeltaMagnitude(
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ,
+                    endpointAxis: "x",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaX)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ,
+                    endpointAxis: "z",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaX)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ,
+                    endpointAxis: "x",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaZ)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.LeftFootWorldZ,
+                    endpointAxis: "z",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaZ)),
+                F(FiniteXzDelta(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    axis: "x")),
+                F(FiniteXzDelta(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    axis: "z")),
+                F(FiniteXzDeltaMagnitude(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "x",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaX)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "z",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaX)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "x",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaZ)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "z",
+                    RootSpike.PreSetHumanPoseEndpointBodyPositionDeltaZ)),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "x",
+                    FiniteDelta(
+                        RootSpike.SetHumanPoseInputBodyPositionX,
+                        RootSpike.SetHumanPoseOutputBodyPositionX))),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "z",
+                    FiniteDelta(
+                        RootSpike.SetHumanPoseInputBodyPositionX,
+                        RootSpike.SetHumanPoseOutputBodyPositionX))),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "x",
+                    FiniteDelta(
+                        RootSpike.SetHumanPoseInputBodyPositionZ,
+                        RootSpike.SetHumanPoseOutputBodyPositionZ))),
+                F(FiniteXzResponseRatio(
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX,
+                    RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldX,
+                    RootSpike.RetargetStageAfterSetHumanPose.RightFootWorldZ,
+                    endpointAxis: "z",
+                    FiniteDelta(
+                        RootSpike.SetHumanPoseInputBodyPositionZ,
+                        RootSpike.SetHumanPoseOutputBodyPositionZ))),
+                F(RootSpike.SetHumanPosePreSolveGhostLeftFootWorldX),
+                F(RootSpike.SetHumanPosePreSolveGhostLeftFootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveGhostLeftToesWorldX),
+                F(RootSpike.SetHumanPosePreSolveGhostLeftToesWorldZ),
+                F(RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldX),
+                F(RootSpike.SetHumanPosePreSolveCurrentLeftFootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveCurrentLeftToesWorldX),
+                F(RootSpike.SetHumanPosePreSolveCurrentLeftToesWorldZ),
+                F(RootSpike.SetHumanPosePreSolveTargetLeftFootWorldX),
+                F(RootSpike.SetHumanPosePreSolveTargetLeftFootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveTargetLeftToesWorldX),
+                F(RootSpike.SetHumanPosePreSolveTargetLeftToesWorldZ),
+                F(RootSpike.SetHumanPosePreSolveGhostRightFootWorldX),
+                F(RootSpike.SetHumanPosePreSolveGhostRightFootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveGhostRightToesWorldX),
+                F(RootSpike.SetHumanPosePreSolveGhostRightToesWorldZ),
+                F(RootSpike.SetHumanPosePreSolveCurrentRightFootWorldX),
+                F(RootSpike.SetHumanPosePreSolveCurrentRightFootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveCurrentRightToesWorldX),
+                F(RootSpike.SetHumanPosePreSolveCurrentRightToesWorldZ),
+                F(RootSpike.SetHumanPosePreSolveTargetRightFootWorldX),
+                F(RootSpike.SetHumanPosePreSolveTargetRightFootWorldZ),
+                F(RootSpike.SetHumanPosePreSolveTargetRightToesWorldX),
+                F(RootSpike.SetHumanPosePreSolveTargetRightToesWorldZ),
+                F(RootSpike.SetHumanPoseInputSpineFrontBackMuscle),
+                F(RootSpike.SetHumanPoseInputSpineLeftRightMuscle),
+                F(RootSpike.SetHumanPoseInputSpineTwistLeftRightMuscle),
+                F(RootSpike.SetHumanPoseInputChestFrontBackMuscle),
+                F(RootSpike.SetHumanPoseInputChestLeftRightMuscle),
+                F(RootSpike.SetHumanPoseInputChestTwistLeftRightMuscle),
+                F(RootSpike.SetHumanPoseInputUpperChestFrontBackMuscle),
+                F(RootSpike.SetHumanPoseInputUpperChestLeftRightMuscle),
+                F(RootSpike.SetHumanPoseInputUpperChestTwistLeftRightMuscle),
+                F(RootSpike.SetHumanPoseInputLeftUpperLegInOutMuscle),
+                F(RootSpike.SetHumanPoseInputRightUpperLegInOutMuscle),
+                F(RootSpike.SetHumanPoseInputLeftUpperLegTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseInputRightUpperLegTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseInputLeftLowerLegTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseInputRightLowerLegTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseInputLeftFootTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseInputRightFootTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseInputLeftToesUpDownMuscle),
+                F(RootSpike.SetHumanPoseInputRightToesUpDownMuscle),
+                F(RootSpike.SetHumanPoseOutputRightUpperLegInOutMuscle),
+                F(RootSpike.SetHumanPoseRightUpperLegInOutDelta),
+                F(RootSpike.SetHumanPoseOutputRightUpperLegTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseRightUpperLegTwistInOutDelta),
+                F(RootSpike.SetHumanPoseOutputRightLowerLegTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseRightLowerLegTwistInOutDelta),
+                F(RootSpike.SetHumanPoseOutputRightFootTwistInOutMuscle),
+                F(RootSpike.SetHumanPoseRightFootTwistInOutDelta),
+                F(RootSpike.SetHumanPoseOutputRightToesUpDownMuscle),
+                F(RootSpike.SetHumanPoseRightToesUpDownDelta));
+        }
+
+        private static float FiniteXzDelta(float beforeX, float beforeZ, float afterX, float afterZ, string axis)
+        {
+            if (!IsFinite(beforeX) || !IsFinite(beforeZ) || !IsFinite(afterX) || !IsFinite(afterZ))
+            {
+                return float.NaN;
+            }
+
+            return axis == "z" ? afterZ - beforeZ : afterX - beforeX;
+        }
+
+        private static float FiniteDelta(float before, float after)
+        {
+            return IsFinite(before) && IsFinite(after) ? after - before : float.NaN;
+        }
+
+        private static float FiniteXzDeltaMagnitude(float beforeX, float beforeZ, float afterX, float afterZ)
+        {
+            float deltaX = FiniteXzDelta(beforeX, beforeZ, afterX, afterZ, axis: "x");
+            float deltaZ = FiniteXzDelta(beforeX, beforeZ, afterX, afterZ, axis: "z");
+            return IsFinite(deltaX) && IsFinite(deltaZ)
+                ? Mathf.Sqrt(deltaX * deltaX + deltaZ * deltaZ)
+                : float.NaN;
+        }
+
+        private static float FiniteXzResponseRatio(
+            float beforeX,
+            float beforeZ,
+            float afterX,
+            float afterZ,
+            string endpointAxis,
+            float bodyPositionDelta)
+        {
+            float endpointDelta = FiniteXzDelta(beforeX, beforeZ, afterX, afterZ, endpointAxis);
+            if (!IsFinite(endpointDelta) ||
+                !IsFinite(bodyPositionDelta) ||
+                Mathf.Abs(bodyPositionDelta) <= 0.000001f)
+            {
+                return float.NaN;
+            }
+
+            return endpointDelta / bodyPositionDelta;
         }
 
         private static string F(float value)
