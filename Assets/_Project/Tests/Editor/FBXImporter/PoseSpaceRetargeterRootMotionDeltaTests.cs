@@ -59,6 +59,27 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ZeroMovementScale_When_CalculatingRootMotionDelta_Then_SuppressesGhostEditorAndBodyRootSources()
+        {
+            Vector3 delta = CalculateRetargetRootDelta(
+                ghostDelta: new Vector3(1.5f, 0f, -2.5f),
+                scaleRatio: 2f,
+                editorRootTranslationDelta: new Vector3(0.25f, 0f, 0.5f),
+                bodyRootDelta: new Vector3(-0.2f, 0f, 0.35f),
+                movementScaleMultiplier: 0f,
+                clampRootDeltaSpikes: true,
+                maxRootDeltaPerFrame: 0.006f,
+                out float deltaMagnitude,
+                out bool skippedByNonFinite,
+                out bool skippedBySpike);
+
+            Assert.That(delta, Is.EqualTo(Vector3.zero));
+            Assert.That(deltaMagnitude, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(skippedByNonFinite, Is.False);
+            Assert.That(skippedBySpike, Is.False);
+        }
+
+        [Test]
         public void Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN()
         {
             Vector3 delta = CalculateRetargetRootDelta(

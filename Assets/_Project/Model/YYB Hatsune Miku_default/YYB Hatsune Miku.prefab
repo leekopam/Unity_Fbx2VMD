@@ -20098,6 +20098,14 @@ MonoBehaviour:
   ClampMmdIkExportDeltaSpikes: 1
   MaxMmdFootIkExportDeltaPerFrame: 0.11
   MaxMmdToeIkExportDeltaPerFrame: 0.11
+  UseMmdIkExportDeltaRecoveryLimit: 1
+  MmdIkExportDeltaRecoveryTriggerPerFrame: 0.26
+  MmdIkExportDeltaRecoveryLimitPerFrame: 0.1209
+  MmdIkExportDeltaRecoveryDebtThresholdPerFrame: 0.08
+  MmdIkExportDeltaRecoveryHoldFrames: 3
+  UseMmdIkDynamicToggleOnLargeExportSteps: 1
+  MmdIkDynamicToggleFootStepThreshold: 0.12
+  MmdIkDynamicToggleToeStepThreshold: 0.12
   LeftFootIKOffset: {x: 0, y: 0, z: 0}
   RightFootIKOffset: {x: 0, y: 0, z: 0}
   LeftToeIKOffset: {x: 0, y: 0, z: 0}

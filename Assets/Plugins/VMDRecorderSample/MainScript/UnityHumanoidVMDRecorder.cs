@@ -255,6 +255,18 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     [Tooltip("VMD-space accumulated lag from source IK target that also activates the conditional recovery limit. 0 disables lag-debt recovery.")]
     [Range(0f, 2f)] public float MmdIkExportDeltaRecoveryDebtThresholdPerFrame = 0f;
 
+    [Tooltip("Total frames in the conditional IK recovery hold window, including the triggering raw source foot step. 0 disables hold-window recovery.")]
+    [Range(0, 30)] public int MmdIkExportDeltaRecoveryHoldFrames = 0;
+
+    [Tooltip("Writes per-frame MMD IK ON/OFF keys so large swing-phase foot IK target steps do not pull the model through the target.")]
+    public bool UseMmdIkDynamicToggleOnLargeExportSteps = false;
+
+    [Tooltip("VMD-space foot IK step that temporarily disables the matching foot/toe IK pair when dynamic IK toggles are enabled.")]
+    [Range(0.05f, 2f)] public float MmdIkDynamicToggleFootStepThreshold = 0.12f;
+
+    [Tooltip("VMD-space toe IK step that temporarily disables the matching foot/toe IK pair when dynamic IK toggles are enabled.")]
+    [Range(0.05f, 2f)] public float MmdIkDynamicToggleToeStepThreshold = 0.12f;
+
     public int LastMmdIkExportDeltaClampCount { get; private set; }
     public float LastMmdIkExportMaxDeltaBefore { get; private set; }
     public float LastMmdIkExportMaxDeltaAfter { get; private set; }
@@ -395,7 +407,10 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
             Vector3 sourceRelativePosition,
             Vector3 exportedUnityPosition,
             Vector3 directFootWorldPosition = default(Vector3),
-            Vector3 directFootRootPosition = default(Vector3))
+            Vector3 directFootRootPosition = default(Vector3),
+            Vector3 recorderRootPosition = default(Vector3),
+            Vector3 sourceRecorderRootPosition = default(Vector3),
+            Vector3 directFootRecorderRootPosition = default(Vector3))
         {
             RecorderFrameNumber = recorderFrameNumber;
             UnityFrameNumber = unityFrameNumber;
@@ -407,6 +422,9 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
             ExportedUnityPosition = exportedUnityPosition;
             DirectFootWorldPosition = directFootWorldPosition;
             DirectFootRootPosition = directFootRootPosition;
+            RecorderRootPosition = recorderRootPosition;
+            SourceRecorderRootPosition = sourceRecorderRootPosition;
+            DirectFootRecorderRootPosition = directFootRecorderRootPosition;
         }
 
         public int RecorderFrameNumber { get; }
@@ -419,6 +437,9 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
         public Vector3 ExportedUnityPosition { get; }
         public Vector3 DirectFootWorldPosition { get; }
         public Vector3 DirectFootRootPosition { get; }
+        public Vector3 RecorderRootPosition { get; }
+        public Vector3 SourceRecorderRootPosition { get; }
+        public Vector3 DirectFootRecorderRootPosition { get; }
     }
 
     internal void RecordExportRotationDiagnostic(int frameNumber, VmdBoneRotationDiagnostic diagnostic)
@@ -453,7 +474,10 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
         Vector3 sourceRelativePosition,
         Vector3 exportedUnityPosition,
         Vector3 directFootWorldPosition = default(Vector3),
-        Vector3 directFootRootPosition = default(Vector3))
+        Vector3 directFootRootPosition = default(Vector3),
+        Vector3 recorderRootPosition = default(Vector3),
+        Vector3 sourceRecorderRootPosition = default(Vector3),
+        Vector3 directFootRecorderRootPosition = default(Vector3))
     {
         exportIkSourceDiagnosticSamples.Add(new ExportIkSourceDiagnosticSample(
             recorderFrameNumber,
@@ -465,7 +489,10 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
             sourceRelativePosition,
             exportedUnityPosition,
             directFootWorldPosition,
-            directFootRootPosition));
+            directFootRootPosition,
+            recorderRootPosition,
+            sourceRecorderRootPosition,
+            directFootRecorderRootPosition));
     }
 
     internal IReadOnlyCollection<ExportIkSourceDiagnosticSample> GetExportIkSourceDiagnosticSamples()
@@ -507,7 +534,10 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
                 sample.SourceRelativePosition,
                 exportedUnityPosition,
                 sample.DirectFootWorldPosition,
-                sample.DirectFootRootPosition));
+                sample.DirectFootRootPosition,
+                sample.RecorderRootPosition,
+                sample.SourceRecorderRootPosition,
+                sample.DirectFootRecorderRootPosition));
         }
 
         return finalSamples;
@@ -590,7 +620,7 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
     internal static string BuildExportIkSourceDiagnosticsCsv(IEnumerable<ExportIkSourceDiagnosticSample> samples)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("recorderFrame,unityFrame,sampleTime,boneName,boneIndex,rootReferencePosition,sourceWorldPosition,sourceRelativePosition,exportedUnityPosition,directFootWorldPosition,directFootRootPosition");
+        builder.AppendLine("recorderFrame,unityFrame,sampleTime,boneName,boneIndex,rootReferencePosition,sourceWorldPosition,sourceRelativePosition,exportedUnityPosition,directFootWorldPosition,directFootRootPosition,recorderRootPosition,sourceRecorderRootPosition,directFootRecorderRootPosition,sourceRelativeVsSourceRecorderRootDelta,sourceRelativeVsDirectFootRecorderRootDelta,exportedUnityVsSourceRelativeDelta,exportedUnityVsSourceRecorderRootDelta");
 
         if (samples == null)
         {
@@ -620,6 +650,20 @@ public partial class UnityHumanoidVMDRecorder : MonoBehaviour
             builder.Append(FormatDiagnosticVector3(sample.DirectFootWorldPosition));
             builder.Append(',');
             builder.Append(FormatDiagnosticVector3(sample.DirectFootRootPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.RecorderRootPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.SourceRecorderRootPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.DirectFootRecorderRootPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.SourceRelativePosition - sample.SourceRecorderRootPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.SourceRelativePosition - sample.DirectFootRecorderRootPosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.ExportedUnityPosition - sample.SourceRelativePosition));
+            builder.Append(',');
+            builder.Append(FormatDiagnosticVector3(sample.ExportedUnityPosition - sample.SourceRecorderRootPosition));
             builder.AppendLine();
         }
 

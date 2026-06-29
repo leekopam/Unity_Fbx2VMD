@@ -795,6 +795,175 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_MmdIkExportRecoveryHold_When_RawStepTriggers_Then_KeepsRecoveryLimitForTriggerInclusiveHoldWindow()
+        {
+            var positions = new List<Vector3>
+            {
+                Vector3.zero,
+                new Vector3(0.05f, 0f, 0f),
+                new Vector3(0.50f, 0f, 0f),
+                new Vector3(0.61f, 0f, 0f)
+            };
+
+            MethodInfo method = typeof(UnityHumanoidVMDRecorder).GetMethod(
+                "ClampMmdIkExportDeltaSpikePositions",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                new[]
+                {
+                    typeof(List<Vector3>),
+                    typeof(int),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(int),
+                    typeof(float).MakeByRefType(),
+                    typeof(float).MakeByRefType()
+                },
+                null);
+
+            Assert.That(method, Is.Not.Null, "IK export clamp needs a short contact/recovery hold window so recovery does not collapse immediately after a raw foot step.");
+
+            object[] arguments =
+            {
+                positions,
+                positions.Count,
+                0.11f,
+                0.12f,
+                0.30f,
+                0f,
+                2,
+                0f,
+                0f
+            };
+
+            int clamped = (int)method.Invoke(null, arguments);
+            float maxBefore = (float)arguments[7];
+            float maxAfter = (float)arguments[8];
+
+            Assert.That(clamped, Is.EqualTo(2));
+            Assert.That(maxBefore, Is.EqualTo(0.45f).Within(0.0001f));
+            Assert.That(maxAfter, Is.LessThan(0.12f));
+            Assert.That(maxAfter, Is.GreaterThan(0.11f));
+            Assert.That(positions[1].x, Is.EqualTo(0.05f).Within(0.0001f));
+            Assert.That(positions[2].x, Is.EqualTo(0.169f).Within(0.0001f));
+            Assert.That(positions[3].x, Is.EqualTo(0.288f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_LargeFootIkExportStep_When_BuildingDynamicIkFrames_Then_DisablesThatSideUntilStable()
+        {
+            var positions = new Dictionary<BoneNames, List<Vector3>>
+            {
+                [(BoneNames)2] = new List<Vector3>
+                {
+                    Vector3.zero,
+                    new Vector3(0.30f, 0f, 0f),
+                    new Vector3(0.31f, 0f, 0f)
+                },
+                [(BoneNames)3] = new List<Vector3>
+                {
+                    Vector3.zero,
+                    new Vector3(0.01f, 0f, 0f),
+                    new Vector3(0.02f, 0f, 0f)
+                },
+                [(BoneNames)4] = new List<Vector3>
+                {
+                    Vector3.zero,
+                    new Vector3(0.01f, 0f, 0f),
+                    new Vector3(0.02f, 0f, 0f)
+                },
+                [(BoneNames)5] = new List<Vector3>
+                {
+                    Vector3.zero,
+                    new Vector3(0.01f, 0f, 0f),
+                    new Vector3(0.02f, 0f, 0f)
+                }
+            };
+
+            IReadOnlyList<VmdIkFrame> ikFrames =
+                UnityHumanoidVMDRecorder.BuildMmdIkToggleFramesFromExportSteps(
+                    positions,
+                    safeFrameCount: 3,
+                    footStepThresholdVmd: 0.12f,
+                    toeStepThresholdVmd: 0.12f);
+
+            Assert.That(ikFrames.Count, Is.EqualTo(3));
+            Assert.That(ikFrames[0].FrameIndex, Is.EqualTo(0));
+            Assert.That(ikFrames[0].LeftFootEnabled, Is.True);
+            Assert.That(ikFrames[1].FrameIndex, Is.EqualTo(1));
+            Assert.That(ikFrames[1].LeftFootEnabled, Is.False);
+            Assert.That(ikFrames[1].LeftToeEnabled, Is.False);
+            Assert.That(ikFrames[1].RightFootEnabled, Is.True);
+            Assert.That(ikFrames[1].RightToeEnabled, Is.True);
+            Assert.That(ikFrames[2].FrameIndex, Is.EqualTo(2));
+            Assert.That(ikFrames[2].LeftFootEnabled, Is.True);
+            Assert.That(ikFrames[2].LeftToeEnabled, Is.True);
+        }
+
+        [Test]
+        public void Given_DynamicIkFrames_When_WritingVmd_Then_IKFooterPreservesPerFrameStates()
+        {
+            string filePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".vmd");
+            try
+            {
+                var activeBones = new List<BoneNames> { (BoneNames)2, (BoneNames)3, (BoneNames)4, (BoneNames)5 };
+                var positions = new Dictionary<BoneNames, List<Vector3>>();
+                var rotations = new Dictionary<BoneNames, List<Quaternion>>();
+                foreach (BoneNames bone in activeBones)
+                {
+                    positions[bone] = new List<Vector3> { Vector3.zero, Vector3.zero, Vector3.zero };
+                    rotations[bone] = new List<Quaternion> { Quaternion.identity, Quaternion.identity, Quaternion.identity };
+                }
+
+                var ikFrames = new List<VmdIkFrame>
+                {
+                    VmdIkFrame.Enabled(0),
+                    new VmdIkFrame(1, leftFootEnabled: false, leftToeEnabled: false, rightFootEnabled: true, rightToeEnabled: true),
+                    VmdIkFrame.Enabled(2)
+                };
+
+                VmdFileWriter.WriteVmdFile(
+                    "fbxToVMD",
+                    filePath,
+                    activeBones,
+                    frameCount: 3,
+                    keyReductionLevel: 1,
+                    positions,
+                    rotations,
+                    morphSnapshot: null,
+                    useCenterAsParentOfAll: false,
+                    routeCenterBoneToGroove: false,
+                    centerNameString: "センター",
+                    grooveNameString: "グルーブ",
+                    ikFrames);
+
+                VmdMotionData motion = VmdMotionReader.Read(filePath);
+
+                Assert.That(motion.IkFrameCount, Is.EqualTo(3));
+                Assert.That(motion.IkFrames.Count, Is.EqualTo(3));
+                Assert.That(motion.IkFrames[1].FrameIndex, Is.EqualTo(1));
+                Assert.That(VmdIkFrame.LeftFootIkName, Is.EqualTo("\u5de6\u8db3\uff29\uff2b"));
+                Assert.That(VmdIkFrame.LeftToeIkName, Is.EqualTo("\u5de6\u3064\u307e\u5148\uff29\uff2b"));
+                Assert.That(VmdIkFrame.RightFootIkName, Is.EqualTo("\u53f3\u8db3\uff29\uff2b"));
+                Assert.That(VmdIkFrame.RightToeIkName, Is.EqualTo("\u53f3\u3064\u307e\u5148\uff29\uff2b"));
+                Assert.That(motion.IkFrames[1].GetEnabled(VmdIkFrame.LeftFootIkName), Is.False);
+                Assert.That(motion.IkFrames[1].GetEnabled(VmdIkFrame.LeftToeIkName), Is.False);
+                Assert.That(motion.IkFrames[1].GetEnabled(VmdIkFrame.RightFootIkName), Is.True);
+                Assert.That(motion.IkFrames[1].GetEnabled(VmdIkFrame.RightToeIkName), Is.True);
+                Assert.That(motion.IkFrames[2].GetEnabled(VmdIkFrame.LeftFootIkName), Is.True);
+            }
+            finally
+            {
+                if (File.Exists(filePath))
+                {
+                    File.Delete(filePath);
+                }
+            }
+        }
+
+        [Test]
         public void Given_MmdCenterExportDeltaSpike_When_ClampingExportPositions_Then_LimitsEveryFrameStep()
         {
             var positions = new List<Vector3>
@@ -1307,6 +1476,76 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_ExportIkSourceDiagnostics_When_BuildingCsv_Then_ReportsRecorderRootComparison()
+        {
+            var samples = new[]
+            {
+                new UnityHumanoidVMDRecorder.ExportIkSourceDiagnosticSample(
+                    recorderFrameNumber: 2,
+                    unityFrameNumber: 120,
+                    sampleTime: 0.5f,
+                    boneName: (BoneNames)2,
+                    rootReferencePosition: new Vector3(10f, 0f, 20f),
+                    sourceWorldPosition: new Vector3(11f, 1f, 23f),
+                    sourceRelativePosition: new Vector3(1f, 1f, 3f),
+                    exportedUnityPosition: new Vector3(0.25f, 0.1f, -0.35f),
+                    directFootWorldPosition: new Vector3(11.5f, 1.25f, 23.5f),
+                    directFootRootPosition: new Vector3(1.5f, 1.25f, 3.5f),
+                    recorderRootPosition: new Vector3(9f, 0f, 18f),
+                    sourceRecorderRootPosition: new Vector3(2f, 1f, 5f),
+                    directFootRecorderRootPosition: new Vector3(2.5f, 1.25f, 5.5f))
+            };
+
+            string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(samples);
+            string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+            Assert.That(lines[0], Does.Contain("recorderRootPosition"));
+            Assert.That(lines[0], Does.Contain("sourceRecorderRootPosition"));
+            Assert.That(lines[0], Does.Contain("directFootRecorderRootPosition"));
+
+            string[] columns = lines[1].Split(',');
+            Assert.That(columns[11], Is.EqualTo("9|0|18"));
+            Assert.That(columns[12], Is.EqualTo("2|1|5"));
+            Assert.That(columns[13], Is.EqualTo("2.5|1.25|5.5"));
+        }
+
+        [Test]
+        public void Given_ExportIkSourceDiagnostics_When_BuildingCsv_Then_ReportsDerivedExportStageOffsets()
+        {
+            var samples = new[]
+            {
+                new UnityHumanoidVMDRecorder.ExportIkSourceDiagnosticSample(
+                    recorderFrameNumber: 2,
+                    unityFrameNumber: 120,
+                    sampleTime: 0.5f,
+                    boneName: (BoneNames)2,
+                    rootReferencePosition: new Vector3(10f, 0f, 20f),
+                    sourceWorldPosition: new Vector3(11f, 1f, 23f),
+                    sourceRelativePosition: new Vector3(1f, 1f, 3f),
+                    exportedUnityPosition: new Vector3(0.25f, 0.1f, -0.35f),
+                    directFootWorldPosition: new Vector3(11.5f, 1.25f, 23.5f),
+                    directFootRootPosition: new Vector3(1.5f, 1.25f, 3.5f),
+                    recorderRootPosition: new Vector3(9f, 0f, 18f),
+                    sourceRecorderRootPosition: new Vector3(2f, 1f, 5f),
+                    directFootRecorderRootPosition: new Vector3(2.5f, 1.25f, 5.5f))
+            };
+
+            string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(samples);
+            string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+            Assert.That(lines[0], Does.Contain("sourceRelativeVsSourceRecorderRootDelta"));
+            Assert.That(lines[0], Does.Contain("sourceRelativeVsDirectFootRecorderRootDelta"));
+            Assert.That(lines[0], Does.Contain("exportedUnityVsSourceRelativeDelta"));
+            Assert.That(lines[0], Does.Contain("exportedUnityVsSourceRecorderRootDelta"));
+
+            string[] columns = lines[1].Split(',');
+            Assert.That(columns[14], Is.EqualTo("-1|0|-2"));
+            Assert.That(columns[15], Is.EqualTo("-1.5|-0.25|-2.5"));
+            Assert.That(columns[16], Is.EqualTo("-0.75|-0.9|-3.35"));
+            Assert.That(columns[17], Is.EqualTo("-1.75|-0.9|-5.35"));
+        }
+
+        [Test]
         public void Given_MovingModelRootNode_When_ResolvingFootIkRootReference_Then_UsesMovingRoot()
         {
             var recorderObject = new GameObject("moving-root-reference-recorder");
@@ -1333,6 +1572,25 @@ namespace Tests.Editor.VMDRecorderSample
                 UnityEngine.Object.DestroyImmediate(modelRootObject);
                 UnityEngine.Object.DestroyImmediate(recorderObject);
             }
+        }
+
+        [Test]
+        public void Given_IgnoreInitialPositionFootIk_When_BuildingRootRelativeSource_Then_InitialIkOffsetIsNotSubtracted()
+        {
+            Vector3 sourceWorldPosition = new Vector3(1.2f, 1.1f, 2.4f);
+            Vector3 rootReferencePosition = new Vector3(1f, 1f, 2f);
+            Vector3 initialFootIkOffset = new Vector3(0.05f, -0.1f, 0.03f);
+
+            var rootRelativeSource = (Vector3)InvokeStaticPrivate(
+                typeof(UnityHumanoidVMDRecorder),
+                "CalculateIgnoreInitialPositionFootIkTargetVector",
+                sourceWorldPosition,
+                rootReferencePosition,
+                initialFootIkOffset);
+
+            Assert.That(rootRelativeSource.x, Is.EqualTo(0.2f).Within(0.0001f));
+            Assert.That(rootRelativeSource.y, Is.EqualTo(0.1f).Within(0.0001f));
+            Assert.That(rootRelativeSource.z, Is.EqualTo(0.4f).Within(0.0001f));
         }
 
         [Test]
@@ -1406,6 +1664,13 @@ namespace Tests.Editor.VMDRecorderSample
             MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null, methodName);
             return method.Invoke(target, null);
+        }
+
+        private static object InvokeStaticPrivate(Type targetType, string methodName, params object[] args)
+        {
+            MethodInfo method = targetType.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, methodName);
+            return method.Invoke(null, args);
         }
 
         private static void WriteOneFrameVmd(string filePath, List<BoneNames> activeBones)

@@ -39,6 +39,35 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
+        private static readonly Type[] FootLocalRotationReferenceParameterTypes =
+        {
+            typeof(Quaternion),
+            typeof(Quaternion),
+            typeof(float),
+            typeof(Quaternion).MakeByRefType()
+        };
+
+        private static readonly Type[] FootIkPositionReferenceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(float),
+            typeof(float),
+            typeof(Vector3).MakeByRefType()
+        };
+
+        private static readonly Type[] LowerBodySegmentDirectionReferenceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(Quaternion),
+            typeof(float),
+            typeof(float),
+            typeof(Quaternion).MakeByRefType()
+        };
+
         [Test]
         public void Given_RestReference_When_CalculatingHipsLocalPosition_Then_AppliesReferenceDeltaWithWeight()
         {
@@ -137,6 +166,94 @@ namespace Tests.Editor.FBXImporter
             Assert.That(IsRecordingStartHipsBaselineFlip(float.NaN, 0.800f, 0.02f), Is.False);
         }
 
+        [Test]
+        public void Given_FootLocalRotationReference_When_CalculatingBlend_Then_SlerpsTowardReference()
+        {
+            Quaternion current = Quaternion.identity;
+            Quaternion reference = Quaternion.Euler(0f, 90f, 0f);
+
+            bool calculated = TryCalculateEditorFootLocalRotationReference(
+                reference,
+                current,
+                0.5f,
+                out Quaternion nextRotation);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(Quaternion.Angle(current, nextRotation), Is.EqualTo(45f).Within(0.05f));
+            Assert.That(Quaternion.Angle(nextRotation, reference), Is.EqualTo(45f).Within(0.05f));
+        }
+
+        [Test]
+        public void Given_ManualFootReference_When_CalculatingFootIkTarget_Then_UsesReferenceHipsRelativePosition()
+        {
+            Vector3 referenceHips = new Vector3(1f, 1f, 1f);
+            Vector3 referenceFoot = new Vector3(1.2f, 0.15f, 1.4f);
+            Vector3 targetHips = new Vector3(10f, 2f, -3f);
+            Vector3 currentFoot = new Vector3(10.1f, 1.2f, -2.8f);
+
+            bool calculated = TryCalculateEditorFootIkPositionReference(
+                referenceFoot,
+                referenceHips,
+                currentFoot,
+                targetHips,
+                weight: 1f,
+                maxOffset: 0f,
+                out Vector3 nextPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextPosition.x, Is.EqualTo(10.2f).Within(0.0001f));
+            Assert.That(nextPosition.y, Is.EqualTo(1.15f).Within(0.0001f));
+            Assert.That(nextPosition.z, Is.EqualTo(-2.6f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ManualFootReferenceMaxOffset_When_CalculatingFootIkTarget_Then_ClampsBeforeWeight()
+        {
+            bool calculated = TryCalculateEditorFootIkPositionReference(
+                referenceFootPosition: new Vector3(2f, 0f, 0f),
+                referenceHipsPosition: Vector3.zero,
+                currentFootPosition: Vector3.zero,
+                targetHipsPosition: Vector3.zero,
+                weight: 0.5f,
+                maxOffset: 0.2f,
+                out Vector3 nextPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextPosition.x, Is.EqualTo(0.1f).Within(0.0001f));
+            Assert.That(nextPosition.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(nextPosition.z, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_LowerBodySegmentDirectionReference_When_CalculatingCorrection_Then_RotatesTowardReferenceDirection()
+        {
+            bool calculated = TryCalculateEditorLowerBodySegmentDirectionReference(
+                referenceSegmentDirection: Vector3.forward,
+                currentSegmentDirection: Vector3.right,
+                currentParentWorldRotation: Quaternion.identity,
+                weight: 0.5f,
+                maxAngleDegrees: 0f,
+                out Quaternion nextRotation);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(Quaternion.Angle(Quaternion.identity, nextRotation), Is.EqualTo(45f).Within(0.05f));
+        }
+
+        [Test]
+        public void Given_LowerBodySegmentDirectionMaxAngle_When_CalculatingCorrection_Then_ClampsBeforeWeight()
+        {
+            bool calculated = TryCalculateEditorLowerBodySegmentDirectionReference(
+                referenceSegmentDirection: Vector3.forward,
+                currentSegmentDirection: Vector3.right,
+                currentParentWorldRotation: Quaternion.identity,
+                weight: 1f,
+                maxAngleDegrees: 10f,
+                out Quaternion nextRotation);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(Quaternion.Angle(Quaternion.identity, nextRotation), Is.EqualTo(10f).Within(0.05f));
+        }
+
         private static bool TryCalculateEditorHipsLocalPositionReference(
             Vector3 referenceCurrentLocalPosition,
             Vector3 referenceRestLocalPosition,
@@ -223,6 +340,100 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure guard for recording-start Hips localPosition baseline flips.");
             return (bool)method.Invoke(null, new object[] { beforeLocalY, afterLocalY, warningThreshold });
+        }
+
+        private static bool TryCalculateEditorFootLocalRotationReference(
+            Quaternion referenceLocalRotation,
+            Quaternion currentLocalRotation,
+            float weight,
+            out Quaternion nextLocalRotation)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "TryCalculateEditorFootLocalRotationReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: FootLocalRotationReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure foot localRotation reference helper for isolated ankle/toe runtime candidates.");
+
+            object[] args =
+            {
+                referenceLocalRotation,
+                currentLocalRotation,
+                weight,
+                currentLocalRotation
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextLocalRotation = (Quaternion)args[3];
+            return calculated;
+        }
+
+        private static bool TryCalculateEditorFootIkPositionReference(
+            Vector3 referenceFootPosition,
+            Vector3 referenceHipsPosition,
+            Vector3 currentFootPosition,
+            Vector3 targetHipsPosition,
+            float weight,
+            float maxOffset,
+            out Vector3 nextPosition)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "TryCalculateEditorFootIkPositionReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: FootIkPositionReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure foot IK target helper for the BipedIK runtime candidate.");
+
+            object[] args =
+            {
+                referenceFootPosition,
+                referenceHipsPosition,
+                currentFootPosition,
+                targetHipsPosition,
+                weight,
+                maxOffset,
+                currentFootPosition
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextPosition = (Vector3)args[6];
+            return calculated;
+        }
+
+        private static bool TryCalculateEditorLowerBodySegmentDirectionReference(
+            Vector3 referenceSegmentDirection,
+            Vector3 currentSegmentDirection,
+            Quaternion currentParentWorldRotation,
+            float weight,
+            float maxAngleDegrees,
+            out Quaternion nextRotation)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "TryCalculateEditorLowerBodySegmentDirectionReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: LowerBodySegmentDirectionReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure segment-direction helper for morphology-aware lower-body runtime candidates.");
+
+            object[] args =
+            {
+                referenceSegmentDirection,
+                currentSegmentDirection,
+                currentParentWorldRotation,
+                weight,
+                maxAngleDegrees,
+                currentParentWorldRotation
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextRotation = (Quaternion)args[5];
+            return calculated;
         }
 
     }

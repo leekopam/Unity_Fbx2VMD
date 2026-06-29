@@ -27,8 +27,8 @@ namespace Tests.Editor.FBXImporter
                 tests.FbxImportCaptureScene_IsRegisteredAndConfiguredForCaptureOnly);
             RunTest(results, nameof(tests.MainRecordingScene_HasManualMmdRecordingButtonWiredToTarget),
                 tests.MainRecordingScene_HasManualMmdRecordingButtonWiredToTarget);
-            RunTest(results, nameof(tests.MainRecordingScene_UsesManualFullBodyPoseReferenceForLowerBodyArcGuard),
-                tests.MainRecordingScene_UsesManualFullBodyPoseReferenceForLowerBodyArcGuard);
+            RunTest(results, nameof(tests.MainRecordingScene_DoesNotReplaceImportedFbxPoseWithManualFullBodyReference),
+                tests.MainRecordingScene_DoesNotReplaceImportedFbxPoseWithManualFullBodyReference);
             RunTest(results, nameof(tests.ConversionAndCaptureScenes_DoNotExposeManualMmdRecordingButton),
                 tests.ConversionAndCaptureScenes_DoNotExposeManualMmdRecordingButton);
 

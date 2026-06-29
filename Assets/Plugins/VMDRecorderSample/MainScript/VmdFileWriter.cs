@@ -101,7 +101,8 @@ internal static class VmdFileWriter
         bool useCenterAsParentOfAll,
         bool routeCenterBoneToGroove,
         string centerNameString,
-        string grooveNameString)
+        string grooveNameString,
+        IReadOnlyList<VmdIkFrame> ikFrames = null)
     {
         const string shiftJis = "shift_jis";
         const int intByteLength = 4;
@@ -170,7 +171,7 @@ internal static class VmdFileWriter
         binaryWriter.Write(BitConverter.GetBytes(0), 0, intByteLength);
         binaryWriter.Write(BitConverter.GetBytes(0), 0, intByteLength);
 
-        WriteIkFooter(binaryWriter, shiftJis, intByteLength);
+        WriteIkFooter(binaryWriter, shiftJis, intByteLength, ikFrames);
     }
 
     internal static bool ShouldWriteBoneFrame(BoneNames boneName, int frameIndex, int frameCount, int keyReductionLevel)
@@ -263,31 +264,37 @@ internal static class VmdFileWriter
         });
     }
 
-    private static void WriteIkFooter(BinaryWriter binaryWriter, string shiftJis, int intByteLength)
+    private static void WriteIkFooter(
+        BinaryWriter binaryWriter,
+        string shiftJis,
+        int intByteLength,
+        IReadOnlyList<VmdIkFrame> ikFrames)
     {
-        byte[] ikCount = BitConverter.GetBytes(1);
-        byte[] ikFrameNumber = BitConverter.GetBytes(0);
-        byte modelDisplay = Convert.ToByte(1);
-        byte[] ikNumber = BitConverter.GetBytes(4);
-        const int ikNameLength = 20;
-        byte[] leftIKName = GetShiftJisBytes("\u5de6\u8db3\uff29\uff2b", shiftJis, ikNameLength);
-        byte[] rightIKName = GetShiftJisBytes("\u53f3\u8db3\uff29\uff2b", shiftJis, ikNameLength);
-        byte[] leftToeIKName = GetShiftJisBytes("\u5de6\u3064\u307e\u5148\uff29\uff2b", shiftJis, ikNameLength);
-        byte[] rightToeIKName = GetShiftJisBytes("\u53f3\u3064\u307e\u5148\uff29\uff2b", shiftJis, ikNameLength);
-        byte ikOn = Convert.ToByte(1);
+        IReadOnlyList<VmdIkFrame> frames = ikFrames != null && ikFrames.Count > 0
+            ? ikFrames
+            : new List<VmdIkFrame> { VmdIkFrame.Enabled(0) };
 
-        binaryWriter.Write(ikCount, 0, intByteLength);
-        binaryWriter.Write(ikFrameNumber, 0, intByteLength);
-        binaryWriter.Write(modelDisplay);
-        binaryWriter.Write(ikNumber, 0, intByteLength);
-        WritePaddedBytes(binaryWriter, leftIKName, ikNameLength);
-        binaryWriter.Write(ikOn);
-        WritePaddedBytes(binaryWriter, leftToeIKName, ikNameLength);
-        binaryWriter.Write(ikOn);
-        WritePaddedBytes(binaryWriter, rightIKName, ikNameLength);
-        binaryWriter.Write(ikOn);
-        WritePaddedBytes(binaryWriter, rightToeIKName, ikNameLength);
-        binaryWriter.Write(ikOn);
+        const int ikNameLength = 20;
+        byte[] leftIKName = GetShiftJisBytes(VmdIkFrame.LeftFootIkName, shiftJis, ikNameLength);
+        byte[] rightIKName = GetShiftJisBytes(VmdIkFrame.RightFootIkName, shiftJis, ikNameLength);
+        byte[] leftToeIKName = GetShiftJisBytes(VmdIkFrame.LeftToeIkName, shiftJis, ikNameLength);
+        byte[] rightToeIKName = GetShiftJisBytes(VmdIkFrame.RightToeIkName, shiftJis, ikNameLength);
+
+        binaryWriter.Write(BitConverter.GetBytes((uint)frames.Count), 0, intByteLength);
+        foreach (VmdIkFrame frame in frames.OrderBy(f => f.FrameIndex))
+        {
+            binaryWriter.Write(BitConverter.GetBytes(frame.FrameIndex), 0, intByteLength);
+            binaryWriter.Write(Convert.ToByte(1));
+            binaryWriter.Write(BitConverter.GetBytes(4), 0, intByteLength);
+            WritePaddedBytes(binaryWriter, leftIKName, ikNameLength);
+            binaryWriter.Write(Convert.ToByte(frame.LeftFootEnabled));
+            WritePaddedBytes(binaryWriter, leftToeIKName, ikNameLength);
+            binaryWriter.Write(Convert.ToByte(frame.LeftToeEnabled));
+            WritePaddedBytes(binaryWriter, rightIKName, ikNameLength);
+            binaryWriter.Write(Convert.ToByte(frame.RightFootEnabled));
+            WritePaddedBytes(binaryWriter, rightToeIKName, ikNameLength);
+            binaryWriter.Write(Convert.ToByte(frame.RightToeEnabled));
+        }
     }
 
     private static void WritePaddedBytes(BinaryWriter binaryWriter, byte[] bytes, int byteLength)

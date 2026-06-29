@@ -119,8 +119,10 @@ public partial class UnityHumanoidVMDRecorder
                     }
                     else if ((UseAbsoluteCoordinateSystem || transform.parent == null) && IgnoreInitialPosition)
                     {
-                        targetVector = BoneDictionary[boneName].position - GetCurrentRootPositionForIkReference();
-                        targetVector -= GetInitialFootIkOffset(boneName);
+                        targetVector = CalculateIgnoreInitialPositionFootIkTargetVector(
+                            BoneDictionary[boneName].position,
+                            GetCurrentRootPositionForIkReference(),
+                            GetInitialFootIkOffset(boneName));
                     }
                     else if ((UseAbsoluteCoordinateSystem || transform.parent == null) && transform.parent && !IgnoreInitialPosition)
                     {
@@ -170,6 +172,7 @@ public partial class UnityHumanoidVMDRecorder
                 {
                     Vector3 diagnosticRootReference = GetCurrentIkDiagnosticRootReference();
                     Vector3 directFootWorldPosition = GetCurrentDirectFootWorldPositionForIkBone(boneName, sourceWorldPosition);
+                    Vector3 recorderRootPosition = transform.position;
                     RecordExportIkSourceDiagnostic(
                         FrameNumber,
                         Time.frameCount,
@@ -180,7 +183,10 @@ public partial class UnityHumanoidVMDRecorder
                         targetVector,
                         ConvertVmdExportPositionToUnityMeters(exportedVmdPosition),
                         directFootWorldPosition,
-                        directFootWorldPosition - diagnosticRootReference);
+                        directFootWorldPosition - diagnosticRootReference,
+                        recorderRootPosition,
+                        sourceWorldPosition - recorderRootPosition,
+                        directFootWorldPosition - recorderRootPosition);
                 }
                 
                 //回転は全部足首／つま先に持たせる（今回はidentity）
@@ -464,6 +470,15 @@ public partial class UnityHumanoidVMDRecorder
 
         return Vector3.zero;
     }
+
+    private static Vector3 CalculateIgnoreInitialPositionFootIkTargetVector(
+        Vector3 sourceWorldPosition,
+        Vector3 rootReferencePosition,
+        Vector3 initialFootIkOffset)
+    {
+        return sourceWorldPosition - rootReferencePosition;
+    }
+
     private float GetCurrentParentOfAllExportY()
     {
         if (IgnoreInitialPosition && FreezeParentOfAllMotionWhenIgnoringInitialPosition)
