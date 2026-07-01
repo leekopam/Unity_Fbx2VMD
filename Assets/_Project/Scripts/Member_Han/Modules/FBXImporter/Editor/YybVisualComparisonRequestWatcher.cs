@@ -24,16 +24,19 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private const float DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = 1f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.25f;
+        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.125f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = 1f;
         private const float DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
         private const float DefaultManualAnimatorBodyRotationReferenceWeight = 1f;
         private const float DefaultManualAnimatorFullBodyPoseReferenceWeight = 1f;
+        private const float DefaultSetHumanPoseRightLegTwistOutputReferenceWeight = 1f;
+        private const float DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta = 0.02f;
         private const float DefaultManualAnimatorHandPalmFrameWeight = 1f;
         private const float DefaultRetargetPoseVisualSpikeCurrentWeight = 0.65f;
         private const float DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset = 0f;
+        private const float DefaultRetargetArmStretchMuscleLimit = 0.5f;
         private const float DefaultYybArmSwingLimitWeight = 0.85f;
         private const float DefaultYybArmSwingMaxDownDot = 0.68f;
         private const float DefaultYybArmSwingMinHandHorizontalRatio = 0.05f;
@@ -159,6 +162,16 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool manual_animator_full_body_pose_exclude_lower_body_muscles;
             public bool manual_animator_full_body_pose_lower_body_muscles_only;
             public bool manual_animator_full_body_pose_leg_twist_muscles_only;
+            public bool manual_animator_full_body_pose_right_arm_muscles_only;
+            public bool manual_animator_full_body_pose_left_arm_muscles_only;
+            public bool manual_animator_full_body_pose_right_sleeve_chain_muscles_only;
+            public float manual_animator_full_body_pose_frame_gate_start;
+            public float manual_animator_full_body_pose_frame_gate_end;
+            public bool set_human_pose_right_leg_twist_output_enabled;
+            public float set_human_pose_right_leg_twist_output_weight =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceWeight;
+            public float set_human_pose_right_leg_twist_output_max_delta =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta;
             public bool manual_animator_body_rotation_enabled;
             public bool manual_animator_body_rotation_disabled;
             public float manual_animator_body_rotation_weight =
@@ -173,6 +186,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 DefaultRetargetPoseVisualSpikeCurrentWeight;
             public float retarget_pose_visual_spike_forearm_stretch_clamp_max_offset =
                 DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset;
+            public bool retarget_arm_stretch_clamp_enabled;
+            public float retarget_arm_stretch_muscle_limit = DefaultRetargetArmStretchMuscleLimit;
             public bool yyb_arm_swing_limit_enabled;
             public float yyb_arm_swing_limit_weight = DefaultYybArmSwingLimitWeight;
             public float yyb_arm_swing_max_down_dot = DefaultYybArmSwingMaxDownDot;
@@ -305,6 +320,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float manual_animator_body_position_xz_frame_gate_blend_frames;
             public float manual_animator_body_position_xz_axis_x_scale = 1f;
             public float manual_animator_body_position_xz_axis_z_scale = 1f;
+            public bool yyb_right_sleeve_silhouette_offset_enabled;
+            public float yyb_right_sleeve_silhouette_local_offset_x;
+            public float yyb_right_sleeve_silhouette_local_offset_frame_gate_start;
+            public float yyb_right_sleeve_silhouette_local_offset_frame_gate_end;
             public bool retarget_body_position_xz_root_motion_enabled;
             public bool target_humanoid_bone_position_lock_disabled;
             public bool vmd_playback_probe_enabled;
@@ -503,6 +522,30 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                         request.manual_animator_full_body_pose_lower_body_muscles_only,
                     manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride:
                         request.manual_animator_full_body_pose_leg_twist_muscles_only,
+                    manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride:
+                        request.manual_animator_full_body_pose_right_arm_muscles_only,
+                    manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride:
+                        request.manual_animator_full_body_pose_left_arm_muscles_only,
+                    manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride:
+                        request.manual_animator_full_body_pose_right_sleeve_chain_muscles_only,
+                    manualAnimatorFullBodyPoseReferenceFrameGateStart: Mathf.Max(
+                        0f,
+                        NormalizeFiniteFloat(
+                            request.manual_animator_full_body_pose_frame_gate_start,
+                            0f)),
+                    manualAnimatorFullBodyPoseReferenceFrameGateEnd: Mathf.Max(
+                        0f,
+                        NormalizeFiniteFloat(
+                            request.manual_animator_full_body_pose_frame_gate_end,
+                            0f)),
+                    enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride:
+                        request.set_human_pose_right_leg_twist_output_enabled,
+                    setHumanPoseRightLegTwistOutputReferenceWeight: Mathf.Clamp01(NormalizeFiniteFloat(
+                        request.set_human_pose_right_leg_twist_output_weight,
+                        DefaultSetHumanPoseRightLegTwistOutputReferenceWeight)),
+                    setHumanPoseRightLegTwistOutputReferenceMaxDelta: Mathf.Max(0f, NormalizeFiniteFloat(
+                        request.set_human_pose_right_leg_twist_output_max_delta,
+                        DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta)),
                     enableManualAnimatorBodyRotationRuntimeOverride: request.manual_animator_body_rotation_enabled,
                     disableManualAnimatorBodyRotationRuntimeOverride: request.manual_animator_body_rotation_disabled,
                     manualAnimatorBodyRotationReferenceWeight: NormalizePositiveFloat(
@@ -531,6 +574,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                         NormalizePositiveFloat(
                             request.retarget_pose_visual_spike_forearm_stretch_clamp_max_offset,
                             DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset)),
+                    enableRetargetArmStretchClampRuntimeOverride:
+                        request.retarget_arm_stretch_clamp_enabled,
+                    retargetArmStretchMuscleLimit: Mathf.Clamp(
+                        NormalizePositiveFloat(
+                            request.retarget_arm_stretch_muscle_limit,
+                            DefaultRetargetArmStretchMuscleLimit),
+                        0f,
+                        DefaultRetargetArmStretchMuscleLimit),
                     enableYybArmSwingLimitRuntimeOverride: request.yyb_arm_swing_limit_enabled,
                     yybArmSwingLimitWeight: Mathf.Clamp01(NormalizePositiveFloat(
                         request.yyb_arm_swing_limit_weight,
@@ -808,6 +859,26 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                         NormalizeFiniteFloat(
                             request.manual_animator_body_position_xz_axis_z_scale,
                             1f)),
+                    enableYybRightSleeveSilhouetteOffsetRuntimeOverride:
+                        request.yyb_right_sleeve_silhouette_offset_enabled,
+                    yybRightSleeveSilhouetteLocalOffsetX: Mathf.Clamp(
+                        NormalizeFiniteFloat(
+                            request.yyb_right_sleeve_silhouette_local_offset_x,
+                            0f),
+                        -0.2f,
+                        0.2f),
+                    yybRightSleeveSilhouetteLocalOffsetFrameGateStart: Mathf.Clamp(
+                        NormalizeFiniteFloat(
+                            request.yyb_right_sleeve_silhouette_local_offset_frame_gate_start,
+                            0f),
+                        0f,
+                        6000f),
+                    yybRightSleeveSilhouetteLocalOffsetFrameGateEnd: Mathf.Clamp(
+                        NormalizeFiniteFloat(
+                            request.yyb_right_sleeve_silhouette_local_offset_frame_gate_end,
+                            0f),
+                        0f,
+                        6000f),
                     enableRetargetBodyPositionXzRootMotionRuntimeOverride:
                         request.retarget_body_position_xz_root_motion_enabled,
                     disableTargetHumanoidBonePositionLockRuntimeOverride:

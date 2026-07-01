@@ -48,13 +48,19 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private const float ReferenceAlignedVisualEvidenceMaxSilhouetteProfileL1Delta = 0.15f;
         private const float ReferenceAlignedVisualEvidenceMaxSilhouetteProfileBandDelta = 0.25f;
         private const float ReferenceAlignedVisualEvidenceMaxSilhouetteLandmarkEndpointDelta = 0.30f;
+        private const float ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta = 0.30f;
         private const float ReferenceAlignedVisualEvidenceEndpointPixelTolerance = 0.001f;
         private const int EvidenceSafeMaxFullPathLength = 240;
         private const float DefaultManualAnimatorBodyRotationReferenceWeight = 1f;
         private const float DefaultManualAnimatorFullBodyPoseReferenceWeight = 1f;
+        private const float DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart = 0f;
+        private const float DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd = 0f;
+        private const float DefaultSetHumanPoseRightLegTwistOutputReferenceWeight = 1f;
+        private const float DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta = 0.02f;
         private const float DefaultManualAnimatorHandPalmFrameWeight = 1f;
         private const float DefaultRetargetPoseVisualSpikeCurrentWeight = 0.65f;
         private const float DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset = 0f;
+        private const float DefaultRetargetArmStretchMuscleLimit = 0.5f;
         private const float DefaultManualAnimatorHipsLocalPositionReferenceWeight = 0.25f;
         private const float DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset = 0.04f;
         private const float DefaultManualAnimatorBodyPositionXzReferenceWeight = 0.45f;
@@ -64,6 +70,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private const float DefaultManualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = 0f;
         private const float DefaultManualAnimatorBodyPositionXzReferenceAxisXScale = 1f;
         private const float DefaultManualAnimatorBodyPositionXzReferenceAxisZScale = 1f;
+        private const float DefaultYybRightSleeveSilhouetteLocalOffsetX = 0f;
+        private const float DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart = 0f;
+        private const float DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd = 0f;
         private static readonly float[] ReferenceMp4ProbeDefaultLocalSampleTimes =
         {
             0f,
@@ -113,7 +122,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private const float DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = 1f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.25f;
+        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.125f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = 0f;
         private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = 1f;
@@ -217,6 +226,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool manualAnimatorFullBodyPoseExcludeLowerBodyMuscles;
             public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
             public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly;
+            public bool manualAnimatorFullBodyPoseRightArmMusclesOnly;
+            public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly;
+            public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly;
+            public float manualAnimatorFullBodyPoseFrameGateStart;
+            public float manualAnimatorFullBodyPoseFrameGateEnd;
+            public bool useSetHumanPoseRightLegTwistOutputReference;
+            public float setHumanPoseRightLegTwistOutputReferenceWeight;
+            public float setHumanPoseRightLegTwistOutputReferenceMaxDelta;
             public bool useManualAnimatorBodyRotationReference;
             public float manualAnimatorBodyRotationReferenceWeight;
             public bool useManualAnimatorLowerBodySegmentDirectionReference;
@@ -282,6 +299,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float yybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
             public bool enableYybArmSleeveAnchorCorrection;
             public bool enableYybArmVisualTwistCorrection;
+            public bool clampRetargetArmStretchMuscles;
+            public float armStretchMuscleLimit;
         }
 
         [Serializable]
@@ -320,6 +339,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool manualAnimatorFullBodyPoseExcludeLowerBodyMuscles;
             public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
             public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly;
+            public bool manualAnimatorFullBodyPoseRightArmMusclesOnly;
+            public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly;
+            public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly;
+            public float manualAnimatorFullBodyPoseFrameGateStart;
+            public float manualAnimatorFullBodyPoseFrameGateEnd;
+            public bool useSetHumanPoseRightLegTwistOutputReference;
+            public float setHumanPoseRightLegTwistOutputReferenceWeight;
+            public float setHumanPoseRightLegTwistOutputReferenceMaxDelta;
             public bool useManualAnimatorBodyRotationReference;
             public float manualAnimatorBodyRotationReferenceWeight;
             public bool useManualAnimatorLowerBodySegmentDirectionReference;
@@ -385,6 +412,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float yybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
             public bool enableYybArmSleeveAnchorCorrection;
             public bool enableYybArmVisualTwistCorrection;
+            public bool clampRetargetArmStretchMuscles;
+            public float armStretchMuscleLimit;
         }
 
         [Serializable]
@@ -408,6 +437,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
             public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
             public bool manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
+            public bool manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
+            public bool manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
+            public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
+            public float manualAnimatorFullBodyPoseReferenceFrameGateStart;
+            public float manualAnimatorFullBodyPoseReferenceFrameGateEnd;
+            public bool enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
+            public float setHumanPoseRightLegTwistOutputReferenceWeight;
+            public float setHumanPoseRightLegTwistOutputReferenceMaxDelta;
             public bool enableManualAnimatorBodyRotationRuntimeOverride;
             public bool disableManualAnimatorBodyRotationRuntimeOverride;
             public float manualAnimatorBodyRotationReferenceWeight;
@@ -419,6 +456,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool enableRetargetPoseVisualSpikeSmoothingRuntimeOverride;
             public float retargetPoseVisualSpikeCurrentWeight;
             public float retargetPoseVisualSpikeForearmStretchClampMaxOffset;
+            public bool enableRetargetArmStretchClampRuntimeOverride;
+            public float retargetArmStretchMuscleLimit;
             public bool enableYybArmSwingLimitRuntimeOverride;
             public float yybArmSwingLimitWeight;
             public float yybArmSwingMaxDownDot;
@@ -559,6 +598,18 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static bool _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
         private static bool _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
         private static bool _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
+        private static bool _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
+        private static bool _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
+        private static bool _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
+        private static float _manualAnimatorFullBodyPoseReferenceFrameGateStart =
+            DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart;
+        private static float _manualAnimatorFullBodyPoseReferenceFrameGateEnd =
+            DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd;
+        private static bool _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
+        private static float _setHumanPoseRightLegTwistOutputReferenceWeight =
+            DefaultSetHumanPoseRightLegTwistOutputReferenceWeight;
+        private static float _setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+            DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta;
         private static bool _enableManualAnimatorBodyRotationRuntimeOverride;
         private static bool _disableManualAnimatorBodyRotationRuntimeOverride;
         private static float _manualAnimatorBodyRotationReferenceWeight =
@@ -572,6 +623,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
         private static float _retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight;
         private static float _retargetPoseVisualSpikeForearmStretchClampMaxOffset =
             DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset;
+        private static bool _enableRetargetArmStretchClampRuntimeOverride;
+        private static float _retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit;
         private static bool _enableYybArmSwingLimitRuntimeOverride;
         private static float _yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight;
         private static float _yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot;
@@ -708,6 +761,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             DefaultManualAnimatorBodyPositionXzReferenceAxisXScale;
         private static float _manualAnimatorBodyPositionXzReferenceAxisZScale =
             DefaultManualAnimatorBodyPositionXzReferenceAxisZScale;
+        private static bool _enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
+        private static float _yybRightSleeveSilhouetteLocalOffsetX =
+            DefaultYybRightSleeveSilhouetteLocalOffsetX;
+        private static float _yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+            DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart;
+        private static float _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+            DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
         private static bool _enableVmdPlaybackProbeRuntimeOverride;
         private static bool _applyVmdPlaybackProbeIkTargetsRuntimeOverride;
         private static string _vmdPlaybackProbeSourceVmdPath = string.Empty;
@@ -839,6 +899,18 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = false;
             _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = false;
             _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = false;
+            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = false;
+            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = false;
+            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = false;
+            _manualAnimatorFullBodyPoseReferenceFrameGateStart =
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart;
+            _manualAnimatorFullBodyPoseReferenceFrameGateEnd =
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd;
+            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = false;
+            _setHumanPoseRightLegTwistOutputReferenceWeight =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceWeight;
+            _setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta;
             _enableManualAnimatorBodyRotationRuntimeOverride = false;
             _disableManualAnimatorBodyRotationRuntimeOverride = false;
             _manualAnimatorBodyRotationReferenceWeight = DefaultManualAnimatorBodyRotationReferenceWeight;
@@ -851,6 +923,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             _retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight;
             _retargetPoseVisualSpikeForearmStretchClampMaxOffset =
                 DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset;
+            _enableRetargetArmStretchClampRuntimeOverride = false;
+            _retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit;
             _enableYybArmSwingLimitRuntimeOverride = false;
             _yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight;
             _yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot;
@@ -988,6 +1062,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 DefaultManualAnimatorBodyPositionXzReferenceAxisXScale;
             _manualAnimatorBodyPositionXzReferenceAxisZScale =
                 DefaultManualAnimatorBodyPositionXzReferenceAxisZScale;
+            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride = false;
+            _yybRightSleeveSilhouetteLocalOffsetX =
+                DefaultYybRightSleeveSilhouetteLocalOffsetX;
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart;
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
             _isRunning = false;
             ClearPersistedState();
             AppendRunnerTrace($"stale run state cleared reason={reason}");
@@ -1027,6 +1108,26 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 GetCommandLineBool("-yybCompareManualAnimatorFullBodyPoseLowerBodyMusclesOnly", false);
             bool manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride =
                 GetCommandLineBool("-yybCompareManualAnimatorFullBodyPoseLegTwistMusclesOnly", false);
+            bool manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride =
+                GetCommandLineBool("-yybCompareManualAnimatorFullBodyPoseRightArmMusclesOnly", false);
+            bool manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride =
+                GetCommandLineBool("-yybCompareManualAnimatorFullBodyPoseLeftArmMusclesOnly", false);
+            bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride =
+                GetCommandLineBool("-yybCompareManualAnimatorFullBodyPoseRightSleeveChainMusclesOnly", false);
+            float manualAnimatorFullBodyPoseReferenceFrameGateStart = GetCommandLineFloat(
+                "-yybCompareManualAnimatorFullBodyPoseFrameGateStart",
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart);
+            float manualAnimatorFullBodyPoseReferenceFrameGateEnd = GetCommandLineFloat(
+                "-yybCompareManualAnimatorFullBodyPoseFrameGateEnd",
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd);
+            bool enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride =
+                GetCommandLineBool("-yybCompareSetHumanPoseRightLegTwistOutputEnabled", false);
+            float setHumanPoseRightLegTwistOutputReferenceWeight = GetCommandLineFloat(
+                "-yybCompareSetHumanPoseRightLegTwistOutputWeight",
+                DefaultSetHumanPoseRightLegTwistOutputReferenceWeight);
+            float setHumanPoseRightLegTwistOutputReferenceMaxDelta = GetCommandLineFloat(
+                "-yybCompareSetHumanPoseRightLegTwistOutputMaxDelta",
+                DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta);
             bool enableManualAnimatorBodyRotationRuntimeOverride =
                 GetCommandLineBool("-yybCompareManualAnimatorBodyRotationEnabled", false);
             bool disableManualAnimatorBodyRotationRuntimeOverride =
@@ -1053,6 +1154,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float retargetPoseVisualSpikeForearmStretchClampMaxOffset = GetCommandLineFloat(
                 "-yybCompareRetargetPoseVisualSpikeForearmStretchClampMaxOffset",
                 DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset);
+            bool enableRetargetArmStretchClampRuntimeOverride =
+                GetCommandLineBool("-yybCompareRetargetArmStretchClampEnabled", false);
+            float retargetArmStretchMuscleLimit = GetCommandLineFloat(
+                "-yybCompareRetargetArmStretchMuscleLimit",
+                DefaultRetargetArmStretchMuscleLimit);
             bool enableYybArmSwingLimitRuntimeOverride =
                 GetCommandLineBool("-yybCompareYybArmSwingLimitEnabled", false);
             float yybArmSwingLimitWeight = GetCommandLineFloat(
@@ -1296,6 +1402,17 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float manualAnimatorBodyPositionXzReferenceAxisZScale = GetCommandLineFloat(
                 "-yybCompareManualAnimatorBodyPositionXzAxisZScale",
                 DefaultManualAnimatorBodyPositionXzReferenceAxisZScale);
+            bool enableYybRightSleeveSilhouetteOffsetRuntimeOverride =
+                GetCommandLineBool("-yybCompareYybRightSleeveSilhouetteOffsetEnabled", false);
+            float yybRightSleeveSilhouetteLocalOffsetX = GetCommandLineFloat(
+                "-yybCompareYybRightSleeveSilhouetteLocalOffsetX",
+                DefaultYybRightSleeveSilhouetteLocalOffsetX);
+            float yybRightSleeveSilhouetteLocalOffsetFrameGateStart = GetCommandLineFloat(
+                "-yybCompareYybRightSleeveSilhouetteLocalOffsetFrameGateStart",
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart);
+            float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = GetCommandLineFloat(
+                "-yybCompareYybRightSleeveSilhouetteLocalOffsetFrameGateEnd",
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
             bool disableTargetHumanoidBonePositionLockRuntimeOverride =
                 GetCommandLineBool("-yybCompareTargetHumanoidBonePositionLockDisabled", false);
             bool enableRetargetBodyPositionXzRootMotionRuntimeOverride =
@@ -1337,6 +1454,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride,
                 manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
                 manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseReferenceFrameGateStart,
+                manualAnimatorFullBodyPoseReferenceFrameGateEnd,
                 enableManualAnimatorBodyRotationRuntimeOverride,
                 disableManualAnimatorBodyRotationRuntimeOverride,
                 manualAnimatorBodyRotationReferenceWeight,
@@ -1348,6 +1470,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 enableRetargetPoseVisualSpikeSmoothingRuntimeOverride,
                 retargetPoseVisualSpikeCurrentWeight,
                 retargetPoseVisualSpikeForearmStretchClampMaxOffset,
+                enableRetargetArmStretchClampRuntimeOverride,
+                retargetArmStretchMuscleLimit,
                 enableYybArmSwingLimitRuntimeOverride,
                 yybArmSwingLimitWeight,
                 yybArmSwingMaxDownDot,
@@ -1435,6 +1559,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames,
                 manualAnimatorBodyPositionXzReferenceAxisXScale,
                 manualAnimatorBodyPositionXzReferenceAxisZScale,
+                enableYybRightSleeveSilhouetteOffsetRuntimeOverride,
+                yybRightSleeveSilhouetteLocalOffsetX,
+                yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+                yybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
                 enableRetargetBodyPositionXzRootMotionRuntimeOverride,
                 disableTargetHumanoidBonePositionLockRuntimeOverride,
                 enableVmdPlaybackProbeRuntimeOverride,
@@ -1444,7 +1572,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 diagnosticCaptureWidthOverride,
                 diagnosticCaptureHeightOverride,
                 diagnosticScreenshotPaddingOverride,
-                diagnosticScreenshotVerticalViewportCenterOverride);
+                diagnosticScreenshotVerticalViewportCenterOverride,
+                enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride:
+                    enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride,
+                setHumanPoseRightLegTwistOutputReferenceWeight:
+                    setHumanPoseRightLegTwistOutputReferenceWeight,
+                setHumanPoseRightLegTwistOutputReferenceMaxDelta:
+                    setHumanPoseRightLegTwistOutputReferenceMaxDelta);
         }
 
         public static void RunWithOptions(string fbxFileName, float durationSeconds, bool enableFingerCloseups)
@@ -1558,6 +1692,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             bool manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = false,
             bool manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = false,
             bool manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = false,
+            bool manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = false,
+            bool manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = false,
+            bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = false,
+            float manualAnimatorFullBodyPoseReferenceFrameGateStart =
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart,
+            float manualAnimatorFullBodyPoseReferenceFrameGateEnd =
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd,
             bool enableManualAnimatorBodyRotationRuntimeOverride = false,
             bool disableManualAnimatorBodyRotationRuntimeOverride = false,
             float manualAnimatorBodyRotationReferenceWeight = DefaultManualAnimatorBodyRotationReferenceWeight,
@@ -1570,6 +1711,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight,
             float retargetPoseVisualSpikeForearmStretchClampMaxOffset =
                 DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset,
+            bool enableRetargetArmStretchClampRuntimeOverride = false,
+            float retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit,
             bool enableYybArmSwingLimitRuntimeOverride = false,
             float yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight,
             float yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot,
@@ -1700,6 +1843,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 DefaultManualAnimatorBodyPositionXzReferenceAxisXScale,
             float manualAnimatorBodyPositionXzReferenceAxisZScale =
                 DefaultManualAnimatorBodyPositionXzReferenceAxisZScale,
+            bool enableYybRightSleeveSilhouetteOffsetRuntimeOverride = false,
+            float yybRightSleeveSilhouetteLocalOffsetX =
+                DefaultYybRightSleeveSilhouetteLocalOffsetX,
+            float yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+            float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
             bool enableRetargetBodyPositionXzRootMotionRuntimeOverride = false,
             bool disableTargetHumanoidBonePositionLockRuntimeOverride = false,
             bool enableVmdPlaybackProbeRuntimeOverride = false,
@@ -1709,7 +1859,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             int diagnosticCaptureWidthOverride = NoDiagnosticCaptureDimensionOverride,
             int diagnosticCaptureHeightOverride = NoDiagnosticCaptureDimensionOverride,
             float diagnosticScreenshotPaddingOverride = NoDiagnosticScreenshotFramingOverride,
-            float diagnosticScreenshotVerticalViewportCenterOverride = NoDiagnosticScreenshotFramingOverride)
+            float diagnosticScreenshotVerticalViewportCenterOverride = NoDiagnosticScreenshotFramingOverride,
+            bool enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = false,
+            float setHumanPoseRightLegTwistOutputReferenceWeight =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceWeight,
+            float setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta)
         {
             StartRun(
                 fbxFileName,
@@ -1729,6 +1884,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride,
                 manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
                 manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseReferenceFrameGateStart,
+                manualAnimatorFullBodyPoseReferenceFrameGateEnd,
                 enableManualAnimatorBodyRotationRuntimeOverride,
                 disableManualAnimatorBodyRotationRuntimeOverride,
                 manualAnimatorBodyRotationReferenceWeight,
@@ -1740,6 +1900,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 enableRetargetPoseVisualSpikeSmoothingRuntimeOverride,
                 retargetPoseVisualSpikeCurrentWeight,
                 retargetPoseVisualSpikeForearmStretchClampMaxOffset,
+                enableRetargetArmStretchClampRuntimeOverride,
+                retargetArmStretchMuscleLimit,
                 enableYybArmSwingLimitRuntimeOverride,
                 yybArmSwingLimitWeight,
                 yybArmSwingMaxDownDot,
@@ -1827,6 +1989,10 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames,
                 manualAnimatorBodyPositionXzReferenceAxisXScale,
                 manualAnimatorBodyPositionXzReferenceAxisZScale,
+                enableYybRightSleeveSilhouetteOffsetRuntimeOverride,
+                yybRightSleeveSilhouetteLocalOffsetX,
+                yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+                yybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
                 enableRetargetBodyPositionXzRootMotionRuntimeOverride,
                 disableTargetHumanoidBonePositionLockRuntimeOverride,
                 enableVmdPlaybackProbeRuntimeOverride,
@@ -1836,7 +2002,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 diagnosticCaptureWidthOverride,
                 diagnosticCaptureHeightOverride,
                 diagnosticScreenshotPaddingOverride,
-                diagnosticScreenshotVerticalViewportCenterOverride);
+                diagnosticScreenshotVerticalViewportCenterOverride,
+                enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride:
+                    enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride,
+                setHumanPoseRightLegTwistOutputReferenceWeight:
+                    setHumanPoseRightLegTwistOutputReferenceWeight,
+                setHumanPoseRightLegTwistOutputReferenceMaxDelta:
+                    setHumanPoseRightLegTwistOutputReferenceMaxDelta);
         }
 
         public static void RunWithOptions(
@@ -1878,6 +2050,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             bool manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = false,
             bool manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = false,
             bool manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = false,
+            bool manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = false,
+            bool manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = false,
+            bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = false,
+            float manualAnimatorFullBodyPoseReferenceFrameGateStart =
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart,
+            float manualAnimatorFullBodyPoseReferenceFrameGateEnd =
+                DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd,
             bool enableManualAnimatorBodyRotationRuntimeOverride = false,
             bool disableManualAnimatorBodyRotationRuntimeOverride = false,
             float manualAnimatorBodyRotationReferenceWeight = DefaultManualAnimatorBodyRotationReferenceWeight,
@@ -1890,6 +2069,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight,
             float retargetPoseVisualSpikeForearmStretchClampMaxOffset =
                 DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset,
+            bool enableRetargetArmStretchClampRuntimeOverride = false,
+            float retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit,
             bool enableYybArmSwingLimitRuntimeOverride = false,
             float yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight,
             float yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot,
@@ -2020,6 +2201,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 DefaultManualAnimatorBodyPositionXzReferenceAxisXScale,
             float manualAnimatorBodyPositionXzReferenceAxisZScale =
                 DefaultManualAnimatorBodyPositionXzReferenceAxisZScale,
+            bool enableYybRightSleeveSilhouetteOffsetRuntimeOverride = false,
+            float yybRightSleeveSilhouetteLocalOffsetX =
+                DefaultYybRightSleeveSilhouetteLocalOffsetX,
+            float yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+            float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+                DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
             bool enableRetargetBodyPositionXzRootMotionRuntimeOverride = false,
             bool disableTargetHumanoidBonePositionLockRuntimeOverride = false,
             bool enableVmdPlaybackProbeRuntimeOverride = false,
@@ -2029,7 +2217,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             int diagnosticCaptureWidthOverride = NoDiagnosticCaptureDimensionOverride,
             int diagnosticCaptureHeightOverride = NoDiagnosticCaptureDimensionOverride,
             float diagnosticScreenshotPaddingOverride = NoDiagnosticScreenshotFramingOverride,
-            float diagnosticScreenshotVerticalViewportCenterOverride = NoDiagnosticScreenshotFramingOverride)
+            float diagnosticScreenshotVerticalViewportCenterOverride = NoDiagnosticScreenshotFramingOverride,
+            bool enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = false,
+            float setHumanPoseRightLegTwistOutputReferenceWeight =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceWeight,
+            float setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta)
         {
             if (_isRunning)
             {
@@ -2062,6 +2255,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
             _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride =
                 manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride =
+                manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride =
+                manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride =
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseReferenceFrameGateStart =
+                Mathf.Max(0f, manualAnimatorFullBodyPoseReferenceFrameGateStart);
+            _manualAnimatorFullBodyPoseReferenceFrameGateEnd =
+                Mathf.Max(0f, manualAnimatorFullBodyPoseReferenceFrameGateEnd);
+            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride =
+                enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
+            _setHumanPoseRightLegTwistOutputReferenceWeight = Mathf.Clamp01(
+                setHumanPoseRightLegTwistOutputReferenceWeight);
+            _setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                Mathf.Max(0f, setHumanPoseRightLegTwistOutputReferenceMaxDelta);
             _enableManualAnimatorBodyRotationRuntimeOverride = enableManualAnimatorBodyRotationRuntimeOverride;
             _disableManualAnimatorBodyRotationRuntimeOverride = disableManualAnimatorBodyRotationRuntimeOverride;
             _manualAnimatorBodyRotationReferenceWeight = Mathf.Clamp01(manualAnimatorBodyRotationReferenceWeight);
@@ -2079,6 +2288,11 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 1f);
             _retargetPoseVisualSpikeForearmStretchClampMaxOffset =
                 Mathf.Clamp01(retargetPoseVisualSpikeForearmStretchClampMaxOffset);
+            _enableRetargetArmStretchClampRuntimeOverride = enableRetargetArmStretchClampRuntimeOverride;
+            _retargetArmStretchMuscleLimit = Mathf.Clamp(
+                retargetArmStretchMuscleLimit,
+                0f,
+                DefaultRetargetArmStretchMuscleLimit);
             _enableYybArmSwingLimitRuntimeOverride = enableYybArmSwingLimitRuntimeOverride;
             _yybArmSwingLimitWeight = Mathf.Clamp01(yybArmSwingLimitWeight);
             _yybArmSwingMaxDownDot = Mathf.Clamp01(yybArmSwingMaxDownDot);
@@ -2259,6 +2473,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 manualAnimatorBodyPositionXzReferenceAxisXScale);
             _manualAnimatorBodyPositionXzReferenceAxisZScale = Mathf.Clamp01(
                 manualAnimatorBodyPositionXzReferenceAxisZScale);
+            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride =
+                enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
+            _yybRightSleeveSilhouetteLocalOffsetX =
+                Mathf.Clamp(yybRightSleeveSilhouetteLocalOffsetX, -0.2f, 0.2f);
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+                Mathf.Clamp(yybRightSleeveSilhouetteLocalOffsetFrameGateStart, 0f, 6000f);
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+                Mathf.Clamp(yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, 0f, 6000f);
             _enableRetargetBodyPositionXzRootMotionRuntimeOverride =
                 enableRetargetBodyPositionXzRootMotionRuntimeOverride;
             _disableTargetHumanoidBonePositionLockRuntimeOverride =
@@ -2921,7 +3143,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             else if (_enableManualAnimatorFullBodyPoseRuntimeOverride ||
                      _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride ||
                      _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride)
+                     _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride ||
+                     _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride ||
+                     _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride ||
+                     _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride ||
+                     _manualAnimatorFullBodyPoseReferenceFrameGateStart > 0f ||
+                     _manualAnimatorFullBodyPoseReferenceFrameGateEnd > 0f)
             {
                 ApplyManualAnimatorFullBodyPoseRuntimeOverride(
                     fileManager,
@@ -2929,7 +3156,21 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     _manualAnimatorFullBodyPoseReferenceWeight,
                     _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride,
                     _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
-                    _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride);
+                    _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
+                    _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
+                    _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
+                    _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
+                    _manualAnimatorFullBodyPoseReferenceFrameGateStart,
+                    _manualAnimatorFullBodyPoseReferenceFrameGateEnd);
+            }
+
+            if (_enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride)
+            {
+                ApplySetHumanPoseRightLegTwistOutputRuntimeOverride(
+                    fileManager,
+                    true,
+                    _setHumanPoseRightLegTwistOutputReferenceWeight,
+                    _setHumanPoseRightLegTwistOutputReferenceMaxDelta);
             }
 
             if (_disableManualAnimatorBodyRotationRuntimeOverride)
@@ -2972,6 +3213,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride,
                     _retargetPoseVisualSpikeCurrentWeight,
                     _retargetPoseVisualSpikeForearmStretchClampMaxOffset);
+            }
+
+            if (_enableRetargetArmStretchClampRuntimeOverride)
+            {
+                ApplyRetargetArmStretchClampRuntimeOverride(
+                    fileManager,
+                    true,
+                    _retargetArmStretchMuscleLimit);
             }
 
             if (_enableYybArmSwingLimitRuntimeOverride)
@@ -3156,6 +3405,16 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     _manualAnimatorBodyPositionXzReferenceAxisZScale);
             }
 
+            if (_enableYybRightSleeveSilhouetteOffsetRuntimeOverride)
+            {
+                ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
+                    fileManager,
+                    true,
+                    _yybRightSleeveSilhouetteLocalOffsetX,
+                    _yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+                    _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
+            }
+
             if (_enableRetargetBodyPositionXzRootMotionRuntimeOverride)
             {
                 ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(fileManager, true);
@@ -3208,7 +3467,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float weight,
             bool excludeLowerBodyMuscles,
             bool lowerBodyMusclesOnly = false,
-            bool legTwistMusclesOnly = false)
+            bool legTwistMusclesOnly = false,
+            bool rightArmMusclesOnly = false,
+            bool leftArmMusclesOnly = false,
+            bool rightSleeveChainMusclesOnly = false,
+            float frameGateStart = DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart,
+            float frameGateEnd = DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd)
         {
             if (fileManager == null)
             {
@@ -3220,6 +3484,29 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles = enabled && excludeLowerBodyMuscles;
             fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly = enabled && lowerBodyMusclesOnly;
             fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly = enabled && legTwistMusclesOnly;
+            fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly = enabled && rightArmMusclesOnly;
+            fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly = enabled && leftArmMusclesOnly;
+            fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly =
+                enabled && rightSleeveChainMusclesOnly;
+            fileManager.manualAnimatorFullBodyPoseFrameGateStart = enabled ? Mathf.Max(0f, frameGateStart) : 0f;
+            fileManager.manualAnimatorFullBodyPoseFrameGateEnd = enabled ? Mathf.Max(0f, frameGateEnd) : 0f;
+            return true;
+        }
+
+        private static bool ApplySetHumanPoseRightLegTwistOutputRuntimeOverride(
+            FileManager fileManager,
+            bool enabled,
+            float weight,
+            float maxDelta)
+        {
+            if (fileManager == null)
+            {
+                return false;
+            }
+
+            fileManager.useSetHumanPoseRightLegTwistOutputReference = enabled;
+            fileManager.setHumanPoseRightLegTwistOutputReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
+            fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta = Mathf.Max(0f, maxDelta);
             return true;
         }
 
@@ -3298,6 +3585,26 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             fileManager.RetargetPoseVisualSpikeCurrentWeight = Mathf.Clamp(currentWeight, 0.1f, 1f);
             fileManager.RetargetPoseVisualSpikeForearmStretchClampMaxOffset =
                 Mathf.Clamp01(forearmStretchClampMaxOffset);
+            return true;
+        }
+
+        private static bool ApplyRetargetArmStretchClampRuntimeOverride(
+            FileManager fileManager,
+            bool enabled,
+            float stretchLimit)
+        {
+            if (fileManager == null)
+            {
+                return false;
+            }
+
+            fileManager.enableAnatomicalArmGuard = true;
+            fileManager.clampRetargetArmStretchMuscles = enabled;
+            fileManager.targetGuardClampAnatomicalArmMuscles = enabled;
+            fileManager.targetGuardClampArmStretchMuscles = enabled;
+            fileManager.ArmStretchMuscleLimit = enabled
+                ? Mathf.Clamp(stretchLimit, 0f, DefaultRetargetArmStretchMuscleLimit)
+                : 0f;
             return true;
         }
 
@@ -3918,6 +4225,31 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float positiveZScale,
             float toesBlendWeight,
             float frameGateStart,
+            float frameGateEnd)
+        {
+            return ApplyPostSetHumanPoseEndpointPositionRuntimeOverride(
+                fileManager,
+                enabled,
+                weight,
+                maxOffset,
+                positiveZScale,
+                toesBlendWeight,
+                frameGateStart,
+                frameGateEnd,
+                useLeftSide: false,
+                evaluatorXzReferenceEnabled: false,
+                evaluatorXzTargetMagnitude:
+                    DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude);
+        }
+
+        private static bool ApplyPostSetHumanPoseEndpointPositionRuntimeOverride(
+            FileManager fileManager,
+            bool enabled,
+            float weight,
+            float maxOffset,
+            float positiveZScale,
+            float toesBlendWeight,
+            float frameGateStart,
             float frameGateEnd,
             bool useLeftSide,
             bool evaluatorXzReferenceEnabled,
@@ -4043,6 +4375,27 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             fileManager.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = Mathf.Max(0f, frameGateBlendFrames);
             fileManager.manualAnimatorBodyPositionXzReferenceAxisXScale = Mathf.Clamp01(axisXScale);
             fileManager.manualAnimatorBodyPositionXzReferenceAxisZScale = Mathf.Clamp01(axisZScale);
+            return true;
+        }
+
+        private static bool ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
+            FileManager fileManager,
+            bool enabled,
+            float localOffsetX,
+            float frameGateStart,
+            float frameGateEnd)
+        {
+            if (fileManager == null)
+            {
+                return false;
+            }
+
+            fileManager.useYybRightSleeveSilhouetteLocalOffsetReference = enabled;
+            fileManager.yybRightSleeveSilhouetteLocalOffsetX = Mathf.Clamp(localOffsetX, -0.2f, 0.2f);
+            fileManager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+                Mathf.Clamp(frameGateStart, 0f, 6000f);
+            fileManager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+                Mathf.Clamp(frameGateEnd, 0f, 6000f);
             return true;
         }
 
@@ -4507,6 +4860,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
             result.manualAnimatorFullBodyPoseLegTwistMusclesOnly =
                 fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly;
+            result.manualAnimatorFullBodyPoseRightArmMusclesOnly =
+                fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly;
+            result.manualAnimatorFullBodyPoseLeftArmMusclesOnly =
+                fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly;
+            result.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly =
+                fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly;
+            result.manualAnimatorFullBodyPoseFrameGateStart =
+                fileManager.manualAnimatorFullBodyPoseFrameGateStart;
+            result.manualAnimatorFullBodyPoseFrameGateEnd =
+                fileManager.manualAnimatorFullBodyPoseFrameGateEnd;
+            result.useSetHumanPoseRightLegTwistOutputReference =
+                fileManager.useSetHumanPoseRightLegTwistOutputReference;
+            result.setHumanPoseRightLegTwistOutputReferenceWeight =
+                fileManager.setHumanPoseRightLegTwistOutputReferenceWeight;
+            result.setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta;
             result.useManualAnimatorBodyRotationReference = fileManager.useManualAnimatorBodyRotationReference;
             result.manualAnimatorBodyRotationReferenceWeight = fileManager.manualAnimatorBodyRotationReferenceWeight;
             result.useManualAnimatorLowerBodySegmentDirectionReference =
@@ -4626,6 +4995,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 fileManager.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
             result.enableYybArmSleeveAnchorCorrection = fileManager.enableYybArmSleeveAnchorCorrection;
             result.enableYybArmVisualTwistCorrection = fileManager.enableYybArmVisualTwistCorrection;
+            result.clampRetargetArmStretchMuscles = fileManager.clampRetargetArmStretchMuscles;
+            result.armStretchMuscleLimit = fileManager.ArmStretchMuscleLimit;
         }
 
         private static VmdSaveResult BuildStableCandidateResult(VmdSaveResult result)
@@ -5039,6 +5410,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
                 manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride =
                     _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride =
+                    _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride =
+                    _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride =
+                    _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
+                manualAnimatorFullBodyPoseReferenceFrameGateStart =
+                    _manualAnimatorFullBodyPoseReferenceFrameGateStart,
+                manualAnimatorFullBodyPoseReferenceFrameGateEnd =
+                    _manualAnimatorFullBodyPoseReferenceFrameGateEnd,
+                enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride =
+                    _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride,
+                setHumanPoseRightLegTwistOutputReferenceWeight =
+                    _setHumanPoseRightLegTwistOutputReferenceWeight,
+                setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                    _setHumanPoseRightLegTwistOutputReferenceMaxDelta,
                 enableManualAnimatorBodyRotationRuntimeOverride = _enableManualAnimatorBodyRotationRuntimeOverride,
                 disableManualAnimatorBodyRotationRuntimeOverride = _disableManualAnimatorBodyRotationRuntimeOverride,
                 manualAnimatorBodyRotationReferenceWeight = _manualAnimatorBodyRotationReferenceWeight,
@@ -5053,6 +5440,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 retargetPoseVisualSpikeCurrentWeight = _retargetPoseVisualSpikeCurrentWeight,
                 retargetPoseVisualSpikeForearmStretchClampMaxOffset =
                     _retargetPoseVisualSpikeForearmStretchClampMaxOffset,
+                enableRetargetArmStretchClampRuntimeOverride =
+                    _enableRetargetArmStretchClampRuntimeOverride,
+                retargetArmStretchMuscleLimit = _retargetArmStretchMuscleLimit,
                 enableYybArmSwingLimitRuntimeOverride = _enableYybArmSwingLimitRuntimeOverride,
                 yybArmSwingLimitWeight = _yybArmSwingLimitWeight,
                 yybArmSwingMaxDownDot = _yybArmSwingMaxDownDot,
@@ -5276,6 +5666,30 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 state.manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
             _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride =
                 state.manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride =
+                state.manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride =
+                state.manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride =
+                state.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseReferenceFrameGateStart = Mathf.Max(
+                0f,
+                NormalizeFiniteFloat(
+                    state.manualAnimatorFullBodyPoseReferenceFrameGateStart,
+                    DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart));
+            _manualAnimatorFullBodyPoseReferenceFrameGateEnd = Mathf.Max(
+                0f,
+                NormalizeFiniteFloat(
+                    state.manualAnimatorFullBodyPoseReferenceFrameGateEnd,
+                    DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd));
+            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride =
+                state.enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
+            _setHumanPoseRightLegTwistOutputReferenceWeight = Mathf.Clamp01(NormalizeFiniteFloat(
+                state.setHumanPoseRightLegTwistOutputReferenceWeight,
+                DefaultSetHumanPoseRightLegTwistOutputReferenceWeight));
+            _setHumanPoseRightLegTwistOutputReferenceMaxDelta = Mathf.Max(0f, NormalizeFiniteFloat(
+                state.setHumanPoseRightLegTwistOutputReferenceMaxDelta,
+                DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta));
             _enableManualAnimatorBodyRotationRuntimeOverride = state.enableManualAnimatorBodyRotationRuntimeOverride;
             _disableManualAnimatorBodyRotationRuntimeOverride = state.disableManualAnimatorBodyRotationRuntimeOverride;
             _manualAnimatorBodyRotationReferenceWeight = float.IsNaN(state.manualAnimatorBodyRotationReferenceWeight) ||
@@ -5302,6 +5716,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 NormalizePositiveFloat(
                     state.retargetPoseVisualSpikeForearmStretchClampMaxOffset,
                     DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset));
+            _enableRetargetArmStretchClampRuntimeOverride =
+                state.enableRetargetArmStretchClampRuntimeOverride;
+            _retargetArmStretchMuscleLimit = Mathf.Clamp(
+                NormalizePositiveFloat(
+                    state.retargetArmStretchMuscleLimit,
+                    DefaultRetargetArmStretchMuscleLimit),
+                0f,
+                DefaultRetargetArmStretchMuscleLimit);
             _enableYybArmSwingLimitRuntimeOverride = state.enableYybArmSwingLimitRuntimeOverride;
             _yybArmSwingLimitWeight = Mathf.Clamp01(NormalizePositiveFloat(
                 state.yybArmSwingLimitWeight,
@@ -5856,6 +6278,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     result.manualAnimatorFullBodyPoseLowerBodyMusclesOnly,
                 manualAnimatorFullBodyPoseLegTwistMusclesOnly =
                     result.manualAnimatorFullBodyPoseLegTwistMusclesOnly,
+                manualAnimatorFullBodyPoseRightArmMusclesOnly =
+                    result.manualAnimatorFullBodyPoseRightArmMusclesOnly,
+                manualAnimatorFullBodyPoseLeftArmMusclesOnly =
+                    result.manualAnimatorFullBodyPoseLeftArmMusclesOnly,
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly =
+                    result.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly,
+                manualAnimatorFullBodyPoseFrameGateStart =
+                    result.manualAnimatorFullBodyPoseFrameGateStart,
+                manualAnimatorFullBodyPoseFrameGateEnd =
+                    result.manualAnimatorFullBodyPoseFrameGateEnd,
+                useSetHumanPoseRightLegTwistOutputReference =
+                    result.useSetHumanPoseRightLegTwistOutputReference,
+                setHumanPoseRightLegTwistOutputReferenceWeight =
+                    result.setHumanPoseRightLegTwistOutputReferenceWeight,
+                setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                    result.setHumanPoseRightLegTwistOutputReferenceMaxDelta,
                 useManualAnimatorBodyRotationReference = result.useManualAnimatorBodyRotationReference,
                 manualAnimatorBodyRotationReferenceWeight = result.manualAnimatorBodyRotationReferenceWeight,
                 useManualAnimatorLowerBodySegmentDirectionReference =
@@ -5973,7 +6411,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 yybArmSwingRaisedPoseMaxHandHorizontalReachRatio =
                     result.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
                 enableYybArmSleeveAnchorCorrection = result.enableYybArmSleeveAnchorCorrection,
-                enableYybArmVisualTwistCorrection = result.enableYybArmVisualTwistCorrection
+                enableYybArmVisualTwistCorrection = result.enableYybArmVisualTwistCorrection,
+                clampRetargetArmStretchMuscles = result.clampRetargetArmStretchMuscles,
+                armStretchMuscleLimit = result.armStretchMuscleLimit
             };
         }
 
@@ -6012,6 +6452,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     result.manualAnimatorFullBodyPoseLowerBodyMusclesOnly,
                 manualAnimatorFullBodyPoseLegTwistMusclesOnly =
                     result.manualAnimatorFullBodyPoseLegTwistMusclesOnly,
+                manualAnimatorFullBodyPoseRightArmMusclesOnly =
+                    result.manualAnimatorFullBodyPoseRightArmMusclesOnly,
+                manualAnimatorFullBodyPoseLeftArmMusclesOnly =
+                    result.manualAnimatorFullBodyPoseLeftArmMusclesOnly,
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly =
+                    result.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly,
+                manualAnimatorFullBodyPoseFrameGateStart =
+                    result.manualAnimatorFullBodyPoseFrameGateStart,
+                manualAnimatorFullBodyPoseFrameGateEnd =
+                    result.manualAnimatorFullBodyPoseFrameGateEnd,
+                useSetHumanPoseRightLegTwistOutputReference =
+                    result.useSetHumanPoseRightLegTwistOutputReference,
+                setHumanPoseRightLegTwistOutputReferenceWeight =
+                    result.setHumanPoseRightLegTwistOutputReferenceWeight,
+                setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                    result.setHumanPoseRightLegTwistOutputReferenceMaxDelta,
                 useManualAnimatorBodyRotationReference = result.useManualAnimatorBodyRotationReference,
                 manualAnimatorBodyRotationReferenceWeight = result.manualAnimatorBodyRotationReferenceWeight,
                 useManualAnimatorLowerBodySegmentDirectionReference =
@@ -6129,7 +6585,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 yybArmSwingRaisedPoseMaxHandHorizontalReachRatio =
                     result.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
                 enableYybArmSleeveAnchorCorrection = result.enableYybArmSleeveAnchorCorrection,
-                enableYybArmVisualTwistCorrection = result.enableYybArmVisualTwistCorrection
+                enableYybArmVisualTwistCorrection = result.enableYybArmVisualTwistCorrection,
+                clampRetargetArmStretchMuscles = result.clampRetargetArmStretchMuscles,
+                armStretchMuscleLimit = result.armStretchMuscleLimit
             };
         }
 
@@ -6167,6 +6625,22 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
                 manual_animator_full_body_pose_leg_twist_muscles_only =
                     _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
+                manual_animator_full_body_pose_right_arm_muscles_only =
+                    _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
+                manual_animator_full_body_pose_left_arm_muscles_only =
+                    _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
+                manual_animator_full_body_pose_right_sleeve_chain_muscles_only =
+                    _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
+                manual_animator_full_body_pose_frame_gate_start =
+                    _manualAnimatorFullBodyPoseReferenceFrameGateStart,
+                manual_animator_full_body_pose_frame_gate_end =
+                    _manualAnimatorFullBodyPoseReferenceFrameGateEnd,
+                set_human_pose_right_leg_twist_output_enabled =
+                    _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride,
+                set_human_pose_right_leg_twist_output_weight =
+                    _setHumanPoseRightLegTwistOutputReferenceWeight,
+                set_human_pose_right_leg_twist_output_max_delta =
+                    _setHumanPoseRightLegTwistOutputReferenceMaxDelta,
                 manual_animator_body_rotation_enabled = _enableManualAnimatorBodyRotationRuntimeOverride,
                 manual_animator_body_rotation_disabled = _disableManualAnimatorBodyRotationRuntimeOverride,
                 manual_animator_body_rotation_weight = _manualAnimatorBodyRotationReferenceWeight,
@@ -6181,6 +6655,9 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 retarget_pose_visual_spike_current_weight = _retargetPoseVisualSpikeCurrentWeight,
                 retarget_pose_visual_spike_forearm_stretch_clamp_max_offset =
                     _retargetPoseVisualSpikeForearmStretchClampMaxOffset,
+                retarget_arm_stretch_clamp_enabled =
+                    _enableRetargetArmStretchClampRuntimeOverride,
+                retarget_arm_stretch_muscle_limit = _retargetArmStretchMuscleLimit,
                 yyb_arm_swing_limit_enabled = _enableYybArmSwingLimitRuntimeOverride,
                 yyb_arm_swing_limit_weight = _yybArmSwingLimitWeight,
                 yyb_arm_swing_max_down_dot = _yybArmSwingMaxDownDot,
@@ -6373,6 +6850,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             builder.AppendLine($"- Manual Animator full-body pose exclude lower-body muscles: `{_manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride}`");
             builder.AppendLine($"- Manual Animator full-body pose lower-body muscles only: `{_manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride}`");
             builder.AppendLine($"- Manual Animator full-body pose leg twist muscles only: `{_manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride}`");
+            builder.AppendLine($"- Manual Animator full-body pose right arm muscles only: `{_manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride}`");
+            builder.AppendLine($"- Manual Animator full-body pose left arm muscles only: `{_manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride}`");
+            builder.AppendLine($"- Manual Animator full-body pose right sleeve chain muscles only: `{_manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride}`");
+            builder.AppendLine($"- Manual Animator full-body pose frame gate: `{_manualAnimatorFullBodyPoseReferenceFrameGateStart:F1}-{_manualAnimatorFullBodyPoseReferenceFrameGateEnd:F1}`");
+            builder.AppendLine($"- SetHumanPose right leg twist output reference: `{_enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride}`");
+            builder.AppendLine($"- SetHumanPose right leg twist output reference weight: `{_setHumanPoseRightLegTwistOutputReferenceWeight:F3}`");
+            builder.AppendLine($"- SetHumanPose right leg twist output reference max delta: `{_setHumanPoseRightLegTwistOutputReferenceMaxDelta:F3}`");
             builder.AppendLine($"- Manual Animator body rotation runtime override: `{_enableManualAnimatorBodyRotationRuntimeOverride}`");
             builder.AppendLine($"- Manual Animator body rotation runtime disable: `{_disableManualAnimatorBodyRotationRuntimeOverride}`");
             builder.AppendLine($"- Manual Animator body rotation weight: `{_manualAnimatorBodyRotationReferenceWeight:F3}`");
@@ -6384,6 +6868,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             builder.AppendLine($"- Retarget pose visual spike smoothing enabled: `{_enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}`");
             builder.AppendLine($"- Retarget pose visual spike current weight: `{_retargetPoseVisualSpikeCurrentWeight:F3}`");
             builder.AppendLine($"- Retarget pose visual spike forearm stretch clamp max offset: `{_retargetPoseVisualSpikeForearmStretchClampMaxOffset:F3}`");
+            builder.AppendLine($"- Retarget arm stretch clamp runtime override: `{_enableRetargetArmStretchClampRuntimeOverride}`");
+            builder.AppendLine($"- Retarget arm stretch muscle limit: `{_retargetArmStretchMuscleLimit:F3}`");
             builder.AppendLine($"- YYB arm swing limit runtime override: `{_enableYybArmSwingLimitRuntimeOverride}`");
             builder.AppendLine($"- YYB arm swing limit weight: `{_yybArmSwingLimitWeight:F3}`");
             builder.AppendLine($"- YYB arm swing max down dot: `{_yybArmSwingMaxDownDot:F3}`");
@@ -6510,9 +6996,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             builder.AppendLine($"- candidate/ref non-hair bbox-normalized keypoints: keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_bbox_normalized_image_space_keypoint_count}`, samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_bbox_normalized_image_space_keypoint_sample_count}`, avg L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_l1_delta)}`, max label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label)}`");
             builder.AppendLine($"- candidate/ref bbox-normalized max keypoint attribution: label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_label)}`, keypoint `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_index}`, ref seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_reference_seconds)}`, candidate seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_candidate_seconds)}`, recorder frame `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_recorder_frame}`, x delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_x_delta)}`, y delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_y_delta)}`");
             builder.AppendLine($"- candidate/ref bbox-normalized max keypoint crop context: ref touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_touches_frame_edge}`, candidate touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_touches_frame_edge}`, ref bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_bottom_gap)}`, ref top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_top_gap)}`, candidate bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_bottom_gap)}`, candidate top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_top_gap)}`");
+            builder.AppendLine($"- candidate/ref non-hair bbox-normalized max keypoint attribution: label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label)}`, keypoint `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_index}`, ref seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_seconds)}`, candidate seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_seconds)}`, recorder frame `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_recorder_frame}`, x delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_x_delta)}`, y delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_y_delta)}`");
+            builder.AppendLine($"- candidate/ref non-hair bbox-normalized max keypoint crop context: ref touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_touches_frame_edge}`, candidate touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_touches_frame_edge}`, ref bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_bottom_gap)}`, ref top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_top_gap)}`, candidate bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_bottom_gap)}`, candidate top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_top_gap)}`");
             builder.AppendLine($"- candidate/ref crop-safe time-matched: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_sample_count}`, avg bbox width abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_bbox_width_ratio_abs_delta)}`, max bbox width abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_bbox_width_ratio_abs_delta)}`, silhouette samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_silhouette_profile_sample_count}`, avg silhouette L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_silhouette_profile_l1_abs_delta)}`, max silhouette L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_silhouette_profile_l1_abs_delta)}`");
             builder.AppendLine($"- candidate/ref crop-safe keypoints: image samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_image_space_keypoint_sample_count}`, avg image L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_image_space_keypoint_l1_delta)}`, max image L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_image_space_keypoint_l1_delta)}`, bbox-normalized samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_bbox_normalized_image_space_keypoint_sample_count}`, avg bbox-normalized L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max bbox-normalized L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta)}`");
             builder.AppendLine($"- candidate/ref keypoint-local crop-safe bbox-normalized keypoints: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count}`, keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count}`, excluded keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count}`, avg L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta)}`, max label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label)}`");
+            builder.AppendLine($"- candidate/ref non-hair keypoint-local crop-safe bbox-normalized keypoints: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count}`, keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count}`, excluded keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count}`, avg L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta)}`, max label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label)}`");
+            builder.AppendLine($"- candidate/ref non-hair keypoint-local crop-safe max attribution: keypoint `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_index}`, x delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_x_delta)}`, y delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_y_delta)}`, candidate x/y `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_x)}`/`{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_y)}`, reference x/y `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_x)}`/`{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_y)}`, required x reduction to `{ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta:F2}` `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_required_x_reduction_to_threshold)}`");
             builder.AppendLine($"- candidate vs ref framing deltas: avg height `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_avg_bbox_height_ratio_delta)}`, avg width `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_avg_bbox_width_ratio_delta)}`, center X range `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_center_x_range_ratio_delta)}`, max bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_max_bottom_gap_ratio_delta)}`, avg bright area `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_avg_bright_area_ratio_delta)}`");
             builder.AppendLine($"- candidate vs current-clip ref framing deltas: avg height `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_avg_bbox_height_ratio_delta)}`, avg width `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_avg_bbox_width_ratio_delta)}`, center X range `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_center_x_range_ratio_delta)}`, max bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_max_bottom_gap_ratio_delta)}`, avg bright area `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_avg_bright_area_ratio_delta)}`");
             builder.AppendLine($"- candidate screenshot basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_screenshot_frame_metrics_basis)}");
@@ -6527,6 +7017,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             builder.AppendLine($"- candidate/ref non-hair bbox-normalized keypoint basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_bbox_normalized_image_space_keypoint_basis)}");
             builder.AppendLine($"- candidate/ref crop-safe basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_basis)}");
             builder.AppendLine($"- candidate/ref keypoint-local crop-safe basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_basis)}");
+            builder.AppendLine($"- candidate/ref non-hair keypoint-local crop-safe basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_basis)}");
             builder.AppendLine($"- basis: {EscapeMarkdown(frameRoleDiagnostics.reference_mp4_analysis_metric_basis)}");
             builder.AppendLine();
 
@@ -7856,6 +8347,20 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             diagnostics.candidate_vs_reference_time_matched_non_hair_avg_bbox_normalized_image_space_keypoint_l1_delta = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_l1_delta = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label = string.Empty;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_index = -1;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_seconds = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_seconds = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_recorder_frame = -1;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_x_delta = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_y_delta = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_x = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_y = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_x = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_y = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_bottom_gap = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_top_gap = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_bottom_gap = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_top_gap = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_bottom_gap = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_top_gap = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_bottom_gap = float.NaN;
@@ -7878,6 +8383,20 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             diagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label = string.Empty;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count = 0;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count = 0;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count = 0;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label = string.Empty;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_index = -1;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_x_delta = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_y_delta = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_x = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_y = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_x = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_y = float.NaN;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_required_x_reduction_to_threshold = float.NaN;
             diagnostics.candidate_vs_reference_time_matched_framing_metric_basis =
                 "Compares each current-clip ref MP4 sample with the nearest candidate screenshot sample in seconds, then reports absolute bbox/framing deltas.";
             diagnostics.candidate_vs_reference_time_matched_image_space_limb_span_basis =
@@ -7898,6 +8417,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 "Aggregates only time-matched samples where neither the reference MP4 frame nor the candidate screenshot touches the frame edge; edge-touch samples are reported by the full metrics but excluded from crop-safe pose/shape aggregates.";
             diagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_basis =
                 "Aggregates bbox-normalized deterministic keypoints after excluding only keypoints directly affected by bottom/top frame-edge contact; this keypoint-local crop-safe view can retain middle-band pose/shape residuals from samples whose cap endpoints are cropped.";
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_basis =
+                "Repeats keypoint-local crop-safe aggregation on the non-hair silhouette only, separating YYB hair exclusion from bottom/top frame-edge exclusion.";
 
             string resolvedIndexPath = ResolveProjectRelativePath(diagnostics.candidate_screenshot_frame_index_path);
             diagnostics.candidate_screenshot_frame_index_exists = File.Exists(resolvedIndexPath);
@@ -8100,6 +8621,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float sumNonHairBBoxNormalizedImageSpaceKeypointL1Delta = 0f;
             float maxNonHairBBoxNormalizedImageSpaceKeypointL1Delta = 0f;
             string maxNonHairBBoxNormalizedImageSpaceKeypointLabel = string.Empty;
+            int maxNonHairBBoxNormalizedImageSpaceKeypointIndex = -1;
             int cropSafeSampleCount = 0;
             float sumCropSafeBBoxWidthDelta = 0f;
             float maxCropSafeBBoxWidthDelta = 0f;
@@ -8118,6 +8640,19 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             float sumKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta = 0f;
             float maxKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta = 0f;
             string maxKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointLabel = string.Empty;
+            int nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount = 0;
+            int nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount = 0;
+            int nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointExcludedCount = 0;
+            float sumNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta = 0f;
+            float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta = 0f;
+            string maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointLabel = string.Empty;
+            int maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointIndex = -1;
+            float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointXDelta = float.NaN;
+            float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointYDelta = float.NaN;
+            float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateX = float.NaN;
+            float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateY = float.NaN;
+            float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceX = float.NaN;
+            float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceY = float.NaN;
             float referenceClipStartSeconds = Mathf.Max(
                 0f,
                 diagnostics.reference_mp4_current_clip_start_seconds);
@@ -8298,7 +8833,13 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                         out int excludedKeypointLocalCropSafeKeypointCount,
                         out float keypointLocalCropSafeKeypointL1Delta,
                         out float keypointLocalCropSafeKeypointMaxL1Delta,
-                        out int keypointLocalCropSafeKeypointMaxIndex))
+                        out int keypointLocalCropSafeKeypointMaxIndex,
+                        out _,
+                        out _,
+                        out _,
+                        out _,
+                        out _,
+                        out _))
                     {
                         keypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount =
                             Mathf.Max(
@@ -8377,12 +8918,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                         out float nonHairBBoxNormalizedKeypointL1Delta,
                         out float nonHairBBoxNormalizedKeypointMaxL1Delta,
                         out int nonHairBBoxNormalizedKeypointMaxIndex,
-                        out _,
-                        out _,
-                        out _,
-                        out _,
-                        out _,
-                        out _))
+                        out float nonHairBBoxNormalizedKeypointMaxXDelta,
+                        out float nonHairBBoxNormalizedKeypointMaxYDelta,
+                        out float nonHairBBoxNormalizedKeypointMaxCandidateX,
+                        out float nonHairBBoxNormalizedKeypointMaxCandidateY,
+                        out float nonHairBBoxNormalizedKeypointMaxReferenceX,
+                        out float nonHairBBoxNormalizedKeypointMaxReferenceY))
                 {
                     nonHairBBoxNormalizedImageSpaceKeypointCount =
                         Mathf.Max(
@@ -8395,8 +8936,110 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     {
                         maxNonHairBBoxNormalizedImageSpaceKeypointL1Delta =
                             nonHairBBoxNormalizedKeypointMaxL1Delta;
+                        maxNonHairBBoxNormalizedImageSpaceKeypointIndex =
+                            nonHairBBoxNormalizedKeypointMaxIndex;
                         maxNonHairBBoxNormalizedImageSpaceKeypointLabel =
                             ResolveImageSpaceKeypointLabel(nonHairBBoxNormalizedKeypointMaxIndex);
+
+                        float referenceNonHairTopGapRatio = ResolveFrameTopGapRatio(
+                            referenceRow.nonHairBottomGapRatio,
+                            referenceRow.nonHairBBoxHeightRatio);
+                        float candidateNonHairTopGapRatio = ResolveFrameTopGapRatio(
+                            candidateMetric.NonHairBottomGapRatio,
+                            candidateMetric.NonHairBBoxHeightRatio);
+
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_seconds =
+                            referenceRow.seconds;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_seconds =
+                            nearestSample.Seconds;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_recorder_frame =
+                            nearestSample.RecorderFrame;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_x_delta =
+                            nonHairBBoxNormalizedKeypointMaxXDelta;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_y_delta =
+                            nonHairBBoxNormalizedKeypointMaxYDelta;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_x =
+                            nonHairBBoxNormalizedKeypointMaxCandidateX;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_y =
+                            nonHairBBoxNormalizedKeypointMaxCandidateY;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_x =
+                            nonHairBBoxNormalizedKeypointMaxReferenceX;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_y =
+                            nonHairBBoxNormalizedKeypointMaxReferenceY;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_bottom_gap =
+                            referenceRow.nonHairBottomGapRatio;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_top_gap =
+                            referenceNonHairTopGapRatio;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_bottom_gap =
+                            candidateMetric.NonHairBottomGapRatio;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_top_gap =
+                            candidateNonHairTopGapRatio;
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_touches_frame_edge =
+                            IsFrameEdgeTouched(referenceRow.nonHairBottomGapRatio, referenceNonHairTopGapRatio);
+                        diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_touches_frame_edge =
+                            IsFrameEdgeTouched(candidateMetric.NonHairBottomGapRatio, candidateNonHairTopGapRatio);
+                    }
+
+                    if (TryComputeKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointDelta(
+                        candidateMetric.NonHairImageSpaceKeypointProfile,
+                        candidateMetric.NonHairCenterX,
+                        candidateMetric.NonHairBBoxWidthRatio,
+                        candidateMetric.NonHairBottomGapRatio,
+                        candidateMetric.NonHairBBoxHeightRatio,
+                        ResolveFrameTopGapRatio(
+                            candidateMetric.NonHairBottomGapRatio,
+                            candidateMetric.NonHairBBoxHeightRatio),
+                        referenceRow.nonHairImageSpaceKeypointProfile,
+                        referenceRow.nonHairCenterXRatio,
+                        referenceRow.nonHairBBoxWidthRatio,
+                        referenceRow.nonHairBottomGapRatio,
+                        referenceRow.nonHairBBoxHeightRatio,
+                        ResolveFrameTopGapRatio(
+                            referenceRow.nonHairBottomGapRatio,
+                            referenceRow.nonHairBBoxHeightRatio),
+                        out int matchedNonHairKeypointLocalCropSafeKeypointCount,
+                        out int excludedNonHairKeypointLocalCropSafeKeypointCount,
+                        out float nonHairKeypointLocalCropSafeKeypointL1Delta,
+                        out float nonHairKeypointLocalCropSafeKeypointMaxL1Delta,
+                        out int nonHairKeypointLocalCropSafeKeypointMaxIndex,
+                        out float nonHairKeypointLocalCropSafeKeypointMaxXDelta,
+                        out float nonHairKeypointLocalCropSafeKeypointMaxYDelta,
+                        out float nonHairKeypointLocalCropSafeKeypointMaxCandidateX,
+                        out float nonHairKeypointLocalCropSafeKeypointMaxCandidateY,
+                        out float nonHairKeypointLocalCropSafeKeypointMaxReferenceX,
+                        out float nonHairKeypointLocalCropSafeKeypointMaxReferenceY))
+                    {
+                        nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount =
+                            Mathf.Max(
+                                nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount,
+                                matchedNonHairKeypointLocalCropSafeKeypointCount);
+                        nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount++;
+                        nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointExcludedCount +=
+                            excludedNonHairKeypointLocalCropSafeKeypointCount;
+                        sumNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta +=
+                            nonHairKeypointLocalCropSafeKeypointL1Delta;
+                        if (nonHairKeypointLocalCropSafeKeypointMaxL1Delta >
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta)
+                        {
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta =
+                                nonHairKeypointLocalCropSafeKeypointMaxL1Delta;
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointLabel =
+                                ResolveImageSpaceKeypointLabel(nonHairKeypointLocalCropSafeKeypointMaxIndex);
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointIndex =
+                                nonHairKeypointLocalCropSafeKeypointMaxIndex;
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointXDelta =
+                                nonHairKeypointLocalCropSafeKeypointMaxXDelta;
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointYDelta =
+                                nonHairKeypointLocalCropSafeKeypointMaxYDelta;
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateX =
+                                nonHairKeypointLocalCropSafeKeypointMaxCandidateX;
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateY =
+                                nonHairKeypointLocalCropSafeKeypointMaxCandidateY;
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceX =
+                                nonHairKeypointLocalCropSafeKeypointMaxReferenceX;
+                            maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceY =
+                                nonHairKeypointLocalCropSafeKeypointMaxReferenceY;
+                        }
                     }
                 }
 
@@ -8506,6 +9149,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 nonHairBBoxNormalizedImageSpaceKeypointSampleCount;
             diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label =
                 maxNonHairBBoxNormalizedImageSpaceKeypointLabel ?? string.Empty;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_index =
+                maxNonHairBBoxNormalizedImageSpaceKeypointIndex;
             if (nonHairBBoxNormalizedImageSpaceKeypointSampleCount > 0)
             {
                 diagnostics.candidate_vs_reference_time_matched_non_hair_avg_bbox_normalized_image_space_keypoint_l1_delta =
@@ -8569,6 +9214,50 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                     keypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount;
                 diagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta =
                     maxKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta;
+            }
+
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count =
+                nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count =
+                nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count =
+                nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointExcludedCount;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointLabel ?? string.Empty;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_index =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointIndex;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_x_delta =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointXDelta;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_y_delta =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointYDelta;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_x =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateX;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_y =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateY;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_x =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceX;
+            diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_y =
+                maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceY;
+            if (IsFiniteMetric(maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointXDelta) &&
+                IsFiniteMetric(maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointYDelta))
+            {
+                float remainingXBudget = Mathf.Max(
+                    0f,
+                    ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta -
+                    maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointYDelta);
+                diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_required_x_reduction_to_threshold =
+                    Mathf.Max(
+                        0f,
+                        maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointXDelta -
+                        remainingXBudget);
+            }
+            if (nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount > 0)
+            {
+                diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta =
+                    sumNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta /
+                    nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount;
+                diagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta =
+                    maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta;
             }
         }
 
@@ -9526,13 +10215,25 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             out int excludedKeypointCount,
             out float l1Delta,
             out float maxL1Delta,
-            out int maxKeypointIndex)
+            out int maxKeypointIndex,
+            out float maxXDelta,
+            out float maxYDelta,
+            out float maxCandidateX,
+            out float maxCandidateY,
+            out float maxReferenceX,
+            out float maxReferenceY)
         {
             keypointCount = 0;
             excludedKeypointCount = 0;
             l1Delta = float.NaN;
             maxL1Delta = float.NaN;
             maxKeypointIndex = -1;
+            maxXDelta = float.NaN;
+            maxYDelta = float.NaN;
+            maxCandidateX = float.NaN;
+            maxCandidateY = float.NaN;
+            maxReferenceX = float.NaN;
+            maxReferenceY = float.NaN;
             if (candidateKeypoints == null ||
                 referenceKeypoints == null ||
                 !IsFiniteMetric(candidateCenterX) ||
@@ -9609,6 +10310,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
                 {
                     maxDelta = delta;
                     maxKeypointIndex = keypointIndex;
+                    maxXDelta = Mathf.Abs(candidateNormalizedX - referenceNormalizedX);
+                    maxYDelta = Mathf.Abs(candidateNormalizedY - referenceNormalizedY);
+                    maxCandidateX = candidateNormalizedX;
+                    maxCandidateY = candidateNormalizedY;
+                    maxReferenceX = referenceNormalizedX;
+                    maxReferenceY = referenceNormalizedY;
                 }
                 finiteKeypointCount++;
             }
@@ -10801,6 +11508,14 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool manual_animator_full_body_pose_exclude_lower_body_muscles;
             public bool manual_animator_full_body_pose_lower_body_muscles_only;
             public bool manual_animator_full_body_pose_leg_twist_muscles_only;
+            public bool manual_animator_full_body_pose_right_arm_muscles_only;
+            public bool manual_animator_full_body_pose_left_arm_muscles_only;
+            public bool manual_animator_full_body_pose_right_sleeve_chain_muscles_only;
+            public float manual_animator_full_body_pose_frame_gate_start;
+            public float manual_animator_full_body_pose_frame_gate_end;
+            public bool set_human_pose_right_leg_twist_output_enabled;
+            public float set_human_pose_right_leg_twist_output_weight;
+            public float set_human_pose_right_leg_twist_output_max_delta;
             public bool manual_animator_body_rotation_enabled;
             public bool manual_animator_body_rotation_disabled;
             public float manual_animator_body_rotation_weight;
@@ -10812,6 +11527,8 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public bool retarget_pose_visual_spike_smoothing_enabled;
             public float retarget_pose_visual_spike_current_weight;
             public float retarget_pose_visual_spike_forearm_stretch_clamp_max_offset;
+            public bool retarget_arm_stretch_clamp_enabled;
+            public float retarget_arm_stretch_muscle_limit;
             public bool yyb_arm_swing_limit_enabled;
             public float yyb_arm_swing_limit_weight;
             public float yyb_arm_swing_max_down_dot;
@@ -11082,6 +11799,16 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float candidate_vs_reference_time_matched_non_hair_avg_bbox_normalized_image_space_keypoint_l1_delta;
             public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_l1_delta;
             public string candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label;
+            public int candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_index;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_seconds;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_seconds;
+            public int candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_recorder_frame;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_x_delta;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_y_delta;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_x;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_y;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_x;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_y;
             public int candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_index;
             public string candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_label;
             public float candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_reference_seconds;
@@ -11099,6 +11826,12 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_top_gap;
             public float candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_bottom_gap;
             public float candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_top_gap;
+            public bool candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_touches_frame_edge;
+            public bool candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_touches_frame_edge;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_bottom_gap;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_top_gap;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_bottom_gap;
+            public float candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_top_gap;
             public int candidate_vs_reference_time_matched_crop_safe_sample_count;
             public float candidate_vs_reference_time_matched_crop_safe_avg_bbox_width_ratio_abs_delta;
             public float candidate_vs_reference_time_matched_crop_safe_max_bbox_width_ratio_abs_delta;
@@ -11117,6 +11850,20 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public float candidate_vs_reference_time_matched_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta;
             public float candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta;
             public string candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label;
+            public int candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count;
+            public int candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count;
+            public int candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta;
+            public string candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label;
+            public int candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_index;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_x_delta;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_y_delta;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_x;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_y;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_x;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_y;
+            public float candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_required_x_reduction_to_threshold;
             public string candidate_vs_reference_time_matched_framing_metric_basis;
             public string candidate_vs_reference_time_matched_image_space_limb_span_basis;
             public string candidate_vs_reference_time_matched_image_space_limb_band_basis;
@@ -11127,6 +11874,7 @@ namespace Member_Han.Modules.FBXImporter.EditorTools
             public string candidate_vs_reference_time_matched_non_hair_bbox_normalized_image_space_keypoint_basis;
             public string candidate_vs_reference_time_matched_crop_safe_basis;
             public string candidate_vs_reference_time_matched_keypoint_local_crop_safe_basis;
+            public string candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_basis;
             public string candidate_screenshot_frame_metrics_error;
             public string reference_mp4_analysis_error;
             public string reference_mp4_frame_metrics_error;

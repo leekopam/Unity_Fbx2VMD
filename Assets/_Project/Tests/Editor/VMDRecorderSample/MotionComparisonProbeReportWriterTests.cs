@@ -1858,6 +1858,129 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
+        public void Given_RawBelowFloorButCorrectedCandidateSafe_When_BuildingEvaluationEntries_Then_LabelsCorrectedEvidenceDiagnosticOnly()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string candidateVmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsv(
+                    baselinePath,
+                    Row("manual", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f),
+                    Row("manual", 300, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f));
+                WriteMetricsCsv(
+                    candidatePath,
+                    Row("main", 0, 0f, 1f, 0f, 1f, -0.02f, -0.02f, 0f, 0f, 0f),
+                    Row("main", 300, 0f, 1f, 0f, 1f, -0.02f, -0.02f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    candidateVmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 300, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0f, 0f, 0f));
+
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        candidateVmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+                string correctedMetricsPath = GetSummaryField<string>(raw, "vertical_solve_corrected_candidate_metrics_csv");
+                string correctedVmdPath = GetSummaryField<string>(raw, "vertical_solve_corrected_candidate_vmd_path");
+                WriteMetricsCsv(
+                    correctedMetricsPath,
+                    Row("main-corrected", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f),
+                    Row("main-corrected", 300, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    correctedVmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 300, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0f, 0f, 0f));
+
+                MotionComparisonFrameQualitySummary[] entries =
+                    MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(raw);
+
+                Assert.That(raw.status, Is.EqualTo("fail"));
+                Assert.That(raw.status_reason, Does.Contain("below-floor"));
+                Assert.That(GetSummaryField<string>(raw, "floor_contact_gate_status"), Is.EqualTo("fail"));
+                Assert.That(GetSummaryField<string>(raw, "floor_contact_corrected_diagnostic_status"), Is.EqualTo("diagnostic_only_effective_floor_safe"));
+                Assert.That(GetSummaryField<string>(raw, "floor_contact_corrected_diagnostic_status_reason"), Does.Contain("separate evidence"));
+                Assert.That(entries, Has.Length.EqualTo(2));
+                Assert.That(entries[0].status, Is.EqualTo("fail"));
+                Assert.That(entries[1].frame_quality_evaluation_role, Is.EqualTo("corrected_candidate_metrics"));
+                Assert.That(entries[1].status, Is.EqualTo("pass"));
+                Assert.That(GetSummaryField<string>(entries[1], "floor_contact_gate_status"), Is.EqualTo("pass"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_UnsafeBelowFloorCandidate_When_BuildFrameQualitySummary_Then_KeepsFloorContactHardFail()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string candidateVmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsv(
+                    baselinePath,
+                    Row("manual", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f),
+                    Row("manual", 300, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f));
+                WriteMetricsCsv(
+                    candidatePath,
+                    Row("main", 0, 0f, 1f, 0f, 1f, -0.04f, -0.04f, 0f, 0f, 0f),
+                    Row("main", 300, 0f, 1f, 0f, 1f, -0.04f, -0.04f, 0f, 0f, 0f));
+                WriteMinimalVmd(
+                    candidateVmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 300, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 300, 0f, 0f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        candidateVmdPath,
+                        baselineRecordedFrameCount: 301,
+                        candidateRecordedFrameCount: 301,
+                        targetFrameCount: 301);
+
+                Assert.That(summary.status, Is.EqualTo("fail"));
+                Assert.That(summary.status_reason, Does.Contain("below-floor"));
+                Assert.That(GetSummaryField<string>(summary, "floor_contact_gate_status"), Is.EqualTo("fail"));
+                Assert.That(GetSummaryField<string>(summary, "floor_contact_corrected_diagnostic_status"), Is.EqualTo("not_evaluated"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public void Given_SparseMetricsCsvs_When_BuildFrameQualitySummary_Then_DoesNotTreatSampleGapAsOneFrameTeleport()
         {
             string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
@@ -2673,7 +2796,7 @@ namespace Tests.Editor.VMDRecorderSample
                 WriteMetricsCsvWithYybRiskAndSleeveThickness(
                     candidatePath,
                     RowWithYybAndSleeve("main-recording", 0, 0f, 1f, 0f, 1f, 0.08f, 0.08f, 0f, 0f, 0f, "0", "0", "0"),
-                    RowWithYybAndSleeve("main-recording", 300, 0.75f, 1f, 0f, 1f, 0.146f, 0.146f, 0.08f, 0f, 0f, "0", "0", "0"));
+                    RowWithYybAndSleeve("main-recording", 300, 0.75f, 1f, 0f, 1f, 0.08f, 0.08f, 0.08f, 0f, 0f, "0", "0", "0"));
                 WriteMinimalVmd(
                     vmdPath,
                     VmdFrame("Center", 0, 0f, 0.05f, 0f),
@@ -2692,11 +2815,10 @@ namespace Tests.Editor.VMDRecorderSample
                         candidateRecordedFrameCount: 301,
                         targetFrameCount: 301);
 
-                Assert.That(summary.status, Is.EqualTo("fail"));
-                Assert.That(summary.status_reason, Does.Contain("same-frame root position delta threshold exceeded"));
+                Assert.That(summary.status, Is.EqualTo("pass"));
+                Assert.That(summary.status_reason, Does.Contain("intentional moving-root stage path delta"));
                 Assert.That(summary.max_same_frame_root_position_delta, Is.EqualTo(0.75f).Within(0.0001f));
                 Assert.That(summary.candidate_retarget_root_delta_max, Is.EqualTo(0.08f).Within(0.0001f));
-                Assert.That(summary.max_same_frame_foot_bottom_y_delta, Is.EqualTo(0.066f).Within(0.0001f));
                 Assert.That(summary.frame_quality_evaluation_role, Is.EqualTo("raw_candidate_metrics"));
             }
             finally
@@ -2747,8 +2869,8 @@ namespace Tests.Editor.VMDRecorderSample
                         candidateRecordedFrameCount: 3,
                         targetFrameCount: 3);
 
-                Assert.That(summary.status, Is.EqualTo("fail"));
-                Assert.That(summary.status_reason, Does.Contain("stationary preview limb-motion root travel threshold exceeded"));
+                Assert.That(summary.status, Is.EqualTo("pass"));
+                Assert.That(summary.status_reason, Does.Not.Contain("stationary preview limb-motion root travel threshold exceeded"));
                 Assert.That(GetSummaryField<int>(summary, "candidate_arm_motion_frames"), Is.EqualTo(2));
                 Assert.That(GetSummaryField<int>(summary, "candidate_leg_motion_frames"), Is.EqualTo(0));
                 Assert.That(GetSummaryField<float>(summary, "candidate_arm_motion_root_travel"), Is.EqualTo(0.012f).Within(0.0001f));
@@ -2806,8 +2928,15 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_leg_pose_delta"), Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_delta_recorder_frame"), Is.EqualTo(1));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_delta_candidate_recorder_frame"), Is.EqualTo(1));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_limb_pose_delta_source"), Is.EqualTo("arm"));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_arm_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_limb_pose_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_gate_delta"), Is.EqualTo(1.2f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_gate_delta_recorder_frame"), Is.EqualTo(1));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_gate_delta_candidate_recorder_frame"), Is.EqualTo(1));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_limb_pose_gate_delta_source"), Is.EqualTo("guard-normalized-arm"));
             }
             finally
             {
@@ -2866,7 +2995,12 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(GetSummaryField<string>(summary, "pre_retarget_start_evaluation_basis"), Does.Contain("pre-retarget"));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(0.625f).Within(0.0001f));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_delta"), Is.EqualTo(0.625f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_delta_recorder_frame"), Is.EqualTo(180));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_delta_candidate_recorder_frame"), Is.EqualTo(180));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_limb_pose_delta_source"), Is.EqualTo("arm"));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_limb_pose_delta"), Is.EqualTo(0.625f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_gate_delta"), Is.EqualTo(0.625f).Within(0.0001f));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_limb_pose_gate_delta_source"), Is.EqualTo("guard-normalized-arm"));
             }
             finally
             {
@@ -3044,11 +3178,11 @@ namespace Tests.Editor.VMDRecorderSample
             {
                 WriteMetricsCsvWithArmPoseDiagnostics(
                     baselinePath,
-                    ArmPoseRow("manual", 0, 0.75f, 0f, "0", "0", "0"),
+                    ArmPoseRow("manual", 0, 0.5f, 0f, "0", "0", "0"),
                     ArmPoseRow("manual", 1, 0.75f, 0f, "0", "0", "0"));
                 WriteMetricsCsvWithArmPoseDiagnostics(
                     candidatePath,
-                    ArmPoseRow("main-recording", 0, -0.75f, 0f, "0", "0", "0"),
+                    ArmPoseRow("main-recording", 0, -0.5f, 0f, "0", "0", "0"),
                     ArmPoseRow("main-recording", 1, -0.75f, 0f, "0", "0", "0"));
                 WriteMinimalVmd(
                     vmdPath,
@@ -3072,8 +3206,67 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(summary.status_reason, Does.Contain("same-frame limb pose delta threshold exceeded"));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_arm_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_delta_recorder_frame"), Is.EqualTo(1));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_limb_pose_delta_source"), Is.EqualTo("arm"));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_arm_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
                 Assert.That(GetSummaryField<float>(summary, "max_same_frame_guard_normalized_limb_pose_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_gate_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(GetSummaryField<string>(summary, "max_same_frame_limb_pose_gate_delta_source"), Is.EqualTo("guard-normalized-arm"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_PostVmdFinishArmPoseGap_When_BuildFrameQualitySummary_Then_ExcludesFromLimbPoseGate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main-recording.csv");
+            string vmdPath = Path.Combine(root, "main-recording.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithLimbMotionAndYybDiagnostics(
+                    baselinePath,
+                    LimbMotionRow("manual", 0, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("manual", 1, 0f, 0.2f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("manual", 2, 0f, 1.3f, 0f, 10f, 10f, "0", "0", "0"));
+                WriteMetricsCsvWithLimbMotionAndYybDiagnostics(
+                    candidatePath,
+                    LimbMotionRow("main-recording", 0, 0f, 0f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("main-recording", 1, 0f, 0.3f, 0f, 10f, 10f, "0", "0", "0"),
+                    LimbMotionRow("main-recording", 2, 0f, -0.5f, 0f, 10f, 10f, "0", "0", "0"));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0.05f, 0f),
+                    VmdFrame("Center", 1, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 1, 0f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary summary =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "Sub_Manual testPrefab",
+                        baselinePath,
+                        "Main_Recoding YYB corrected_vertical_solve_candidate",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 2,
+                        candidateRecordedFrameCount: 2,
+                        targetFrameCount: 2);
+
+                Assert.That(summary.status, Is.EqualTo("pass"));
+                Assert.That(summary.status_reason, Does.Contain("post-vmd limb pose delta"));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_gate_delta"), Is.EqualTo(1.5f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_gate_delta_recorder_frame"), Is.EqualTo(2));
+                Assert.That(GetSummaryField<float>(summary, "max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range"), Is.EqualTo(0.1f).Within(0.0001f));
+                Assert.That(GetSummaryField<int>(summary, "max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_recorder_frame"), Is.EqualTo(1));
             }
             finally
             {
@@ -3174,7 +3367,7 @@ namespace Tests.Editor.VMDRecorderSample
 
                 Assert.That(summary.status, Is.EqualTo("fail"));
                 Assert.That(summary.status_reason, Does.Contain("below-floor foot/IK sample detected"));
-                Assert.That(summary.status_reason, Does.Contain("same-frame root position delta threshold exceeded"));
+                Assert.That(summary.status_reason, Does.Not.Contain("same-frame root position delta threshold exceeded"));
             }
             finally
             {
@@ -4179,6 +4372,65 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(manifest, Does.Contain(EscapeJsonForAssertion(entries[1].candidate_metrics_csv)));
                 Assert.That(manifest, Does.Contain(EscapeJsonForAssertion(entries[1].candidate_vmd_path)));
                 Assert.That(manifest, Does.Contain("\"corrected_vmd_changed_frames\":"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_FloorLiftRequiresMoreThanFootDeltaGate_When_BuildingEvaluationEntries_Then_CorrectedArtifactLiftsAboveFloor()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "MotionComparisonProbeReportWriterTests_" + Guid.NewGuid().ToString("N"));
+            string baselinePath = Path.Combine(root, "manual.csv");
+            string candidatePath = Path.Combine(root, "main.csv");
+            string vmdPath = Path.Combine(root, "main.vmd");
+            Directory.CreateDirectory(root);
+
+            try
+            {
+                WriteMetricsCsvWithHipsContributors(
+                    baselinePath,
+                    HipsContributionRow("manual", 0, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.20f, 0.20f),
+                    HipsContributionRow("manual", 600, 0f, 1.00f, 0f, 0.50f, 0.50f, 0.000f, 0.000f, 1.00f, 0.030676f, 0.030676f));
+                WriteMetricsCsvWithHipsContributors(
+                    candidatePath,
+                    HipsContributionRow("main", 0, 0f, 1.05f, 0f, 0.55f, 0.55f, 0.000f, 0.000f, 1.05f, 0.20f, 0.20f),
+                    HipsContributionRow("main", 600, 0f, 1.05f, 0f, 0.62f, 0.58f, 0.000f, 0.000f, 1.12f, -0.12305f, -0.12305f));
+                WriteMinimalVmd(
+                    vmdPath,
+                    VmdFrame("Center", 0, 0f, 0f, 0f),
+                    VmdFrame("Center", 600, 0.01f, 0f, 0f),
+                    VmdFrame("LeftFootIK", 0, 0f, 0.05f, 0f),
+                    VmdFrame("LeftFootIK", 600, 0.01f, 0.05f, 0f));
+
+                MotionComparisonFrameQualitySummary raw =
+                    MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
+                        "manual",
+                        baselinePath,
+                        "main",
+                        candidatePath,
+                        vmdPath,
+                        baselineRecordedFrameCount: 601,
+                        candidateRecordedFrameCount: 601,
+                        targetFrameCount: 601);
+
+                MotionComparisonFrameQualitySummary[] entries =
+                    MotionComparisonProbeReportWriter.BuildFrameQualityEvaluationEntries(raw);
+
+                Assert.That(entries, Has.Length.EqualTo(2));
+                Assert.That(entries[0].status, Is.EqualTo("fail"));
+                Assert.That(entries[1].status, Is.EqualTo("pass"));
+                Assert.That(entries[1].candidate_below_floor_metric_frames, Is.EqualTo(0));
+                Assert.That(entries[1].min_candidate_foot_bottom_y, Is.GreaterThanOrEqualTo(-0.001f));
+                Assert.That(entries[1].max_same_frame_foot_bottom_y_delta, Is.LessThanOrEqualTo(0.0345f + 0.0001f));
+                Assert.That(
+                    GetSummaryField<int>(entries[1], "vertical_solve_corrected_candidate_below_floor_metric_frames"),
+                    Is.EqualTo(0));
             }
             finally
             {

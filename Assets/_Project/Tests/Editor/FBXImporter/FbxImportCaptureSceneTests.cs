@@ -156,12 +156,14 @@ namespace Tests.Editor.FBXImporter
                 "Main_Recoding must not preserve manual thumb muscles while the manual finger reference is disabled.");
             Assert.That(fileManager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.12f).Within(0.0001f),
                 "Main_Recoding keeps only the conservative serialized Hips reference cap while the reference is disabled.");
-            Assert.That(fileManager.MovementScaleMultiplier, Is.EqualTo(0f).Within(0.0001f),
-                "Main_Recoding must keep the visible root carrier stationary so arm motion does not move the whole character in an arc.");
-            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.False,
-                "Main_Recoding must not add bodyPosition X/Z root motion to the stationary preview carrier.");
+            Assert.That(fileManager.preserveRetargetBodyPosition, Is.False,
+                "Main_Recoding must let the imported FBX body position drive the moving-root solve.");
+            Assert.That(fileManager.MovementScaleMultiplier, Is.GreaterThanOrEqualTo(0.9f),
+                "Main_Recoding must keep the visible root carrier moving for manual-style natural motion.");
+            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.True,
+                "Main_Recoding must add bodyPosition X/Z root motion to the manual-style preview carrier.");
             Assert.That(fileManager.useEditorHumanoidRootTranslationReference, Is.False,
-                "Main_Recoding must not add Humanoid RootT translation to the stationary preview carrier.");
+                "Main_Recoding must not add Humanoid RootT translation on top of bodyPosition X/Z root motion.");
         }
 
         [Test]

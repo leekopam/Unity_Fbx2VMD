@@ -116,7 +116,9 @@ namespace Tests.Editor.Graphics
                     false,
                     null,
                     3840,
-                    2160);
+                    2160,
+                    1.8f,
+                    0.28f);
 
                 Assert.That(GetMemberValue<int>(controller, "ProbeScreenshotWidth"), Is.EqualTo(3840));
                 Assert.That(GetMemberValue<int>(controller, "ProbeScreenshotHeight"), Is.EqualTo(2160));

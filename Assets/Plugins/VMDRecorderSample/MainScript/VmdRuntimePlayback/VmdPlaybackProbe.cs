@@ -56,10 +56,9 @@ public sealed class VmdPlaybackProbe : MonoBehaviour
         UseCenterAsParentOfAll = useCenterAsParentOfAll;
         RouteCenterBoneToGroove = routeCenterBoneToGroove;
         AnchorCarrierPositionsToInitialPose = true;
-        LockParentOfAllPosition = true;
-        UseExplicitParentOfAllLockPosition = true;
+        LockParentOfAllPosition = false;
+        UseExplicitParentOfAllLockPosition = false;
         ParentOfAllLockPosition = Vector3.zero;
-        transform.localPosition = ParentOfAllLockPosition;
         ApplyIkTargets = applyIkTargets;
         PlaybackEnabled = true;
         _motion = null;

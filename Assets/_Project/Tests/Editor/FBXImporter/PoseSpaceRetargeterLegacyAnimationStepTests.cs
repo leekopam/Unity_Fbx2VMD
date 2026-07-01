@@ -35,6 +35,15 @@ namespace Tests.Editor.FBXImporter
             typeof(int)
         };
 
+        private static readonly Type[] BoundedSetHumanPoseRightLegTwistParameterTypes =
+        {
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(float)
+        };
+
         private static readonly Type[] VisualPoseSpikeParameterTypes =
         {
             typeof(float),
@@ -161,6 +170,16 @@ namespace Tests.Editor.FBXImporter
             typeof(Vector3),
             typeof(Vector3),
             typeof(float)
+        };
+
+        private static readonly Type[] RetargetEndpointStageJumpParameterTypes =
+        {
+            typeof(string[]),
+            typeof(Vector3[]),
+            typeof(float),
+            typeof(string).MakeByRefType(),
+            typeof(Vector3).MakeByRefType(),
+            typeof(float).MakeByRefType()
         };
 
         [Test]
@@ -720,6 +739,66 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta()
+        {
+            bool attributed = TryFindFirstRetargetEndpointStageJump(
+                new[] { "pre_set", "after_set_human_pose", "after_manual_reference", "after_root_restore" },
+                new[]
+                {
+                    new Vector3(0f, 0f, 0f),
+                    new Vector3(0.08f, 0f, -0.02f),
+                    new Vector3(0.20f, 0f, -0.02f),
+                    new Vector3(0.20f, 0f, -0.10f)
+                },
+                threshold: 0.05f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(attributed, Is.True);
+            Assert.That(stage, Is.EqualTo("after_set_human_pose"));
+            Assert.That(delta.x, Is.EqualTo(0.08f).Within(0.0001f));
+            Assert.That(delta.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(delta.z, Is.EqualTo(-0.02f).Within(0.0001f));
+            Assert.That(magnitude, Is.EqualTo(new Vector3(0.08f, 0f, -0.02f).magnitude).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution()
+        {
+            bool attributed = TryFindFirstRetargetEndpointStageJump(
+                new[] { "pre_set", "after_set_human_pose", "after_manual_reference" },
+                new[]
+                {
+                    new Vector3(0f, 0f, 0f),
+                    new Vector3(0.01f, 0f, 0f),
+                    new Vector3(0.02f, 0f, 0f)
+                },
+                threshold: 0.05f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(attributed, Is.False);
+            Assert.That(stage, Is.EqualTo(""));
+            Assert.That(delta.x, Is.NaN);
+            Assert.That(delta.y, Is.NaN);
+            Assert.That(delta.z, Is.NaN);
+            Assert.That(magnitude, Is.NaN);
+        }
+
+        [Test]
+        public void Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties()
+        {
+            AssertReadableStringProperty("LastRetargetEndpointFirstJumpStage");
+            AssertReadableStringProperty("LastRetargetEndpointFirstJumpEndpoint");
+            AssertReadableFloatProperty("LastRetargetEndpointFirstJumpMagnitude");
+            AssertReadableFloatProperty("LastRetargetEndpointFirstJumpDeltaX");
+            AssertReadableFloatProperty("LastRetargetEndpointFirstJumpDeltaY");
+            AssertReadableFloatProperty("LastRetargetEndpointFirstJumpDeltaZ");
+        }
+
+        [Test]
         public void Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist()
         {
             var root = new GameObject("leg twist full body pose mask fixture");
@@ -742,6 +821,40 @@ namespace Tests.Editor.FBXImporter
             {
                 UnityEngine.Object.DestroyImmediate(root);
             }
+        }
+
+        [Test]
+        public void Given_BoundedSetHumanPoseRightLegTwist_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit()
+        {
+            Assert.That(
+                CalculateBoundedSetHumanPoseRightLegTwistOutput(
+                    inputValue: 0.25f,
+                    outputValue: 0.33f,
+                    weight: 0f,
+                    maxDelta: 0.02f,
+                    fallbackValue: 0.33f),
+                Is.EqualTo(0.33f).Within(0.0001f),
+                "Weight zero must keep the current SetHumanPose output unchanged.");
+
+            Assert.That(
+                CalculateBoundedSetHumanPoseRightLegTwistOutput(
+                    inputValue: 0.25f,
+                    outputValue: 0.33f,
+                    weight: 1f,
+                    maxDelta: 0.02f,
+                    fallbackValue: 0.33f),
+                Is.EqualTo(0.31f).Within(0.0001f),
+                "The correction must be capped so the diagnostic cannot hard-snap a leg twist muscle.");
+
+            Assert.That(
+                CalculateBoundedSetHumanPoseRightLegTwistOutput(
+                    inputValue: 0.25f,
+                    outputValue: 0.33f,
+                    weight: 0.5f,
+                    maxDelta: 0.02f,
+                    fallbackValue: 0.33f),
+                Is.EqualTo(0.32f).Within(0.0001f),
+                "Partial weight should apply a bounded fraction of the output-to-input correction.");
         }
 
         [Test]
@@ -879,6 +992,52 @@ namespace Tests.Editor.FBXImporter
             Assert.That(property, Is.Not.Null, $"PoseSpaceRetargeter should expose {propertyName} for left arm twist stage diagnostics.");
             Assert.That(property.PropertyType, Is.EqualTo(typeof(float)));
             Assert.That(property.GetMethod, Is.Not.Null);
+        }
+
+        private static void AssertReadableStringProperty(string propertyName)
+        {
+            PropertyInfo property = typeof(PoseSpaceRetargeter).GetProperty(
+                propertyName,
+                BindingFlags.Instance | BindingFlags.Public);
+
+            Assert.That(property, Is.Not.Null, $"PoseSpaceRetargeter should expose {propertyName} for endpoint stage attribution diagnostics.");
+            Assert.That(property.PropertyType, Is.EqualTo(typeof(string)));
+            Assert.That(property.GetMethod, Is.Not.Null);
+        }
+
+        private static bool TryFindFirstRetargetEndpointStageJump(
+            string[] stageNames,
+            Vector3[] positions,
+            float threshold,
+            out string stage,
+            out Vector3 delta,
+            out float magnitude)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "TryFindFirstRetargetEndpointStageJump",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: RetargetEndpointStageJumpParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "PoseSpaceRetargeter should expose a pure static helper for first endpoint stage-jump attribution diagnostics.");
+
+            object[] args =
+            {
+                stageNames,
+                positions,
+                threshold,
+                "",
+                Vector3.zero,
+                0f
+            };
+
+            bool found = (bool)method.Invoke(null, args);
+            stage = (string)args[3];
+            delta = (Vector3)args[4];
+            magnitude = (float)args[5];
+            return found;
         }
 
         [Test]
@@ -1228,6 +1387,32 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter must expose the full-body pose mask predicate for focused diagnostics.");
 
             return (bool)method.Invoke(retargeter, new object[] { muscleIndex });
+        }
+
+        private static float CalculateBoundedSetHumanPoseRightLegTwistOutput(
+            float inputValue,
+            float outputValue,
+            float weight,
+            float maxDelta,
+            float fallbackValue)
+        {
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                "CalculateBoundedSetHumanPoseRightLegTwistOutput",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: BoundedSetHumanPoseRightLegTwistParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure helper for bounded right leg twist output preservation.");
+
+            return (float)method.Invoke(null, new object[]
+            {
+                inputValue,
+                outputValue,
+                weight,
+                maxDelta,
+                fallbackValue
+            });
         }
 
         private static int FindHumanMuscleIndex(string muscleName)

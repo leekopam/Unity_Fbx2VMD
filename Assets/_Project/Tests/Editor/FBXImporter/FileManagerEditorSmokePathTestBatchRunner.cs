@@ -91,6 +91,12 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_MainSceneFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesFullClipUhd4KAndHeadMiddleTailSamples);
             RunTest(results, nameof(tests.Given_MainRecordingFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesSatisfaction2Fbx),
                 tests.Given_MainRecordingFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesSatisfaction2Fbx);
+            RunTest(results, nameof(tests.Given_EditorSmokeSettingsSnapshot_When_CapturingAndClearing_Then_RestoresAllRuntimeSettings),
+                tests.Given_EditorSmokeSettingsSnapshot_When_CapturingAndClearing_Then_RestoresAllRuntimeSettings);
+            RunTest(results, nameof(tests.Given_EditorSmokeSettingsSnapshot_When_StartDelayIsNaN_Then_RestoresNaNExactly),
+                tests.Given_EditorSmokeSettingsSnapshot_When_StartDelayIsNaN_Then_RestoresNaNExactly);
+            RunTest(results, nameof(tests.Given_EditorSmokeSettingsSnapshot_When_ClearRunsWithoutActiveSnapshot_Then_DoesNotChangeSettings),
+                tests.Given_EditorSmokeSettingsSnapshot_When_ClearRunsWithoutActiveSnapshot_Then_DoesNotChangeSettings);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);
