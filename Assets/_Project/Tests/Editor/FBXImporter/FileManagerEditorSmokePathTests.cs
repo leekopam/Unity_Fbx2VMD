@@ -693,6 +693,150 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_EditorSmokeSettingsSnapshot_When_CapturingAndClearing_Then_RestoresAllRuntimeSettings()
+        {
+            GameObject root = new GameObject("EditorSmokeSettingsSnapshotTest");
+            FileManager fileManager = root.AddComponent<FileManager>();
+
+            try
+            {
+                fileManager.enableRecordingDiagnostics = false;
+                fileManager.enableDiagnosticFingerCloseups = true;
+                fileManager.useDeterministicCaptureFramerateForDiagnostics = false;
+                fileManager.startDelay = 1.25f;
+                SetPrivateField(fileManager, "_editorSmokeRecordingOverrideActive", true);
+                SetPrivateField(fileManager, "_editorSmokeTargetFrameCount", 17);
+                SetPrivateField(fileManager, "_editorSmokeDurationSeconds", 2.5f);
+                SetPrivateField(fileManager, "_editorSmokeSampleTimesOverride", new[] { 0.5f });
+                SetPrivateField(fileManager, "_editorSmokeSegment", FileManager.EditorDiagnosticSmokeSegment.Middle);
+                SetPrivateField(fileManager, "_editorSmokeCurrentFbxFileName", "snapshot.fbx");
+
+                InvokeInstance(fileManager, "CaptureEditorSmokeSettings");
+                fileManager.enableRecordingDiagnostics = true;
+                fileManager.enableDiagnosticFingerCloseups = false;
+                fileManager.useDeterministicCaptureFramerateForDiagnostics = true;
+                fileManager.startDelay = 9.5f;
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+
+                Assert.That(fileManager.enableRecordingDiagnostics, Is.False);
+                Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.True);
+                Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.False);
+                Assert.That(fileManager.startDelay, Is.EqualTo(1.25f));
+                AssertEditorSmokeCoreCleanupState(fileManager);
+                AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+
+                Assert.That(fileManager.enableRecordingDiagnostics, Is.False);
+                Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.True);
+                Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.False);
+                Assert.That(fileManager.startDelay, Is.EqualTo(1.25f));
+                AssertEditorSmokeCoreCleanupState(fileManager);
+                AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void Given_EditorSmokeSettingsSnapshot_When_StartDelayIsNaN_Then_RestoresNaNExactly()
+        {
+            GameObject root = new GameObject("EditorSmokeSettingsSnapshotNaNTest");
+            FileManager fileManager = root.AddComponent<FileManager>();
+
+            try
+            {
+                fileManager.enableRecordingDiagnostics = true;
+                fileManager.enableDiagnosticFingerCloseups = false;
+                fileManager.useDeterministicCaptureFramerateForDiagnostics = true;
+                fileManager.startDelay = float.NaN;
+
+                InvokeInstance(fileManager, "CaptureEditorSmokeSettings");
+                fileManager.enableRecordingDiagnostics = false;
+                fileManager.enableDiagnosticFingerCloseups = true;
+                fileManager.useDeterministicCaptureFramerateForDiagnostics = false;
+                fileManager.startDelay = 3.75f;
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+
+                Assert.That(fileManager.enableRecordingDiagnostics, Is.True);
+                Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.False);
+                Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.True);
+                Assert.That(float.IsNaN(fileManager.startDelay), Is.True);
+                Assert.That(fileManager.startDelay, Is.NaN);
+                AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+
+                Assert.That(fileManager.enableRecordingDiagnostics, Is.True);
+                Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.False);
+                Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.True);
+                Assert.That(float.IsNaN(fileManager.startDelay), Is.True);
+                Assert.That(fileManager.startDelay, Is.NaN);
+                AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void Given_EditorSmokeSettingsSnapshot_When_ClearRunsWithoutActiveSnapshot_Then_DoesNotChangeSettings()
+        {
+            GameObject root = new GameObject("EditorSmokeSettingsSnapshotInactiveTest");
+            FileManager fileManager = root.AddComponent<FileManager>();
+
+            try
+            {
+                fileManager.enableRecordingDiagnostics = true;
+                fileManager.enableDiagnosticFingerCloseups = false;
+                fileManager.useDeterministicCaptureFramerateForDiagnostics = true;
+                fileManager.startDelay = 4.5f;
+                SetPrivateField(fileManager, "_editorSmokeRecordingOverrideActive", true);
+                SetPrivateField(fileManager, "_editorSmokeTargetFrameCount", 17);
+                SetPrivateField(fileManager, "_editorSmokeDurationSeconds", 2.5f);
+                SetPrivateField(fileManager, "_editorSmokeSampleTimesOverride", new[] { 0.5f });
+                SetPrivateField(fileManager, "_editorSmokeSegment", FileManager.EditorDiagnosticSmokeSegment.Middle);
+                SetPrivateField(fileManager, "_editorSmokeCurrentFbxFileName", "inactive.fbx");
+                SetPrivateField(fileManager, "_editorSmokeCaptureResolutionOverrideActive", true);
+                SetPrivateField(fileManager, "_editorSmokeCaptureWidth", 1920);
+                SetPrivateField(fileManager, "_editorSmokeCaptureHeight", 1080);
+                SetPrivateField(fileManager, "_editorSmokeDiagnosticScreenshotPaddingOverride", 0.25f);
+                SetPrivateField(fileManager, "_editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride", 0.75f);
+                SetPrivateField(fileManager, "_editorSmokeUseKnownMmdReferenceTiming", true);
+                SetPrivateField(fileManager, "_editorSmokeRecordingStartTimeOverrideSeconds", 1f);
+                SetPrivateField(fileManager, "_editorSmokeRecordingPlaybackSpeedOverride", 0.5f);
+
+                AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+
+                Assert.That(fileManager.enableRecordingDiagnostics, Is.True);
+                Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.False);
+                Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.True);
+                Assert.That(fileManager.startDelay, Is.EqualTo(4.5f));
+                AssertEditorSmokeCoreCleanupState(fileManager);
+                AssertEditorSmokeExtendedCleanupState(fileManager);
+                AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+
+                Assert.That(fileManager.enableRecordingDiagnostics, Is.True);
+                Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.False);
+                Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.True);
+                Assert.That(fileManager.startDelay, Is.EqualTo(4.5f));
+                AssertEditorSmokeCoreCleanupState(fileManager);
+                AssertEditorSmokeExtendedCleanupState(fileManager);
+                AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         private static string Resolve(
             string fbxFileName,
             string controlledDirectory,
@@ -1039,6 +1183,53 @@ namespace Tests.Editor.FBXImporter
             Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must keep a private {fieldName} field for this visibility regression test.");
 
             return (T)field.GetValue(target);
+        }
+
+        private static void SetPrivateField<T>(object target, string fieldName, T value)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must keep a private {fieldName} field for this editor smoke settings snapshot test.");
+            field.SetValue(target, value);
+        }
+
+        private static void AssertEditorSmokeCoreCleanupState(FileManager fileManager)
+        {
+            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeRecordingOverrideActive"), Is.False);
+            Assert.That(ReadInstanceField<int>(fileManager, "_editorSmokeTargetFrameCount"), Is.EqualTo(0));
+            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeDurationSeconds"), Is.EqualTo(0f));
+            Assert.That(ReadInstanceField<float[]>(fileManager, "_editorSmokeSampleTimesOverride"), Is.Null);
+            Assert.That(ReadInstanceField<FileManager.EditorDiagnosticSmokeSegment>(fileManager, "_editorSmokeSegment"),
+                Is.EqualTo(FileManager.EditorDiagnosticSmokeSegment.Head));
+            Assert.That(ReadInstanceField<string>(fileManager, "_editorSmokeCurrentFbxFileName"), Is.Null);
+        }
+
+        private static void AssertEditorSmokeExtendedCleanupState(FileManager fileManager)
+        {
+            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeCaptureResolutionOverrideActive"), Is.False);
+            Assert.That(ReadInstanceField<int>(fileManager, "_editorSmokeCaptureWidth"), Is.EqualTo(0));
+            Assert.That(ReadInstanceField<int>(fileManager, "_editorSmokeCaptureHeight"), Is.EqualTo(0));
+            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeDiagnosticScreenshotPaddingOverride"), Is.NaN);
+            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride"), Is.NaN);
+            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeUseKnownMmdReferenceTiming"), Is.False);
+            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeRecordingStartTimeOverrideSeconds"), Is.NaN);
+            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeRecordingPlaybackSpeedOverride"), Is.NaN);
+        }
+
+        private static void AssertEditorSmokeSettingsSnapshotIsDefault(FileManager fileManager)
+        {
+            FieldInfo snapshotField = fileManager.GetType().GetField(
+                "_editorSmokeSettingsSnapshot",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(snapshotField, Is.Not.Null, "FileManager must keep the private editor smoke settings snapshot backing field.");
+            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeSettingsSnapshotActive"), Is.False);
+
+            object snapshot = ReadInstanceField<object>(fileManager, "_editorSmokeSettingsSnapshot");
+            object defaultSnapshot = Activator.CreateInstance(snapshotField.FieldType);
+            Assert.That(snapshot, Is.EqualTo(defaultSnapshot));
         }
 
         private static void InvokeInstance(object target, string methodName)

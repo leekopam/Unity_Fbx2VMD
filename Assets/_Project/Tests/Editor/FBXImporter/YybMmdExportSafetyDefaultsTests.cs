@@ -43,13 +43,15 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.YybArmSwingMinHandHorizontalRatio, Is.EqualTo(0.05f).Within(0.0001f), "Main_Auto must keep the accepted horizontal trigger ratio.");
             Assert.That(fileManager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(1.5f).Within(0.0001f), "Main_Auto must keep the accepted below-shoulder tolerance.");
             Assert.That(fileManager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must apply the accepted horizontal reach clamp strength.");
-            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.08f).Within(0.0001f), "Main_Auto must use the measured reach cap that reduces silhouette and non-hair avg without worsening the current max metrics.");
+            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.06f).Within(0.0001f), "Main_Auto must use the measured reach cap that reduces non-hair average, local average, upper span, and silhouette average without worsening the current max metrics.");
             Assert.That(fileManager.YybArmSwingRaisedPoseHorizontalReachLimitWeight, Is.EqualTo(0.25f).Within(0.0001f), "Main_Auto must keep the accepted raised-pose reach cap that reduces upper-band and silhouette residuals without worsening full or non-hair max.");
             Assert.That(fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot, Is.EqualTo(0.55f).Within(0.0001f), "Main_Auto must only apply the raised-pose reach cap when the upper arm is still meaningfully lowered.");
             Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio, Is.EqualTo(0.05f).Within(0.0001f), "Main_Auto must keep the raised-pose reach cap out of the natural below-shoulder swing frames.");
             Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio, Is.EqualTo(0.55f).Within(0.0001f), "Main_Auto must cap only the wide raised-pose horizontal reach that drives the MP4 upper-band residual.");
             Assert.That(fileManager.enableAnatomicalArmGuard, Is.True, "Main_Auto must keep arm anatomy protection while validating the shared YYB playback/export path.");
             Assert.That(fileManager.attachTargetArmDeformationGuard, Is.True, "Main_Auto must attach arm deformation guards while validating the shared YYB playback/export path.");
+            Assert.That(fileManager.targetGuardClampAnatomicalArmMuscles, Is.True, "Main_Auto must clamp target-side arm muscles after YYB arm swing correction so late guard output cannot reopen limb-pose failures.");
+            Assert.That(fileManager.targetGuardClampArmStretchMuscles, Is.True, "Main_Auto must clamp target-side forearm stretch after YYB arm swing correction.");
             Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, "Main_Auto must keep YYB arm visual twist correction for the shared playback/export path.");
             Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, "Main_Auto must keep sleeve anchor correction for the shared playback/export path.");
             Assert.That(fileManager.YybArmSleeveAnchorInfluence, Is.EqualTo(0.825f).Within(0.0001f), "Main_Auto must use the measured sleeve anchor influence that reduces non-hair avg without worsening non-hair max, silhouette, or full max.");
@@ -57,11 +59,17 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.enableThumbLocalRotationGuard, Is.True, "Main_Auto must keep thumb local rotation protection for the shared playback/export path.");
             Assert.That(fileManager.enableThumbVisualLengthGuard, Is.True, "Main_Auto must keep thumb visual length protection for the shared playback/export path.");
             Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.True, "Editor smoke must fail when thumb risk exceeds the threshold.");
+            Assert.That(fileManager.clampRetargetArmStretchMuscles, Is.True, "Main_Auto must clamp retarget arm stretch muscles to prevent corrected left forearm stretch spikes from reopening the limb-pose gate.");
+            Assert.That(fileManager.ArmStretchMuscleLimit, Is.EqualTo(0.5f).Within(0.0001f), "Main_Auto must keep the measured 0.5 arm stretch limit that reduces the corrected left forearm stretch gate delta below 1.0.");
             Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True, "Main_Auto must blend the manual reference pose to reduce the non-hair band_3_right arm/sleeve residual in normal playback/import.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must use the measured full-body reference blend that reduces full max, non-hair max, and non-hair avg while the remaining upper/silhouette trade-off stays tracked.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False, "Main_Auto must not mask lower-body muscles unless a runtime diagnostic explicitly requests it.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to lower-body muscles unless a runtime diagnostic explicitly requests it.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to leg twist muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to right-arm muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to left-arm muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f), "Main_Auto must keep full-body reference frame gates disabled by default.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f), "Main_Auto must keep full-body reference frame gates disabled by default.");
             Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.False, "Rollback preset must remove the manual hips local-position override from the reference-video tuning pass.");
             Assert.That(fileManager.useManualAnimatorFootHeightGroundingReference, Is.False, "Rollback preset must remove manual lowest-foot grounding from the reference-video tuning pass.");
             Assert.That(fileManager.useManualAnimatorFootLocalRotationReference, Is.True, "Main_Auto must promote the accepted lower-body localRotation reference after it kept MP4 compare gates passing.");
@@ -71,10 +79,15 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True, "Main_Auto must promote the accepted lower-body segment direction guard.");
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted lower-body segment direction blend.");
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f), "Main_Auto must keep the accepted lower-body segment direction cap.");
-            Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.25f).Within(0.0001f), "Main_Auto must use the measured right LowerLegToFoot soft blend that reduces right foot X/Z without worsening hips-aligned foot residual.");
+            Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.125f).Within(0.0001f), "Main_Auto must use the measured right LowerLegToFoot soft blend that reduces right foot X/Z and hips-aligned foot residual without moving hips.");
             Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True, "Main_Auto must promote the accepted foot hips-aligned residual yaw guard.");
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted residual yaw blend.");
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f), "Main_Auto must keep the accepted residual yaw cap.");
+            Assert.That(fileManager.usePostSetHumanPoseRightEndpointPositionReference, Is.False, "Main_Auto must keep the post-SetHumanPose endpoint carrier runtime-only until twist and manual-layer ablation metrics justify promotion.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must preserve the endpoint diagnostic blend value while the diagnostic is disabled.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f), "Main_Auto must preserve the endpoint diagnostic cap while the diagnostic remains runtime-only.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must preserve the symmetric X/Z endpoint diagnostic scale.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must preserve the foot/toes average endpoint diagnostic blend.");
             Assert.That(fileManager.manualAnimatorFootHeightGroundingReferenceMaxLift, Is.EqualTo(0.08f).Within(0.0001f), "Serialized cap remains available but must be inactive while the reference-video foot-height reference is disabled.");
             Assert.That(fileManager.clampRetargetHipsLocalPositionSpikes, Is.False, "Hips local clamps change pose internals and must stay out of the center/root-only floor correction slice.");
             Assert.That(fileManager.vmdRecordingPlaybackSpeed, Is.EqualTo(1f).Within(0.0001f), "Main_Auto VMD export must default to normal playback speed.");
@@ -121,15 +134,25 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.25f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.125f).Within(0.0001f));
             Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f));
+            Assert.That(fileManager.usePostSetHumanPoseRightEndpointPositionReference, Is.False);
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.useManualAnimatorHandLocalRotationReference, Is.True);
             Assert.That(fileManager.lockTargetHumanoidBonePositions, Is.True);
             Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.True);
@@ -137,7 +160,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.YybArmSwingMaxDownDot, Is.EqualTo(0.75f).Within(0.0001f));
             Assert.That(fileManager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(1.5f).Within(0.0001f));
             Assert.That(fileManager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.08f).Within(0.0001f));
+            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.06f).Within(0.0001f));
             Assert.That(fileManager.YybArmSwingRaisedPoseHorizontalReachLimitWeight, Is.EqualTo(0.25f).Within(0.0001f));
             Assert.That(fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot, Is.EqualTo(0.55f).Within(0.0001f));
             Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio, Is.EqualTo(0.05f).Within(0.0001f));
@@ -274,6 +297,11 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
             Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
@@ -288,6 +316,10 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
             Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
@@ -302,11 +334,203 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.True);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+
+            ClearYybVisualComparisonRunnerState("full-body-mask-right-arm-frame-gate-test");
+            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateStart", 88f);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 92f);
+
+            Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
+            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.True);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(88f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(92f).Within(0.0001f));
+            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+
+            ClearYybVisualComparisonRunnerState("full-body-mask-left-arm-frame-gate-test");
+            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateStart", 396f);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 396f);
+
+            Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
+            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.True);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(396f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(396f).Within(0.0001f));
+            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+
+            ClearYybVisualComparisonRunnerState("full-body-mask-right-sleeve-chain-frame-gate-test");
+            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateStart", 90f);
+            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 90f);
+
+            Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
+            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.True);
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
             Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
             Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-test-cleanup");
+        }
+
+        [Test]
+        public void ManualFullBodyPoseRightArmMask_FiltersOnlyRightArmChain()
+        {
+            GameObject host = new GameObject("right-arm-mask-test");
+            try
+            {
+                PoseSpaceRetargeter retargeter = host.AddComponent<PoseSpaceRetargeter>();
+                retargeter.manualAnimatorFullBodyPoseRightArmMusclesOnly = true;
+
+                MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                    "ShouldApplyManualFullBodyPoseReferenceMuscle",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null, "Pose retargeter must expose a private manual full-body muscle filter.");
+
+                int rightArm = FindHumanMuscleIndex("Right", "Arm");
+                int rightForearm = FindHumanMuscleIndex("Right", "Forearm");
+                int leftArm = FindHumanMuscleIndex("Left", "Arm");
+                int rightUpperLeg = FindHumanMuscleIndex("Right", "Upper Leg");
+                int rightIndex = FindHumanMuscleIndex("Right", "Index");
+
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightArm }), Is.True);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightForearm }), Is.True);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { leftArm }), Is.False);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightUpperLeg }), Is.False);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightIndex }), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void ManualFullBodyPoseLeftArmMask_FiltersOnlyLeftArmChain()
+        {
+            GameObject host = new GameObject("left-arm-mask-test");
+            try
+            {
+                PoseSpaceRetargeter retargeter = host.AddComponent<PoseSpaceRetargeter>();
+                retargeter.manualAnimatorFullBodyPoseLeftArmMusclesOnly = true;
+
+                MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                    "ShouldApplyManualFullBodyPoseReferenceMuscle",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null, "Pose retargeter must expose a private manual full-body muscle filter.");
+
+                int leftArm = FindHumanMuscleIndex("Left", "Arm");
+                int leftForearm = FindHumanMuscleIndex("Left", "Forearm");
+                int rightArm = FindHumanMuscleIndex("Right", "Arm");
+                int leftUpperLeg = FindHumanMuscleIndex("Left", "Upper Leg");
+                int leftIndex = FindHumanMuscleIndex("Left", "Index");
+
+                Assert.That((bool)method.Invoke(retargeter, new object[] { leftArm }), Is.True);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { leftForearm }), Is.True);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightArm }), Is.False);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { leftUpperLeg }), Is.False);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { leftIndex }), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void ManualFullBodyPoseRightSleeveChainMask_FiltersOnlySpineAndRightSleeveChain()
+        {
+            GameObject host = new GameObject("right-sleeve-chain-mask-test");
+            try
+            {
+                PoseSpaceRetargeter retargeter = host.AddComponent<PoseSpaceRetargeter>();
+                retargeter.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = true;
+
+                MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                    "ShouldApplyManualFullBodyPoseReferenceMuscle",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null, "Pose retargeter must expose a private manual full-body muscle filter.");
+
+                int spine = FindHumanMuscleIndex("Spine");
+                int rightArm = FindHumanMuscleIndex("Right", "Arm");
+                int rightForearm = FindHumanMuscleIndex("Right", "Forearm");
+                int leftArm = FindHumanMuscleIndex("Left", "Arm");
+                int rightUpperLeg = FindHumanMuscleIndex("Right", "Upper Leg");
+                int rightIndex = FindHumanMuscleIndex("Right", "Index");
+
+                Assert.That((bool)method.Invoke(retargeter, new object[] { spine }), Is.True);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightArm }), Is.True);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightForearm }), Is.True);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { leftArm }), Is.False);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightUpperLeg }), Is.False);
+                Assert.That((bool)method.Invoke(retargeter, new object[] { rightIndex }), Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated()
+        {
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+
+            FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FileManager.");
+            Assert.That(fileManager.useSetHumanPoseRightLegTwistOutputReference, Is.False);
+            Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta, Is.EqualTo(0.02f).Within(0.0001f));
+
+            ClearYybVisualComparisonRunnerState("set-human-pose-right-leg-twist-output-test");
+            SetYybVisualComparisonRunnerStaticField("_enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride", true);
+            SetYybVisualComparisonRunnerStaticField("_setHumanPoseRightLegTwistOutputReferenceWeight", 0.5f);
+            SetYybVisualComparisonRunnerStaticField("_setHumanPoseRightLegTwistOutputReferenceMaxDelta", 0.01f);
+
+            Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
+            Assert.That(fileManager.useSetHumanPoseRightLegTwistOutputReference, Is.True);
+            Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceWeight, Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta, Is.EqualTo(0.01f).Within(0.0001f));
+            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+
+            ClearYybVisualComparisonRunnerState("set-human-pose-right-leg-twist-output-cleanup");
         }
 
         [Test]
@@ -478,7 +702,7 @@ namespace Tests.Editor.FBXImporter
         public void MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback()
         {
             AssertRegressionSafeRetargetDefaults("Assets/_Project/Scene/Main_Auto.unity", expectedMovementScaleMultiplier: 1f);
-            AssertRegressionSafeRetargetDefaults("Assets/_Project/Scene/Main_Recoding.unity", expectedMovementScaleMultiplier: 0f);
+            AssertMovingRootRetargetDefaults("Assets/_Project/Scene/Main_Recoding.unity", minMovementScaleMultiplier: 0.9f);
         }
 
         [Test]
@@ -511,22 +735,24 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void MainSceneRootMotionPolicy_KeepsMainAutoAndMainRecordingStationaryRootCarrier()
+        public void MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier()
         {
             AssertSceneRootMotionPolicy(
                 "Assets/_Project/Scene/Main_Auto.unity",
+                expectedPreserveRetargetBodyPosition: true,
                 expectedUseRetargetBodyPositionXZRootMotion: false,
                 expectedUseEditorHumanoidRootTranslationReference: false,
                 expectedClampRetargetHipsLocalPositionSpikes: false);
             AssertSceneRootMotionPolicy(
                 "Assets/_Project/Scene/Main_Recoding.unity",
-                expectedUseRetargetBodyPositionXZRootMotion: false,
+                expectedPreserveRetargetBodyPosition: false,
+                expectedUseRetargetBodyPositionXZRootMotion: true,
                 expectedUseEditorHumanoidRootTranslationReference: false,
                 expectedClampRetargetHipsLocalPositionSpikes: true);
         }
 
         [Test]
-        public void MainRecordingRootMotionPolicy_DisablesPreviewRootCarrierForLimbIsolation()
+        public void MainRecordingRootMotionPolicy_EnablesMovingRootCarrierForNaturalMotion()
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
@@ -535,20 +761,20 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must contain FileManager.");
             Assert.That(
                 fileManager.MovementScaleMultiplier,
-                Is.EqualTo(0f).Within(0.0001f),
-                "Main_Recoding must keep the visible root carrier stationary so arm motion does not drag the whole character in an arc.");
+                Is.GreaterThanOrEqualTo(0.9f),
+                "Main_Recoding must keep the natural moving-root carrier enabled for manual-style preview/export.");
             Assert.That(
                 fileManager.useRetargetBodyPositionXZRootMotion,
-                Is.False,
-                "Main_Recoding must not reintroduce bodyPosition X/Z root motion into the visible preview carrier.");
+                Is.True,
+                "Main_Recoding must preserve bodyPosition X/Z root motion instead of behaving like Main_Auto.");
             Assert.That(
                 fileManager.useEditorHumanoidRootTranslationReference,
                 Is.False,
-                "Main_Recoding must not add Humanoid RootT translation on top of the stationary preview carrier.");
+                "Main_Recoding must not add Humanoid RootT translation on top of bodyPosition X/Z root motion.");
             Assert.That(
                 fileManager.MaxRetargetRootDeltaPerFrame,
                 Is.EqualTo(0.006f).Within(0.0001f),
-                "Main_Recoding keeps the spike guard as a fallback even though preview root movement is disabled.");
+                "Main_Recoding keeps the spike guard as a fallback while moving-root recovery is validated.");
         }
 
         [Test]
@@ -982,6 +1208,42 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(disabledApplied, Is.True);
                 Assert.That(manager.useManualAnimatorHandPalmFrameReference, Is.False);
                 Assert.That(manager.manualAnimatorHandPalmFrameWeight, Is.EqualTo(0f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(managerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RetargetArmStretchClampRuntimeOverride_When_Enabled_Then_AlsoClampsTargetGuardStretch()
+        {
+            var managerObject = new GameObject("retarget arm stretch clamp runtime override manager");
+            try
+            {
+                var manager = managerObject.AddComponent<FileManager>();
+                manager.enableAnatomicalArmGuard = false;
+                manager.clampRetargetArmStretchMuscles = false;
+                manager.targetGuardClampAnatomicalArmMuscles = false;
+                manager.targetGuardClampArmStretchMuscles = false;
+                manager.ArmStretchMuscleLimit = 0f;
+
+                bool enabledApplied = ApplyRetargetArmStretchClampRuntimeOverride(manager, true, 0.75f);
+
+                Assert.That(enabledApplied, Is.True);
+                Assert.That(manager.enableAnatomicalArmGuard, Is.True);
+                Assert.That(manager.clampRetargetArmStretchMuscles, Is.True);
+                Assert.That(manager.targetGuardClampAnatomicalArmMuscles, Is.True);
+                Assert.That(manager.targetGuardClampArmStretchMuscles, Is.True);
+                Assert.That(manager.ArmStretchMuscleLimit, Is.EqualTo(0.5f).Within(0.0001f));
+
+                bool disabledApplied = ApplyRetargetArmStretchClampRuntimeOverride(manager, false, 0.5f);
+
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(manager.clampRetargetArmStretchMuscles, Is.False);
+                Assert.That(manager.targetGuardClampAnatomicalArmMuscles, Is.False);
+                Assert.That(manager.targetGuardClampArmStretchMuscles, Is.False);
+                Assert.That(manager.ArmStretchMuscleLimit, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
             {
@@ -2164,6 +2426,73 @@ namespace Tests.Editor.FBXImporter
             {
                 UnityEngine.Object.DestroyImmediate(managerObject);
             }
+        }
+
+        [Test]
+        public void Given_RightSleeveSilhouetteOffsetRuntimeOverride_When_Toggled_Then_OnlyChangesFrameLocalSleeveSettings()
+        {
+            var managerObject = new GameObject("right sleeve silhouette offset runtime override manager");
+            try
+            {
+                var manager = managerObject.AddComponent<FileManager>();
+                manager.useManualAnimatorFullBodyPoseReference = false;
+                manager.useManualAnimatorBodyPositionXzReference = false;
+                manager.enableYybArmSleeveAnchorCorrection = true;
+
+                bool enabledApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
+                    manager,
+                    true,
+                    localOffsetX: -0.055f,
+                    frameGateStart: 90f,
+                    frameGateEnd: 90f);
+
+                Assert.That(enabledApplied, Is.True);
+                Assert.That(ReadBoolField(manager, "useYybRightSleeveSilhouetteLocalOffsetReference"), Is.True);
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetX"), Is.EqualTo(-0.055f).Within(0.0001f));
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateStart"), Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateEnd"), Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.useManualAnimatorBodyPositionXzReference, Is.False);
+                Assert.That(manager.enableYybArmSleeveAnchorCorrection, Is.True);
+
+                bool clampedApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
+                    manager,
+                    true,
+                    localOffsetX: 0.5f,
+                    frameGateStart: -10f,
+                    frameGateEnd: 7000f);
+
+                Assert.That(clampedApplied, Is.True);
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetX"), Is.EqualTo(0.2f).Within(0.0001f));
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateStart"), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateEnd"), Is.EqualTo(6000f).Within(0.0001f));
+
+                bool disabledApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
+                    manager,
+                    false,
+                    localOffsetX: -0.055f,
+                    frameGateStart: 90f,
+                    frameGateEnd: 90f);
+
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(ReadBoolField(manager, "useYybRightSleeveSilhouetteLocalOffsetReference"), Is.False);
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetX"), Is.EqualTo(-0.055f).Within(0.0001f));
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateStart"), Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateEnd"), Is.EqualTo(90f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(managerObject);
+            }
+        }
+
+        [Test]
+        public void Given_RightSleeveSilhouetteOffsetFrameGate_When_ExposedInInspector_Then_Frame90IsSelectable()
+        {
+            AssertRangeMaxAtLeast<FileManager>("yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
+            AssertRangeMaxAtLeast<FileManager>("yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
+            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
+            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
         }
 
         [Test]
@@ -4131,6 +4460,181 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_NonHairSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_RecordsNonHairMaxAttribution()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybNonHairMaxAttribution_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string provenancePath = Path.Combine(root, "provenance.md");
+            string resultPath = Path.Combine(root, "result.json");
+            string frameMetricsPath = Path.Combine(root, "frame-metrics.json");
+            string contactSheetPath = Path.Combine(root, "contact-sheet.png");
+            string frameFolder = Path.Combine(root, "frames");
+            Directory.CreateDirectory(frameFolder);
+            string refFrame = Path.Combine(frameFolder, "ref-nonhair.png");
+            string candidateFrame = Path.Combine(frameFolder, "candidate-nonhair.png");
+            string indexPath = Path.Combine(frameFolder, "index.csv");
+
+            try
+            {
+                File.WriteAllText(provenancePath, "fixture provenance");
+                File.WriteAllText(
+                    resultPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-analysis-fixture-v1\",\n" +
+                    "  \"extractedFrameCount\": 1,\n" +
+                    "  \"video\": { \"width\": 10, \"height\": 10, \"avg_frame_rate\": \"30/1\", \"stream_duration\": \"3.0\", \"nb_frames\": \"90\" }\n" +
+                    "}\n");
+                File.WriteAllText(
+                    frameMetricsPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-frame-metrics-fixture-v1\",\n" +
+                    "  \"sampleCount\": 1,\n" +
+                    "  \"extractedFrameCount\": 1,\n" +
+                    "  \"avgBBoxHeightRatio\": 0.8,\n" +
+                    "  \"avgBBoxWidthRatio\": 0.6,\n" +
+                    "  \"centerXRangeRatio\": 0.0,\n" +
+                    "  \"maxBottomGapRatio\": 0.1,\n" +
+                    "  \"avgBrightAreaRatio\": 0.34,\n" +
+                    "  \"rows\": [\n" +
+                    $"    {{ \"seconds\": 0.0, \"framePath\": \"{refFrame.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 0.8, \"bboxWidthRatio\": 0.6, \"centerXRatio\": 0.6, \"bottomGapRatio\": 0.1, \"brightAreaRatio\": 0.34 }}\n" +
+                    "  ]\n" +
+                    "}\n");
+                File.WriteAllBytes(contactSheetPath, new byte[] { 0x89, 0x50, 0x4e, 0x47 });
+                WriteFixturePngWithColor(
+                    refFrame,
+                    new FixturePngFill(new RectInt(3, 1, 4, 8), new Color32(255, 255, 255, 255)),
+                    new FixturePngFill(new RectInt(8, 1, 1, 1), new Color32(255, 255, 255, 255)));
+                WriteFixturePngWithColor(
+                    candidateFrame,
+                    new FixturePngFill(new RectInt(3, 1, 4, 8), new Color32(255, 255, 255, 255)),
+                    new FixturePngFill(new RectInt(8, 1, 1, 1), new Color32(255, 255, 255, 255)),
+                    new FixturePngFill(new RectInt(8, 5, 1, 2), new Color32(255, 255, 255, 255)));
+                File.WriteAllText(
+                    indexPath,
+                    "label,scene,reason,recorderFrame,view,path\n" +
+                    $"nonhair,Main_Auto,start,0,front,{candidateFrame}\n");
+
+                object diagnostics = BuildSummaryFrameRoleDiagnostics(
+                    referenceTargetFrameCount: 90,
+                    baselineRecordedFrameCount: 90,
+                    candidateRecordedFrameCount: 90,
+                    requestedDurationSeconds: 3f,
+                    provenancePath,
+                    resultPath,
+                    frameMetricsPath,
+                    contactSheetPath,
+                    indexPath);
+
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_l1_delta"), Is.GreaterThan(0.2f));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label"), Is.EqualTo("band_2_right"));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_index"), Is.EqualTo(7));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_seconds"), Is.EqualTo(0f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_seconds"), Is.EqualTo(0f).Within(0.00001f));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_recorder_frame"), Is.EqualTo(0));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_x_delta"), Is.GreaterThan(0.2f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_y_delta"), Is.EqualTo(0f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_x"), Is.GreaterThan(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_x")));
+                Assert.That(GetField<bool>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_touches_frame_edge"), Is.False);
+                Assert.That(GetField<bool>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_touches_frame_edge"), Is.False);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_NonHairFrameEdgeTouchStillLeavesMiddleBandResidual_When_BuildingDiagnostics_Then_RecordsNonHairKeypointLocalCropSafeAggregate()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybNonHairKeypointLocalCropSafe_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string provenancePath = Path.Combine(root, "provenance.md");
+            string resultPath = Path.Combine(root, "result.json");
+            string frameMetricsPath = Path.Combine(root, "frame-metrics.json");
+            string contactSheetPath = Path.Combine(root, "contact-sheet.png");
+            string frameFolder = Path.Combine(root, "frames");
+            Directory.CreateDirectory(frameFolder);
+            string refFrame = Path.Combine(frameFolder, "ref-nonhair-edge.png");
+            string candidateFrame = Path.Combine(frameFolder, "candidate-nonhair-edge.png");
+            string indexPath = Path.Combine(frameFolder, "index.csv");
+
+            try
+            {
+                File.WriteAllText(provenancePath, "fixture provenance");
+                File.WriteAllText(
+                    resultPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-analysis-fixture-v1\",\n" +
+                    "  \"extractedFrameCount\": 1,\n" +
+                    "  \"video\": { \"width\": 10, \"height\": 10, \"avg_frame_rate\": \"30/1\", \"stream_duration\": \"3.0\", \"nb_frames\": \"90\" }\n" +
+                    "}\n");
+                File.WriteAllText(
+                    frameMetricsPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-frame-metrics-fixture-v1\",\n" +
+                    "  \"sampleCount\": 1,\n" +
+                    "  \"extractedFrameCount\": 1,\n" +
+                    "  \"avgBBoxHeightRatio\": 1.0,\n" +
+                    "  \"avgBBoxWidthRatio\": 0.4,\n" +
+                    "  \"centerXRangeRatio\": 0.0,\n" +
+                    "  \"maxBottomGapRatio\": 0.0,\n" +
+                    "  \"avgBrightAreaRatio\": 0.4,\n" +
+                    "  \"rows\": [\n" +
+                    $"    {{ \"seconds\": 0.0, \"framePath\": \"{refFrame.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 1.0, \"bboxWidthRatio\": 0.4, \"centerXRatio\": 0.5, \"bottomGapRatio\": 0.0, \"brightAreaRatio\": 0.4 }}\n" +
+                    "  ]\n" +
+                    "}\n");
+                File.WriteAllBytes(contactSheetPath, new byte[] { 0x89, 0x50, 0x4e, 0x47 });
+                WriteFixturePngWithColor(
+                    refFrame,
+                    new FixturePngFill(new RectInt(3, 0, 4, 10), new Color32(255, 255, 255, 255)));
+                WriteFixturePngWithColor(
+                    candidateFrame,
+                    new FixturePngFill(new RectInt(3, 0, 4, 10), new Color32(255, 255, 255, 255)),
+                    new FixturePngFill(new RectInt(8, 5, 1, 3), new Color32(255, 255, 255, 255)));
+                File.WriteAllText(
+                    indexPath,
+                    "label,scene,reason,recorderFrame,view,path\n" +
+                    $"nonhair-edge,Main_Auto,start,0,front,{candidateFrame}\n");
+
+                object diagnostics = BuildSummaryFrameRoleDiagnostics(
+                    referenceTargetFrameCount: 90,
+                    baselineRecordedFrameCount: 90,
+                    candidateRecordedFrameCount: 90,
+                    requestedDurationSeconds: 3f,
+                    provenancePath,
+                    resultPath,
+                    frameMetricsPath,
+                    contactSheetPath,
+                    indexPath);
+
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_l1_delta"), Is.GreaterThan(0.2f));
+                Assert.That(GetField<bool>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_touches_frame_edge"), Is.True);
+                Assert.That(GetField<bool>(diagnostics, "candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_touches_frame_edge"), Is.True);
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count"), Is.EqualTo(1));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count"), Is.EqualTo(4));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count"), Is.EqualTo(6));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta"), Is.GreaterThan(0.2f));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_index"), Is.GreaterThanOrEqualTo(0));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_x_delta"), Is.GreaterThan(0.2f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_y_delta"), Is.LessThan(0.001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_x"), Is.Not.EqualTo(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_x")).Within(0.001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_required_x_reduction_to_threshold"), Is.GreaterThan(0f));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label"), Is.EqualTo("band_1_right"));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_basis"), Does.Contain("non-hair"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public void Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw()
         {
             var raw = new MotionComparisonFrameQualitySummary
@@ -5419,6 +5923,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.MovementScaleMultiplier, Is.EqualTo(expectedMovementScaleMultiplier).Within(0.0001f), $"{scenePath} must keep the expected visible root carrier movement scale.");
             Assert.That(fileManager.enableAnatomicalArmGuard, Is.True, $"{scenePath} must keep the arm anatomy guard enabled.");
             Assert.That(fileManager.attachTargetArmDeformationGuard, Is.True, $"{scenePath} must attach the target arm deformation guard.");
+            Assert.That(fileManager.targetGuardClampAnatomicalArmMuscles, Is.True, $"{scenePath} must clamp target-side arm muscles after YYB arm swing correction.");
+            Assert.That(fileManager.targetGuardClampArmStretchMuscles, Is.True, $"{scenePath} must clamp target-side forearm stretch after YYB arm swing correction.");
             Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, $"{scenePath} must keep YYB arm visual twist correction enabled.");
             Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, $"{scenePath} must keep sleeve anchor correction enabled.");
             Assert.That(fileManager.YybArmSleeveAnchorInfluence, Is.EqualTo(0.825f).Within(0.0001f), $"{scenePath} must keep the measured sleeve anchor influence that reduces non-hair avg without worsening the current max metrics.");
@@ -5462,7 +5968,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.YybArmSwingMinHandHorizontalRatio, Is.EqualTo(0.05f).Within(0.0001f), $"{scenePath} must keep the accepted horizontal trigger ratio.");
             Assert.That(fileManager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(1.5f).Within(0.0001f), $"{scenePath} must keep the accepted below-shoulder tolerance.");
             Assert.That(fileManager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted horizontal reach clamp strength.");
-            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.08f).Within(0.0001f), $"{scenePath} must keep the measured horizontal reach cap that reduces silhouette and non-hair avg without worsening the current max metrics.");
+            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.06f).Within(0.0001f), $"{scenePath} must keep the measured horizontal reach cap that reduces non-hair average, local average, upper span, and silhouette average without worsening the current max metrics.");
             Assert.That(fileManager.YybArmSwingRaisedPoseHorizontalReachLimitWeight, Is.EqualTo(0.25f).Within(0.0001f), $"{scenePath} must keep the accepted raised-pose reach cap without the rejected hair-length candidate.");
             Assert.That(fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot, Is.EqualTo(0.55f).Within(0.0001f), $"{scenePath} must keep the raised-pose cap limited to mildly lowered upper arms.");
             Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio, Is.EqualTo(0.05f).Within(0.0001f), $"{scenePath} must avoid applying the raised-pose cap to below-shoulder swing frames.");
@@ -5475,6 +5981,7 @@ namespace Tests.Editor.FBXImporter
 
         private static void AssertSceneRootMotionPolicy(
             string scenePath,
+            bool expectedPreserveRetargetBodyPosition,
             bool expectedUseRetargetBodyPositionXZRootMotion,
             bool expectedUseEditorHumanoidRootTranslationReference,
             bool expectedClampRetargetHipsLocalPositionSpikes)
@@ -5486,8 +5993,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FileManager.");
             Assert.That(
                 fileManager.preserveRetargetBodyPosition,
-                Is.True,
-                $"{scenePath} must keep body-position preservation enabled so Y height remains stable while scene-specific X/Z root policy is applied.");
+                Is.EqualTo(expectedPreserveRetargetBodyPosition),
+                $"{scenePath} must match the scene-specific body-position preservation policy.");
             Assert.That(
                 fileManager.useRetargetBodyPositionXZRootMotion,
                 Is.EqualTo(expectedUseRetargetBodyPositionXZRootMotion),
@@ -5500,6 +6007,19 @@ namespace Tests.Editor.FBXImporter
                 fileManager.clampRetargetHipsLocalPositionSpikes,
                 Is.EqualTo(expectedClampRetargetHipsLocalPositionSpikes),
                 $"{scenePath} must match the scene-specific Hips local-position spike policy.");
+        }
+
+        private static void AssertMovingRootRetargetDefaults(string scenePath, float minMovementScaleMultiplier)
+        {
+            EditorSceneManager.OpenScene(scenePath);
+
+            FileManager fileManager = UnityEngine.Object.FindObjectOfType<FileManager>();
+
+            Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FileManager.");
+            Assert.That(fileManager.preserveRetargetBodyPosition, Is.False, $"{scenePath} must let the imported FBX body position drive the moving-root solve.");
+            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.True, $"{scenePath} must preserve X/Z body root motion.");
+            Assert.That(fileManager.MovementScaleMultiplier, Is.GreaterThanOrEqualTo(minMovementScaleMultiplier), $"{scenePath} must not suppress moving-root preview/export.");
+            Assert.That(fileManager.useEditorHumanoidRootTranslationReference, Is.False, $"{scenePath} must avoid adding a second root translation source.");
         }
 
         private static void AssertRootYFreezeAfterInitialGrounding(string scenePath)
@@ -6161,6 +6681,27 @@ namespace Tests.Editor.FBXImporter
             return (bool)method.Invoke(null, new object[] { manager, enabled, currentWeight, forearmStretchClampMaxOffset });
         }
 
+        private static bool ApplyRetargetArmStretchClampRuntimeOverride(
+            FileManager manager,
+            bool enabled,
+            float stretchLimit)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "ApplyRetargetArmStretchClampRuntimeOverride",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(FileManager), typeof(bool), typeof(float) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only arm stretch clamp override for Ref MP4 visual comparison candidates.");
+
+            return (bool)method.Invoke(null, new object[] { manager, enabled, stretchLimit });
+        }
+
         private static bool ApplyYybArmSwingLimitRuntimeOverride(
             FileManager manager,
             bool enabled,
@@ -6382,6 +6923,38 @@ namespace Tests.Editor.FBXImporter
                     upperArmMaxDegrees,
                     forearmMaxDegrees
                 });
+        }
+
+        private static bool ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
+            FileManager manager,
+            bool enabled,
+            float localOffsetX,
+            float frameGateStart,
+            float frameGateEnd)
+        {
+            Type runnerType = Type.GetType(
+                "Member_Han.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(FileManager),
+                    typeof(bool),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float)
+                },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only frame-local right sleeve silhouette offset for band_3_right correction probes.");
+
+            return (bool)method.Invoke(
+                null,
+                new object[] { manager, enabled, localOffsetX, frameGateStart, frameGateEnd });
         }
 
         private static bool ApplyManualAnimatorHandLocalRotationRuntimeOverride(FileManager manager, bool enabled)
@@ -7583,6 +8156,21 @@ namespace Tests.Editor.FBXImporter
                 sampleTimes.Any(time => Mathf.Abs(time - unexpected) <= 0.0001f),
                 Is.False,
                 $"Did not expect unshifted sample time {unexpected:0.000000}.");
+        }
+
+        private static int FindHumanMuscleIndex(params string[] tokens)
+        {
+            for (int i = 0; i < HumanTrait.MuscleCount; i++)
+            {
+                string muscleName = HumanTrait.MuscleName[i] ?? string.Empty;
+                if (tokens.All(token => muscleName.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    return i;
+                }
+            }
+
+            Assert.Fail($"Expected Humanoid muscle containing tokens: {string.Join(", ", tokens)}.");
+            return -1;
         }
 
         private static object BuildSampleOrderingDiagnostic(

@@ -22,6 +22,13 @@ namespace Member_Han.Modules.FBXImporter
         private const float HipsLocalPositionTargetGapGuardMaxIncreaseMeters = 0.0005f;
         private const string RecordingStartHipsReferenceStagePrewarmComplete = "prewarm-complete";
         private const int UnresolvedHumanMuscleIndex = -2;
+        private static readonly string[] RightSleeveSilhouetteLocalOffsetTransformSuffixes =
+        {
+            "joint_RightArmM",
+            "!joint_RightShoulderC"
+        };
+        private readonly Dictionary<Transform, Vector3> _rightSleeveSilhouetteLocalOffsetBaseLocalPositions =
+            new Dictionary<Transform, Vector3>();
         [Header("--- CORE COMPONENTS ---")]
         public Animator ghostAnimator;  // (Container 내부의 모델)
         public Animator targetAnimator; // 내 캐릭터
@@ -123,6 +130,30 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Runtime diagnostic: apply manual full-body reference only to leg in-out/twist muscles.")]
         public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly = false;
 
+        [Tooltip("Runtime diagnostic: apply manual full-body reference only to right arm and shoulder muscles.")]
+        public bool manualAnimatorFullBodyPoseRightArmMusclesOnly = false;
+
+        [Tooltip("Runtime diagnostic: apply manual full-body reference only to left arm and shoulder muscles.")]
+        public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly = false;
+
+        [Tooltip("Runtime diagnostic: apply manual full-body reference only to spine and right sleeve chain muscles.")]
+        public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = false;
+
+        [Range(0f, 6000f)]
+        public float manualAnimatorFullBodyPoseFrameGateStart = 0f;
+
+        [Range(0f, 6000f)]
+        public float manualAnimatorFullBodyPoseFrameGateEnd = 0f;
+
+        [Tooltip("Runtime diagnostic: after SetHumanPose, blend only right upper/lower leg twist output muscles back toward the solver input within a small cap.")]
+        public bool useSetHumanPoseRightLegTwistOutputReference = false;
+
+        [Range(0f, 1f)]
+        public float setHumanPoseRightLegTwistOutputReferenceWeight = 1f;
+
+        [Range(0f, 0.1f)]
+        public float setHumanPoseRightLegTwistOutputReferenceMaxDelta = 0.02f;
+
         [Tooltip("Manual Animator finger reference의 엄지 체인 localRotation도 Target에 적용해 모델별 엄지 축 차이를 줄입니다.")]
         public bool useManualAnimatorThumbLocalRotationReference = true;
 
@@ -184,6 +215,18 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Runtime diagnostic scale for the manual Animator bodyPosition Z solver-input basis. One keeps the legacy Z contribution.")]
         [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceAxisZScale = 1f;
+
+        [Tooltip("Runtime diagnostic: apply a frame-local local-X offset to the right sleeve helper silhouette after SetHumanPose.")]
+        public bool useYybRightSleeveSilhouetteLocalOffsetReference = false;
+
+        [Tooltip("Local X offset in meters for the frame-local right sleeve silhouette probe.")]
+        [Range(-0.2f, 0.2f)] public float yybRightSleeveSilhouetteLocalOffsetX = 0f;
+
+        [Tooltip("Runtime diagnostic start recorder frame for the right sleeve silhouette local-X offset. Zero with end zero keeps the full clip.")]
+        [Range(0f, 6000f)] public float yybRightSleeveSilhouetteLocalOffsetFrameGateStart = 0f;
+
+        [Tooltip("Runtime diagnostic end recorder frame for the right sleeve silhouette local-X offset. Zero with start zero keeps the full clip.")]
+        [Range(0f, 6000f)] public float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = 0f;
 
         [Tooltip("수동 기준 Hips localPosition 보정 강도입니다.")]
         [Range(0f, 1f)]
@@ -250,7 +293,7 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Blend for right lower-leg-to-foot correction strength. The measured default reduces right-foot X/Z residual without worsening hips-aligned foot residual.")]
         [Range(0f, 1f)]
-        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.25f;
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.125f;
 
         [Tooltip("Runtime diagnostic start recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
         [Range(0f, 2000f)]
@@ -293,7 +336,7 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0f, 0.2f)]
         public float manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0.12f;
 
-        [Tooltip("Apply a right-foot endpoint X/Z correction immediately after SetHumanPose as an isolated runtime candidate.")]
+        [Tooltip("Runtime diagnostic: apply a bounded right foot/toes endpoint X/Z correction immediately after SetHumanPose.")]
         public bool usePostSetHumanPoseRightEndpointPositionReference = false;
 
         [Tooltip("Blend weight for post-SetHumanPose right-foot endpoint X/Z correction.")]
@@ -815,6 +858,12 @@ namespace Member_Han.Modules.FBXImporter
         public float LastRetargetStageAfterLateVisualGroundingRightFootWorldZ => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.RightFoot.z;
         public float LastRetargetStageAfterLateVisualGroundingRightToesWorldX => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.RightToes.x;
         public float LastRetargetStageAfterLateVisualGroundingRightToesWorldZ => _lastRetargetStageAfterLateVisualGroundingEndpointPositions.RightToes.z;
+        public string LastRetargetEndpointFirstJumpStage => _lastRetargetEndpointFirstJumpStage;
+        public string LastRetargetEndpointFirstJumpEndpoint => _lastRetargetEndpointFirstJumpEndpoint;
+        public float LastRetargetEndpointFirstJumpMagnitude => _lastRetargetEndpointFirstJumpMagnitude;
+        public float LastRetargetEndpointFirstJumpDeltaX => _lastRetargetEndpointFirstJumpDelta.x;
+        public float LastRetargetEndpointFirstJumpDeltaY => _lastRetargetEndpointFirstJumpDelta.y;
+        public float LastRetargetEndpointFirstJumpDeltaZ => _lastRetargetEndpointFirstJumpDelta.z;
         public float LastEditorFootLocalRotationLeftFootXzDelta => _lastEditorFootLocalRotationLeftFootXzDelta;
         public float LastEditorFootLocalRotationRightFootXzDelta => _lastEditorFootLocalRotationRightFootXzDelta;
         public float LastEditorLowerBodySegmentDirectionLeftFootXzDelta => _lastEditorLowerBodySegmentDirectionLeftFootXzDelta;
@@ -1368,6 +1417,10 @@ namespace Member_Han.Modules.FBXImporter
         private RetargetEndpointStageWorldPositions _lastRetargetStageAfterGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
         private RetargetEndpointStageWorldPositions _lastRetargetStageAfterBipedIKEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
         private RetargetEndpointStageWorldPositions _lastRetargetStageAfterLateVisualGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+        private string _lastRetargetEndpointFirstJumpStage = "";
+        private string _lastRetargetEndpointFirstJumpEndpoint = "";
+        private Vector3 _lastRetargetEndpointFirstJumpDelta = BuildNaNVector3();
+        private float _lastRetargetEndpointFirstJumpMagnitude = float.NaN;
         private int _setHumanPoseLeftShoulderFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
         private int _setHumanPoseLeftArmTwistMuscleIndex = UnresolvedHumanMuscleIndex;
         private int _setHumanPoseLeftForearmStretchMuscleIndex = UnresolvedHumanMuscleIndex;
@@ -1575,6 +1628,22 @@ namespace Member_Han.Modules.FBXImporter
                     settings.manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
                 manualAnimatorFullBodyPoseLegTwistMusclesOnly =
                     settings.manualAnimatorFullBodyPoseLegTwistMusclesOnly;
+                manualAnimatorFullBodyPoseRightArmMusclesOnly =
+                    settings.manualAnimatorFullBodyPoseRightArmMusclesOnly;
+                manualAnimatorFullBodyPoseLeftArmMusclesOnly =
+                    settings.manualAnimatorFullBodyPoseLeftArmMusclesOnly;
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly =
+                    settings.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly;
+                manualAnimatorFullBodyPoseFrameGateStart =
+                    Mathf.Max(0f, settings.manualAnimatorFullBodyPoseFrameGateStart);
+                manualAnimatorFullBodyPoseFrameGateEnd =
+                    Mathf.Max(0f, settings.manualAnimatorFullBodyPoseFrameGateEnd);
+                useSetHumanPoseRightLegTwistOutputReference =
+                    settings.useSetHumanPoseRightLegTwistOutputReference;
+                setHumanPoseRightLegTwistOutputReferenceWeight =
+                    Mathf.Clamp01(settings.setHumanPoseRightLegTwistOutputReferenceWeight);
+                setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+                    Mathf.Max(0f, settings.setHumanPoseRightLegTwistOutputReferenceMaxDelta);
                 useManualAnimatorThumbLocalRotationReference = settings.useManualAnimatorThumbLocalRotationReference;
                 useManualAnimatorHandLocalRotationReference = settings.useManualAnimatorHandLocalRotationReference;
                 useManualAnimatorThumbSegmentDirectionReference = settings.useManualAnimatorThumbSegmentDirectionReference;
@@ -1866,7 +1935,12 @@ namespace Member_Han.Modules.FBXImporter
             float fullBodyPoseReferenceWeight = 1f,
             bool fullBodyPoseExcludeLowerBodyMuscles = false,
             bool fullBodyPoseLowerBodyMusclesOnly = false,
-            bool fullBodyPoseLegTwistMusclesOnly = false)
+            bool fullBodyPoseLegTwistMusclesOnly = false,
+            bool fullBodyPoseRightArmMusclesOnly = false,
+            bool fullBodyPoseLeftArmMusclesOnly = false,
+            bool fullBodyPoseRightSleeveChainMusclesOnly = false,
+            float fullBodyPoseFrameGateStart = 0f,
+            float fullBodyPoseFrameGateEnd = 0f)
         {
             DisposeEditorHumanoidFingerPoseReference();
             _useEditorFingerPoseReference = false;
@@ -1962,6 +2036,11 @@ namespace Member_Han.Modules.FBXImporter
             manualAnimatorFullBodyPoseExcludeLowerBodyMuscles = fullBodyPoseExcludeLowerBodyMuscles;
             manualAnimatorFullBodyPoseLowerBodyMusclesOnly = fullBodyPoseLowerBodyMusclesOnly;
             manualAnimatorFullBodyPoseLegTwistMusclesOnly = fullBodyPoseLegTwistMusclesOnly;
+            manualAnimatorFullBodyPoseRightArmMusclesOnly = fullBodyPoseRightArmMusclesOnly;
+            manualAnimatorFullBodyPoseLeftArmMusclesOnly = fullBodyPoseLeftArmMusclesOnly;
+            manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = fullBodyPoseRightSleeveChainMusclesOnly;
+            manualAnimatorFullBodyPoseFrameGateStart = Mathf.Max(0f, fullBodyPoseFrameGateStart);
+            manualAnimatorFullBodyPoseFrameGateEnd = Mathf.Max(0f, fullBodyPoseFrameGateEnd);
             _useEditorFingerPoseReference = ShouldUseEditorPoseReference(
                 enableFingerPoseReference,
                 useManualAnimatorFullBodyPoseReference,
@@ -2153,6 +2232,7 @@ namespace Member_Han.Modules.FBXImporter
 #endif
             CaptureSetHumanPoseInputDiagnostics(_humanPose);
             _targetHandler.SetHumanPose(ref _humanPose);
+            ApplySetHumanPoseRightLegTwistOutputReference(_humanPose);
             CaptureSetHumanPoseOutputDiagnostics();
             _lastRetargetStageAfterSetHumanPoseEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
             ClampAppliedTargetPose();
@@ -2174,6 +2254,7 @@ namespace Member_Han.Modules.FBXImporter
             ApplyEditorHumanoidHandLocalRotationReference();
             ApplyEditorHumanoidThumbSegmentDirectionReference();
             ApplyEditorHumanoidThumbHandDirectionReference();
+            ApplyYybRightSleeveSilhouetteLocalOffsetReference();
 #endif
             ClampTargetRootPositionSpike(targetPositionBeforePose, "SetHumanPose");
             Vector3 implicitRootGuardReference = SelectImplicitRootGuardReference(
@@ -2222,6 +2303,7 @@ namespace Member_Han.Modules.FBXImporter
                 editorRootTranslationDelta,
                 bodyRootDelta,
                 _movementScaleMultiplier,
+                useBodyPositionXZRootMotion,
                 clampRootDeltaSpikes,
                 maxRootDeltaPerFrame,
                 out float targetDeltaMagnitude,
@@ -2268,6 +2350,7 @@ namespace Member_Han.Modules.FBXImporter
             ApplyEditorHumanoidBipedIkFootPositionReference();
 #endif
             _lastRetargetStageAfterBipedIKEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+            CaptureRetargetEndpointStageAttributionDiagnostics();
         }
 
         private static Vector3 CalculateRetargetRootDelta(
@@ -2276,6 +2359,7 @@ namespace Member_Han.Modules.FBXImporter
             Vector3 editorRootTranslationDelta,
             Vector3 bodyRootDelta,
             float movementScaleMultiplier,
+            bool useBodyPositionXZRootMotion,
             bool clampRootDeltaSpikes,
             float maxRootDeltaPerFrame,
             out float deltaMagnitude,
@@ -2285,7 +2369,9 @@ namespace Member_Han.Modules.FBXImporter
             skippedByNonFinite = false;
             limitedBySpike = false;
 
-            Vector3 targetDelta = (ghostDelta * scaleRatio + editorRootTranslationDelta + bodyRootDelta) * movementScaleMultiplier;
+            Vector3 targetDelta = useBodyPositionXZRootMotion
+                ? bodyRootDelta * movementScaleMultiplier
+                : (ghostDelta * scaleRatio + editorRootTranslationDelta) * movementScaleMultiplier;
             if (!IsFinite(targetDelta))
             {
                 deltaMagnitude = float.NaN;
@@ -2312,7 +2398,7 @@ namespace Member_Han.Modules.FBXImporter
                 return 1f;
             }
 
-            return Mathf.Clamp(value, 0f, 1.2f);
+            return Mathf.Clamp(value, 0f, 1.5f);
         }
 
         private void UpdateLegacyAnimationVisualStep()
@@ -2931,6 +3017,11 @@ namespace Member_Han.Modules.FBXImporter
                     return;
                 }
 
+                if (!ShouldApplyManualFullBodyPoseReferenceFrameGate())
+                {
+                    return;
+                }
+
                 int count = Mathf.Min(pose.muscles.Length, _editorFingerReferencePose.muscles.Length);
                 for (int i = 0; i < count; i++)
                 {
@@ -3447,6 +3538,153 @@ namespace Member_Han.Modules.FBXImporter
                 RightFoot = ReadAnimatorBoneWorldPosition(animator, HumanBodyBones.RightFoot),
                 RightToes = ReadAnimatorBoneWorldPosition(animator, HumanBodyBones.RightToes)
             };
+        }
+
+        private static bool TryFindFirstRetargetEndpointStageJump(
+            string[] stageNames,
+            Vector3[] positions,
+            float threshold,
+            out string stage,
+            out Vector3 delta,
+            out float magnitude)
+        {
+            stage = "";
+            delta = BuildNaNVector3();
+            magnitude = float.NaN;
+            if (stageNames == null ||
+                positions == null ||
+                stageNames.Length != positions.Length ||
+                positions.Length < 2)
+            {
+                return false;
+            }
+
+            float safeThreshold = Mathf.Max(0f, threshold);
+            for (int i = 1; i < positions.Length; i++)
+            {
+                Vector3 previous = positions[i - 1];
+                Vector3 current = positions[i];
+                if (!IsFinite(previous) || !IsFinite(current))
+                {
+                    continue;
+                }
+
+                Vector3 stageDelta = current - previous;
+                float stageMagnitude = stageDelta.magnitude;
+                if (!IsFinite(stageDelta) || !IsFinite(stageMagnitude) || stageMagnitude <= safeThreshold)
+                {
+                    continue;
+                }
+
+                stage = stageNames[i] ?? "";
+                delta = stageDelta;
+                magnitude = stageMagnitude;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static readonly string[] RetargetEndpointStageNames =
+        {
+            "ghost",
+            "after_set_human_pose",
+            "after_manual_reference",
+            "after_root_restore",
+            "after_root_delta",
+            "after_grounding",
+            "after_biped_ik",
+            "after_late_visual_grounding"
+        };
+
+        private const float RetargetEndpointStageJumpAttributionThreshold = 0.001f;
+
+        private void CaptureRetargetEndpointStageAttributionDiagnostics()
+        {
+            ResetRetargetEndpointStageAttributionDiagnostics();
+            bool hasBest = false;
+            int bestStageIndex = int.MaxValue;
+            TryRecordRetargetEndpointStageJump(
+                "left_foot",
+                BuildRetargetEndpointStagePositions(endpoint => endpoint.LeftFoot),
+                ref hasBest,
+                ref bestStageIndex);
+            TryRecordRetargetEndpointStageJump(
+                "left_toes",
+                BuildRetargetEndpointStagePositions(endpoint => endpoint.LeftToes),
+                ref hasBest,
+                ref bestStageIndex);
+            TryRecordRetargetEndpointStageJump(
+                "right_foot",
+                BuildRetargetEndpointStagePositions(endpoint => endpoint.RightFoot),
+                ref hasBest,
+                ref bestStageIndex);
+            TryRecordRetargetEndpointStageJump(
+                "right_toes",
+                BuildRetargetEndpointStagePositions(endpoint => endpoint.RightToes),
+                ref hasBest,
+                ref bestStageIndex);
+        }
+
+        private delegate Vector3 RetargetEndpointStageSelector(RetargetEndpointStageWorldPositions endpointPositions);
+
+        private Vector3[] BuildRetargetEndpointStagePositions(RetargetEndpointStageSelector selector)
+        {
+            return new[]
+            {
+                selector(_lastRetargetStageGhostEndpointPositions),
+                selector(_lastRetargetStageAfterSetHumanPoseEndpointPositions),
+                selector(_lastRetargetStageAfterManualReferencesEndpointPositions),
+                selector(_lastRetargetStageAfterRootRestoreEndpointPositions),
+                selector(_lastRetargetStageAfterRootDeltaEndpointPositions),
+                selector(_lastRetargetStageAfterGroundingEndpointPositions),
+                selector(_lastRetargetStageAfterBipedIKEndpointPositions),
+                selector(_lastRetargetStageAfterLateVisualGroundingEndpointPositions)
+            };
+        }
+
+        private void TryRecordRetargetEndpointStageJump(
+            string endpointName,
+            Vector3[] positions,
+            ref bool hasBest,
+            ref int bestStageIndex)
+        {
+            if (!TryFindFirstRetargetEndpointStageJump(
+                    RetargetEndpointStageNames,
+                    positions,
+                    RetargetEndpointStageJumpAttributionThreshold,
+                    out string stage,
+                    out Vector3 delta,
+                    out float magnitude))
+            {
+                return;
+            }
+
+            int stageIndex = Array.IndexOf(RetargetEndpointStageNames, stage);
+            if (stageIndex < 0)
+            {
+                return;
+            }
+
+            if (hasBest && stageIndex >= bestStageIndex)
+            {
+                return;
+            }
+
+            hasBest = true;
+            bestStageIndex = stageIndex;
+            _lastRetargetEndpointFirstJumpStage = stage;
+            _lastRetargetEndpointFirstJumpEndpoint = endpointName ?? "";
+            _lastRetargetEndpointFirstJumpDelta = delta;
+            _lastRetargetEndpointFirstJumpMagnitude = magnitude;
+        }
+
+        private void ResetRetargetEndpointStageAttributionDiagnostics()
+        {
+            _lastRetargetEndpointFirstJumpStage = "";
+            _lastRetargetEndpointFirstJumpEndpoint = "";
+            _lastRetargetEndpointFirstJumpDelta = BuildNaNVector3();
+            _lastRetargetEndpointFirstJumpMagnitude = float.NaN;
         }
 
         private void RecordEditorFootLocalRotationReferenceDiagnostics(Vector3 leftFootBefore, Vector3 rightFootBefore)
@@ -4111,6 +4349,24 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return axis.normalized;
+        }
+
+        private static bool TryCalculateEditorLowerBodySegmentDirectionReference(
+            Vector3 referenceSegmentDirection,
+            Vector3 currentSegmentDirection,
+            Quaternion currentParentWorldRotation,
+            float weight,
+            float maxAngleDegrees,
+            out Quaternion nextParentWorldRotation)
+        {
+            return TryCalculateEditorLowerBodySegmentDirectionReference(
+                referenceSegmentDirection,
+                currentSegmentDirection,
+                currentParentWorldRotation,
+                weight,
+                maxAngleDegrees,
+                1f,
+                out nextParentWorldRotation);
         }
 
         private static bool TryCalculateEditorLowerBodySegmentDirectionReference(
@@ -6327,10 +6583,26 @@ namespace Member_Han.Modules.FBXImporter
                 return true;
             }
 
-            bool isLowerBody = IsLowerBodyMuscle(HumanTrait.MuscleName[muscleIndex]);
+            string muscleName = HumanTrait.MuscleName[muscleIndex];
+            if (manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly)
+            {
+                return IsRightSleeveChainPoseMuscle(muscleName);
+            }
+
+            if (manualAnimatorFullBodyPoseRightArmMusclesOnly)
+            {
+                return IsRightArmPoseMuscle(muscleName);
+            }
+
+            if (manualAnimatorFullBodyPoseLeftArmMusclesOnly)
+            {
+                return IsLeftArmPoseMuscle(muscleName);
+            }
+
+            bool isLowerBody = IsLowerBodyMuscle(muscleName);
             if (manualAnimatorFullBodyPoseLegTwistMusclesOnly)
             {
-                return IsLegTwistOrInOutMuscle(HumanTrait.MuscleName[muscleIndex]);
+                return IsLegTwistOrInOutMuscle(muscleName);
             }
 
             if (manualAnimatorFullBodyPoseLowerBodyMusclesOnly)
@@ -6339,6 +6611,109 @@ namespace Member_Han.Modules.FBXImporter
             }
 
             return !manualAnimatorFullBodyPoseExcludeLowerBodyMuscles || !isLowerBody;
+        }
+
+        private bool ShouldApplyManualFullBodyPoseReferenceFrameGate()
+        {
+            float start = Mathf.Max(0f, manualAnimatorFullBodyPoseFrameGateStart);
+            float end = Mathf.Max(0f, manualAnimatorFullBodyPoseFrameGateEnd);
+            if (start <= 0f && end <= 0f)
+            {
+                return true;
+            }
+
+            if (end <= 0f || end < start)
+            {
+                end = start;
+            }
+
+            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 1f, 240f);
+            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+        }
+
+        private bool ShouldApplyYybRightSleeveSilhouetteLocalOffsetFrameGate()
+        {
+            float start = Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateStart);
+            float end = Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
+            if (start <= 0f && end <= 0f)
+            {
+                return true;
+            }
+
+            if (end <= 0f || end < start)
+            {
+                end = start;
+            }
+
+            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 1f, 240f);
+            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+        }
+
+        private void ApplyYybRightSleeveSilhouetteLocalOffsetReference()
+        {
+            RestoreYybRightSleeveSilhouetteLocalOffsetReference();
+            if (!useYybRightSleeveSilhouetteLocalOffsetReference ||
+                !ShouldApplyYybRightSleeveSilhouetteLocalOffsetFrameGate())
+            {
+                return;
+            }
+
+            float offsetX = Mathf.Clamp(yybRightSleeveSilhouetteLocalOffsetX, -0.2f, 0.2f);
+            if (Mathf.Abs(offsetX) <= 0.00001f)
+            {
+                return;
+            }
+
+            Vector3 offset = new Vector3(offsetX, 0f, 0f);
+            ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(
+                targetAnimator != null ? targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm) : null,
+                offset);
+            ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(
+                targetAnimator != null ? targetAnimator.GetBoneTransform(HumanBodyBones.RightLowerArm) : null,
+                offset);
+            ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(
+                targetAnimator != null ? targetAnimator.GetBoneTransform(HumanBodyBones.RightHand) : null,
+                offset);
+            for (int i = 0; i < RightSleeveSilhouetteLocalOffsetTransformSuffixes.Length; i++)
+            {
+                Transform target = FindTargetTransformByNameSuffix(
+                    RightSleeveSilhouetteLocalOffsetTransformSuffixes[i]);
+                ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(target, offset);
+            }
+        }
+
+        private void ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(Transform target, Vector3 offset)
+        {
+            if (target == null ||
+                !IsFinite(target.localPosition) ||
+                !IsFinite(offset) ||
+                _rightSleeveSilhouetteLocalOffsetBaseLocalPositions.ContainsKey(target))
+            {
+                return;
+            }
+
+            _rightSleeveSilhouetteLocalOffsetBaseLocalPositions[target] = target.localPosition;
+            target.localPosition += offset;
+        }
+
+        private void RestoreYybRightSleeveSilhouetteLocalOffsetReference()
+        {
+            if (_rightSleeveSilhouetteLocalOffsetBaseLocalPositions.Count == 0)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<Transform, Vector3> entry in _rightSleeveSilhouetteLocalOffsetBaseLocalPositions)
+            {
+                if (entry.Key != null && IsFinite(entry.Value))
+                {
+                    entry.Key.localPosition = entry.Value;
+                }
+            }
+
+            _rightSleeveSilhouetteLocalOffsetBaseLocalPositions.Clear();
         }
 
         private static bool IsLowerBodyMuscle(string muscleName)
@@ -6373,6 +6748,95 @@ namespace Member_Han.Modules.FBXImporter
 
             return normalized.Contains("inout") ||
                    normalized.Contains("twist");
+        }
+
+        private static bool IsRightArmPoseMuscle(string muscleName)
+        {
+            if (string.IsNullOrEmpty(muscleName))
+            {
+                return false;
+            }
+
+            string normalized = NormalizeEditorMuscleName(muscleName);
+            if (!normalized.Contains("right"))
+            {
+                return false;
+            }
+
+            if (normalized.Contains("thumb") ||
+                normalized.Contains("index") ||
+                normalized.Contains("middle") ||
+                normalized.Contains("ring") ||
+                normalized.Contains("little"))
+            {
+                return false;
+            }
+
+            return normalized.Contains("shoulder") ||
+                   normalized.Contains("arm") ||
+                   normalized.Contains("forearm");
+        }
+
+        private static bool IsLeftArmPoseMuscle(string muscleName)
+        {
+            if (string.IsNullOrEmpty(muscleName))
+            {
+                return false;
+            }
+
+            string normalized = NormalizeEditorMuscleName(muscleName);
+            if (!normalized.Contains("left"))
+            {
+                return false;
+            }
+
+            if (normalized.Contains("thumb") ||
+                normalized.Contains("index") ||
+                normalized.Contains("middle") ||
+                normalized.Contains("ring") ||
+                normalized.Contains("little"))
+            {
+                return false;
+            }
+
+            return normalized.Contains("shoulder") ||
+                   normalized.Contains("arm") ||
+                   normalized.Contains("forearm");
+        }
+
+        private static bool IsRightSleeveChainPoseMuscle(string muscleName)
+        {
+            if (string.IsNullOrEmpty(muscleName))
+            {
+                return false;
+            }
+
+            string normalized = NormalizeEditorMuscleName(muscleName);
+            if (normalized.Contains("spine") ||
+                normalized.Contains("chest") ||
+                normalized.Contains("upperchest"))
+            {
+                return true;
+            }
+
+            if (!normalized.Contains("right"))
+            {
+                return false;
+            }
+
+            if (normalized.Contains("thumb") ||
+                normalized.Contains("index") ||
+                normalized.Contains("middle") ||
+                normalized.Contains("ring") ||
+                normalized.Contains("little") ||
+                normalized.Contains("hand"))
+            {
+                return false;
+            }
+
+            return normalized.Contains("shoulder") ||
+                   normalized.Contains("arm") ||
+                   normalized.Contains("forearm");
         }
 
         private float GetLegacyAnimationTime()
@@ -7128,6 +7592,7 @@ namespace Member_Han.Modules.FBXImporter
             _lastRetargetStageAfterGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastRetargetStageAfterBipedIKEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastRetargetStageAfterLateVisualGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+            ResetRetargetEndpointStageAttributionDiagnostics();
         }
 
         private void CapturePoseInputDiagnostics(HumanPose pose)
@@ -7910,6 +8375,100 @@ namespace Member_Han.Modules.FBXImporter
                 Debug.LogWarning($"[PoseSpaceRetargeter] Humanoid muscle 값 {clampedCount}개가 안전 범위를 벗어나 [-1, 1]로 제한되었습니다.");
                 _muscleClampWarningLogged = true;
             }
+        }
+
+        private void ApplySetHumanPoseRightLegTwistOutputReference(HumanPose inputPose)
+        {
+            if (!useSetHumanPoseRightLegTwistOutputReference ||
+                _targetHandler == null ||
+                inputPose.muscles == null)
+            {
+                return;
+            }
+
+            _targetHandler.GetHumanPose(ref _appliedTargetPose);
+            if (_appliedTargetPose.muscles == null)
+            {
+                return;
+            }
+
+            float weight = Mathf.Clamp01(setHumanPoseRightLegTwistOutputReferenceWeight);
+            float maxDelta = Mathf.Max(0f, setHumanPoseRightLegTwistOutputReferenceMaxDelta);
+            if (weight <= 0f || maxDelta <= 0f)
+            {
+                return;
+            }
+
+            bool changed = ApplyBoundedSetHumanPoseRightLegTwistOutput(
+                ref _appliedTargetPose,
+                inputPose,
+                GetSetHumanPoseRightUpperLegTwistInOutMuscleIndex(),
+                weight,
+                maxDelta);
+            changed |= ApplyBoundedSetHumanPoseRightLegTwistOutput(
+                ref _appliedTargetPose,
+                inputPose,
+                GetSetHumanPoseRightLowerLegTwistInOutMuscleIndex(),
+                weight,
+                maxDelta);
+
+            if (changed)
+            {
+                _targetHandler.SetHumanPose(ref _appliedTargetPose);
+            }
+        }
+
+        private static bool ApplyBoundedSetHumanPoseRightLegTwistOutput(
+            ref HumanPose outputPose,
+            HumanPose inputPose,
+            int muscleIndex,
+            float weight,
+            float maxDelta)
+        {
+            if (muscleIndex < 0 ||
+                inputPose.muscles == null ||
+                outputPose.muscles == null ||
+                muscleIndex >= inputPose.muscles.Length ||
+                muscleIndex >= outputPose.muscles.Length)
+            {
+                return false;
+            }
+
+            float currentValue = outputPose.muscles[muscleIndex];
+            float nextValue = CalculateBoundedSetHumanPoseRightLegTwistOutput(
+                inputPose.muscles[muscleIndex],
+                currentValue,
+                weight,
+                maxDelta,
+                currentValue);
+            if (!IsFinite(nextValue) || Mathf.Approximately(nextValue, currentValue))
+            {
+                return false;
+            }
+
+            outputPose.muscles[muscleIndex] = nextValue;
+            return true;
+        }
+
+        private static float CalculateBoundedSetHumanPoseRightLegTwistOutput(
+            float inputValue,
+            float outputValue,
+            float weight,
+            float maxDelta,
+            float fallbackValue)
+        {
+            if (!IsFinite(outputValue))
+            {
+                return IsFinite(fallbackValue) ? fallbackValue : outputValue;
+            }
+
+            if (!IsFinite(inputValue))
+            {
+                return outputValue;
+            }
+
+            float clampedCorrection = Mathf.Clamp(inputValue - outputValue, -Mathf.Max(0f, maxDelta), Mathf.Max(0f, maxDelta));
+            return outputValue + clampedCorrection * Mathf.Clamp01(weight);
         }
 
         private void ApplyAnatomicalArmGuard(ref HumanPose pose)
@@ -10030,6 +10589,7 @@ namespace Member_Han.Modules.FBXImporter
                 if (targetAnimator != null)
                 {
                     _lastRetargetStageAfterLateVisualGroundingEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+                    CaptureRetargetEndpointStageAttributionDiagnostics();
                 }
             }
         }

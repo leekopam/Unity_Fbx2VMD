@@ -110,6 +110,30 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to leg in-out/twist muscles.")]
         public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly = false;
 
+        [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to right arm and shoulder muscles.")]
+        public bool manualAnimatorFullBodyPoseRightArmMusclesOnly = false;
+
+        [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to left arm and shoulder muscles.")]
+        public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly = false;
+
+        [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to spine and right sleeve chain muscles.")]
+        public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = false;
+
+        [Tooltip("Runtime diagnostic: first recorder frame for manual Animator full-body pose reference. Zero with end zero keeps the full clip.")]
+        [Range(0f, 6000f)] public float manualAnimatorFullBodyPoseFrameGateStart = 0f;
+
+        [Tooltip("Runtime diagnostic: last recorder frame for manual Animator full-body pose reference. Zero with start zero keeps the full clip.")]
+        [Range(0f, 6000f)] public float manualAnimatorFullBodyPoseFrameGateEnd = 0f;
+
+        [Tooltip("Runtime diagnostic: after SetHumanPose, blend only right upper/lower leg twist output muscles back toward the solver input within a small cap.")]
+        public bool useSetHumanPoseRightLegTwistOutputReference = false;
+
+        [Tooltip("Blend weight for bounded right leg twist output preservation after SetHumanPose.")]
+        [Range(0f, 1f)] public float setHumanPoseRightLegTwistOutputReferenceWeight = 1f;
+
+        [Tooltip("Maximum SetHumanPose right leg twist output correction per muscle.")]
+        [Range(0f, 0.1f)] public float setHumanPoseRightLegTwistOutputReferenceMaxDelta = 0.02f;
+
         [Tooltip("Sub_Manual/testPrefab Animator의 HumanPose bodyRotation을 retarget pose 기준으로 사용해 팔꿈치 bend plane 기준축 차이를 줄입니다.")]
         public bool useManualAnimatorBodyRotationReference = false;
 
@@ -141,6 +165,18 @@ namespace Member_Han.Modules.FBXImporter
 
         [Tooltip("Runtime diagnostic scale for the manual Animator bodyPosition Z solver-input basis. One keeps the legacy Z contribution.")]
         [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceAxisZScale = 1f;
+
+        [Tooltip("Runtime diagnostic: apply a frame-local local-X offset to the right sleeve helper silhouette after SetHumanPose.")]
+        public bool useYybRightSleeveSilhouetteLocalOffsetReference = false;
+
+        [Tooltip("Local X offset in meters for the frame-local right sleeve silhouette probe.")]
+        [Range(-0.2f, 0.2f)] public float yybRightSleeveSilhouetteLocalOffsetX = 0f;
+
+        [Tooltip("Runtime diagnostic start recorder frame for the right sleeve silhouette local-X offset. Zero with end zero keeps the full clip.")]
+        [Range(0f, 6000f)] public float yybRightSleeveSilhouetteLocalOffsetFrameGateStart = 0f;
+
+        [Tooltip("Runtime diagnostic end recorder frame for the right sleeve silhouette local-X offset. Zero with start zero keeps the full clip.")]
+        [Range(0f, 6000f)] public float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = 0f;
 
         [Tooltip("수동 기준 Animator의 Hips localPosition을 target Hips에 선택적으로 적용해 Main_Auto의 몸통 경로 편차를 A/B 검증합니다. 활성 시 testprefab Hips delta가 YYB에 전달되어 오히려 발 호 궤적이 심해지므로 기본 비활성화합니다.")]
         public bool useManualAnimatorHipsLocalPositionReference = false;
@@ -197,7 +233,7 @@ namespace Member_Han.Modules.FBXImporter
         [Range(0f, 1f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = 1f;
 
         [Tooltip("Blend for right lower-leg-to-foot correction strength. The measured default reduces right-foot X/Z residual without worsening hips-aligned foot residual.")]
-        [Range(0f, 1f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.25f;
+        [Range(0f, 1f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.125f;
 
         [Tooltip("Runtime diagnostic start recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
         [Range(0f, 2000f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = 0f;
@@ -232,7 +268,7 @@ namespace Member_Han.Modules.FBXImporter
         [Tooltip("Maximum per-frame BipedIK foot target correction distance from the current target foot position.")]
         [Range(0f, 0.2f)] public float manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0.12f;
 
-        [Tooltip("Apply a right-foot endpoint X/Z correction immediately after SetHumanPose as an isolated runtime candidate.")]
+        [Tooltip("Runtime diagnostic: apply a bounded right foot/toes endpoint X/Z correction immediately after SetHumanPose.")]
         public bool usePostSetHumanPoseRightEndpointPositionReference = false;
 
         [Tooltip("Blend weight for post-SetHumanPose right-foot endpoint X/Z correction.")]
@@ -711,7 +747,7 @@ namespace Member_Han.Modules.FBXImporter
         [Range(-0.5f, 0.5f)] public float HeightOffset = 0.0f;
 
         [Tooltip("보폭 비율 (1.0 = 자동, 미끄러지면 조절)")]
-        [Range(0f, 1.2f)] public float MovementScaleMultiplier = 1.0f;
+        [Range(0f, 1.5f)] public float MovementScaleMultiplier = 1.0f;
 
         [Header("Root Motion Spike Guard")]
         [Tooltip("FBX root delta가 한 프레임에 과도하게 튀면 순간이동으로 보고 해당 프레임의 추가 root 이동을 무시합니다.")]
@@ -834,15 +870,20 @@ namespace Member_Han.Modules.FBXImporter
         private bool _hasCachedTargetController;
         private bool _idlePoseInitialized;
 #if UNITY_EDITOR
+        private struct EditorSmokeSettingsSnapshot
+        {
+            public bool enableRecordingDiagnostics;
+            public bool enableDiagnosticFingerCloseups;
+            public bool useDeterministicCaptureFramerateForDiagnostics;
+            public float startDelay;
+        }
+
         private bool _editorSmokeRecordingOverrideActive;
         private int _editorSmokeTargetFrameCount;
         private float _editorSmokeDurationSeconds;
         private float[] _editorSmokeSampleTimesOverride;
-        private bool _editorSmokeRestoreSettingsActive;
-        private bool _editorSmokePreviousEnableRecordingDiagnostics;
-        private bool _editorSmokePreviousEnableDiagnosticFingerCloseups;
-        private bool _editorSmokePreviousUseDeterministicCaptureFramerate;
-        private float _editorSmokePreviousStartDelay;
+        private EditorSmokeSettingsSnapshot _editorSmokeSettingsSnapshot;
+        private bool _editorSmokeSettingsSnapshotActive;
         private EditorDiagnosticSmokeSegment _editorSmokeSegment;
         private string _editorSmokeCurrentFbxFileName;
         private bool _editorSmokeCaptureResolutionOverrideActive;
@@ -1171,28 +1212,30 @@ namespace Member_Han.Modules.FBXImporter
 
         private void CaptureEditorSmokeSettings()
         {
-            _editorSmokePreviousEnableRecordingDiagnostics = enableRecordingDiagnostics;
-            _editorSmokePreviousEnableDiagnosticFingerCloseups = enableDiagnosticFingerCloseups;
-            _editorSmokePreviousUseDeterministicCaptureFramerate = useDeterministicCaptureFramerateForDiagnostics;
-            _editorSmokePreviousStartDelay = startDelay;
-            _editorSmokeRestoreSettingsActive = true;
+            _editorSmokeSettingsSnapshot = new EditorSmokeSettingsSnapshot
+            {
+                enableRecordingDiagnostics = enableRecordingDiagnostics,
+                enableDiagnosticFingerCloseups = enableDiagnosticFingerCloseups,
+                useDeterministicCaptureFramerateForDiagnostics = useDeterministicCaptureFramerateForDiagnostics,
+                startDelay = startDelay
+            };
+            _editorSmokeSettingsSnapshotActive = true;
         }
 
         private void ClearEditorSmokeOverride()
         {
-            if (_editorSmokeRestoreSettingsActive)
+            if (_editorSmokeSettingsSnapshotActive)
             {
-                enableRecordingDiagnostics = _editorSmokePreviousEnableRecordingDiagnostics;
-                enableDiagnosticFingerCloseups = _editorSmokePreviousEnableDiagnosticFingerCloseups;
-                useDeterministicCaptureFramerateForDiagnostics = _editorSmokePreviousUseDeterministicCaptureFramerate;
-                startDelay = _editorSmokePreviousStartDelay;
+                enableRecordingDiagnostics = _editorSmokeSettingsSnapshot.enableRecordingDiagnostics;
+                enableDiagnosticFingerCloseups = _editorSmokeSettingsSnapshot.enableDiagnosticFingerCloseups;
+                useDeterministicCaptureFramerateForDiagnostics = _editorSmokeSettingsSnapshot.useDeterministicCaptureFramerateForDiagnostics;
+                startDelay = _editorSmokeSettingsSnapshot.startDelay;
             }
 
             _editorSmokeRecordingOverrideActive = false;
             _editorSmokeTargetFrameCount = 0;
             _editorSmokeDurationSeconds = 0f;
             _editorSmokeSampleTimesOverride = null;
-            _editorSmokeRestoreSettingsActive = false;
             _editorSmokeSegment = EditorDiagnosticSmokeSegment.Head;
             _editorSmokeCurrentFbxFileName = null;
             _editorSmokeCaptureResolutionOverrideActive = false;
@@ -1203,6 +1246,8 @@ namespace Member_Han.Modules.FBXImporter
             _editorSmokeUseKnownMmdReferenceTiming = false;
             _editorSmokeRecordingStartTimeOverrideSeconds = float.NaN;
             _editorSmokeRecordingPlaybackSpeedOverride = float.NaN;
+            _editorSmokeSettingsSnapshot = default(EditorSmokeSettingsSnapshot);
+            _editorSmokeSettingsSnapshotActive = false;
         }
 
         private static float NormalizeEditorSmokeStartTimeOverride(float value)
@@ -3905,6 +3950,7 @@ namespace Member_Han.Modules.FBXImporter
                     !usePostSetHumanPoseRightFootEvaluatorXzReference &&
                     !usePreSetHumanPoseRightEndpointPositionReference &&
                     !useManualAnimatorBodyPositionXzReference &&
+                    !useYybRightSleeveSilhouetteLocalOffsetReference &&
                     !useManualAnimatorBipedIkFootPositionReference) ||
                 retargeter == null ||
                 referenceClip == null)
@@ -3947,7 +3993,20 @@ namespace Member_Han.Modules.FBXImporter
                 manualAnimatorFullBodyPoseReferenceWeight,
                 manualAnimatorFullBodyPoseExcludeLowerBodyMuscles,
                 manualAnimatorFullBodyPoseLowerBodyMusclesOnly,
-                manualAnimatorFullBodyPoseLegTwistMusclesOnly);
+                manualAnimatorFullBodyPoseLegTwistMusclesOnly,
+                manualAnimatorFullBodyPoseRightArmMusclesOnly,
+                manualAnimatorFullBodyPoseLeftArmMusclesOnly,
+                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly,
+                manualAnimatorFullBodyPoseFrameGateStart,
+                manualAnimatorFullBodyPoseFrameGateEnd);
+            retargeter.useYybRightSleeveSilhouetteLocalOffsetReference =
+                useYybRightSleeveSilhouetteLocalOffsetReference;
+            retargeter.yybRightSleeveSilhouetteLocalOffsetX =
+                Mathf.Clamp(yybRightSleeveSilhouetteLocalOffsetX, -0.2f, 0.2f);
+            retargeter.yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+                Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateStart);
+            retargeter.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+                Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
         }
 
         private static string ResolveEditorHumanoidReferencePath(string importedFilePath, string sourceFilePath)

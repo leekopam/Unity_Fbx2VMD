@@ -1,21 +1,5 @@
 {
   "dependencies": {
-    "com.antigravity.editor": {
-      "version": "https://github.com/hohollala/Antigravity.git",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {
-        "com.unity.test-framework": "1.1.9"
-      },
-      "hash": "31b54b2f6839f53aebef450e1219b5e366a27093"
-    },
-    "com.antigravity.ide": {
-      "version": "https://github.com/prithvi-bharadwaj/Antigravity-IDE.git",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "052001cf62c44b1af3d8bd6339939f5f2c34966d"
-    },
     "com.autodesk.fbx": {
       "version": "4.2.1",
       "depth": 1,
