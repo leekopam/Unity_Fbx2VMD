@@ -14,7 +14,7 @@ namespace Tests.Editor.Settings
         private const string FBXVmdPipelineTypeName =
             "Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline, Assembly-CSharp";
         private const string RecodingSettingTypeName =
-            "RecodingSetting, Assembly-CSharp";
+            "RecordingSetting, Assembly-CSharp";
         private const string MotionComparisonProbeTypeName =
             "MotionComparisonProbe, Assembly-CSharp-firstpass";
         private const string HumanoidSampleCodeTypeName =
@@ -69,7 +69,7 @@ namespace Tests.Editor.Settings
             Type recodingSettingType = RequireType(RecodingSettingTypeName);
             Type presetType = RequireType(PresetTypeName);
             var fileManagerObject = new GameObject("Recording Capture FBXVmdPipeline Test");
-            var settingObject = new GameObject("Recording Capture RecodingSetting Test");
+            var settingObject = new GameObject("Recording Capture RecordingSetting Test");
 
             try
             {

@@ -14,7 +14,7 @@ namespace Tests.Editor.Settings
     {
         private const string GraphicSettingTypeName = "Fbx2Vmd.Settings.GraphicSetting, Assembly-CSharp";
         private const string BackgroundColorSettingTypeName = "BackgroundColorSetting, Assembly-CSharp";
-        private const string RecodingSettingTypeName = "RecodingSetting, Assembly-CSharp";
+        private const string RecodingSettingTypeName = "RecordingSetting, Assembly-CSharp";
         private const string FBXVmdPipelineTypeName = "Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline, Assembly-CSharp";
         private const string TextureProfileTypeName = "Fbx2Vmd.Settings.GraphicTextureImportProfile, Assembly-CSharp";
         private const string MaterialShaderProfileTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderProfile, Assembly-CSharp";
@@ -409,7 +409,7 @@ namespace Tests.Editor.Settings
             Component backgroundSetting = settingRoot.GetComponent(backgroundSettingType);
             Assert.That(backgroundSetting, Is.Not.Null, "Setting must have BackgroundColorSetting for GameView background control.");
             Component recodingSetting = settingRoot.GetComponent(recodingSettingType);
-            Assert.That(recodingSetting, Is.Not.Null, "Setting must have RecodingSetting for manual recording control.");
+            Assert.That(recodingSetting, Is.Not.Null, "Setting must have RecordingSetting for manual recording control.");
 
             var targetCamera = GetField<Camera>(component, "targetCamera");
             Assert.That(targetCamera, Is.EqualTo(Camera.main), "GraphicSetting must target the Main Camera by default.");
@@ -456,13 +456,13 @@ namespace Tests.Editor.Settings
             Button manualRecordButton = manualRecordButtonObject.GetComponent<Button>();
             Assert.That(manualRecordButton, Is.Not.Null, "Manual MMD recording button must use Unity UI Button.");
             Assert.That(GetField<Component>(recodingSetting, "recordingFBXVmdPipeline"), Is.EqualTo(fileManager),
-                "RecodingSetting must show which FBXVmdPipeline owns the recording flow.");
+                "RecordingSetting must show which FBXVmdPipeline owns the recording flow.");
             Assert.That(GetField<Button>(recodingSetting, "manualRecordButton"), Is.EqualTo(manualRecordButton),
-                "RecodingSetting must show the manual recording button assignment.");
+                "RecordingSetting must show the manual recording button assignment.");
             Assert.That(GetField<Component>(recodingSetting, "recordingController"), Is.EqualTo(recordingController),
-                "RecodingSetting must show which HumanoidSampleCode receives manual recording.");
+                "RecordingSetting must show which HumanoidSampleCode receives manual recording.");
             Assert.That(HasPersistentCall(manualRecordButton, recodingSetting, ManualRecordMethodName), Is.True,
-                "Manual recording button must call RecodingSetting.StartManualRecording on the selected Setting object.");
+                "Manual recording button must call RecordingSetting.StartManualRecording on the selected Setting object.");
 
             object materialProfile = GetMemberValue<object>(component, "materialShaderProfile");
             Assert.That(materialProfile, Is.Not.Null,
@@ -550,7 +550,7 @@ namespace Tests.Editor.Settings
                 Assert.That(GetField<Color>(backgroundSetting, "backgroundColor"),
                     Is.EqualTo(ReferenceMp4BackgroundColor));
                 Component recodingSetting = component.GetComponent(recodingSettingType);
-                Assert.That(recodingSetting, Is.Not.Null, "Installer must keep RecodingSetting on Setting.");
+                Assert.That(recodingSetting, Is.Not.Null, "Installer must keep RecordingSetting on Setting.");
                 Component fileManager = UnityEngine.Object.FindObjectOfType(RequireType(FBXVmdPipelineTypeName)) as Component;
                 Component recordingController = ResolveRecordingController(fileManager);
                 Button manualRecordButton = GameObject.Find(ManualRecordButtonName)?.GetComponent<Button>();

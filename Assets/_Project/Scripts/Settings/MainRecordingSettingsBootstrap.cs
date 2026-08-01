@@ -3,13 +3,13 @@ using UnityEngine;
 
 namespace Fbx2Vmd.Settings
 {
-    public static class MainRecordingSettingsRuntimeBootstrap
+    public static class MainRecordingSettingsBootstrap
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void AutoLaunchForPlayerStartup()
         {
-            Application.quitting -= MainRecordingSettingsRuntimeLauncher.CloseStartedProcessQuietly;
-            Application.quitting += MainRecordingSettingsRuntimeLauncher.CloseStartedProcessQuietly;
+            Application.quitting -= MainRecordingSettingsLauncher.CloseStartedProcessQuietly;
+            Application.quitting += MainRecordingSettingsLauncher.CloseStartedProcessQuietly;
 
             string settingsPath = MainRecordingSettingsPathResolver.ResolveSettingsFilePath();
             bool openSettingsOnStart = ResolveOpenSettingsOnStart(settingsPath);
@@ -22,10 +22,10 @@ namespace Fbx2Vmd.Settings
             }
 
             MainRecordingSettingsActionResult result =
-                MainRecordingSettingsRuntimeLauncher.TryLaunchForPlayer(true, settingsPath);
+                MainRecordingSettingsLauncher.TryLaunchForPlayer(true, settingsPath);
             if (!result.Succeeded)
             {
-                Debug.LogWarning($"[MainRecordingSettingsRuntimeBootstrap] {result.UserMessage}");
+                Debug.LogWarning($"[MainRecordingSettingsBootstrap] {result.UserMessage}");
             }
         }
 
@@ -34,7 +34,7 @@ namespace Fbx2Vmd.Settings
             bool isEditor,
             bool isBatchMode)
         {
-            return MainRecordingSettingsRuntimeLauncher.ShouldAutoLaunchForPlayer(
+            return MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(
                 requestedOpen,
                 isEditor,
                 isBatchMode);
@@ -51,7 +51,7 @@ namespace Fbx2Vmd.Settings
             catch (Exception exception)
             {
                 Debug.LogWarning(
-                    "[MainRecordingSettingsRuntimeBootstrap] 공유 설정을 읽지 못해 기본 자동 실행 정책을 사용합니다. " +
+                    "[MainRecordingSettingsBootstrap] 공유 설정을 읽지 못해 기본 자동 실행 정책을 사용합니다. " +
                     exception.Message);
                 return true;
             }
