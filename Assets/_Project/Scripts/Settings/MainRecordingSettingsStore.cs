@@ -110,7 +110,7 @@ namespace Fbx2Vmd.Settings
 
             if (document.runtimeState == null)
             {
-                document.runtimeState = new MainRecordingSettingsRuntimeState();
+                document.runtimeState = new MainRecordingSettingsState();
             }
 
             document.runtimeState.Normalize();

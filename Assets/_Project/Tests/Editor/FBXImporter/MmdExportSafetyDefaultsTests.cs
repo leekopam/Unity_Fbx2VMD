@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class YybMmdExportSafetyDefaultsTests
+    public class MmdExportSafetyDefaultsTests
     {
         private const float ExpectedYybMmdExportMaxDeltaPerFrame = 0.11f;
         private const float MaxSmokeSafeThumbIndexSpreadAngle = 50f;

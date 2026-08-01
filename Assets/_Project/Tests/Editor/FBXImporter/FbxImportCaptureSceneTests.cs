@@ -15,7 +15,7 @@ namespace Tests.Editor.FBXImporter
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string CaptureScenePath = "Assets/_Project/Scene/FbxImport_Capture.unity";
-        private const string RecodingSettingTypeName = "RecodingSetting, Assembly-CSharp";
+        private const string RecodingSettingTypeName = "RecordingSetting, Assembly-CSharp";
         private const string ManualRecordButtonName = "MMD_Record_Button";
         private const string LegacyFBXVmdPipelineManualRecordMethodName = "OnClickManualRecordButton";
         private const string SettingManualRecordMethodName = "StartManualRecording";
@@ -96,14 +96,14 @@ namespace Tests.Editor.FBXImporter
             var sampleCode = fileManager.targetCharacter.GetComponent<HumanoidSampleCode>();
             Assert.That(sampleCode, Is.Not.Null, "Main_recoding target must keep HumanoidSampleCode for manual MMD-style recording.");
             Assert.That(typeof(FBXVmdPipeline).GetMethod(LegacyFBXVmdPipelineManualRecordMethodName, BindingFlags.Instance | BindingFlags.Public),
-                Is.Null, "FBXVmdPipeline must not expose screen/manual recording button handling after RecodingSetting owns it.");
+                Is.Null, "FBXVmdPipeline must not expose screen/manual recording button handling after RecordingSetting owns it.");
             Assert.That(typeof(HumanoidSampleCode).GetMethod(HumanoidManualRecordMethodName, BindingFlags.Instance | BindingFlags.Public),
                 Is.Not.Null, "HumanoidSampleCode must keep the actual VMD recorder button endpoint.");
             System.Type recodingSettingType = RequireType(RecodingSettingTypeName);
             GameObject settingRoot = GameObject.Find("Setting");
             Assert.That(settingRoot, Is.Not.Null, "Main_recoding scene must keep the visible Setting object.");
             Component setting = settingRoot.GetComponent(recodingSettingType);
-            Assert.That(setting, Is.Not.Null, "Setting must expose the recording assignment through RecodingSetting.");
+            Assert.That(setting, Is.Not.Null, "Setting must expose the recording assignment through RecordingSetting.");
 
             GameObject buttonObject = GameObject.Find(ManualRecordButtonName);
             Assert.That(buttonObject, Is.Not.Null,

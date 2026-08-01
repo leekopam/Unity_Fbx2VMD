@@ -1096,7 +1096,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string YybRootName = "YYB Hatsune Miku";
         private const string ManualRecordButtonName = "MMD_Record_Button";
-        private const string RecodingSettingManualRecordMethodName = nameof(RecodingSetting.StartManualRecording);
+        private const string RecodingSettingManualRecordMethodName = nameof(RecordingSetting.StartManualRecording);
         private const string LegacyFBXVmdPipelineManualRecordMethodName = "OnClickManualRecordButton";
         private const string YybTextureFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/tex";
         private const string YybMaterialFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/Materials";
@@ -1146,7 +1146,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             }
 
             BackgroundColorSetting backgroundSetting = EnsureComponent<BackgroundColorSetting>(root);
-            RecodingSetting recodingSetting = EnsureComponent<RecodingSetting>(root);
+            RecordingSetting recodingSetting = EnsureComponent<RecordingSetting>(root);
             RemoveLegacyGraphicSettingChild(root);
             ConfigureDefaults(setting, backgroundSetting, recodingSetting);
             return setting;
@@ -1189,7 +1189,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         private static void ConfigureDefaults(
             GraphicSetting setting,
             BackgroundColorSetting backgroundSetting,
-            RecodingSetting recodingSetting)
+            RecordingSetting recodingSetting)
         {
             UniversalRenderPipelineAsset pipelineAsset = ResolveUniversalRenderPipelineAsset();
             Camera mainCamera = Camera.main;
@@ -1241,7 +1241,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void ConfigureRecordingControls(RecodingSetting recodingSetting)
+        private static void ConfigureRecordingControls(RecordingSetting recodingSetting)
         {
             if (recodingSetting == null)
             {

@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 
 namespace Tests.Editor.Settings
 {
-    public class RecodingSettingEditorTests
+    public class RecordingSettingEditorTests
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
@@ -30,9 +30,9 @@ namespace Tests.Editor.Settings
         private const string EditorPlayModeGuardTypeName =
             "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorPlayModeGuard, Assembly-CSharp-Editor";
         private const string RuntimeLauncherTypeName =
-            "Fbx2Vmd.Settings.MainRecordingSettingsRuntimeLauncher, Assembly-CSharp";
+            "Fbx2Vmd.Settings.MainRecordingSettingsLauncher, Assembly-CSharp";
         private const string RuntimeBootstrapTypeName =
-            "Fbx2Vmd.Settings.MainRecordingSettingsRuntimeBootstrap, Assembly-CSharp";
+            "Fbx2Vmd.Settings.MainRecordingSettingsBootstrap, Assembly-CSharp";
 
         [Test]
         public void Given_MissingFBXVmdPipeline_When_ApplyingSharedSettingsWithFbxPath_Then_ReturnsUserMessage()
@@ -64,12 +64,12 @@ namespace Tests.Editor.Settings
             });
 
             var fileManagerObject = new GameObject("Shared Settings FBXVmdPipeline Test");
-            var settingObject = new GameObject("Shared Settings RecodingSetting Test");
+            var settingObject = new GameObject("Shared Settings RecordingSetting Test");
 
             try
             {
                 var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 MainRecordingSettingsActionResult result =
@@ -96,12 +96,12 @@ namespace Tests.Editor.Settings
         {
             string missingFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
             var fileManagerObject = new GameObject("Shared Settings Missing FBX FBXVmdPipeline Test");
-            var settingObject = new GameObject("Shared Settings Missing FBX RecodingSetting Test");
+            var settingObject = new GameObject("Shared Settings Missing FBX RecordingSetting Test");
 
             try
             {
                 var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 var document = new MainRecordingSettingsDocument
@@ -130,14 +130,14 @@ namespace Tests.Editor.Settings
         {
             string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
             var fileManagerObject = new GameObject("Shared Settings Duplicate FBX FBXVmdPipeline Test");
-            var settingObject = new GameObject("Shared Settings Duplicate FBX RecodingSetting Test");
+            var settingObject = new GameObject("Shared Settings Duplicate FBX RecordingSetting Test");
 
             try
             {
                 File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
 
                 var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
                 SetField(recodingSetting, "lastAppliedSharedSettingsFbxPath", tempFbxPath);
                 SetField(fileManager, "_isProcessing", true);
@@ -172,21 +172,21 @@ namespace Tests.Editor.Settings
         {
             string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
             var fileManagerObject = new GameObject("Shared Settings Positive FBX FBXVmdPipeline Test");
-            var settingObject = new GameObject("Shared Settings Positive FBX RecodingSetting Test");
-            Func<FBXVmdPipeline, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+            var settingObject = new GameObject("Shared Settings Positive FBX RecordingSetting Test");
+            Func<FBXVmdPipeline, string, bool> originalStarter = RecordingSetting.SharedSettingsFbxImportStarterForTests;
 
             try
             {
                 File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
 
                 var fileManager = fileManagerObject.AddComponent<FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
                 FBXVmdPipeline startedManager = null;
                 string startedPath = string.Empty;
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
                 {
                     startCount++;
                     startedManager = manager;
@@ -216,7 +216,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
                 if (File.Exists(tempFbxPath))
                 {
                     File.Delete(tempFbxPath);
@@ -232,19 +232,19 @@ namespace Tests.Editor.Settings
         {
             string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
             var fileManagerObject = new GameObject("Shared Settings Command FBX FBXVmdPipeline Test");
-            var settingObject = new GameObject("Shared Settings Command FBX RecodingSetting Test");
-            Func<FBXVmdPipeline, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+            var settingObject = new GameObject("Shared Settings Command FBX RecordingSetting Test");
+            Func<FBXVmdPipeline, string, bool> originalStarter = RecordingSetting.SharedSettingsFbxImportStarterForTests;
 
             try
             {
                 File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
 
                 var fileManager = fileManagerObject.AddComponent<FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
                 {
                     startCount++;
                     return manager == fileManager && path == tempFbxPath;
@@ -275,7 +275,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
                 if (File.Exists(tempFbxPath))
                 {
                     File.Delete(tempFbxPath);
@@ -293,8 +293,8 @@ namespace Tests.Editor.Settings
             string settingsPath = CreateTempSettingsPath();
             var store = new MainRecordingSettingsStore(settingsPath);
             var fileManagerObject = new GameObject("Stored FBX Path FBXVmdPipeline Test");
-            var settingObject = new GameObject("Stored FBX Path RecodingSetting Test");
-            Func<FBXVmdPipeline, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+            var settingObject = new GameObject("Stored FBX Path RecordingSetting Test");
+            Func<FBXVmdPipeline, string, bool> originalStarter = RecordingSetting.SharedSettingsFbxImportStarterForTests;
 
             try
             {
@@ -307,11 +307,11 @@ namespace Tests.Editor.Settings
                 });
 
                 var fileManager = fileManagerObject.AddComponent<FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
                 {
                     startCount++;
                     return true;
@@ -326,7 +326,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
                 if (File.Exists(tempFbxPath))
                 {
                     File.Delete(tempFbxPath);
@@ -344,8 +344,8 @@ namespace Tests.Editor.Settings
             string settingsPath = CreateTempSettingsPath();
             var store = new MainRecordingSettingsStore(settingsPath);
             var fileManagerObject = new GameObject("Stale Import Command FBXVmdPipeline Test");
-            var settingObject = new GameObject("Stale Import Command RecodingSetting Test");
-            Func<FBXVmdPipeline, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+            var settingObject = new GameObject("Stale Import Command RecordingSetting Test");
+            Func<FBXVmdPipeline, string, bool> originalStarter = RecordingSetting.SharedSettingsFbxImportStarterForTests;
 
             try
             {
@@ -360,11 +360,11 @@ namespace Tests.Editor.Settings
                 store.Save(document);
 
                 var fileManager = fileManagerObject.AddComponent<FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
                 {
                     startCount++;
                     return true;
@@ -386,7 +386,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
                 if (File.Exists(tempFbxPath))
                 {
                     File.Delete(tempFbxPath);
@@ -402,19 +402,19 @@ namespace Tests.Editor.Settings
         {
             string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
             var fileManagerObject = new GameObject("Empty Command Path FBXVmdPipeline Test");
-            var settingObject = new GameObject("Empty Command Path RecodingSetting Test");
-            Func<FBXVmdPipeline, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+            var settingObject = new GameObject("Empty Command Path RecordingSetting Test");
+            Func<FBXVmdPipeline, string, bool> originalStarter = RecordingSetting.SharedSettingsFbxImportStarterForTests;
 
             try
             {
                 File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
 
                 var fileManager = fileManagerObject.AddComponent<FBXVmdPipeline>();
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
                 {
                     startCount++;
                     return true;
@@ -444,7 +444,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
                 if (File.Exists(tempFbxPath))
                 {
                     File.Delete(tempFbxPath);
@@ -462,10 +462,10 @@ namespace Tests.Editor.Settings
             string settingsPath = CreateTempSettingsPath();
             var store = new MainRecordingSettingsStore(settingsPath);
             var firstFBXVmdPipelineObject = new GameObject("Consumed Command First FBXVmdPipeline Test");
-            var firstSettingObject = new GameObject("Consumed Command First RecodingSetting Test");
+            var firstSettingObject = new GameObject("Consumed Command First RecordingSetting Test");
             var secondFBXVmdPipelineObject = new GameObject("Consumed Command Second FBXVmdPipeline Test");
-            var secondSettingObject = new GameObject("Consumed Command Second RecodingSetting Test");
-            Func<FBXVmdPipeline, string, bool> originalStarter = RecodingSetting.SharedSettingsFbxImportStarterForTests;
+            var secondSettingObject = new GameObject("Consumed Command Second RecordingSetting Test");
+            Func<FBXVmdPipeline, string, bool> originalStarter = RecordingSetting.SharedSettingsFbxImportStarterForTests;
 
             try
             {
@@ -478,14 +478,14 @@ namespace Tests.Editor.Settings
                 });
 
                 int startCount = 0;
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = (_, path) =>
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = (_, path) =>
                 {
                     startCount++;
                     return path == tempFbxPath;
                 };
 
                 var firstFBXVmdPipeline = firstFBXVmdPipelineObject.AddComponent<FBXVmdPipeline>();
-                var firstRecodingSetting = firstSettingObject.AddComponent<RecodingSetting>();
+                var firstRecodingSetting = firstSettingObject.AddComponent<RecordingSetting>();
                 SetField(firstRecodingSetting, "recordingFBXVmdPipeline", firstFBXVmdPipeline);
 
                 MainRecordingSettingsActionResult initialResult =
@@ -517,7 +517,7 @@ namespace Tests.Editor.Settings
                 Assert.That(GetField<string>(consumedCommand, "fbxPath"), Is.EqualTo(string.Empty));
 
                 var secondFBXVmdPipeline = secondFBXVmdPipelineObject.AddComponent<FBXVmdPipeline>();
-                var secondRecodingSetting = secondSettingObject.AddComponent<RecodingSetting>();
+                var secondRecodingSetting = secondSettingObject.AddComponent<RecordingSetting>();
                 SetField(secondRecodingSetting, "recordingFBXVmdPipeline", secondFBXVmdPipeline);
 
                 MainRecordingSettingsActionResult secondResult =
@@ -528,7 +528,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                RecodingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
+                RecordingSetting.SharedSettingsFbxImportStarterForTests = originalStarter;
                 if (File.Exists(tempFbxPath))
                 {
                     File.Delete(tempFbxPath);
@@ -553,11 +553,11 @@ namespace Tests.Editor.Settings
                 openSettingsOnStart = false,
             });
 
-            var settingObject = new GameObject("Shared Settings Polling RecodingSetting Test");
+            var settingObject = new GameObject("Shared Settings Polling RecordingSetting Test");
 
             try
             {
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 recodingSetting.LoadSharedSettingsFromPathForTests(path);
 
                 store.Save(new MainRecordingSettingsDocument
@@ -594,11 +594,11 @@ namespace Tests.Editor.Settings
                 openSettingsOnStart = false,
             });
 
-            var settingObject = new GameObject("Runtime State Writer RecodingSetting Test");
+            var settingObject = new GameObject("Runtime State Writer RecordingSetting Test");
 
             try
             {
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 recodingSetting.LoadSharedSettingsFromPathForTests(path);
 
                 MainRecordingSettingsActionResult playingResult =
@@ -642,13 +642,13 @@ namespace Tests.Editor.Settings
 
             try
             {
-                var recodingSetting = settingObject.AddComponent<RecodingSetting>();
+                var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 UnityEditor.Editor editor = UnityEditor.Editor.CreateEditor(recodingSetting);
 
                 try
                 {
                     Assert.That(editor.GetType().FullName,
-                        Is.EqualTo("Fbx2Vmd.Settings.EditorTools.RecodingSettingEditor"));
+                        Is.EqualTo("Fbx2Vmd.Settings.EditorTools.RecordingSettingEditor"));
                 }
                 finally
                 {
@@ -699,20 +699,20 @@ namespace Tests.Editor.Settings
             AssertInspectorName<BackgroundColorSetting>("applyBackgroundColor", "배경색 적용");
             AssertInspectorName<BackgroundColorSetting>("backgroundColor", "배경색");
 
-            AssertHeader<RecodingSetting>("recordingFBXVmdPipeline", "수동 녹화");
-            AssertInspectorName<RecodingSetting>("recordingFBXVmdPipeline", "녹화 FBXVmdPipeline");
-            AssertInspectorName<RecodingSetting>("manualRecordButton", "수동 녹화 버튼");
-            AssertInspectorName<RecodingSetting>("recordingController", "녹화 대상");
-            AssertHeader<RecodingSetting>("enableRecordingDiagnostics", "화면 녹화 진단");
-            AssertInspectorName<RecodingSetting>("enableRecordingDiagnostics", "녹화 진단/캡처 사용");
-            AssertInspectorName<RecodingSetting>(
+            AssertHeader<RecordingSetting>("recordingFBXVmdPipeline", "수동 녹화");
+            AssertInspectorName<RecordingSetting>("recordingFBXVmdPipeline", "녹화 FBXVmdPipeline");
+            AssertInspectorName<RecordingSetting>("manualRecordButton", "수동 녹화 버튼");
+            AssertInspectorName<RecordingSetting>("recordingController", "녹화 대상");
+            AssertHeader<RecordingSetting>("enableRecordingDiagnostics", "화면 녹화 진단");
+            AssertInspectorName<RecordingSetting>("enableRecordingDiagnostics", "녹화 진단/캡처 사용");
+            AssertInspectorName<RecordingSetting>(
                 "useDeterministicCaptureFramerateForDiagnostics",
                 "테스트용 30fps 시간 고정");
-            AssertInspectorName<RecodingSetting>("enableDiagnosticFingerCloseups", "손 close-up 캡처");
-            AssertInspectorName<RecodingSetting>("applyDiagnosticsToFBXVmdPipelineOnAwake", "실행 시작 시 FBXVmdPipeline에 적용");
-            AssertHeader<RecodingSetting>("settingsPopup", "설정 팝업");
-            AssertInspectorName<RecodingSetting>("settingsPopup", "런타임 설정 팝업");
-            AssertInspectorName<RecodingSetting>("openSettingsPopupOnStart", "시작 시 설정 팝업 열기");
+            AssertInspectorName<RecordingSetting>("enableDiagnosticFingerCloseups", "손 close-up 캡처");
+            AssertInspectorName<RecordingSetting>("applyDiagnosticsToFBXVmdPipelineOnAwake", "실행 시작 시 FBXVmdPipeline에 적용");
+            AssertHeader<RecordingSetting>("settingsPopup", "설정 팝업");
+            AssertInspectorName<RecordingSetting>("settingsPopup", "런타임 설정 팝업");
+            AssertInspectorName<RecordingSetting>("openSettingsPopupOnStart", "시작 시 설정 팝업 열기");
         }
 
         [Test]
@@ -929,9 +929,9 @@ namespace Tests.Editor.Settings
 
             EditorSceneManager.OpenScene(MainAutoScenePath);
             Assert.That(
-                UnityEngine.Object.FindObjectOfType<RecodingSetting>(),
+                UnityEngine.Object.FindObjectOfType<RecordingSetting>(),
                 Is.Null,
-                "The first Player scene is Main_Auto, so Player startup settings launch must not depend on RecodingSetting.Start().");
+                "The first Player scene is Main_Auto, so Player startup settings launch must not depend on RecordingSetting.Start().");
         }
 
         [Test]
@@ -1372,7 +1372,7 @@ namespace Tests.Editor.Settings
         public void Given_MainRecordingScene_When_InspectingOnboardingActions_Then_BasicSetupCanReachFbxImporter()
         {
             EditorSceneManager.OpenScene(MainRecordingScenePath);
-            RecodingSetting recodingSetting = UnityEngine.Object.FindObjectOfType<RecodingSetting>();
+            RecordingSetting recodingSetting = UnityEngine.Object.FindObjectOfType<RecordingSetting>();
 
             Assert.That(
                 MainRecordingSettingsActions.CanExecute(
@@ -1431,7 +1431,7 @@ namespace Tests.Editor.Settings
             Assert.That(root, Is.Not.Null);
             Assert.That(root.GetComponent<GraphicSetting>(), Is.Not.Null);
             Assert.That(root.GetComponent<BackgroundColorSetting>(), Is.Not.Null);
-            Assert.That(root.GetComponent<RecodingSetting>(), Is.Not.Null);
+            Assert.That(root.GetComponent<RecordingSetting>(), Is.Not.Null);
             Assert.That(Camera.main, Is.Not.Null);
         }
 
@@ -1441,8 +1441,8 @@ namespace Tests.Editor.Settings
             Type popupType = RequireType(RuntimePopupTypeName);
             EditorSceneManager.OpenScene(MainRecordingScenePath);
 
-            RecodingSetting recodingSetting = UnityEngine.Object.FindObjectOfType<RecodingSetting>();
-            Assert.That(recodingSetting, Is.Not.Null, "Main_recoding must keep RecodingSetting on the Setting object.");
+            RecordingSetting recodingSetting = UnityEngine.Object.FindObjectOfType<RecordingSetting>();
+            Assert.That(recodingSetting, Is.Not.Null, "Main_recoding must keep RecordingSetting on the Setting object.");
             Assert.That(GetField<bool>(recodingSetting, "openSettingsPopupOnStart"), Is.True);
 
             object popup = InvokeInstance<object>(recodingSetting, "EnsureSettingsPopup");

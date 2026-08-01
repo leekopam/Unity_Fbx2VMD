@@ -30,7 +30,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
 #if UNITY_EDITOR
         private const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
 #endif
-        private static Func<IFileBrowserService> fileBrowserServiceFactory = () => new RuntimeFileBrowserService();
+        private static Func<IFileBrowserService> fileBrowserServiceFactory = () => new FileBrowserService();
 
         private enum FBXSessionState
         {
@@ -1572,7 +1572,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         private void InitializeServices()
         {
             // 파일 브라우저 서비스 초기화 (StandaloneFileBrowser 사용)
-            _fileBrowserService = fileBrowserServiceFactory?.Invoke() ?? new RuntimeFileBrowserService();
+            _fileBrowserService = fileBrowserServiceFactory?.Invoke() ?? new FileBrowserService();
 
             // 런타임 FBX 임포터 초기화 (Assimp 사용)
             _fbxImporter = new RuntimeFBXImporter();

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Fbx2Vmd.Settings
 {
-    public static class MainRecordingSettingsRuntimeLauncher
+    public static class MainRecordingSettingsLauncher
     {
         public const string SettingsFolderName = "MainRecordingSettings";
         public const string SettingsExecutableFileName = "Unity_Fbx2VMD_Settings.exe";
@@ -118,7 +118,7 @@ namespace Fbx2Vmd.Settings
             catch (Exception exception)
             {
                 UnityEngine.Debug.LogWarning(
-                    "[MainRecordingSettingsRuntimeLauncher] Web 설정창 종료 요청에 실패했습니다. " +
+                    "[MainRecordingSettingsLauncher] Web 설정창 종료 요청에 실패했습니다. " +
                     exception.Message);
             }
             finally

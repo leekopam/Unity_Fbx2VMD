@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
-public sealed class RecodingSetting : MonoBehaviour
+public sealed class RecordingSetting : MonoBehaviour
 {
     private const string ManualRecordButtonName = "MMD_Record_Button";
 
@@ -119,7 +119,7 @@ public sealed class RecodingSetting : MonoBehaviour
     {
         if (Application.isPlaying)
         {
-            WriteRuntimePlayModeStateQuietly(MainRecordingSettingsRuntimeState.Playing);
+            WriteRuntimePlayModeStateQuietly(MainRecordingSettingsState.Playing);
         }
 
         if (loadSharedSettingsOnAwake)
@@ -137,28 +137,28 @@ public sealed class RecodingSetting : MonoBehaviour
     {
         if (Application.isPlaying)
         {
-            WriteRuntimePlayModeStateQuietly(MainRecordingSettingsRuntimeState.Stopped);
+            WriteRuntimePlayModeStateQuietly(MainRecordingSettingsState.Stopped);
             if (!Application.isEditor)
             {
-                MainRecordingSettingsRuntimeLauncher.CloseStartedProcessQuietly();
+                MainRecordingSettingsLauncher.CloseStartedProcessQuietly();
             }
         }
     }
 
     private void Start()
     {
-        if (MainRecordingSettingsRuntimeLauncher.ShouldAutoLaunchForPlayer(
+        if (MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(
                 openSettingsPopupOnStart,
                 Application.isEditor,
                 Application.isBatchMode))
         {
             MainRecordingSettingsActionResult launchResult =
-                MainRecordingSettingsRuntimeLauncher.TryLaunchForPlayer(
+                MainRecordingSettingsLauncher.TryLaunchForPlayer(
                     openSettingsPopupOnStart,
                     ResolveSharedSettingsFilePathForExternalLauncher());
             if (!launchResult.Succeeded)
             {
-                Debug.LogWarning($"[RecodingSetting] {launchResult.UserMessage}");
+                Debug.LogWarning($"[RecordingSetting] {launchResult.UserMessage}");
                 OpenSettingsPopup();
             }
 
@@ -200,13 +200,13 @@ public sealed class RecodingSetting : MonoBehaviour
         {
             const string message = "FBX 처리 중에는 수동 녹화를 시작할 수 없습니다.";
             controller?.SetProcessingStatus(message, 0.1f);
-            Debug.LogWarning($"[RecodingSetting] {message}");
+            Debug.LogWarning($"[RecordingSetting] {message}");
             return;
         }
 
         if (controller == null)
         {
-            Debug.LogWarning("[RecodingSetting] 수동 녹화를 시작할 HumanoidSampleCode가 연결되어 있지 않습니다.");
+            Debug.LogWarning("[RecordingSetting] 수동 녹화를 시작할 HumanoidSampleCode가 연결되어 있지 않습니다.");
             return;
         }
 
@@ -277,7 +277,7 @@ public sealed class RecodingSetting : MonoBehaviour
         catch (Exception exception)
         {
             string message = "공유 설정 로드에 실패했습니다.";
-            Debug.LogWarning($"[RecodingSetting] {message} {exception.Message}");
+            Debug.LogWarning($"[RecordingSetting] {message} {exception.Message}");
             return MainRecordingSettingsActionResult.Failure(message);
         }
     }
@@ -300,7 +300,7 @@ public sealed class RecodingSetting : MonoBehaviour
         catch (Exception exception)
         {
             string message = "공유 설정 갱신에 실패했습니다.";
-            Debug.LogWarning($"[RecodingSetting] {message} {exception.Message}");
+            Debug.LogWarning($"[RecordingSetting] {message} {exception.Message}");
             return MainRecordingSettingsActionResult.Failure(message);
         }
     }
@@ -310,7 +310,7 @@ public sealed class RecodingSetting : MonoBehaviour
         MainRecordingSettingsActionResult result = WriteRuntimePlayModeState(playMode);
         if (!result.Succeeded)
         {
-            Debug.LogWarning($"[RecodingSetting] {result.UserMessage}");
+            Debug.LogWarning($"[RecordingSetting] {result.UserMessage}");
         }
     }
 
@@ -320,7 +320,7 @@ public sealed class RecodingSetting : MonoBehaviour
         {
             EnsureSharedSettingsStore();
             MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
-            document.runtimeState = MainRecordingSettingsRuntimeState.Create(playMode, DateTime.UtcNow);
+            document.runtimeState = MainRecordingSettingsState.Create(playMode, DateTime.UtcNow);
             sharedSettingsStore.Save(document);
             lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
             return MainRecordingSettingsActionResult.Success("Play Mode 상태를 기록했습니다.");
@@ -468,7 +468,7 @@ public sealed class RecodingSetting : MonoBehaviour
         }
         catch (Exception exception)
         {
-            Debug.LogWarning($"[RecodingSetting] 처리한 FBX 명령을 지우지 못했습니다: {exception.Message}");
+            Debug.LogWarning($"[RecordingSetting] 처리한 FBX 명령을 지우지 못했습니다: {exception.Message}");
         }
     }
 

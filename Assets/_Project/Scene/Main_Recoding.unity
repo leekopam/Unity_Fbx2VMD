@@ -2135,7 +2135,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 154825442}
-        m_TargetAssemblyTypeName: RecodingSetting, Assembly-CSharp
+        m_TargetAssemblyTypeName: RecordingSetting, Assembly-CSharp
         m_MethodName: StartManualRecording
         m_Mode: 0
         m_Arguments:

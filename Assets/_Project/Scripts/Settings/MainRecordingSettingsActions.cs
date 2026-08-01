@@ -8,7 +8,7 @@ namespace Fbx2Vmd.Settings
     {
         public static bool CanExecute(
             MainRecordingSettingsActionType action,
-            RecodingSetting recodingSetting = null,
+            RecordingSetting recodingSetting = null,
             FBXVmdPipeline fileManager = null)
         {
             switch (action)
@@ -25,7 +25,7 @@ namespace Fbx2Vmd.Settings
 
         public static bool Execute(
             MainRecordingSettingsActionType action,
-            RecodingSetting recodingSetting = null,
+            RecordingSetting recodingSetting = null,
             FBXVmdPipeline fileManager = null,
             Action<string> notify = null)
         {
@@ -58,7 +58,7 @@ namespace Fbx2Vmd.Settings
 
         public static MainRecordingSettingsActionResult ApplySharedSettings(
             MainRecordingSettingsDocument document,
-            RecodingSetting recodingSetting,
+            RecordingSetting recodingSetting,
             FBXVmdPipeline fileManager = null,
             bool startFbxImport = true)
         {
@@ -85,14 +85,14 @@ namespace Fbx2Vmd.Settings
 
         public static MainRecordingSettingsActionResult ApplyForTests(
             MainRecordingSettingsDocument document,
-            RecodingSetting recodingSetting,
+            RecordingSetting recodingSetting,
             FBXVmdPipeline fileManager)
         {
             return ApplySharedSettings(document, recodingSetting, fileManager, false);
         }
 
         public static FBXVmdPipeline ResolveFBXVmdPipeline(
-            RecodingSetting recodingSetting = null,
+            RecordingSetting recodingSetting = null,
             FBXVmdPipeline fileManager = null)
         {
             if (fileManager != null)

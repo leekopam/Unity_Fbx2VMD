@@ -132,7 +132,7 @@ namespace Tests.Editor.Settings
                     Is.LessThanOrEqualTo(15f),
                     "Companion TMP action label max font size must stay within the measured safe button contract.");
 
-                Assert.That(UnityEngine.Object.FindObjectOfType<RecodingSetting>(), Is.Null);
+                Assert.That(UnityEngine.Object.FindObjectOfType<RecordingSetting>(), Is.Null);
                 Assert.That(UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>(), Is.Null);
                 Assert.That(UnityEngine.Object.FindObjectOfType<UnityHumanoidVMDRecorder>(), Is.Null);
             }
@@ -195,11 +195,11 @@ namespace Tests.Editor.Settings
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsDocument.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsLaunchPlan.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsPathResolver.cs",
-                "Assets/_Project/Scripts/Settings/MainRecordingSettingsRuntimeBootstrap.cs",
-                "Assets/_Project/Scripts/Settings/MainRecordingSettingsRuntimeLauncher.cs",
-                "Assets/_Project/Scripts/Settings/MainRecordingSettingsRuntimeState.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsBootstrap.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsLauncher.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsState.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsStore.cs",
-                "Assets/_Project/Scripts/Settings/RecodingSetting.cs",
+                "Assets/_Project/Scripts/Settings/RecordingSetting.cs",
             };
 
             foreach (string sourceFile in runtimeSourceFiles)

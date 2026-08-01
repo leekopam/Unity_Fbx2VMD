@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace Fbx2Vmd.Settings.EditorTools
 {
-    [CustomEditor(typeof(RecodingSetting))]
+    [CustomEditor(typeof(RecordingSetting))]
     [CanEditMultipleObjects]
-    public sealed class RecodingSettingEditor : Editor
+    public sealed class RecordingSettingEditor : Editor
     {
         public override void OnInspectorGUI()
         {
@@ -59,7 +59,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             foreach (Object targetObject in targets)
             {
-                if (targetObject is RecodingSetting recodingSetting)
+                if (targetObject is RecordingSetting recodingSetting)
                 {
                     recodingSetting.StartManualRecording();
                 }

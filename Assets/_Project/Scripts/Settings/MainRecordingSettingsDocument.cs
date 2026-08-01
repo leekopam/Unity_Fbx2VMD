@@ -12,7 +12,7 @@ namespace Fbx2Vmd.Settings
         public int captureWidth = 1920;
         public int captureHeight = 1080;
         public bool openSettingsOnStart = true;
-        public MainRecordingSettingsRuntimeState runtimeState = new MainRecordingSettingsRuntimeState();
+        public MainRecordingSettingsState runtimeState = new MainRecordingSettingsState();
         public MainRecordingSettingsCommandEnvelope pendingCommand = new MainRecordingSettingsCommandEnvelope();
     }
 

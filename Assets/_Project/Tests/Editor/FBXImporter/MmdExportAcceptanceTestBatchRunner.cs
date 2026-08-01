@@ -1,0 +1,314 @@
+using NUnit.Framework;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Security;
+using UnityEditor;
+
+namespace Tests.Editor.FBXImporter
+{
+    public static class MmdExportAcceptanceTestBatchRunner
+    {
+        public static void Run()
+        {
+            string resultPath = GetArgumentValue("-testResults");
+            if (string.IsNullOrEmpty(resultPath))
+            {
+                resultPath = Path.Combine(Directory.GetCurrentDirectory(), "TestResults-YybMmdExportAcceptance.xml");
+            }
+
+            DateTimeOffset start = DateTimeOffset.UtcNow;
+            var results = new List<TestResultRecord>();
+
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainAutoScene_UsesMmdSafeYybExportDefaults),
+                () => new MmdExportSafetyDefaultsTests().MainAutoScene_UsesMmdSafeYybExportDefaults());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.YybMmdExportProductionPrefab_UsesAcceptedRuntimeVisualRecoveryDefaults),
+                () => new MmdExportSafetyDefaultsTests().YybMmdExportProductionPrefab_UsesAcceptedRuntimeVisualRecoveryDefaults());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.YybMmdExportManualReferencePrefab_StaysClampOnlyBaseline),
+                () => new MmdExportSafetyDefaultsTests().YybMmdExportManualReferencePrefab_StaysClampOnlyBaseline());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier),
+                () => new MmdExportSafetyDefaultsTests().MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainRecordingRootMotionPolicy_EnablesMovingRootCarrierForNaturalMotion),
+                () => new MmdExportSafetyDefaultsTests().MainRecordingRootMotionPolicy_EnablesMovingRootCarrierForNaturalMotion());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault),
+                () => new MmdExportSafetyDefaultsTests().MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback),
+                () => new MmdExportSafetyDefaultsTests().MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap),
+                () => new MmdExportSafetyDefaultsTests().Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve),
+                () => new MmdExportSafetyDefaultsTests().Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik),
+                () => new MmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers),
+                () => new MmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline),
+                () => new MmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorFootLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesReferenceSwitchAndWeight),
+                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorFootLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesReferenceSwitchAndWeight());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults),
+                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_LegChainSegmentDetailOptionsPreservePromotedSceneDefaults),
+                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_LegChainSegmentDetailOptionsPreservePromotedSceneDefaults());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_FullBodyForceOffOptionsDisablePromotedSceneDefaults),
+                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_FullBodyForceOffOptionsDisablePromotedSceneDefaults());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated),
+                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated),
+                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments),
+                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorLegChainSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRequestedSegments),
+                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorLegChainSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRequestedSegments());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRightSide),
+                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRightSide());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootAxisAwareRuntimeOverride_When_Applied_Then_ScalesOnlyRightAxisXzContribution),
+                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootAxisAwareRuntimeOverride_When_Applied_Then_ScalesOnlyRightAxisXzContribution());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootSoftBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightCorrectionWeight),
+                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootSoftBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightCorrectionWeight());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootFrameGatedRuntimeOverride_When_Applied_Then_GatesOnlyRightCapWindow),
+                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootFrameGatedRuntimeOverride_When_Applied_Then_GatesOnlyRightCapWindow());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation),
+                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_OnlyChangesEndpointClampSwitchAndCaps),
+                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_OnlyChangesEndpointClampSwitchAndCaps());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointPositiveZScaleRuntimeOverride_When_Applied_Then_ScalesOnlyPositiveZCarrier),
+                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointPositiveZScaleRuntimeOverride_When_Applied_Then_ScalesOnlyPositiveZCarrier());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointFrameGatedRuntimeOverride_When_Applied_Then_PreservesDiagnosticWindow),
+                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointFrameGatedRuntimeOverride_When_Applied_Then_PreservesDiagnosticWindow());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX),
+                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage),
+                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PreSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_UsesSeparatePreSolveSwitchAndCaps),
+                () => new MmdExportSafetyDefaultsTests().Given_PreSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_UsesSeparatePreSolveSwitchAndCaps());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PreSetHumanPoseEndpointLeftSideRuntimeOverride_When_Applied_Then_PreservesPreSolveSideSwitch),
+                () => new MmdExportSafetyDefaultsTests().Given_PreSetHumanPoseEndpointLeftSideRuntimeOverride_When_Applied_Then_PreservesPreSolveSideSwitch());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_PreSetHumanPoseEndpointBodyPositionInversionRuntimeOverride_When_Applied_Then_PreservesAxisFlags),
+                () => new MmdExportSafetyDefaultsTests().Given_PreSetHumanPoseEndpointBodyPositionInversionRuntimeOverride_When_Applied_Then_PreservesAxisFlags());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_TargetHumanoidBonePositionLockRuntimeOverride_When_Toggled_Then_OnlyChangesSkeletonBasisLock),
+                () => new MmdExportSafetyDefaultsTests().Given_TargetHumanoidBonePositionLockRuntimeOverride_When_Toggled_Then_OnlyChangesSkeletonBasisLock());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorBodyPositionXzRuntimeOverride_When_Toggled_Then_OnlyChangesSolverBodyPositionBasis),
+                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorBodyPositionXzRuntimeOverride_When_Toggled_Then_OnlyChangesSolverBodyPositionBasis());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow),
+                () => new MmdExportSafetyDefaultsTests().Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RuntimeMmdIkDeltaRecoveryHoldOverride_When_ApplyingToRecorder_Then_SetsHoldWindow),
+                () => new MmdExportSafetyDefaultsTests().Given_RuntimeMmdIkDeltaRecoveryHoldOverride_When_ApplyingToRecorder_Then_SetsHoldWindow());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport),
+                () => new MmdExportSafetyDefaultsTests().Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines),
+                () => new MmdExportSafetyDefaultsTests().Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4),
+                () => new MmdExportSafetyDefaultsTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples),
+                () => new MmdExportSafetyDefaultsTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window),
+                () => new MmdExportSafetyDefaultsTests().Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming),
+                () => new MmdExportSafetyDefaultsTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans),
+                () => new MmdExportSafetyDefaultsTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans),
+                () => new MmdExportSafetyDefaultsTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints),
+                () => new MmdExportSafetyDefaultsTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
+                () => new MmdExportSafetyDefaultsTests().Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
+                () => new MmdExportSafetyDefaultsTests().Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw),
+                () => new MmdExportSafetyDefaultsTests().Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact),
+                () => new MmdExportSafetyDefaultsTests().Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CorrectedMetricsPassAndVmdIsRawCopy_When_BuildingCandidateArtifactSelection_Then_KeepsDiagnosticOnly),
+                () => new MmdExportSafetyDefaultsTests().Given_CorrectedMetricsPassAndVmdIsRawCopy_When_BuildingCandidateArtifactSelection_Then_KeepsDiagnosticOnly());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_SelectedCorrectedCandidateManifestIsMissing_When_BuildingCandidateArtifactSelection_Then_WritesManifestAndMarksAcceptanceArtifact),
+                () => new MmdExportSafetyDefaultsTests().Given_SelectedCorrectedCandidateManifestIsMissing_When_BuildingCandidateArtifactSelection_Then_WritesManifestAndMarksAcceptanceArtifact());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RawMainAutoCandidatePasses_When_BuildingCandidateArtifactSelection_Then_MarksRawExportAcceptanceArtifact),
+                () => new MmdExportSafetyDefaultsTests().Given_RawMainAutoCandidatePasses_When_BuildingCandidateArtifactSelection_Then_MarksRawExportAcceptanceArtifact());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact),
+                () => new MmdExportSafetyDefaultsTests().Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure),
+                () => new MmdExportSafetyDefaultsTests().Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly),
+                () => new MmdExportSafetyDefaultsTests().Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes),
+                () => new MmdExportSafetyDefaultsTests().Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles),
+                () => new MmdExportSafetyDefaultsTests().Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate),
+                () => new MmdExportSafetyDefaultsTests().Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure),
+                () => new MmdExportSafetyDefaultsTests().Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock),
+                () => new MmdExportSafetyDefaultsTests().Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_NonZeroClipWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock),
+                () => new MmdExportSafetyDefaultsTests().Given_NonZeroClipWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock());
+
+            var namingTests = new VmdNamingContractTests();
+            RunTest(results, typeof(VmdNamingContractTests).FullName + "." +
+                nameof(VmdNamingContractTests.Given_ExportedYybVmd_When_ReadingBoneNames_Then_MmdStandardNamesAreWritten),
+                namingTests.Given_ExportedYybVmd_When_ReadingBoneNames_Then_MmdStandardNamesAreWritten);
+
+            double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
+            string resultDirectory = Path.GetDirectoryName(resultPath);
+            if (!string.IsNullOrEmpty(resultDirectory))
+            {
+                Directory.CreateDirectory(resultDirectory);
+            }
+            File.WriteAllText(resultPath, BuildXml(results, duration));
+
+            int failed = 0;
+            foreach (var result in results)
+            {
+                if (result.Failure != null)
+                {
+                    failed++;
+                    Console.Error.WriteLine(result.Failure);
+                }
+            }
+
+            Console.WriteLine($"YybMmdExportAcceptance tests completed; results written to {resultPath}");
+            EditorApplication.Exit(failed == 0 ? 0 : 1);
+        }
+
+        private static void RunTest(List<TestResultRecord> results, string name, TestDelegate action)
+        {
+            DateTimeOffset start = DateTimeOffset.UtcNow;
+            string failure = null;
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                failure = ex.ToString();
+            }
+
+            results.Add(new TestResultRecord(name, Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds), failure));
+        }
+
+        private static string GetArgumentValue(string name)
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == name)
+                {
+                    return args[i + 1];
+                }
+            }
+
+            return null;
+        }
+
+        private static string BuildXml(IReadOnlyList<TestResultRecord> results, double duration)
+        {
+            int failed = 0;
+            foreach (var result in results)
+            {
+                if (result.Failure != null)
+                {
+                    failed++;
+                }
+            }
+
+            int passed = results.Count - failed;
+            string runResult = failed == 0 ? "Passed" : "Failed";
+            var writer = new System.Text.StringBuilder();
+            writer.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+            writer.AppendLine($"<test-run testcasecount=\"{results.Count}\" result=\"{runResult}\" total=\"{results.Count}\" passed=\"{passed}\" failed=\"{failed}\" duration=\"{duration:0.000}\">");
+            writer.AppendLine($"  <test-suite type=\"TestFixture\" name=\"{SecurityElement.Escape(typeof(MmdExportAcceptanceTestBatchRunner).FullName)}\" result=\"{runResult}\" total=\"{results.Count}\" passed=\"{passed}\" failed=\"{failed}\">");
+
+            foreach (var result in results)
+            {
+                string testResult = result.Failure == null ? "Passed" : "Failed";
+                string failureNode = result.Failure == null
+                    ? string.Empty
+                    : $"<failure><message>{SecurityElement.Escape(result.Failure)}</message></failure>";
+                string escapedName = SecurityElement.Escape(result.Name);
+                writer.AppendLine($"    <test-case name=\"{escapedName}\" fullname=\"{escapedName}\" result=\"{testResult}\" duration=\"{result.Duration:0.000}\">{failureNode}</test-case>");
+            }
+
+            writer.AppendLine("  </test-suite>");
+            writer.AppendLine("</test-run>");
+            return writer.ToString();
+        }
+
+        private sealed class TestResultRecord
+        {
+            public TestResultRecord(string name, double duration, string failure)
+            {
+                Name = name;
+                Duration = duration;
+                Failure = failure;
+            }
+
+            public string Name { get; }
+            public double Duration { get; }
+            public string Failure { get; }
+        }
+    }
+}

@@ -4,7 +4,7 @@ using System.Globalization;
 namespace Fbx2Vmd.Settings
 {
     [Serializable]
-    public sealed class MainRecordingSettingsRuntimeState
+    public sealed class MainRecordingSettingsState
     {
         public const string Playing = "playing";
         public const string Stopped = "stopped";
@@ -12,9 +12,9 @@ namespace Fbx2Vmd.Settings
         public string playMode = Stopped;
         public string updatedAtUtc = string.Empty;
 
-        public static MainRecordingSettingsRuntimeState Create(string playMode, DateTime utcNow)
+        public static MainRecordingSettingsState Create(string playMode, DateTime utcNow)
         {
-            return new MainRecordingSettingsRuntimeState
+            return new MainRecordingSettingsState
             {
                 playMode = NormalizePlayMode(playMode),
                 updatedAtUtc = utcNow.ToString("O"),
