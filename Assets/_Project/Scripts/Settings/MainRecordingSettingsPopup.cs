@@ -11,7 +11,7 @@ namespace Fbx2Vmd.Settings
     public sealed class MainRecordingSettingsPopup : MonoBehaviour, IBeginDragHandler, IDragHandler
     {
         [SerializeField] private bool openOnStart = true;
-        [SerializeField] private RecodingSetting recodingSetting;
+        [SerializeField] private RecordingSetting recodingSetting;
         [SerializeField] private FBXVmdPipeline fileManager;
 
         private readonly List<Button> cardButtons = new List<Button>();
@@ -38,7 +38,7 @@ namespace Fbx2Vmd.Settings
 
         public bool IsOpen => isOpen;
         public bool OpenOnStart => openOnStart;
-        public RecodingSetting RecodingSetting => recodingSetting;
+        public RecordingSetting RecordingSetting => recodingSetting;
         public FBXVmdPipeline FBXVmdPipeline => MainRecordingSettingsActions.ResolveFBXVmdPipeline(recodingSetting, fileManager);
 
         private void Awake()
@@ -54,7 +54,7 @@ namespace Fbx2Vmd.Settings
             }
         }
 
-        public static MainRecordingSettingsPopup EnsurePopupForScene(RecodingSetting owner)
+        public static MainRecordingSettingsPopup EnsurePopupForScene(RecordingSetting owner)
         {
             Canvas canvas = ResolveCanvas();
             MainRecordingSettingsPopup popup = canvas.GetComponentInChildren<MainRecordingSettingsPopup>(true);
@@ -71,7 +71,7 @@ namespace Fbx2Vmd.Settings
             return popup;
         }
 
-        public void Bind(RecodingSetting owner, FBXVmdPipeline manager)
+        public void Bind(RecordingSetting owner, FBXVmdPipeline manager)
         {
             if (owner != null)
             {
