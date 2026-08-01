@@ -219,7 +219,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 751e885a632b7e34fa4ae38a9d0af153, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  recordingFileManager: {fileID: 721950035}
+  recordingFBXVmdPipeline: {fileID: 721950035}
   manualRecordButton: {fileID: 2101000002}
   recordingController: {fileID: 421532801}
   enableRecordingDiagnostics: 0
@@ -228,7 +228,7 @@ MonoBehaviour:
   recordingCaptureQuality: 2
   customRecordingCaptureWidth: 3840
   customRecordingCaptureHeight: 2160
-  applyDiagnosticsToFileManagerOnAwake: 1
+  applyDiagnosticsToFBXVmdPipelineOnAwake: 1
   settingsPopup: {fileID: 0}
   openSettingsPopupOnStart: 1
   loadSharedSettingsOnAwake: 1
@@ -414,13 +414,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 4424228440267264327, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: nextEdgeMaterial_Pass4
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 2110999311}
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: nextEdgeMaterial_Pass8
       value: 
+      objectReference: {fileID: 2015129578}
+    - target: {fileID: 5685924819462444671, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6108625213875688924, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6818878734488371576, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: m_Name
@@ -437,6 +449,10 @@ PrefabInstance:
     - target: {fileID: 8151235911576539714, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: AutoStartRecording
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8176206618482133508, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -477,6 +493,14 @@ PrefabInstance:
     - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8267588536064925729, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8568587042170047797, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -604,7 +628,7 @@ GameObject:
   - component: {fileID: 721950034}
   - component: {fileID: 721950035}
   m_Layer: 0
-  m_Name: FileManager
+  m_Name: FBXVmdPipeline
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -642,8 +666,8 @@ MonoBehaviour:
   targetCharacter: {fileID: 643269947}
   useLegacyPoseSpaceFacingCorrection: 0
   preserveFbxRootRotation: 0
-  preserveRetargetBodyPosition: 1
-  useRetargetBodyPositionXZRootMotion: 0
+  preserveRetargetBodyPosition: 0
+  useRetargetBodyPositionXZRootMotion: 1
   stabilizeGroundedFootXZ: 0
   GroundedFootLockWeight: 0.45
   MaxGroundedFootLockStep: 0.025
@@ -652,11 +676,34 @@ MonoBehaviour:
   editorHumanoidRootTranslationWeight: 0.25
   editorHumanoidRootTranslationCurrentWeight: 0.35
   useManualAnimatorFingerPoseReference: 0
-  useManualAnimatorFullBodyPoseReference: 1
+  useManualAnimatorFullBodyPoseReference: 0
   manualAnimatorFullBodyPoseReferenceWeight: 1
-  useManualAnimatorBodyRotationReference: 1
+  manualAnimatorFullBodyPoseExcludeLowerBodyMuscles: 0
+  manualAnimatorFullBodyPoseLowerBodyMusclesOnly: 0
+  manualAnimatorFullBodyPoseLegTwistMusclesOnly: 0
+  manualAnimatorFullBodyPoseRightArmMusclesOnly: 0
+  manualAnimatorFullBodyPoseLeftArmMusclesOnly: 0
+  manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly: 0
+  manualAnimatorFullBodyPoseFrameGateStart: 0
+  manualAnimatorFullBodyPoseFrameGateEnd: 0
+  useSetHumanPoseRightLegTwistOutputReference: 0
+  setHumanPoseRightLegTwistOutputReferenceWeight: 1
+  setHumanPoseRightLegTwistOutputReferenceMaxDelta: 0.02
+  useManualAnimatorBodyRotationReference: 0
   manualAnimatorBodyRotationReferenceWeight: 1
   useManualAnimatorBodyPositionYReference: 0
+  useManualAnimatorBodyPositionXzReference: 0
+  manualAnimatorBodyPositionXzReferenceWeight: 1
+  manualAnimatorBodyPositionXzReferenceMaxOffset: 0.025
+  manualAnimatorBodyPositionXzReferenceFrameGateStart: 0
+  manualAnimatorBodyPositionXzReferenceFrameGateEnd: 0
+  manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames: 0
+  manualAnimatorBodyPositionXzReferenceAxisXScale: 1
+  manualAnimatorBodyPositionXzReferenceAxisZScale: 1
+  useYybRightSleeveSilhouetteLocalOffsetReference: 0
+  yybRightSleeveSilhouetteLocalOffsetX: 0
+  yybRightSleeveSilhouetteLocalOffsetFrameGateStart: 0
+  yybRightSleeveSilhouetteLocalOffsetFrameGateEnd: 0
   useManualAnimatorHipsLocalPositionReference: 0
   manualAnimatorHipsLocalPositionWeight: 1
   manualAnimatorHipsLocalPositionMaxOffset: 0.12
@@ -668,14 +715,48 @@ MonoBehaviour:
   useManualAnimatorLowerBodySegmentDirectionReference: 1
   manualAnimatorLowerBodySegmentDirectionReferenceWeight: 1
   manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle: 60
+  disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference: 0
+  manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle: 0
+  disableManualAnimatorLowerLegToFootSegmentDirectionReference: 0
+  manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
+  manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
+  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
+  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale: 1
+  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight: 0.125
+  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart: 0
+  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd: 0
+  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight: 1
+  disableManualAnimatorFootToToesSegmentDirectionReference: 0
+  manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle: 0
   useManualAnimatorFootHipsAlignedResidualYawReference: 1
   manualAnimatorFootHipsAlignedResidualYawReferenceWeight: 1
   manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle: 45
   useManualAnimatorBipedIkFootPositionReference: 0
   manualAnimatorBipedIkFootPositionReferenceWeight: 0.65
   manualAnimatorBipedIkFootPositionReferenceMaxOffset: 0.12
+  usePostSetHumanPoseRightEndpointPositionReference: 0
+  postSetHumanPoseRightEndpointPositionReferenceWeight: 1
+  postSetHumanPoseRightEndpointPositionReferenceMaxOffset: 0.04
+  postSetHumanPoseRightEndpointPositionReferencePositiveZScale: 1
+  postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: 1
+  postSetHumanPoseRightEndpointPositionReferenceFrameGateStart: 0
+  postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: 0
+  postSetHumanPoseEndpointPositionUseLeftSide: 0
+  usePostSetHumanPoseRightFootEvaluatorXzReference: 0
+  postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude: 0.049
+  usePreSetHumanPoseRightEndpointPositionReference: 0
+  preSetHumanPoseRightEndpointPositionReferenceWeight: 1
+  preSetHumanPoseRightEndpointPositionReferenceMaxOffset: 0.025
+  preSetHumanPoseRightEndpointPositionReferencePositiveZScale: 1
+  preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: 1
+  preSetHumanPoseRightEndpointPositionReferenceFrameGateStart: 0
+  preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: 0
+  preSetHumanPoseEndpointPositionUseLeftSide: 0
+  preSetHumanPoseEndpointPositionUseGhostCurrentBasis: 0
+  preSetHumanPoseEndpointPositionInvertBodyPositionX: 0
+  preSetHumanPoseEndpointPositionInvertBodyPositionZ: 0
   useManualAnimatorThumbLocalRotationReference: 0
-  useManualAnimatorHandLocalRotationReference: 1
+  useManualAnimatorHandLocalRotationReference: 0
   useManualAnimatorThumbSegmentDirectionReference: 0
   manualAnimatorThumbSegmentDirectionWeight: 1
   useManualAnimatorThumbHandDirectionReference: 0
@@ -690,16 +771,16 @@ MonoBehaviour:
   disableMmdShoulderPostPoseDuringRetarget: 0
   clampRetargetMusclesToHumanRange: 1
   enableAnatomicalArmGuard: 1
-  ArmStretchMuscleLimit: 0
-  clampRetargetArmStretchMuscles: 0
+  ArmStretchMuscleLimit: 0.5
+  clampRetargetArmStretchMuscles: 1
   UpperArmTwistMuscleLimit: 0.75
   LowerArmTwistMuscleLimit: 0.65
   lockTargetHumanoidBonePositions: 1
   lockTargetLimbChildLocalPositions: 1
   lockTargetLimbChildLocalRotations: 0
   attachTargetArmDeformationGuard: 1
-  targetGuardClampAnatomicalArmMuscles: 0
-  targetGuardClampArmStretchMuscles: 0
+  targetGuardClampAnatomicalArmMuscles: 1
+  targetGuardClampArmStretchMuscles: 1
   logArmDeformationGuardCorrections: 0
   enableAnimationRiggingArmTwistCorrection: 0
   AnimationRiggingArmTwistRigWeight: 0.65
@@ -726,7 +807,9 @@ MonoBehaviour:
   YybArmSwingMinHandHorizontalRatio: 0.05
   YybArmSwingMaxHandBelowShoulderRatio: 1.5
   YybArmSwingHorizontalReachLimitWeight: 1
-  YybArmSwingMaxHandHorizontalReachRatio: 0.08
+  YybArmSwingMaxHandHorizontalReachRatio: 0.06
+  YybArmSwingHorizontalReachMaxHandBelowShoulderRatio: 0
+  YybArmSwingHorizontalReachMinElbowAngleAfterApply: 0
   YybArmSwingRaisedPoseHorizontalReachLimitWeight: 0.25
   YybArmSwingRaisedPoseMinUpperArmDownDot: 0.55
   YybArmSwingRaisedPoseMaxHandBelowShoulderRatio: 0.05
@@ -803,9 +886,10 @@ MonoBehaviour:
   RetargetVisualClipFrameRate: 30
   smoothRetargetPoseOnVisualStepSpike: 1
   RetargetPoseVisualSpikeCurrentWeight: 0.65
+  RetargetPoseVisualSpikeForearmStretchClampMaxOffset: 0
   RetargetPoseVisualMuscleDeltaThreshold: 0.35
   HeightOffset: 0
-  MovementScaleMultiplier: 0
+  MovementScaleMultiplier: 1.5
   clampRetargetRootDeltaSpikes: 1
   MaxRetargetRootDeltaPerFrame: 0.006
   logRetargetRootDeltaSpikes: 0
@@ -1059,7 +1143,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 721950035}
-        m_TargetAssemblyTypeName: FileManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: FBXVmdPipeline, Assembly-CSharp
         m_MethodName: OnClickImportButton
         m_Mode: 1
         m_Arguments:
@@ -1937,6 +2021,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!21 &2015129578
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
+  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!1 &2101000000
 GameObject:
   m_ObjectHideFlags: 0
@@ -2204,6 +2318,36 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2101000010}
   m_CullTransparentMesh: 1
+--- !u!21 &2110999311
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
+  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!1001 &240061973030223373
 PrefabInstance:
   m_ObjectHideFlags: 0

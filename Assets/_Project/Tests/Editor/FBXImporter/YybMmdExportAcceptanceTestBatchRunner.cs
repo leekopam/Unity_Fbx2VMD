@@ -30,11 +30,11 @@ namespace Tests.Editor.FBXImporter
                 nameof(YybMmdExportSafetyDefaultsTests.YybMmdExportManualReferencePrefab_StaysClampOnlyBaseline),
                 () => new YybMmdExportSafetyDefaultsTests().YybMmdExportManualReferencePrefab_StaysClampOnlyBaseline());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(YybMmdExportSafetyDefaultsTests.MainSceneRootMotionPolicy_KeepsMainAutoAndMainRecordingStationaryRootCarrier),
-                () => new YybMmdExportSafetyDefaultsTests().MainSceneRootMotionPolicy_KeepsMainAutoAndMainRecordingStationaryRootCarrier());
+                nameof(YybMmdExportSafetyDefaultsTests.MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier),
+                () => new YybMmdExportSafetyDefaultsTests().MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(YybMmdExportSafetyDefaultsTests.MainRecordingRootMotionPolicy_DisablesPreviewRootCarrierForLimbIsolation),
-                () => new YybMmdExportSafetyDefaultsTests().MainRecordingRootMotionPolicy_DisablesPreviewRootCarrierForLimbIsolation());
+                nameof(YybMmdExportSafetyDefaultsTests.MainRecordingRootMotionPolicy_EnablesMovingRootCarrierForNaturalMotion),
+                () => new YybMmdExportSafetyDefaultsTests().MainRecordingRootMotionPolicy_EnablesMovingRootCarrierForNaturalMotion());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(YybMmdExportSafetyDefaultsTests.MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault),
                 () => new YybMmdExportSafetyDefaultsTests().MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault());
@@ -71,6 +71,9 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(YybMmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated),
                 () => new YybMmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated());
+            RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(YybMmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated),
+                () => new YybMmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated());
             RunTest(results, typeof(YybMmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(YybMmdExportSafetyDefaultsTests.Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments),
                 () => new YybMmdExportSafetyDefaultsTests().Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments());

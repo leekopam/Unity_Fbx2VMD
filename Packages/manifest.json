@@ -1,8 +1,6 @@
 {
   "dependencies": {
-    "com.antigravity.editor": "https://github.com/hohollala/Antigravity.git",
-    "com.antigravity.ide": "https://github.com/prithvi-bharadwaj/Antigravity-IDE.git",
-    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v9.6.8",
+    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.1.0",
     "com.unity.ai.navigation": "1.1.4",
     "com.unity.animation.rigging": "1.2.1",
     "com.unity.burst": "1.8.29",

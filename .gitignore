@@ -1,4 +1,4 @@
-# This .gitignore file should be placed at the root of your Unity project directory
+﻿# This .gitignore file should be placed at the root of your Unity project directory
 #
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
@@ -19,7 +19,7 @@
 /[Rr]ecordings/
 
 # Unity/MCP capture outputs are QA artifacts.
-# Keep screenshots/videos under Docs/Machine_Spirit/Local instead.
+# Keep screenshots/videos under Docs/Workflow/Local instead.
 /[Ss]creenshots/
 /[Cc]aptures/
 /[Vv]ideos/
@@ -60,8 +60,8 @@
 /Assets/UI/GUIPack-Clean&Minimalist.meta
 /Assets/MagicaCloth2/
 /Assets/MagicaCloth2.meta
-/Assets/_Project/Tool/MagicaCloth2/
-/Assets/_Project/Tool/MagicaCloth2.meta
+/Assets/_Project/Plugins/MagicaCloth2/
+/Assets/_Project/Plugins/MagicaCloth2.meta
 
 # Uncomment this line if you wish to ignore the asset store tools plugin
 # /[Aa]ssets/AssetStoreTools*
@@ -119,6 +119,8 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
 # FBX 파일은 업로드 되지 않도록 설정
+*.fbx
+*.FBX
 Assets/_Project/FBX/
 Assets/Resources/Import_FBX/
 
@@ -150,60 +152,51 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /Assets/_Project/Tests/Editor/VMDRecorderSample/VmdUnityTransformConverterTests.cs.meta
 
 # BEGIN LOCAL PRIVATE WORKFLOW FILES
-/DOCS/Machine_Spirit.md
-/DOCS/Machine_Spirit/Machine_Spirit.md
-/DOCS/Machine_Spirit/
-/DOCS/Machine_Spirit
-/DOCS/Machine_Spirit/Share/
-/DOCS/Machine_Spirit/Tools/
-/DOCS/Machine_Spirit/Share/README.md
-/DOCS/Machine_Spirit/Local/
-/DOCS/Machine_Spirit/Local/README.md
-/DOCS/Machine Spirit.md
-/DOCS/Machine Spirit
+/DOCS/Workflow.md
+/DOCS/Workflow/Workflow.md
+/DOCS/Workflow/
+/DOCS/Workflow
+/DOCS/Workflow/Share/
+/DOCS/Workflow/Tools/
+/DOCS/Workflow/Share/README.md
+/DOCS/Workflow/Local/
+/DOCS/Workflow/Local/README.md
+/DOCS/Workflow/Share.md
 /DOCS/Share.md
-/DOCS/Machine_Spirit/Share.md
 /DOCS/Share
 /DOCS/Local.md
-/DOCS/Machine_Spirit/Local.md
+/DOCS/Workflow/Local.md
 /DOCS/Local
 /DOCS/Modfiy_Log.md
 /DOCS/CheckList.md
-/DOCS/Machine_Spirit/Modfiy_Log.md
-/DOCS/Machine_Spirit/CheckList.md
-/DOCS/Machine_Spirit/Local/Modfiy_Log.md
-/DOCS/Machine_Spirit/Local/CheckList.md
-/Docs/Machine_Spirit.md
-/Docs/Machine_Spirit/Machine_Spirit.md
-/Docs/Machine_Spirit/
-/Docs/Machine_Spirit
-/Docs/Machine_Spirit/Share/
-/Docs/Machine_Spirit/Tools/
-/Docs/Machine_Spirit/Share/README.md
-/Docs/Machine_Spirit/Local/
-/Docs/Machine_Spirit/Local/README.md
-/Docs/Machine Spirit.md
-/Docs/Machine Spirit
+/DOCS/Workflow/Modfiy_Log.md
+/DOCS/Workflow/CheckList.md
+/DOCS/Workflow/Local/Modfiy_Log.md
+/DOCS/Workflow/Local/CheckList.md
+/Docs/Workflow.md
+/Docs/Workflow/Workflow.md
+/Docs/Workflow/
+/Docs/Workflow
+/Docs/Workflow/Share/
+/Docs/Workflow/Tools/
+/Docs/Workflow/Share/README.md
+/Docs/Workflow/Local/
+/Docs/Workflow/Local/README.md
 /Docs/Share.md
-/Docs/Machine_Spirit/Share.md
+/Docs/Workflow/Share.md
 /Docs/Share
 /Docs/Local.md
-/Docs/Machine_Spirit/Local.md
+/Docs/Workflow/Local.md
 /Docs/Local
 /Docs/Modfiy_Log.md
 /Docs/CheckList.md
-/Docs/Machine_Spirit/Modfiy_Log.md
-/Docs/Machine_Spirit/CheckList.md
-/Docs/Machine_Spirit/Local/Modfiy_Log.md
-/Docs/Machine_Spirit/Local/CheckList.md
+/Docs/Workflow/Modfiy_Log.md
+/Docs/Workflow/CheckList.md
+/Docs/Workflow/Local/Modfiy_Log.md
+/Docs/Workflow/Local/CheckList.md
 
-/Machine Spirit.md
-/Machine Spirit
-/Machine_Spirit.md
-/Machine_Spirit
-/machine_sprit/
-/machine_sprit/Local/
-/machine_sprit/Local
+/Workflow.md
+/Workflow
 
 # Generated motion/model outputs
 *.vmd
@@ -214,6 +207,7 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /.claude/
 /.cluade/
 /.codex/
+/.hermes/
 /.openai/
 /.cursor/
 /.continue/
@@ -232,6 +226,7 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /CODEX.md
 /Codex.md
 /.agents/
+/.codegraph/
 /.vscode/tasks.json
 /.vscode/mcp.json
 /DOCS/capture/
@@ -240,75 +235,75 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /DOCS/qa/
 /DOCS/tasks/
 /DOCS/ai-worklog/
-/DOCS/Machine_Spirit/capture/
-/DOCS/Machine_Spirit/progress/
-/DOCS/Machine_Spirit/qa/
-/DOCS/Machine_Spirit/tasks/
-/DOCS/Machine_Spirit/ai-worklog/
-/DOCS/Machine_Spirit/Share/capture/
-/DOCS/Machine_Spirit/Local/progress/
-/DOCS/Machine_Spirit/Share/qa/
-/DOCS/Machine_Spirit/Share/tasks/
-/DOCS/Machine_Spirit/Local/ai-worklog/
-/DOCS/Machine_Spirit/Local/AI_history/
+/DOCS/Workflow/capture/
+/DOCS/Workflow/progress/
+/DOCS/Workflow/qa/
+/DOCS/Workflow/tasks/
+/DOCS/Workflow/ai-worklog/
+/DOCS/Workflow/Share/capture/
+/DOCS/Workflow/Local/progress/
+/DOCS/Workflow/Share/qa/
+/DOCS/Workflow/Share/tasks/
+/DOCS/Workflow/Local/ai-worklog/
+/DOCS/Workflow/Local/AI_history/
 /Docs/capture/
 /Docs/ref/
 /Docs/progress/
 /Docs/qa/
 /Docs/tasks/
 /Docs/ai-worklog/
-/Docs/Machine_Spirit/capture/
-/Docs/Machine_Spirit/progress/
-/Docs/Machine_Spirit/qa/
-/Docs/Machine_Spirit/tasks/
-/Docs/Machine_Spirit/ai-worklog/
-/Docs/Machine_Spirit/Share/capture/
-/Docs/Machine_Spirit/Local/progress/
-/Docs/Machine_Spirit/Share/qa/
-/Docs/Machine_Spirit/Share/tasks/
-/Docs/Machine_Spirit/Local/ai-worklog/
-/Docs/Machine_Spirit/Local/AI_history/
+/Docs/Workflow/capture/
+/Docs/Workflow/progress/
+/Docs/Workflow/qa/
+/Docs/Workflow/tasks/
+/Docs/Workflow/ai-worklog/
+/Docs/Workflow/Share/capture/
+/Docs/Workflow/Local/progress/
+/Docs/Workflow/Share/qa/
+/Docs/Workflow/Share/tasks/
+/Docs/Workflow/Local/ai-worklog/
+/Docs/Workflow/Local/AI_history/
 /docs/capture/
 /docs/ref/
 /docs/progress/
 /docs/qa/
 /docs/tasks/
 /docs/ai-worklog/
-/docs/Machine_Spirit/
-/docs/Machine_Spirit/Tools/
-/docs/Machine_Spirit/capture/
-/docs/Machine_Spirit/progress/
-/docs/Machine_Spirit/qa/
-/docs/Machine_Spirit/tasks/
-/docs/Machine_Spirit/ai-worklog/
-/docs/Machine_Spirit/Local/AI_history/
+/docs/Workflow/
+/docs/Workflow/Tools/
+/docs/Workflow/capture/
+/docs/Workflow/progress/
+/docs/Workflow/qa/
+/docs/Workflow/tasks/
+/docs/Workflow/ai-worklog/
+/docs/Workflow/Local/AI_history/
 /Modfiy_Log.md
 /CheckList.md
 /CheckMachine.bat
 /CheckTextIntegrity.bat
 /scripts/harness/
 /artifacts/
-/DOCS/Machine_Spirit/Tools/Share/scripts/harness/
-/Docs/Machine_Spirit/Tools/Share/scripts/harness/
-/docs/Machine_Spirit/Tools/Share/scripts/harness/
-/DOCS/Machine_Spirit/artifacts/
-/Docs/Machine_Spirit/artifacts/
-/docs/Machine_Spirit/artifacts/
-/DOCS/Machine_Spirit/Local/artifacts/
-/Docs/Machine_Spirit/Local/artifacts/
+/DOCS/Workflow/Tools/Share/scripts/harness/
+/Docs/Workflow/Tools/Share/scripts/harness/
+/docs/Workflow/Tools/Share/scripts/harness/
+/DOCS/Workflow/artifacts/
+/Docs/Workflow/artifacts/
+/docs/Workflow/artifacts/
+/DOCS/Workflow/Local/artifacts/
+/Docs/Workflow/Local/artifacts/
 /Docs/portable-*-workflow-tmp/
 /Docs/snippets/
 /Docs/archive/conflicting-or-obsolete/
 # END LOCAL PRIVATE WORKFLOW FILES
 
 # External MMD automation tooling (local only)
-/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
-/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/
+/Docs/Workflow/Tools/Local/mmd_qa_mcp/
+/docs/Workflow/Tools/Local/mmd_qa_mcp/
 
 # Python bytecode/cache
 __pycache__/
 *.pyc
 
 # Local machine-specific config (do not commit)
-/Docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
-/docs/Machine_Spirit/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
+/Docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
+/docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json

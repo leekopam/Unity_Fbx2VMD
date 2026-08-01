@@ -464,7 +464,7 @@ GameObject:
   - component: {fileID: 721950034}
   - component: {fileID: 721950035}
   m_Layer: 0
-  m_Name: FileManager
+  m_Name: FBXVmdPipeline
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -550,16 +550,16 @@ MonoBehaviour:
   disableMmdShoulderPostPoseDuringRetarget: 0
   clampRetargetMusclesToHumanRange: 1
   enableAnatomicalArmGuard: 1
-  ArmStretchMuscleLimit: 0
-  clampRetargetArmStretchMuscles: 0
+  ArmStretchMuscleLimit: 0.5
+  clampRetargetArmStretchMuscles: 1
   UpperArmTwistMuscleLimit: 0.75
   LowerArmTwistMuscleLimit: 0.65
   lockTargetHumanoidBonePositions: 1
   lockTargetLimbChildLocalPositions: 1
   lockTargetLimbChildLocalRotations: 0
   attachTargetArmDeformationGuard: 1
-  targetGuardClampAnatomicalArmMuscles: 0
-  targetGuardClampArmStretchMuscles: 0
+  targetGuardClampAnatomicalArmMuscles: 1
+  targetGuardClampArmStretchMuscles: 1
   logArmDeformationGuardCorrections: 0
   enableAnimationRiggingArmTwistCorrection: 0
   AnimationRiggingArmTwistRigWeight: 0.65
@@ -586,7 +586,7 @@ MonoBehaviour:
   YybArmSwingMinHandHorizontalRatio: 0.05
   YybArmSwingMaxHandBelowShoulderRatio: 1.5
   YybArmSwingHorizontalReachLimitWeight: 1
-  YybArmSwingMaxHandHorizontalReachRatio: 0.08
+  YybArmSwingMaxHandHorizontalReachRatio: 0.06
   YybArmSwingRaisedPoseHorizontalReachLimitWeight: 0.25
   YybArmSwingRaisedPoseMinUpperArmDownDot: 0.55
   YybArmSwingRaisedPoseMaxHandBelowShoulderRatio: 0.05
@@ -919,7 +919,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 721950035}
-        m_TargetAssemblyTypeName: FileManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: FBXVmdPipeline, Assembly-CSharp
         m_MethodName: OnClickImportButton
         m_Mode: 1
         m_Arguments:

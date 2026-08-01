@@ -25,7 +25,7 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
-        public void Given_RuntimeMotionPath_When_ConfiguringProbe_Then_EnablesExplicitNonIkPlayback()
+        public void Given_RuntimeMotionPath_When_ConfiguringProbe_Then_EnablesCarrierPlaybackForMovingRootEvidence()
         {
             var probeObject = new GameObject("vmd-playback-probe");
 
@@ -45,10 +45,9 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(probe.UseCenterAsParentOfAll, Is.True);
                 Assert.That(probe.RouteCenterBoneToGroove, Is.False);
                 Assert.That(probe.AnchorCarrierPositionsToInitialPose, Is.True);
-                Assert.That(probe.LockParentOfAllPosition, Is.True);
-                Assert.That(probe.UseExplicitParentOfAllLockPosition, Is.True);
-                Assert.That(Vector3.Distance(probe.ParentOfAllLockPosition, Vector3.zero), Is.LessThan(0.0001f));
-                Assert.That(Vector3.Distance(probeObject.transform.localPosition, Vector3.zero), Is.LessThan(0.0001f));
+                Assert.That(probe.LockParentOfAllPosition, Is.False);
+                Assert.That(probe.UseExplicitParentOfAllLockPosition, Is.False);
+                Assert.That(Vector3.Distance(probeObject.transform.localPosition, new Vector3(0f, -0.02621f, 0f)), Is.LessThan(0.0001f));
             }
             finally
             {
@@ -57,7 +56,7 @@ namespace Tests.Editor.VMDRecorderSample
         }
 
         [Test]
-        public void Given_RuntimeMotionPath_When_RootMovesAfterConfigure_Then_PrepareForMotionComparisonSampleReappliesLock()
+        public void Given_RuntimeMotionPath_When_RootMovesAfterConfigure_Then_PrepareForMotionComparisonSampleKeepsCarrierFree()
         {
             var probeObject = new GameObject("vmd-playback-probe");
 
@@ -72,7 +71,7 @@ namespace Tests.Editor.VMDRecorderSample
                 probeObject.transform.localPosition = new Vector3(0f, -0.02621f, 0f);
                 probe.PrepareForMotionComparisonSample();
 
-                Assert.That(Vector3.Distance(probeObject.transform.localPosition, Vector3.zero), Is.LessThan(0.0001f));
+                Assert.That(Vector3.Distance(probeObject.transform.localPosition, new Vector3(0f, -0.02621f, 0f)), Is.LessThan(0.0001f));
             }
             finally
             {

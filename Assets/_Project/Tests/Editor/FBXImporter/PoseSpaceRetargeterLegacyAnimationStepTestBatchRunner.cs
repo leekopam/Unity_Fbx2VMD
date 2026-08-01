@@ -87,8 +87,16 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
             RunTest(results, nameof(tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
                 tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
+            RunTest(results, nameof(tests.Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta),
+                tests.Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta);
+            RunTest(results, nameof(tests.Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution),
+                tests.Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution);
+            RunTest(results, nameof(tests.Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
+                tests.Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
             RunTest(results, nameof(tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist),
                 tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist);
+            RunTest(results, nameof(tests.Given_BoundedSetHumanPoseRightLegTwist_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit),
+                tests.Given_BoundedSetHumanPoseRightLegTwist_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit);
             RunTest(results, nameof(tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed),
                 tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed);
             RunTest(results, nameof(tests.Given_ZeroPlaybackSpeed_When_CalculatingManualLegacyTime_Then_UsesNormalPlaybackStep),

@@ -163,6 +163,10 @@ namespace Tests.Editor.VMDRecorderSample
                 tests.Given_ExportedVmdArtifactInputs_When_BuildRow_Then_EscapesPathAndIncludesOptionalStats);
             RunTest(results, nameof(tests.Given_TwoMetricsCsvs_When_BuildFrameQualitySummary_Then_ComparesSameRecorderFramesAndReportsSpikes),
                 tests.Given_TwoMetricsCsvs_When_BuildFrameQualitySummary_Then_ComparesSameRecorderFramesAndReportsSpikes);
+            RunTest(results, nameof(tests.Given_RawBelowFloorButCorrectedCandidateSafe_When_BuildingEvaluationEntries_Then_LabelsCorrectedEvidenceDiagnosticOnly),
+                tests.Given_RawBelowFloorButCorrectedCandidateSafe_When_BuildingEvaluationEntries_Then_LabelsCorrectedEvidenceDiagnosticOnly);
+            RunTest(results, nameof(tests.Given_UnsafeBelowFloorCandidate_When_BuildFrameQualitySummary_Then_KeepsFloorContactHardFail),
+                tests.Given_UnsafeBelowFloorCandidate_When_BuildFrameQualitySummary_Then_KeepsFloorContactHardFail);
             RunTest(results, nameof(tests.Given_SparseMetricsCsvs_When_BuildFrameQualitySummary_Then_DoesNotTreatSampleGapAsOneFrameTeleport),
                 tests.Given_SparseMetricsCsvs_When_BuildFrameQualitySummary_Then_DoesNotTreatSampleGapAsOneFrameTeleport);
             RunTest(results, nameof(tests.Given_MetricSamplesDriftByOneRecorderFrame_When_BuildFrameQualitySummary_Then_ComparesNearestFrame),
