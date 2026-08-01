@@ -21,10 +21,12 @@ namespace Tests.Editor.FBXImporter
             var results = new List<TestResultRecord>();
             var tests = new PoseSpaceRetargeterRootMotionDeltaTests();
 
-            RunTest(results, nameof(tests.Given_FiniteInputs_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostEditorAndBodyDelta),
-                tests.Given_FiniteInputs_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostEditorAndBodyDelta);
+            RunTest(results, nameof(tests.Given_FiniteInputsWithoutBodyRootPolicy_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostAndEditorDelta),
+                tests.Given_FiniteInputsWithoutBodyRootPolicy_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostAndEditorDelta);
             RunTest(results, nameof(tests.Given_ZeroMovementScale_When_CalculatingRootMotionDelta_Then_SuppressesGhostEditorAndBodyRootSources),
                 tests.Given_ZeroMovementScale_When_CalculatingRootMotionDelta_Then_SuppressesGhostEditorAndBodyRootSources);
+            RunTest(results, nameof(tests.Given_MainRecordingMovingRootPolicy_When_CalculatingRootMotionDelta_Then_PreservesBodyRootSourceWithoutLegacyDoubleCount),
+                tests.Given_MainRecordingMovingRootPolicy_When_CalculatingRootMotionDelta_Then_PreservesBodyRootSourceWithoutLegacyDoubleCount);
             RunTest(results, nameof(tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN),
                 tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN);
             RunTest(results, nameof(tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_LimitsDeltaAndReportsSpike),

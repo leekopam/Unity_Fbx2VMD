@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using System;
 using System.IO;
 
@@ -40,7 +40,7 @@ namespace Tests.Editor.VMDRecorderSample
                 created = MotionComparisonProbeOutputPaths.GetOrCreateFolderFromDataPath(
                     dataPath,
                     "Docs",
-                    "Machine_Spirit",
+                    "Workflow",
                     "Local",
                     "ComparisonLogs");
 
@@ -61,14 +61,14 @@ namespace Tests.Editor.VMDRecorderSample
         {
             string root = Path.Combine(Path.GetTempPath(), "fbx2vmd-tests", Guid.NewGuid().ToString("N"));
             string dataPath = Path.Combine(root, "Assets");
-            string sessionPath = Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonLogs", "metrics.csv");
+            string sessionPath = Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonLogs", "metrics.csv");
             Directory.CreateDirectory(Path.GetDirectoryName(sessionPath));
 
             try
             {
                 string relativePath = MotionComparisonProbeOutputPaths.MakeProjectRelativePath(dataPath, sessionPath);
 
-                Assert.That(relativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonLogs/metrics.csv"));
+                Assert.That(relativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonLogs/metrics.csv"));
             }
             finally
             {
@@ -85,7 +85,7 @@ namespace Tests.Editor.VMDRecorderSample
             string root = Path.Combine(Path.GetTempPath(), "fbx2vmd-tests", Guid.NewGuid().ToString("N"));
             string siblingRoot = root + "-sibling";
             string dataPath = Path.Combine(root, "Assets");
-            string siblingPath = Path.Combine(siblingRoot, "Docs", "Machine_Spirit", "Local", "ComparisonLogs", "metrics.csv");
+            string siblingPath = Path.Combine(siblingRoot, "Docs", "Workflow", "Local", "ComparisonLogs", "metrics.csv");
             Directory.CreateDirectory(dataPath);
             Directory.CreateDirectory(Path.GetDirectoryName(siblingPath));
 
@@ -116,7 +116,7 @@ namespace Tests.Editor.VMDRecorderSample
             string reportPath = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "MMDQASessions",
                 "automation_runs",
@@ -128,7 +128,7 @@ namespace Tests.Editor.VMDRecorderSample
             {
                 string relativePath = MotionComparisonProbeOutputPaths.MakeProjectRootRelativePath(root, reportPath);
 
-                Assert.That(relativePath, Is.EqualTo("Docs/Machine_Spirit/Local/MMDQASessions/automation_runs/run-a/report.json"));
+                Assert.That(relativePath, Is.EqualTo("Docs/Workflow/Local/MMDQASessions/automation_runs/run-a/report.json"));
             }
             finally
             {
@@ -194,8 +194,8 @@ namespace Tests.Editor.VMDRecorderSample
                 MotionComparisonProbeOutputRoots roots =
                     MotionComparisonProbeOutputPaths.BuildComparisonOutputRoots(dataPath);
 
-                Assert.That(roots.ComparisonOutputFolder, Is.EqualTo(Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonLogs")));
-                Assert.That(roots.ComparisonSessionRootFolder, Is.EqualTo(Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonSessions")));
+                Assert.That(roots.ComparisonOutputFolder, Is.EqualTo(Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonLogs")));
+                Assert.That(roots.ComparisonSessionRootFolder, Is.EqualTo(Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonSessions")));
                 Assert.That(Directory.Exists(roots.ComparisonOutputFolder), Is.True);
                 Assert.That(Directory.Exists(roots.ComparisonSessionRootFolder), Is.True);
             }
@@ -216,7 +216,7 @@ namespace Tests.Editor.VMDRecorderSample
             string existingSessionFolder = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonSessions",
                 "session_01");
@@ -275,7 +275,7 @@ namespace Tests.Editor.VMDRecorderSample
             string existingScreenshotFolder = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonFrames",
                 "when-stamp_01");
@@ -310,7 +310,7 @@ namespace Tests.Editor.VMDRecorderSample
             string sessionManifestPath = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonSessions",
                 "session-a",
@@ -318,14 +318,14 @@ namespace Tests.Editor.VMDRecorderSample
             string metricsCsvPath = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonLogs",
                 "metrics.csv");
             string existingScreenshotFolder = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonFrames",
                 "when-stamp_01");
@@ -353,7 +353,7 @@ namespace Tests.Editor.VMDRecorderSample
                 string expectedScreenshotFolder = Path.Combine(
                     root,
                     "Docs",
-                    "Machine_Spirit",
+                    "Workflow",
                     "Local",
                     "ComparisonFrames",
                     "when-stamp_01_001");
@@ -365,13 +365,13 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(frameSessionIndexDataType.GetField("SessionId").GetValue(frameSessionIndexData), Is.EqualTo("session-a"));
                 Assert.That(
                     frameSessionIndexDataType.GetField("SessionManifestRelativePath").GetValue(frameSessionIndexData),
-                    Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonSessions/session-a/index.md"));
+                    Is.EqualTo("Docs/Workflow/Local/ComparisonSessions/session-a/index.md"));
                 Assert.That(
                     frameSessionIndexDataType.GetField("MetricsCsvRelativePath").GetValue(frameSessionIndexData),
-                    Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonLogs/metrics.csv"));
+                    Is.EqualTo("Docs/Workflow/Local/ComparisonLogs/metrics.csv"));
                 Assert.That(
                     frameSessionIndexDataType.GetField("FrameIndexCsvRelativePath").GetValue(frameSessionIndexData),
-                    Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames/when-stamp_01_001/index.csv"));
+                    Is.EqualTo("Docs/Workflow/Local/ComparisonFrames/when-stamp_01_001/index.csv"));
             }
             finally
             {
@@ -390,21 +390,21 @@ namespace Tests.Editor.VMDRecorderSample
             string metricsCsvPath = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonLogs",
                 "metrics.csv");
             string existingSessionFolder = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonSessions",
                 "session-a");
             string existingScreenshotFolder = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "ComparisonFrames",
                 "when-stamp_01");
@@ -435,14 +435,14 @@ namespace Tests.Editor.VMDRecorderSample
                 string expectedSessionFolder = Path.Combine(
                     root,
                     "Docs",
-                    "Machine_Spirit",
+                    "Workflow",
                     "Local",
                     "ComparisonSessions",
                     "session-a_001");
                 string expectedScreenshotFolder = Path.Combine(
                     root,
                     "Docs",
-                    "Machine_Spirit",
+                    "Workflow",
                     "Local",
                     "ComparisonFrames",
                     "when-stamp_01_001");
@@ -457,13 +457,13 @@ namespace Tests.Editor.VMDRecorderSample
                 Assert.That(frameSessionIndexDataType.GetField("SessionId").GetValue(frameSessionIndexData), Is.EqualTo("session-a"));
                 Assert.That(
                     frameSessionIndexDataType.GetField("SessionManifestRelativePath").GetValue(frameSessionIndexData),
-                    Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonSessions/session-a_001/index.md"));
+                    Is.EqualTo("Docs/Workflow/Local/ComparisonSessions/session-a_001/index.md"));
                 Assert.That(
                     frameSessionIndexDataType.GetField("MetricsCsvRelativePath").GetValue(frameSessionIndexData),
-                    Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonLogs/metrics.csv"));
+                    Is.EqualTo("Docs/Workflow/Local/ComparisonLogs/metrics.csv"));
                 Assert.That(
                     frameSessionIndexDataType.GetField("FrameIndexCsvRelativePath").GetValue(frameSessionIndexData),
-                    Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames/when-stamp_01_001/index.csv"));
+                    Is.EqualTo("Docs/Workflow/Local/ComparisonFrames/when-stamp_01_001/index.csv"));
             }
             finally
             {
@@ -478,7 +478,7 @@ namespace Tests.Editor.VMDRecorderSample
         public void Given_ScreenshotFolderAndFileName_When_BuildScreenshotPngPath_Then_ReturnsCombinedPathWithoutCreatingFolder()
         {
             string root = Path.Combine(Path.GetTempPath(), "fbx2vmd-tests", Guid.NewGuid().ToString("N"));
-            string screenshotFolder = Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames", "when-stamp_01");
+            string screenshotFolder = Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames", "when-stamp_01");
 
             string path = MotionComparisonProbeOutputPaths.BuildScreenshotPngPath(screenshotFolder, "pose_reason_rt-front_frame-000120.png");
 
@@ -655,7 +655,7 @@ namespace Tests.Editor.VMDRecorderSample
         public void Given_ComparisonOutputFolderAndMetricsFileName_When_BuildMetricsCsvOutputPath_Then_ReturnsUniquePath()
         {
             string root = Path.Combine(Path.GetTempPath(), "fbx2vmd-tests", Guid.NewGuid().ToString("N"));
-            string comparisonOutputFolder = Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonLogs");
+            string comparisonOutputFolder = Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonLogs");
 
             try
             {
@@ -686,15 +686,15 @@ namespace Tests.Editor.VMDRecorderSample
 
             MotionComparisonProbeSessionManifestOutputPaths paths = MotionComparisonProbeOutputPaths.BuildSessionManifestOutputPaths(
                 dataPath,
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonLogs", "metrics.csv"),
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames"),
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames", "index.csv"),
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames", "session_index.md"));
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonLogs", "metrics.csv"),
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames"),
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames", "index.csv"),
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames", "session_index.md"));
 
-            Assert.That(paths.MetricsCsvRelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonLogs/metrics.csv"));
-            Assert.That(paths.FrameFolderRelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames"));
-            Assert.That(paths.FrameIndexCsvRelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames/index.csv"));
-            Assert.That(paths.FrameSessionIndexRelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames/session_index.md"));
+            Assert.That(paths.MetricsCsvRelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonLogs/metrics.csv"));
+            Assert.That(paths.FrameFolderRelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonFrames"));
+            Assert.That(paths.FrameIndexCsvRelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonFrames/index.csv"));
+            Assert.That(paths.FrameSessionIndexRelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonFrames/session_index.md"));
         }
 
         [Test]
@@ -706,14 +706,14 @@ namespace Tests.Editor.VMDRecorderSample
             MotionComparisonProbeFrameSessionIndexData data = MotionComparisonProbeOutputPaths.BuildFrameSessionIndexData(
                 dataPath,
                 "session-a",
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonSessions", "index.md"),
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonLogs", "metrics.csv"),
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames", "index.csv"));
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonSessions", "index.md"),
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonLogs", "metrics.csv"),
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames", "index.csv"));
 
             Assert.That(data.SessionId, Is.EqualTo("session-a"));
-            Assert.That(data.SessionManifestRelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonSessions/index.md"));
-            Assert.That(data.MetricsCsvRelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonLogs/metrics.csv"));
-            Assert.That(data.FrameIndexCsvRelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames/index.csv"));
+            Assert.That(data.SessionManifestRelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonSessions/index.md"));
+            Assert.That(data.MetricsCsvRelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonLogs/metrics.csv"));
+            Assert.That(data.FrameIndexCsvRelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonFrames/index.csv"));
         }
 
         [Test]
@@ -729,14 +729,14 @@ namespace Tests.Editor.VMDRecorderSample
                 "reason",
                 42,
                 "front",
-                Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames", "frame.png"));
+                Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames", "frame.png"));
 
             Assert.That(row.ComparisonLabel, Is.EqualTo("label"));
             Assert.That(row.SceneName, Is.EqualTo("scene"));
             Assert.That(row.Reason, Is.EqualTo("reason"));
             Assert.That(row.RecorderFrame, Is.EqualTo(42));
             Assert.That(row.ViewName, Is.EqualTo("front"));
-            Assert.That(row.RelativePath, Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames/frame.png"));
+            Assert.That(row.RelativePath, Is.EqualTo("Docs/Workflow/Local/ComparisonFrames/frame.png"));
         }
 
         [Test]
@@ -744,7 +744,7 @@ namespace Tests.Editor.VMDRecorderSample
         {
             string root = Path.Combine(Path.GetTempPath(), "fbx2vmd-tests", Guid.NewGuid().ToString("N"));
             string dataPath = Path.Combine(root, "Assets");
-            string screenshotFolder = Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames", "when-stamp");
+            string screenshotFolder = Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames", "when-stamp");
 
             System.Reflection.MethodInfo method = typeof(MotionComparisonProbeOutputPaths).GetMethod(
                 "BuildScreenshotCaptureOutputPaths",
@@ -781,7 +781,7 @@ namespace Tests.Editor.VMDRecorderSample
             Assert.That(indexRowType.GetField("ViewName").GetValue(indexRow), Is.EqualTo("left/hand front"));
             Assert.That(
                 indexRowType.GetField("RelativePath").GetValue(indexRow),
-                Is.EqualTo("Docs/Machine_Spirit/Local/ComparisonFrames/when-stamp/pose_thumb_risk_high_rt-left_hand_front_frame-00_12.png"));
+                Is.EqualTo("Docs/Workflow/Local/ComparisonFrames/when-stamp/pose_thumb_risk_high_rt-left_hand_front_frame-00_12.png"));
         }
 
         [Test]
@@ -791,7 +791,7 @@ namespace Tests.Editor.VMDRecorderSample
             string screenshotPath = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "MMDQASessions",
                 "automation_runs",
@@ -804,7 +804,7 @@ namespace Tests.Editor.VMDRecorderSample
             Assert.That(modelScreenshotPath, Is.EqualTo(Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "MMDQASessions",
                 "automation_runs",
@@ -820,7 +820,7 @@ namespace Tests.Editor.VMDRecorderSample
             string screenshotsDir = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "MMDQASessions",
                 "automation_runs",
@@ -841,7 +841,7 @@ namespace Tests.Editor.VMDRecorderSample
             string reportDirectory = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "MMDQASessions",
                 "automation_runs",
@@ -879,7 +879,7 @@ namespace Tests.Editor.VMDRecorderSample
             string reportDirectory = Path.Combine(
                 root,
                 "Docs",
-                "Machine_Spirit",
+                "Workflow",
                 "Local",
                 "MMDQASessions",
                 "automation_runs",
@@ -912,7 +912,7 @@ namespace Tests.Editor.VMDRecorderSample
         public void Given_FolderPath_When_EnsureDirectoryExists_Then_CreatesFolder()
         {
             string root = Path.Combine(Path.GetTempPath(), "fbx2vmd-tests", Guid.NewGuid().ToString("N"));
-            string folderPath = Path.Combine(root, "Docs", "Machine_Spirit", "Local", "ComparisonFrames");
+            string folderPath = Path.Combine(root, "Docs", "Workflow", "Local", "ComparisonFrames");
 
             try
             {

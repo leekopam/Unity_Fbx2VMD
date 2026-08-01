@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -92,7 +92,7 @@ public class HumanoidSampleCode : MonoBehaviour
     private static TMP_FontAsset _cachedKoreanUiFont;
     private static Font _cachedKoreanLegacyUiFont;
     private bool _progressTextFontChecked;
-    private const string EditorAutoStartSuppressionKey = "Member_Han.YybVisualComparison.SuppressManualAutoStart";
+    private const string EditorAutoStartSuppressionKey = "Fbx2Vmd.YybVisualComparison.SuppressManualAutoStart";
 
     private void Start()
     {
@@ -841,7 +841,7 @@ public class HumanoidSampleCode : MonoBehaviour
 [DefaultExecutionOrder(30010)]
 internal class TransformJitterProbe : MonoBehaviour
 {
-    private const string OutputFolder = "Docs/Machine_Spirit/Local/JitterLogs";
+    private const string OutputFolder = "Docs/Workflow/Local/JitterLogs";
     private const float AnomalyScreenDeltaThreshold = 20f;
     private const int MaxAnomalyScreenshots = 6;
     private const float RootScreenTeleportThreshold = 5f;
@@ -1225,7 +1225,7 @@ internal class TransformJitterProbe : MonoBehaviour
             return;
         }
 
-        Type retargeterType = Type.GetType("Member_Han.Modules.FBXImporter.PoseSpaceRetargeter, Assembly-CSharp");
+        Type retargeterType = Type.GetType("Fbx2Vmd.Modules.FBXImporter.PoseSpaceRetargeter, Assembly-CSharp");
         if (retargeterType == null)
         {
             return;

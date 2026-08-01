@@ -289,6 +289,10 @@ internal sealed class MotionComparisonFrameQualitySummary
     public int baseline_frame_count_delta_from_target;
     public int candidate_frame_count_delta_from_target;
     public int candidate_below_floor_metric_frames;
+    public string floor_contact_gate_status;
+    public string floor_contact_gate_status_reason;
+    public string floor_contact_corrected_diagnostic_status;
+    public string floor_contact_corrected_diagnostic_status_reason;
     public int candidate_root_step_spike_frames;
     public bool candidate_yyb_deformation_risk_column_present;
     public int candidate_yyb_deformation_risk_frame_count;
@@ -311,8 +315,19 @@ internal sealed class MotionComparisonFrameQualitySummary
     public float max_same_frame_arm_pose_delta;
     public float max_same_frame_leg_pose_delta;
     public float max_same_frame_limb_pose_delta;
+    public int max_same_frame_limb_pose_delta_recorder_frame;
+    public int max_same_frame_limb_pose_delta_candidate_recorder_frame;
+    public string max_same_frame_limb_pose_delta_source;
     public float max_same_frame_guard_normalized_arm_pose_delta;
     public float max_same_frame_guard_normalized_limb_pose_delta;
+    public float max_same_frame_limb_pose_gate_delta;
+    public int max_same_frame_limb_pose_gate_delta_recorder_frame;
+    public int max_same_frame_limb_pose_gate_delta_candidate_recorder_frame;
+    public string max_same_frame_limb_pose_gate_delta_source;
+    public float max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range;
+    public int max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_recorder_frame;
+    public int max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_candidate_recorder_frame;
+    public string max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_source;
     public int raw_limb_pose_delta_saturated_frame_count;
     public float raw_limb_pose_delta_excess_over_guard_normalized;
     public string raw_limb_pose_delta_saturation_basis;
@@ -1149,6 +1164,10 @@ internal static class MotionComparisonProbeReportWriter
             baseline_frame_count_delta_from_target = targetFrameCount > 0 ? baselineRecordedFrameCount - targetFrameCount : 0,
             candidate_frame_count_delta_from_target = targetFrameCount > 0 ? candidateRecordedFrameCount - targetFrameCount : 0,
             candidate_below_floor_metric_frames = candidate.BelowFloorFrameCount,
+            floor_contact_gate_status = "not_evaluated",
+            floor_contact_gate_status_reason = "",
+            floor_contact_corrected_diagnostic_status = "not_evaluated",
+            floor_contact_corrected_diagnostic_status_reason = "",
             candidate_root_step_spike_frames = candidate.RootStepSpikeFrameCount,
             candidate_yyb_deformation_risk_column_present = candidate.HasYybMaxDeformationRiskColumn,
             candidate_yyb_deformation_risk_frame_count = candidate.YybDeformationRiskFrameCount,
@@ -1171,8 +1190,19 @@ internal static class MotionComparisonProbeReportWriter
             max_same_frame_arm_pose_delta = float.NaN,
             max_same_frame_leg_pose_delta = float.NaN,
             max_same_frame_limb_pose_delta = float.NaN,
+            max_same_frame_limb_pose_delta_recorder_frame = -1,
+            max_same_frame_limb_pose_delta_candidate_recorder_frame = -1,
+            max_same_frame_limb_pose_delta_source = "",
             max_same_frame_guard_normalized_arm_pose_delta = float.NaN,
             max_same_frame_guard_normalized_limb_pose_delta = float.NaN,
+            max_same_frame_limb_pose_gate_delta = float.NaN,
+            max_same_frame_limb_pose_gate_delta_recorder_frame = -1,
+            max_same_frame_limb_pose_gate_delta_candidate_recorder_frame = -1,
+            max_same_frame_limb_pose_gate_delta_source = "",
+            max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range = float.NaN,
+            max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_recorder_frame = -1,
+            max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_candidate_recorder_frame = -1,
+            max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_source = "",
             raw_limb_pose_delta_excess_over_guard_normalized = float.NaN,
             raw_limb_pose_delta_saturation_basis = "",
             pre_retarget_start_compared_frames = 0,
@@ -1519,10 +1549,42 @@ internal static class MotionComparisonProbeReportWriter
             return new[] { rawSummary };
         }
 
+        ApplyCorrectedFloorContactDiagnosticStatus(rawSummary, correctedSummary);
+
         rawSummary.frame_quality_evaluation_role = "evaluation_candidate_metrics";
         rawSummary.frame_quality_evaluation_basis =
             "primary frame_quality evaluator over the unmodified candidate metrics CSV; corrected candidate artifacts remain separate evidence";
         return new[] { rawSummary, correctedSummary };
+    }
+
+    private static void ApplyCorrectedFloorContactDiagnosticStatus(
+        MotionComparisonFrameQualitySummary rawSummary,
+        MotionComparisonFrameQualitySummary correctedSummary)
+    {
+        if (rawSummary == null || correctedSummary == null)
+        {
+            return;
+        }
+
+        if (!string.Equals(rawSummary.floor_contact_gate_status, "fail", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (string.Equals(correctedSummary.floor_contact_gate_status, "pass", StringComparison.OrdinalIgnoreCase))
+        {
+            rawSummary.floor_contact_corrected_diagnostic_status = "diagnostic_only_effective_floor_safe";
+            rawSummary.floor_contact_corrected_diagnostic_status_reason =
+                "corrected candidate artifact is separate evidence; raw floor/contact gate remains a hard fail until generated output is rerun";
+            return;
+        }
+
+        if (string.Equals(correctedSummary.floor_contact_gate_status, "fail", StringComparison.OrdinalIgnoreCase))
+        {
+            rawSummary.floor_contact_corrected_diagnostic_status = "diagnostic_only_effective_floor_unsafe";
+            rawSummary.floor_contact_corrected_diagnostic_status_reason =
+                "corrected candidate artifact still reports below-floor contact evidence; raw floor/contact gate remains a hard fail";
+        }
     }
 
     private static bool IsIntegratedVerticalSolvePrimaryRole(string role)
@@ -1994,13 +2056,47 @@ internal static class MotionComparisonProbeReportWriter
             {
                 summary.max_same_frame_arm_pose_delta = MaxFinite(summary.max_same_frame_arm_pose_delta, armPoseDelta);
                 summary.max_same_frame_leg_pose_delta = MaxFinite(summary.max_same_frame_leg_pose_delta, legPoseDelta);
-                summary.max_same_frame_limb_pose_delta = MaxFinite(summary.max_same_frame_limb_pose_delta, limbPoseDelta);
+                UpdateMaxFiniteWithFrameAndSource(
+                    limbPoseDelta,
+                    frame,
+                    candidateRecorderFrame,
+                    ResolveLimbPoseDeltaSource(armPoseDelta, legPoseDelta, "arm", "leg"),
+                    ref summary.max_same_frame_limb_pose_delta,
+                    ref summary.max_same_frame_limb_pose_delta_recorder_frame,
+                    ref summary.max_same_frame_limb_pose_delta_candidate_recorder_frame,
+                    ref summary.max_same_frame_limb_pose_delta_source);
                 summary.max_same_frame_guard_normalized_arm_pose_delta = MaxFinite(
                     summary.max_same_frame_guard_normalized_arm_pose_delta,
                     guardNormalizedArmPoseDelta);
                 summary.max_same_frame_guard_normalized_limb_pose_delta = MaxFinite(
                     summary.max_same_frame_guard_normalized_limb_pose_delta,
                     guardNormalizedLimbPoseDelta);
+                string gateDeltaSource = ResolveLimbPoseDeltaSource(
+                    guardNormalizedArmPoseDelta,
+                    legPoseDelta,
+                    "guard-normalized-arm",
+                    "leg");
+                UpdateMaxFiniteWithFrameAndSource(
+                    guardNormalizedLimbPoseDelta,
+                    frame,
+                    candidateRecorderFrame,
+                    gateDeltaSource,
+                    ref summary.max_same_frame_limb_pose_gate_delta,
+                    ref summary.max_same_frame_limb_pose_gate_delta_recorder_frame,
+                    ref summary.max_same_frame_limb_pose_gate_delta_candidate_recorder_frame,
+                    ref summary.max_same_frame_limb_pose_gate_delta_source);
+                if (IsWithinCandidateVmdFrameRange(summary, candidateRecorderFrame))
+                {
+                    UpdateMaxFiniteWithFrameAndSource(
+                        guardNormalizedLimbPoseDelta,
+                        frame,
+                        candidateRecorderFrame,
+                        gateDeltaSource,
+                        ref summary.max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range,
+                        ref summary.max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_recorder_frame,
+                        ref summary.max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_candidate_recorder_frame,
+                        ref summary.max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range_source);
+                }
                 if (ExceedsThreshold(limbPoseDelta, QualitySameFrameLimbPoseDeltaFailThreshold) &&
                     !ExceedsThreshold(guardNormalizedLimbPoseDelta, QualitySameFrameLimbPoseDeltaFailThreshold))
                 {
@@ -2083,7 +2179,10 @@ internal static class MotionComparisonProbeReportWriter
                 normalizedFootBottomYDelta,
                 QualitySameFrameFootBottomYWarnThreshold,
                 VerticalSolvePrototypeMaxCorrectionY);
-            prototypeFootCorrection = ClampFootVerticalSolveCorrectionToFloor(prototypeFootCorrection, candidateFrame);
+            prototypeFootCorrection = ClampFootVerticalSolveCorrectionToFloor(
+                prototypeFootCorrection,
+                candidateFrame,
+                VerticalSolvePrototypeMaxCorrectionY);
             float prototypeHipsYDelta = IsFinite(normalizedHipsYDelta) && IsFinite(prototypeHipsCorrection)
                 ? normalizedHipsYDelta + prototypeHipsCorrection
                 : float.NaN;
@@ -2111,7 +2210,8 @@ internal static class MotionComparisonProbeReportWriter
                         VerticalSolveArtifactMaxCorrectionY);
                     postprocessFootCorrection = ClampFootVerticalSolveCorrectionToFloor(
                         postprocessFootCorrection,
-                        candidateFrame);
+                        candidateFrame,
+                        VerticalSolveArtifactMaxCorrectionY);
                 }
 
                 verticalSolveCorrections[candidateRecorderFrame] =
@@ -3792,9 +3892,14 @@ internal static class MotionComparisonProbeReportWriter
         float floorCheckFootIkY = IsFinite(summary.min_candidate_vmd_effective_foot_ik_y)
             ? summary.min_candidate_vmd_effective_foot_ik_y
             : summary.min_candidate_vmd_foot_ik_y;
-        if (summary.candidate_below_floor_metric_frames > 0 || IsBelowFloor(floorCheckFootIkY))
+        bool floorContactFailed = summary.candidate_below_floor_metric_frames > 0 || IsBelowFloor(floorCheckFootIkY);
+        summary.floor_contact_gate_status = floorContactFailed ? "fail" : "pass";
+        summary.floor_contact_gate_status_reason = floorContactFailed
+            ? "below-floor foot/IK sample detected"
+            : "candidate foot/contact samples stayed above floor";
+        if (floorContactFailed)
         {
-            reasons.Add("below-floor foot/IK sample detected");
+            reasons.Add(summary.floor_contact_gate_status_reason);
             fail = true;
         }
 
@@ -3838,9 +3943,10 @@ internal static class MotionComparisonProbeReportWriter
             fail = true;
         }
 
+        bool allowMovingRootPathDelta = allowSameFrameRootPositionDelta || IsMainRecordingMovingRootCandidate(summary);
         if (IsTeleportStep(summary.max_same_frame_root_position_delta))
         {
-            if (allowSameFrameRootPositionDelta)
+            if (allowMovingRootPathDelta)
             {
                 allowedNotes.Add("intentional moving-root stage path delta");
             }
@@ -3852,19 +3958,23 @@ internal static class MotionComparisonProbeReportWriter
         }
 
         if (IsMainRecordingStationaryPreviewCandidate(summary) &&
+            !allowMovingRootPathDelta &&
             ExceedsThreshold(summary.candidate_limb_motion_root_travel, QualityStationaryLimbRootTravelFailThreshold))
         {
             reasons.Add("stationary preview limb-motion root travel threshold exceeded");
             fail = true;
         }
 
-        float limbPoseGateDelta = IsFinite(summary.max_same_frame_guard_normalized_limb_pose_delta)
-            ? summary.max_same_frame_guard_normalized_limb_pose_delta
-            : summary.max_same_frame_limb_pose_delta;
+        float overallLimbPoseGateDelta = GetOverallSameFrameLimbPoseDeltaForGate(summary);
+        float limbPoseGateDelta = GetSameFrameLimbPoseDeltaForGate(summary);
         if (ExceedsThreshold(limbPoseGateDelta, QualitySameFrameLimbPoseDeltaFailThreshold))
         {
             reasons.Add("same-frame limb pose delta threshold exceeded");
             fail = true;
+        }
+        else if (ExceedsThreshold(overallLimbPoseGateDelta, QualitySameFrameLimbPoseDeltaFailThreshold))
+        {
+            allowedNotes.Add("post-vmd limb pose delta");
         }
 
         if (ExceedsThreshold(summary.max_same_frame_hips_y_delta, QualitySameFrameHipsYFailThreshold))
@@ -3949,6 +4059,41 @@ internal static class MotionComparisonProbeReportWriter
         return summary != null ? summary.max_same_frame_foot_xz_delta : float.NaN;
     }
 
+    private static float GetSameFrameLimbPoseDeltaForGate(MotionComparisonFrameQualitySummary summary)
+    {
+        if (summary != null &&
+            summary.candidate_vmd_max_bone_frame_index >= 0 &&
+            IsFinite(summary.max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range))
+        {
+            return summary.max_same_frame_limb_pose_gate_delta_within_candidate_vmd_frame_range;
+        }
+
+        return GetOverallSameFrameLimbPoseDeltaForGate(summary);
+    }
+
+    private static float GetOverallSameFrameLimbPoseDeltaForGate(MotionComparisonFrameQualitySummary summary)
+    {
+        if (summary == null)
+        {
+            return float.NaN;
+        }
+
+        return IsFinite(summary.max_same_frame_limb_pose_gate_delta)
+            ? summary.max_same_frame_limb_pose_gate_delta
+            : IsFinite(summary.max_same_frame_guard_normalized_limb_pose_delta)
+            ? summary.max_same_frame_guard_normalized_limb_pose_delta
+            : summary.max_same_frame_limb_pose_delta;
+    }
+
+    private static bool IsWithinCandidateVmdFrameRange(
+        MotionComparisonFrameQualitySummary summary,
+        int candidateRecorderFrame)
+    {
+        return summary == null ||
+            summary.candidate_vmd_max_bone_frame_index < 0 ||
+            candidateRecorderFrame <= summary.candidate_vmd_max_bone_frame_index;
+    }
+
     private static bool IsYybFrameQualityCandidate(MotionComparisonFrameQualitySummary summary)
     {
         return summary != null &&
@@ -3973,6 +4118,22 @@ internal static class MotionComparisonProbeReportWriter
             metricsPath.Contains("main_recording");
         bool isReplay = label.Contains("vmd replay") || metricsPath.Contains("vmd-replay");
         return isMainRecording && !isReplay;
+    }
+
+    private static bool IsMainRecordingMovingRootCandidate(MotionComparisonFrameQualitySummary summary)
+    {
+        if (summary == null)
+        {
+            return false;
+        }
+
+        string label = NormalizeDiagnosticTransformName(summary.candidate_label);
+        string metricsPath = NormalizeDiagnosticTransformName(summary.candidate_metrics_csv);
+        return label.Contains("main_recoding") ||
+            label.Contains("main_recording") ||
+            metricsPath.Contains("main_recoding") ||
+            metricsPath.Contains("main-recording") ||
+            metricsPath.Contains("main_recording");
     }
 
     private static void ApplyVerticalSolvePrototypeStatus(MotionComparisonFrameQualitySummary summary)
@@ -4800,6 +4961,30 @@ internal static class MotionComparisonProbeReportWriter
         }
     }
 
+    private static void UpdateMaxFiniteWithFrameAndSource(
+        float candidate,
+        int baselineRecorderFrame,
+        int candidateRecorderFrame,
+        string source,
+        ref float current,
+        ref int currentBaselineRecorderFrame,
+        ref int currentCandidateRecorderFrame,
+        ref string currentSource)
+    {
+        if (!IsFinite(candidate))
+        {
+            return;
+        }
+
+        if (!IsFinite(current) || candidate > current)
+        {
+            current = candidate;
+            currentBaselineRecorderFrame = baselineRecorderFrame;
+            currentCandidateRecorderFrame = candidateRecorderFrame;
+            currentSource = source ?? "";
+        }
+    }
+
     private static void UpdateMaxFootXzDelta(
         MotionComparisonFrameQualitySummary summary,
         string side,
@@ -5077,16 +5262,26 @@ internal static class MotionComparisonProbeReportWriter
         return normalizedDelta > 0f ? -correctionMagnitude : correctionMagnitude;
     }
 
-    private static float ClampFootVerticalSolveCorrectionToFloor(float correction, MetricsCsvFrame candidateFrame)
+    private static float ClampFootVerticalSolveCorrectionToFloor(
+        float correction,
+        MetricsCsvFrame candidateFrame,
+        float maxCorrectionMagnitude)
     {
         if (!IsFinite(correction))
         {
             return float.NaN;
         }
 
+        float maxMagnitude = IsFinite(maxCorrectionMagnitude)
+            ? Math.Max(0f, maxCorrectionMagnitude)
+            : float.PositiveInfinity;
         if (correction >= 0f)
         {
-            return correction;
+            float floorLift = ResolveFootVerticalSolveFloorLift(candidateFrame);
+            float floorSafeCorrection = IsFinite(floorLift)
+                ? Math.Max(correction, floorLift)
+                : correction;
+            return Math.Min(floorSafeCorrection, maxMagnitude);
         }
 
         float maxLowering = float.PositiveInfinity;
@@ -5107,6 +5302,29 @@ internal static class MotionComparisonProbeReportWriter
 
         float allowedLowering = Math.Max(0f, maxLowering);
         return Math.Max(correction, -allowedLowering);
+    }
+
+    private static float ResolveFootVerticalSolveFloorLift(MetricsCsvFrame candidateFrame)
+    {
+        float minFootFloorValue = float.NaN;
+        if (IsFinite(candidateFrame.LowestFootBottomY))
+        {
+            minFootFloorValue = candidateFrame.LowestFootBottomY;
+        }
+
+        if (IsFinite(candidateFrame.FootBottomGroundGap))
+        {
+            minFootFloorValue = IsFinite(minFootFloorValue)
+                ? Math.Min(minFootFloorValue, candidateFrame.FootBottomGroundGap)
+                : candidateFrame.FootBottomGroundGap;
+        }
+
+        if (!IsFinite(minFootFloorValue))
+        {
+            return float.NaN;
+        }
+
+        return Math.Max(0f, ResolveVerticalSolveFloorSafeY() - minFootFloorValue);
     }
 
     private static void UpdatePrototypeCorrection(
@@ -5703,6 +5921,27 @@ internal static class MotionComparisonProbeReportWriter
         max = MaxNormalizedAngleDelta(max, previous.LeftKneeAngle, current.LeftKneeAngle);
         max = MaxNormalizedAngleDelta(max, previous.RightKneeAngle, current.RightKneeAngle);
         return max;
+    }
+
+    private static string ResolveLimbPoseDeltaSource(
+        float armPoseDelta,
+        float legPoseDelta,
+        string armSource,
+        string legSource)
+    {
+        bool hasArm = IsFinite(armPoseDelta);
+        bool hasLeg = IsFinite(legPoseDelta);
+        if (hasArm && (!hasLeg || armPoseDelta >= legPoseDelta))
+        {
+            return armSource;
+        }
+
+        if (hasLeg)
+        {
+            return legSource;
+        }
+
+        return "";
     }
 
     private static float MaxAbsDelta(float currentMax, float previous, float current)

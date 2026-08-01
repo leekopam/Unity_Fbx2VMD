@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 
@@ -175,7 +175,7 @@ internal readonly struct MotionComparisonProbeSamplingSessionOutputPaths
 internal static class MotionComparisonProbeOutputPaths
 {
     private const string OutputDocsFolderName = "Docs";
-    private const string OutputRootFolderName = "Machine_Spirit";
+    private const string OutputRootFolderName = "Workflow";
     private const string OutputLocalFolderName = "Local";
     private const string ComparisonFolderName = "ComparisonLogs";
     private const string ComparisonFramesFolderName = "ComparisonFrames";

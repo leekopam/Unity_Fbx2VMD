@@ -1,6 +1,6 @@
 using System.Reflection;
 using Assimp;
-using Member_Han.Modules.FBXImporter;
+using Fbx2Vmd.Modules.FBXImporter;
 using NUnit.Framework;
 using UnityEngine;
 using System;

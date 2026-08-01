@@ -1,4 +1,4 @@
-using Member_Han.Modules.FBXImporter;
+using Fbx2Vmd.Modules.FBXImporter;
 using NUnit.Framework;
 using System;
 using System.Reflection;
@@ -15,6 +15,7 @@ namespace Tests.Editor.FBXImporter
             typeof(Vector3),
             typeof(Vector3),
             typeof(float),
+            typeof(bool),
             typeof(bool),
             typeof(float),
             typeof(float).MakeByRefType(),
@@ -36,7 +37,7 @@ namespace Tests.Editor.FBXImporter
         };
 
         [Test]
-        public void Given_FiniteInputs_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostEditorAndBodyDelta()
+        public void Given_FiniteInputsWithoutBodyRootPolicy_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostAndEditorDelta()
         {
             Vector3 delta = CalculateRetargetRootDelta(
                 ghostDelta: new Vector3(1f, 2f, 3f),
@@ -44,6 +45,7 @@ namespace Tests.Editor.FBXImporter
                 editorRootTranslationDelta: new Vector3(0.5f, 0.25f, -0.5f),
                 bodyRootDelta: new Vector3(0.1f, -0.25f, 0.2f),
                 movementScaleMultiplier: 0.5f,
+                useBodyPositionXZRootMotion: false,
                 clampRootDeltaSpikes: true,
                 maxRootDeltaPerFrame: 10f,
                 out float deltaMagnitude,
@@ -52,9 +54,9 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(skippedByNonFinite, Is.False);
             Assert.That(skippedBySpike, Is.False);
-            Assert.That(delta.x, Is.EqualTo(1.3f).Within(0.0001f));
-            Assert.That(delta.y, Is.EqualTo(2f).Within(0.0001f));
-            Assert.That(delta.z, Is.EqualTo(2.85f).Within(0.0001f));
+            Assert.That(delta.x, Is.EqualTo(1.25f).Within(0.0001f));
+            Assert.That(delta.y, Is.EqualTo(2.125f).Within(0.0001f));
+            Assert.That(delta.z, Is.EqualTo(2.75f).Within(0.0001f));
             Assert.That(deltaMagnitude, Is.EqualTo(delta.magnitude).Within(0.0001f));
         }
 
@@ -67,6 +69,7 @@ namespace Tests.Editor.FBXImporter
                 editorRootTranslationDelta: new Vector3(0.25f, 0f, 0.5f),
                 bodyRootDelta: new Vector3(-0.2f, 0f, 0.35f),
                 movementScaleMultiplier: 0f,
+                useBodyPositionXZRootMotion: false,
                 clampRootDeltaSpikes: true,
                 maxRootDeltaPerFrame: 0.006f,
                 out float deltaMagnitude,
@@ -80,6 +83,54 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_MainRecordingMovingRootPolicy_When_CalculatingRootMotionDelta_Then_PreservesBodyRootSourceWithoutLegacyDoubleCount()
+        {
+            Vector3 delta = CalculateRetargetRootDelta(
+                ghostDelta: new Vector3(0.2f, 0f, 0.1f),
+                scaleRatio: 1f,
+                editorRootTranslationDelta: new Vector3(0.05f, 0f, 0.02f),
+                bodyRootDelta: new Vector3(0.3f, 0f, 0.12f),
+                movementScaleMultiplier: 1f,
+                useBodyPositionXZRootMotion: true,
+                clampRootDeltaSpikes: true,
+                maxRootDeltaPerFrame: 10f,
+                out float deltaMagnitude,
+                out bool skippedByNonFinite,
+                out bool skippedBySpike);
+
+            Assert.That(skippedByNonFinite, Is.False);
+            Assert.That(skippedBySpike, Is.False);
+            Assert.That(delta.x, Is.EqualTo(0.3f).Within(0.0001f));
+            Assert.That(delta.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(delta.z, Is.EqualTo(0.12f).Within(0.0001f));
+            Assert.That(deltaMagnitude, Is.EqualTo(delta.magnitude).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MainRecordingMovingRootPolicyAndMovementScale_When_CalculatingRootMotionDelta_Then_ScalesBodyRootSourceOnly()
+        {
+            Vector3 delta = CalculateRetargetRootDelta(
+                ghostDelta: new Vector3(0.2f, 0f, 0.1f),
+                scaleRatio: 1f,
+                editorRootTranslationDelta: new Vector3(0.05f, 0f, 0.02f),
+                bodyRootDelta: new Vector3(0.3f, 0f, 0.12f),
+                movementScaleMultiplier: 1.2f,
+                useBodyPositionXZRootMotion: true,
+                clampRootDeltaSpikes: true,
+                maxRootDeltaPerFrame: 10f,
+                out float deltaMagnitude,
+                out bool skippedByNonFinite,
+                out bool skippedBySpike);
+
+            Assert.That(skippedByNonFinite, Is.False);
+            Assert.That(skippedBySpike, Is.False);
+            Assert.That(delta.x, Is.EqualTo(0.36f).Within(0.0001f));
+            Assert.That(delta.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(delta.z, Is.EqualTo(0.144f).Within(0.0001f));
+            Assert.That(deltaMagnitude, Is.EqualTo(delta.magnitude).Within(0.0001f));
+        }
+
+        [Test]
         public void Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN()
         {
             Vector3 delta = CalculateRetargetRootDelta(
@@ -88,6 +139,7 @@ namespace Tests.Editor.FBXImporter
                 editorRootTranslationDelta: Vector3.zero,
                 bodyRootDelta: Vector3.zero,
                 movementScaleMultiplier: 1f,
+                useBodyPositionXZRootMotion: false,
                 clampRootDeltaSpikes: true,
                 maxRootDeltaPerFrame: 0.25f,
                 out float deltaMagnitude,
@@ -109,6 +161,7 @@ namespace Tests.Editor.FBXImporter
                 editorRootTranslationDelta: Vector3.zero,
                 bodyRootDelta: Vector3.zero,
                 movementScaleMultiplier: 1f,
+                useBodyPositionXZRootMotion: false,
                 clampRootDeltaSpikes: true,
                 maxRootDeltaPerFrame: 0.25f,
                 out float deltaMagnitude,
@@ -133,6 +186,7 @@ namespace Tests.Editor.FBXImporter
                 editorRootTranslationDelta: Vector3.zero,
                 bodyRootDelta: Vector3.zero,
                 movementScaleMultiplier: 1f,
+                useBodyPositionXZRootMotion: false,
                 clampRootDeltaSpikes: true,
                 maxRootDeltaPerFrame: 0.006f,
                 out float deltaMagnitude,
@@ -157,6 +211,7 @@ namespace Tests.Editor.FBXImporter
                 editorRootTranslationDelta: Vector3.zero,
                 bodyRootDelta: Vector3.zero,
                 movementScaleMultiplier: 1f,
+                useBodyPositionXZRootMotion: false,
                 clampRootDeltaSpikes: false,
                 maxRootDeltaPerFrame: 0.25f,
                 out float deltaMagnitude,
@@ -176,7 +231,8 @@ namespace Tests.Editor.FBXImporter
         {
             Assert.That(NormalizeMovementScaleMultiplier(0f), Is.EqualTo(0f).Within(0.0001f));
             Assert.That(NormalizeMovementScaleMultiplier(-0.5f), Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(NormalizeMovementScaleMultiplier(1.5f), Is.EqualTo(1.2f).Within(0.0001f));
+            Assert.That(NormalizeMovementScaleMultiplier(1.45f), Is.EqualTo(1.45f).Within(0.0001f));
+            Assert.That(NormalizeMovementScaleMultiplier(1.75f), Is.EqualTo(1.5f).Within(0.0001f));
         }
 
         [Test]
@@ -215,6 +271,7 @@ namespace Tests.Editor.FBXImporter
             Vector3 editorRootTranslationDelta,
             Vector3 bodyRootDelta,
             float movementScaleMultiplier,
+            bool useBodyPositionXZRootMotion,
             bool clampRootDeltaSpikes,
             float maxRootDeltaPerFrame,
             out float deltaMagnitude,
@@ -237,6 +294,7 @@ namespace Tests.Editor.FBXImporter
                 editorRootTranslationDelta,
                 bodyRootDelta,
                 movementScaleMultiplier,
+                useBodyPositionXZRootMotion,
                 clampRootDeltaSpikes,
                 maxRootDeltaPerFrame,
                 float.NaN,
@@ -245,9 +303,9 @@ namespace Tests.Editor.FBXImporter
             };
 
             Vector3 delta = (Vector3)method.Invoke(null, args);
-            deltaMagnitude = (float)args[7];
-            skippedByNonFinite = (bool)args[8];
-            skippedBySpike = (bool)args[9];
+            deltaMagnitude = (float)args[8];
+            skippedByNonFinite = (bool)args[9];
+            skippedBySpike = (bool)args[10];
             return delta;
         }
 
