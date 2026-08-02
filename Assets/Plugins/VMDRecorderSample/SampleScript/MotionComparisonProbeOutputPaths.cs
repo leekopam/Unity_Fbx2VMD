@@ -123,7 +123,7 @@ internal readonly struct MotionComparisonProbeScreenshotCaptureNames
     }
 }
 
-internal readonly struct MotionComparisonProbeSessionManifestOutputPaths
+public readonly struct MotionComparisonProbeSessionManifestOutputPaths
 {
     public readonly string MetricsCsvRelativePath;
     public readonly string FrameFolderRelativePath;

@@ -1,6 +1,6 @@
 using SFB;
 
-namespace Fbx2Vmd.Modules.FileSystem
+namespace Fbx2Vmd.FileSystem
 {
     /// <summary>
     /// StandaloneFileBrowser를 사용하는 런타임 파일 브라우저 서비스

@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 
-internal readonly struct MotionComparisonProbeScreenshotIndexRow
+public readonly struct MotionComparisonProbeScreenshotIndexRow
 {
     public readonly string ComparisonLabel;
     public readonly string SceneName;
@@ -31,7 +31,7 @@ internal readonly struct MotionComparisonProbeScreenshotIndexRow
     }
 }
 
-internal readonly struct MotionComparisonProbeFrameSessionIndexData
+public readonly struct MotionComparisonProbeFrameSessionIndexData
 {
     public readonly string SessionId;
     public readonly string SessionManifestRelativePath;
@@ -51,7 +51,7 @@ internal readonly struct MotionComparisonProbeFrameSessionIndexData
     }
 }
 
-internal readonly struct MotionComparisonProbeSessionManifestData
+public readonly struct MotionComparisonProbeSessionManifestData
 {
     public readonly string SessionId;
     public readonly string ComparisonLabel;
@@ -262,7 +262,7 @@ internal readonly struct MotionComparisonProbeSessionManifestData
 }
 
 [Serializable]
-internal sealed class MotionComparisonFrameQualitySummary
+public sealed class MotionComparisonFrameQualitySummary
 {
     public string baseline_label;
     public string candidate_label;
@@ -458,7 +458,7 @@ internal sealed class MotionComparisonFrameQualitySummary
 }
 
 [Serializable]
-internal sealed class VerticalSolvePrimaryExportPromotion
+public sealed class VerticalSolvePrimaryExportPromotion
 {
     public string raw_metrics_csv;
     public string raw_vmd_path;
@@ -502,7 +502,7 @@ internal sealed class MmdAutomationStepForSummary
     public string play_state_screenshot;
 }
 
-internal static class MotionComparisonProbeReportWriter
+public static class MotionComparisonProbeReportWriter
 {
     private const float QualityFloorTolerance = -0.001f;
     private const float QualityTeleportStepThreshold = 0.12f;
@@ -1099,7 +1099,7 @@ internal static class MotionComparisonProbeReportWriter
         return MetricsCsvHeader + "," + YybDiagnosticMetricsCsvHeader + "," + RetargetEndpointStageDiagnosticsCsvHeader + "," + LowerBodyPostPoseDiagnosticsCsvHeader + "," + SetHumanPoseBodyDiagnosticsCsvHeader + "," + SetHumanPosePreSolveBasisDiagnosticsCsvHeader + "," + SetHumanPoseExtendedInputDiagnosticsCsvHeader + "," + SetHumanPoseRightLegOutputDiagnosticsCsvHeader;
     }
 
-    internal static MotionComparisonFrameQualitySummary BuildFrameQualitySummary(
+    public static MotionComparisonFrameQualitySummary BuildFrameQualitySummary(
         string baselineLabel,
         string baselineMetricsCsvPath,
         string candidateLabel,
@@ -1414,7 +1414,7 @@ internal static class MotionComparisonProbeReportWriter
         return true;
     }
 
-    internal static bool TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
+    public static bool TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
         MotionComparisonFrameQualitySummary rawSummary,
         out VerticalSolvePrimaryExportPromotion promotion)
     {
@@ -1529,7 +1529,7 @@ internal static class MotionComparisonProbeReportWriter
             FilesDiffer(summary.candidate_vmd_path, diagnosticVmdPath);
     }
 
-    internal static MotionComparisonFrameQualitySummary[] BuildFrameQualityEvaluationEntries(
+    public static MotionComparisonFrameQualitySummary[] BuildFrameQualityEvaluationEntries(
         MotionComparisonFrameQualitySummary rawSummary)
     {
         if (rawSummary == null)
@@ -1605,7 +1605,7 @@ internal static class MotionComparisonProbeReportWriter
         return $"{label} corrected_vertical_solve_candidate";
     }
 
-    internal static void AttachLatestMmdAutomationEvidence(
+    public static void AttachLatestMmdAutomationEvidence(
         MotionComparisonFrameQualitySummary summary,
         string projectRoot,
         string automationRunsRoot)

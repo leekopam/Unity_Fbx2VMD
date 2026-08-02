@@ -1,4 +1,4 @@
-using Fbx2Vmd.Modules.FBXImporter.EditorTools;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System.Collections.Generic;
 using UnityEngine;

@@ -1,4 +1,4 @@
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System.IO;
 using System.Linq;
@@ -130,15 +130,15 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FBXVmdPipeline for FBX selection/import.");
-            Assert.That(fileManager.useManualAnimatorFingerPoseReference, Is.False,
+            Assert.That(fileManager.ShouldUseManualAnimatorFingerPoseReference, Is.False,
                 "Main_Recoding must not copy manual finger pose into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.False,
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False,
                 "Main_Recoding must preserve the imported FBX full-body pose during normal Play/import playback.");
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.False,
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.False,
                 "Main_Recoding must not copy manual body rotation into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorBodyPositionYReference, Is.False,
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyPositionYReference, Is.False,
                 "Main_Recoding must not copy manual body Y into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.False,
+            Assert.That(fileManager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False,
                 "Main_Recoding must not copy manual Hips local position into the default playback/import path.");
             Assert.That(fileManager.useManualAnimatorThumbLocalRotationReference, Is.False,
                 "Main_Recoding must not copy manual thumb local rotation into the normal Play/import path.");
@@ -156,13 +156,13 @@ namespace Tests.Editor.FBXImporter
                 "Main_Recoding must not preserve manual thumb muscles while the manual finger reference is disabled.");
             Assert.That(fileManager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.12f).Within(0.0001f),
                 "Main_Recoding keeps only the conservative serialized Hips reference cap while the reference is disabled.");
-            Assert.That(fileManager.preserveRetargetBodyPosition, Is.False,
+            Assert.That(fileManager.ShouldPreserveRetargetBodyPosition, Is.False,
                 "Main_Recoding must let the imported FBX body position drive the moving-root solve.");
             Assert.That(fileManager.MovementScaleMultiplier, Is.GreaterThanOrEqualTo(0.9f),
                 "Main_Recoding must keep the visible root carrier moving for manual-style natural motion.");
-            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.True,
+            Assert.That(fileManager.ShouldUseRetargetBodyPositionXZRootMotion, Is.True,
                 "Main_Recoding must add bodyPosition X/Z root motion to the manual-style preview carrier.");
-            Assert.That(fileManager.useEditorHumanoidRootTranslationReference, Is.False,
+            Assert.That(fileManager.ShouldUseEditorHumanoidRootTranslationReference, Is.False,
                 "Main_Recoding must not add Humanoid RootT translation on top of bodyPosition X/Z root motion.");
         }
 
@@ -182,7 +182,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ReadRecordVmdAfterImport(FBXVmdPipeline fileManager)
         {
             FieldInfo field = typeof(FBXVmdPipeline).GetField(
-                "recordVmdAfterImport",
+                "ShouldRecordVmdAfterImport",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, "FBXVmdPipeline must expose a scene-level VMD recording mode flag.");
             return (bool)field.GetValue(fileManager);

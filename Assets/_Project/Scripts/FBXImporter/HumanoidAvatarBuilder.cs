@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace Fbx2Vmd.Modules.FBXImporter
+namespace Fbx2Vmd.FBXImporter
 {
     public static class HumanoidAvatarBuilder
     {
@@ -74,7 +74,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
 
             if (explicitMapping == null || explicitMapping.Count == 0)
             {
-                Debug.LogWarning("[AvatarBuilder] Bone mapping is empty. Trying auto-mapping fallback.");
+                Debug.LogWarning("[AvatarBuilder] 본 매핑이 비어 있습니다. 자동 매핑 폴백 시도.");
                 explicitMapping = BuildAutoMapping(targetRoot);
             }
 
@@ -124,7 +124,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 }
             }
 
-            Debug.Log($"[AvatarBuilder] Auto bone mapping: {mappedCount}/{requiredBoneNames.Count} required bones mapped.");
+            Debug.Log($"[AvatarBuilder] 자동 본 매핑: {mappedCount}/{requiredBoneNames.Count}개 필수 본 매핑됨.");
             return mapping;
         }
 
