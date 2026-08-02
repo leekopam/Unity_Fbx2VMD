@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using UnityEditor;
 using UnityEditor.Events;
 using UnityEditor.SceneManagement;
@@ -12,7 +12,7 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-namespace Fbx2Vmd.Settings.EditorTools
+namespace Fbx2Vmd.Settings
 {
     public enum GraphicSettingInspectorCategory
     {
@@ -515,7 +515,7 @@ namespace Fbx2Vmd.Settings.EditorTools
                     setting.ApplyNow();
                     ApplyTextureImports(setting);
                     ApplyMaterialShaderSettings(setting);
-                    GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
+                    GameViewScaleController.TryApply(setting.GameViewScaleMode);
                     MarkSettingDirty(setting);
                     break;
                 default:
@@ -552,16 +552,16 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static void ApplyTextureImports(GraphicSetting setting)
         {
-            int changed = GraphicSettingTextureImportEditorUtility.Apply(setting);
+            int changed = GraphicTextureImportEditorController.Apply(setting);
             if (changed > 0)
             {
-                Debug.Log($"GraphicSetting 텍스처 Import 자동 적용: 변경={changed}");
+                Debug.Log($"GraphicSetting 텍스처 임포트 자동 적용: changes={changed}");
             }
         }
 
         private static void ApplyMaterialShaderSettings(GraphicSetting setting)
         {
-            GraphicMaterialShaderApplyResult result = GraphicSettingMaterialShaderEditorUtility.Apply(setting);
+            GraphicMaterialShaderApplyResult result = GraphicMaterialShaderEditorController.Apply(setting);
             if (result.ChangedMaterials > 0 || result.ChangedProperties > 0)
             {
                 Debug.Log($"GraphicSetting 모델 머티리얼 자동 적용: {result}");
@@ -599,7 +599,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         }
     }
 
-    public static class GraphicSettingMaterialShaderEditorUtility
+    public static class GraphicMaterialShaderEditorController
     {
         public static GraphicMaterialShaderApplyResult Apply(GraphicSetting setting)
         {
@@ -691,7 +691,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         }
     }
 
-    public static class GraphicSettingTextureImportEditorUtility
+    public static class GraphicTextureImportEditorController
     {
         public static int Apply(GraphicSetting setting)
         {
@@ -873,7 +873,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             }
 
             GraphicSetting setting = FindActiveSceneGraphicSetting();
-            return setting != null && GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
+            return setting != null && GameViewScaleController.TryApply(setting.GameViewScaleMode);
         }
 
         public static bool ApplyActiveSceneSettingGameViewScaleIfDrifted()
@@ -889,8 +889,8 @@ namespace Fbx2Vmd.Settings.EditorTools
                 return false;
             }
 
-            return !GraphicSettingGameViewScaleUtility.IsCurrentZoomScale(Vector2.one, 0.001f)
-                && GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
+            return !GameViewScaleController.IsCurrentZoomScale(Vector2.one, 0.001f)
+                && GameViewScaleController.TryApply(setting.GameViewScaleMode);
         }
 
         private static void OnSceneOpened(Scene scene, OpenSceneMode mode)
@@ -952,7 +952,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         }
     }
 
-    public static class GraphicSettingGameViewScaleUtility
+    public static class GameViewScaleController
     {
         public static bool IsCurrentZoomScale(Vector2 expected, float tolerance)
         {
@@ -970,7 +970,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             Type gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
             if (gameViewType == null)
             {
-                Debug.LogWarning("GraphicSetting이 UnityEditor.GameView를 찾지 못했습니다.");
+                Debug.LogWarning("GraphicSetting에서 UnityEditor.GameView를 찾을 수 없습니다.");
                 return false;
             }
 
@@ -993,7 +993,7 @@ namespace Fbx2Vmd.Settings.EditorTools
                 return true;
             }
 
-            Debug.LogWarning("현재 Unity 버전에서 GraphicSetting이 GameView 확대 표시를 변경하지 못했습니다.");
+            Debug.LogWarning("GraphicSetting에서 현재 Unity 버전의 GameView 스케일 표시를 변경할 수 없습니다.");
             return false;
         }
 
@@ -1114,11 +1114,11 @@ namespace Fbx2Vmd.Settings.EditorTools
             var scene = EditorSceneManager.OpenScene(MainRecordingScenePath);
             GraphicSetting setting = EnsureInActiveScene();
             setting.ApplyNow();
-            GraphicSettingGameViewScaleUtility.TryApply(setting.GameViewScaleMode);
+            GameViewScaleController.TryApply(setting.GameViewScaleMode);
             BackgroundColorSetting backgroundSetting = setting.GetComponent<BackgroundColorSetting>();
             backgroundSetting?.ApplyNow();
-            GraphicSettingTextureImportEditorUtility.Apply(setting);
-            GraphicSettingMaterialShaderEditorUtility.Apply(setting);
+            GraphicTextureImportEditorController.Apply(setting);
+            GraphicMaterialShaderEditorController.Apply(setting);
             Selection.activeObject = setting.gameObject;
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);

@@ -1,4 +1,4 @@
-namespace Fbx2Vmd.Modules.FileSystem
+namespace Fbx2Vmd.FileSystem
 {
     public interface IFileBrowserService
     {

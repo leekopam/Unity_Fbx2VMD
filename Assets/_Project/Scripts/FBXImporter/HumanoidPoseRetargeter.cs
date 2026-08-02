@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Fbx2Vmd.Modules.FBXImporter
+namespace Fbx2Vmd.FBXImporter
 {
     public class HumanoidPoseRetargeter : MonoBehaviour
     {

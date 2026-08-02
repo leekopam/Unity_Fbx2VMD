@@ -1,4 +1,5 @@
-﻿#if UNITY_EDITOR
+﻿
+#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -10,7 +11,7 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     public static class FbxRuntimePoseClipCompareRunner
     {
@@ -572,7 +573,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
         private static List<RawAssimpImportVariantSpec> BuildRawAssimpImportVariantSpecs()
         {
             Assimp.PostProcessSteps runtimeDefault =
-                Fbx2Vmd.Modules.FBXImporter.RuntimeFBXImporter.BuildAssimpPostProcessStepsForEditorDiagnostics();
+                Fbx2Vmd.FBXImporter.AssimpFBXImporter.BuildAssimpPostProcessStepsForEditorDiagnostics();
             Assimp.PostProcessSteps withoutLeftHandedBasis =
                 runtimeDefault
                 & ~Assimp.PostProcessSteps.MakeLeftHanded
@@ -647,7 +648,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 projectRoot,
                 assetPath,
                 preservePivots: false,
-                postProcessSteps: Fbx2Vmd.Modules.FBXImporter.RuntimeFBXImporter.BuildAssimpPostProcessStepsForEditorDiagnostics(),
+                postProcessSteps: Fbx2Vmd.FBXImporter.AssimpFBXImporter.BuildAssimpPostProcessStepsForEditorDiagnostics(),
                 out animationName);
         }
 
@@ -660,9 +661,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
         {
             animationName = string.Empty;
             string fullPath = Path.Combine(projectRoot, assetPath.Replace('/', Path.DirectorySeparatorChar));
-            if (!Fbx2Vmd.Modules.FBXImporter.AssimpLibraryLoader.IsLoaded)
+            if (!Fbx2Vmd.FBXImporter.AssimpLibraryLoader.IsLoaded)
             {
-                Fbx2Vmd.Modules.FBXImporter.AssimpLibraryLoader.LoadLibrary();
+                Fbx2Vmd.FBXImporter.AssimpLibraryLoader.LoadLibrary();
             }
 
             using (var importer = new Assimp.AssimpContext())
@@ -723,20 +724,20 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
         {
             runtimeClipName = string.Empty;
             string fullPath = Path.Combine(projectRoot, assetPath.Replace('/', Path.DirectorySeparatorChar));
-            var importer = new Fbx2Vmd.Modules.FBXImporter.RuntimeFBXImporter();
+            var importer = new Fbx2Vmd.FBXImporter.AssimpFBXImporter();
             GameObject importedRoot = null;
             try
             {
                 importedRoot = importer.ImportSynchronouslyForEditorDiagnostics(fullPath);
                 if (importedRoot == null)
                 {
-                    throw new InvalidOperationException($"RuntimeFBXImporter returned null for {assetPath}");
+                    throw new InvalidOperationException($"AssimpFBXImporter returned null for {assetPath}");
                 }
 
                 AnimationClip clip = importer.GetAnimationClips().FirstOrDefault();
                 if (clip == null)
                 {
-                    throw new InvalidOperationException($"RuntimeFBXImporter clip not found for {assetPath}");
+                    throw new InvalidOperationException($"AssimpFBXImporter clip not found for {assetPath}");
                 }
 
                 runtimeClipName = clip.name;
@@ -1729,3 +1730,4 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
     }
 }
 #endif
+

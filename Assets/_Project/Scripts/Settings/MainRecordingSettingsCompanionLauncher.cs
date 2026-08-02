@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if UNITY_EDITOR
+using System;
 using System.Diagnostics;
 using System.IO;
 using Fbx2Vmd.Settings;
@@ -6,7 +7,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Fbx2Vmd.Settings.EditorTools
+namespace Fbx2Vmd.Settings
 {
     public static class MainRecordingSettingsCompanionLauncher
     {
@@ -180,3 +181,4 @@ namespace Fbx2Vmd.Settings.EditorTools
         }
     }
 }
+#endif

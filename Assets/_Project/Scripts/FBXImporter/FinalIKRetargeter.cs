@@ -1,7 +1,7 @@
 using UnityEngine;
 using RootMotion.FinalIK;
 
-namespace Fbx2Vmd.Modules.FBXImporter
+namespace Fbx2Vmd.FBXImporter
 {
     public class FinalIKRetargeter : MonoBehaviour
     {

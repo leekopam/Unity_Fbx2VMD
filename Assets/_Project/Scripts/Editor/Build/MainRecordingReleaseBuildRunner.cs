@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
-namespace Fbx2Vmd.Build.EditorTools
+namespace Fbx2Vmd.Build
 {
     public static class MainRecordingReleaseBuildRunner
     {

@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Settings.EditorTools
+namespace Fbx2Vmd.Settings
 {
     [CustomEditor(typeof(RecordingSetting))]
     [CanEditMultipleObjects]

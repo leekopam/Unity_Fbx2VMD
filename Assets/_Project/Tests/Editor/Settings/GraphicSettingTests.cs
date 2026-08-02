@@ -15,7 +15,7 @@ namespace Tests.Editor.Settings
         private const string GraphicSettingTypeName = "Fbx2Vmd.Settings.GraphicSetting, Assembly-CSharp";
         private const string BackgroundColorSettingTypeName = "BackgroundColorSetting, Assembly-CSharp";
         private const string RecodingSettingTypeName = "RecordingSetting, Assembly-CSharp";
-        private const string FBXVmdPipelineTypeName = "Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline, Assembly-CSharp";
+        private const string FBXVmdPipelineTypeName = "Fbx2Vmd.FBXImporter.FBXVmdPipeline, Assembly-CSharp";
         private const string TextureProfileTypeName = "Fbx2Vmd.Settings.GraphicTextureImportProfile, Assembly-CSharp";
         private const string MaterialShaderProfileTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderProfile, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderUtility, Assembly-CSharp";

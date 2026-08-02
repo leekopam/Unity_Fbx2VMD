@@ -1,4 +1,4 @@
-namespace Fbx2Vmd.Settings.EditorTools
+namespace Fbx2Vmd.Settings
 {
     internal static class MainRecordingSettingsWindowRemoved
     {

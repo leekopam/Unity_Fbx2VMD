@@ -6,7 +6,7 @@ using UnityEditor;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     [CustomEditor(typeof(FBXVmdPipeline))]
     public class FBXVmdPipelineEditor : UnityEditor.Editor
@@ -70,8 +70,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                         directory = Directory.Exists(value) ? value : Path.GetDirectoryName(value) ?? "";
                     }
                 }
-                catch
+                catch (System.Exception ex)
                 {
+                    Debug.LogWarning($"[FBXVmdPipelineEditor] 디렉터리 확인 실패: {ex.Message}");
                     directory = "";
                 }
 
@@ -107,8 +108,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                         directory = Directory.Exists(value) ? value : Path.GetDirectoryName(value) ?? "";
                     }
                 }
-                catch
+                catch (System.Exception ex)
                 {
+                    Debug.LogWarning($"[FBXVmdPipelineEditor] 디렉터리 확인 실패: {ex.Message}");
                     directory = "";
                 }
 
@@ -129,7 +131,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return overridePath;
             }
 
-            string pyLauncher = @"C:\Windows\py.exe";
+            string pyLauncher = @"py.exe";
             if (File.Exists(pyLauncher))
             {
                 return pyLauncher;
@@ -157,9 +159,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     }
                 }
             }
-            catch
+            catch (System.Exception ex)
             {
-                // ignored
+                Debug.LogWarning($"[FBXVmdPipelineEditor] 프로젝트 PMM에서 디렉터리를 확인하지 못했습니다: {ex.Message}");
             }
 
             try
@@ -176,9 +178,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     return desktop;
                 }
             }
-            catch
+            catch (System.Exception ex)
             {
-                // ignored
+                Debug.LogWarning($"[FBXVmdPipelineEditor] MMD SaveFile 디렉터리를 확인하지 못했습니다: {ex.Message}");
             }
 
             return "";
@@ -293,7 +295,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogWarning($"Failed to stop process: {ex.Message}");
+                        Debug.LogWarning($"프로세스 중지 실패: {ex.Message}");
                     }
                 }
             }
@@ -318,13 +320,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
           {
             if (string.IsNullOrEmpty(projectPmm) || string.IsNullOrEmpty(motionVmd))
             {
-                Debug.LogError("External MMD: Project(.pmm) and Motion(.vmd) are required.");
+                Debug.LogError("External MMD: Project(.pmm)와 Motion(.vmd)이 필요합니다.");
                 return;
             }
 
             if (!skipRenderAvi && string.IsNullOrEmpty(outputAvi))
             {
-                Debug.LogError("External MMD: Output(.avi) is required unless Skip render AVI is enabled.");
+                Debug.LogError("External MMD: Skip render AVI가 활성화되지 않은 경우 Output(.avi)이 필요합니다.");
                 return;
             }
 
@@ -340,7 +342,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
 
             if (!File.Exists(cliScript))
             {
-                Debug.LogError($"External MMD: CLI script not found: {cliScript}");
+                Debug.LogError($"External MMD: CLI 스크립트를 찾을 수 없습니다: {cliScript}");
                 return;
             }
 
@@ -404,8 +406,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 {
                     mmdAutomationLastResultJson = mmdAutomationStdout.ToString().Trim();
                 }
-                catch
+                catch (System.Exception ex)
                 {
+                    Debug.LogWarning($"[FBXVmdPipelineEditor] MMD 자동화 stdout 읽기 실패: {ex.Message}");
                     mmdAutomationLastResultJson = "";
                 }
             };
@@ -423,12 +426,12 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 process.BeginErrorReadLine();
 
                 string outputLabel = skipRenderAvi ? "skip-render" : $"Output AVI: {outputAvi}";
-                Debug.Log($"External MMD: started automation (PID={process.Id}). {outputLabel}");
+                Debug.Log($"External MMD: 자동화 시작됨 (PID={process.Id}). {outputLabel}");
             }
             catch (Exception ex)
             {
                 mmdAutomationProcess = null;
-                Debug.LogError($"External MMD: failed to start process: {ex.Message}");
+                Debug.LogError($"External MMD: 프로세스 시작 실패: {ex.Message}");
             }
         }
 
@@ -479,8 +482,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return;
             }
 
-            DrawProperty("saveToImportFolder", "Import_FBX 폴더에 저장");
-            if (GetBool("saveToImportFolder"))
+            DrawProperty("_shouldSaveToImportFolder", "Import_FBX 폴더에 저장");
+            if (GetBool("_shouldSaveToImportFolder"))
             {
                 EditorGUILayout.HelpBox(
                     "Editor에서는 Assets/Resources/Import_FBX에 복사하고, 빌드에서는 persistentDataPath 아래 Import_FBX를 사용합니다.",
@@ -507,33 +510,33 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 EditorGUILayout.HelpBox("디버그용 표시입니다. 녹화 기준을 확인한 뒤에는 꺼두는 편이 좋습니다.", MessageType.Info);
             }
 
-            DrawProperty("useLegacyPoseSpaceFacingCorrection", "Legacy PoseSpace 방향 보정");
-            if (GetBool("useLegacyPoseSpaceFacingCorrection"))
+            DrawProperty("_shouldUseLegacyPoseSpaceFacingCorrection", "Legacy PoseSpace 방향 보정");
+            if (GetBool("_shouldUseLegacyPoseSpaceFacingCorrection"))
             {
                 EditorGUILayout.HelpBox(
                     "이전 수동 프로젝트와 같은 180도 방향 보정입니다. 현재 자동 경로의 카메라 정면 기준을 깨뜨릴 수 있어 비교/롤백용으로만 사용합니다.",
                     MessageType.Warning);
             }
 
-            DrawProperty("preserveFbxRootRotation", "FBX Root 회전 보존");
-            if (GetBool("preserveFbxRootRotation"))
+            DrawProperty("_shouldPreserveFbxRootRotation", "FBX Root 회전 보존");
+            if (GetBool("_shouldPreserveFbxRootRotation"))
             {
                 EditorGUILayout.HelpBox("Main_Auto가 Sub_Manual 직접 Animator 재생처럼 FBX body/root yaw를 그대로 따릅니다.", MessageType.Info);
             }
 
-            DrawProperty("useEditorHumanoidClipMuscleReference", "Editor Humanoid Muscle 기준 사용");
-            if (GetBool("useEditorHumanoidClipMuscleReference"))
+            DrawProperty("ShouldUseEditorHumanoidClipMuscleReference", "Editor Humanoid Muscle 기준 사용");
+            if (GetBool("ShouldUseEditorHumanoidClipMuscleReference"))
             {
                 EditorGUILayout.HelpBox(
                     "Editor 자동 경로에서는 Unity가 FBX에서 임포트한 Humanoid muscle curve를 기준으로 사용합니다. Runtime Assimp Ghost의 회전 curve가 수동 기준과 다르게 해석될 때 팔/상체 포즈 차이를 줄이는 경로입니다.",
                     MessageType.Info);
 
                 EditorGUI.indentLevel++;
-                DrawProperty("useEditorHumanoidRootTranslationReference", "Editor Humanoid RootT 이동 기준 사용");
-                DrawProperty("useManualAnimatorFingerPoseReference", "수동 Animator 손가락 기준 사용");
-                DrawProperty("useManualAnimatorBodyRotationReference", "수동 Animator bodyRotation 기준 사용");
-                DrawProperty("useManualAnimatorHipsLocalPositionReference", "수동 Animator Hips localPosition 기준 사용");
-                if (GetBool("useManualAnimatorHipsLocalPositionReference"))
+                DrawProperty("ShouldUseEditorHumanoidRootTranslationReference", "Editor Humanoid RootT 이동 기준 사용");
+                DrawProperty("ShouldUseManualAnimatorFingerPoseReference", "수동 Animator 손가락 기준 사용");
+                DrawProperty("ShouldUseManualAnimatorBodyRotationReference", "수동 Animator bodyRotation 기준 사용");
+                DrawProperty("ShouldUseManualAnimatorHipsLocalPositionReference", "수동 Animator Hips localPosition 기준 사용");
+                if (GetBool("ShouldUseManualAnimatorHipsLocalPositionReference"))
                 {
                     EditorGUILayout.HelpBox(
                         "Sub_Manual/testPrefab Animator의 Hips localPosition 경로를 Main_Auto target Hips에 선택 적용합니다. visual_body_arc_jitter A/B 검증 전용으로 사용합니다.",
@@ -541,21 +544,21 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     DrawProperty("manualAnimatorHipsLocalPositionWeight", "Hips localPosition 보정 강도");
                     DrawProperty("manualAnimatorHipsLocalPositionMaxOffset", "Hips localPosition 최대 보정");
                 }
-                DrawProperty("useManualAnimatorFootLocalRotationReference", "Lower-body localRotation runtime reference");
-                if (GetBool("useManualAnimatorFootLocalRotationReference"))
+                DrawProperty("ShouldUseManualAnimatorFootLocalRotationReference", "Lower-body localRotation runtime reference");
+                if (GetBool("ShouldUseManualAnimatorFootLocalRotationReference"))
                 {
                     DrawProperty("manualAnimatorFootLocalRotationReferenceWeight", "Lower-body localRotation reference weight");
                 }
-                DrawProperty("useManualAnimatorLowerBodySegmentDirectionReference", "Lower-body segment direction runtime reference");
-                if (GetBool("useManualAnimatorLowerBodySegmentDirectionReference"))
+                DrawProperty("ShouldUseManualAnimatorLowerBodySegmentDirectionReference", "Lower-body segment direction runtime reference");
+                if (GetBool("ShouldUseManualAnimatorLowerBodySegmentDirectionReference"))
                 {
                     DrawProperty("manualAnimatorLowerBodySegmentDirectionReferenceWeight", "Lower-body segment direction weight");
                     DrawProperty("manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle", "Lower-body segment direction max angle");
-                    DrawProperty("disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference", "Disable UpperLegToLowerLeg segment direction");
+                    DrawProperty("ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference", "Disable UpperLegToLowerLeg segment direction");
                     DrawProperty("manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle", "UpperLegToLowerLeg segment direction max angle override");
-                    DrawProperty("disableManualAnimatorLowerLegToFootSegmentDirectionReference", "Disable LowerLegToFoot segment direction");
+                    DrawProperty("ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference", "Disable LowerLegToFoot segment direction");
                     DrawProperty("manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle", "LowerLegToFoot segment direction max angle override");
-                    DrawProperty("disableManualAnimatorFootToToesSegmentDirectionReference", "Disable FootToToes segment direction");
+                    DrawProperty("ShouldDisableManualAnimatorFootToToesSegmentDirectionReference", "Disable FootToToes segment direction");
                     DrawProperty("manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle", "FootToToes segment direction max angle override");
                 }
                 DrawProperty("useManualAnimatorBipedIkFootPositionReference", "BipedIK foot position runtime reference");
@@ -564,7 +567,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     DrawProperty("manualAnimatorBipedIkFootPositionReferenceWeight", "BipedIK foot position reference weight");
                     DrawProperty("manualAnimatorBipedIkFootPositionReferenceMaxOffset", "BipedIK foot position max offset");
                 }
-                if (GetBool("useManualAnimatorFingerPoseReference"))
+                if (GetBool("ShouldUseManualAnimatorFingerPoseReference"))
                 {
                     EditorGUILayout.HelpBox(
                         "손가락은 Sub_Manual/testPrefab Animator가 같은 FBX clip을 평가한 HumanPose 값을 기준으로 덮어씁니다. 비워두면 기본 testPrefab과 TestAnimator1_Manual을 자동으로 찾습니다.",
@@ -618,10 +621,10 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return;
             }
 
-            DrawProperty("clampRetargetMusclesToHumanRange", "Muscle 기본 범위 제한");
-            DrawProperty("lockTargetHumanoidBonePositions", "Humanoid 본 길이 잠금");
-            DrawProperty("lockTargetLimbChildLocalPositions", "Limb 보조본 위치 잠금");
-            DrawProperty("lockTargetLimbChildLocalRotations", "Limb 보조본 회전 잠금");
+            DrawProperty("_shouldClampRetargetMusclesToHumanRange", "Muscle 기본 범위 제한");
+            DrawProperty("_shouldLockTargetHumanoidBonePositions", "Humanoid 본 길이 잠금");
+            DrawProperty("_shouldLockTargetLimbChildLocalPositions", "Limb 보조본 위치 잠금");
+            DrawProperty("_shouldLockTargetLimbChildLocalRotations", "Limb 보조본 회전 잠금");
             DrawProperty("attachTargetArmDeformationGuard", "Target 팔 변형 가드 자동 부착");
             if (GetBool("attachTargetArmDeformationGuard"))
             {
@@ -634,8 +637,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             }
 
             EditorGUILayout.Space(6f);
-            DrawProperty("enableAnimationRiggingArmTwistCorrection", "Animation Rigging 팔 Twist 보정");
-            if (GetBool("enableAnimationRiggingArmTwistCorrection"))
+            DrawProperty("_shouldEnableAnimationRiggingArmTwistCorrection", "Animation Rigging 팔 Twist 보정");
+            if (GetBool("_shouldEnableAnimationRiggingArmTwistCorrection"))
             {
                 EditorGUILayout.HelpBox("고스트 리타게팅 결과 위에 YYB 팔 twist 보조본만 보정합니다. 기존 Limb 보조본 회전 잠금은 rig가 제어하는 twist 본을 예외 처리합니다.", MessageType.Info);
                 EditorGUI.indentLevel++;
@@ -713,13 +716,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 EditorGUI.indentLevel--;
             }
 
-            if (GetBool("lockTargetHumanoidBonePositions"))
+            if (GetBool("_shouldLockTargetHumanoidBonePositions"))
             {
                 EditorGUILayout.HelpBox("SetHumanPose 이후 팔/다리 본 localPosition을 초기값으로 복구해 모델이 길게 늘어나거나 가늘어지는 변형을 막습니다.", MessageType.Info);
             }
 
-            DrawProperty("enableAnatomicalArmGuard", "팔 해부학적 안전장치");
-            if (GetBool("enableAnatomicalArmGuard"))
+            DrawProperty("_shouldEnableAnatomicalArmGuard", "팔 해부학적 안전장치");
+            if (GetBool("_shouldEnableAnatomicalArmGuard"))
             {
                 EditorGUI.indentLevel++;
                 DrawProperty("ArmStretchMuscleLimit", "팔 Stretch 허용치");
@@ -792,8 +795,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
 
             DrawProperty("HeightOffset", "높이 보정");
             DrawProperty("MovementScaleMultiplier", "보폭 비율");
-            DrawProperty("clampRetargetRootDeltaSpikes", "Root 순간이동 방지");
-            if (GetBool("clampRetargetRootDeltaSpikes"))
+            DrawProperty("_shouldClampRetargetRootDeltaSpikes", "Root 순간이동 방지");
+            if (GetBool("_shouldClampRetargetRootDeltaSpikes"))
             {
                 EditorGUI.indentLevel++;
                 DrawProperty("MaxRetargetRootDeltaPerFrame", "프레임당 Root 이동 제한");
@@ -808,7 +811,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 DrawProperty("MaxGroundingVerticalStepPerFrame", "프레임당 접지 보정 제한");
                 DrawProperty("GroundingSmoothing", "접지 보정 반영 비율");
                 DrawProperty("GroundingDeadZone", "접지 보정 데드존");
-                DrawProperty("FreezeRootYAfterInitialGrounding", "초기 접지 뒤 root Y 고정");
+                DrawProperty("_shouldFreezeRootYAfterInitialGrounding", "초기 접지 뒤 root Y 고정");
                 DrawProperty("rejectRendererGroundingOutliers", "renderer 접지 outlier 제외");
                 if (GetBool("rejectRendererGroundingOutliers"))
                 {
@@ -848,8 +851,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
 
             EditorGUILayout.Space(6f);
             EditorGUILayout.LabelField("엄지 해부학적 제한", EditorStyles.boldLabel);
-            DrawProperty("enableThumbAnatomicalGuard", "엄지 해부학적 안전장치");
-            if (GetBool("enableThumbAnatomicalGuard"))
+            DrawProperty("_shouldEnableThumbAnatomicalGuard", "엄지 해부학적 안전장치");
+            if (GetBool("_shouldEnableThumbAnatomicalGuard"))
             {
                 EditorGUI.indentLevel++;
                 DrawProperty("ThumbStretchMin", "엄지 굽힘 최소");
@@ -861,8 +864,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 EditorGUI.indentLevel--;
             }
 
-            DrawProperty("enableThumbLocalRotationGuard", "엄지 본 회전 안전장치");
-            if (GetBool("enableThumbLocalRotationGuard"))
+            DrawProperty("_shouldEnableThumbLocalRotationGuard", "엄지 본 회전 안전장치");
+            if (GetBool("_shouldEnableThumbLocalRotationGuard"))
             {
                 EditorGUI.indentLevel++;
                 DrawProperty("disableThumbLocalRotationGuardWithManualFingerReference", "Manual 기준 사용 시 localRotation 가드 끄기");
@@ -910,8 +913,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 EditorGUI.indentLevel--;
             }
 
-            DrawProperty("enableThumbVisualLengthGuard", "엄지 시각 길이 보정");
-            if (GetBool("enableThumbVisualLengthGuard"))
+            DrawProperty("_shouldEnableThumbVisualLengthGuard", "엄지 시각 길이 보정");
+            if (GetBool("_shouldEnableThumbVisualLengthGuard"))
             {
                 EditorGUI.indentLevel++;
                 DrawProperty("ThumbProjectionMinPalmNormal", "엄지 손바닥 앞쪽 최소 성분");
@@ -1035,8 +1038,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                             : Path.GetDirectoryName(property.stringValue) ?? "";
                     }
                 }
-                catch
+                catch (System.Exception ex)
                 {
+                    Debug.LogWarning($"[FBXVmdPipelineEditor] 디렉터리 확인 실패: {ex.Message}");
                     directory = "";
                 }
 

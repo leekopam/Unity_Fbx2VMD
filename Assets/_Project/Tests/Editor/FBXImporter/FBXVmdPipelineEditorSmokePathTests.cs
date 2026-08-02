@@ -1,5 +1,4 @@
-using Fbx2Vmd.Modules.FBXImporter;
-using Fbx2Vmd.Modules.FBXImporter.EditorTools;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -316,7 +315,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_CaptureOnlyModeWithoutEditorSmoke_When_DecidingRecordingMode_Then_SkipsVmdRecording()
         {
             bool shouldRecord = ShouldStartVmdRecordingAfterImport(
-                recordVmdAfterImport: false,
+                ShouldRecordVmdAfterImport: false,
                 editorSmokeRecordingOverrideActive: false);
 
             Assert.That(shouldRecord, Is.False);
@@ -326,7 +325,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_CaptureOnlyModeWithEditorSmoke_When_DecidingRecordingMode_Then_AllowsDiagnosticVmdRecording()
         {
             bool shouldRecord = ShouldStartVmdRecordingAfterImport(
-                recordVmdAfterImport: false,
+                ShouldRecordVmdAfterImport: false,
                 editorSmokeRecordingOverrideActive: true);
 
             Assert.That(shouldRecord, Is.True);
@@ -336,7 +335,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_VmdMode_When_DecidingRecordingMode_Then_StartsVmdRecording()
         {
             bool shouldRecord = ShouldStartVmdRecordingAfterImport(
-                recordVmdAfterImport: true,
+                ShouldRecordVmdAfterImport: true,
                 editorSmokeRecordingOverrideActive: false);
 
             Assert.That(shouldRecord, Is.True);
@@ -893,7 +892,7 @@ namespace Tests.Editor.FBXImporter
             return (bool)method.Invoke(null, new object[] { sourcePath, targetPath, dataPath });
         }
 
-        private static bool ShouldStartVmdRecordingAfterImport(bool recordVmdAfterImport, bool editorSmokeRecordingOverrideActive)
+        private static bool ShouldStartVmdRecordingAfterImport(bool ShouldRecordVmdAfterImport, bool editorSmokeRecordingOverrideActive)
         {
             MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
                 "ShouldStartVmdRecordingAfterImport",
@@ -904,7 +903,7 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a testable recording-mode decision helper.");
 
-            return (bool)method.Invoke(null, new object[] { recordVmdAfterImport, editorSmokeRecordingOverrideActive });
+            return (bool)method.Invoke(null, new object[] { ShouldRecordVmdAfterImport, editorSmokeRecordingOverrideActive });
         }
 
         private static bool ShouldApplyTargetIdlePoseGuardThisFrame(bool isProcessing, bool hasActiveRetargeter)

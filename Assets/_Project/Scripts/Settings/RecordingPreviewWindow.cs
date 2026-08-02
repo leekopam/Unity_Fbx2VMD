@@ -1,8 +1,9 @@
+#if UNITY_EDITOR
 using System;
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Settings.EditorTools
+namespace Fbx2Vmd.Settings
 {
     public sealed class RecordingPreviewWindow : EditorWindow
     {
@@ -356,3 +357,4 @@ namespace Fbx2Vmd.Settings.EditorTools
         }
     }
 }
+#endif

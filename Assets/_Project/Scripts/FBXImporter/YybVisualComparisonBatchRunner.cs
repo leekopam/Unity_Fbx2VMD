@@ -1,4 +1,5 @@
-﻿#if UNITY_EDITOR
+﻿
+#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -10,7 +11,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     [InitializeOnLoad]
     public static class YybVisualComparisonBatchRunner
@@ -219,29 +220,29 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public string comparisonFrameIndexPath;
             public string comparisonSessionId;
             public bool hasFBXVmdPipelineEffectiveSettings;
-            public bool useManualAnimatorFootLocalRotationReference;
+            public bool ShouldUseManualAnimatorFootLocalRotationReference;
             public float manualAnimatorFootLocalRotationReferenceWeight;
-            public bool useManualAnimatorFullBodyPoseReference;
+            public bool ShouldUseManualAnimatorFullBodyPoseReference;
             public float manualAnimatorFullBodyPoseReferenceWeight;
-            public bool manualAnimatorFullBodyPoseExcludeLowerBodyMuscles;
-            public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
-            public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly;
+            public bool ShouldExcludeManualAnimatorFullBodyLowerMuscles;
+            public bool ShouldApplyManualAnimatorFullBodyLowerMusclesOnly;
+            public bool ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly;
             public bool manualAnimatorFullBodyPoseRightArmMusclesOnly;
             public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly;
             public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly;
             public float manualAnimatorFullBodyPoseFrameGateStart;
             public float manualAnimatorFullBodyPoseFrameGateEnd;
-            public bool useSetHumanPoseRightLegTwistOutputReference;
+            public bool ShouldUseSetHumanPoseRightLegTwistOutputReference;
             public float setHumanPoseRightLegTwistOutputReferenceWeight;
             public float setHumanPoseRightLegTwistOutputReferenceMaxDelta;
-            public bool useManualAnimatorBodyRotationReference;
+            public bool ShouldUseManualAnimatorBodyRotationReference;
             public float manualAnimatorBodyRotationReferenceWeight;
-            public bool useManualAnimatorLowerBodySegmentDirectionReference;
+            public bool ShouldUseManualAnimatorLowerBodySegmentDirectionReference;
             public float manualAnimatorLowerBodySegmentDirectionReferenceWeight;
             public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-            public bool disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
+            public bool ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
             public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-            public bool disableManualAnimatorLowerLegToFootSegmentDirectionReference;
+            public bool ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference;
             public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
             public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
@@ -250,9 +251,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-            public bool disableManualAnimatorFootToToesSegmentDirectionReference;
+            public bool ShouldDisableManualAnimatorFootToToesSegmentDirectionReference;
             public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-            public bool useManualAnimatorFootHipsAlignedResidualYawReference;
+            public bool ShouldUseManualAnimatorFootHipsAlignedResidualYawReference;
             public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
             public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
             public bool usePostSetHumanPoseRightEndpointPositionReference;
@@ -262,7 +263,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
             public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool postSetHumanPoseEndpointPositionUseLeftSide;
+            public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
             public bool usePreSetHumanPoseRightEndpointPositionReference;
             public float preSetHumanPoseRightEndpointPositionReferenceWeight;
             public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
@@ -270,13 +271,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
             public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool preSetHumanPoseEndpointPositionUseLeftSide;
+            public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
             public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            public bool preSetHumanPoseEndpointPositionInvertBodyPositionX;
-            public bool preSetHumanPoseEndpointPositionInvertBodyPositionZ;
+            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
+            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
             public bool usePostSetHumanPoseRightFootEvaluatorXzReference;
             public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-            public bool useManualAnimatorBodyPositionXzReference;
+            public bool ShouldUseManualAnimatorBodyPositionXzReference;
             public float manualAnimatorBodyPositionXzReferenceWeight;
             public float manualAnimatorBodyPositionXzReferenceMaxOffset;
             public float manualAnimatorBodyPositionXzReferenceFrameGateStart;
@@ -332,29 +333,29 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public string comparisonFrameIndexPath;
             public string comparisonSessionId;
             public bool hasFBXVmdPipelineEffectiveSettings;
-            public bool useManualAnimatorFootLocalRotationReference;
+            public bool ShouldUseManualAnimatorFootLocalRotationReference;
             public float manualAnimatorFootLocalRotationReferenceWeight;
-            public bool useManualAnimatorFullBodyPoseReference;
+            public bool ShouldUseManualAnimatorFullBodyPoseReference;
             public float manualAnimatorFullBodyPoseReferenceWeight;
-            public bool manualAnimatorFullBodyPoseExcludeLowerBodyMuscles;
-            public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
-            public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly;
+            public bool ShouldExcludeManualAnimatorFullBodyLowerMuscles;
+            public bool ShouldApplyManualAnimatorFullBodyLowerMusclesOnly;
+            public bool ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly;
             public bool manualAnimatorFullBodyPoseRightArmMusclesOnly;
             public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly;
             public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly;
             public float manualAnimatorFullBodyPoseFrameGateStart;
             public float manualAnimatorFullBodyPoseFrameGateEnd;
-            public bool useSetHumanPoseRightLegTwistOutputReference;
+            public bool ShouldUseSetHumanPoseRightLegTwistOutputReference;
             public float setHumanPoseRightLegTwistOutputReferenceWeight;
             public float setHumanPoseRightLegTwistOutputReferenceMaxDelta;
-            public bool useManualAnimatorBodyRotationReference;
+            public bool ShouldUseManualAnimatorBodyRotationReference;
             public float manualAnimatorBodyRotationReferenceWeight;
-            public bool useManualAnimatorLowerBodySegmentDirectionReference;
+            public bool ShouldUseManualAnimatorLowerBodySegmentDirectionReference;
             public float manualAnimatorLowerBodySegmentDirectionReferenceWeight;
             public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-            public bool disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
+            public bool ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
             public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-            public bool disableManualAnimatorLowerLegToFootSegmentDirectionReference;
+            public bool ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference;
             public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
             public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
@@ -363,9 +364,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
             public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-            public bool disableManualAnimatorFootToToesSegmentDirectionReference;
+            public bool ShouldDisableManualAnimatorFootToToesSegmentDirectionReference;
             public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-            public bool useManualAnimatorFootHipsAlignedResidualYawReference;
+            public bool ShouldUseManualAnimatorFootHipsAlignedResidualYawReference;
             public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
             public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
             public bool usePostSetHumanPoseRightEndpointPositionReference;
@@ -375,7 +376,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
             public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool postSetHumanPoseEndpointPositionUseLeftSide;
+            public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
             public bool usePreSetHumanPoseRightEndpointPositionReference;
             public float preSetHumanPoseRightEndpointPositionReferenceWeight;
             public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
@@ -383,13 +384,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
             public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool preSetHumanPoseEndpointPositionUseLeftSide;
+            public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
             public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            public bool preSetHumanPoseEndpointPositionInvertBodyPositionX;
-            public bool preSetHumanPoseEndpointPositionInvertBodyPositionZ;
+            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
+            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
             public bool usePostSetHumanPoseRightFootEvaluatorXzReference;
             public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-            public bool useManualAnimatorBodyPositionXzReference;
+            public bool ShouldUseManualAnimatorBodyPositionXzReference;
             public float manualAnimatorBodyPositionXzReferenceWeight;
             public float manualAnimatorBodyPositionXzReferenceMaxOffset;
             public float manualAnimatorBodyPositionXzReferenceFrameGateStart;
@@ -523,17 +524,17 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
             public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool postSetHumanPoseEndpointPositionUseLeftSide;
+            public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
             public float preSetHumanPoseRightEndpointPositionReferenceWeight;
             public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
             public float preSetHumanPoseRightEndpointPositionReferencePositiveZScale;
             public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
             public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool preSetHumanPoseEndpointPositionUseLeftSide;
+            public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
             public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            public bool preSetHumanPoseEndpointPositionInvertBodyPositionX;
-            public bool preSetHumanPoseEndpointPositionInvertBodyPositionZ;
+            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
+            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
             public bool usePostSetHumanPoseRightFootEvaluatorXzReference;
             public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
             public float manualAnimatorBipedIkFootPositionReferenceWeight;
@@ -1327,7 +1328,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = GetCommandLineFloat(
                 "-yybComparePostSetHumanPoseRightEndpointPositionFrameGateEnd",
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            bool postSetHumanPoseEndpointPositionUseLeftSide =
+            bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition =
                 GetCommandLineBool("-yybComparePostSetHumanPoseEndpointPositionUseLeftSide", false);
             bool enablePreSetHumanPoseRightEndpointPositionRuntimeOverride =
                 GetCommandLineBool("-yybComparePreSetHumanPoseRightEndpointPositionEnabled", false);
@@ -1349,13 +1350,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = GetCommandLineFloat(
                 "-yybComparePreSetHumanPoseRightEndpointPositionFrameGateEnd",
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            bool preSetHumanPoseEndpointPositionUseLeftSide =
+            bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition =
                 GetCommandLineBool("-yybComparePreSetHumanPoseEndpointPositionUseLeftSide", false);
             bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
                 GetCommandLineBool("-yybComparePreSetHumanPoseEndpointPositionUseGhostCurrentBasis", false);
-            bool preSetHumanPoseEndpointPositionInvertBodyPositionX =
+            bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX =
                 GetCommandLineBool("-yybComparePreSetHumanPoseEndpointPositionInvertBodyPositionX", false);
-            bool preSetHumanPoseEndpointPositionInvertBodyPositionZ =
+            bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ =
                 GetCommandLineBool("-yybComparePreSetHumanPoseEndpointPositionInvertBodyPositionZ", false);
             bool usePostSetHumanPoseRightFootEvaluatorXzReference = GetCommandLineBool(
                 "-yybComparePostSetHumanPoseRightFootEvaluatorXzReferenceEnabled",
@@ -1531,7 +1532,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                postSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPostSetHumanPoseEndpointPosition,
                 enablePreSetHumanPoseRightEndpointPositionRuntimeOverride,
                 preSetHumanPoseRightEndpointPositionReferenceWeight,
                 preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
@@ -1539,10 +1540,10 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                preSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPreSetHumanPoseEndpointPosition,
                 preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                preSetHumanPoseEndpointPositionInvertBodyPositionZ,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyX,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ,
                 usePostSetHumanPoseRightFootEvaluatorXzReference,
                 postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
                 enableManualAnimatorBipedIkFootPositionRuntimeOverride,
@@ -1797,7 +1798,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
             float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-            bool postSetHumanPoseEndpointPositionUseLeftSide = false,
+            bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = false,
             bool enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = false,
             float preSetHumanPoseRightEndpointPositionReferenceWeight =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight,
@@ -1811,10 +1812,10 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
             float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-            bool preSetHumanPoseEndpointPositionUseLeftSide = false,
+            bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = false,
             bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false,
-            bool preSetHumanPoseEndpointPositionInvertBodyPositionX = false,
-            bool preSetHumanPoseEndpointPositionInvertBodyPositionZ = false,
+            bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX = false,
+            bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = false,
             bool usePostSetHumanPoseRightFootEvaluatorXzReference = false,
             float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
                 DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
@@ -1961,7 +1962,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                postSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPostSetHumanPoseEndpointPosition,
                 enablePreSetHumanPoseRightEndpointPositionRuntimeOverride,
                 preSetHumanPoseRightEndpointPositionReferenceWeight,
                 preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
@@ -1969,10 +1970,10 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                preSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPreSetHumanPoseEndpointPosition,
                 preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                preSetHumanPoseEndpointPositionInvertBodyPositionZ,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyX,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ,
                 usePostSetHumanPoseRightFootEvaluatorXzReference,
                 postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
                 enableManualAnimatorBipedIkFootPositionRuntimeOverride,
@@ -2155,7 +2156,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
             float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-            bool postSetHumanPoseEndpointPositionUseLeftSide = false,
+            bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = false,
             bool enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = false,
             float preSetHumanPoseRightEndpointPositionReferenceWeight =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight,
@@ -2169,10 +2170,10 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
             float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-            bool preSetHumanPoseEndpointPositionUseLeftSide = false,
+            bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = false,
             bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false,
-            bool preSetHumanPoseEndpointPositionInvertBodyPositionX = false,
-            bool preSetHumanPoseEndpointPositionInvertBodyPositionZ = false,
+            bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX = false,
+            bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = false,
             bool usePostSetHumanPoseRightFootEvaluatorXzReference = false,
             float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
                 DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
@@ -2411,7 +2412,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(
                 0f,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            _postSetHumanPoseEndpointPositionUseLeftSide = postSetHumanPoseEndpointPositionUseLeftSide;
+            _postSetHumanPoseEndpointPositionUseLeftSide = ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
             _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride =
                 enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
             _preSetHumanPoseRightEndpointPositionReferenceWeight = Mathf.Clamp01(
@@ -2429,13 +2430,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(
                 0f,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            _preSetHumanPoseEndpointPositionUseLeftSide = preSetHumanPoseEndpointPositionUseLeftSide;
+            _preSetHumanPoseEndpointPositionUseLeftSide = ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
             _preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
                 preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
             _preSetHumanPoseEndpointPositionInvertBodyPositionX =
-                preSetHumanPoseEndpointPositionInvertBodyPositionX;
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
             _preSetHumanPoseEndpointPositionInvertBodyPositionZ =
-                preSetHumanPoseEndpointPositionInvertBodyPositionZ;
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
             _usePostSetHumanPoseRightFootEvaluatorXzReference =
                 usePostSetHumanPoseRightFootEvaluatorXzReference;
             _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = Mathf.Max(
@@ -2662,7 +2663,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
 
             if (!Application.isBatchMode && RequestRuntimeDiagnosticScriptRefresh())
             {
-                Debug.Log("[YybVisualComparisonBatchRunner] runtime diagnostics script refresh 대기 중입니다.");
+                Debug.Log("[YybVisualComparisonBatchRunner] 런타임 진단 스크립트 새로고침 대기 중.");
                 AppendRunnerTrace("runtime diagnostics script refresh requested; waiting before first job");
                 EditorApplication.delayCall += ContinueStartRunAfterRefresh;
                 return;
@@ -3435,7 +3436,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useManualAnimatorFootLocalRotationReference = enabled;
+            fileManager.ShouldUseManualAnimatorFootLocalRotationReference = enabled;
             fileManager.manualAnimatorFootLocalRotationReferenceWeight = enabled ? 1f : 0f;
             return true;
         }
@@ -3479,11 +3480,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useManualAnimatorFullBodyPoseReference = enabled;
+            fileManager.ShouldUseManualAnimatorFullBodyPoseReference = enabled;
             fileManager.manualAnimatorFullBodyPoseReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles = enabled && excludeLowerBodyMuscles;
-            fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly = enabled && lowerBodyMusclesOnly;
-            fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly = enabled && legTwistMusclesOnly;
+            fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles = enabled && excludeLowerBodyMuscles;
+            fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly = enabled && lowerBodyMusclesOnly;
+            fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = enabled && legTwistMusclesOnly;
             fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly = enabled && rightArmMusclesOnly;
             fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly = enabled && leftArmMusclesOnly;
             fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly =
@@ -3504,7 +3505,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useSetHumanPoseRightLegTwistOutputReference = enabled;
+            fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference = enabled;
             fileManager.setHumanPoseRightLegTwistOutputReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
             fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta = Mathf.Max(0f, maxDelta);
             return true;
@@ -3528,7 +3529,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useManualAnimatorBodyRotationReference = enabled;
+            fileManager.ShouldUseManualAnimatorBodyRotationReference = enabled;
             fileManager.manualAnimatorBodyRotationReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
             return true;
         }
@@ -3598,7 +3599,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.enableAnatomicalArmGuard = true;
+            SetSerializedBoolean(fileManager, "_shouldEnableAnatomicalArmGuard", true);
             fileManager.clampRetargetArmStretchMuscles = enabled;
             fileManager.targetGuardClampAnatomicalArmMuscles = enabled;
             fileManager.targetGuardClampArmStretchMuscles = enabled;
@@ -4023,14 +4024,14 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useManualAnimatorLowerBodySegmentDirectionReference = enabled;
+            fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = enabled;
             fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
             fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = Mathf.Max(0f, maxAngle);
-            fileManager.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
+            fileManager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
                 enabled && disableUpperLegToLowerLeg;
             fileManager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
                 Mathf.Max(0f, upperLegToLowerLegMaxAngle);
-            fileManager.disableManualAnimatorLowerLegToFootSegmentDirectionReference =
+            fileManager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference =
                 enabled && disableLowerLegToFoot;
             fileManager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
                 Mathf.Max(0f, lowerLegToFootMaxAngle);
@@ -4048,7 +4049,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 Mathf.Max(0f, rightLowerLegToFootFrameGateEnd);
             fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
                 Mathf.Clamp01(rightLowerLegToFootEndpointBlendWeight);
-            fileManager.disableManualAnimatorFootToToesSegmentDirectionReference = enabled && disableFootToToes;
+            fileManager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = enabled && disableFootToToes;
             fileManager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = Mathf.Max(0f, footToToesMaxAngle);
             return true;
         }
@@ -4084,11 +4085,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
+            fileManager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
                 _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
             fileManager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
                 Mathf.Max(0f, _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle);
-            fileManager.disableManualAnimatorLowerLegToFootSegmentDirectionReference =
+            fileManager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference =
                 _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
             fileManager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
                 Mathf.Max(0f, _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle);
@@ -4106,7 +4107,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 Mathf.Max(0f, _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
             fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
                 Mathf.Clamp01(_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
-            fileManager.disableManualAnimatorFootToToesSegmentDirectionReference =
+            fileManager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference =
                 _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
             fileManager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
                 Mathf.Max(0f, _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
@@ -4124,7 +4125,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useManualAnimatorFootHipsAlignedResidualYawReference = enabled;
+            fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = enabled;
             fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
             fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = Mathf.Max(0f, maxAngle);
             return true;
@@ -4267,7 +4268,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(toesBlendWeight);
             fileManager.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = Mathf.Max(0f, frameGateStart);
             fileManager.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(0f, frameGateEnd);
-            fileManager.postSetHumanPoseEndpointPositionUseLeftSide = enabled && useLeftSide;
+            fileManager.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = enabled && useLeftSide;
             fileManager.usePostSetHumanPoseRightFootEvaluatorXzReference =
                 enabled && evaluatorXzReferenceEnabled;
             fileManager.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
@@ -4301,10 +4302,10 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             fileManager.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(toesBlendWeight);
             fileManager.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = Mathf.Max(0f, frameGateStart);
             fileManager.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(0f, frameGateEnd);
-            fileManager.preSetHumanPoseEndpointPositionUseLeftSide = enabled && useLeftSide;
+            fileManager.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = enabled && useLeftSide;
             fileManager.preSetHumanPoseEndpointPositionUseGhostCurrentBasis = enabled && useGhostCurrentBasis;
-            fileManager.preSetHumanPoseEndpointPositionInvertBodyPositionX = enabled && invertBodyPositionX;
-            fileManager.preSetHumanPoseEndpointPositionInvertBodyPositionZ = enabled && invertBodyPositionZ;
+            fileManager.ShouldInvertPreSetHumanPoseEndpointPositionBodyX = enabled && invertBodyPositionX;
+            fileManager.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = enabled && invertBodyPositionZ;
             return true;
         }
 
@@ -4345,7 +4346,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useManualAnimatorHipsLocalPositionReference = enabled;
+            fileManager.ShouldUseManualAnimatorHipsLocalPositionReference = enabled;
             fileManager.manualAnimatorHipsLocalPositionWeight = enabled ? Mathf.Clamp01(weight) : 0f;
             fileManager.manualAnimatorHipsLocalPositionMaxOffset = Mathf.Max(0f, maxOffset);
             return true;
@@ -4367,7 +4368,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useManualAnimatorBodyPositionXzReference = enabled;
+            fileManager.ShouldUseManualAnimatorBodyPositionXzReference = enabled;
             fileManager.manualAnimatorBodyPositionXzReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
             fileManager.manualAnimatorBodyPositionXzReferenceMaxOffset = Mathf.Max(0f, maxOffset);
             fileManager.manualAnimatorBodyPositionXzReferenceFrameGateStart = Mathf.Max(0f, frameGateStart);
@@ -4408,8 +4409,21 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.lockTargetHumanoidBonePositions = enabled;
+            SetSerializedBoolean(fileManager, "_shouldLockTargetHumanoidBonePositions", enabled);
             return true;
+        }
+
+        private static void SetSerializedBoolean(FBXVmdPipeline fileManager, string propertyName, bool value)
+        {
+            var serializedObject = new SerializedObject(fileManager);
+            SerializedProperty property = serializedObject.FindProperty(propertyName);
+            if (property == null)
+            {
+                throw new InvalidOperationException($"FBXVmdPipeline 직렬화 bool 필드를 찾을 수 없습니다: {propertyName}");
+            }
+
+            property.boolValue = value;
+            serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static bool ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(
@@ -4421,7 +4435,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return false;
             }
 
-            fileManager.useRetargetBodyPositionXZRootMotion = enabled;
+            fileManager.ShouldUseRetargetBodyPositionXZRootMotion = enabled;
             return true;
         }
 
@@ -4846,20 +4860,20 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             }
 
             result.hasFBXVmdPipelineEffectiveSettings = true;
-            result.useManualAnimatorFootLocalRotationReference =
-                fileManager.useManualAnimatorFootLocalRotationReference;
+            result.ShouldUseManualAnimatorFootLocalRotationReference =
+                fileManager.ShouldUseManualAnimatorFootLocalRotationReference;
             result.manualAnimatorFootLocalRotationReferenceWeight =
                 fileManager.manualAnimatorFootLocalRotationReferenceWeight;
-            result.useManualAnimatorFullBodyPoseReference =
-                fileManager.useManualAnimatorFullBodyPoseReference;
+            result.ShouldUseManualAnimatorFullBodyPoseReference =
+                fileManager.ShouldUseManualAnimatorFullBodyPoseReference;
             result.manualAnimatorFullBodyPoseReferenceWeight =
                 fileManager.manualAnimatorFullBodyPoseReferenceWeight;
-            result.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles =
-                fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles;
-            result.manualAnimatorFullBodyPoseLowerBodyMusclesOnly =
-                fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly;
-            result.manualAnimatorFullBodyPoseLegTwistMusclesOnly =
-                fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly;
+            result.ShouldExcludeManualAnimatorFullBodyLowerMuscles =
+                fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles;
+            result.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly =
+                fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly;
+            result.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly =
+                fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly;
             result.manualAnimatorFullBodyPoseRightArmMusclesOnly =
                 fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly;
             result.manualAnimatorFullBodyPoseLeftArmMusclesOnly =
@@ -4870,26 +4884,26 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 fileManager.manualAnimatorFullBodyPoseFrameGateStart;
             result.manualAnimatorFullBodyPoseFrameGateEnd =
                 fileManager.manualAnimatorFullBodyPoseFrameGateEnd;
-            result.useSetHumanPoseRightLegTwistOutputReference =
-                fileManager.useSetHumanPoseRightLegTwistOutputReference;
+            result.ShouldUseSetHumanPoseRightLegTwistOutputReference =
+                fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference;
             result.setHumanPoseRightLegTwistOutputReferenceWeight =
                 fileManager.setHumanPoseRightLegTwistOutputReferenceWeight;
             result.setHumanPoseRightLegTwistOutputReferenceMaxDelta =
                 fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta;
-            result.useManualAnimatorBodyRotationReference = fileManager.useManualAnimatorBodyRotationReference;
+            result.ShouldUseManualAnimatorBodyRotationReference = fileManager.ShouldUseManualAnimatorBodyRotationReference;
             result.manualAnimatorBodyRotationReferenceWeight = fileManager.manualAnimatorBodyRotationReferenceWeight;
-            result.useManualAnimatorLowerBodySegmentDirectionReference =
-                fileManager.useManualAnimatorLowerBodySegmentDirectionReference;
+            result.ShouldUseManualAnimatorLowerBodySegmentDirectionReference =
+                fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference;
             result.manualAnimatorLowerBodySegmentDirectionReferenceWeight =
                 fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight;
             result.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle =
                 fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-            result.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
-                fileManager.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
+            result.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
+                fileManager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
             result.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
                 fileManager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-            result.disableManualAnimatorLowerLegToFootSegmentDirectionReference =
-                fileManager.disableManualAnimatorLowerLegToFootSegmentDirectionReference;
+            result.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference =
+                fileManager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference;
             result.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
                 fileManager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
             result.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
@@ -4906,12 +4920,12 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
             result.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
                 fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-            result.disableManualAnimatorFootToToesSegmentDirectionReference =
-                fileManager.disableManualAnimatorFootToToesSegmentDirectionReference;
+            result.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference =
+                fileManager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference;
             result.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
                 fileManager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-            result.useManualAnimatorFootHipsAlignedResidualYawReference =
-                fileManager.useManualAnimatorFootHipsAlignedResidualYawReference;
+            result.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference =
+                fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference;
             result.manualAnimatorFootHipsAlignedResidualYawReferenceWeight =
                 fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
             result.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle =
@@ -4930,8 +4944,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 fileManager.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             result.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 fileManager.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            result.postSetHumanPoseEndpointPositionUseLeftSide =
-                fileManager.postSetHumanPoseEndpointPositionUseLeftSide;
+            result.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition =
+                fileManager.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
             result.usePreSetHumanPoseRightEndpointPositionReference =
                 fileManager.usePreSetHumanPoseRightEndpointPositionReference;
             result.preSetHumanPoseRightEndpointPositionReferenceWeight =
@@ -4946,20 +4960,20 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 fileManager.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             result.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 fileManager.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            result.preSetHumanPoseEndpointPositionUseLeftSide =
-                fileManager.preSetHumanPoseEndpointPositionUseLeftSide;
+            result.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition =
+                fileManager.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
             result.preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
                 fileManager.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            result.preSetHumanPoseEndpointPositionInvertBodyPositionX =
-                fileManager.preSetHumanPoseEndpointPositionInvertBodyPositionX;
-            result.preSetHumanPoseEndpointPositionInvertBodyPositionZ =
-                fileManager.preSetHumanPoseEndpointPositionInvertBodyPositionZ;
+            result.ShouldInvertPreSetHumanPoseEndpointPositionBodyX =
+                fileManager.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
+            result.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ =
+                fileManager.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
             result.usePostSetHumanPoseRightFootEvaluatorXzReference =
                 fileManager.usePostSetHumanPoseRightFootEvaluatorXzReference;
             result.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
                 fileManager.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-            result.useManualAnimatorBodyPositionXzReference =
-                fileManager.useManualAnimatorBodyPositionXzReference;
+            result.ShouldUseManualAnimatorBodyPositionXzReference =
+                fileManager.ShouldUseManualAnimatorBodyPositionXzReference;
             result.manualAnimatorBodyPositionXzReferenceWeight =
                 fileManager.manualAnimatorBodyPositionXzReferenceWeight;
             result.manualAnimatorBodyPositionXzReferenceMaxOffset =
@@ -5539,7 +5553,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                     _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                postSetHumanPoseEndpointPositionUseLeftSide =
+                ShouldUseLeftSideForPostSetHumanPoseEndpointPosition =
                     _postSetHumanPoseEndpointPositionUseLeftSide,
                 preSetHumanPoseRightEndpointPositionReferenceWeight =
                     _preSetHumanPoseRightEndpointPositionReferenceWeight,
@@ -5553,13 +5567,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                     _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                preSetHumanPoseEndpointPositionUseLeftSide =
+                ShouldUseLeftSideForPreSetHumanPoseEndpointPosition =
                     _preSetHumanPoseEndpointPositionUseLeftSide,
                 preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
                     _preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                preSetHumanPoseEndpointPositionInvertBodyPositionX =
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyX =
                     _preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                preSetHumanPoseEndpointPositionInvertBodyPositionZ =
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ =
                     _preSetHumanPoseEndpointPositionInvertBodyPositionZ,
                 usePostSetHumanPoseRightFootEvaluatorXzReference =
                     _usePostSetHumanPoseRightFootEvaluatorXzReference,
@@ -5631,8 +5645,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[YybVisualComparisonBatchRunner] 상태 복구 실패: {ex.Message}\n{ex.StackTrace}");
-                RecordFailure($"상태 복구 실패: {ex.Message}");
+                Debug.LogError($"[YybVisualComparisonBatchRunner] 상태 복원 실패: {ex.Message}\n{ex.StackTrace}");
+                RecordFailure($"상태 복원 실패: {ex.Message}");
                 ClearPersistedState();
                 _isRunning = false;
                 HumanoidSampleCode.SetEditorAutoStartSuppressed(false);
@@ -5932,7 +5946,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 state.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
             _postSetHumanPoseEndpointPositionUseLeftSide =
-                state.postSetHumanPoseEndpointPositionUseLeftSide;
+                state.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
             _preSetHumanPoseRightEndpointPositionReferenceWeight = Mathf.Clamp01(
                 NormalizeFiniteFloat(
                     state.preSetHumanPoseRightEndpointPositionReferenceWeight,
@@ -5955,13 +5969,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 state.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
             _preSetHumanPoseEndpointPositionUseLeftSide =
-                state.preSetHumanPoseEndpointPositionUseLeftSide;
+                state.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
             _preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
                 state.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
             _preSetHumanPoseEndpointPositionInvertBodyPositionX =
-                state.preSetHumanPoseEndpointPositionInvertBodyPositionX;
+                state.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
             _preSetHumanPoseEndpointPositionInvertBodyPositionZ =
-                state.preSetHumanPoseEndpointPositionInvertBodyPositionZ;
+                state.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
             _usePostSetHumanPoseRightFootEvaluatorXzReference =
                 state.usePostSetHumanPoseRightFootEvaluatorXzReference;
             _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = NormalizePositiveFloat(
@@ -6122,7 +6136,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             }
             else if (_activeJob != null)
             {
-                EditorApplication.delayCall += () => { QueuePlayModeEntryForActiveJob("RestoreActiveJob"); };
+                EditorApplication.delayCall += RestoreActiveJobEntry;
             }
             else if (PendingJobs.Count > 0)
             {
@@ -6132,6 +6146,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             {
                 FinalizeRun();
             }
+        }
+
+        private static void RestoreActiveJobEntry()
+        {
+            QueuePlayModeEntryForActiveJob("RestoreActiveJob");
         }
 
         private static void RecoverFromMissingActiveJob(string reason)
@@ -6175,9 +6194,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     path,
                     $"{DateTime.Now.ToString("o", CultureInfo.InvariantCulture)} {message}{Environment.NewLine}");
             }
-            catch
+            catch (System.Exception ex)
             {
-                // Ignore trace write failures. The runner must keep going even if diagnostics cannot be written.
+                Debug.LogWarning($"[YybVisualComparisonBatchRunner] Runner 트레이스 쓰기 실패: {ex.Message}");
             }
         }
 
@@ -6268,16 +6287,16 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 comparisonFrameIndexPath = result.comparisonFrameIndexPath,
                 comparisonSessionId = result.comparisonSessionId,
                 hasFBXVmdPipelineEffectiveSettings = result.hasFBXVmdPipelineEffectiveSettings,
-                useManualAnimatorFootLocalRotationReference = result.useManualAnimatorFootLocalRotationReference,
+                ShouldUseManualAnimatorFootLocalRotationReference = result.ShouldUseManualAnimatorFootLocalRotationReference,
                 manualAnimatorFootLocalRotationReferenceWeight = result.manualAnimatorFootLocalRotationReferenceWeight,
-                useManualAnimatorFullBodyPoseReference = result.useManualAnimatorFullBodyPoseReference,
+                ShouldUseManualAnimatorFullBodyPoseReference = result.ShouldUseManualAnimatorFullBodyPoseReference,
                 manualAnimatorFullBodyPoseReferenceWeight = result.manualAnimatorFullBodyPoseReferenceWeight,
-                manualAnimatorFullBodyPoseExcludeLowerBodyMuscles =
-                    result.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles,
-                manualAnimatorFullBodyPoseLowerBodyMusclesOnly =
-                    result.manualAnimatorFullBodyPoseLowerBodyMusclesOnly,
-                manualAnimatorFullBodyPoseLegTwistMusclesOnly =
-                    result.manualAnimatorFullBodyPoseLegTwistMusclesOnly,
+                ShouldExcludeManualAnimatorFullBodyLowerMuscles =
+                    result.ShouldExcludeManualAnimatorFullBodyLowerMuscles,
+                ShouldApplyManualAnimatorFullBodyLowerMusclesOnly =
+                    result.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly,
+                ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly =
+                    result.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly,
                 manualAnimatorFullBodyPoseRightArmMusclesOnly =
                     result.manualAnimatorFullBodyPoseRightArmMusclesOnly,
                 manualAnimatorFullBodyPoseLeftArmMusclesOnly =
@@ -6288,26 +6307,26 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.manualAnimatorFullBodyPoseFrameGateStart,
                 manualAnimatorFullBodyPoseFrameGateEnd =
                     result.manualAnimatorFullBodyPoseFrameGateEnd,
-                useSetHumanPoseRightLegTwistOutputReference =
-                    result.useSetHumanPoseRightLegTwistOutputReference,
+                ShouldUseSetHumanPoseRightLegTwistOutputReference =
+                    result.ShouldUseSetHumanPoseRightLegTwistOutputReference,
                 setHumanPoseRightLegTwistOutputReferenceWeight =
                     result.setHumanPoseRightLegTwistOutputReferenceWeight,
                 setHumanPoseRightLegTwistOutputReferenceMaxDelta =
                     result.setHumanPoseRightLegTwistOutputReferenceMaxDelta,
-                useManualAnimatorBodyRotationReference = result.useManualAnimatorBodyRotationReference,
+                ShouldUseManualAnimatorBodyRotationReference = result.ShouldUseManualAnimatorBodyRotationReference,
                 manualAnimatorBodyRotationReferenceWeight = result.manualAnimatorBodyRotationReferenceWeight,
-                useManualAnimatorLowerBodySegmentDirectionReference =
-                    result.useManualAnimatorLowerBodySegmentDirectionReference,
+                ShouldUseManualAnimatorLowerBodySegmentDirectionReference =
+                    result.ShouldUseManualAnimatorLowerBodySegmentDirectionReference,
                 manualAnimatorLowerBodySegmentDirectionReferenceWeight =
                     result.manualAnimatorLowerBodySegmentDirectionReferenceWeight,
                 manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
-                    result.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference,
+                ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
+                    result.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference,
                 manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                disableManualAnimatorLowerLegToFootSegmentDirectionReference =
-                    result.disableManualAnimatorLowerLegToFootSegmentDirectionReference,
+                ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference =
+                    result.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference,
                 manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
                 manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
@@ -6324,12 +6343,12 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
                 manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
                     result.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                disableManualAnimatorFootToToesSegmentDirectionReference =
-                    result.disableManualAnimatorFootToToesSegmentDirectionReference,
+                ShouldDisableManualAnimatorFootToToesSegmentDirectionReference =
+                    result.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference,
                 manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle,
-                useManualAnimatorFootHipsAlignedResidualYawReference =
-                    result.useManualAnimatorFootHipsAlignedResidualYawReference,
+                ShouldUseManualAnimatorFootHipsAlignedResidualYawReference =
+                    result.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference,
                 manualAnimatorFootHipsAlignedResidualYawReferenceWeight =
                     result.manualAnimatorFootHipsAlignedResidualYawReferenceWeight,
                 manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle =
@@ -6348,8 +6367,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                     result.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                postSetHumanPoseEndpointPositionUseLeftSide =
-                    result.postSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPostSetHumanPoseEndpointPosition =
+                    result.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition,
                 usePreSetHumanPoseRightEndpointPositionReference =
                     result.usePreSetHumanPoseRightEndpointPositionReference,
                 preSetHumanPoseRightEndpointPositionReferenceWeight =
@@ -6364,20 +6383,20 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                     result.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                preSetHumanPoseEndpointPositionUseLeftSide =
-                    result.preSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPreSetHumanPoseEndpointPosition =
+                    result.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition,
                 preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
                     result.preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                preSetHumanPoseEndpointPositionInvertBodyPositionX =
-                    result.preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                preSetHumanPoseEndpointPositionInvertBodyPositionZ =
-                    result.preSetHumanPoseEndpointPositionInvertBodyPositionZ,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyX =
+                    result.ShouldInvertPreSetHumanPoseEndpointPositionBodyX,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ =
+                    result.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ,
                 usePostSetHumanPoseRightFootEvaluatorXzReference =
                     result.usePostSetHumanPoseRightFootEvaluatorXzReference,
                 postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
                     result.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
-                useManualAnimatorBodyPositionXzReference =
-                    result.useManualAnimatorBodyPositionXzReference,
+                ShouldUseManualAnimatorBodyPositionXzReference =
+                    result.ShouldUseManualAnimatorBodyPositionXzReference,
                 manualAnimatorBodyPositionXzReferenceWeight =
                     result.manualAnimatorBodyPositionXzReferenceWeight,
                 manualAnimatorBodyPositionXzReferenceMaxOffset =
@@ -6442,16 +6461,16 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 comparisonFrameIndexPath = result.comparisonFrameIndexPath,
                 comparisonSessionId = result.comparisonSessionId,
                 hasFBXVmdPipelineEffectiveSettings = result.hasFBXVmdPipelineEffectiveSettings,
-                useManualAnimatorFootLocalRotationReference = result.useManualAnimatorFootLocalRotationReference,
+                ShouldUseManualAnimatorFootLocalRotationReference = result.ShouldUseManualAnimatorFootLocalRotationReference,
                 manualAnimatorFootLocalRotationReferenceWeight = result.manualAnimatorFootLocalRotationReferenceWeight,
-                useManualAnimatorFullBodyPoseReference = result.useManualAnimatorFullBodyPoseReference,
+                ShouldUseManualAnimatorFullBodyPoseReference = result.ShouldUseManualAnimatorFullBodyPoseReference,
                 manualAnimatorFullBodyPoseReferenceWeight = result.manualAnimatorFullBodyPoseReferenceWeight,
-                manualAnimatorFullBodyPoseExcludeLowerBodyMuscles =
-                    result.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles,
-                manualAnimatorFullBodyPoseLowerBodyMusclesOnly =
-                    result.manualAnimatorFullBodyPoseLowerBodyMusclesOnly,
-                manualAnimatorFullBodyPoseLegTwistMusclesOnly =
-                    result.manualAnimatorFullBodyPoseLegTwistMusclesOnly,
+                ShouldExcludeManualAnimatorFullBodyLowerMuscles =
+                    result.ShouldExcludeManualAnimatorFullBodyLowerMuscles,
+                ShouldApplyManualAnimatorFullBodyLowerMusclesOnly =
+                    result.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly,
+                ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly =
+                    result.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly,
                 manualAnimatorFullBodyPoseRightArmMusclesOnly =
                     result.manualAnimatorFullBodyPoseRightArmMusclesOnly,
                 manualAnimatorFullBodyPoseLeftArmMusclesOnly =
@@ -6462,26 +6481,26 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.manualAnimatorFullBodyPoseFrameGateStart,
                 manualAnimatorFullBodyPoseFrameGateEnd =
                     result.manualAnimatorFullBodyPoseFrameGateEnd,
-                useSetHumanPoseRightLegTwistOutputReference =
-                    result.useSetHumanPoseRightLegTwistOutputReference,
+                ShouldUseSetHumanPoseRightLegTwistOutputReference =
+                    result.ShouldUseSetHumanPoseRightLegTwistOutputReference,
                 setHumanPoseRightLegTwistOutputReferenceWeight =
                     result.setHumanPoseRightLegTwistOutputReferenceWeight,
                 setHumanPoseRightLegTwistOutputReferenceMaxDelta =
                     result.setHumanPoseRightLegTwistOutputReferenceMaxDelta,
-                useManualAnimatorBodyRotationReference = result.useManualAnimatorBodyRotationReference,
+                ShouldUseManualAnimatorBodyRotationReference = result.ShouldUseManualAnimatorBodyRotationReference,
                 manualAnimatorBodyRotationReferenceWeight = result.manualAnimatorBodyRotationReferenceWeight,
-                useManualAnimatorLowerBodySegmentDirectionReference =
-                    result.useManualAnimatorLowerBodySegmentDirectionReference,
+                ShouldUseManualAnimatorLowerBodySegmentDirectionReference =
+                    result.ShouldUseManualAnimatorLowerBodySegmentDirectionReference,
                 manualAnimatorLowerBodySegmentDirectionReferenceWeight =
                     result.manualAnimatorLowerBodySegmentDirectionReferenceWeight,
                 manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
-                    result.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference,
+                ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
+                    result.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference,
                 manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                disableManualAnimatorLowerLegToFootSegmentDirectionReference =
-                    result.disableManualAnimatorLowerLegToFootSegmentDirectionReference,
+                ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference =
+                    result.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference,
                 manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
                 manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
@@ -6498,12 +6517,12 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
                 manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
                     result.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                disableManualAnimatorFootToToesSegmentDirectionReference =
-                    result.disableManualAnimatorFootToToesSegmentDirectionReference,
+                ShouldDisableManualAnimatorFootToToesSegmentDirectionReference =
+                    result.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference,
                 manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
                     result.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle,
-                useManualAnimatorFootHipsAlignedResidualYawReference =
-                    result.useManualAnimatorFootHipsAlignedResidualYawReference,
+                ShouldUseManualAnimatorFootHipsAlignedResidualYawReference =
+                    result.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference,
                 manualAnimatorFootHipsAlignedResidualYawReferenceWeight =
                     result.manualAnimatorFootHipsAlignedResidualYawReferenceWeight,
                 manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle =
@@ -6522,8 +6541,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                     result.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                postSetHumanPoseEndpointPositionUseLeftSide =
-                    result.postSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPostSetHumanPoseEndpointPosition =
+                    result.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition,
                 usePreSetHumanPoseRightEndpointPositionReference =
                     result.usePreSetHumanPoseRightEndpointPositionReference,
                 preSetHumanPoseRightEndpointPositionReferenceWeight =
@@ -6538,20 +6557,20 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     result.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
                 preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                     result.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                preSetHumanPoseEndpointPositionUseLeftSide =
-                    result.preSetHumanPoseEndpointPositionUseLeftSide,
+                ShouldUseLeftSideForPreSetHumanPoseEndpointPosition =
+                    result.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition,
                 preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
                     result.preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                preSetHumanPoseEndpointPositionInvertBodyPositionX =
-                    result.preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                preSetHumanPoseEndpointPositionInvertBodyPositionZ =
-                    result.preSetHumanPoseEndpointPositionInvertBodyPositionZ,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyX =
+                    result.ShouldInvertPreSetHumanPoseEndpointPositionBodyX,
+                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ =
+                    result.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ,
                 usePostSetHumanPoseRightFootEvaluatorXzReference =
                     result.usePostSetHumanPoseRightFootEvaluatorXzReference,
                 postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
                     result.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
-                useManualAnimatorBodyPositionXzReference =
-                    result.useManualAnimatorBodyPositionXzReference,
+                ShouldUseManualAnimatorBodyPositionXzReference =
+                    result.ShouldUseManualAnimatorBodyPositionXzReference,
                 manualAnimatorBodyPositionXzReferenceWeight =
                     result.manualAnimatorBodyPositionXzReferenceWeight,
                 manualAnimatorBodyPositionXzReferenceMaxOffset =
@@ -7047,11 +7066,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 {
                     builder.AppendLine(
                         $"| {EscapeMarkdown(result.jobDisplayName)} | " +
-                        $"{FormatEnabledWeight(result.useManualAnimatorFootLocalRotationReference, result.manualAnimatorFootLocalRotationReferenceWeight)} | " +
-                        $"{FormatEnabledWeight(result.useManualAnimatorFullBodyPoseReference, result.manualAnimatorFullBodyPoseReferenceWeight)} | " +
-                        $"{FormatEnabledWeight(result.useManualAnimatorBodyRotationReference, result.manualAnimatorBodyRotationReferenceWeight)} | " +
-                        $"{FormatEnabledWeightCap(result.useManualAnimatorLowerBodySegmentDirectionReference, result.manualAnimatorLowerBodySegmentDirectionReferenceWeight, result.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle)} | " +
-                        $"{FormatEnabledWeightCap(result.useManualAnimatorFootHipsAlignedResidualYawReference, result.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, result.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle)} | " +
+                        $"{FormatEnabledWeight(result.ShouldUseManualAnimatorFootLocalRotationReference, result.manualAnimatorFootLocalRotationReferenceWeight)} | " +
+                        $"{FormatEnabledWeight(result.ShouldUseManualAnimatorFullBodyPoseReference, result.manualAnimatorFullBodyPoseReferenceWeight)} | " +
+                        $"{FormatEnabledWeight(result.ShouldUseManualAnimatorBodyRotationReference, result.manualAnimatorBodyRotationReferenceWeight)} | " +
+                        $"{FormatEnabledWeightCap(result.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, result.manualAnimatorLowerBodySegmentDirectionReferenceWeight, result.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle)} | " +
+                        $"{FormatEnabledWeightCap(result.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, result.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, result.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle)} | " +
                         $"{FormatEnabledWeightCapScaleBlendGate(result.usePostSetHumanPoseRightEndpointPositionReference, result.postSetHumanPoseRightEndpointPositionReferenceWeight, result.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, result.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, result.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, result.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart, result.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd)} | " +
                         $"{FormatEnabledWeightCapScaleBlendGate(result.usePreSetHumanPoseRightEndpointPositionReference, result.preSetHumanPoseRightEndpointPositionReferenceWeight, result.preSetHumanPoseRightEndpointPositionReferenceMaxOffset, result.preSetHumanPoseRightEndpointPositionReferencePositiveZScale, result.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, result.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart, result.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd)} | " +
                         $"{FormatEvaluatorXzReferenceSettings(result)} | " +
@@ -10480,16 +10499,15 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             }
 
             string dataPath = Application.dataPath;
-            if (!string.IsNullOrWhiteSpace(dataPath))
+            DirectoryInfo projectRoot = string.IsNullOrWhiteSpace(dataPath)
+                ? null
+                : Directory.GetParent(dataPath);
+            if (projectRoot == null)
             {
-                DirectoryInfo parent = Directory.GetParent(dataPath);
-                if (parent != null)
-                {
-                    return parent.FullName;
-                }
+                throw new InvalidOperationException("Unity 프로젝트 루트를 확인할 수 없습니다.");
             }
 
-            return Directory.GetCurrentDirectory();
+            return projectRoot.FullName;
         }
 
         private static int ParseInvariantInt(string value)
@@ -12045,3 +12063,4 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
     }
 }
 #endif
+

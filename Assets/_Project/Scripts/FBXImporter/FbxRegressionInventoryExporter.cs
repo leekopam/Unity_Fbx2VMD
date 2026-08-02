@@ -1,4 +1,5 @@
-﻿#if UNITY_EDITOR
+﻿
+#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -8,7 +9,7 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     public static class FbxRegressionInventoryExporter
     {
@@ -91,11 +92,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 WriteSummary(summaryPath, rows);
                 WriteResultJson(resultPath, inputAssetDirectory, rows);
 
-                Debug.Log($"[FbxRegressionInventory] Exported {rows.Count} rows: {csvPath}");
+                Debug.Log($"[FbxRegressionInventory] {rows.Count}행 내보내기 완료: {csvPath}");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[FbxRegressionInventory] Export failed: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogError($"[FbxRegressionInventory] 내보내기 실패: {ex.Message}\n{ex.StackTrace}");
                 if (Application.isBatchMode)
                 {
                     EditorApplication.Exit(1);
@@ -171,7 +172,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                             $"{clip.name}:{clip.firstFrame.ToString("0.###", CultureInfo.InvariantCulture)}-{clip.lastFrame.ToString("0.###", CultureInfo.InvariantCulture)}"));
                 }
 
-                RuntimeFBXImporter.AnimationInspectionReport runtimeReport = RuntimeFBXImporter.InspectAnimationFile(filePath);
+                AssimpFBXImporter.AnimationInspectionReport runtimeReport = AssimpFBXImporter.InspectAnimationFile(filePath);
                 row.RuntimeAnimationImportSucceeded = runtimeReport.ImportSucceeded;
                 row.RuntimeAnimationCount = runtimeReport.AnimationCount;
                 row.RuntimeNodeAnimationChannelCount = runtimeReport.NodeAnimationChannelCount;
@@ -730,3 +731,4 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
     }
 }
 #endif
+

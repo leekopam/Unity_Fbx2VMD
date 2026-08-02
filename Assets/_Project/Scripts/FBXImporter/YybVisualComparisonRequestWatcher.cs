@@ -1,11 +1,12 @@
-﻿#if UNITY_EDITOR
+﻿
+#if UNITY_EDITOR
 using System;
 using System.Globalization;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     [InitializeOnLoad]
     public static class YybVisualComparisonRequestWatcher
@@ -137,7 +138,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     });
                 }
             }
-            Debug.Log("[YybVisualComparisonRequestWatcher] loaded");
+            Debug.Log("[YybVisualComparisonRequestWatcher] 로드됨");
         }
 
         [Serializable]
@@ -403,7 +404,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             RequestEnvelope request;
             try
             {
-                Debug.Log("[YybVisualComparisonRequestWatcher] request detected");
+                Debug.Log("[YybVisualComparisonRequestWatcher] 요청 감지됨");
                 request = JsonUtility.FromJson<RequestEnvelope>(File.ReadAllText(RequestPath));
             }
             catch (Exception ex)
@@ -780,7 +781,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: NormalizePositiveFloat(
                         request.post_set_human_pose_right_endpoint_position_frame_gate_end,
                         DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd),
-                    postSetHumanPoseEndpointPositionUseLeftSide:
+                    ShouldUseLeftSideForPostSetHumanPoseEndpointPosition:
                         request.post_set_human_pose_endpoint_position_use_left_side,
                     enablePreSetHumanPoseRightEndpointPositionRuntimeOverride:
                         request.pre_set_human_pose_right_endpoint_position_enabled,
@@ -805,13 +806,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: NormalizePositiveFloat(
                         request.pre_set_human_pose_right_endpoint_position_frame_gate_end,
                         DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd),
-                    preSetHumanPoseEndpointPositionUseLeftSide:
+                    ShouldUseLeftSideForPreSetHumanPoseEndpointPosition:
                         request.pre_set_human_pose_endpoint_position_use_left_side,
                     preSetHumanPoseEndpointPositionUseGhostCurrentBasis:
                         request.pre_set_human_pose_endpoint_position_use_ghost_current_basis,
-                    preSetHumanPoseEndpointPositionInvertBodyPositionX:
+                    ShouldInvertPreSetHumanPoseEndpointPositionBodyX:
                         request.pre_set_human_pose_endpoint_position_invert_body_position_x,
-                    preSetHumanPoseEndpointPositionInvertBodyPositionZ:
+                    ShouldInvertPreSetHumanPoseEndpointPositionBodyZ:
                         request.pre_set_human_pose_endpoint_position_invert_body_position_z,
                     usePostSetHumanPoseRightFootEvaluatorXzReference:
                         request.post_set_human_pose_right_foot_evaluator_xz_reference_enabled,
@@ -1029,4 +1030,5 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
     }
 }
 #endif
+
 

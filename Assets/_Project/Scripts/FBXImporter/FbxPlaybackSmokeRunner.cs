@@ -1,17 +1,18 @@
-﻿#if UNITY_EDITOR
+﻿
+#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     [InitializeOnLoad]
     public static class FbxPlaybackSmokeRunner
@@ -709,7 +710,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
 
             string segmentLabel = GetSegmentLabel(segment);
-            Debug.Log($"[FbxPlaybackSmokeRunner] 전체 Import_FBX smoke 시작: segment={segmentLabel}, {_batchTotalCount} files, {SmokeDurationSeconds:F0}s cap");
+            Debug.Log($"[FbxPlaybackSmokeRunner] Import_FBX 전체 smoke 시작됨: segment={segmentLabel}, {_batchTotalCount} files, {SmokeDurationSeconds:F0}s cap");
             StartNextBatchSmoke();
         }
 
@@ -770,13 +771,13 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
         {
             if (fileManager == null)
             {
-                Debug.LogError("[FbxPlaybackSmokeRunner] FBXVmdPipeline가 없어 smoke를 시작하지 못했습니다.");
+                Debug.LogError("[FbxPlaybackSmokeRunner] FBXVmdPipeline을 찾을 수 없습니다, smoke를 시작할 수 없습니다");
                 return false;
             }
 
             if (fileManager.IsProcessing)
             {
-                Debug.LogWarning($"[FbxPlaybackSmokeRunner] FBXVmdPipeline가 처리 중이라 smoke를 시작하지 않았습니다: {fbxFileName}");
+                Debug.LogWarning($"[FbxPlaybackSmokeRunner] FBXVmdPipeline이 사용 중입니다, smoke 시작 안 됨: {fbxFileName}");
                 return false;
             }
 
@@ -801,7 +802,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 string sampleSummary = sampleTimesOverride != null && sampleTimesOverride.Length > 0
                     ? string.Join("/", sampleTimesOverride.Select(time => time.ToString("0.###")))
                     : "default";
-                Debug.Log($"[FbxPlaybackSmokeRunner] {fbxFileName} smoke 시작: mode={mode}, segment={segmentLabel}, {safeDuration:F1}s, {targetFrameCount} frames, fingerCloseups={enableFingerCloseups}, samples={sampleSummary}");
+                Debug.Log($"[FbxPlaybackSmokeRunner] {fbxFileName} smoke 시작됨: mode={mode}, segment={segmentLabel}, {safeDuration:F1}s, {targetFrameCount} frames, fingerCloseups={enableFingerCloseups}, samples={sampleSummary}");
             }
 
             return started;
@@ -881,11 +882,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
 
             if (result.Success)
             {
-                Debug.Log($"[FbxPlaybackSmokeRunner] single smoke 성공: mode={_singleSmokeMode}, {resultLabel}{evidenceSummary}");
+                Debug.Log($"[FbxPlaybackSmokeRunner] 단일 smoke 성공: mode={_singleSmokeMode}, {resultLabel}{evidenceSummary}");
             }
             else
             {
-                Debug.LogError($"[FbxPlaybackSmokeRunner] single smoke 실패: mode={_singleSmokeMode}, {resultLabel}{evidenceSummary}");
+                Debug.LogError($"[FbxPlaybackSmokeRunner] 단일 smoke 실패: mode={_singleSmokeMode}, {resultLabel}{evidenceSummary}");
             }
 
             if (!string.IsNullOrEmpty(_activeAutomationRequestId))
@@ -1124,8 +1125,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     TracePath,
                     $"{DateTime.Now.ToString("o", CultureInfo.InvariantCulture)} {message}{Environment.NewLine}");
             }
-            catch
+            catch (System.Exception ex)
             {
+                Debug.LogWarning($"[FbxPlaybackSmokeRunner] 트레이스 쓰기 실패: {ex.Message}");
             }
         }
 
@@ -1149,8 +1151,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                     File.Delete(RequestPath);
                 }
             }
-            catch
+            catch (System.Exception ex)
             {
+                Debug.LogWarning($"[FbxPlaybackSmokeRunner] 요청 파일 삭제 실패: {ex.Message}");
             }
         }
 
@@ -1188,7 +1191,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             }
 
             errorMessage = "현재 Play Mode 씬에서 FBXVmdPipeline를 찾지 못했습니다.";
-            Debug.LogWarning($"[FbxPlaybackSmokeRunner] FBXVmdPipeline 탐색 실패: {BuildMainAutoRuntimeSummary()}, thumbReference[{BuildRetargeterThumbReferenceSummary(null)}]");
+            Debug.LogWarning($"[FbxPlaybackSmokeRunner] FBXVmdPipeline 조회 실패: {BuildMainAutoRuntimeSummary()}, thumbReference[{BuildRetargeterThumbReferenceSummary(null)}]");
             if (interactive)
             {
                 EditorUtility.DisplayDialog("FBX Smoke", $"{errorMessage} 콘솔 로그를 확인하세요.", "확인");
@@ -1422,7 +1425,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 $"go={GetHierarchyPath(retargeter.transform)}, " +
                 $"targetAnimator={(targetAnimator != null ? GetHierarchyPath(targetAnimator.transform) : "<none>")}, " +
                 $"fileManagerMatch={fileManagerTargetMatch}, " +
-                $"manualFingerConfig={ReadBoolMember(retargeterType, retargeter, "useManualAnimatorFingerPoseReference")}, " +
+                $"manualFingerConfig={ReadBoolMember(retargeterType, retargeter, "ShouldUseManualAnimatorFingerPoseReference")}, " +
                 $"thumbLocalRefConfig={ReadBoolMember(retargeterType, retargeter, "useManualAnimatorThumbLocalRotationReference")}, " +
                 $"preserveThumbMuscles={ReadBoolMember(retargeterType, retargeter, "preserveManualFingerReferenceThumbMuscles")}, " +
                 $"editorFingerRuntime={ReadBoolMember(retargeterType, retargeter, "_useEditorFingerPoseReference")}, " +
@@ -1472,3 +1475,4 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
     }
 }
 #endif
+

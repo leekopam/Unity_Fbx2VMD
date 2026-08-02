@@ -1,6 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 
 namespace Tests.Editor.FBXImporter
 {

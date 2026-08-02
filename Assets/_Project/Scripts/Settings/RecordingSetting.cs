@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using Fbx2Vmd.Settings;
 using UnityEngine;
 using UnityEngine.UI;

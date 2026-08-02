@@ -1,4 +1,5 @@
-﻿#if UNITY_EDITOR
+﻿
+#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -7,7 +8,7 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     public static class FbxReferenceHipsLocalPositionProbeRunner
     {
@@ -425,3 +426,4 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
     }
 }
 #endif
+

@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace Fbx2Vmd.Modules.FBXImporter
+namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
     /// Play 진입과 FBX 선택 전 대기 상태에서 타깃 캐릭터의 Idle 자세를 유지하는 Guard.

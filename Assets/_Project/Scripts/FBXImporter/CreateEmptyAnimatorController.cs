@@ -1,9 +1,10 @@
+#if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.Animations;
 using System.IO;
 
-namespace Fbx2Vmd.Modules.FBXImporter.Editor
+namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
     /// EmptyAnimatorController와 EmptyClip을 자동으로 생성하는 Editor 스크립트
@@ -35,12 +36,12 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
                     "EmptyAnimatorController 생성",
                     "EmptyAnimatorController와 EmptyClip이 이미 존재합니다.\n덮어쓰시겠습니까?",
                     "덮어쓰기",
-                    "취소"
+                    "Cancel"
                 );
                 
                 if (!overwrite)
                 {
-                    Debug.Log("[CreateEmptyAnimatorController] 사용자가 취소했습니다.");
+                    Debug.Log("[CreateEmptyAnimatorController] 사용자가 취소했습니다");
                     return;
                 }
                 
@@ -56,7 +57,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
             emptyClip.legacy = false;
             
             AssetDatabase.CreateAsset(emptyClip, CLIP_PATH);
-            Debug.Log($"[CreateEmptyAnimatorController] ✅ EmptyClip 생성: {CLIP_PATH}");
+            Debug.Log($"[CreateEmptyAnimatorController] EmptyClip 생성됨: {CLIP_PATH}");
             
             // 4. AnimatorController 생성
             AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(CONTROLLER_PATH);
@@ -78,8 +79,8 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
             AssetDatabase.Refresh();
             
             Debug.Log("[CreateEmptyAnimatorController] ========================================");
-            Debug.Log("[CreateEmptyAnimatorController] ✅ EmptyAnimatorController 생성 완료!");
-            Debug.Log($"[CreateEmptyAnimatorController]    경로: {CONTROLLER_PATH}");
+            Debug.Log("[CreateEmptyAnimatorController] EmptyAnimatorController 생성됨");
+            Debug.Log($"[CreateEmptyAnimatorController]    Path: {CONTROLLER_PATH}");
             Debug.Log("[CreateEmptyAnimatorController]    State: EmptyState (Default)");
             Debug.Log($"[CreateEmptyAnimatorController]    Motion: EmptyClip");
             Debug.Log("[CreateEmptyAnimatorController] ========================================");
@@ -99,11 +100,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
             if (controller == null)
             {
                 EditorUtility.DisplayDialog(
-                    "검증 실패",
+                    "Validation failed",
                     "EmptyAnimatorController를 찾을 수 없습니다!\n\n'Tools > Ghost Retargeting > Create Empty Animator Controller'를 실행하세요.",
                     "확인"
                 );
-                Debug.LogError("[VerifyController] ❌ EmptyAnimatorController를 찾을 수 없습니다!");
+                Debug.LogError("[VerifyController] EmptyAnimatorController를 찾을 수 없습니다");
                 return;
             }
             
@@ -112,11 +113,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
             if (animController == null)
             {
                 EditorUtility.DisplayDialog(
-                    "검증 실패",
+                    "Validation failed",
                     "로드된 Controller가 AnimatorController가 아닙니다.",
                     "확인"
                 );
-                Debug.LogError("[VerifyController] ❌ AnimatorController 타입 오류!");
+                Debug.LogError("[VerifyController] AnimatorController 타입 오류");
                 return;
             }
             
@@ -138,7 +139,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
                             "EmptyState가 있지만 Motion이 할당되지 않았습니다.\n\nEmptyClip을 할당해야 합니다.",
                             "확인"
                         );
-                        Debug.LogWarning("[VerifyController] ⚠️ EmptyState의 Motion이 null입니다!");
+                        Debug.LogWarning("[VerifyController] EmptyState Motion이 null입니다");
                         return;
                     }
                     
@@ -149,7 +150,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
                             $"EmptyState의 Motion이 EmptyClip이 아닙니다.\n현재 Motion: {state.state.motion.name}",
                             "확인"
                         );
-                        Debug.LogWarning($"[VerifyController] ⚠️ Motion 이름 불일치: {state.state.motion.name}");
+                        Debug.LogWarning($"[VerifyController] Motion 이름 불일치: {state.state.motion.name}");
                         return;
                     }
                     
@@ -161,7 +162,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
                             "EmptyState가 Default State로 설정되지 않았습니다.",
                             "확인"
                         );
-                        Debug.LogWarning("[VerifyController] ⚠️ EmptyState가 Default State가 아닙니다!");
+                        Debug.LogWarning("[VerifyController] EmptyState가 기본 상태가 아닙니다");
                         return;
                     }
                     
@@ -172,11 +173,11 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
             if (!hasEmptyState)
             {
                 EditorUtility.DisplayDialog(
-                    "검증 실패",
+                    "Validation failed",
                     "EmptyState를 찾을 수 없습니다!\n\n'Tools > Ghost Retargeting > Create Empty Animator Controller'를 실행하세요.",
                     "확인"
                 );
-                Debug.LogError("[VerifyController] ❌ EmptyState를 찾을 수 없습니다!");
+                Debug.LogError("[VerifyController] EmptyState를 찾을 수 없습니다");
                 return;
             }
             
@@ -188,8 +189,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.Editor
             );
             
             Debug.Log("[VerifyController] ========================================");
-            Debug.Log("[VerifyController] ✅ EmptyAnimatorController 검증 성공!");
+            Debug.Log("[VerifyController] EmptyAnimatorController 검증 성공");
             Debug.Log("[VerifyController] ========================================");
         }
     }
 }
+#endif

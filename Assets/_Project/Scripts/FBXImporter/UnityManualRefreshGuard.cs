@@ -1,3 +1,4 @@
+
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
@@ -5,7 +6,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
+namespace Fbx2Vmd.FBXImporter
 {
     public static class UnityManualRefreshGuard
     {
@@ -55,7 +56,7 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
             }
 
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            Debug.Log($"[UnityManualRefreshGuard] refresh requested: reason={reason}, assets={assetPaths.Count}");
+            Debug.Log($"[UnityManualRefreshGuard] 새로고침 요청됨: reason={reason}, assets={assetPaths.Count}");
             return EditorApplication.isCompiling || EditorApplication.isUpdating;
         }
 
@@ -79,8 +80,9 @@ namespace Fbx2Vmd.Modules.FBXImporter.EditorTools
                 return;
             }
 
-            Debug.Log("[UnityManualRefreshGuard] refresh settled; check Console for compile/import errors.");
+            Debug.Log("[UnityManualRefreshGuard] 새로고침 완료; 컴파일/임포트 오류는 Console을 확인하세요.");
         }
     }
 }
 #endif
+

@@ -1,5 +1,5 @@
 using System;
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using UnityEngine;
 
 namespace Fbx2Vmd.Settings

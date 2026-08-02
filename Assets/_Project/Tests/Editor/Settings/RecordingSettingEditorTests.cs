@@ -3,10 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using Fbx2Vmd.Modules.FBXImporter;
-using Fbx2Vmd.Modules.FileSystem;
+using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.FileSystem;
 using Fbx2Vmd.Settings;
-using Fbx2Vmd.Settings.EditorTools;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -68,7 +67,7 @@ namespace Tests.Editor.Settings
 
             try
             {
-                var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline>();
+                var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
                 var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
@@ -100,7 +99,7 @@ namespace Tests.Editor.Settings
 
             try
             {
-                var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline>();
+                var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
                 var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
@@ -136,7 +135,7 @@ namespace Tests.Editor.Settings
             {
                 File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
 
-                var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline>();
+                var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
                 var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
                 SetField(recodingSetting, "lastAppliedSharedSettingsFbxPath", tempFbxPath);

@@ -1,4 +1,4 @@
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -21,7 +21,7 @@ namespace Tests.Editor.FBXImporter
 
             try
             {
-                runtime = new RuntimeFBXImporter().ImportSynchronouslyForEditorDiagnostics(SampleFbxPath);
+                runtime = new AssimpFBXImporter().ImportSynchronouslyForEditorDiagnostics(SampleFbxPath);
                 Assert.That(runtime, Is.Not.Null);
 
                 Bounds referenceBounds = CalculateCombinedRendererBounds(reference);
@@ -57,7 +57,7 @@ namespace Tests.Editor.FBXImporter
 
             try
             {
-                runtime = new RuntimeFBXImporter().ImportSynchronouslyForEditorDiagnostics(SampleFbxPath);
+                runtime = new AssimpFBXImporter().ImportSynchronouslyForEditorDiagnostics(SampleFbxPath);
                 Assert.That(runtime, Is.Not.Null);
 
                 Bounds referenceBounds = CalculateCombinedBakedVertexBounds(reference);
@@ -93,7 +93,7 @@ namespace Tests.Editor.FBXImporter
 
             try
             {
-                runtime = new RuntimeFBXImporter().ImportSynchronouslyForEditorDiagnostics(SampleFbxPath);
+                runtime = new AssimpFBXImporter().ImportSynchronouslyForEditorDiagnostics(SampleFbxPath);
                 Assert.That(runtime, Is.Not.Null);
 
                 Material[] referenceMaterials = GetRendererMaterials(reference);

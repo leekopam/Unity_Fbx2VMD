@@ -3,7 +3,7 @@ using System.IO;
 
 namespace Fbx2Vmd.FBXImporter
 {
-    public static class RuntimeFbxMaterialResolver
+    public static class FbxMaterialResolver
     {
         private static readonly string[] TextureCandidateDirectories =
         {

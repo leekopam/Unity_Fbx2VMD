@@ -5,12 +5,12 @@ using System.IO;
 using System.Runtime.InteropServices;
 using Assimp;
 
-namespace Fbx2Vmd.Modules.FBXImporter
+namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
     /// 런타임에서 Assimp 라이브러리를 사용하여 FBX 파일을 임포트하는 서비스
     /// </summary>
-    public class RuntimeFBXImporter
+    public class AssimpFBXImporter
     {
         #region 상수
         private const int MAX_BONE_WEIGHTS_PER_VERTEX = 4;
@@ -25,8 +25,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         #region Private 필드
         // 노드 이름으로 Transform을 찾기 위한 맵 (본 할당용)
         private Dictionary<string, Transform> _nodeMap = new Dictionary<string, Transform>();
-        private bool _loggedSkippedScaleCurves;
-        private bool _loggedSkippedNonRootPositionCurves;
+        
         private string _sourceDirectory = string.Empty;
 
         // 생성된 AnimationClip 저장 (외부 접근용)
@@ -124,7 +123,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
-                Debug.LogError($"파일을 찾을 수 없음: {path}");
+                Debug.LogError($"파일을 찾을 수 없습니다: {path}");
                 return null;
             }
 
@@ -147,8 +146,6 @@ namespace Fbx2Vmd.Modules.FBXImporter
             GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
 
             _nodeMap.Clear();
-            _loggedSkippedScaleCurves = false;
-            _loggedSkippedNonRootPositionCurves = false;
             _sourceDirectory = ResolveSourceDirectory(path);
             BuildHierarchy(scene.RootNode, rootObject.transform, scene);
             ProcessMeshes(scene.RootNode, scene);
@@ -172,7 +169,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
-                Debug.LogError($"?뚯씪??李얠쓣 ???놁쓬: {path}");
+                Debug.LogError($"파일을 찾을 수 없습니다: {path}");
                 return null;
             }
 
@@ -184,15 +181,13 @@ namespace Fbx2Vmd.Modules.FBXImporter
             Scene scene = ImportWithAssimp(path);
             if (scene == null)
             {
-                Debug.LogError("FBX ?꾪룷???ㅽ뙣");
+                Debug.LogError("FBX 임포트 실패");
                 return null;
             }
 
             GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
 
             _nodeMap.Clear();
-            _loggedSkippedScaleCurves = false;
-            _loggedSkippedNonRootPositionCurves = false;
             _sourceDirectory = ResolveSourceDirectory(path);
             BuildHierarchy(scene.RootNode, rootObject.transform, scene);
             ProcessMeshes(scene.RootNode, scene);
@@ -220,14 +215,14 @@ namespace Fbx2Vmd.Modules.FBXImporter
 
                 if (scene == null)
                 {
-                    Debug.LogError("[RuntimeFBXImporter] importer.ImportFile이 null을 반환함");
+                    Debug.LogError("[AssimpFBXImporter] importer.ImportFile이 null을 반환했습니다");
                 }
 
                 return scene;
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[RuntimeFBXImporter] Assimp 예외: {e.Message}\n{e.StackTrace}");
+                Debug.LogError($"[AssimpFBXImporter] Assimp 예외: {e.Message}\n{e.StackTrace}");
                 return null;
             }
         }
@@ -440,7 +435,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 string boneName = bone.Name;
                 if (!_nodeMap.TryGetValue(boneName, out Transform boneTrans))
                 {
-                    Debug.LogWarning($"계층 구조에서 본을 찾을 수 없음: {boneName}");
+                    Debug.LogWarning($"계층 구조에서 본을 찾을 수 없습니다: {boneName}");
                     continue;
                 }
 
@@ -571,10 +566,10 @@ namespace Fbx2Vmd.Modules.FBXImporter
         private static string ResolveMainTexturePath(Assimp.Material sourceMaterial, string sourceDirectory)
         {
             string textureReference = ResolveDiffuseTextureReference(sourceMaterial);
-            string texturePath = RuntimeFbxMaterialResolver.ResolveTextureCandidateFromDirectory(sourceDirectory, textureReference);
+            string texturePath = FbxMaterialResolver.ResolveTextureCandidateFromDirectory(sourceDirectory, textureReference);
             if (string.IsNullOrEmpty(texturePath))
             {
-                texturePath = RuntimeFbxMaterialResolver.ResolveTextureCandidateFromMaterialName(
+                texturePath = FbxMaterialResolver.ResolveTextureCandidateFromMaterialName(
                     sourceDirectory,
                     sourceMaterial?.Name);
             }
@@ -608,11 +603,11 @@ namespace Fbx2Vmd.Modules.FBXImporter
             }
             catch (IOException e)
             {
-                Debug.LogWarning($"[RuntimeFBXImporter] 텍스처 로드 실패: {texturePath} ({e.Message})");
+                Debug.LogWarning($"[AssimpFBXImporter] 텍스처 로드 실패: {texturePath} ({e.Message})");
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"[RuntimeFBXImporter] 텍스처 적용 실패: {texturePath} ({e.Message})");
+                Debug.LogWarning($"[AssimpFBXImporter] 텍스처 적용 실패: {texturePath} ({e.Message})");
             }
         }
 
@@ -694,7 +689,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             }
             catch (UnityException e)
             {
-                Debug.LogWarning($"[RuntimeFBXImporter] texture alpha scan skipped: {texture.name} ({e.Message})");
+                Debug.LogWarning($"[AssimpFBXImporter] 텍스처 알파 스캔 건너뜀: {texture.name} ({e.Message})");
             }
 
             return false;
@@ -800,7 +795,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 if (ticksPerSecond <= 1.0)
                 {
                     ticksPerSecond = 60.0;
-                    Debug.LogWarning($"TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 60 FPS로 설정");
+                    Debug.LogWarning($"TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 기본값 60 FPS 사용");
                 }
                 float timeScale = 1.0f / (float)ticksPerSecond;
 
@@ -858,12 +853,12 @@ namespace Fbx2Vmd.Modules.FBXImporter
             {
                 animComp.clip = clips[0]; // 기본 클립 설정
                 // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
-                Debug.Log($"클립 {clips.Count}개 생성 완료");
+                Debug.Log($"{clips.Count}개 클립 생성됨");
             }
             }
             else
             {
-                Debug.LogWarning("생성된 애니메이션 클립이 없습니다.");
+                Debug.LogWarning("애니메이션 클립이 생성되지 않았습니다");
             }
         }
 
@@ -1032,7 +1027,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
 
             if (validPath == null)
             {
-                Debug.LogError($"assimp.dll을 찾을 수 없습니다. 검색된 경로:\n{string.Join("\n", possiblePaths)}");
+                Debug.LogError($"assimp.dll을 찾을 수 없습니다. 검색 경로:\n{string.Join("\n", possiblePaths)}");
                 return;
             }
 
@@ -1042,11 +1037,11 @@ namespace Fbx2Vmd.Modules.FBXImporter
             if (handle == System.IntPtr.Zero)
             {
                 int errorCode = Marshal.GetLastWin32Error();
-                Debug.LogError($"로드 실패. Error Code: {errorCode}, Path: {validPath}");
+                Debug.LogError($"로드 실패. 오류 코드: {errorCode}, 경로: {validPath}");
             }
             else
             {
-                Debug.Log($"로드 성공. Handle: {handle}");
+                Debug.Log($"로드 성공. 핸들: {handle}");
                 IsLoaded = true;
             }
         }

@@ -68,7 +68,6 @@ namespace Fbx2Vmd.Retargeting
         /// </summary>
         public static bool IsBodyPoseSpike(float bodyPositionDelta, float bodyRotationDelta)
         {
-            const float BodyPositionVisualSpikeThreshold = 0.02f;
             const float BodyRotationVisualSpikeThresholdDegrees = 25f;
             // ponytail: bodyPositionDelta를 meters 단위로 비교 (는 Vector3.magnitude이어야 함)
             return bodyRotationDelta > BodyRotationVisualSpikeThresholdDegrees;
