@@ -12,7 +12,7 @@ namespace Tests.Editor.Settings
         private const string PresetTypeName =
             "Fbx2Vmd.Settings.RecordingCaptureQualityPreset, Assembly-CSharp";
         private const string FBXVmdPipelineTypeName =
-            "Fbx2Vmd.Modules.FBXImporter.FBXVmdPipeline, Assembly-CSharp";
+            "Fbx2Vmd.FBXImporter.FBXVmdPipeline, Assembly-CSharp";
         private const string RecodingSettingTypeName =
             "RecordingSetting, Assembly-CSharp";
         private const string MotionComparisonProbeTypeName =

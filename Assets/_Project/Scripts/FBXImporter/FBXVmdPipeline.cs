@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using System;
 using System.IO;
 using System.Collections;
@@ -6,33 +7,33 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using Fbx2Vmd.Modules.FileSystem;
+using Fbx2Vmd.FileSystem;
 using Fbx2Vmd.Settings;
 using Fbx2Vmd.Recording;
 using Fbx2Vmd.Character;
 using RootMotion;
 using RootMotion.FinalIK;
 
-namespace Fbx2Vmd.Modules.FBXImporter
+namespace Fbx2Vmd.FBXImporter
 {
     public class FBXVmdPipeline : MonoBehaviour
     {
-        private const string IMPORT_FBX_FOLDER = "Import_FBX";
-        private const string FBX_EXTENSION = "fbx";
+        internal const string IMPORT_FBX_FOLDER = "Import_FBX";
+        internal const string FBX_EXTENSION = "fbx";
         private const string BONE_MAPPING_FILE = "BoneMapping_Data.txt";
         private const float GHOST_CONTAINER_SCALE = 0.01f;
         private const float THUMB_PROXIMAL_SAFE_MAX_LOCAL_ANGLE = 30f;
         private const float DEFAULT_THUMB_STRETCH_OFFSET = -0.1f;
         private const float LEGACY_THUMB_PROJECTION_MIN_PALM_NORMAL = 0.36f;
         private const float DEFAULT_THUMB_PROJECTION_MIN_PALM_NORMAL = 0.358f;
-        private const float MMD_REFERENCE_FRAME_RATE = 30f;
-        private const int MAX_RETARGET_PREWARM_FRAME_COUNT = 120;
+        internal const float MMD_REFERENCE_FRAME_RATE = 30f;
+        internal const int MAX_RETARGET_PREWARM_FRAME_COUNT = 120;
 #if UNITY_EDITOR
-        private const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
+        internal const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
 #endif
         private static Func<IFileBrowserService> fileBrowserServiceFactory = () => new FileBrowserService();
 
-        private enum FBXSessionState
+        internal enum FBXSessionState
         {
             Idle,
             Selected,
@@ -52,29 +53,29 @@ namespace Fbx2Vmd.Modules.FBXImporter
         #region Public 필드
         [Header("FBX 임포트 설정")]
         [Tooltip("체크 시 선택한 FBX 파일을 Import_FBX 폴더에 복사하여 저장")]
-        public bool saveToImportFolder = false;
+        [FormerlySerializedAs("saveToImportFolder")] [SerializeField] private bool _shouldSaveToImportFolder = false;
 
         [Tooltip("체크 시 FBX 임포트 후 VMD 녹화를 자동 시작합니다. 끄면 Unity 재생/촬영 준비까지만 수행합니다.")]
-        public bool recordVmdAfterImport = true;
+        [FormerlySerializedAs("recordVmdAfterImport")] [SerializeField] private bool _shouldRecordVmdAfterImport = true;
 
         [Header("Ghost Retargeting 설정")]
         [Tooltip("애니메이션을 적용할 대상 캐릭터 (Humanoid Avatar 필요)")]
         public GameObject targetCharacter;
 
         [Tooltip("이전 수동 프로젝트와 같은 180도 PoseSpace 방향 보정을 사용합니다. 현재 씬에서는 카메라 정면 조건을 깨므로 비교/롤백용으로만 켭니다.")]
-        public bool useLegacyPoseSpaceFacingCorrection = false;
+        [FormerlySerializedAs("useLegacyPoseSpaceFacingCorrection")] [SerializeField] private bool _shouldUseLegacyPoseSpaceFacingCorrection = false;
 
         [Tooltip("Main_Auto가 Sub_Manual 직접 Animator 재생처럼 FBX의 body/root 회전을 따르도록 합니다. 끄면 기존처럼 Ghost Transform 기준 회전 보정을 강제합니다.")]
-        public bool preserveFbxRootRotation = false;
+        [FormerlySerializedAs("preserveFbxRootRotation")] [SerializeField] private bool _shouldPreserveFbxRootRotation = false;
 
         [Tooltip("HumanPose bodyPosition copied from FBX can jump on some clips. Keep the target body position stable like the manual Animator path.")]
-        public bool preserveRetargetBodyPosition = true;
+        [FormerlySerializedAs("preserveRetargetBodyPosition")] [SerializeField] private bool _shouldPreserveRetargetBodyPosition = true;
 
         [Tooltip("Use FBX HumanPose bodyPosition X/Z delta as target root motion to reduce foot sliding.")]
-        public bool useRetargetBodyPositionXZRootMotion = false;
+        [FormerlySerializedAs("useRetargetBodyPositionXZRootMotion")] [SerializeField] private bool _shouldUseRetargetBodyPositionXZRootMotion = false;
 
         [Tooltip("When a foot is visually grounded, add a small X/Z root correction to reduce skating.")]
-        public bool stabilizeGroundedFootXZ = false;
+        [FormerlySerializedAs("stabilizeGroundedFootXZ")] [SerializeField] private bool _shouldStabilizeGroundedFootXZ = false;
 
         [Tooltip("Foot-lock correction strength. Lower values preserve dance motion, higher values reduce skating.")]
         [Range(0f, 1f)] public float GroundedFootLockWeight = 0.45f;
@@ -83,10 +84,10 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0.001f, 0.1f)] public float MaxGroundedFootLockStep = 0.025f;
 
         [Tooltip("Editor 자동 경로에서 Unity가 임포트한 Humanoid clip의 muscle curve를 기준으로 사용합니다. Assimp Ghost 회전 curve가 수동 기준과 다를 때 팔/상체 포즈 차이를 줄이기 위한 안전 경로입니다.")]
-        public bool useEditorHumanoidClipMuscleReference = true;
+        [FormerlySerializedAs("useEditorHumanoidClipMuscleReference")] [SerializeField] private bool _shouldUseEditorHumanoidClipMuscleReference = true;
 
         [Tooltip("Editor-only experimental RootT X/Z root motion reference. Keep disabled until visual_body_arc_jitter passes without increasing jitter.")]
-        public bool useEditorHumanoidRootTranslationReference = false;
+        [FormerlySerializedAs("useEditorHumanoidRootTranslationReference")] [SerializeField] private bool _shouldUseEditorHumanoidRootTranslationReference = false;
 
         [Tooltip("Weight for Editor Humanoid RootT translation reference.")]
         [Range(0f, 1f)] public float editorHumanoidRootTranslationWeight = 0.25f;
@@ -95,20 +96,20 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0.05f, 1f)] public float editorHumanoidRootTranslationCurrentWeight = 0.35f;
 
         [Tooltip("손가락은 Sub_Manual/testPrefab Animator가 평가한 HumanPose 값을 기준으로 덮어씁니다.")]
-        public bool useManualAnimatorFingerPoseReference = false;
+        [FormerlySerializedAs("useManualAnimatorFingerPoseReference")] [SerializeField] private bool _shouldUseManualAnimatorFingerPoseReference = false;
 
-        public bool useManualAnimatorFullBodyPoseReference = false;
+        [FormerlySerializedAs("useManualAnimatorFullBodyPoseReference")] [SerializeField] private bool _shouldUseManualAnimatorFullBodyPoseReference = false;
 
         [Range(0f, 1f)] public float manualAnimatorFullBodyPoseReferenceWeight = 1f;
 
         [Tooltip("Runtime diagnostic: keep the manual Animator full-body reference active but skip lower-body muscles.")]
-        public bool manualAnimatorFullBodyPoseExcludeLowerBodyMuscles = false;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseExcludeLowerBodyMuscles")] [SerializeField] private bool _shouldExcludeManualAnimatorFullBodyLowerMuscles = false;
 
         [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to lower-body muscles.")]
-        public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnly = false;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseLowerBodyMusclesOnly")] [SerializeField] private bool _shouldApplyManualAnimatorFullBodyLowerMusclesOnly = false;
 
         [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to leg in-out/twist muscles.")]
-        public bool manualAnimatorFullBodyPoseLegTwistMusclesOnly = false;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseLegTwistMusclesOnly")] [SerializeField] private bool _shouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = false;
 
         [Tooltip("Runtime diagnostic: apply the manual Animator full-body reference only to right arm and shoulder muscles.")]
         public bool manualAnimatorFullBodyPoseRightArmMusclesOnly = false;
@@ -126,7 +127,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 6000f)] public float manualAnimatorFullBodyPoseFrameGateEnd = 0f;
 
         [Tooltip("Runtime diagnostic: after SetHumanPose, blend only right upper/lower leg twist output muscles back toward the solver input within a small cap.")]
-        public bool useSetHumanPoseRightLegTwistOutputReference = false;
+        [FormerlySerializedAs("useSetHumanPoseRightLegTwistOutputReference")] [SerializeField] private bool _shouldUseSetHumanPoseRightLegTwistOutputReference = false;
 
         [Tooltip("Blend weight for bounded right leg twist output preservation after SetHumanPose.")]
         [Range(0f, 1f)] public float setHumanPoseRightLegTwistOutputReferenceWeight = 1f;
@@ -135,15 +136,15 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 0.1f)] public float setHumanPoseRightLegTwistOutputReferenceMaxDelta = 0.02f;
 
         [Tooltip("Sub_Manual/testPrefab Animator의 HumanPose bodyRotation을 retarget pose 기준으로 사용해 팔꿈치 bend plane 기준축 차이를 줄입니다.")]
-        public bool useManualAnimatorBodyRotationReference = false;
+        [FormerlySerializedAs("useManualAnimatorBodyRotationReference")] [SerializeField] private bool _shouldUseManualAnimatorBodyRotationReference = false;
 
         [Range(0f, 1f)] public float manualAnimatorBodyRotationReferenceWeight = 1f;
 
         [Tooltip("preserveRetargetBodyPosition=true 일 때 body Y를 수동 기준 Animator bodyPosition.y로 대체합니다. ghost Legacy-animation bodyPos.y 스파이크 없이 상체 높이를 애니메이션에 맞게 따라가도록 합니다.")]
-        public bool useManualAnimatorBodyPositionYReference = false;
+        [FormerlySerializedAs("useManualAnimatorBodyPositionYReference")] [SerializeField] private bool _shouldUseManualAnimatorBodyPositionYReference = false;
 
         [Tooltip("Runtime diagnostic: blend HumanPose bodyPosition X/Z toward the manual Animator reference before SetHumanPose.")]
-        public bool useManualAnimatorBodyPositionXzReference = false;
+        [FormerlySerializedAs("useManualAnimatorBodyPositionXzReference")] [SerializeField] private bool _shouldUseManualAnimatorBodyPositionXzReference = false;
 
         [Tooltip("Blend weight for the manual Animator bodyPosition X/Z solver-input reference.")]
         [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceWeight = 1f;
@@ -179,7 +180,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 6000f)] public float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = 0f;
 
         [Tooltip("수동 기준 Animator의 Hips localPosition을 target Hips에 선택적으로 적용해 Main_Auto의 몸통 경로 편차를 A/B 검증합니다. 활성 시 testprefab Hips delta가 YYB에 전달되어 오히려 발 호 궤적이 심해지므로 기본 비활성화합니다.")]
-        public bool useManualAnimatorHipsLocalPositionReference = false;
+        [FormerlySerializedAs("useManualAnimatorHipsLocalPositionReference")] [SerializeField] private bool _shouldUseManualAnimatorHipsLocalPositionReference = false;
 
         [Tooltip("수동 기준 Hips localPosition 보정 강도입니다.")]
         [Range(0f, 1f)] public float manualAnimatorHipsLocalPositionWeight = 1f;
@@ -188,7 +189,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0.001f, 0.5f)] public float manualAnimatorHipsLocalPositionMaxOffset = 0.12f;
 
         [Tooltip("수동 기준 Animator의 lowest-foot 상승량을 접지 목표 높이에 반영해 Main_Auto가 점프/발 높이 호를 바닥으로 평탄화하지 않도록 합니다.")]
-        public bool useManualAnimatorFootHeightGroundingReference = false;
+        [FormerlySerializedAs("useManualAnimatorFootHeightGroundingReference")] [SerializeField] private bool _shouldUseManualAnimatorFootHeightGroundingReference = false;
 
         [Tooltip("수동 기준 lowest-foot 접지 높이 보정 강도입니다.")]
         [Range(0f, 1f)] public float manualAnimatorFootHeightGroundingReferenceWeight = 1f;
@@ -197,13 +198,13 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 0.12f)] public float manualAnimatorFootHeightGroundingReferenceMaxLift = 0.08f;
 
         [Tooltip("Apply the manual Animator lower-body leg-chain localRotation to the target as an isolated runtime candidate.")]
-        public bool useManualAnimatorFootLocalRotationReference = false;
+        [FormerlySerializedAs("useManualAnimatorFootLocalRotationReference")] [SerializeField] private bool _shouldUseManualAnimatorFootLocalRotationReference = false;
 
         [Tooltip("Blend weight for the manual Animator lower-body leg-chain localRotation reference.")]
         [Range(0f, 1f)] public float manualAnimatorFootLocalRotationReferenceWeight = 1f;
 
         [Tooltip("Apply manual Animator lower-body segment directions as an isolated runtime candidate without changing bone lengths or scale.")]
-        public bool useManualAnimatorLowerBodySegmentDirectionReference = false;
+        [FormerlySerializedAs("useManualAnimatorLowerBodySegmentDirectionReference")] [SerializeField] private bool _shouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
 
         [Tooltip("Blend weight for the manual Animator lower-body segment direction correction.")]
         [Range(0f, 1f)] public float manualAnimatorLowerBodySegmentDirectionReferenceWeight = 1f;
@@ -212,13 +213,13 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 20f)] public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 6.2f;
 
         [Tooltip("Skip only the upper-leg-to-lower-leg segments from the manual Animator lower-body segment direction correction.")]
-        public bool disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = false;
+        [FormerlySerializedAs("disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference")] [SerializeField] private bool _shouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = false;
 
         [Tooltip("Optional upper-leg-to-lower-leg segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
         [Range(0f, 20f)] public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = 0f;
 
         [Tooltip("Skip only the lower-leg-to-foot segments from the manual Animator lower-body segment direction correction.")]
-        public bool disableManualAnimatorLowerLegToFootSegmentDirectionReference = false;
+        [FormerlySerializedAs("disableManualAnimatorLowerLegToFootSegmentDirectionReference")] [SerializeField] private bool _shouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference = false;
 
         [Tooltip("Optional lower-leg-to-foot segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
         [Range(0f, 20f)] public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
@@ -245,13 +246,13 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 1f)] public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = 1f;
 
         [Tooltip("Skip only the foot-to-toes segment from the manual Animator lower-body segment direction correction.")]
-        public bool disableManualAnimatorFootToToesSegmentDirectionReference = false;
+        [FormerlySerializedAs("disableManualAnimatorFootToToesSegmentDirectionReference")] [SerializeField] private bool _shouldDisableManualAnimatorFootToToesSegmentDirectionReference = false;
 
         [Tooltip("Optional foot-to-toes-only segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
         [Range(0f, 20f)] public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
 
         [Tooltip("Apply a yaw-only upper-leg correction toward the manual Animator hips-relative foot X/Z path.")]
-        public bool useManualAnimatorFootHipsAlignedResidualYawReference = false;
+        [FormerlySerializedAs("useManualAnimatorFootHipsAlignedResidualYawReference")] [SerializeField] private bool _shouldUseManualAnimatorFootHipsAlignedResidualYawReference = false;
 
         [Tooltip("Blend weight for the hips-aligned foot X/Z residual yaw correction.")]
         [Range(0f, 1f)] public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight = 1f;
@@ -290,7 +291,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 6000f)] public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
 
         [Tooltip("Runtime diagnostic: apply the post-SetHumanPose endpoint correction to the left foot row instead of the right foot row.")]
-        public bool postSetHumanPoseEndpointPositionUseLeftSide = false;
+        [FormerlySerializedAs("postSetHumanPoseEndpointPositionUseLeftSide")] [SerializeField] private bool _shouldUseLeftSideForPostSetHumanPoseEndpointPosition = false;
 
         [Tooltip("Use the first matched reference foot X/Z offset as the post-SetHumanPose right-foot correction basis.")]
         public bool usePostSetHumanPoseRightFootEvaluatorXzReference = false;
@@ -320,16 +321,16 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0f, 6000f)] public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
 
         [Tooltip("Runtime diagnostic: apply the pre-SetHumanPose endpoint correction to the left foot row instead of the right foot row.")]
-        public bool preSetHumanPoseEndpointPositionUseLeftSide = false;
+        [FormerlySerializedAs("preSetHumanPoseEndpointPositionUseLeftSide")] [SerializeField] private bool _shouldUseLeftSideForPreSetHumanPoseEndpointPosition = false;
 
         [Tooltip("Runtime diagnostic: use ghost/current endpoint rows as a sign-corrected bodyPosition X/Z translation basis before SetHumanPose.")]
         public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false;
 
         [Tooltip("Runtime diagnostic: invert the pre-SetHumanPose endpoint bodyPosition X input delta.")]
-        public bool preSetHumanPoseEndpointPositionInvertBodyPositionX = false;
+        [FormerlySerializedAs("preSetHumanPoseEndpointPositionInvertBodyPositionX")] [SerializeField] private bool _shouldInvertPreSetHumanPoseEndpointPositionBodyX = false;
 
         [Tooltip("Runtime diagnostic: invert the pre-SetHumanPose endpoint bodyPosition Z input delta.")]
-        public bool preSetHumanPoseEndpointPositionInvertBodyPositionZ = false;
+        [FormerlySerializedAs("preSetHumanPoseEndpointPositionInvertBodyPositionZ")] [SerializeField] private bool _shouldInvertPreSetHumanPoseEndpointPositionBodyZ = false;
 
         [Tooltip("엄지 체인의 localRotation도 Sub_Manual/testPrefab Animator가 같은 FBX clip에서 평가한 값을 기준으로 덮어씁니다. YYB와 testPrefab의 Humanoid muscle은 같지만 엄지 로컬 축 해석이 달라 보일 때 사용합니다.")]
         public bool useManualAnimatorThumbLocalRotationReference = false;
@@ -393,7 +394,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         [Range(0.1f, 1f)] public float LowerArmTwistMuscleLimit = 0.65f;
 
         [Tooltip("Retarget 중 Target Humanoid 본의 localPosition을 초기값으로 복구해 팔/다리 길이 변형을 막습니다.")]
-        public bool lockTargetHumanoidBonePositions = true;
+        [FormerlySerializedAs("lockTargetHumanoidBonePositions")] [SerializeField] private bool _shouldLockTargetHumanoidBonePositions = true;
 
         [Tooltip("팔/다리 하위의 비-Humanoid 보조본 localPosition도 초기값으로 복구해 소매/팔 메시가 가늘어지는 변형을 막습니다.")]
         public bool lockTargetLimbChildLocalPositions = true;
@@ -848,11 +849,11 @@ namespace Fbx2Vmd.Modules.FBXImporter
         #endregion
 
         #region Private 필드
-        private IFileBrowserService _fileBrowserService;
-        private RuntimeFBXImporter _fbxImporter;
-        private bool _isProcessing;
+        internal IFileBrowserService _fileBrowserService;
+        private AssimpFBXImporter _fbxImporter;
+        internal bool _isProcessing;
         private GameObject _activeGhostContainer;
-        private HumanoidSampleCode _activeRecorderController;
+        internal HumanoidSampleCode _activeRecorderController;
         private PoseSpaceRetargeter _activeRetargeter;
         private TargetIdlePoseGuard _idlePoseGuard;
         private readonly List<BooleanFieldSnapshot> _retargetBooleanSnapshots = new List<BooleanFieldSnapshot>();
@@ -865,22 +866,22 @@ namespace Fbx2Vmd.Modules.FBXImporter
             public float startDelay;
         }
 
-        private bool _editorSmokeRecordingOverrideActive;
-        private int _editorSmokeTargetFrameCount;
-        private float _editorSmokeDurationSeconds;
-        private float[] _editorSmokeSampleTimesOverride;
+        internal bool _editorSmokeRecordingOverrideActive;
+        internal int _editorSmokeTargetFrameCount;
+        internal float _editorSmokeDurationSeconds;
+        internal float[] _editorSmokeSampleTimesOverride;
         private EditorSmokeSettingsSnapshot _editorSmokeSettingsSnapshot;
         private bool _editorSmokeSettingsSnapshotActive;
-        private EditorDiagnosticSmokeSegment _editorSmokeSegment;
+        internal EditorDiagnosticSmokeSegment _editorSmokeSegment;
         private string _editorSmokeCurrentFbxFileName;
-        private bool _editorSmokeCaptureResolutionOverrideActive;
-        private int _editorSmokeCaptureWidth;
-        private int _editorSmokeCaptureHeight;
-        private float _editorSmokeDiagnosticScreenshotPaddingOverride = float.NaN;
-        private float _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride = float.NaN;
-        private bool _editorSmokeUseKnownMmdReferenceTiming;
-        private float _editorSmokeRecordingStartTimeOverrideSeconds = float.NaN;
-        private float _editorSmokeRecordingPlaybackSpeedOverride = float.NaN;
+        internal bool _editorSmokeCaptureResolutionOverrideActive;
+        internal int _editorSmokeCaptureWidth;
+        internal int _editorSmokeCaptureHeight;
+        internal float _editorSmokeDiagnosticScreenshotPaddingOverride = float.NaN;
+        internal float _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride = float.NaN;
+        internal bool _editorSmokeUseKnownMmdReferenceTiming;
+        internal float _editorSmokeRecordingStartTimeOverrideSeconds = float.NaN;
+        internal float _editorSmokeRecordingPlaybackSpeedOverride = float.NaN;
         private Coroutine _editorDiagnosticBatchAdvanceCoroutine;
 #endif
         #endregion
@@ -917,7 +918,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         {
             get
             {
-                return useManualAnimatorFingerPoseReference &&
+                return _shouldUseManualAnimatorFingerPoseReference &&
                     useManualAnimatorThumbLocalRotationReference &&
                     preserveManualFingerReferenceThumbMuscles &&
                     ShouldSuppressFinalThumbGuardsWithManualReference;
@@ -928,7 +929,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         {
             get
             {
-                if (!useManualAnimatorFingerPoseReference)
+                if (!_shouldUseManualAnimatorFingerPoseReference)
                 {
                     return false;
                 }
@@ -951,7 +952,46 @@ namespace Fbx2Vmd.Modules.FBXImporter
             }
         }
 
-        public float EffectiveThumbStretchOffset
+        public bool ShouldSaveToImportFolder => _shouldSaveToImportFolder;
+        public bool ShouldRecordVmdAfterImport => _shouldRecordVmdAfterImport;
+        public bool ShouldUseLegacyPoseSpaceFacingCorrection => _shouldUseLegacyPoseSpaceFacingCorrection;
+        public bool ShouldPreserveFbxRootRotation => _shouldPreserveFbxRootRotation;
+        public bool ShouldPreserveRetargetBodyPosition => _shouldPreserveRetargetBodyPosition;
+        public bool ShouldUseRetargetBodyPositionXZRootMotion { get => _shouldUseRetargetBodyPositionXZRootMotion; set => _shouldUseRetargetBodyPositionXZRootMotion = value; }
+        public bool ShouldStabilizeGroundedFootXZ => _shouldStabilizeGroundedFootXZ;
+        public bool ShouldUseEditorHumanoidClipMuscleReference => _shouldUseEditorHumanoidClipMuscleReference;
+        public bool ShouldUseEditorHumanoidRootTranslationReference => _shouldUseEditorHumanoidRootTranslationReference;
+        public bool ShouldUseManualAnimatorFingerPoseReference { get => _shouldUseManualAnimatorFingerPoseReference; set => _shouldUseManualAnimatorFingerPoseReference = value; }
+        public bool ShouldUseManualAnimatorFullBodyPoseReference { get => _shouldUseManualAnimatorFullBodyPoseReference; set => _shouldUseManualAnimatorFullBodyPoseReference = value; }
+        public bool ShouldExcludeManualAnimatorFullBodyLowerMuscles { get => _shouldExcludeManualAnimatorFullBodyLowerMuscles; set => _shouldExcludeManualAnimatorFullBodyLowerMuscles = value; }
+        public bool ShouldApplyManualAnimatorFullBodyLowerMusclesOnly { get => _shouldApplyManualAnimatorFullBodyLowerMusclesOnly; set => _shouldApplyManualAnimatorFullBodyLowerMusclesOnly = value; }
+        public bool ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly { get => _shouldApplyManualAnimatorFullBodyLegTwistMusclesOnly; set => _shouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = value; }
+        public bool ShouldUseSetHumanPoseRightLegTwistOutputReference { get => _shouldUseSetHumanPoseRightLegTwistOutputReference; set => _shouldUseSetHumanPoseRightLegTwistOutputReference = value; }
+        public bool ShouldUseManualAnimatorBodyRotationReference { get => _shouldUseManualAnimatorBodyRotationReference; set => _shouldUseManualAnimatorBodyRotationReference = value; }
+        public bool ShouldUseManualAnimatorBodyPositionYReference => _shouldUseManualAnimatorBodyPositionYReference;
+        public bool ShouldUseManualAnimatorBodyPositionXzReference { get => _shouldUseManualAnimatorBodyPositionXzReference; set => _shouldUseManualAnimatorBodyPositionXzReference = value; }
+        public bool ShouldUseManualAnimatorHipsLocalPositionReference { get => _shouldUseManualAnimatorHipsLocalPositionReference; set => _shouldUseManualAnimatorHipsLocalPositionReference = value; }
+        public bool ShouldUseManualAnimatorFootHeightGroundingReference { get => _shouldUseManualAnimatorFootHeightGroundingReference; set => _shouldUseManualAnimatorFootHeightGroundingReference = value; }
+        public bool ShouldUseManualAnimatorFootLocalRotationReference { get => _shouldUseManualAnimatorFootLocalRotationReference; set => _shouldUseManualAnimatorFootLocalRotationReference = value; }
+        public bool ShouldUseManualAnimatorLowerBodySegmentDirectionReference { get => _shouldUseManualAnimatorLowerBodySegmentDirectionReference; set => _shouldUseManualAnimatorLowerBodySegmentDirectionReference = value; }
+        public bool ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference { get => _shouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference; set => _shouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = value; }
+        public bool ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference { get => _shouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference; set => _shouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference = value; }
+        public bool ShouldDisableManualAnimatorFootToToesSegmentDirectionReference { get => _shouldDisableManualAnimatorFootToToesSegmentDirectionReference; set => _shouldDisableManualAnimatorFootToToesSegmentDirectionReference = value; }
+        public bool ShouldUseManualAnimatorFootHipsAlignedResidualYawReference { get => _shouldUseManualAnimatorFootHipsAlignedResidualYawReference; set => _shouldUseManualAnimatorFootHipsAlignedResidualYawReference = value; }
+        public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition { get => _shouldUseLeftSideForPostSetHumanPoseEndpointPosition; set => _shouldUseLeftSideForPostSetHumanPoseEndpointPosition = value; }
+        public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition { get => _shouldUseLeftSideForPreSetHumanPoseEndpointPosition; set => _shouldUseLeftSideForPreSetHumanPoseEndpointPosition = value; }
+        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX { get => _shouldInvertPreSetHumanPoseEndpointPositionBodyX; set => _shouldInvertPreSetHumanPoseEndpointPositionBodyX = value; }
+        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ { get => _shouldInvertPreSetHumanPoseEndpointPositionBodyZ; set => _shouldInvertPreSetHumanPoseEndpointPositionBodyZ = value; }
+        public bool ShouldLockTargetHumanoidBonePositions { get => _shouldLockTargetHumanoidBonePositions; set => _shouldLockTargetHumanoidBonePositions = value; }
+        public bool ShouldClampRetargetMusclesToHumanRange => clampRetargetMusclesToHumanRange;
+        public bool ShouldEnableAnatomicalArmGuard => enableAnatomicalArmGuard;
+        public bool ShouldEnableThumbAnatomicalGuard => enableThumbAnatomicalGuard;
+        public bool ShouldClampRetargetRootDeltaSpikes => clampRetargetRootDeltaSpikes;
+        public bool ShouldFreezeRootYAfterInitialGrounding => FreezeRootYAfterInitialGrounding;
+        public bool ShouldEnableThumbLocalRotationGuard => enableThumbLocalRotationGuard;
+        public bool ShouldEnableThumbVisualLengthGuard => enableThumbVisualLengthGuard;
+
+                public float EffectiveThumbStretchOffset
         {
             get
             {
@@ -1078,7 +1118,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return true;
         }
 
-        private static bool TryBuildEditorSmokeCaptureResolutionOverride(
+        internal static bool TryBuildEditorSmokeCaptureResolutionOverride(
             int requestedWidth,
             int requestedHeight,
             out int width,
@@ -1135,7 +1175,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return controlledPath;
         }
 
-        private static string BuildEditorSmokeOutputBaseName(string outputBaseName, float durationSeconds, EditorDiagnosticSmokeSegment segment)
+        internal static string BuildEditorSmokeOutputBaseName(string outputBaseName, float durationSeconds, EditorDiagnosticSmokeSegment segment)
         {
             string cleanBaseName = SanitizeFileName(
                 string.IsNullOrWhiteSpace(outputBaseName) ? VMDOutputNamePolicy.DefaultOutputBaseName : outputBaseName);
@@ -1157,7 +1197,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return $"{prefix}_{cleanBaseName}_{roundedSeconds}s";
         }
 
-        private static float CalculateEditorSmokeStartTime(AnimationClip clip, float requestedDuration, EditorDiagnosticSmokeSegment segment)
+        internal static float CalculateEditorSmokeStartTime(AnimationClip clip, float requestedDuration, EditorDiagnosticSmokeSegment segment)
         {
             if (clip == null)
             {
@@ -1177,7 +1217,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             }
         }
 
-        private static string GetEditorSmokeSegmentLabel(EditorDiagnosticSmokeSegment segment)
+        internal static string GetEditorSmokeSegmentLabel(EditorDiagnosticSmokeSegment segment)
         {
             switch (segment)
             {
@@ -1320,7 +1360,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         }
 #endif
 
-        private static bool TryBuildKnownMmdReferenceRecordingPlan(
+        internal static bool TryBuildKnownMmdReferenceRecordingPlan(
             string outputBaseName,
             float clipLengthSeconds,
             float recordingFrameRate,
@@ -1338,7 +1378,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 out playbackSpeed);
         }
 
-        private static bool TryBuildKnownMmdReferenceRecordingPlan(
+        internal static bool TryBuildKnownMmdReferenceRecordingPlan(
             string outputBaseName,
             float clipLengthSeconds,
             float recordingFrameRate,
@@ -1387,7 +1427,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return true;
         }
 
-        private static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+        internal static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
             string outputBaseName,
             float clipLengthSeconds,
             float requestedDurationSeconds,
@@ -1409,7 +1449,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 out playbackSpeed);
         }
 
-        private static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+        internal static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
             string outputBaseName,
             float clipLengthSeconds,
             float requestedDurationSeconds,
@@ -1506,7 +1546,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return coversFullReferenceDuration && coversFullReferenceFrames;
         }
 
-        private static float ResolveVmdRecordingPlaybackSpeed(float configuredPlaybackSpeed)
+        internal static float ResolveVmdRecordingPlaybackSpeed(float configuredPlaybackSpeed)
         {
             if (configuredPlaybackSpeed <= 0f ||
                 float.IsNaN(configuredPlaybackSpeed) ||
@@ -1518,7 +1558,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return Mathf.Max(0.0001f, configuredPlaybackSpeed);
         }
 
-        private static float ResolveRecordingLengthForPlaybackSpeed(float clipLengthSeconds, float playbackSpeed)
+        internal static float ResolveRecordingLengthForPlaybackSpeed(float clipLengthSeconds, float playbackSpeed)
         {
             if (clipLengthSeconds <= 0f ||
                 float.IsNaN(clipLengthSeconds) ||
@@ -1575,10 +1615,10 @@ namespace Fbx2Vmd.Modules.FBXImporter
             _fileBrowserService = fileBrowserServiceFactory?.Invoke() ?? new FileBrowserService();
 
             // 런타임 FBX 임포터 초기화 (Assimp 사용)
-            _fbxImporter = new RuntimeFBXImporter();
+            _fbxImporter = new AssimpFBXImporter();
         }
 
-        private void EnsureServicesInitialized()
+        internal void EnsureServicesInitialized()
         {
             if (_fileBrowserService == null || _fbxImporter == null)
             {
@@ -1707,7 +1747,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         #endregion
 
         #region 파일 처리 로직
-        private async void ProcessFBXAsync(string sourcePath)
+        internal async void ProcessFBXAsync(string sourcePath)
         {
             if (_isProcessing)
             {
@@ -1723,7 +1763,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 string targetPath = sourcePath; // 기본값: 원본 경로 사용
 
                 // 파일 복사본
-                if (saveToImportFolder)
+                if (_shouldSaveToImportFolder)
                 {
                     string targetDir = Path.Combine(Application.dataPath, "Resources", IMPORT_FBX_FOLDER);
                     if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
@@ -1772,7 +1812,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                     // Ghost Container Pattern (스케일 방어막)
                     // Legacy Animation이 실행되면 자식(importedModel)의 Scale은 무조건 1.0으로 강제 원복
                     // 이를 방어하기 위해 부모(Container)에서 0.01로 눌러버리는 구조가 필수
-                    Debug.Log($"[System]  Activating Ghost Container... (Scale Lock: 0.01)");
+                    Debug.Log($"[System]  Ghost Container 활성화 중... (Scale Lock: 0.01)");
 
                     // 컨테이너 생성
                     GameObject ghostContainer = new GameObject($"GhostContainer_{importedModel.name}");
@@ -1800,7 +1840,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
 
                         if (targetClip.length > 1000f)
                         {
-                            Debug.LogError("애니메이션 시간이 비정상적으로 깁니다. RuntimeFBXImporter의 timeScale을 확인하세요.");
+                            Debug.LogError("애니메이션 시간이 비정상적으로 깁니다. AssimpFBXImporter의 timeScale을 확인하세요.");
                         }
                     }
                     else
@@ -1831,7 +1871,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                     var ikControl = targetObject.GetComponent<IKControl>();
                     if (ikControl != null)
                     {
-                        Debug.Log("Hostile IKControl detected. Destroying...");
+                        Debug.Log("적대적 IKControl 감지됨. 제거 중...");
                         Destroy(ikControl);
                     }
 
@@ -1881,7 +1921,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
         /// <param name="targetCharacter">리타겟 대상 캐릭터</param>
         /// <param name="clip">재생할 AnimationClip</param>
         /// <param name="retargeter">Pose Space Retargeter 컴포넌트</param>
-        private async Task<bool> ProcessFBXSessionAsync(string sourcePath)
+        internal async Task<bool> ProcessFBXSessionAsync(string sourcePath)
         {
             EnsureServicesInitialized();
             _idlePoseGuard?.Apply();
@@ -1906,7 +1946,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 SetSessionState(FBXSessionState.Selected, $"선택됨: {Path.GetFileName(sourcePath)}", 0.05f);
                 string targetPath = CopyToControlledImportFolder(sourcePath);
                 string outputBaseName = Path.GetFileNameWithoutExtension(targetPath);
-                if (recordVmdAfterImport)
+                if (_shouldRecordVmdAfterImport)
                 {
                     Debug.Log($"[FBXVmdPipeline] 자동 VMD 출력명 고정: {outputBaseName}.vmd (입력 FBX: {Path.GetFileName(sourcePath)})");
                 }
@@ -2031,7 +2071,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             bool earlyEditorSmokeRecordingOverrideActive = false;
 #endif
             bool earlyShouldStartVmdRecording = ShouldStartVmdRecordingAfterImport(
-                recordVmdAfterImport,
+                _shouldRecordVmdAfterImport,
                 earlyEditorSmokeRecordingOverrideActive);
             float resolvedStartDelay = ResolveStartDelayForRecordingMode(startDelay, earlyShouldStartVmdRecording);
             SetSessionState(FBXSessionState.Retargeting, $"녹화 시작 전 {resolvedStartDelay:F1}초 대기", 0.7f);
@@ -2061,7 +2101,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             float[] diagnosticSampleTimesOverride = null;
 #endif
             bool shouldStartVmdRecording = ShouldStartVmdRecordingAfterImport(
-                recordVmdAfterImport,
+                _shouldRecordVmdAfterImport,
                 editorSmokeRecordingOverrideActive);
 
             HumanoidSampleCode recorderController = null;
@@ -2307,12 +2347,12 @@ namespace Fbx2Vmd.Modules.FBXImporter
             Debug.Log($"[FBXVmdPipeline] Retarget prewarm 완료: {prewarmFrames} frame(s) at clip time {sampleTime:F2}.");
         }
 
-        private static bool PrepareRetargeterRecordingStartPose(PoseSpaceRetargeter retargeter, float sampleTime, float playbackSpeed, bool holdPose)
+        internal static bool PrepareRetargeterRecordingStartPose(PoseSpaceRetargeter retargeter, float sampleTime, float playbackSpeed, bool holdPose)
         {
             return retargeter != null && retargeter.PrepareRecordingStartPose(sampleTime, playbackSpeed, holdPose);
         }
 
-        private static object YieldRetargetPrewarmFrame()
+        internal static object YieldRetargetPrewarmFrame()
         {
 #if UNITY_EDITOR
             if (Application.isBatchMode)
@@ -2329,7 +2369,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return Mathf.Clamp(configuredFrameCount, 0, MAX_RETARGET_PREWARM_FRAME_COUNT);
         }
 
-        private static int ResolveRetargetPrewarmFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
+        internal static int ResolveRetargetPrewarmFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
         {
             if (!shouldStartVmdRecording)
             {
@@ -2339,7 +2379,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return ResolveRetargetPrewarmFrameCount(configuredFrameCount);
         }
 
-        private static int ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
+        internal static int ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
         {
             if (!shouldStartVmdRecording)
             {
@@ -2365,14 +2405,14 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return Mathf.Clamp(configuredStartDelay, 0f, 10f);
         }
 
-        private static bool ShouldStartVmdRecordingAfterImport(
-            bool recordVmdAfterImport,
+        internal static bool ShouldStartVmdRecordingAfterImport(
+            bool _shouldRecordVmdAfterImport,
             bool editorSmokeRecordingOverrideActive)
         {
-            return recordVmdAfterImport || editorSmokeRecordingOverrideActive;
+            return _shouldRecordVmdAfterImport || editorSmokeRecordingOverrideActive;
         }
 
-        private void OnRecordingFinished(VmdSaveResult result)
+        internal void OnRecordingFinished(VmdSaveResult result)
         {
             MotionComparisonProbe probe = _activeRecorderController != null
                 ? _activeRecorderController.GetComponent<MotionComparisonProbe>()
@@ -2624,7 +2664,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return targetPath;
         }
 
-        private string GetControlledImportDirectory()
+        internal string GetControlledImportDirectory()
         {
 #if UNITY_EDITOR
             return Path.Combine(Application.dataPath, "Resources", IMPORT_FBX_FOLDER);
@@ -3026,7 +3066,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 ArmStretchMuscleLimit,
                 UpperArmTwistMuscleLimit,
                 LowerArmTwistMuscleLimit,
-                lockTargetHumanoidBonePositions,
+                _shouldLockTargetHumanoidBonePositions,
                 logArmDeformationGuardCorrections,
                 targetGuardClampArmStretchMuscles,
                 lockTargetLimbChildLocalPositions,
@@ -3423,7 +3463,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             _retargetBooleanSnapshots.Clear();
         }
 
-        private void FailSession(string message, Exception exception = null)
+        internal void FailSession(string message, Exception exception = null)
         {
             if (exception != null)
             {
@@ -3551,7 +3591,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             return string.Join("/", parts);
         }
 
-        private void SetSessionState(FBXSessionState state, string message, float progress)
+        internal void SetSessionState(FBXSessionState state, string message, float progress)
         {
             Debug.Log($"[FBXVmdPipeline] {state}: {message}");
             HumanoidSampleCode recorder = GetRecorderController();
@@ -3714,7 +3754,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
 
         private void SetupGhostRetargeting(GameObject ghostObject, AnimationClip ghostClip, GameObject targetPrefab)
         {
-            Debug.Log("[FBXVmdPipeline] Native AnimatorOverride Setup...");
+            Debug.Log("[FBXVmdPipeline] Native AnimatorOverride 설정 중...");
              Animator targetAnimator = targetPrefab.GetComponent<Animator>();
             if (targetAnimator == null || targetAnimator.runtimeAnimatorController == null) return;
 
@@ -3754,7 +3794,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
 #if UNITY_EDITOR
         private void ConfigureEditorHumanoidMuscleReference(PoseSpaceRetargeter retargeter, string importedFilePath, string sourceFilePath)
         {
-            if (!useEditorHumanoidClipMuscleReference || retargeter == null)
+            if (!_shouldUseEditorHumanoidClipMuscleReference || retargeter == null)
             {
                 return;
             }
@@ -3774,7 +3814,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
 
             Debug.Log($"[FBXVmdPipeline] Editor Humanoid muscle 기준 clip: {relativePath}/{referenceClip.name}");
             retargeter.ConfigureEditorHumanoidMuscleReference(referenceClip);
-            if (useEditorHumanoidRootTranslationReference)
+            if (_shouldUseEditorHumanoidRootTranslationReference)
             {
                 retargeter.ConfigureEditorHumanoidRootTranslationReference(referenceClip);
             }
@@ -3783,18 +3823,18 @@ namespace Fbx2Vmd.Modules.FBXImporter
 
         private void ConfigureEditorManualFingerPoseReference(PoseSpaceRetargeter retargeter, AnimationClip referenceClip)
         {
-            if ((!useManualAnimatorFingerPoseReference &&
-                    !useManualAnimatorFullBodyPoseReference &&
-                    !useManualAnimatorHipsLocalPositionReference &&
-                    !useManualAnimatorBodyRotationReference &&
+            if ((!_shouldUseManualAnimatorFingerPoseReference &&
+                    !_shouldUseManualAnimatorFullBodyPoseReference &&
+                    !_shouldUseManualAnimatorHipsLocalPositionReference &&
+                    !_shouldUseManualAnimatorBodyRotationReference &&
                     !useManualAnimatorHandLocalRotationReference &&
-                    !useManualAnimatorFootLocalRotationReference &&
-                    !useManualAnimatorLowerBodySegmentDirectionReference &&
-                    !useManualAnimatorFootHipsAlignedResidualYawReference &&
+                    !_shouldUseManualAnimatorFootLocalRotationReference &&
+                    !_shouldUseManualAnimatorLowerBodySegmentDirectionReference &&
+                    !_shouldUseManualAnimatorFootHipsAlignedResidualYawReference &&
                     !usePostSetHumanPoseRightEndpointPositionReference &&
                     !usePostSetHumanPoseRightFootEvaluatorXzReference &&
                     !usePreSetHumanPoseRightEndpointPositionReference &&
-                    !useManualAnimatorBodyPositionXzReference &&
+                    !_shouldUseManualAnimatorBodyPositionXzReference &&
                     !useYybRightSleeveSilhouetteLocalOffsetReference &&
                     !useManualAnimatorBipedIkFootPositionReference) ||
                 retargeter == null ||
@@ -3833,12 +3873,12 @@ namespace Fbx2Vmd.Modules.FBXImporter
                 referencePrefab,
                 referenceController,
                 referenceClip,
-                useManualAnimatorFingerPoseReference,
-                useManualAnimatorFullBodyPoseReference,
+                _shouldUseManualAnimatorFingerPoseReference,
+                _shouldUseManualAnimatorFullBodyPoseReference,
                 manualAnimatorFullBodyPoseReferenceWeight,
-                manualAnimatorFullBodyPoseExcludeLowerBodyMuscles,
-                manualAnimatorFullBodyPoseLowerBodyMusclesOnly,
-                manualAnimatorFullBodyPoseLegTwistMusclesOnly,
+                _shouldExcludeManualAnimatorFullBodyLowerMuscles,
+                _shouldApplyManualAnimatorFullBodyLowerMusclesOnly,
+                _shouldApplyManualAnimatorFullBodyLegTwistMusclesOnly,
                 manualAnimatorFullBodyPoseRightArmMusclesOnly,
                 manualAnimatorFullBodyPoseLeftArmMusclesOnly,
                 manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly,
@@ -4049,7 +4089,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
                     {
                         prop.boolValue = false;
                         found = true;
-                        Debug.Log($"[Strip Bones Fix] Successfully disabled '{name}' via SerializedObject");
+                        Debug.Log($"[Strip Bones Fix] SerializedObject를 통해 '{name}' 비활성화 성공");
                     }
                 }
 
@@ -4064,7 +4104,7 @@ namespace Fbx2Vmd.Modules.FBXImporter
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[Strip Bones Fix] Error: {e.Message}");
+                Debug.LogError($"[Strip Bones Fix] 오류: {e.Message}");
             }
 
             // AnimationCompression 추가 설정

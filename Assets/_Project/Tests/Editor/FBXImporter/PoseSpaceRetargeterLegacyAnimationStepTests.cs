@@ -1,4 +1,4 @@
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System;
 using System.Reflection;
@@ -805,7 +805,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var retargeter = root.AddComponent<PoseSpaceRetargeter>();
-                SetInstanceBool(retargeter, "manualAnimatorFullBodyPoseLegTwistMusclesOnly", true);
+                SetInstanceBool(retargeter, "ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly", true);
 
                 Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Left Upper Leg In-Out")), Is.True);
                 Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Right Upper Leg Twist In-Out")), Is.True);

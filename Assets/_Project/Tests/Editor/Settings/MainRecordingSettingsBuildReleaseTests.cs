@@ -2,8 +2,8 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using Fbx2Vmd.Build.EditorTools;
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.Build;
+using Fbx2Vmd.FBXImporter;
 using Fbx2Vmd.Settings;
 using NUnit.Framework;
 using TMPro;

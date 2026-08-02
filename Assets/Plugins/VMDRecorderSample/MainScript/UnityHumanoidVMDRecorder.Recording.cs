@@ -672,7 +672,7 @@ public partial class UnityHumanoidVMDRecorder
         bool ready = BoneDictionary != null && animator != null && positionDictionary != null && rotationDictionary != null;
         if (!ready && !recorderInitializationWarningLogged)
         {
-            Debug.LogError("[UnityHumanoidVMDRecorder] 녹화 본 딕셔너리가 초기화되지 않아 현재 프레임 저장을 건너뜁니다.");
+            Debug.LogError("[UnityHumanoidVMDRecorder] Recording bone dictionary not initialized; skipping current frame save.");
             recorderInitializationWarningLogged = true;
         }
 
@@ -702,7 +702,7 @@ public partial class UnityHumanoidVMDRecorder
         
         // 현재 레코딩 데이터를 "Saved" 버전으로 백업
         frameNumberSaved = FrameNumber;
-        Debug.Log($"[VMDRecorder] 녹화 종료: frames={frameNumberSaved}, afterLate={RecordAfterLateVisualPose}, captureFps={UseCaptureFramerateDuringRecording}, sameUnityFrameSaves={sameUnityFrameSaveCount}, maxLateBurst={maxFramesSavedInSingleLateUpdate}, droppedBacklog={droppedLateFrameBacklogCount}");
+        Debug.Log($"[VMDRecorder] Recording ended: frames={frameNumberSaved}, afterLate={RecordAfterLateVisualPose}, captureFps={UseCaptureFramerateDuringRecording}, sameUnityFrameSaves={sameUnityFrameSaveCount}, maxLateBurst={maxFramesSavedInSingleLateUpdate}, droppedBacklog={droppedLateFrameBacklogCount}");
         morphRecorderSaved = morphRecorder;
         FrameNumber = 0;
         ResetRecordingCadenceStats();

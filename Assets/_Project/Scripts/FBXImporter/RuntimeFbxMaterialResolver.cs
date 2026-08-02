@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Fbx2Vmd.Modules.FBXImporter
+namespace Fbx2Vmd.FBXImporter
 {
     public static class RuntimeFbxMaterialResolver
     {

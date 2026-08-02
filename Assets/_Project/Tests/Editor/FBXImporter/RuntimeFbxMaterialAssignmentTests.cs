@@ -1,6 +1,6 @@
 using System.Reflection;
 using Assimp;
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using UnityEngine;
 using System;
@@ -13,7 +13,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_FbxMeshHasMaterialIndex_When_RuntimeImportCreatesRenderer_Then_AssignsNamedMaterial()
         {
-            var importer = new RuntimeFBXImporter();
+            var importer = new AssimpFBXImporter();
             var target = new GameObject("material-target");
 
             try
@@ -30,7 +30,7 @@ namespace Tests.Editor.FBXImporter
                 mesh.Vertices.Add(new Vector3D(0f, 1f, 0f));
                 mesh.Faces.Add(new Face(new[] { 0, 1, 2 }));
 
-                MethodInfo createMesh = typeof(RuntimeFBXImporter).GetMethod(
+                MethodInfo createMesh = typeof(AssimpFBXImporter).GetMethod(
                     "CreateMesh",
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.That(createMesh, Is.Not.Null);
@@ -51,7 +51,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_FbxMaterialHasDiffuseTexture_When_RuntimeImportCreatesRenderer_Then_AssignsMainTexture()
         {
-            var importer = new RuntimeFBXImporter();
+            var importer = new AssimpFBXImporter();
             var target = new GameObject("texture-target");
             string root = CreateTempRoot();
 
@@ -90,7 +90,7 @@ namespace Tests.Editor.FBXImporter
                 mesh.Vertices.Add(new Vector3D(0f, 1f, 0f));
                 mesh.Faces.Add(new Face(new[] { 0, 1, 2 }));
 
-                MethodInfo createMesh = typeof(RuntimeFBXImporter).GetMethod(
+                MethodInfo createMesh = typeof(AssimpFBXImporter).GetMethod(
                     "CreateMesh",
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.That(createMesh, Is.Not.Null);
@@ -112,7 +112,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_DiffuseTextureHasTransparentPixels_When_RuntimeImportCreatesRenderer_Then_UsesAlphaCutoutMaterial()
         {
-            var importer = new RuntimeFBXImporter();
+            var importer = new AssimpFBXImporter();
             var target = new GameObject("alpha-texture-target");
             string root = CreateTempRoot();
 
@@ -159,7 +159,7 @@ namespace Tests.Editor.FBXImporter
                 mesh.Vertices.Add(new Vector3D(0f, 1f, 0f));
                 mesh.Faces.Add(new Face(new[] { 0, 1, 2 }));
 
-                MethodInfo createMesh = typeof(RuntimeFBXImporter).GetMethod(
+                MethodInfo createMesh = typeof(AssimpFBXImporter).GetMethod(
                     "CreateMesh",
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.That(createMesh, Is.Not.Null);
@@ -192,7 +192,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_RuntimeMaterialUsesStandardShader_When_RuntimeImportCreatesRenderer_Then_UsesMatteReferenceGlossiness()
         {
-            var importer = new RuntimeFBXImporter();
+            var importer = new AssimpFBXImporter();
             var target = new GameObject("matte-material-target");
 
             try
@@ -209,7 +209,7 @@ namespace Tests.Editor.FBXImporter
                 mesh.Vertices.Add(new Vector3D(0f, 1f, 0f));
                 mesh.Faces.Add(new Face(new[] { 0, 1, 2 }));
 
-                MethodInfo createMesh = typeof(RuntimeFBXImporter).GetMethod(
+                MethodInfo createMesh = typeof(AssimpFBXImporter).GetMethod(
                     "CreateMesh",
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.That(createMesh, Is.Not.Null);
@@ -232,7 +232,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_NodeHasMultipleSkinnedMeshes_When_RuntimeImportCreatesRenderers_Then_UsesSeparateMeshObjects()
         {
-            var importer = new RuntimeFBXImporter();
+            var importer = new AssimpFBXImporter();
             var target = new GameObject("multi-skinned-mesh-target");
             var bone = new GameObject("Bone");
             bone.transform.SetParent(target.transform, false);
@@ -248,7 +248,7 @@ namespace Tests.Editor.FBXImporter
                 Assimp.Mesh firstMesh = CreateSkinnedTriangleMesh("first_mesh", 0);
                 Assimp.Mesh secondMesh = CreateSkinnedTriangleMesh("second_mesh", 1);
 
-                MethodInfo createMesh = typeof(RuntimeFBXImporter).GetMethod(
+                MethodInfo createMesh = typeof(AssimpFBXImporter).GetMethod(
                     "CreateMesh",
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.That(createMesh, Is.Not.Null);
@@ -270,7 +270,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_FbxMaterialHasNoDiffuseSlotButNameMatchesTexture_When_RuntimeImportCreatesRenderer_Then_AssignsMainTexture()
         {
-            var importer = new RuntimeFBXImporter();
+            var importer = new AssimpFBXImporter();
             var target = new GameObject("material-name-texture-target");
             string root = CreateTempRoot();
 
@@ -296,7 +296,7 @@ namespace Tests.Editor.FBXImporter
                 mesh.Vertices.Add(new Vector3D(0f, 1f, 0f));
                 mesh.Faces.Add(new Face(new[] { 0, 1, 2 }));
 
-                MethodInfo createMesh = typeof(RuntimeFBXImporter).GetMethod(
+                MethodInfo createMesh = typeof(AssimpFBXImporter).GetMethod(
                     "CreateMesh",
                     BindingFlags.Instance | BindingFlags.NonPublic);
                 Assert.That(createMesh, Is.Not.Null);
@@ -322,18 +322,18 @@ namespace Tests.Editor.FBXImporter
             return components[0];
         }
 
-        private static void SetSourceDirectory(RuntimeFBXImporter importer, string fbxDirectory)
+        private static void SetSourceDirectory(AssimpFBXImporter importer, string fbxDirectory)
         {
-            FieldInfo sourceDirectory = typeof(RuntimeFBXImporter).GetField(
+            FieldInfo sourceDirectory = typeof(AssimpFBXImporter).GetField(
                 "_sourceDirectory",
                 BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(sourceDirectory, Is.Not.Null, "RuntimeFBXImporter must keep the FBX source directory for texture resolving.");
+            Assert.That(sourceDirectory, Is.Not.Null, "AssimpFBXImporter must keep the FBX source directory for texture resolving.");
             sourceDirectory.SetValue(importer, fbxDirectory);
         }
 
-        private static void SetNodeMap(RuntimeFBXImporter importer, Transform bone)
+        private static void SetNodeMap(AssimpFBXImporter importer, Transform bone)
         {
-            FieldInfo nodeMapField = typeof(RuntimeFBXImporter).GetField(
+            FieldInfo nodeMapField = typeof(AssimpFBXImporter).GetField(
                 "_nodeMap",
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(nodeMapField, Is.Not.Null);

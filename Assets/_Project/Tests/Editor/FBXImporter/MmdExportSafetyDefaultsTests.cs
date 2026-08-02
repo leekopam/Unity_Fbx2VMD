@@ -1,4 +1,4 @@
-using Fbx2Vmd.Modules.FBXImporter;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -32,7 +32,7 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
-            Assert.That(fileManager.stabilizeGroundedFootXZ, Is.False, "Rollback preset must not enable per-foot X/Z locking.");
+            Assert.That(fileManager.ShouldStabilizeGroundedFootXZ, Is.False, "Rollback preset must not enable per-foot X/Z locking.");
             Assert.That(fileManager.GroundedFootLockWeight, Is.EqualTo(0.45f).Within(0.0001f), "Rollback preset must restore the pre-reference-video foot-lock blend.");
             Assert.That(fileManager.FreezeRootYAfterInitialGrounding, Is.True, "Root Y must freeze after initial grounding so live playback does not chase per-frame foot noise.");
             Assert.That(fileManager.RetargetPrewarmFrameCount, Is.EqualTo(6), "Rollback preset must remove the 120-frame prewarm added by the reference-video tuning pass.");
@@ -61,26 +61,26 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.True, "Editor smoke must fail when thumb risk exceeds the threshold.");
             Assert.That(fileManager.clampRetargetArmStretchMuscles, Is.True, "Main_Auto must clamp retarget arm stretch muscles to prevent corrected left forearm stretch spikes from reopening the limb-pose gate.");
             Assert.That(fileManager.ArmStretchMuscleLimit, Is.EqualTo(0.5f).Within(0.0001f), "Main_Auto must keep the measured 0.5 arm stretch limit that reduces the corrected left forearm stretch gate delta below 1.0.");
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True, "Main_Auto must blend the manual reference pose to reduce the non-hair band_3_right arm/sleeve residual in normal playback/import.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True, "Main_Auto must blend the manual reference pose to reduce the non-hair band_3_right arm/sleeve residual in normal playback/import.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must use the measured full-body reference blend that reduces full max, non-hair max, and non-hair avg while the remaining upper/silhouette trade-off stays tracked.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False, "Main_Auto must not mask lower-body muscles unless a runtime diagnostic explicitly requests it.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to lower-body muscles unless a runtime diagnostic explicitly requests it.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to leg twist muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False, "Main_Auto must not mask lower-body muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to lower-body muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to leg twist muscles unless a runtime diagnostic explicitly requests it.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to right-arm muscles unless a runtime diagnostic explicitly requests it.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to left-arm muscles unless a runtime diagnostic explicitly requests it.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f), "Main_Auto must keep full-body reference frame gates disabled by default.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f), "Main_Auto must keep full-body reference frame gates disabled by default.");
-            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.False, "Rollback preset must remove the manual hips local-position override from the reference-video tuning pass.");
-            Assert.That(fileManager.useManualAnimatorFootHeightGroundingReference, Is.False, "Rollback preset must remove manual lowest-foot grounding from the reference-video tuning pass.");
-            Assert.That(fileManager.useManualAnimatorFootLocalRotationReference, Is.True, "Main_Auto must promote the accepted lower-body localRotation reference after it kept MP4 compare gates passing.");
+            Assert.That(fileManager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Rollback preset must remove the manual hips local-position override from the reference-video tuning pass.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Rollback preset must remove manual lowest-foot grounding from the reference-video tuning pass.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True, "Main_Auto must promote the accepted lower-body localRotation reference after it kept MP4 compare gates passing.");
             Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted leg-chain localRotation blend.");
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True, "Main_Auto must promote the accepted bodyRotation reference for MP4-aligned playback.");
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True, "Main_Auto must promote the accepted bodyRotation reference for MP4-aligned playback.");
             Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted bodyRotation blend.");
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True, "Main_Auto must promote the accepted lower-body segment direction guard.");
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True, "Main_Auto must promote the accepted lower-body segment direction guard.");
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted lower-body segment direction blend.");
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f), "Main_Auto must keep the accepted lower-body segment direction cap.");
             Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.125f).Within(0.0001f), "Main_Auto must use the measured right LowerLegToFoot soft blend that reduces right foot X/Z and hips-aligned foot residual without moving hips.");
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True, "Main_Auto must promote the accepted foot hips-aligned residual yaw guard.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True, "Main_Auto must promote the accepted foot hips-aligned residual yaw guard.");
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted residual yaw blend.");
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f), "Main_Auto must keep the accepted residual yaw cap.");
             Assert.That(fileManager.usePostSetHumanPoseRightEndpointPositionReference, Is.False, "Main_Auto must keep the post-SetHumanPose endpoint carrier runtime-only until twist and manual-layer ablation metrics justify promotion.");
@@ -127,15 +127,15 @@ namespace Tests.Editor.FBXImporter
             ClearYybVisualComparisonRunnerState("default-options-preserve-scene-defaults-test");
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFootLocalRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
             Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
             Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.125f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f));
             Assert.That(fileManager.usePostSetHumanPoseRightEndpointPositionReference, Is.False);
@@ -143,18 +143,18 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
             Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.useManualAnimatorHandLocalRotationReference, Is.True);
-            Assert.That(fileManager.lockTargetHumanoidBonePositions, Is.True);
+            Assert.That(fileManager.ShouldLockTargetHumanoidBonePositions, Is.True);
             Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.True);
             Assert.That(fileManager.YybArmSwingLimitWeight, Is.EqualTo(0.6f).Within(0.0001f));
             Assert.That(fileManager.YybArmSwingMaxDownDot, Is.EqualTo(0.75f).Within(0.0001f));
@@ -178,9 +178,9 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
-            Assert.That(fileManager.useManualAnimatorFootLocalRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("lower-body-force-off-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFootLocalRotationRuntimeOverride", true);
@@ -191,11 +191,11 @@ namespace Tests.Editor.FBXImporter
             SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFootLocalRotationReference, Is.False);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False);
             Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.False);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.False);
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.False);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False);
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
 
             ClearYybVisualComparisonRunnerState("lower-body-force-off-test-cleanup");
@@ -209,7 +209,7 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
 
@@ -220,14 +220,14 @@ namespace Tests.Editor.FBXImporter
             SetYybVisualComparisonRunnerStaticField("_manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle", 2f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
-            Assert.That(fileManager.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle, Is.EqualTo(3f).Within(0.0001f));
-            Assert.That(fileManager.disableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle, Is.EqualTo(2f).Within(0.0001f));
-            Assert.That(fileManager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+            Assert.That(fileManager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
             Assert.That(fileManager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle, Is.EqualTo(0f).Within(0.0001f));
 
             ClearYybVisualComparisonRunnerState("leg-chain-segment-detail-test-cleanup");
@@ -241,11 +241,11 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootLocalRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-force-off-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
@@ -254,20 +254,20 @@ namespace Tests.Editor.FBXImporter
             SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorBodyRotationRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.False);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.False);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.False);
             Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(
-                fileManager.useManualAnimatorFootLocalRotationReference,
+                fileManager.ShouldUseManualAnimatorFootLocalRotationReference,
                 Is.True,
                 "Full-body force-off probes must not disable lower-body localRotation compensation.");
             Assert.That(
-                fileManager.useManualAnimatorLowerBodySegmentDirectionReference,
+                fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference,
                 Is.True,
                 "Full-body force-off probes must not disable lower-body segment compensation.");
             Assert.That(
-                fileManager.useManualAnimatorFootHipsAlignedResidualYawReference,
+                fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference,
                 Is.True,
                 "Full-body force-off probes must not disable lower-body residual yaw compensation.");
 
@@ -282,66 +282,66 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-exclude-lower-body-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
             SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.True);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.True);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-lower-body-only-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
             SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.True);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.True);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-leg-twist-only-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
             SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.True);
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-right-arm-frame-gate-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
@@ -350,19 +350,19 @@ namespace Tests.Editor.FBXImporter
             SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 92f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(88f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(92f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-left-arm-frame-gate-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
@@ -371,19 +371,19 @@ namespace Tests.Editor.FBXImporter
             SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 396f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(396f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(396f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-right-sleeve-chain-frame-gate-test");
             SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
@@ -392,19 +392,19 @@ namespace Tests.Editor.FBXImporter
             SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 90f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.manualAnimatorFullBodyPoseExcludeLowerBodyMuscles, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLowerBodyMusclesOnly, Is.False);
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLegTwistMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.True);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-test-cleanup");
         }
@@ -515,7 +515,7 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
-            Assert.That(fileManager.useSetHumanPoseRightLegTwistOutputReference, Is.False);
+            Assert.That(fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference, Is.False);
             Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta, Is.EqualTo(0.02f).Within(0.0001f));
 
@@ -525,10 +525,10 @@ namespace Tests.Editor.FBXImporter
             SetYybVisualComparisonRunnerStaticField("_setHumanPoseRightLegTwistOutputReferenceMaxDelta", 0.01f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
-            Assert.That(fileManager.useSetHumanPoseRightLegTwistOutputReference, Is.True);
+            Assert.That(fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference, Is.True);
             Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceWeight, Is.EqualTo(0.5f).Within(0.0001f));
             Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta, Is.EqualTo(0.01f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("set-human-pose-right-leg-twist-output-cleanup");
         }
@@ -537,7 +537,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_YybSideHairSilhouetteGuard_When_Applied_Then_ContractsOnlyHairChains()
         {
             Type guardType = typeof(FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.HumanoidYybHairSilhouetteGuard");
+                "Fbx2Vmd.FBXImporter.HumanoidYybHairSilhouetteGuard");
             Assert.That(
                 guardType,
                 Is.Null,
@@ -764,11 +764,11 @@ namespace Tests.Editor.FBXImporter
                 Is.GreaterThanOrEqualTo(0.9f),
                 "Main_Recoding must keep the natural moving-root carrier enabled for manual-style preview/export.");
             Assert.That(
-                fileManager.useRetargetBodyPositionXZRootMotion,
+                fileManager.ShouldUseRetargetBodyPositionXZRootMotion,
                 Is.True,
                 "Main_Recoding must preserve bodyPosition X/Z root motion instead of behaving like Main_Auto.");
             Assert.That(
-                fileManager.useEditorHumanoidRootTranslationReference,
+                fileManager.ShouldUseEditorHumanoidRootTranslationReference,
                 Is.False,
                 "Main_Recoding must not add Humanoid RootT translation on top of bodyPosition X/Z root motion.");
             Assert.That(
@@ -910,21 +910,21 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorFootLocalRotationReference = false;
+                manager.ShouldUseManualAnimatorFootLocalRotationReference = false;
                 manager.manualAnimatorFootLocalRotationReferenceWeight = 0f;
 
                 bool enabledApplied = ApplyManualAnimatorFootLocalRotationRuntimeOverride(manager, true);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFootLocalRotationReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
                 Assert.That(manager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Foot/toe runtime candidate must not re-enable the rejected hips/local body pose copy path.");
-                Assert.That(manager.useManualAnimatorFootHeightGroundingReference, Is.False, "Foot/toe runtime candidate must not change the grounding reference path.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Foot/toe runtime candidate must not re-enable the rejected hips/local body pose copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Foot/toe runtime candidate must not change the grounding reference path.");
 
                 bool disabledApplied = ApplyManualAnimatorFootLocalRotationRuntimeOverride(manager, false);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFootLocalRotationReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False);
                 Assert.That(manager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
@@ -940,23 +940,23 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorHipsLocalPositionReference = false;
-                manager.useManualAnimatorFootHeightGroundingReference = false;
-                manager.useManualAnimatorFootLocalRotationReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldUseManualAnimatorFootHeightGroundingReference = false;
+                manager.ShouldUseManualAnimatorFootLocalRotationReference = false;
 
                 bool enabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, true);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.True);
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Full-body pose candidate must not re-enable the rejected hips localPosition copy path.");
-                Assert.That(manager.useManualAnimatorFootHeightGroundingReference, Is.False, "Full-body pose candidate must not change the grounding reference path.");
-                Assert.That(manager.useManualAnimatorFootLocalRotationReference, Is.False, "Full-body pose candidate must not implicitly enable the leg-chain localRotation candidate.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Full-body pose candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Full-body pose candidate must not change the grounding reference path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False, "Full-body pose candidate must not implicitly enable the leg-chain localRotation candidate.");
 
                 bool disabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, false);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
             }
             finally
             {
@@ -975,7 +975,7 @@ namespace Tests.Editor.FBXImporter
                 bool enabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, true, 0.35f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
                 Assert.That(
                     GetField<float>(manager, "manualAnimatorFullBodyPoseReferenceWeight"),
                     Is.EqualTo(0.35f).Within(0.0001f));
@@ -990,7 +990,7 @@ namespace Tests.Editor.FBXImporter
                 bool disabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, false, 0.35f);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
                 Assert.That(
                     GetField<float>(manager, "manualAnimatorFullBodyPoseReferenceWeight"),
                     Is.EqualTo(0f).Within(0.0001f));
@@ -1008,27 +1008,27 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorBodyRotationReference = false;
+                manager.ShouldUseManualAnimatorBodyRotationReference = false;
                 manager.manualAnimatorBodyRotationReferenceWeight = 0f;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorHipsLocalPositionReference = false;
-                manager.useManualAnimatorFootHeightGroundingReference = false;
-                manager.useManualAnimatorFootLocalRotationReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldUseManualAnimatorFootHeightGroundingReference = false;
+                manager.ShouldUseManualAnimatorFootLocalRotationReference = false;
 
                 bool enabledApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, true);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorBodyRotationReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
                 Assert.That(manager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Body rotation candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Body rotation candidate must not re-enable the rejected hips localPosition copy path.");
-                Assert.That(manager.useManualAnimatorFootHeightGroundingReference, Is.False, "Body rotation candidate must not change the grounding reference path.");
-                Assert.That(manager.useManualAnimatorFootLocalRotationReference, Is.False, "Body rotation candidate must not implicitly enable the leg-chain localRotation candidate.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Body rotation candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Body rotation candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Body rotation candidate must not change the grounding reference path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False, "Body rotation candidate must not implicitly enable the leg-chain localRotation candidate.");
 
                 bool disabledApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, false);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorBodyRotationReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.False);
                 Assert.That(manager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
@@ -1048,7 +1048,7 @@ namespace Tests.Editor.FBXImporter
                 bool enabledApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, true, 0.35f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorBodyRotationReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
                 Assert.That(manager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0.35f).Within(0.0001f));
 
                 bool clampedApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, true, 2f);
@@ -1072,7 +1072,7 @@ namespace Tests.Editor.FBXImporter
                 manager.smoothRetargetPoseOnVisualStepSpike = true;
                 manager.RetargetPoseVisualSpikeCurrentWeight = 0.65f;
                 manager.RetargetPoseVisualSpikeForearmStretchClampMaxOffset = 0f;
-                manager.useManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
                 manager.enableYybArmSwingLimitCorrection = false;
                 manager.usePostSetHumanPoseRightEndpointPositionReference = false;
 
@@ -1086,7 +1086,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.smoothRetargetPoseOnVisualStepSpike, Is.False);
                 Assert.That(manager.RetargetPoseVisualSpikeCurrentWeight, Is.EqualTo(1f).Within(0.0001f));
                 Assert.That(manager.RetargetPoseVisualSpikeForearmStretchClampMaxOffset, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Visual spike smoothing candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Visual spike smoothing candidate must not replace full-body muscles.");
                 Assert.That(manager.enableYybArmSwingLimitCorrection, Is.False, "Visual spike smoothing candidate must not implicitly change the arm swing limiter.");
                 Assert.That(manager.usePostSetHumanPoseRightEndpointPositionReference, Is.False, "Visual spike smoothing candidate must not enable endpoint compensation.");
 
@@ -1118,8 +1118,8 @@ namespace Tests.Editor.FBXImporter
                 manager.useManualAnimatorThumbLocalRotationReference = false;
                 manager.useManualAnimatorHandPalmFrameReference = false;
                 manager.manualAnimatorHandPalmFrameWeight = 0f;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorFingerPoseReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorFingerPoseReference = false;
 
                 bool enabledApplied = ApplyManualAnimatorHandLocalRotationRuntimeOverride(manager, true);
 
@@ -1127,8 +1127,8 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.useManualAnimatorHandLocalRotationReference, Is.True);
                 Assert.That(manager.useManualAnimatorThumbLocalRotationReference, Is.False, "Hand local candidate must not implicitly enable thumb local rotation reference.");
                 Assert.That(manager.useManualAnimatorHandPalmFrameReference, Is.False, "Hand local candidate must not implicitly enable palm-frame reference.");
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Hand local candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorFingerPoseReference, Is.False, "Hand local candidate must not enable finger curl copy.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Hand local candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorFingerPoseReference, Is.False, "Hand local candidate must not enable finger curl copy.");
 
                 bool disabledApplied = ApplyManualAnimatorHandLocalRotationRuntimeOverride(manager, false);
 
@@ -1151,8 +1151,8 @@ namespace Tests.Editor.FBXImporter
                 manager.useManualAnimatorThumbLocalRotationReference = false;
                 manager.useManualAnimatorHandLocalRotationReference = false;
                 manager.useManualAnimatorHandPalmFrameReference = false;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorFingerPoseReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorFingerPoseReference = false;
 
                 bool enabledApplied = ApplyManualAnimatorThumbLocalRotationRuntimeOverride(manager, true);
 
@@ -1160,8 +1160,8 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.useManualAnimatorThumbLocalRotationReference, Is.True);
                 Assert.That(manager.useManualAnimatorHandLocalRotationReference, Is.False, "Thumb candidate must not implicitly enable whole-hand local rotation reference.");
                 Assert.That(manager.useManualAnimatorHandPalmFrameReference, Is.False, "Thumb candidate must not implicitly enable palm-frame reference.");
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Thumb candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorFingerPoseReference, Is.False, "Thumb candidate must not enable finger curl copy.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Thumb candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorFingerPoseReference, Is.False, "Thumb candidate must not enable finger curl copy.");
 
                 bool disabledApplied = ApplyManualAnimatorThumbLocalRotationRuntimeOverride(manager, false);
 
@@ -1185,8 +1185,8 @@ namespace Tests.Editor.FBXImporter
                 manager.manualAnimatorHandPalmFrameWeight = 0f;
                 manager.useManualAnimatorHandLocalRotationReference = false;
                 manager.useManualAnimatorThumbLocalRotationReference = false;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorFingerPoseReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorFingerPoseReference = false;
 
                 bool enabledApplied = ApplyManualAnimatorHandPalmFrameRuntimeOverride(manager, true, 0.35f);
 
@@ -1195,8 +1195,8 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.manualAnimatorHandPalmFrameWeight, Is.EqualTo(0.35f).Within(0.0001f));
                 Assert.That(manager.useManualAnimatorHandLocalRotationReference, Is.False, "Palm-frame candidate must not implicitly enable whole-hand local rotation reference.");
                 Assert.That(manager.useManualAnimatorThumbLocalRotationReference, Is.False, "Palm-frame candidate must not implicitly enable thumb local rotation reference.");
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Palm-frame candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorFingerPoseReference, Is.False, "Palm-frame candidate must not enable finger curl copy.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Palm-frame candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorFingerPoseReference, Is.False, "Palm-frame candidate must not enable finger curl copy.");
 
                 bool clampedApplied = ApplyManualAnimatorHandPalmFrameRuntimeOverride(manager, true, 2f);
 
@@ -1263,9 +1263,9 @@ namespace Tests.Editor.FBXImporter
                 manager.YybArmSwingMaxDownDot = 0.68f;
                 manager.YybArmSwingMinHandHorizontalRatio = 0.05f;
                 manager.YybArmSwingMaxHandBelowShoulderRatio = 0.75f;
-                manager.useManualAnimatorBodyRotationReference = false;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldUseManualAnimatorBodyRotationReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
 
                 bool enabledApplied = ApplyYybArmSwingLimitRuntimeOverride(
                     manager,
@@ -1281,9 +1281,9 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.YybArmSwingMaxDownDot, Is.EqualTo(0.42f).Within(0.0001f));
                 Assert.That(manager.YybArmSwingMinHandHorizontalRatio, Is.EqualTo(0.07f).Within(0.0001f));
                 Assert.That(manager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(0.6f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorBodyRotationReference, Is.False, "Arm swing candidate must not implicitly enable bodyRotation reference.");
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Arm swing candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Arm swing candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.False, "Arm swing candidate must not implicitly enable bodyRotation reference.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Arm swing candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Arm swing candidate must not re-enable the rejected hips localPosition copy path.");
 
                 bool disabledApplied = ApplyYybArmSwingLimitRuntimeOverride(
                     manager,
@@ -1316,7 +1316,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(maxReachField, Is.Not.Null, "YYB arm swing runtime candidate must expose a max horizontal reach ratio.");
 
                 Type runnerType = Type.GetType(
-                    "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                    "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
                 MethodInfo method = runnerType.GetMethod(
@@ -1392,7 +1392,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(gateField, Is.Not.Null, "YYB arm swing runtime candidate must expose a horizontal-reach-only below-shoulder gate.");
 
                 Type runnerType = Type.GetType(
-                    "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                    "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
                 MethodInfo method = runnerType.GetMethod(
@@ -1470,7 +1470,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(elbowGuardField, Is.Not.Null, "YYB arm swing runtime candidate must expose a post-horizontal-reach elbow saturation guard.");
 
                 Type runnerType = Type.GetType(
-                    "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                    "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
                 MethodInfo method = runnerType.GetMethod(
@@ -1551,9 +1551,9 @@ namespace Tests.Editor.FBXImporter
                 manager.YybArmDirectionUpperArmMaxDegrees = 0f;
                 manager.YybArmDirectionForearmMaxDegrees = 0f;
                 manager.enableYybArmSwingLimitCorrection = false;
-                manager.useManualAnimatorBodyRotationReference = false;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldUseManualAnimatorBodyRotationReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
 
                 bool enabledApplied = ApplyYybArmDirectionRetargetRuntimeOverride(
                     manager,
@@ -1570,9 +1570,9 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.YybArmDirectionUpperArmMaxDegrees, Is.EqualTo(22f).Within(0.0001f));
                 Assert.That(manager.YybArmDirectionForearmMaxDegrees, Is.EqualTo(35f).Within(0.0001f));
                 Assert.That(manager.enableYybArmSwingLimitCorrection, Is.False, "Arm direction candidate must not implicitly enable the swing limiter.");
-                Assert.That(manager.useManualAnimatorBodyRotationReference, Is.False, "Arm direction candidate must not implicitly enable bodyRotation reference.");
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Arm direction candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Arm direction candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.False, "Arm direction candidate must not implicitly enable bodyRotation reference.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Arm direction candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Arm direction candidate must not re-enable the rejected hips localPosition copy path.");
 
                 bool clampedApplied = ApplyYybArmDirectionRetargetRuntimeOverride(
                     manager,
@@ -1705,9 +1705,9 @@ namespace Tests.Editor.FBXImporter
                 manager.YybArmSleeveAnchorMaxDegrees = 0f;
                 manager.enableYybArmDirectionRetargetCorrection = false;
                 manager.enableYybArmSwingLimitCorrection = false;
-                manager.useManualAnimatorBodyRotationReference = false;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldUseManualAnimatorBodyRotationReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
 
                 bool enabledApplied = ApplyYybArmSleeveAnchorRuntimeOverride(
                     manager,
@@ -1723,9 +1723,9 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.YybArmSleeveAnchorMaxDegrees, Is.EqualTo(42f).Within(0.0001f));
                 Assert.That(manager.enableYybArmDirectionRetargetCorrection, Is.False, "Sleeve anchor candidate must not implicitly enable arm direction retarget.");
                 Assert.That(manager.enableYybArmSwingLimitCorrection, Is.False, "Sleeve anchor candidate must not implicitly enable the swing limiter.");
-                Assert.That(manager.useManualAnimatorBodyRotationReference, Is.False, "Sleeve anchor candidate must not implicitly enable bodyRotation reference.");
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Sleeve anchor candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Sleeve anchor candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.False, "Sleeve anchor candidate must not implicitly enable bodyRotation reference.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Sleeve anchor candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Sleeve anchor candidate must not re-enable the rejected hips localPosition copy path.");
 
                 bool clampedApplied = ApplyYybArmSleeveAnchorRuntimeOverride(
                     manager,
@@ -1772,9 +1772,9 @@ namespace Tests.Editor.FBXImporter
                 manager.YybArmVisualForearmMaxDegrees = 0f;
                 manager.enableYybArmDirectionRetargetCorrection = false;
                 manager.enableYybArmSwingLimitCorrection = false;
-                manager.useManualAnimatorBodyRotationReference = false;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldUseManualAnimatorBodyRotationReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
 
                 bool enabledApplied = ApplyYybArmVisualTwistRuntimeOverride(
                     manager,
@@ -1792,9 +1792,9 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.YybArmVisualForearmMaxDegrees, Is.EqualTo(50f).Within(0.0001f));
                 Assert.That(manager.enableYybArmDirectionRetargetCorrection, Is.False, "Visual twist candidate must not implicitly enable arm direction retarget.");
                 Assert.That(manager.enableYybArmSwingLimitCorrection, Is.False, "Visual twist candidate must not implicitly enable the swing limiter.");
-                Assert.That(manager.useManualAnimatorBodyRotationReference, Is.False, "Visual twist candidate must not implicitly enable bodyRotation reference.");
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Visual twist candidate must not replace full-body muscles.");
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Visual twist candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.False, "Visual twist candidate must not implicitly enable bodyRotation reference.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Visual twist candidate must not replace full-body muscles.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Visual twist candidate must not re-enable the rejected hips localPosition copy path.");
 
                 bool clampedApplied = ApplyYybArmVisualTwistRuntimeOverride(
                     manager,
@@ -1848,8 +1848,8 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.True);
                 Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(0.65f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0.12f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFootLocalRotationReference, Is.False, "BipedIK foot position candidate must not implicitly enable the leg-chain localRotation candidate.");
-                Assert.That(manager.useManualAnimatorFootHeightGroundingReference, Is.False, "BipedIK foot position candidate must not change the grounding reference path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False, "BipedIK foot position candidate must not implicitly enable the leg-chain localRotation candidate.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "BipedIK foot position candidate must not change the grounding reference path.");
                 Assert.That(manager.enableFinalIkFootGroundingExperiment, Is.False, "BipedIK foot position candidate must not enable GrounderBipedIK.");
 
                 bool disabledApplied = ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(manager, false);
@@ -2054,7 +2054,7 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(enabledApplied, Is.True);
                 Assert.That(ReadBoolField(manager, "usePostSetHumanPoseRightEndpointPositionReference"), Is.True);
-                Assert.That(ReadBoolField(manager, "postSetHumanPoseEndpointPositionUseLeftSide"), Is.True);
+                Assert.That(ReadBoolField(manager, "ShouldUseLeftSideForPostSetHumanPoseEndpointPosition"), Is.True);
                 Assert.That(ReadFloatField(manager, "postSetHumanPoseRightEndpointPositionReferenceFrameGateStart"), Is.EqualTo(300f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd"), Is.EqualTo(600f).Within(0.0001f));
 
@@ -2073,7 +2073,7 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(disabledApplied, Is.True);
                 Assert.That(ReadBoolField(manager, "usePostSetHumanPoseRightEndpointPositionReference"), Is.False);
-                Assert.That(ReadBoolField(manager, "postSetHumanPoseEndpointPositionUseLeftSide"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldUseLeftSideForPostSetHumanPoseEndpointPosition"), Is.False);
             }
             finally
             {
@@ -2205,14 +2205,14 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(enabledApplied, Is.True);
                 Assert.That(ReadBoolField(manager, "usePreSetHumanPoseRightEndpointPositionReference"), Is.True);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseLeftSide"), Is.True);
+                Assert.That(ReadBoolField(manager, "ShouldUseLeftSideForPreSetHumanPoseEndpointPosition"), Is.True);
                 Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseGhostCurrentBasis"), Is.True);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionX"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionZ"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyX"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyZ"), Is.False);
                 Assert.That(ReadFloatField(manager, "preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight"), Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(ReadBoolField(manager, "usePostSetHumanPoseRightEndpointPositionReference"), Is.False,
                     "The pre-SetHumanPose left endpoint candidate must not enable the already rejected post-solve endpoint path.");
-                Assert.That(ReadBoolField(manager, "postSetHumanPoseEndpointPositionUseLeftSide"), Is.False,
+                Assert.That(ReadBoolField(manager, "ShouldUseLeftSideForPostSetHumanPoseEndpointPosition"), Is.False,
                     "The pre-SetHumanPose side switch must stay isolated from the post-solve endpoint side switch.");
 
                 bool disabledApplied = ApplyPreSetHumanPoseEndpointPositionRuntimeOverride(
@@ -2229,10 +2229,10 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(disabledApplied, Is.True);
                 Assert.That(ReadBoolField(manager, "usePreSetHumanPoseRightEndpointPositionReference"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseLeftSide"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldUseLeftSideForPreSetHumanPoseEndpointPosition"), Is.False);
                 Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseGhostCurrentBasis"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionX"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionZ"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyX"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyZ"), Is.False);
             }
             finally
             {
@@ -2264,10 +2264,10 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(enabledApplied, Is.True);
                 Assert.That(ReadBoolField(manager, "usePreSetHumanPoseRightEndpointPositionReference"), Is.True);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseLeftSide"), Is.True);
+                Assert.That(ReadBoolField(manager, "ShouldUseLeftSideForPreSetHumanPoseEndpointPosition"), Is.True);
                 Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseGhostCurrentBasis"), Is.True);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionX"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionZ"), Is.True);
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyX"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyZ"), Is.True);
 
                 bool disabledApplied = ApplyPreSetHumanPoseEndpointPositionRuntimeOverride(
                     manager,
@@ -2285,10 +2285,10 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(disabledApplied, Is.True);
                 Assert.That(ReadBoolField(manager, "usePreSetHumanPoseRightEndpointPositionReference"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseLeftSide"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldUseLeftSideForPreSetHumanPoseEndpointPosition"), Is.False);
                 Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionUseGhostCurrentBasis"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionX"), Is.False);
-                Assert.That(ReadBoolField(manager, "preSetHumanPoseEndpointPositionInvertBodyPositionZ"), Is.False,
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyX"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldInvertPreSetHumanPoseEndpointPositionBodyZ"), Is.False,
                     "Disabling the runtime candidate must clear the inversion flag so restore runs return to the default route.");
             }
             finally
@@ -2304,25 +2304,25 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.lockTargetHumanoidBonePositions = true;
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldLockTargetHumanoidBonePositions = true;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
                 manager.useManualAnimatorBipedIkFootPositionReference = false;
 
                 bool unlockedApplied = ApplyTargetHumanoidBonePositionLockRuntimeOverride(manager, false);
 
                 Assert.That(unlockedApplied, Is.True);
-                Assert.That(manager.lockTargetHumanoidBonePositions, Is.False);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False);
+                Assert.That(manager.ShouldLockTargetHumanoidBonePositions, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False);
 
                 bool lockedApplied = ApplyTargetHumanoidBonePositionLockRuntimeOverride(manager, true);
 
                 Assert.That(lockedApplied, Is.True);
-                Assert.That(manager.lockTargetHumanoidBonePositions, Is.True);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False);
+                Assert.That(manager.ShouldLockTargetHumanoidBonePositions, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False);
             }
             finally
@@ -2338,26 +2338,26 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useRetargetBodyPositionXZRootMotion = false;
-                manager.useManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseRetargetBodyPositionXZRootMotion = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
                 manager.usePreSetHumanPoseRightEndpointPositionReference = false;
-                manager.lockTargetHumanoidBonePositions = true;
+                manager.ShouldLockTargetHumanoidBonePositions = true;
 
                 bool enabledApplied = ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(manager, true);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useRetargetBodyPositionXZRootMotion, Is.True);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseRetargetBodyPositionXZRootMotion, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
                 Assert.That(manager.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
-                Assert.That(manager.lockTargetHumanoidBonePositions, Is.True);
+                Assert.That(manager.ShouldLockTargetHumanoidBonePositions, Is.True);
 
                 bool disabledApplied = ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(manager, false);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useRetargetBodyPositionXZRootMotion, Is.False);
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
                 Assert.That(manager.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
-                Assert.That(manager.lockTargetHumanoidBonePositions, Is.True);
+                Assert.That(manager.ShouldLockTargetHumanoidBonePositions, Is.True);
             }
             finally
             {
@@ -2372,9 +2372,9 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
                 manager.usePreSetHumanPoseRightEndpointPositionReference = false;
-                manager.useRetargetBodyPositionXZRootMotion = false;
+                manager.ShouldUseRetargetBodyPositionXZRootMotion = false;
 
                 bool enabledApplied = ApplyManualAnimatorBodyPositionXzRuntimeOverride(
                     manager,
@@ -2388,7 +2388,7 @@ namespace Tests.Editor.FBXImporter
                     axisZScale: 0.75f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(ReadBoolField(manager, "useManualAnimatorBodyPositionXzReference"), Is.True);
+                Assert.That(ReadBoolField(manager, "ShouldUseManualAnimatorBodyPositionXzReference"), Is.True);
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceWeight"), Is.EqualTo(0.45f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceMaxOffset"), Is.EqualTo(0.025f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateStart"), Is.EqualTo(300f).Within(0.0001f));
@@ -2396,9 +2396,9 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames"), Is.EqualTo(30f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisXScale"), Is.EqualTo(0.25f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisZScale"), Is.EqualTo(0.75f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
                 Assert.That(manager.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
-                Assert.That(manager.useRetargetBodyPositionXZRootMotion, Is.False);
+                Assert.That(manager.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
 
                 bool disabledApplied = ApplyManualAnimatorBodyPositionXzRuntimeOverride(
                     manager,
@@ -2412,15 +2412,15 @@ namespace Tests.Editor.FBXImporter
                     axisZScale: 0.75f);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(ReadBoolField(manager, "useManualAnimatorBodyPositionXzReference"), Is.False);
+                Assert.That(ReadBoolField(manager, "ShouldUseManualAnimatorBodyPositionXzReference"), Is.False);
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateStart"), Is.EqualTo(300f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateEnd"), Is.EqualTo(600f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames"), Is.EqualTo(30f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisXScale"), Is.EqualTo(0.25f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisZScale"), Is.EqualTo(0.75f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
                 Assert.That(manager.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
-                Assert.That(manager.useRetargetBodyPositionXZRootMotion, Is.False);
+                Assert.That(manager.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
             }
             finally
             {
@@ -2435,8 +2435,8 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorFullBodyPoseReference = false;
-                manager.useManualAnimatorBodyPositionXzReference = false;
+                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                manager.ShouldUseManualAnimatorBodyPositionXzReference = false;
                 manager.enableYybArmSleeveAnchorCorrection = true;
 
                 bool enabledApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
@@ -2451,8 +2451,8 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetX"), Is.EqualTo(-0.055f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateStart"), Is.EqualTo(90f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateEnd"), Is.EqualTo(90f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.useManualAnimatorBodyPositionXzReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorBodyPositionXzReference, Is.False);
                 Assert.That(manager.enableYybArmSleeveAnchorCorrection, Is.True);
 
                 bool clampedApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
@@ -2604,7 +2604,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorHipsLocalPositionReference = false;
+                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
                 manager.manualAnimatorHipsLocalPositionWeight = 0f;
                 manager.manualAnimatorHipsLocalPositionMaxOffset = 0f;
 
@@ -2615,12 +2615,12 @@ namespace Tests.Editor.FBXImporter
                     maxOffset: 0.04f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
                 Assert.That(manager.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(0.25f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFullBodyPoseReference, Is.False, "Hips local-position candidate must not enable the full-body pose copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Hips local-position candidate must not enable the full-body pose copy path.");
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Hips local-position candidate must not enable the rejected BipedIK pull path.");
-                Assert.That(manager.useManualAnimatorFootHeightGroundingReference, Is.False, "Hips local-position candidate must not change grounding.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Hips local-position candidate must not change grounding.");
 
                 bool disabledApplied = ApplyManualAnimatorHipsLocalPositionRuntimeOverride(
                     manager,
@@ -2629,7 +2629,7 @@ namespace Tests.Editor.FBXImporter
                     maxOffset: 0.04f);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
                 Assert.That(manager.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
             }
@@ -2646,7 +2646,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorFootHipsAlignedResidualYawReference = false;
+                manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = false;
                 manager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight = 0f;
                 manager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = 0f;
 
@@ -2657,12 +2657,12 @@ namespace Tests.Editor.FBXImporter
                     maxAngle: 12f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
                 Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(0.8f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(12f).Within(0.0001f));
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Foot residual yaw candidate must not enable the rejected BipedIK pull path.");
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Foot residual yaw candidate must not re-enable the rejected hips localPosition copy path.");
-                Assert.That(manager.useManualAnimatorFootHeightGroundingReference, Is.False, "Foot residual yaw candidate must not change grounding.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Foot residual yaw candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Foot residual yaw candidate must not change grounding.");
 
                 bool disabledApplied = ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
                     manager,
@@ -2671,7 +2671,7 @@ namespace Tests.Editor.FBXImporter
                     maxAngle: 12f);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False);
                 Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(12f).Within(0.0001f));
             }
@@ -2688,10 +2688,10 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
-                manager.disableManualAnimatorFootToToesSegmentDirectionReference = true;
+                manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = true;
                 manager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 4f;
 
                 bool enabledApplied = ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
@@ -2701,14 +2701,14 @@ namespace Tests.Editor.FBXImporter
                     maxAngle: 6.2f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(0.75f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(6.2f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
                 Assert.That(manager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle, Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Segment direction candidate must not enable the rejected BipedIK pull path.");
-                Assert.That(manager.useManualAnimatorHipsLocalPositionReference, Is.False, "Segment direction candidate must not re-enable the rejected hips localPosition copy path.");
-                Assert.That(manager.useManualAnimatorFootHeightGroundingReference, Is.False, "Segment direction candidate must not change grounding.");
+                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Segment direction candidate must not re-enable the rejected hips localPosition copy path.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Segment direction candidate must not change grounding.");
 
                 bool disabledApplied = ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
                     manager,
@@ -2717,10 +2717,10 @@ namespace Tests.Editor.FBXImporter
                     maxAngle: 6.2f);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.False);
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(6.2f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
                 Assert.That(manager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
@@ -2736,10 +2736,10 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
-                manager.disableManualAnimatorFootToToesSegmentDirectionReference = false;
+                manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = false;
                 manager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
 
                 bool applied = ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
@@ -2751,12 +2751,12 @@ namespace Tests.Editor.FBXImporter
                     footToToesMaxAngle: 2f);
 
                 Assert.That(applied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.True);
                 Assert.That(manager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle, Is.EqualTo(2f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "FootToToes segment ablation must not alter residual yaw correction.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "FootToToes segment ablation must not alter residual yaw correction.");
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "FootToToes segment ablation must not enable the rejected BipedIK pull path.");
             }
             finally
@@ -2772,14 +2772,14 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
-                manager.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = false;
+                manager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = false;
                 manager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = 0f;
-                manager.disableManualAnimatorLowerLegToFootSegmentDirectionReference = false;
+                manager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference = false;
                 manager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
-                manager.disableManualAnimatorFootToToesSegmentDirectionReference = false;
+                manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = false;
                 manager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
 
                 bool applied = ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
@@ -2795,16 +2795,16 @@ namespace Tests.Editor.FBXImporter
                     footToToesMaxAngle: 0f);
 
                 Assert.That(applied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference, Is.True);
                 Assert.That(manager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle, Is.EqualTo(3f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.True);
                 Assert.That(manager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle, Is.EqualTo(2f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
                 Assert.That(manager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Leg-chain segment ablation must not alter residual yaw correction.");
+                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Leg-chain segment ablation must not alter residual yaw correction.");
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Leg-chain segment ablation must not enable the rejected BipedIK pull path.");
             }
             finally
@@ -2820,7 +2820,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
 
@@ -2839,14 +2839,14 @@ namespace Tests.Editor.FBXImporter
                     footToToesMaxAngle: 0f);
 
                 Assert.That(applied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
                 Assert.That(manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(2f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
-                Assert.That(manager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Right-side segment ablation must not alter residual yaw correction.");
+                Assert.That(manager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Right-side segment ablation must not alter residual yaw correction.");
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Right-side segment ablation must not enable the rejected BipedIK pull path.");
             }
             finally
@@ -2862,7 +2862,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
 
@@ -2886,13 +2886,13 @@ namespace Tests.Editor.FBXImporter
                     footToToesMaxAngle: 0f);
 
                 Assert.That(applied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(ReadFloatField(manager, "manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(4f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale"), Is.EqualTo(0.25f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
-                Assert.That(manager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Axis-aware lower leg ablation must not alter residual yaw correction.");
+                Assert.That(manager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Axis-aware lower leg ablation must not alter residual yaw correction.");
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Axis-aware lower leg ablation must not enable the rejected BipedIK pull path.");
             }
             finally
@@ -2908,7 +2908,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
 
@@ -2932,16 +2932,16 @@ namespace Tests.Editor.FBXImporter
                     footToToesMaxAngle: 0f);
 
                 Assert.That(applied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(ReadFloatField(manager, "manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(4f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale"), Is.EqualTo(1f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight"), Is.EqualTo(0.5f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart"), Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd"), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
-                Assert.That(manager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Soft-blend lower leg ablation must not alter residual yaw correction.");
+                Assert.That(manager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False, "Soft-blend lower leg ablation must not alter residual yaw correction.");
                 Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Soft-blend lower leg ablation must not enable the rejected BipedIK pull path.");
             }
             finally
@@ -2957,7 +2957,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
 
@@ -2981,14 +2981,14 @@ namespace Tests.Editor.FBXImporter
                     footToToesMaxAngle: 0f);
 
                 Assert.That(applied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(4f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale"), Is.EqualTo(1f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart"), Is.EqualTo(900f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd"), Is.EqualTo(930f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
             }
             finally
             {
@@ -3003,7 +3003,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = false;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = 0f;
                 manager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 0f;
 
@@ -3027,13 +3027,13 @@ namespace Tests.Editor.FBXImporter
                     footToToesMaxAngle: 0f);
 
                 Assert.That(applied, Is.True);
-                Assert.That(manager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True);
+                Assert.That(manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(4f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight"), Is.EqualTo(0.5f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight"), Is.EqualTo(1f).Within(0.0001f));
                 Assert.That(ReadFloatField(manager, "manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle"), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.disableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
-                Assert.That(manager.disableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference, Is.False);
+                Assert.That(manager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference, Is.False);
             }
             finally
             {
@@ -3050,7 +3050,7 @@ namespace Tests.Editor.FBXImporter
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
                 var retargeter = retargeterObject.AddComponent<PoseSpaceRetargeter>();
-                manager.useManualAnimatorLowerBodySegmentDirectionReference = true;
+                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = true;
 
                 AnimationClip referenceClip = LoadFirstHumanoidAnimationClip("Assets/_Project/FBX/satisfaction_2.fbx");
                 Assert.That(referenceClip, Is.Not.Null, "satisfaction_2 reference clip must be available for lower-body segment A/B probes.");
@@ -5433,7 +5433,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_MainRecordingStableCandidate_When_ExportIkSourceDiagnosticsExists_Then_CopiesDiagnosticsBesideStableVmd()
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             Type captureModeType = runnerType.GetNestedType("CaptureMode", BindingFlags.NonPublic);
@@ -5513,7 +5513,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure()
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             Type captureModeType = runnerType.GetNestedType("CaptureMode", BindingFlags.NonPublic);
@@ -5878,7 +5878,7 @@ namespace Tests.Editor.FBXImporter
             params string[] existingAssetPaths)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -5898,7 +5898,7 @@ namespace Tests.Editor.FBXImporter
         private static int ResolveSummaryTargetFrameCount(int referenceTargetFrameCount, int mainAutoFrameCount)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -5928,10 +5928,10 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, $"{scenePath} must keep YYB arm visual twist correction enabled.");
             Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, $"{scenePath} must keep sleeve anchor correction enabled.");
             Assert.That(fileManager.YybArmSleeveAnchorInfluence, Is.EqualTo(0.825f).Within(0.0001f), $"{scenePath} must keep the measured sleeve anchor influence that reduces non-hair avg without worsening the current max metrics.");
-            Assert.That(fileManager.useManualAnimatorFingerPoseReference, Is.False, $"{scenePath} must not copy manual finger pose into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorBodyRotationReference, Is.True, $"{scenePath} must use the accepted MP4-aligned body rotation reference in the normal Play/import path.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFingerPoseReference, Is.False, $"{scenePath} must not copy manual finger pose into the normal Play/import path.");
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True, $"{scenePath} must use the accepted MP4-aligned body rotation reference in the normal Play/import path.");
             Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted body rotation blend.");
-            Assert.That(fileManager.useManualAnimatorBodyPositionYReference, Is.False, $"{scenePath} must not copy manual body Y into the normal Play/import path.");
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyPositionYReference, Is.False, $"{scenePath} must not copy manual body Y into the normal Play/import path.");
             Assert.That(fileManager.useManualAnimatorHandLocalRotationReference, Is.True, $"{scenePath} must use the measured manual hand local rotation reference in the normal Play/import path.");
             Assert.That(fileManager.useManualAnimatorThumbLocalRotationReference, Is.False, $"{scenePath} must not copy manual thumb local rotation into the normal Play/import path.");
             Assert.That(fileManager.useManualAnimatorThumbSegmentDirectionReference, Is.False, $"{scenePath} must not copy manual thumb segment direction into the normal Play/import path.");
@@ -5954,12 +5954,12 @@ namespace Tests.Editor.FBXImporter
                 Is.LessThanOrEqualTo(MaxSmokeSafeThumbProjectionMaxPalmNormal),
                 $"{scenePath} must cap thumb palm-normal projection before YYB smoke deformation risk can exceed 0.35.");
             Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.True, $"{scenePath} must fail editor smoke when thumb risk exceeds the threshold.");
-            Assert.That(fileManager.useManualAnimatorFootLocalRotationReference, Is.True, $"{scenePath} must use the accepted MP4-aligned foot/toe localRotation reference in the normal Play/import path.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True, $"{scenePath} must use the accepted MP4-aligned foot/toe localRotation reference in the normal Play/import path.");
             Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted foot/toe localRotation blend.");
-            Assert.That(fileManager.useManualAnimatorLowerBodySegmentDirectionReference, Is.True, $"{scenePath} must use the accepted lower-body segment direction guard.");
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True, $"{scenePath} must use the accepted lower-body segment direction guard.");
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted lower-body segment direction blend.");
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f), $"{scenePath} must keep the accepted lower-body segment direction cap.");
-            Assert.That(fileManager.useManualAnimatorFootHipsAlignedResidualYawReference, Is.True, $"{scenePath} must use the accepted foot hips-aligned residual yaw guard.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True, $"{scenePath} must use the accepted foot hips-aligned residual yaw guard.");
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted foot residual yaw blend.");
             Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f), $"{scenePath} must keep the accepted foot residual yaw cap.");
             Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.True, $"{scenePath} must use the accepted MP4-aligned arm swing limiter.");
@@ -5973,9 +5973,9 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot, Is.EqualTo(0.55f).Within(0.0001f), $"{scenePath} must keep the raised-pose cap limited to mildly lowered upper arms.");
             Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio, Is.EqualTo(0.05f).Within(0.0001f), $"{scenePath} must avoid applying the raised-pose cap to below-shoulder swing frames.");
             Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio, Is.EqualTo(0.55f).Within(0.0001f), $"{scenePath} must cap only wide raised-pose horizontal reach.");
-            Assert.That(fileManager.useManualAnimatorFullBodyPoseReference, Is.True, $"{scenePath} must blend the manual reference pose as the default playback source.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True, $"{scenePath} must blend the manual reference pose as the default playback source.");
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must use the measured full-body reference blend that reduces full max, non-hair max, and non-hair avg while the remaining upper/silhouette trade-off stays tracked.");
-            Assert.That(fileManager.useManualAnimatorHipsLocalPositionReference, Is.False, $"{scenePath} must not copy manual Hips localPosition into the default playback/import path.");
+            Assert.That(fileManager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, $"{scenePath} must not copy manual Hips localPosition into the default playback/import path.");
             Assert.That(fileManager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.12f).Within(0.0001f), $"{scenePath} must keep only the conservative serialized Hips reference cap while the reference is disabled.");
         }
 
@@ -5992,15 +5992,15 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
             Assert.That(
-                fileManager.preserveRetargetBodyPosition,
+                fileManager.ShouldPreserveRetargetBodyPosition,
                 Is.EqualTo(expectedPreserveRetargetBodyPosition),
                 $"{scenePath} must match the scene-specific body-position preservation policy.");
             Assert.That(
-                fileManager.useRetargetBodyPositionXZRootMotion,
+                fileManager.ShouldUseRetargetBodyPositionXZRootMotion,
                 Is.EqualTo(expectedUseRetargetBodyPositionXZRootMotion),
                 $"{scenePath} must keep the requested scene-specific X/Z root-motion policy.");
             Assert.That(
-                fileManager.useEditorHumanoidRootTranslationReference,
+                fileManager.ShouldUseEditorHumanoidRootTranslationReference,
                 Is.EqualTo(expectedUseEditorHumanoidRootTranslationReference),
                 $"{scenePath} must use the requested scene-specific Humanoid RootT translation policy.");
             Assert.That(
@@ -6016,10 +6016,10 @@ namespace Tests.Editor.FBXImporter
             FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
-            Assert.That(fileManager.preserveRetargetBodyPosition, Is.False, $"{scenePath} must let the imported FBX body position drive the moving-root solve.");
-            Assert.That(fileManager.useRetargetBodyPositionXZRootMotion, Is.True, $"{scenePath} must preserve X/Z body root motion.");
+            Assert.That(fileManager.ShouldPreserveRetargetBodyPosition, Is.False, $"{scenePath} must let the imported FBX body position drive the moving-root solve.");
+            Assert.That(fileManager.ShouldUseRetargetBodyPositionXZRootMotion, Is.True, $"{scenePath} must preserve X/Z body root motion.");
             Assert.That(fileManager.MovementScaleMultiplier, Is.GreaterThanOrEqualTo(minMovementScaleMultiplier), $"{scenePath} must not suppress moving-root preview/export.");
-            Assert.That(fileManager.useEditorHumanoidRootTranslationReference, Is.False, $"{scenePath} must avoid adding a second root translation source.");
+            Assert.That(fileManager.ShouldUseEditorHumanoidRootTranslationReference, Is.False, $"{scenePath} must avoid adding a second root translation source.");
         }
 
         private static void AssertRootYFreezeAfterInitialGrounding(string scenePath)
@@ -6150,7 +6150,7 @@ namespace Tests.Editor.FBXImporter
             float recordingFrameRate)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6185,7 +6185,7 @@ namespace Tests.Editor.FBXImporter
             string contactSheetPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6234,7 +6234,7 @@ namespace Tests.Editor.FBXImporter
             string candidateFrameIndexPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6286,7 +6286,7 @@ namespace Tests.Editor.FBXImporter
             string candidateFrameIndexPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6411,7 +6411,7 @@ namespace Tests.Editor.FBXImporter
         private static object BuildCandidateArtifactSelection(params MotionComparisonFrameQualitySummary[] summaries)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6446,7 +6446,7 @@ namespace Tests.Editor.FBXImporter
         private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6464,7 +6464,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyMmdIkDeltaGuardRuntimeOverride(UnityHumanoidVMDRecorder recorder, float overrideLimitVmd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6485,7 +6485,7 @@ namespace Tests.Editor.FBXImporter
             float recoveryTriggerVmd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6507,7 +6507,7 @@ namespace Tests.Editor.FBXImporter
             float recoveryDebtThresholdVmd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6530,7 +6530,7 @@ namespace Tests.Editor.FBXImporter
             int recoveryHoldFrames)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6548,7 +6548,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyFinalIkFootGroundingRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6566,7 +6566,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorFootLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6584,7 +6584,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorFullBodyPoseRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6605,7 +6605,7 @@ namespace Tests.Editor.FBXImporter
             float weight)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6623,7 +6623,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorBodyRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6644,7 +6644,7 @@ namespace Tests.Editor.FBXImporter
             float weight)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6666,7 +6666,7 @@ namespace Tests.Editor.FBXImporter
             float forearmStretchClampMaxOffset = 0f)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6687,7 +6687,7 @@ namespace Tests.Editor.FBXImporter
             float stretchLimit)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6711,7 +6711,7 @@ namespace Tests.Editor.FBXImporter
             float maxHandBelowShoulderRatio)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6753,7 +6753,7 @@ namespace Tests.Editor.FBXImporter
             float forearmMaxDegrees)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6797,7 +6797,7 @@ namespace Tests.Editor.FBXImporter
             float rightSideWeightScale)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6852,7 +6852,7 @@ namespace Tests.Editor.FBXImporter
             float maxDegrees)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6892,7 +6892,7 @@ namespace Tests.Editor.FBXImporter
             float forearmMaxDegrees)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6933,7 +6933,7 @@ namespace Tests.Editor.FBXImporter
             float frameGateEnd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6960,7 +6960,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorHandLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6978,7 +6978,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorThumbLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6999,7 +6999,7 @@ namespace Tests.Editor.FBXImporter
             float weight)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7017,7 +7017,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7039,7 +7039,7 @@ namespace Tests.Editor.FBXImporter
             float maxOffset)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7116,7 +7116,7 @@ namespace Tests.Editor.FBXImporter
             float frameGateEnd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7171,7 +7171,7 @@ namespace Tests.Editor.FBXImporter
             float evaluatorXzTargetMagnitude)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7201,7 +7201,7 @@ namespace Tests.Editor.FBXImporter
             bool invertBodyPositionZ = false)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7219,7 +7219,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyTargetHumanoidBonePositionLockRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7237,7 +7237,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7264,7 +7264,7 @@ namespace Tests.Editor.FBXImporter
             float axisZScale)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7425,7 +7425,7 @@ namespace Tests.Editor.FBXImporter
             float maxOffset)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7447,7 +7447,7 @@ namespace Tests.Editor.FBXImporter
             float maxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7496,7 +7496,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7555,7 +7555,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7624,7 +7624,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7684,7 +7684,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7736,7 +7736,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7824,7 +7824,7 @@ namespace Tests.Editor.FBXImporter
         private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7842,7 +7842,7 @@ namespace Tests.Editor.FBXImporter
         private static bool IsMainSceneCandidateMode(string jobMode)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7860,7 +7860,7 @@ namespace Tests.Editor.FBXImporter
         private static string ResolveIntegratedVerticalSolveRole(string jobMode)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7878,7 +7878,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ShouldBuildFrameQualityDiagnostic(bool success, string metricsCsvPath, string vmdPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7894,7 +7894,7 @@ namespace Tests.Editor.FBXImporter
         private static string[] BuildFrameQualityFailureMessages(params MotionComparisonFrameQualitySummary[] summaries)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7912,7 +7912,7 @@ namespace Tests.Editor.FBXImporter
             object frameRoleDiagnostics)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
             Assert.That(frameRoleDiagnostics, Is.Not.Null);
 
@@ -7932,7 +7932,7 @@ namespace Tests.Editor.FBXImporter
         private static object BuildReferenceAlignedImportedFbxDiagnostics()
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             Type diagnosticsType = runnerType.GetNestedType(
@@ -7968,7 +7968,7 @@ namespace Tests.Editor.FBXImporter
         private static void ClearYybVisualComparisonRunnerState(string reason)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7985,7 +7985,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyMainSceneRuntimeOverrides(FBXVmdPipeline manager)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8002,7 +8002,7 @@ namespace Tests.Editor.FBXImporter
         private static void SetYybVisualComparisonRunnerStaticField<T>(string fieldName, T value)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             FieldInfo field = runnerType.GetField(
@@ -8015,7 +8015,7 @@ namespace Tests.Editor.FBXImporter
         private static string[] BuildCaptureJobModes(bool enableVmdPlaybackProbeRuntimeOverride)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8036,7 +8036,7 @@ namespace Tests.Editor.FBXImporter
         private static string ResolveVisualCompareSmokeSegment(string segment)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8059,7 +8059,7 @@ namespace Tests.Editor.FBXImporter
             string segment)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo segmentMethod = runnerType.GetMethod(
@@ -8097,7 +8097,7 @@ namespace Tests.Editor.FBXImporter
             float[] referenceLocalSampleSeconds)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8120,7 +8120,7 @@ namespace Tests.Editor.FBXImporter
             float candidateClipSecondsPerReferenceSecond)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8179,7 +8179,7 @@ namespace Tests.Editor.FBXImporter
             string metricsCsvPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.Modules.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(

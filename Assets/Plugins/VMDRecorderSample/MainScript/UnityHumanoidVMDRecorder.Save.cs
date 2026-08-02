@@ -13,23 +13,23 @@ public partial class UnityHumanoidVMDRecorder
     {
         if (IsRecording)
         {
-            return VmdSaveResult.Fail(filePath, "VMD 저장 전에 녹화를 먼저 중지해야 합니다.");
+            return VmdSaveResult.Fail(filePath, "Recording must be stopped before saving VMD.");
         }
 
         if (string.IsNullOrWhiteSpace(filePath))
         {
-            return VmdSaveResult.Fail(filePath, "저장 경로가 비어 있습니다.");
+            return VmdSaveResult.Fail(filePath, "Save path is empty.");
         }
 
         string directory = Path.GetDirectoryName(filePath);
         if (string.IsNullOrWhiteSpace(directory))
         {
-            return VmdSaveResult.Fail(filePath, "저장 폴더를 확인할 수 없습니다.");
+            return VmdSaveResult.Fail(filePath, "Cannot verify save folder.");
         }
 
         if (frameNumberSaved <= 0)
         {
-            return VmdSaveResult.Fail(filePath, "저장할 녹화 프레임이 없습니다.");
+            return VmdSaveResult.Fail(filePath, "No recording frames to save.");
         }
 
         if (positionDictionarySaved == null || rotationDictionarySaved == null || BoneDictionary == null)
@@ -81,7 +81,7 @@ public partial class UnityHumanoidVMDRecorder
 
         try
         {
-            Debug.Log($"{transform.name} VMD 파일 생성 시작: {filePath}");
+            Debug.Log($"{transform.name} VMD file creation started: {filePath}");
             await Task.Run(() =>
                 VmdFileWriter.WriteVmdFile(
                     safeModelName,
@@ -106,12 +106,12 @@ public partial class UnityHumanoidVMDRecorder
 
             string exportRotationDiagnosticsCsvPath = WriteExportRotationDiagnosticsCsv(filePath);
             string exportIkSourceDiagnosticsCsvPath = WriteExportIkSourceDiagnosticsCsv(filePath);
-            Debug.Log($"{transform.name} VMD 파일 생성 완료: {filePath}");
+            Debug.Log($"{transform.name} VMD file creation completed: {filePath}");
             return VmdSaveResult.Ok(filePath, safeFrameCount, fileInfo.Length, exportRotationDiagnosticsCsvPath, exportIkSourceDiagnosticsCsvPath);
         }
         catch (Exception ex)
         {
-            Debug.LogError($"VMD 쓰기 오류: {ex.Message}\n{ex.StackTrace}");
+            Debug.LogError($"VMD write error: {ex.Message}\n{ex.StackTrace}");
             return VmdSaveResult.Fail(filePath, ex.Message);
         }
     }
@@ -121,7 +121,7 @@ public partial class UnityHumanoidVMDRecorder
         VmdSaveResult result = await SaveVMDAsync(modelName, filePath);
         if (!result.Success)
         {
-            Debug.LogError($"VMD 저장 실패: {result.ErrorMessage}");
+            Debug.LogError($"VMD save failed: {result.ErrorMessage}");
         }
     }
 
@@ -131,7 +131,7 @@ public partial class UnityHumanoidVMDRecorder
         VmdSaveResult result = await SaveVMDAsync(modelName, filePath);
         if (!result.Success)
         {
-            Debug.LogError($"VMD 저장 실패: {result.ErrorMessage}");
+            Debug.LogError($"VMD save failed: {result.ErrorMessage}");
         }
     }
 
@@ -179,7 +179,7 @@ public partial class UnityHumanoidVMDRecorder
 
         if (safeFrameCount < frameNumberSaved)
         {
-            Debug.LogWarning($"[VMDRecorder] 프레임 수가 일부 본 데이터와 맞지 않아 {frameNumberSaved} -> {safeFrameCount}로 저장합니다.");
+            Debug.LogWarning($"[VMDRecorder] Frame count mismatch with some bone data; saving {frameNumberSaved} -> {safeFrameCount}.");
         }
 
         return safeFrameCount;

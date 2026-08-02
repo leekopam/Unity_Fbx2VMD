@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <PMX2FBXConfig xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <globalSettings>
-    <editorAdvancedMode>false</editorAdvancedMode>
+    <editorAdvancedMode>true</editorAdvancedMode>
     <vertexScale>8</vertexScale>
     <vertexScaleByHeight>0</vertexScaleByHeight>
     <importScale>0.01</importScale>
@@ -69,7 +69,7 @@
     <splitMeshNoShadowCastingFlag>1</splitMeshNoShadowCastingFlag>
     <sameVertexLength>0</sameVertexLength>
     <edgeStretchEnabled>0</edgeStretchEnabled>
-    <sameVertexLengthEdgeStretch>0.001</sameVertexLengthEdgeStretch>
+    <sameVertexLengthEdgeStretch>0.0010000000474974513</sameVertexLengthEdgeStretch>
     <rotationOrderToZXY>1</rotationOrderToZXY>
     <enableFBXTexture>0</enableFBXTexture>
     <exportFBXFormat />
@@ -86,7 +86,7 @@
     <morphOppaiFlag>0</morphOppaiFlag>
     <morphOppaiTanimaMethod>0</morphOppaiTanimaMethod>
     <morphOppaiPower>0.5</morphOppaiPower>
-    <morphOppaiCenter>0.6</morphOppaiCenter>
+    <morphOppaiCenter>0.60000002384185791</morphOppaiCenter>
     <morphOppaiRaidus>1</morphOppaiRaidus>
     <morphOppaiBoneName1>上半身</morphOppaiBoneName1>
     <morphOppaiBoneName2>首</morphOppaiBoneName2>

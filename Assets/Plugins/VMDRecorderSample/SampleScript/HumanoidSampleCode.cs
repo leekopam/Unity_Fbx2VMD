@@ -177,7 +177,7 @@ public class HumanoidSampleCode : MonoBehaviour
         StopRecordingTime = Mathf.CeilToInt(clipLength);
 
         string labelText = string.IsNullOrWhiteSpace(comparisonLabel) ? "(파일명과 동일)" : comparisonLabel;
-        Debug.Log($"[Recorder] 녹화 시작: VMD={Path.GetFileName(_outputFilePath)}, 비교라벨={labelText}, 덮어쓰기={overwriteExistingOutput}, 길이 {_totalDuration:F2}초, 목표 {_targetFrameCount}프레임");
+        Debug.Log($"[Recorder] Recording started: VMD={Path.GetFileName(_outputFilePath)}, comparison_label={labelText}, overwrite={overwriteExistingOutput}, duration={_totalDuration:F2}s, target={_targetFrameCount}frames");
 
         vmdRecorder.StopRecording();
         vmdRecorder.ResetRecordingBuffersForNewSession(_targetFrameCount + 4);
@@ -246,7 +246,7 @@ public class HumanoidSampleCode : MonoBehaviour
         _manualRecordingCoroutine = null;
         _recordingSession?.Stop();
 
-        Debug.Log("[Recorder] 녹화 시간 도달. 저장을 시작합니다.");
+        Debug.Log("[Recorder] Recording duration reached. Starting save.");
         UpdateUI(1f, _totalDuration, "VMD 저장 중");
 
         StopComparisonProbe(resultReason: "finish");
@@ -258,19 +258,19 @@ public class HumanoidSampleCode : MonoBehaviour
         if (result.Success)
         {
             _lastSavedFilePath = result.FilePath;
-            Debug.Log($"[Recorder] 저장 완료: {result.FilePath} ({result.FileSizeBytes} bytes, {result.FrameCount} frames)");
+            Debug.Log($"[Recorder] Save completed: {result.FilePath} ({result.FileSizeBytes} bytes, {result.FrameCount} frames)");
             if (!string.IsNullOrEmpty(result.ExportRotationDiagnosticsCsvPath))
             {
                 Debug.Log($"[Recorder] export rotation diagnostics: {result.ExportRotationDiagnosticsCsvPath}");
             }
-            UpdateUI(1f, _totalDuration, $"저장 완료: {Path.GetFileName(result.FilePath)}");
+            UpdateUI(1f, _totalDuration, $"저장 완료됨: {Path.GetFileName(result.FilePath)}");
             Invoke(nameof(OpenTargetFolder), 0.5f);
         }
         else
         {
-            string error = string.IsNullOrEmpty(result.ErrorMessage) ? "알 수 없는 저장 오류" : result.ErrorMessage;
-            Debug.LogError($"[Recorder] 저장 실패: {error}");
-            UpdateUI(0f, _currentTimer, $"저장 실패: {error}");
+            string error = string.IsNullOrEmpty(result.ErrorMessage) ? "Unknown save error" : result.ErrorMessage;
+            Debug.LogError($"[Recorder] Save failed: {error}");
+            UpdateUI(0f, _currentTimer, $"Save failed: {error}");
         }
 
         RecordingFinished?.Invoke(result);
@@ -485,7 +485,7 @@ public class HumanoidSampleCode : MonoBehaviour
         }
 
         string folderPath = _outputFolderPath.Replace("/", "\\");
-        Debug.Log($"[Recorder] 탐색기 열기: {folderPath}");
+        Debug.Log($"[Recorder] Open explorer: {folderPath}");
         Application.OpenURL(folderPath);
     }
 
@@ -637,7 +637,7 @@ public class HumanoidSampleCode : MonoBehaviour
             return;
         }
 
-        Debug.LogWarning("[Recorder] Current_File UI 한글 표시용 폰트를 찾지 못했습니다. Windows 한글 폰트 설치 상태를 확인하세요.");
+        Debug.LogWarning("[Recorder] Could not find Korean font for Current_File UI. Check Windows Korean font installation.");
     }
 
     private bool TryEnableLegacyKoreanProgressText()
@@ -816,7 +816,7 @@ public class HumanoidSampleCode : MonoBehaviour
         if (StartAutoRecording(clip.length, outputName, null, targetFrameCount, BuildComparisonLabel("manual", outputName)))
         {
             animator.speed = originalSpeed;
-            Debug.Log($"[Recorder] 수동 기준 녹화 시작: {clip.name}, 목표 {targetFrameCount}프레임");
+            Debug.Log($"[Recorder] Manual reference recording started: {clip.name}, target={targetFrameCount}frames");
         }
         else
         {
@@ -1225,7 +1225,7 @@ internal class TransformJitterProbe : MonoBehaviour
             return;
         }
 
-        Type retargeterType = Type.GetType("Fbx2Vmd.Modules.FBXImporter.PoseSpaceRetargeter, Assembly-CSharp");
+        Type retargeterType = Type.GetType("Fbx2Vmd.FBXImporter.PoseSpaceRetargeter, Assembly-CSharp");
         if (retargeterType == null)
         {
             return;

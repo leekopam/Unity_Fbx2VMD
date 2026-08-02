@@ -25,7 +25,7 @@ public partial class UnityHumanoidVMDRecorder
         animator = GetComponent<Animator>();
         if (animator == null || animator.avatar == null || !animator.avatar.isHuman)
         {
-            Debug.LogError("[UnityHumanoidVMDRecorder] Humanoid Animator가 없어 VMD 녹화 본 매핑을 초기화할 수 없습니다.");
+            Debug.LogError("[UnityHumanoidVMDRecorder] Cannot initialize VMD recording bone mapping because Humanoid Animator is missing.");
             return;
         }
 
