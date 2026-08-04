@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -9,21 +10,31 @@ namespace Fbx2Vmd.FBXImporter
     {
         [Header("YYB Arm Sleeve Anchor Guard")]
         [Tooltip("YYB 소매/어깨 보조본이 상완 본과 따로 놀아 소매가 어깨에서 무너져 보이는 현상을 줄입니다.")]
-        public bool enableSleeveAnchor = true;
+        [FormerlySerializedAs("enableSleeveAnchor")]
+        [SerializeField] private bool _enableSleeveAnchor= true;
+        public bool enableSleeveAnchor { get => _enableSleeveAnchor; set => _enableSleeveAnchor = value; }
 
         [Tooltip("소매 상단 보조본이 상완 회전을 따라가는 강도입니다.")]
         [Range(0f, 1f)]
-        public float armAnchorInfluence = 0.85f;
+        [FormerlySerializedAs("armAnchorInfluence")]
+        [SerializeField] private float _armAnchorInfluence= 0.85f;
+        public float armAnchorInfluence { get => _armAnchorInfluence; private set => _armAnchorInfluence = value; }
 
         [Tooltip("어깨 캡 보조본이 상완 회전을 따라가는 강도입니다. MMD4Mecanim PPH와 겹치지 않도록 기본값은 0입니다.")]
         [Range(0f, 1f)]
-        public float shoulderCapInfluence = 0f;
+        [FormerlySerializedAs("shoulderCapInfluence")]
+        [SerializeField] private float _shoulderCapInfluence= 0f;
+        public float shoulderCapInfluence { get => _shoulderCapInfluence; private set => _shoulderCapInfluence = value; }
 
         [Tooltip("보조본이 한 프레임에 따라갈 수 있는 최대 회전각입니다.")]
         [Range(0f, 120f)]
-        public float maxFollowDegrees = 85f;
+        [FormerlySerializedAs("maxFollowDegrees")]
+        [SerializeField] private float _maxFollowDegrees= 85f;
+        public float maxFollowDegrees { get => _maxFollowDegrees; private set => _maxFollowDegrees = value; }
 
-        public bool logConfiguration = false;
+        [FormerlySerializedAs("logConfiguration")]
+        [SerializeField] private bool _logConfiguration= false;
+        public bool logConfiguration { get => _logConfiguration; private set => _logConfiguration = value; }
 
         private readonly List<AnchorCorrection> _anchors = new List<AnchorCorrection>();
         private readonly List<Transform> _controlledTransforms = new List<Transform>();

@@ -17,16 +17,16 @@ namespace Fbx2Vmd.Build
             "Assets/_Project/Scene/FbxImport_Capture.unity",
         };
 
-        public const string OutputDirectory = "Builds/Local/MainRecordingRelease";
-        public const string MainExecutablePath = OutputDirectory + "/Unity_Fbx2VMD.exe";
-        public const string StaleRootSettingsExecutablePath = OutputDirectory + "/Unity_Fbx2VMD_Settings.exe";
-        public const string StaleRootSettingsDataDirectory = OutputDirectory + "/Unity_Fbx2VMD_Settings_Data";
-        public const string SettingsPackageDirectory = OutputDirectory + "/MainRecordingSettings";
-        public const string SettingsExecutablePath = SettingsPackageDirectory + "/Unity_Fbx2VMD_Settings.exe";
-        public const string SettingsResourcesAppPath = SettingsPackageDirectory + "/resources/app";
-        public const string SettingsAppArchivePath = SettingsPackageDirectory + "/resources/app.asar";
-        public const string SettingsAppRoot = "Assets/_Project/Tools/MainRecordingSettings";
-        public const string SettingsPackageScriptPath = SettingsAppRoot + "/scripts/packageElectronRelease.mjs";
+        public static readonly string OutputDirectory = Path.Combine("Builds", "Local", "MainRecordingRelease");
+        public static readonly string MainExecutablePath = Path.Combine(OutputDirectory, "Unity_Fbx2VMD.exe");
+        public static readonly string StaleRootSettingsExecutablePath = Path.Combine(OutputDirectory, "Unity_Fbx2VMD_Settings.exe");
+        public static readonly string StaleRootSettingsDataDirectory = Path.Combine(OutputDirectory, "Unity_Fbx2VMD_Settings_Data");
+        public static readonly string SettingsPackageDirectory = Path.Combine(OutputDirectory, "MainRecordingSettings");
+        public static readonly string SettingsExecutablePath = Path.Combine(SettingsPackageDirectory, "Unity_Fbx2VMD_Settings.exe");
+        public static readonly string SettingsResourcesAppPath = Path.Combine(SettingsPackageDirectory, "resources", "app");
+        public static readonly string SettingsAppArchivePath = Path.Combine(SettingsPackageDirectory, "resources", "app.asar");
+        public static readonly string SettingsAppRoot = Path.Combine("Assets", "_Project", "Tools", "MainRecordingSettings");
+        public static readonly string SettingsPackageScriptPath = Path.Combine(SettingsAppRoot, "scripts", "packageElectronRelease.mjs");
 
         public static string[] MainScenePaths => (string[])MainScenes.Clone();
 

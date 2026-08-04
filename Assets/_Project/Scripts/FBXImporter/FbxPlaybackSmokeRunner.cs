@@ -1284,12 +1284,6 @@ namespace Fbx2Vmd.FBXImporter
 
         private static FBXVmdPipeline FindRuntimeFBXVmdPipeline()
         {
-            FBXVmdPipeline directMatch = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
-            if (directMatch != null)
-            {
-                return directMatch;
-            }
-
             Scene runtimeScene = SceneManager.GetActiveScene();
             if (runtimeScene.IsValid())
             {
@@ -1319,7 +1313,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             Scene editorScene = EditorSceneManager.GetActiveScene();
             Scene runtimeScene = SceneManager.GetActiveScene();
-            FBXVmdPipeline directMatch = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline directMatch = FindRuntimeFBXVmdPipeline();
             FBXVmdPipeline[] allFBXVmdPipelines = Resources.FindObjectsOfTypeAll<FBXVmdPipeline>();
             int runtimeSceneFBXVmdPipelineCount = allFBXVmdPipelines.Count(candidate =>
                 candidate != null &&

@@ -5,7 +5,7 @@ namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
     /// Play 진입과 FBX 선택 전 대기 상태에서 타깃 캐릭터의 Idle 자세를 유지하는 Guard.
-    /// FBXVmdPipeline에서 추출 (Phase A-1).
+    /// FBXVmdPipeline에서 추출함.
     /// </summary>
     public class TargetIdlePoseGuard : MonoBehaviour
     {
@@ -22,6 +22,9 @@ namespace Fbx2Vmd.FBXImporter
 
         [Tooltip("Idle 자세를 유지할 대상 캐릭터")]
         [SerializeField] private GameObject _targetCharacter;
+
+        [Tooltip("Idle 자세에서 사용할 카메라입니다. 비어 있으면 Main Camera를 사용합니다.")]
+        [SerializeField] private Camera _targetCamera;
 
         private readonly List<TransformSnapshot> _targetIdlePose = new List<TransformSnapshot>();
         private RuntimeAnimatorController _cachedTargetController;
@@ -120,7 +123,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            Camera targetCamera = Camera.main != null ? Camera.main : FindObjectOfType<Camera>();
+            Camera targetCamera = _targetCamera != null ? _targetCamera : Camera.main;
             if (targetCamera == null)
             {
                 _targetCharacter.transform.rotation = Quaternion.identity;
