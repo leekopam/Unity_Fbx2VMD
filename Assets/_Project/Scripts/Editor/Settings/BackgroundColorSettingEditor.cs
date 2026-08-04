@@ -11,18 +11,18 @@ namespace Fbx2Vmd.Settings
         {
             serializedObject.Update();
 
-            DrawSection("대상");
-            DrawProperty("targetCamera", "대상 카메라");
+            EditorDrawUtility.DrawSection("대상");
+            EditorDrawUtility.DrawProperty(serializedObject, "targetCamera", "대상 카메라");
 
             EditorGUILayout.Space(6f);
-            DrawSection("적용");
-            DrawProperty("applyOnAwake", "실행 시작 시 자동 적용");
-            DrawProperty("applyOnValidate", "Unity OnValidate 자동 적용");
+            EditorDrawUtility.DrawSection("적용");
+            EditorDrawUtility.DrawProperty(serializedObject, "applyOnAwake", "실행 시작 시 자동 적용");
+            EditorDrawUtility.DrawProperty(serializedObject, "applyOnValidate", "Unity OnValidate 자동 적용");
 
             EditorGUILayout.Space(6f);
-            DrawSection("카메라 배경");
-            DrawProperty("applyBackgroundColor", "배경색 적용");
-            DrawProperty("backgroundColor", "배경색");
+            EditorDrawUtility.DrawSection("카메라 배경");
+            EditorDrawUtility.DrawProperty(serializedObject, "applyBackgroundColor", "배경색 적용");
+            EditorDrawUtility.DrawProperty(serializedObject, "backgroundColor", "배경색");
 
             serializedObject.ApplyModifiedProperties();
 
@@ -43,20 +43,6 @@ namespace Fbx2Vmd.Settings
                     EditorUtility.SetDirty(backgroundColorSetting);
                 }
             }
-        }
-
-        private void DrawProperty(string propertyName, string label)
-        {
-            SerializedProperty property = serializedObject.FindProperty(propertyName);
-            if (property != null)
-            {
-                EditorGUILayout.PropertyField(property, new GUIContent(label), true);
-            }
-        }
-
-        private static void DrawSection(string label)
-        {
-            EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
         }
     }
 }

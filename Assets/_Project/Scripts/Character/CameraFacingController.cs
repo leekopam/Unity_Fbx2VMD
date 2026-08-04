@@ -12,12 +12,11 @@ namespace Fbx2Vmd.Character
         /// <summary>
         /// targetObject를 메인 카메라 방향으로 회전시킨다. Y축만 회전.
         /// </summary>
-        public static void FaceTargetToCamera(GameObject targetObject)
+        public static void FaceTargetToCamera(GameObject targetObject, Camera targetCamera)
         {
             if (targetObject == null)
                 return;
 
-            Camera targetCamera = Camera.main != null ? Camera.main : Object.FindObjectOfType<Camera>();
             if (targetCamera == null)
             {
                 targetObject.transform.rotation = Quaternion.identity;

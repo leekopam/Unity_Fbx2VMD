@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -7,6 +8,19 @@ using Assimp;
 
 namespace Fbx2Vmd.FBXImporter
 {
+    public sealed class FBXImportException : Exception
+    {
+        public FBXImportException(string message)
+            : base(message)
+        {
+        }
+
+        public FBXImportException(string message, Exception innerException)
+            : base(message, innerException)
+        {
+        }
+    }
+
     /// <summary>
     /// 런타임에서 Assimp 라이브러리를 사용하여 FBX 파일을 임포트하는 서비스
     /// </summary>
@@ -123,7 +137,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
-                Debug.LogError($"파일을 찾을 수 없습니다: {path}");
+                Debug.LogError($"[FBXImport] FBX 파일을 찾을 수 없음. 경로={path}");
                 return null;
             }
 
@@ -138,7 +152,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (scene == null)
             {
-                Debug.LogError("FBX 임포트 실패");
+                Debug.LogError("[FBXImport] FBX 임포트 실패함.");
                 return null;
             }
 
@@ -169,7 +183,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
-                Debug.LogError($"파일을 찾을 수 없습니다: {path}");
+                Debug.LogError($"[FBXImport] FBX 파일을 찾을 수 없음. 경로={path}");
                 return null;
             }
 
@@ -181,7 +195,7 @@ namespace Fbx2Vmd.FBXImporter
             Scene scene = ImportWithAssimp(path);
             if (scene == null)
             {
-                Debug.LogError("FBX 임포트 실패");
+                Debug.LogError("[FBXImport] FBX 임포트 실패함.");
                 return null;
             }
 
@@ -215,15 +229,14 @@ namespace Fbx2Vmd.FBXImporter
 
                 if (scene == null)
                 {
-                    Debug.LogError("[AssimpFBXImporter] importer.ImportFile이 null을 반환했습니다");
+                    throw new FBXImportException($"Assimp returned no scene for '{Path.GetFileName(path)}'.");
                 }
 
                 return scene;
             }
-            catch (System.Exception e)
+            catch (AssimpException exception)
             {
-                Debug.LogError($"[AssimpFBXImporter] Assimp 예외: {e.Message}\n{e.StackTrace}");
-                return null;
+                throw new FBXImportException($"Assimp failed to import '{Path.GetFileName(path)}'.", exception);
             }
         }
 
@@ -435,7 +448,7 @@ namespace Fbx2Vmd.FBXImporter
                 string boneName = bone.Name;
                 if (!_nodeMap.TryGetValue(boneName, out Transform boneTrans))
                 {
-                    Debug.LogWarning($"계층 구조에서 본을 찾을 수 없습니다: {boneName}");
+                    Debug.LogWarning($"[FBXImport] 계층 구조에서 본을 찾을 수 없음. 본={boneName}");
                     continue;
                 }
 
@@ -603,11 +616,11 @@ namespace Fbx2Vmd.FBXImporter
             }
             catch (IOException e)
             {
-                Debug.LogWarning($"[AssimpFBXImporter] 텍스처 로드 실패: {texturePath} ({e.Message})");
+                Debug.LogWarning($"[FBXImport] 텍스처 불러오기 실패함. 경로={texturePath}, 오류={e.Message}");
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"[AssimpFBXImporter] 텍스처 적용 실패: {texturePath} ({e.Message})");
+                Debug.LogWarning($"[FBXImport] 텍스처 적용 실패함. 경로={texturePath}, 오류={e.Message}");
             }
         }
 
@@ -689,7 +702,7 @@ namespace Fbx2Vmd.FBXImporter
             }
             catch (UnityException e)
             {
-                Debug.LogWarning($"[AssimpFBXImporter] 텍스처 알파 스캔 건너뜀: {texture.name} ({e.Message})");
+                Debug.LogWarning($"[FBXImport] 텍스처 알파 검사 건너뜀. 텍스처={texture.name}, 오류={e.Message}");
             }
 
             return false;
@@ -795,7 +808,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (ticksPerSecond <= 1.0)
                 {
                     ticksPerSecond = 60.0;
-                    Debug.LogWarning($"TicksPerSecond 데이터 누락 (val={anim.TicksPerSecond}). 기본값 60 FPS 사용");
+                    Debug.LogWarning($"[FBXImport] TicksPerSecond 데이터가 없어 기본값 60 FPS 사용함. 값={anim.TicksPerSecond}");
                 }
                 float timeScale = 1.0f / (float)ticksPerSecond;
 
@@ -853,12 +866,12 @@ namespace Fbx2Vmd.FBXImporter
             {
                 animComp.clip = clips[0]; // 기본 클립 설정
                 // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
-                Debug.Log($"{clips.Count}개 클립 생성됨");
+                Debug.Log($"[FBXImport] 애니메이션 클립 생성됨. 개수={clips.Count}");
             }
             }
             else
             {
-                Debug.LogWarning("애니메이션 클립이 생성되지 않았습니다");
+                Debug.LogWarning("[FBXImport] 애니메이션 클립이 생성되지 않음.");
             }
         }
 
@@ -1027,21 +1040,21 @@ namespace Fbx2Vmd.FBXImporter
 
             if (validPath == null)
             {
-                Debug.LogError($"assimp.dll을 찾을 수 없습니다. 검색 경로:\n{string.Join("\n", possiblePaths)}");
+                Debug.LogError($"[FBXImport] assimp.dll을 찾을 수 없음. 검색 경로:\n{string.Join("\n", possiblePaths)}");
                 return;
             }
 
-            Debug.Log($"네이티브 라이브러리 발견: {validPath}");
+            Debug.Log($"[FBXImport] 네이티브 라이브러리 찾음. 경로={validPath}");
             System.IntPtr handle = LoadLibrary(validPath);
 
             if (handle == System.IntPtr.Zero)
             {
                 int errorCode = Marshal.GetLastWin32Error();
-                Debug.LogError($"로드 실패. 오류 코드: {errorCode}, 경로: {validPath}");
+                Debug.LogError($"[FBXImport] 네이티브 라이브러리 불러오기 실패함. 오류 코드={errorCode}, 경로={validPath}");
             }
             else
             {
-                Debug.Log($"로드 성공. 핸들: {handle}");
+                Debug.Log($"[FBXImport] 네이티브 라이브러리 불러오기 완료됨. 핸들={handle}");
                 IsLoaded = true;
             }
         }

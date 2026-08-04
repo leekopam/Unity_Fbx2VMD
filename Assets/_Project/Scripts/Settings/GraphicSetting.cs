@@ -170,7 +170,7 @@ namespace Fbx2Vmd.Settings
         }
     }
 
-    public static class GraphicMaterialShaderUtility
+    public static class GraphicMaterialShaderController
     {
         private const string EdgeScaleProperty = "_EdgeScale";
         private const string EdgeSizeProperty = "_EdgeSize";
@@ -601,7 +601,7 @@ namespace Fbx2Vmd.Settings
                 materialShaderProfile = new GraphicMaterialShaderProfile();
             }
 
-            GraphicMaterialShaderApplyResult result = GraphicMaterialShaderUtility.Apply(
+            GraphicMaterialShaderApplyResult result = GraphicMaterialShaderController.Apply(
                 CreateMaterialShaderPlan(),
                 CollectMaterialShaderTargets());
             Debug.Log($"GraphicSetting 모델 머티리얼 설정 적용: {result}");

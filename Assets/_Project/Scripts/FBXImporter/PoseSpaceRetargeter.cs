@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.Playables;
 using UnityEngine.Animations;
 using System;
@@ -30,513 +31,807 @@ namespace Fbx2Vmd.FBXImporter
         private readonly Dictionary<Transform, Vector3> _rightSleeveSilhouetteLocalOffsetBaseLocalPositions =
             new Dictionary<Transform, Vector3>();
         [Header("--- CORE COMPONENTS ---")]
-        public Animator ghostAnimator;  // (Container 내부의 모델)
-        public Animator targetAnimator; // 내 캐릭터
+        [FormerlySerializedAs("ghostAnimator")]
+        [SerializeField] private Animator _ghostAnimator;  // (Container 내부의 모델)
+        public Animator ghostAnimator { get => _ghostAnimator; private set => _ghostAnimator = value; }
+        [FormerlySerializedAs("targetAnimator")]
+        [SerializeField] private Animator _targetAnimator; // 내 캐릭터
+        public Animator targetAnimator { get => _targetAnimator; set => _targetAnimator = value; }
 
         [Header("--- FINAL TUNING ---")]
         [Tooltip("캐릭터가 뒤를 보고 있다면 체크 (180도 회전)")]
-        public bool fixReverseRotation = true;
+        [FormerlySerializedAs("fixReverseRotation")]
+        [SerializeField] private bool _fixReverseRotation= true;
+        public bool fixReverseRotation { get => _fixReverseRotation; private set => _fixReverseRotation = value; }
 
         [Tooltip("Sub_Manual 직접 Animator 재생처럼 FBX HumanPose의 body/root 회전을 보존합니다.")]
-        public bool ShouldPreserveFbxRootRotation = false;
+        [FormerlySerializedAs("ShouldPreserveFbxRootRotation")]
+        [SerializeField] private bool _ShouldPreserveFbxRootRotation= false;
+        public bool ShouldPreserveFbxRootRotation { get => _ShouldPreserveFbxRootRotation; private set => _ShouldPreserveFbxRootRotation = value; }
 
         [Tooltip("Keep target HumanPose bodyPosition Y stable while preserving FBX X/Z body sway.")]
-        public bool preserveTargetBodyPosition = true;
+        [FormerlySerializedAs("preserveTargetBodyPosition")]
+        [SerializeField] private bool _preserveTargetBodyPosition= true;
+        public bool preserveTargetBodyPosition { get => _preserveTargetBodyPosition; private set => _preserveTargetBodyPosition = value; }
 
         [Tooltip("Use HumanPose bodyPosition X/Z delta as target root motion to reduce visible foot sliding.")]
-        public bool useBodyPositionXZRootMotion = false;
+        [FormerlySerializedAs("useBodyPositionXZRootMotion")]
+        [SerializeField] private bool _useBodyPositionXZRootMotion= false;
+        public bool useBodyPositionXZRootMotion { get => _useBodyPositionXZRootMotion; private set => _useBodyPositionXZRootMotion = value; }
 
         [Tooltip("Editor-only experimental RootT X/Z root motion reference. Keep disabled until visual_body_arc_jitter passes without increasing jitter.")]
-        public bool ShouldUseEditorHumanoidRootTranslationReference = false;
+        [FormerlySerializedAs("ShouldUseEditorHumanoidRootTranslationReference")]
+        [SerializeField] private bool _ShouldUseEditorHumanoidRootTranslationReference= false;
+        public bool ShouldUseEditorHumanoidRootTranslationReference { get => _ShouldUseEditorHumanoidRootTranslationReference; private set => _ShouldUseEditorHumanoidRootTranslationReference = value; }
 
         [Tooltip("Weight for Editor Humanoid RootT translation reference.")]
         [Range(0f, 1f)]
-        public float editorHumanoidRootTranslationWeight = 0.25f;
+        [FormerlySerializedAs("editorHumanoidRootTranslationWeight")]
+        [SerializeField] private float _editorHumanoidRootTranslationWeight= 0.25f;
+        public float editorHumanoidRootTranslationWeight { get => _editorHumanoidRootTranslationWeight; private set => _editorHumanoidRootTranslationWeight = value; }
 
         [Tooltip("Current-frame blend for smoothed Editor Humanoid RootT translation delta.")]
         [Range(0.05f, 1f)]
-        public float editorHumanoidRootTranslationCurrentWeight = 0.35f;
+        [FormerlySerializedAs("editorHumanoidRootTranslationCurrentWeight")]
+        [SerializeField] private float _editorHumanoidRootTranslationCurrentWeight= 0.35f;
+        public float editorHumanoidRootTranslationCurrentWeight { get => _editorHumanoidRootTranslationCurrentWeight; private set => _editorHumanoidRootTranslationCurrentWeight = value; }
 
         [Tooltip("When a foot is visually grounded, add a small X/Z root correction to reduce skating.")]
-        public bool ShouldStabilizeGroundedFootXZ = false;
+        [FormerlySerializedAs("ShouldStabilizeGroundedFootXZ")]
+        [SerializeField] private bool _ShouldStabilizeGroundedFootXZ= false;
+        public bool ShouldStabilizeGroundedFootXZ { get => _ShouldStabilizeGroundedFootXZ; private set => _ShouldStabilizeGroundedFootXZ = value; }
 
         [Tooltip("Foot-lock correction strength. Lower values preserve dance motion, higher values reduce skating.")]
         [Range(0f, 1f)]
-        public float groundedFootLockWeight = 0.45f;
+        [FormerlySerializedAs("groundedFootLockWeight")]
+        [SerializeField] private float _groundedFootLockWeight= 0.45f;
+        public float groundedFootLockWeight { get => _groundedFootLockWeight; private set => _groundedFootLockWeight = value; }
 
         [Tooltip("Maximum X/Z root correction per frame for grounded foot lock.")]
         [Range(0.001f, 0.1f)]
-        public float maxGroundedFootLockStep = 0.025f;
+        [FormerlySerializedAs("maxGroundedFootLockStep")]
+        [SerializeField] private float _maxGroundedFootLockStep= 0.025f;
+        public float maxGroundedFootLockStep { get => _maxGroundedFootLockStep; private set => _maxGroundedFootLockStep = value; }
 
         [Tooltip("체크 시 공중 부양/박힘을 모두 해결 (Raycast 사용)")]
-        public bool useSmartGrounding = true;
+        [FormerlySerializedAs("useSmartGrounding")]
+        [SerializeField] private bool _useSmartGrounding= true;
+        public bool useSmartGrounding { get => _useSmartGrounding; private set => _useSmartGrounding = value; }
 
         [Tooltip("발바닥 높이 미세 조절 (양수: 띄움, 음수: 박음)")]
         [Range(-0.1f, 0.1f)]
-        public float groundOffset = 0.0f;
+        [FormerlySerializedAs("groundOffset")]
+        [SerializeField] private float _groundOffset= 0.0f;
+        public float groundOffset { get => _groundOffset; private set => _groundOffset = value; }
 
         [Tooltip("FBX Avatar에서 비정상적으로 튀는 Humanoid muscle 값을 안전 범위로 제한합니다.")]
-        public bool clampMusclesToHumanRange = false;
+        [FormerlySerializedAs("clampMusclesToHumanRange")]
+        [SerializeField] private bool _clampMusclesToHumanRange= false;
+        public bool clampMusclesToHumanRange { get => _clampMusclesToHumanRange; private set => _clampMusclesToHumanRange = value; }
 
         [Header("--- ANATOMY GUARD ---")]
         [Tooltip("Target 팔이 늘어나거나 비정상적으로 비틀리는 Humanoid muscle 값을 제한합니다.")]
-        public bool enableAnatomicalArmGuard = true;
+        [FormerlySerializedAs("enableAnatomicalArmGuard")]
+        [SerializeField] private bool _enableAnatomicalArmGuard= true;
+        public bool enableAnatomicalArmGuard { get => _enableAnatomicalArmGuard; set => _enableAnatomicalArmGuard = value; }
 
         [Tooltip("Humanoid 팔 Stretch muscle 허용치입니다. Forearm Stretch는 팔꿈치 굽힘에 가까우므로 기본적으로 제한하지 않습니다.")]
         [Range(0f, 0.5f)]
-        public float armStretchMuscleLimit = 0f;
+        [FormerlySerializedAs("armStretchMuscleLimit")]
+        [SerializeField] private float _armStretchMuscleLimit= 0f;
+        public float armStretchMuscleLimit { get => _armStretchMuscleLimit; set => _armStretchMuscleLimit = value; }
 
         [Tooltip("Forearm Stretch muscle 제한 여부입니다. Unity Humanoid에서는 팔꿈치 굽힘에 가까우므로 기본값은 꺼야 합니다.")]
-        public bool clampArmStretchMuscles = false;
+        [FormerlySerializedAs("clampArmStretchMuscles")]
+        [SerializeField] private bool _clampArmStretchMuscles= false;
+        public bool clampArmStretchMuscles { get => _clampArmStretchMuscles; private set => _clampArmStretchMuscles = value; }
 
         [Tooltip("상완 Twist muscle 허용치입니다.")]
         [Range(0.1f, 1f)]
-        public float upperArmTwistMuscleLimit = 0.75f;
+        [FormerlySerializedAs("upperArmTwistMuscleLimit")]
+        [SerializeField] private float _upperArmTwistMuscleLimit= 0.75f;
+        public float upperArmTwistMuscleLimit { get => _upperArmTwistMuscleLimit; private set => _upperArmTwistMuscleLimit = value; }
 
         [Tooltip("전완 Twist muscle 허용치입니다.")]
         [Range(0.1f, 1f)]
-        public float lowerArmTwistMuscleLimit = 0.65f;
+        [FormerlySerializedAs("lowerArmTwistMuscleLimit")]
+        [SerializeField] private float _lowerArmTwistMuscleLimit= 0.65f;
+        public float lowerArmTwistMuscleLimit { get => _lowerArmTwistMuscleLimit; private set => _lowerArmTwistMuscleLimit = value; }
 
         [Header("--- THUMB ANATOMY GUARD ---")]
         [Tooltip("수동 기준 손가락 pose를 유지하되, YYB 손 구조에서 엄지가 과하게 꺾이는 범위만 제한합니다.")]
-        public bool enableThumbAnatomicalGuard = true;
+        [FormerlySerializedAs("enableThumbAnatomicalGuard")]
+        [SerializeField] private bool _enableThumbAnatomicalGuard= true;
+        public bool enableThumbAnatomicalGuard { get => _enableThumbAnatomicalGuard; private set => _enableThumbAnatomicalGuard = value; }
 
         [Tooltip("엄지 굽힘 muscle 최소값입니다.")]
         [Range(-2.5f, 0f)]
-        public float thumbStretchMin = -2.1f;
+        [FormerlySerializedAs("thumbStretchMin")]
+        [SerializeField] private float _thumbStretchMin= -2.1f;
+        public float thumbStretchMin { get => _thumbStretchMin; private set => _thumbStretchMin = value; }
 
         [Tooltip("엄지 굽힘 muscle 최대값입니다.")]
         [Range(0f, 2.5f)]
-        public float thumbStretchMax = 1.0f;
+        [FormerlySerializedAs("thumbStretchMax")]
+        [SerializeField] private float _thumbStretchMax= 1.0f;
+        public float thumbStretchMax { get => _thumbStretchMax; private set => _thumbStretchMax = value; }
 
         [Tooltip("엄지 굽힘 muscle에 더하는 offset입니다. YYB 엄지 rest pose가 수동 기준보다 과하게 펴져 보일 때만 사용합니다.")]
         [Range(-0.5f, 0.5f)]
-        public float thumbStretchOffset = 0f;
+        [FormerlySerializedAs("thumbStretchOffset")]
+        [SerializeField] private float _thumbStretchOffset= 0f;
+        public float thumbStretchOffset { get => _thumbStretchOffset; private set => _thumbStretchOffset = value; }
 
         [Tooltip("Manual Animator finger reference를 사용할 때는 엄지 stretch offset을 추가하지 않고 수동 기준 엄지 muscle을 보존합니다.")]
-        public bool preserveManualFingerReferenceThumbMuscles = true;
+        [FormerlySerializedAs("preserveManualFingerReferenceThumbMuscles")]
+        [SerializeField] private bool _preserveManualFingerReferenceThumbMuscles= true;
+        public bool preserveManualFingerReferenceThumbMuscles { get => _preserveManualFingerReferenceThumbMuscles; private set => _preserveManualFingerReferenceThumbMuscles = value; }
 
-        public bool ShouldUseManualAnimatorFullBodyPoseReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorFullBodyPoseReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorFullBodyPoseReference= false;
+        public bool ShouldUseManualAnimatorFullBodyPoseReference { get => _ShouldUseManualAnimatorFullBodyPoseReference; set => _ShouldUseManualAnimatorFullBodyPoseReference = value; }
 
         [Range(0f, 1f)]
-        public float manualAnimatorFullBodyPoseReferenceWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseReferenceWeight")]
+        [SerializeField] private float _manualAnimatorFullBodyPoseReferenceWeight= 1f;
+        public float manualAnimatorFullBodyPoseReferenceWeight { get => _manualAnimatorFullBodyPoseReferenceWeight; set => _manualAnimatorFullBodyPoseReferenceWeight = value; }
 
         [Tooltip("Runtime diagnostic: keep manual full-body reference active but skip lower-body muscles.")]
-        public bool ShouldExcludeManualAnimatorFullBodyLowerMuscles = false;
+        [FormerlySerializedAs("ShouldExcludeManualAnimatorFullBodyLowerMuscles")]
+        [SerializeField] private bool _ShouldExcludeManualAnimatorFullBodyLowerMuscles= false;
+        public bool ShouldExcludeManualAnimatorFullBodyLowerMuscles { get => _ShouldExcludeManualAnimatorFullBodyLowerMuscles; set => _ShouldExcludeManualAnimatorFullBodyLowerMuscles = value; }
 
         [Tooltip("Runtime diagnostic: apply manual full-body reference only to lower-body muscles.")]
-        public bool ShouldApplyManualAnimatorFullBodyLowerMusclesOnly = false;
+        [FormerlySerializedAs("ShouldApplyManualAnimatorFullBodyLowerMusclesOnly")]
+        [SerializeField] private bool _ShouldApplyManualAnimatorFullBodyLowerMusclesOnly= false;
+        public bool ShouldApplyManualAnimatorFullBodyLowerMusclesOnly { get => _ShouldApplyManualAnimatorFullBodyLowerMusclesOnly; set => _ShouldApplyManualAnimatorFullBodyLowerMusclesOnly = value; }
 
         [Tooltip("Runtime diagnostic: apply manual full-body reference only to leg in-out/twist muscles.")]
-        public bool ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = false;
+        [FormerlySerializedAs("ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly")]
+        [SerializeField] private bool _ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly= false;
+        public bool ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly { get => _ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly; set => _ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = value; }
 
         [Tooltip("Runtime diagnostic: apply manual full-body reference only to right arm and shoulder muscles.")]
-        public bool manualAnimatorFullBodyPoseRightArmMusclesOnly = false;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseRightArmMusclesOnly")]
+        [SerializeField] private bool _manualAnimatorFullBodyPoseRightArmMusclesOnly= false;
+        public bool manualAnimatorFullBodyPoseRightArmMusclesOnly { get => _manualAnimatorFullBodyPoseRightArmMusclesOnly; set => _manualAnimatorFullBodyPoseRightArmMusclesOnly = value; }
 
         [Tooltip("Runtime diagnostic: apply manual full-body reference only to left arm and shoulder muscles.")]
-        public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly = false;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseLeftArmMusclesOnly")]
+        [SerializeField] private bool _manualAnimatorFullBodyPoseLeftArmMusclesOnly= false;
+        public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly { get => _manualAnimatorFullBodyPoseLeftArmMusclesOnly; set => _manualAnimatorFullBodyPoseLeftArmMusclesOnly = value; }
 
         [Tooltip("Runtime diagnostic: apply manual full-body reference only to spine and right sleeve chain muscles.")]
-        public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = false;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly")]
+        [SerializeField] private bool _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly= false;
+        public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly { get => _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly; set => _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = value; }
 
         [Range(0f, 6000f)]
-        public float manualAnimatorFullBodyPoseFrameGateStart = 0f;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseFrameGateStart")]
+        [SerializeField] private float _manualAnimatorFullBodyPoseFrameGateStart= 0f;
+        public float manualAnimatorFullBodyPoseFrameGateStart { get => _manualAnimatorFullBodyPoseFrameGateStart; set => _manualAnimatorFullBodyPoseFrameGateStart = value; }
 
         [Range(0f, 6000f)]
-        public float manualAnimatorFullBodyPoseFrameGateEnd = 0f;
+        [FormerlySerializedAs("manualAnimatorFullBodyPoseFrameGateEnd")]
+        [SerializeField] private float _manualAnimatorFullBodyPoseFrameGateEnd= 0f;
+        public float manualAnimatorFullBodyPoseFrameGateEnd { get => _manualAnimatorFullBodyPoseFrameGateEnd; set => _manualAnimatorFullBodyPoseFrameGateEnd = value; }
 
         [Tooltip("Runtime diagnostic: after SetHumanPose, blend only right upper/lower leg twist output muscles back toward the solver input within a small cap.")]
-        public bool ShouldUseSetHumanPoseRightLegTwistOutputReference = false;
+        [FormerlySerializedAs("ShouldUseSetHumanPoseRightLegTwistOutputReference")]
+        [SerializeField] private bool _ShouldUseSetHumanPoseRightLegTwistOutputReference= false;
+        public bool ShouldUseSetHumanPoseRightLegTwistOutputReference { get => _ShouldUseSetHumanPoseRightLegTwistOutputReference; set => _ShouldUseSetHumanPoseRightLegTwistOutputReference = value; }
 
         [Range(0f, 1f)]
-        public float setHumanPoseRightLegTwistOutputReferenceWeight = 1f;
+        [FormerlySerializedAs("setHumanPoseRightLegTwistOutputReferenceWeight")]
+        [SerializeField] private float _setHumanPoseRightLegTwistOutputReferenceWeight= 1f;
+        public float setHumanPoseRightLegTwistOutputReferenceWeight { get => _setHumanPoseRightLegTwistOutputReferenceWeight; set => _setHumanPoseRightLegTwistOutputReferenceWeight = value; }
 
         [Range(0f, 0.1f)]
-        public float setHumanPoseRightLegTwistOutputReferenceMaxDelta = 0.02f;
+        [FormerlySerializedAs("setHumanPoseRightLegTwistOutputReferenceMaxDelta")]
+        [SerializeField] private float _setHumanPoseRightLegTwistOutputReferenceMaxDelta= 0.02f;
+        public float setHumanPoseRightLegTwistOutputReferenceMaxDelta { get => _setHumanPoseRightLegTwistOutputReferenceMaxDelta; set => _setHumanPoseRightLegTwistOutputReferenceMaxDelta = value; }
 
         [Tooltip("Manual Animator finger reference의 엄지 체인 localRotation도 Target에 적용해 모델별 엄지 축 차이를 줄입니다.")]
-        public bool useManualAnimatorThumbLocalRotationReference = true;
+        [FormerlySerializedAs("useManualAnimatorThumbLocalRotationReference")]
+        [SerializeField] private bool _useManualAnimatorThumbLocalRotationReference= true;
+        public bool useManualAnimatorThumbLocalRotationReference { get => _useManualAnimatorThumbLocalRotationReference; set => _useManualAnimatorThumbLocalRotationReference = value; }
 
         [Tooltip("손목 localRotation을 Sub_Manual/testPrefab Animator가 같은 FBX clip에서 평가한 값을 기준으로 덮어씁니다. t13.2 hand pose parity 회귀 보호용입니다.")]
-        public bool useManualAnimatorHandLocalRotationReference = true;
+        [FormerlySerializedAs("useManualAnimatorHandLocalRotationReference")]
+        [SerializeField] private bool _useManualAnimatorHandLocalRotationReference= true;
+        public bool useManualAnimatorHandLocalRotationReference { get => _useManualAnimatorHandLocalRotationReference; set => _useManualAnimatorHandLocalRotationReference = value; }
 
         [Tooltip("Manual Animator finger reference의 엄지 세그먼트 방향을 Target 손 기준 방향에 맞춰 모델별 bind axis 차이를 줄입니다.")]
-        public bool useManualAnimatorThumbSegmentDirectionReference = true;
+        [FormerlySerializedAs("useManualAnimatorThumbSegmentDirectionReference")]
+        [SerializeField] private bool _useManualAnimatorThumbSegmentDirectionReference= true;
+        public bool useManualAnimatorThumbSegmentDirectionReference { get => _useManualAnimatorThumbSegmentDirectionReference; private set => _useManualAnimatorThumbSegmentDirectionReference = value; }
 
         [Tooltip("엄지 세그먼트 방향 보정 강도입니다.")]
         [Range(0f, 1f)]
-        public float manualAnimatorThumbSegmentDirectionWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorThumbSegmentDirectionWeight")]
+        [SerializeField] private float _manualAnimatorThumbSegmentDirectionWeight= 1f;
+        public float manualAnimatorThumbSegmentDirectionWeight { get => _manualAnimatorThumbSegmentDirectionWeight; private set => _manualAnimatorThumbSegmentDirectionWeight = value; }
 
         [Tooltip("Manual Animator finger reference의 손바닥 기준 Hand->ThumbIntermediate 방향을 Target에 적용합니다.")]
-        public bool useManualAnimatorThumbHandDirectionReference = true;
+        [FormerlySerializedAs("useManualAnimatorThumbHandDirectionReference")]
+        [SerializeField] private bool _useManualAnimatorThumbHandDirectionReference= true;
+        public bool useManualAnimatorThumbHandDirectionReference { get => _useManualAnimatorThumbHandDirectionReference; private set => _useManualAnimatorThumbHandDirectionReference = value; }
 
         [Tooltip("손바닥 기준 엄지 시작 방향 보정 강도입니다.")]
         [Range(0f, 1f)]
-        public float manualAnimatorThumbHandDirectionWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorThumbHandDirectionWeight")]
+        [SerializeField] private float _manualAnimatorThumbHandDirectionWeight= 1f;
+        public float manualAnimatorThumbHandDirectionWeight { get => _manualAnimatorThumbHandDirectionWeight; private set => _manualAnimatorThumbHandDirectionWeight = value; }
 
         [Tooltip("Manual Animator finger reference의 손바닥 전체 프레임을 Target 손에 적용합니다.")]
-        public bool useManualAnimatorHandPalmFrameReference = true;
+        [FormerlySerializedAs("useManualAnimatorHandPalmFrameReference")]
+        [SerializeField] private bool _useManualAnimatorHandPalmFrameReference= true;
+        public bool useManualAnimatorHandPalmFrameReference { get => _useManualAnimatorHandPalmFrameReference; set => _useManualAnimatorHandPalmFrameReference = value; }
 
         [Tooltip("손바닥 프레임 보정 강도입니다.")]
         [Range(0f, 1f)]
-        public float manualAnimatorHandPalmFrameWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorHandPalmFrameWeight")]
+        [SerializeField] private float _manualAnimatorHandPalmFrameWeight= 1f;
+        public float manualAnimatorHandPalmFrameWeight { get => _manualAnimatorHandPalmFrameWeight; set => _manualAnimatorHandPalmFrameWeight = value; }
 
         [Tooltip("Manual Animator finger reference의 손 기준 엄지 시작 위치를 Target에 적용합니다.")]
-        public bool useManualAnimatorThumbBasePositionReference = true;
+        [FormerlySerializedAs("useManualAnimatorThumbBasePositionReference")]
+        [SerializeField] private bool _useManualAnimatorThumbBasePositionReference= true;
+        public bool useManualAnimatorThumbBasePositionReference { get => _useManualAnimatorThumbBasePositionReference; private set => _useManualAnimatorThumbBasePositionReference = value; }
 
         [Tooltip("수동 기준 Animator의 Hips localPosition을 target Hips에 선택적으로 적용합니다. testprefab Hips delta가 YYB에 전달되어 발 호 궤적이 심해지므로 기본 비활성화합니다.")]
-        public bool ShouldUseManualAnimatorHipsLocalPositionReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorHipsLocalPositionReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorHipsLocalPositionReference= false;
+        public bool ShouldUseManualAnimatorHipsLocalPositionReference { get => _ShouldUseManualAnimatorHipsLocalPositionReference; set => _ShouldUseManualAnimatorHipsLocalPositionReference = value; }
 
         [Tooltip("Sub_Manual/testPrefab Animator의 HumanPose bodyRotation을 retarget pose 기준으로 사용해 팔꿈치 bend plane 기준축 차이를 줄입니다.")]
-        public bool ShouldUseManualAnimatorBodyRotationReference = true;
+        [FormerlySerializedAs("ShouldUseManualAnimatorBodyRotationReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorBodyRotationReference= true;
+        public bool ShouldUseManualAnimatorBodyRotationReference { get => _ShouldUseManualAnimatorBodyRotationReference; set => _ShouldUseManualAnimatorBodyRotationReference = value; }
 
         [Range(0f, 1f)]
-        public float manualAnimatorBodyRotationReferenceWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorBodyRotationReferenceWeight")]
+        [SerializeField] private float _manualAnimatorBodyRotationReferenceWeight= 1f;
+        public float manualAnimatorBodyRotationReferenceWeight { get => _manualAnimatorBodyRotationReferenceWeight; set => _manualAnimatorBodyRotationReferenceWeight = value; }
 
         [Tooltip("preserveTargetBodyPosition=true 일 때 body Y 높이를 수동 기준 Animator의 HumanPose bodyPosition.y로 대체합니다. ghost Legacy-animation bodyPos 스파이크 없이 상체 높이를 애니메이션에 맞게 따라가도록 합니다.")]
-        public bool ShouldUseManualAnimatorBodyPositionYReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorBodyPositionYReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorBodyPositionYReference= false;
+        public bool ShouldUseManualAnimatorBodyPositionYReference { get => _ShouldUseManualAnimatorBodyPositionYReference; private set => _ShouldUseManualAnimatorBodyPositionYReference = value; }
 
         [Tooltip("Runtime diagnostic: blend HumanPose bodyPosition X/Z toward the manual Animator reference before SetHumanPose.")]
-        public bool ShouldUseManualAnimatorBodyPositionXzReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorBodyPositionXzReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorBodyPositionXzReference= false;
+        public bool ShouldUseManualAnimatorBodyPositionXzReference { get => _ShouldUseManualAnimatorBodyPositionXzReference; set => _ShouldUseManualAnimatorBodyPositionXzReference = value; }
 
-        [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceWeight = 1f;
+        [Range(0f, 1f)] [FormerlySerializedAs("manualAnimatorBodyPositionXzReferenceWeight")]
+        [SerializeField] private float _manualAnimatorBodyPositionXzReferenceWeight= 1f;
+        public float manualAnimatorBodyPositionXzReferenceWeight { get => _manualAnimatorBodyPositionXzReferenceWeight; set => _manualAnimatorBodyPositionXzReferenceWeight = value; }
 
-        [Range(0f, 0.2f)] public float manualAnimatorBodyPositionXzReferenceMaxOffset = 0.025f;
+        [Range(0f, 0.2f)] [FormerlySerializedAs("manualAnimatorBodyPositionXzReferenceMaxOffset")]
+        [SerializeField] private float _manualAnimatorBodyPositionXzReferenceMaxOffset= 0.025f;
+        public float manualAnimatorBodyPositionXzReferenceMaxOffset { get => _manualAnimatorBodyPositionXzReferenceMaxOffset; set => _manualAnimatorBodyPositionXzReferenceMaxOffset = value; }
 
-        [Range(0f, 6000f)] public float manualAnimatorBodyPositionXzReferenceFrameGateStart = 0f;
+        [Range(0f, 6000f)] [FormerlySerializedAs("manualAnimatorBodyPositionXzReferenceFrameGateStart")]
+        [SerializeField] private float _manualAnimatorBodyPositionXzReferenceFrameGateStart= 0f;
+        public float manualAnimatorBodyPositionXzReferenceFrameGateStart { get => _manualAnimatorBodyPositionXzReferenceFrameGateStart; set => _manualAnimatorBodyPositionXzReferenceFrameGateStart = value; }
 
-        [Range(0f, 6000f)] public float manualAnimatorBodyPositionXzReferenceFrameGateEnd = 0f;
+        [Range(0f, 6000f)] [FormerlySerializedAs("manualAnimatorBodyPositionXzReferenceFrameGateEnd")]
+        [SerializeField] private float _manualAnimatorBodyPositionXzReferenceFrameGateEnd= 0f;
+        public float manualAnimatorBodyPositionXzReferenceFrameGateEnd { get => _manualAnimatorBodyPositionXzReferenceFrameGateEnd; set => _manualAnimatorBodyPositionXzReferenceFrameGateEnd = value; }
 
         [Tooltip("Runtime diagnostic blend width in recorder frames for manual Animator bodyPosition X/Z frame gates. Zero keeps the legacy hard gate.")]
-        [Range(0f, 600f)] public float manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = 0f;
+        [Range(0f, 600f)] [FormerlySerializedAs("manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames")]
+        [SerializeField] private float _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames= 0f;
+        public float manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames { get => _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames; set => _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = value; }
 
         [Tooltip("Runtime diagnostic scale for the manual Animator bodyPosition X solver-input basis. One keeps the legacy X contribution.")]
-        [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceAxisXScale = 1f;
+        [Range(0f, 1f)] [FormerlySerializedAs("manualAnimatorBodyPositionXzReferenceAxisXScale")]
+        [SerializeField] private float _manualAnimatorBodyPositionXzReferenceAxisXScale= 1f;
+        public float manualAnimatorBodyPositionXzReferenceAxisXScale { get => _manualAnimatorBodyPositionXzReferenceAxisXScale; set => _manualAnimatorBodyPositionXzReferenceAxisXScale = value; }
 
         [Tooltip("Runtime diagnostic scale for the manual Animator bodyPosition Z solver-input basis. One keeps the legacy Z contribution.")]
-        [Range(0f, 1f)] public float manualAnimatorBodyPositionXzReferenceAxisZScale = 1f;
+        [Range(0f, 1f)] [FormerlySerializedAs("manualAnimatorBodyPositionXzReferenceAxisZScale")]
+        [SerializeField] private float _manualAnimatorBodyPositionXzReferenceAxisZScale= 1f;
+        public float manualAnimatorBodyPositionXzReferenceAxisZScale { get => _manualAnimatorBodyPositionXzReferenceAxisZScale; set => _manualAnimatorBodyPositionXzReferenceAxisZScale = value; }
 
         [Tooltip("Runtime diagnostic: apply a frame-local local-X offset to the right sleeve helper silhouette after SetHumanPose.")]
-        public bool useYybRightSleeveSilhouetteLocalOffsetReference = false;
+        [FormerlySerializedAs("useYybRightSleeveSilhouetteLocalOffsetReference")]
+        [SerializeField] private bool _useYybRightSleeveSilhouetteLocalOffsetReference= false;
+        public bool useYybRightSleeveSilhouetteLocalOffsetReference { get => _useYybRightSleeveSilhouetteLocalOffsetReference; set => _useYybRightSleeveSilhouetteLocalOffsetReference = value; }
 
         [Tooltip("Local X offset in meters for the frame-local right sleeve silhouette probe.")]
-        [Range(-0.2f, 0.2f)] public float yybRightSleeveSilhouetteLocalOffsetX = 0f;
+        [Range(-0.2f, 0.2f)] [FormerlySerializedAs("yybRightSleeveSilhouetteLocalOffsetX")]
+        [SerializeField] private float _yybRightSleeveSilhouetteLocalOffsetX= 0f;
+        public float yybRightSleeveSilhouetteLocalOffsetX { get => _yybRightSleeveSilhouetteLocalOffsetX; set => _yybRightSleeveSilhouetteLocalOffsetX = value; }
 
         [Tooltip("Runtime diagnostic start recorder frame for the right sleeve silhouette local-X offset. Zero with end zero keeps the full clip.")]
-        [Range(0f, 6000f)] public float yybRightSleeveSilhouetteLocalOffsetFrameGateStart = 0f;
+        [Range(0f, 6000f)] [FormerlySerializedAs("yybRightSleeveSilhouetteLocalOffsetFrameGateStart")]
+        [SerializeField] private float _yybRightSleeveSilhouetteLocalOffsetFrameGateStart= 0f;
+        public float yybRightSleeveSilhouetteLocalOffsetFrameGateStart { get => _yybRightSleeveSilhouetteLocalOffsetFrameGateStart; set => _yybRightSleeveSilhouetteLocalOffsetFrameGateStart = value; }
 
         [Tooltip("Runtime diagnostic end recorder frame for the right sleeve silhouette local-X offset. Zero with start zero keeps the full clip.")]
-        [Range(0f, 6000f)] public float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = 0f;
+        [Range(0f, 6000f)] [FormerlySerializedAs("yybRightSleeveSilhouetteLocalOffsetFrameGateEnd")]
+        [SerializeField] private float _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd= 0f;
+        public float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd { get => _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd; set => _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = value; }
 
         [Tooltip("수동 기준 Hips localPosition 보정 강도입니다.")]
         [Range(0f, 1f)]
-        public float manualAnimatorHipsLocalPositionWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorHipsLocalPositionWeight")]
+        [SerializeField] private float _manualAnimatorHipsLocalPositionWeight= 1f;
+        public float manualAnimatorHipsLocalPositionWeight { get => _manualAnimatorHipsLocalPositionWeight; set => _manualAnimatorHipsLocalPositionWeight = value; }
 
         [Tooltip("프레임당 수동 기준 Hips localPosition으로 이동할 수 있는 최대 보정 거리입니다.")]
         [Range(0.001f, 0.5f)]
-        public float manualAnimatorHipsLocalPositionMaxOffset = 0.12f;
+        [FormerlySerializedAs("manualAnimatorHipsLocalPositionMaxOffset")]
+        [SerializeField] private float _manualAnimatorHipsLocalPositionMaxOffset= 0.12f;
+        public float manualAnimatorHipsLocalPositionMaxOffset { get => _manualAnimatorHipsLocalPositionMaxOffset; set => _manualAnimatorHipsLocalPositionMaxOffset = value; }
 
         [Tooltip("Use the manual Animator lowest-foot lift as the grounding target height so jump/foot-height arcs are not flattened to the floor.")]
-        public bool ShouldUseManualAnimatorFootHeightGroundingReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorFootHeightGroundingReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorFootHeightGroundingReference= false;
+        public bool ShouldUseManualAnimatorFootHeightGroundingReference { get => _ShouldUseManualAnimatorFootHeightGroundingReference; set => _ShouldUseManualAnimatorFootHeightGroundingReference = value; }
 
         [Tooltip("Blend weight for the manual Animator lowest-foot grounding height reference.")]
         [Range(0f, 1f)]
-        public float manualAnimatorFootHeightGroundingReferenceWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorFootHeightGroundingReferenceWeight")]
+        [SerializeField] private float _manualAnimatorFootHeightGroundingReferenceWeight= 1f;
+        public float manualAnimatorFootHeightGroundingReferenceWeight { get => _manualAnimatorFootHeightGroundingReferenceWeight; private set => _manualAnimatorFootHeightGroundingReferenceWeight = value; }
 
         [Tooltip("Maximum positive grounding target lift from the manual Animator lowest-foot reference.")]
         [Range(0f, 0.12f)]
-        public float manualAnimatorFootHeightGroundingReferenceMaxLift = 0.08f;
+        [FormerlySerializedAs("manualAnimatorFootHeightGroundingReferenceMaxLift")]
+        [SerializeField] private float _manualAnimatorFootHeightGroundingReferenceMaxLift= 0.08f;
+        public float manualAnimatorFootHeightGroundingReferenceMaxLift { get => _manualAnimatorFootHeightGroundingReferenceMaxLift; private set => _manualAnimatorFootHeightGroundingReferenceMaxLift = value; }
 
         [Tooltip("Apply the manual Animator lower-body leg-chain localRotation to the target as an isolated runtime candidate.")]
-        public bool ShouldUseManualAnimatorFootLocalRotationReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorFootLocalRotationReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorFootLocalRotationReference= false;
+        public bool ShouldUseManualAnimatorFootLocalRotationReference { get => _ShouldUseManualAnimatorFootLocalRotationReference; set => _ShouldUseManualAnimatorFootLocalRotationReference = value; }
 
         [Tooltip("Blend weight for the manual Animator lower-body leg-chain localRotation reference.")]
         [Range(0f, 1f)]
-        public float manualAnimatorFootLocalRotationReferenceWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorFootLocalRotationReferenceWeight")]
+        [SerializeField] private float _manualAnimatorFootLocalRotationReferenceWeight= 1f;
+        public float manualAnimatorFootLocalRotationReferenceWeight { get => _manualAnimatorFootLocalRotationReferenceWeight; set => _manualAnimatorFootLocalRotationReferenceWeight = value; }
 
         [Tooltip("Apply manual Animator lower-body segment directions as an isolated runtime candidate without changing bone lengths or scale.")]
-        public bool ShouldUseManualAnimatorLowerBodySegmentDirectionReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorLowerBodySegmentDirectionReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorLowerBodySegmentDirectionReference= false;
+        public bool ShouldUseManualAnimatorLowerBodySegmentDirectionReference { get => _ShouldUseManualAnimatorLowerBodySegmentDirectionReference; set => _ShouldUseManualAnimatorLowerBodySegmentDirectionReference = value; }
 
         [Tooltip("Blend weight for the manual Animator lower-body segment direction correction.")]
         [Range(0f, 1f)]
-        public float manualAnimatorLowerBodySegmentDirectionReferenceWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorLowerBodySegmentDirectionReferenceWeight")]
+        [SerializeField] private float _manualAnimatorLowerBodySegmentDirectionReferenceWeight= 1f;
+        public float manualAnimatorLowerBodySegmentDirectionReferenceWeight { get => _manualAnimatorLowerBodySegmentDirectionReferenceWeight; set => _manualAnimatorLowerBodySegmentDirectionReferenceWeight = value; }
 
         [Tooltip("Maximum per-frame lower-body segment direction correction angle in degrees.")]
         [Range(0f, 20f)]
-        public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 6.2f;
+        [FormerlySerializedAs("manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle")]
+        [SerializeField] private float _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle= 6.2f;
+        public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle { get => _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle; set => _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = value; }
 
         [Tooltip("Skip only the upper-leg-to-lower-leg segments from the manual Animator lower-body segment direction correction.")]
-        public bool ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = false;
+        [FormerlySerializedAs("ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference")]
+        [SerializeField] private bool _ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference= false;
+        public bool ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference { get => _ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference; set => _ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = value; }
 
         [Tooltip("Optional upper-leg-to-lower-leg segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
         [Range(0f, 20f)]
-        public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = 0f;
+        [FormerlySerializedAs("manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle")]
+        [SerializeField] private float _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle= 0f;
+        public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle { get => _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle; set => _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = value; }
 
         [Tooltip("Skip only the lower-leg-to-foot segments from the manual Animator lower-body segment direction correction.")]
-        public bool ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference = false;
+        [FormerlySerializedAs("ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference")]
+        [SerializeField] private bool _ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference= false;
+        public bool ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference { get => _ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference; set => _ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference = value; }
 
         [Tooltip("Optional lower-leg-to-foot segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
         [Range(0f, 20f)]
-        public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+        [FormerlySerializedAs("manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle")]
+        [SerializeField] private float _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle= 0f;
+        public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle { get => _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle; set => _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = value; }
 
         [Tooltip("Optional left lower-leg-to-foot segment direction max angle in degrees. Zero keeps the lower-leg-to-foot segment cap.")]
         [Range(0f, 20f)]
-        public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+        [FormerlySerializedAs("manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle")]
+        [SerializeField] private float _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle= 0f;
+        public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle { get => _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle; set => _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = value; }
 
         [Tooltip("Optional right lower-leg-to-foot segment direction max angle in degrees. Zero keeps the lower-leg-to-foot segment cap.")]
         [Range(0f, 20f)]
-        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
+        [FormerlySerializedAs("manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle")]
+        [SerializeField] private float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle= 0f;
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle { get => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle; set => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = value; }
 
         [Tooltip("Runtime diagnostic scale for right lower-leg-to-foot correction axis X/Z components. One keeps the original axis.")]
         [Range(0f, 1f)]
-        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = 1f;
+        [FormerlySerializedAs("manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale")]
+        [SerializeField] private float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale= 1f;
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale { get => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale; set => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = value; }
 
         [Tooltip("Blend for right lower-leg-to-foot correction strength. The measured default reduces right-foot X/Z residual without worsening hips-aligned foot residual.")]
         [Range(0f, 1f)]
-        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.125f;
+        [FormerlySerializedAs("manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight")]
+        [SerializeField] private float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight= 0.125f;
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight { get => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight; set => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = value; }
 
         [Tooltip("Runtime diagnostic start recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
         [Range(0f, 2000f)]
-        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = 0f;
+        [FormerlySerializedAs("manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart")]
+        [SerializeField] private float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart= 0f;
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart { get => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart; set => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = value; }
 
         [Tooltip("Runtime diagnostic end recorder frame for right lower-leg-to-foot cap. Zero disables frame gating.")]
         [Range(0f, 2000f)]
-        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = 0f;
+        [FormerlySerializedAs("manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd")]
+        [SerializeField] private float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd= 0f;
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd { get => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd; set => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = value; }
 
         [Tooltip("Runtime diagnostic blend for preserving right foot world rotation after lower-leg-to-foot correction. One keeps the existing endpoint drift.")]
         [Range(0f, 1f)]
-        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight")]
+        [SerializeField] private float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight= 1f;
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight { get => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight; set => _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = value; }
 
         [Tooltip("Skip only the foot-to-toes segment from the manual Animator lower-body segment direction correction.")]
-        public bool ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = false;
+        [FormerlySerializedAs("ShouldDisableManualAnimatorFootToToesSegmentDirectionReference")]
+        [SerializeField] private bool _ShouldDisableManualAnimatorFootToToesSegmentDirectionReference= false;
+        public bool ShouldDisableManualAnimatorFootToToesSegmentDirectionReference { get => _ShouldDisableManualAnimatorFootToToesSegmentDirectionReference; set => _ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = value; }
 
         [Tooltip("Optional foot-to-toes-only segment direction max angle in degrees. Zero keeps the shared lower-body segment cap.")]
         [Range(0f, 20f)]
-        public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
+        [FormerlySerializedAs("manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle")]
+        [SerializeField] private float _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle= 0f;
+        public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle { get => _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle; set => _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = value; }
 
         [Tooltip("Apply a yaw-only upper-leg correction toward the manual Animator hips-relative foot X/Z path.")]
-        public bool ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = false;
+        [FormerlySerializedAs("ShouldUseManualAnimatorFootHipsAlignedResidualYawReference")]
+        [SerializeField] private bool _ShouldUseManualAnimatorFootHipsAlignedResidualYawReference= false;
+        public bool ShouldUseManualAnimatorFootHipsAlignedResidualYawReference { get => _ShouldUseManualAnimatorFootHipsAlignedResidualYawReference; set => _ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = value; }
 
         [Tooltip("Blend weight for the hips-aligned foot X/Z residual yaw correction.")]
         [Range(0f, 1f)]
-        public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorFootHipsAlignedResidualYawReferenceWeight")]
+        [SerializeField] private float _manualAnimatorFootHipsAlignedResidualYawReferenceWeight= 1f;
+        public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight { get => _manualAnimatorFootHipsAlignedResidualYawReferenceWeight; set => _manualAnimatorFootHipsAlignedResidualYawReferenceWeight = value; }
 
         [Tooltip("Maximum per-frame yaw correction angle for each upper leg in degrees.")]
         [Range(0f, 45f)]
-        public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = 15f;
+        [FormerlySerializedAs("manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle")]
+        [SerializeField] private float _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle= 15f;
+        public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle { get => _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle; set => _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = value; }
 
         [Tooltip("Apply manual Animator hips-relative foot positions through BipedIK as an isolated runtime candidate.")]
-        public bool useManualAnimatorBipedIkFootPositionReference = false;
+        [FormerlySerializedAs("useManualAnimatorBipedIkFootPositionReference")]
+        [SerializeField] private bool _useManualAnimatorBipedIkFootPositionReference= false;
+        public bool useManualAnimatorBipedIkFootPositionReference { get => _useManualAnimatorBipedIkFootPositionReference; set => _useManualAnimatorBipedIkFootPositionReference = value; }
 
         [Tooltip("Blend weight for manual Animator BipedIK foot position targets.")]
         [Range(0f, 1f)]
-        public float manualAnimatorBipedIkFootPositionReferenceWeight = 0.65f;
+        [FormerlySerializedAs("manualAnimatorBipedIkFootPositionReferenceWeight")]
+        [SerializeField] private float _manualAnimatorBipedIkFootPositionReferenceWeight= 0.65f;
+        public float manualAnimatorBipedIkFootPositionReferenceWeight { get => _manualAnimatorBipedIkFootPositionReferenceWeight; set => _manualAnimatorBipedIkFootPositionReferenceWeight = value; }
 
         [Tooltip("Maximum per-frame BipedIK foot target correction distance from the current target foot position.")]
         [Range(0f, 0.2f)]
-        public float manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0.12f;
+        [FormerlySerializedAs("manualAnimatorBipedIkFootPositionReferenceMaxOffset")]
+        [SerializeField] private float _manualAnimatorBipedIkFootPositionReferenceMaxOffset= 0.12f;
+        public float manualAnimatorBipedIkFootPositionReferenceMaxOffset { get => _manualAnimatorBipedIkFootPositionReferenceMaxOffset; set => _manualAnimatorBipedIkFootPositionReferenceMaxOffset = value; }
 
         [Tooltip("Runtime diagnostic: apply a bounded right foot/toes endpoint X/Z correction immediately after SetHumanPose.")]
-        public bool usePostSetHumanPoseRightEndpointPositionReference = false;
+        [FormerlySerializedAs("usePostSetHumanPoseRightEndpointPositionReference")]
+        [SerializeField] private bool _usePostSetHumanPoseRightEndpointPositionReference= false;
+        public bool usePostSetHumanPoseRightEndpointPositionReference { get => _usePostSetHumanPoseRightEndpointPositionReference; set => _usePostSetHumanPoseRightEndpointPositionReference = value; }
 
         [Tooltip("Blend weight for post-SetHumanPose right-foot endpoint X/Z correction.")]
         [Range(0f, 1f)]
-        public float postSetHumanPoseRightEndpointPositionReferenceWeight = 1f;
+        [FormerlySerializedAs("postSetHumanPoseRightEndpointPositionReferenceWeight")]
+        [SerializeField] private float _postSetHumanPoseRightEndpointPositionReferenceWeight= 1f;
+        public float postSetHumanPoseRightEndpointPositionReferenceWeight { get => _postSetHumanPoseRightEndpointPositionReferenceWeight; set => _postSetHumanPoseRightEndpointPositionReferenceWeight = value; }
 
         [Tooltip("Maximum per-frame post-SetHumanPose right-foot endpoint X/Z correction distance.")]
         [Range(0f, 0.2f)]
-        public float postSetHumanPoseRightEndpointPositionReferenceMaxOffset = 0.04f;
+        [FormerlySerializedAs("postSetHumanPoseRightEndpointPositionReferenceMaxOffset")]
+        [SerializeField] private float _postSetHumanPoseRightEndpointPositionReferenceMaxOffset= 0.04f;
+        public float postSetHumanPoseRightEndpointPositionReferenceMaxOffset { get => _postSetHumanPoseRightEndpointPositionReferenceMaxOffset; set => _postSetHumanPoseRightEndpointPositionReferenceMaxOffset = value; }
 
         [Tooltip("Scale applied only to positive world-Z endpoint correction after SetHumanPose; 1 keeps existing behavior.")]
         [Range(0f, 1f)]
-        public float postSetHumanPoseRightEndpointPositionReferencePositiveZScale = 1f;
+        [FormerlySerializedAs("postSetHumanPoseRightEndpointPositionReferencePositiveZScale")]
+        [SerializeField] private float _postSetHumanPoseRightEndpointPositionReferencePositiveZScale= 1f;
+        public float postSetHumanPoseRightEndpointPositionReferencePositiveZScale { get => _postSetHumanPoseRightEndpointPositionReferencePositiveZScale; set => _postSetHumanPoseRightEndpointPositionReferencePositiveZScale = value; }
 
         [Tooltip("Blend from foot-only endpoint delta to the existing foot/toes average after SetHumanPose; 1 keeps existing behavior.")]
         [Range(0f, 1f)]
-        public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = 1f;
+        [FormerlySerializedAs("postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight")]
+        [SerializeField] private float _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight= 1f;
+        public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight { get => _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight; set => _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = value; }
 
         [Tooltip("First legacy animation frame for post-SetHumanPose right-foot endpoint correction; 0 with end 0 keeps existing behavior.")]
         [Range(0f, 6000f)]
-        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = 0f;
+        [FormerlySerializedAs("postSetHumanPoseRightEndpointPositionReferenceFrameGateStart")]
+        [SerializeField] private float _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart= 0f;
+        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart { get => _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart; set => _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = value; }
 
         [Tooltip("Last legacy animation frame for post-SetHumanPose right-foot endpoint correction; 0 with start 0 keeps existing behavior.")]
         [Range(0f, 6000f)]
-        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
+        [FormerlySerializedAs("postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd")]
+        [SerializeField] private float _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd= 0f;
+        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd { get => _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd; set => _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = value; }
 
         [Tooltip("Runtime diagnostic: apply the post-SetHumanPose endpoint correction to the left foot row instead of the right foot row.")]
-        public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = false;
+        [FormerlySerializedAs("ShouldUseLeftSideForPostSetHumanPoseEndpointPosition")]
+        [SerializeField] private bool _ShouldUseLeftSideForPostSetHumanPoseEndpointPosition= false;
+        public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition { get => _ShouldUseLeftSideForPostSetHumanPoseEndpointPosition; set => _ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = value; }
 
         [Tooltip("Use the first matched reference foot X/Z offset as the post-SetHumanPose right-foot correction basis.")]
-        public bool usePostSetHumanPoseRightFootEvaluatorXzReference = false;
+        [FormerlySerializedAs("usePostSetHumanPoseRightFootEvaluatorXzReference")]
+        [SerializeField] private bool _usePostSetHumanPoseRightFootEvaluatorXzReference= false;
+        public bool usePostSetHumanPoseRightFootEvaluatorXzReference { get => _usePostSetHumanPoseRightFootEvaluatorXzReference; set => _usePostSetHumanPoseRightFootEvaluatorXzReference = value; }
 
         [Tooltip("Target normalized right-foot X/Z magnitude for the first-offset evaluator-basis post-SetHumanPose prototype.")]
         [Range(0f, 0.2f)]
-        public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = 0.049f;
+        [FormerlySerializedAs("postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude")]
+        [SerializeField] private float _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude= 0.049f;
+        public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude { get => _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude; set => _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = value; }
 
         [Tooltip("Apply a right-foot endpoint X/Z correction immediately before SetHumanPose as an isolated runtime candidate.")]
-        public bool usePreSetHumanPoseRightEndpointPositionReference = false;
+        [FormerlySerializedAs("usePreSetHumanPoseRightEndpointPositionReference")]
+        [SerializeField] private bool _usePreSetHumanPoseRightEndpointPositionReference= false;
+        public bool usePreSetHumanPoseRightEndpointPositionReference { get => _usePreSetHumanPoseRightEndpointPositionReference; set => _usePreSetHumanPoseRightEndpointPositionReference = value; }
 
         [Tooltip("Blend weight for pre-SetHumanPose right-foot endpoint X/Z correction.")]
         [Range(0f, 1f)]
-        public float preSetHumanPoseRightEndpointPositionReferenceWeight = 1f;
+        [FormerlySerializedAs("preSetHumanPoseRightEndpointPositionReferenceWeight")]
+        [SerializeField] private float _preSetHumanPoseRightEndpointPositionReferenceWeight= 1f;
+        public float preSetHumanPoseRightEndpointPositionReferenceWeight { get => _preSetHumanPoseRightEndpointPositionReferenceWeight; set => _preSetHumanPoseRightEndpointPositionReferenceWeight = value; }
 
         [Tooltip("Maximum per-frame pre-SetHumanPose right-foot endpoint X/Z correction distance.")]
         [Range(0f, 0.2f)]
-        public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset = 0.025f;
+        [FormerlySerializedAs("preSetHumanPoseRightEndpointPositionReferenceMaxOffset")]
+        [SerializeField] private float _preSetHumanPoseRightEndpointPositionReferenceMaxOffset= 0.025f;
+        public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset { get => _preSetHumanPoseRightEndpointPositionReferenceMaxOffset; set => _preSetHumanPoseRightEndpointPositionReferenceMaxOffset = value; }
 
         [Tooltip("Scale applied only to positive world-Z endpoint correction before SetHumanPose; 1 keeps existing behavior.")]
         [Range(0f, 1f)]
-        public float preSetHumanPoseRightEndpointPositionReferencePositiveZScale = 1f;
+        [FormerlySerializedAs("preSetHumanPoseRightEndpointPositionReferencePositiveZScale")]
+        [SerializeField] private float _preSetHumanPoseRightEndpointPositionReferencePositiveZScale= 1f;
+        public float preSetHumanPoseRightEndpointPositionReferencePositiveZScale { get => _preSetHumanPoseRightEndpointPositionReferencePositiveZScale; set => _preSetHumanPoseRightEndpointPositionReferencePositiveZScale = value; }
 
         [Tooltip("Blend from foot-only endpoint delta to the foot/toes average before SetHumanPose.")]
         [Range(0f, 1f)]
-        public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = 1f;
+        [FormerlySerializedAs("preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight")]
+        [SerializeField] private float _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight= 1f;
+        public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight { get => _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight; set => _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = value; }
 
         [Tooltip("First legacy animation frame for pre-SetHumanPose right-foot endpoint correction; 0 with end 0 keeps existing behavior.")]
         [Range(0f, 6000f)]
-        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = 0f;
+        [FormerlySerializedAs("preSetHumanPoseRightEndpointPositionReferenceFrameGateStart")]
+        [SerializeField] private float _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart= 0f;
+        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart { get => _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart; set => _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = value; }
 
         [Tooltip("Last legacy animation frame for pre-SetHumanPose right-foot endpoint correction; 0 with start 0 keeps existing behavior.")]
         [Range(0f, 6000f)]
-        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
+        [FormerlySerializedAs("preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd")]
+        [SerializeField] private float _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd= 0f;
+        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd { get => _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd; set => _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = value; }
 
         [Tooltip("Runtime diagnostic: apply the pre-SetHumanPose endpoint correction to the left foot row instead of the right foot row.")]
-        public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = false;
+        [FormerlySerializedAs("ShouldUseLeftSideForPreSetHumanPoseEndpointPosition")]
+        [SerializeField] private bool _ShouldUseLeftSideForPreSetHumanPoseEndpointPosition= false;
+        public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition { get => _ShouldUseLeftSideForPreSetHumanPoseEndpointPosition; set => _ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = value; }
 
         [Tooltip("Runtime diagnostic: use ghost/current endpoint rows as a sign-corrected bodyPosition X/Z translation basis before SetHumanPose.")]
-        public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false;
+        [FormerlySerializedAs("preSetHumanPoseEndpointPositionUseGhostCurrentBasis")]
+        [SerializeField] private bool _preSetHumanPoseEndpointPositionUseGhostCurrentBasis= false;
+        public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis { get => _preSetHumanPoseEndpointPositionUseGhostCurrentBasis; set => _preSetHumanPoseEndpointPositionUseGhostCurrentBasis = value; }
 
         [Tooltip("Runtime diagnostic: invert the pre-SetHumanPose endpoint bodyPosition X input delta.")]
-        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX = false;
+        [FormerlySerializedAs("ShouldInvertPreSetHumanPoseEndpointPositionBodyX")]
+        [SerializeField] private bool _ShouldInvertPreSetHumanPoseEndpointPositionBodyX= false;
+        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX { get => _ShouldInvertPreSetHumanPoseEndpointPositionBodyX; set => _ShouldInvertPreSetHumanPoseEndpointPositionBodyX = value; }
 
         [Tooltip("Runtime diagnostic: invert the pre-SetHumanPose endpoint bodyPosition Z input delta.")]
-        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = false;
+        [FormerlySerializedAs("ShouldInvertPreSetHumanPoseEndpointPositionBodyZ")]
+        [SerializeField] private bool _ShouldInvertPreSetHumanPoseEndpointPositionBodyZ= false;
+        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ { get => _ShouldInvertPreSetHumanPoseEndpointPositionBodyZ; set => _ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = value; }
 
         [Tooltip("엄지 시작 위치 보정 강도입니다.")]
         [Range(0f, 1f)]
-        public float manualAnimatorThumbBasePositionWeight = 1f;
+        [FormerlySerializedAs("manualAnimatorThumbBasePositionWeight")]
+        [SerializeField] private float _manualAnimatorThumbBasePositionWeight= 1f;
+        public float manualAnimatorThumbBasePositionWeight { get => _manualAnimatorThumbBasePositionWeight; private set => _manualAnimatorThumbBasePositionWeight = value; }
 
         [Tooltip("엄지 시작 위치가 원본 위치에서 벗어날 수 있는 최대 거리입니다.")]
         [Range(0f, 0.03f)]
-        public float manualAnimatorThumbBasePositionMaxOffset = 0.03f;
+        [FormerlySerializedAs("manualAnimatorThumbBasePositionMaxOffset")]
+        [SerializeField] private float _manualAnimatorThumbBasePositionMaxOffset= 0.03f;
+        public float manualAnimatorThumbBasePositionMaxOffset { get => _manualAnimatorThumbBasePositionMaxOffset; private set => _manualAnimatorThumbBasePositionMaxOffset = value; }
 
         [Tooltip("엄지 벌림 muscle 최소값입니다.")]
         [Range(-1.5f, 0f)]
-        public float thumbSpreadMin = -0.9f;
+        [FormerlySerializedAs("thumbSpreadMin")]
+        [SerializeField] private float _thumbSpreadMin= -0.9f;
+        public float thumbSpreadMin { get => _thumbSpreadMin; private set => _thumbSpreadMin = value; }
 
         [Tooltip("엄지 벌림 muscle 최대값입니다.")]
         [Range(0f, 1.5f)]
-        public float thumbSpreadMax = 0.9f;
+        [FormerlySerializedAs("thumbSpreadMax")]
+        [SerializeField] private float _thumbSpreadMax= 0.9f;
+        public float thumbSpreadMax { get => _thumbSpreadMax; private set => _thumbSpreadMax = value; }
 
         [Tooltip("엄지 해부학적 제한이 값을 바꿨을 때 최초 1회 진단 로그를 출력합니다.")]
-        public bool logThumbAnatomicalGuardCorrections = false;
+        [FormerlySerializedAs("logThumbAnatomicalGuardCorrections")]
+        [SerializeField] private bool _logThumbAnatomicalGuardCorrections= false;
+        public bool logThumbAnatomicalGuardCorrections { get => _logThumbAnatomicalGuardCorrections; private set => _logThumbAnatomicalGuardCorrections = value; }
 
         [Tooltip("엄지 muscle 제한 이후에도 YYB 엄지 본이 손 구조상 이상하게 꺾이면, 실제 엄지 본 localRotation을 기준 자세 근처로 제한합니다.")]
-        public bool enableThumbLocalRotationGuard = true;
+        [FormerlySerializedAs("enableThumbLocalRotationGuard")]
+        [SerializeField] private bool _enableThumbLocalRotationGuard= true;
+        public bool enableThumbLocalRotationGuard { get => _enableThumbLocalRotationGuard; private set => _enableThumbLocalRotationGuard = value; }
 
         [Tooltip("엄지 첫 번째 관절이 기준 자세에서 벗어날 수 있는 최대 각도입니다.")]
         [Range(0f, 90f)]
-        public float thumbProximalMaxLocalAngle = 10f;
+        [FormerlySerializedAs("thumbProximalMaxLocalAngle")]
+        [SerializeField] private float _thumbProximalMaxLocalAngle= 10f;
+        public float thumbProximalMaxLocalAngle { get => _thumbProximalMaxLocalAngle; private set => _thumbProximalMaxLocalAngle = value; }
 
         [Tooltip("엄지 두 번째 관절이 기준 자세에서 벗어날 수 있는 최대 각도입니다.")]
         [Range(0f, 120f)]
-        public float thumbIntermediateMaxLocalAngle = 55f;
+        [FormerlySerializedAs("thumbIntermediateMaxLocalAngle")]
+        [SerializeField] private float _thumbIntermediateMaxLocalAngle= 55f;
+        public float thumbIntermediateMaxLocalAngle { get => _thumbIntermediateMaxLocalAngle; private set => _thumbIntermediateMaxLocalAngle = value; }
 
         [Tooltip("엄지 끝 관절이 기준 자세에서 벗어날 수 있는 최대 각도입니다.")]
         [Range(0f, 120f)]
-        public float thumbDistalMaxLocalAngle = 55f;
+        [FormerlySerializedAs("thumbDistalMaxLocalAngle")]
+        [SerializeField] private float _thumbDistalMaxLocalAngle= 55f;
+        public float thumbDistalMaxLocalAngle { get => _thumbDistalMaxLocalAngle; private set => _thumbDistalMaxLocalAngle = value; }
 
         [Tooltip("엄지 본 localRotation 제한이 값을 바꿨을 때 최초 1회 진단 로그를 출력합니다.")]
-        public bool logThumbLocalRotationGuardCorrections = false;
+        [FormerlySerializedAs("logThumbLocalRotationGuardCorrections")]
+        [SerializeField] private bool _logThumbLocalRotationGuardCorrections= false;
+        public bool logThumbLocalRotationGuardCorrections { get => _logThumbLocalRotationGuardCorrections; private set => _logThumbLocalRotationGuardCorrections = value; }
 
         [Header("--- ROOT MOTION SPIKE GUARD ---")]
         [Tooltip("Ghost root delta가 한 프레임에 과도하게 튀면 순간이동으로 보고 해당 프레임의 추가 root 이동을 무시합니다.")]
-        public bool clampRootDeltaSpikes = true;
+        [FormerlySerializedAs("clampRootDeltaSpikes")]
+        [SerializeField] private bool _clampRootDeltaSpikes= true;
+        public bool clampRootDeltaSpikes { get => _clampRootDeltaSpikes; private set => _clampRootDeltaSpikes = value; }
 
         [Tooltip("한 프레임에 허용할 최대 root 이동량입니다.")]
         [Range(0.001f, 1.0f)]
-        public float maxRootDeltaPerFrame = 0.25f;
+        [FormerlySerializedAs("maxRootDeltaPerFrame")]
+        [SerializeField] private float _maxRootDeltaPerFrame= 0.25f;
+        public float maxRootDeltaPerFrame { get => _maxRootDeltaPerFrame; private set => _maxRootDeltaPerFrame = value; }
 
         [Tooltip("root delta spike를 무시했을 때 최초 1회 진단 로그를 출력합니다.")]
-        public bool logRootDeltaSpikes = false;
+        [FormerlySerializedAs("logRootDeltaSpikes")]
+        [SerializeField] private bool _logRootDeltaSpikes= false;
+        public bool logRootDeltaSpikes { get => _logRootDeltaSpikes; private set => _logRootDeltaSpikes = value; }
 
         [Header("--- HIPS LOCAL POSITION SPIKE GUARD ---")]
         [Tooltip("Clamp one-frame target Hips localPosition outliers after SetHumanPose.")]
-        public bool clampTargetHipsLocalPositionSpikes = false;
+        [FormerlySerializedAs("clampTargetHipsLocalPositionSpikes")]
+        [SerializeField] private bool _clampTargetHipsLocalPositionSpikes= false;
+        public bool clampTargetHipsLocalPositionSpikes { get => _clampTargetHipsLocalPositionSpikes; private set => _clampTargetHipsLocalPositionSpikes = value; }
 
         [Tooltip("Maximum target Hips localPosition delta allowed per frame.")]
         [Range(0.005f, 0.25f)]
-        public float maxTargetHipsLocalPositionDeltaPerFrame = 0.02f;
+        [FormerlySerializedAs("maxTargetHipsLocalPositionDeltaPerFrame")]
+        [SerializeField] private float _maxTargetHipsLocalPositionDeltaPerFrame= 0.02f;
+        public float maxTargetHipsLocalPositionDeltaPerFrame { get => _maxTargetHipsLocalPositionDeltaPerFrame; private set => _maxTargetHipsLocalPositionDeltaPerFrame = value; }
 
         [Header("--- GROUNDING STABILITY GUARD ---")]
         [Tooltip("발바닥 접지 보정이 한 프레임에 크게 튀지 않도록 부드럽게 반영합니다.")]
-        public bool smoothGrounding = true;
+        [FormerlySerializedAs("smoothGrounding")]
+        [SerializeField] private bool _smoothGrounding= true;
+        public bool smoothGrounding { get => _smoothGrounding; private set => _smoothGrounding = value; }
 
         [Tooltip("한 프레임에 허용할 최대 수직 접지 보정값입니다.")]
         [Range(0.001f, 0.2f)]
-        public float maxGroundingVerticalStepPerFrame = 0.01f;
+        [FormerlySerializedAs("maxGroundingVerticalStepPerFrame")]
+        [SerializeField] private float _maxGroundingVerticalStepPerFrame= 0.01f;
+        public float maxGroundingVerticalStepPerFrame { get => _maxGroundingVerticalStepPerFrame; private set => _maxGroundingVerticalStepPerFrame = value; }
 
         [Tooltip("접지 보정 목표값을 현재 위치에 반영하는 비율입니다.")]
         [Range(0f, 1f)]
-        public float groundingSmoothing = 0.25f;
+        [FormerlySerializedAs("groundingSmoothing")]
+        [SerializeField] private float _groundingSmoothing= 0.25f;
+        public float groundingSmoothing { get => _groundingSmoothing; private set => _groundingSmoothing = value; }
 
         [Tooltip("이 값보다 작은 발바닥 떨림은 무시합니다.")]
         [Range(0f, 0.05f)]
-        public float groundingDeadZone = 0.005f;
+        [FormerlySerializedAs("groundingDeadZone")]
+        [SerializeField] private float _groundingDeadZone= 0.005f;
+        public float groundingDeadZone { get => _groundingDeadZone; private set => _groundingDeadZone = value; }
 
         [Tooltip("초기 접지 확정 뒤에는 root Y를 고정합니다. MMD VMD export에서는 이후 프레임의 발 빠짐을 막기 위해 기본 비활성화합니다.")]
-        public bool freezeRootYAfterInitialGrounding = false;
+        [FormerlySerializedAs("freezeRootYAfterInitialGrounding")]
+        [SerializeField] private bool _freezeRootYAfterInitialGrounding= false;
+        public bool freezeRootYAfterInitialGrounding { get => _freezeRootYAfterInitialGrounding; private set => _freezeRootYAfterInitialGrounding = value; }
 
         [Tooltip("Editor/GameView 프레임이 밀려도 Ghost clip time이 한 프레임에 크게 건너뛰지 않게 제한합니다.")]
-        public bool clampLegacyAnimationVisualStep = false;
+        [FormerlySerializedAs("clampLegacyAnimationVisualStep")]
+        [SerializeField] private bool _clampLegacyAnimationVisualStep= false;
+        public bool clampLegacyAnimationVisualStep { get => _clampLegacyAnimationVisualStep; private set => _clampLegacyAnimationVisualStep = value; }
 
         [Tooltip("Ghost clip time이 한 렌더 프레임에 전진할 수 있는 기준 FPS입니다.")]
         [Range(15f, 120f)]
-        public float legacyAnimationVisualFrameRate = 30f;
+        [FormerlySerializedAs("legacyAnimationVisualFrameRate")]
+        [SerializeField] private float _legacyAnimationVisualFrameRate= 30f;
+        public float legacyAnimationVisualFrameRate { get => _legacyAnimationVisualFrameRate; private set => _legacyAnimationVisualFrameRate = value; }
 
         [Tooltip("프레임 지연으로 pose가 한 번에 크게 바뀌면 clip time은 보존하고 target pose만 부드럽게 따라가게 합니다.")]
-        public bool smoothPoseOnLegacyAnimationStepSpike = true;
+        [FormerlySerializedAs("smoothPoseOnLegacyAnimationStepSpike")]
+        [SerializeField] private bool _smoothPoseOnLegacyAnimationStepSpike= true;
+        public bool smoothPoseOnLegacyAnimationStepSpike { get => _smoothPoseOnLegacyAnimationStepSpike; private set => _smoothPoseOnLegacyAnimationStepSpike = value; }
 
         [Tooltip("pose spike smoothing 때 현재 FBX pose를 반영하는 비율입니다.")]
         [Range(0.1f, 1f)]
-        public float poseVisualSpikeCurrentWeight = 0.65f;
+        [FormerlySerializedAs("poseVisualSpikeCurrentWeight")]
+        [SerializeField] private float _poseVisualSpikeCurrentWeight= 0.65f;
+        public float poseVisualSpikeCurrentWeight { get => _poseVisualSpikeCurrentWeight; private set => _poseVisualSpikeCurrentWeight = value; }
 
         [Tooltip("Optional forearm stretch clamp around the current pose during visual spike smoothing. 0 disables the clamp.")]
         [Range(0f, 1f)]
-        public float poseVisualSpikeForearmStretchClampMaxOffset = 0f;
+        [FormerlySerializedAs("poseVisualSpikeForearmStretchClampMaxOffset")]
+        [SerializeField] private float _poseVisualSpikeForearmStretchClampMaxOffset= 0f;
+        public float poseVisualSpikeForearmStretchClampMaxOffset { get => _poseVisualSpikeForearmStretchClampMaxOffset; private set => _poseVisualSpikeForearmStretchClampMaxOffset = value; }
 
         [Tooltip("이 값보다 큰 muscle delta가 발생하면 frame-time spike가 아니어도 pose smoothing을 적용합니다.")]
         [Range(0.05f, 1f)]
-        public float poseVisualMuscleDeltaThreshold = 0.35f;
+        [FormerlySerializedAs("poseVisualMuscleDeltaThreshold")]
+        [SerializeField] private float _poseVisualMuscleDeltaThreshold= 0.35f;
+        public float poseVisualMuscleDeltaThreshold { get => _poseVisualMuscleDeltaThreshold; private set => _poseVisualMuscleDeltaThreshold = value; }
 
         [Tooltip("Renderer bounds 하단이 발바닥 추정치에서 과하게 멀면 접지 기준에서 제외합니다.")]
-        public bool rejectRendererGroundingOutliers = true;
+        [FormerlySerializedAs("rejectRendererGroundingOutliers")]
+        [SerializeField] private bool _rejectRendererGroundingOutliers= true;
+        public bool rejectRendererGroundingOutliers { get => _rejectRendererGroundingOutliers; private set => _rejectRendererGroundingOutliers = value; }
 
         [Tooltip("Renderer bounds 하단과 발바닥 추정치 사이에 허용할 최대 거리입니다.")]
         [Range(0.02f, 0.3f)]
-        public float maxRendererFootGroundingSeparation = 0.12f;
+        [FormerlySerializedAs("maxRendererFootGroundingSeparation")]
+        [SerializeField] private float _maxRendererFootGroundingSeparation= 0.12f;
+        public float maxRendererFootGroundingSeparation { get => _maxRendererFootGroundingSeparation; private set => _maxRendererFootGroundingSeparation = value; }
 
         [Tooltip("LateUpdate 후반의 손/팔 보호 로직이 끝난 뒤 메시 bounds 기준으로 루트 Y만 한 번 더 보정합니다.")]
-        public bool enableLateVisualGroundingCorrection = true;
+        [FormerlySerializedAs("enableLateVisualGroundingCorrection")]
+        [SerializeField] private bool _enableLateVisualGroundingCorrection= true;
+        public bool enableLateVisualGroundingCorrection { get => _enableLateVisualGroundingCorrection; private set => _enableLateVisualGroundingCorrection = value; }
 
         [Tooltip("최종 메시 bounds 보정이 한 프레임에 적용할 수 있는 최대 Y 이동량입니다.")]
         [Range(0.01f, 0.2f)]
-        public float maxLateVisualGroundingCorrection = 0.2f;
+        [FormerlySerializedAs("maxLateVisualGroundingCorrection")]
+        [SerializeField] private float _maxLateVisualGroundingCorrection= 0.2f;
+        public float maxLateVisualGroundingCorrection { get => _maxLateVisualGroundingCorrection; private set => _maxLateVisualGroundingCorrection = value; }
 
         [Tooltip("최종 메시 bounds 접지 보정의 작은 잔여 오차를 부드럽게 반영해 모델 전체 떨림을 줄입니다.")]
-        public bool smoothLateVisualGroundingCorrection = true;
+        [FormerlySerializedAs("smoothLateVisualGroundingCorrection")]
+        [SerializeField] private bool _smoothLateVisualGroundingCorrection= true;
+        public bool smoothLateVisualGroundingCorrection { get => _smoothLateVisualGroundingCorrection; private set => _smoothLateVisualGroundingCorrection = value; }
 
         [Tooltip("Late visual grounding 잔여 오차가 이 값보다 작으면 smoothing 대상으로 봅니다. 큰 오차는 공중 부유 방지를 위해 즉시 보정합니다.")]
         [Range(0.005f, 0.1f)]
-        public float lateVisualGroundingSnapThreshold = 0.03f;
+        [FormerlySerializedAs("lateVisualGroundingSnapThreshold")]
+        [SerializeField] private float _lateVisualGroundingSnapThreshold= 0.03f;
+        public float lateVisualGroundingSnapThreshold { get => _lateVisualGroundingSnapThreshold; private set => _lateVisualGroundingSnapThreshold = value; }
 
         [Tooltip("작은 late visual grounding 잔여 오차를 현재 위치에 반영하는 비율입니다.")]
         [Range(0f, 1f)]
-        public float lateVisualGroundingSmoothing = 0.25f;
+        [FormerlySerializedAs("lateVisualGroundingSmoothing")]
+        [SerializeField] private float _lateVisualGroundingSmoothing= 0.25f;
+        public float lateVisualGroundingSmoothing { get => _lateVisualGroundingSmoothing; private set => _lateVisualGroundingSmoothing = value; }
 
         [Tooltip("작은 late visual grounding smoothing 보정이 한 프레임에 움직일 수 있는 최대 Y 이동량입니다.")]
         [Range(0.001f, 0.05f)]
-        public float maxLateVisualGroundingStepPerFrame = 0.003f;
+        [FormerlySerializedAs("maxLateVisualGroundingStepPerFrame")]
+        [SerializeField] private float _maxLateVisualGroundingStepPerFrame= 0.003f;
+        public float maxLateVisualGroundingStepPerFrame { get => _maxLateVisualGroundingStepPerFrame; private set => _maxLateVisualGroundingStepPerFrame = value; }
 
         public float LastRootDeltaMagnitude => _lastRootDeltaMagnitude;
         public float MaxRootDeltaMagnitude => _maxRootDeltaMagnitude;
@@ -1089,7 +1384,9 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         [Tooltip("Target Humanoid 본의 localPosition을 초기값으로 되돌려 팔/다리 길이 변형을 막습니다.")]
-        public bool ShouldLockTargetHumanoidBonePositions = true;
+        [FormerlySerializedAs("ShouldLockTargetHumanoidBonePositions")]
+        [SerializeField] private bool _ShouldLockTargetHumanoidBonePositions= true;
+        public bool ShouldLockTargetHumanoidBonePositions { get => _ShouldLockTargetHumanoidBonePositions; set => _ShouldLockTargetHumanoidBonePositions = value; }
 
         // --- 내부 변수 ---
         private HumanPoseHandler _ghostHandler;
@@ -1531,8 +1828,12 @@ namespace Fbx2Vmd.FBXImporter
         private bool _addedLegacyAnimationComponent;
         private AnimationClip _ownedLegacyClip;
 
-        public void Initialize(GameObject ghostRoot, GameObject targetRoot, Dictionary<string, string> mappingData, AnimationClip clip, FBXVmdPipeline settings)
+        public void Initialize(RetargetingContext context, RetargetingSettings settings)
         {
+            GameObject ghostRoot = context.GhostRoot;
+            GameObject targetRoot = context.TargetRoot;
+            AnimationClip clip = context.Clip;
+
             CleanupLegacyGhostPlayback();
 
             ghostAnimator = ghostRoot.GetComponent<Animator>();
@@ -11147,6 +11448,321 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             retargeter.ApplyLateVisualGroundingCorrection();
+        }
+    }
+
+
+    public sealed class RetargetingContext
+    {
+        public GameObject GhostRoot { get; }
+        public GameObject TargetRoot { get; }
+        public IReadOnlyDictionary<string, string> Mapping { get; }
+        public AnimationClip Clip { get; }
+
+        public RetargetingContext(
+            GameObject ghostRoot,
+            GameObject targetRoot,
+            IDictionary<string, string> mapping,
+            AnimationClip clip)
+        {
+            GhostRoot = ghostRoot;
+            TargetRoot = targetRoot;
+            Mapping = new Dictionary<string, string>(mapping ?? new Dictionary<string, string>());
+            Clip = clip;
+        }
+    }
+
+    public sealed class RetargetingSettings
+    {
+        public bool ShouldUseLegacyPoseSpaceFacingCorrection { get; }
+        public float HeightOffset { get; }
+        public float MovementScaleMultiplier { get; }
+        public bool ShouldPreserveFbxRootRotation { get; }
+        public bool ShouldPreserveRetargetBodyPosition { get; }
+        public bool ShouldUseRetargetBodyPositionXZRootMotion { get; }
+        public bool ShouldUseEditorHumanoidRootTranslationReference { get; }
+        public float editorHumanoidRootTranslationWeight { get; }
+        public float editorHumanoidRootTranslationCurrentWeight { get; }
+        public bool ShouldStabilizeGroundedFootXZ { get; }
+        public float GroundedFootLockWeight { get; }
+        public float MaxGroundedFootLockStep { get; }
+        public bool clampRetargetMusclesToHumanRange { get; }
+        public bool enableAnatomicalArmGuard { get; }
+        public float ArmStretchMuscleLimit { get; }
+        public bool clampRetargetArmStretchMuscles { get; }
+        public float UpperArmTwistMuscleLimit { get; }
+        public float LowerArmTwistMuscleLimit { get; }
+        public bool enableThumbAnatomicalGuard { get; }
+        public float ThumbStretchMin { get; }
+        public float ThumbStretchMax { get; }
+        public float EffectiveThumbStretchOffset { get; }
+        public bool preserveManualFingerReferenceThumbMuscles { get; }
+        public bool ShouldUseManualAnimatorFullBodyPoseReference { get; }
+        public float manualAnimatorFullBodyPoseReferenceWeight { get; }
+        public bool ShouldExcludeManualAnimatorFullBodyLowerMuscles { get; }
+        public bool ShouldApplyManualAnimatorFullBodyLowerMusclesOnly { get; }
+        public bool ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly { get; }
+        public bool manualAnimatorFullBodyPoseRightArmMusclesOnly { get; }
+        public bool manualAnimatorFullBodyPoseLeftArmMusclesOnly { get; }
+        public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly { get; }
+        public float manualAnimatorFullBodyPoseFrameGateStart { get; }
+        public float manualAnimatorFullBodyPoseFrameGateEnd { get; }
+        public bool ShouldUseSetHumanPoseRightLegTwistOutputReference { get; }
+        public float setHumanPoseRightLegTwistOutputReferenceWeight { get; }
+        public float setHumanPoseRightLegTwistOutputReferenceMaxDelta { get; }
+        public bool useManualAnimatorThumbLocalRotationReference { get; }
+        public bool useManualAnimatorHandLocalRotationReference { get; }
+        public bool useManualAnimatorThumbSegmentDirectionReference { get; }
+        public float manualAnimatorThumbSegmentDirectionWeight { get; }
+        public bool useManualAnimatorThumbHandDirectionReference { get; }
+        public float manualAnimatorThumbHandDirectionWeight { get; }
+        public bool useManualAnimatorHandPalmFrameReference { get; }
+        public float manualAnimatorHandPalmFrameWeight { get; }
+        public bool useManualAnimatorThumbBasePositionReference { get; }
+        public bool ShouldUseManualAnimatorHipsLocalPositionReference { get; }
+        public bool ShouldUseManualAnimatorBodyRotationReference { get; }
+        public float manualAnimatorBodyRotationReferenceWeight { get; }
+        public bool ShouldUseManualAnimatorBodyPositionYReference { get; }
+        public bool ShouldUseManualAnimatorBodyPositionXzReference { get; }
+        public float manualAnimatorBodyPositionXzReferenceWeight { get; }
+        public float manualAnimatorBodyPositionXzReferenceMaxOffset { get; }
+        public float manualAnimatorBodyPositionXzReferenceFrameGateStart { get; }
+        public float manualAnimatorBodyPositionXzReferenceFrameGateEnd { get; }
+        public float manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames { get; }
+        public float manualAnimatorBodyPositionXzReferenceAxisXScale { get; }
+        public float manualAnimatorBodyPositionXzReferenceAxisZScale { get; }
+        public float manualAnimatorHipsLocalPositionWeight { get; }
+        public float manualAnimatorHipsLocalPositionMaxOffset { get; }
+        public bool ShouldUseManualAnimatorFootHeightGroundingReference { get; }
+        public float manualAnimatorFootHeightGroundingReferenceWeight { get; }
+        public float manualAnimatorFootHeightGroundingReferenceMaxLift { get; }
+        public bool ShouldUseManualAnimatorFootLocalRotationReference { get; }
+        public float manualAnimatorFootLocalRotationReferenceWeight { get; }
+        public bool ShouldUseManualAnimatorLowerBodySegmentDirectionReference { get; }
+        public float manualAnimatorLowerBodySegmentDirectionReferenceWeight { get; }
+        public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle { get; }
+        public bool ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference { get; }
+        public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle { get; }
+        public bool ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference { get; }
+        public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle { get; }
+        public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle { get; }
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle { get; }
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale { get; }
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight { get; }
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart { get; }
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd { get; }
+        public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight { get; }
+        public bool ShouldDisableManualAnimatorFootToToesSegmentDirectionReference { get; }
+        public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle { get; }
+        public bool ShouldUseManualAnimatorFootHipsAlignedResidualYawReference { get; }
+        public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight { get; }
+        public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle { get; }
+        public bool useManualAnimatorBipedIkFootPositionReference { get; }
+        public float manualAnimatorBipedIkFootPositionReferenceWeight { get; }
+        public float manualAnimatorBipedIkFootPositionReferenceMaxOffset { get; }
+        public bool usePostSetHumanPoseRightEndpointPositionReference { get; }
+        public float postSetHumanPoseRightEndpointPositionReferenceWeight { get; }
+        public float postSetHumanPoseRightEndpointPositionReferenceMaxOffset { get; }
+        public float postSetHumanPoseRightEndpointPositionReferencePositiveZScale { get; }
+        public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight { get; }
+        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart { get; }
+        public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd { get; }
+        public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition { get; }
+        public bool usePostSetHumanPoseRightFootEvaluatorXzReference { get; }
+        public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude { get; }
+        public bool usePreSetHumanPoseRightEndpointPositionReference { get; }
+        public float preSetHumanPoseRightEndpointPositionReferenceWeight { get; }
+        public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset { get; }
+        public float preSetHumanPoseRightEndpointPositionReferencePositiveZScale { get; }
+        public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight { get; }
+        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart { get; }
+        public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd { get; }
+        public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition { get; }
+        public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis { get; }
+        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX { get; }
+        public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ { get; }
+        public float manualAnimatorThumbBasePositionWeight { get; }
+        public float manualAnimatorThumbBasePositionMaxOffset { get; }
+        public float ThumbSpreadMin { get; }
+        public float ThumbSpreadMax { get; }
+        public bool logThumbAnatomicalGuardCorrections { get; }
+        public bool EffectiveThumbLocalRotationGuard { get; }
+        public float EffectiveThumbProximalMaxLocalAngle { get; }
+        public float ThumbIntermediateMaxLocalAngle { get; }
+        public float ThumbDistalMaxLocalAngle { get; }
+        public bool logThumbLocalRotationGuardCorrections { get; }
+        public bool clampRetargetRootDeltaSpikes { get; }
+        public float MaxRetargetRootDeltaPerFrame { get; }
+        public bool logRetargetRootDeltaSpikes { get; }
+        public bool clampRetargetHipsLocalPositionSpikes { get; }
+        public float MaxRetargetHipsLocalPositionDeltaPerFrame { get; }
+        public bool smoothRetargetGrounding { get; }
+        public float MaxGroundingVerticalStepPerFrame { get; }
+        public float GroundingSmoothing { get; }
+        public float GroundingDeadZone { get; }
+        public bool FreezeRootYAfterInitialGrounding { get; }
+        public bool clampRetargetVisualClipStep { get; }
+        public float RetargetVisualClipFrameRate { get; }
+        public bool smoothRetargetPoseOnVisualStepSpike { get; }
+        public float RetargetPoseVisualSpikeCurrentWeight { get; }
+        public float RetargetPoseVisualSpikeForearmStretchClampMaxOffset { get; }
+        public float RetargetPoseVisualMuscleDeltaThreshold { get; }
+        public bool rejectRendererGroundingOutliers { get; }
+        public float MaxRendererFootGroundingSeparation { get; }
+        public bool smoothLateVisualGroundingCorrection { get; }
+        public float LateVisualGroundingSnapThreshold { get; }
+        public float LateVisualGroundingSmoothing { get; }
+        public float MaxLateVisualGroundingStepPerFrame { get; }
+        public bool ShouldLockTargetHumanoidBonePositions { get; }
+
+        private RetargetingSettings(FBXVmdPipeline pipeline)
+        {
+            ShouldUseLegacyPoseSpaceFacingCorrection = pipeline.ShouldUseLegacyPoseSpaceFacingCorrection;
+            HeightOffset = pipeline.HeightOffset;
+            MovementScaleMultiplier = pipeline.MovementScaleMultiplier;
+            ShouldPreserveFbxRootRotation = pipeline.ShouldPreserveFbxRootRotation;
+            ShouldPreserveRetargetBodyPosition = pipeline.ShouldPreserveRetargetBodyPosition;
+            ShouldUseRetargetBodyPositionXZRootMotion = pipeline.ShouldUseRetargetBodyPositionXZRootMotion;
+            ShouldUseEditorHumanoidRootTranslationReference = pipeline.ShouldUseEditorHumanoidRootTranslationReference;
+            editorHumanoidRootTranslationWeight = pipeline.editorHumanoidRootTranslationWeight;
+            editorHumanoidRootTranslationCurrentWeight = pipeline.editorHumanoidRootTranslationCurrentWeight;
+            ShouldStabilizeGroundedFootXZ = pipeline.ShouldStabilizeGroundedFootXZ;
+            GroundedFootLockWeight = pipeline.GroundedFootLockWeight;
+            MaxGroundedFootLockStep = pipeline.MaxGroundedFootLockStep;
+            clampRetargetMusclesToHumanRange = pipeline.clampRetargetMusclesToHumanRange;
+            enableAnatomicalArmGuard = pipeline.enableAnatomicalArmGuard;
+            ArmStretchMuscleLimit = pipeline.ArmStretchMuscleLimit;
+            clampRetargetArmStretchMuscles = pipeline.clampRetargetArmStretchMuscles;
+            UpperArmTwistMuscleLimit = pipeline.UpperArmTwistMuscleLimit;
+            LowerArmTwistMuscleLimit = pipeline.LowerArmTwistMuscleLimit;
+            enableThumbAnatomicalGuard = pipeline.enableThumbAnatomicalGuard;
+            ThumbStretchMin = pipeline.ThumbStretchMin;
+            ThumbStretchMax = pipeline.ThumbStretchMax;
+            EffectiveThumbStretchOffset = pipeline.EffectiveThumbStretchOffset;
+            preserveManualFingerReferenceThumbMuscles = pipeline.preserveManualFingerReferenceThumbMuscles;
+            ShouldUseManualAnimatorFullBodyPoseReference = pipeline.ShouldUseManualAnimatorFullBodyPoseReference;
+            manualAnimatorFullBodyPoseReferenceWeight = pipeline.manualAnimatorFullBodyPoseReferenceWeight;
+            ShouldExcludeManualAnimatorFullBodyLowerMuscles = pipeline.ShouldExcludeManualAnimatorFullBodyLowerMuscles;
+            ShouldApplyManualAnimatorFullBodyLowerMusclesOnly = pipeline.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly;
+            ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = pipeline.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly;
+            manualAnimatorFullBodyPoseRightArmMusclesOnly = pipeline.manualAnimatorFullBodyPoseRightArmMusclesOnly;
+            manualAnimatorFullBodyPoseLeftArmMusclesOnly = pipeline.manualAnimatorFullBodyPoseLeftArmMusclesOnly;
+            manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = pipeline.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly;
+            manualAnimatorFullBodyPoseFrameGateStart = pipeline.manualAnimatorFullBodyPoseFrameGateStart;
+            manualAnimatorFullBodyPoseFrameGateEnd = pipeline.manualAnimatorFullBodyPoseFrameGateEnd;
+            ShouldUseSetHumanPoseRightLegTwistOutputReference = pipeline.ShouldUseSetHumanPoseRightLegTwistOutputReference;
+            setHumanPoseRightLegTwistOutputReferenceWeight = pipeline.setHumanPoseRightLegTwistOutputReferenceWeight;
+            setHumanPoseRightLegTwistOutputReferenceMaxDelta = pipeline.setHumanPoseRightLegTwistOutputReferenceMaxDelta;
+            useManualAnimatorThumbLocalRotationReference = pipeline.useManualAnimatorThumbLocalRotationReference;
+            useManualAnimatorHandLocalRotationReference = pipeline.useManualAnimatorHandLocalRotationReference;
+            useManualAnimatorThumbSegmentDirectionReference = pipeline.useManualAnimatorThumbSegmentDirectionReference;
+            manualAnimatorThumbSegmentDirectionWeight = pipeline.manualAnimatorThumbSegmentDirectionWeight;
+            useManualAnimatorThumbHandDirectionReference = pipeline.useManualAnimatorThumbHandDirectionReference;
+            manualAnimatorThumbHandDirectionWeight = pipeline.manualAnimatorThumbHandDirectionWeight;
+            useManualAnimatorHandPalmFrameReference = pipeline.useManualAnimatorHandPalmFrameReference;
+            manualAnimatorHandPalmFrameWeight = pipeline.manualAnimatorHandPalmFrameWeight;
+            useManualAnimatorThumbBasePositionReference = pipeline.useManualAnimatorThumbBasePositionReference;
+            ShouldUseManualAnimatorHipsLocalPositionReference = pipeline.ShouldUseManualAnimatorHipsLocalPositionReference;
+            ShouldUseManualAnimatorBodyRotationReference = pipeline.ShouldUseManualAnimatorBodyRotationReference;
+            manualAnimatorBodyRotationReferenceWeight = pipeline.manualAnimatorBodyRotationReferenceWeight;
+            ShouldUseManualAnimatorBodyPositionYReference = pipeline.ShouldUseManualAnimatorBodyPositionYReference;
+            ShouldUseManualAnimatorBodyPositionXzReference = pipeline.ShouldUseManualAnimatorBodyPositionXzReference;
+            manualAnimatorBodyPositionXzReferenceWeight = pipeline.manualAnimatorBodyPositionXzReferenceWeight;
+            manualAnimatorBodyPositionXzReferenceMaxOffset = pipeline.manualAnimatorBodyPositionXzReferenceMaxOffset;
+            manualAnimatorBodyPositionXzReferenceFrameGateStart = pipeline.manualAnimatorBodyPositionXzReferenceFrameGateStart;
+            manualAnimatorBodyPositionXzReferenceFrameGateEnd = pipeline.manualAnimatorBodyPositionXzReferenceFrameGateEnd;
+            manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = pipeline.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames;
+            manualAnimatorBodyPositionXzReferenceAxisXScale = pipeline.manualAnimatorBodyPositionXzReferenceAxisXScale;
+            manualAnimatorBodyPositionXzReferenceAxisZScale = pipeline.manualAnimatorBodyPositionXzReferenceAxisZScale;
+            manualAnimatorHipsLocalPositionWeight = pipeline.manualAnimatorHipsLocalPositionWeight;
+            manualAnimatorHipsLocalPositionMaxOffset = pipeline.manualAnimatorHipsLocalPositionMaxOffset;
+            ShouldUseManualAnimatorFootHeightGroundingReference = pipeline.ShouldUseManualAnimatorFootHeightGroundingReference;
+            manualAnimatorFootHeightGroundingReferenceWeight = pipeline.manualAnimatorFootHeightGroundingReferenceWeight;
+            manualAnimatorFootHeightGroundingReferenceMaxLift = pipeline.manualAnimatorFootHeightGroundingReferenceMaxLift;
+            ShouldUseManualAnimatorFootLocalRotationReference = pipeline.ShouldUseManualAnimatorFootLocalRotationReference;
+            manualAnimatorFootLocalRotationReferenceWeight = pipeline.manualAnimatorFootLocalRotationReferenceWeight;
+            ShouldUseManualAnimatorLowerBodySegmentDirectionReference = pipeline.ShouldUseManualAnimatorLowerBodySegmentDirectionReference;
+            manualAnimatorLowerBodySegmentDirectionReferenceWeight = pipeline.manualAnimatorLowerBodySegmentDirectionReferenceWeight;
+            manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = pipeline.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
+            ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference = pipeline.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference;
+            manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = pipeline.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
+            ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference = pipeline.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference;
+            manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = pipeline.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = pipeline.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = pipeline.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = pipeline.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale;
+            manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = pipeline.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight;
+            manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = pipeline.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
+            manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = pipeline.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
+            manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = pipeline.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
+            ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = pipeline.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference;
+            manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = pipeline.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
+            ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference;
+            manualAnimatorFootHipsAlignedResidualYawReferenceWeight = pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
+            manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
+            useManualAnimatorBipedIkFootPositionReference = pipeline.useManualAnimatorBipedIkFootPositionReference;
+            manualAnimatorBipedIkFootPositionReferenceWeight = pipeline.manualAnimatorBipedIkFootPositionReferenceWeight;
+            manualAnimatorBipedIkFootPositionReferenceMaxOffset = pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset;
+            usePostSetHumanPoseRightEndpointPositionReference = pipeline.usePostSetHumanPoseRightEndpointPositionReference;
+            postSetHumanPoseRightEndpointPositionReferenceWeight = pipeline.postSetHumanPoseRightEndpointPositionReferenceWeight;
+            postSetHumanPoseRightEndpointPositionReferenceMaxOffset = pipeline.postSetHumanPoseRightEndpointPositionReferenceMaxOffset;
+            postSetHumanPoseRightEndpointPositionReferencePositiveZScale = pipeline.postSetHumanPoseRightEndpointPositionReferencePositiveZScale;
+            postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = pipeline.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
+            postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = pipeline.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
+            postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = pipeline.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
+            ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = pipeline.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
+            usePostSetHumanPoseRightFootEvaluatorXzReference = pipeline.usePostSetHumanPoseRightFootEvaluatorXzReference;
+            postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = pipeline.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
+            usePreSetHumanPoseRightEndpointPositionReference = pipeline.usePreSetHumanPoseRightEndpointPositionReference;
+            preSetHumanPoseRightEndpointPositionReferenceWeight = pipeline.preSetHumanPoseRightEndpointPositionReferenceWeight;
+            preSetHumanPoseRightEndpointPositionReferenceMaxOffset = pipeline.preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
+            preSetHumanPoseRightEndpointPositionReferencePositiveZScale = pipeline.preSetHumanPoseRightEndpointPositionReferencePositiveZScale;
+            preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = pipeline.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
+            preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
+            preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
+            ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = pipeline.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
+            preSetHumanPoseEndpointPositionUseGhostCurrentBasis = pipeline.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
+            ShouldInvertPreSetHumanPoseEndpointPositionBodyX = pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
+            ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
+            manualAnimatorThumbBasePositionWeight = pipeline.manualAnimatorThumbBasePositionWeight;
+            manualAnimatorThumbBasePositionMaxOffset = pipeline.manualAnimatorThumbBasePositionMaxOffset;
+            ThumbSpreadMin = pipeline.ThumbSpreadMin;
+            ThumbSpreadMax = pipeline.ThumbSpreadMax;
+            logThumbAnatomicalGuardCorrections = pipeline.logThumbAnatomicalGuardCorrections;
+            EffectiveThumbLocalRotationGuard = pipeline.EffectiveThumbLocalRotationGuard;
+            EffectiveThumbProximalMaxLocalAngle = pipeline.EffectiveThumbProximalMaxLocalAngle;
+            ThumbIntermediateMaxLocalAngle = pipeline.ThumbIntermediateMaxLocalAngle;
+            ThumbDistalMaxLocalAngle = pipeline.ThumbDistalMaxLocalAngle;
+            logThumbLocalRotationGuardCorrections = pipeline.logThumbLocalRotationGuardCorrections;
+            clampRetargetRootDeltaSpikes = pipeline.clampRetargetRootDeltaSpikes;
+            MaxRetargetRootDeltaPerFrame = pipeline.MaxRetargetRootDeltaPerFrame;
+            logRetargetRootDeltaSpikes = pipeline.logRetargetRootDeltaSpikes;
+            clampRetargetHipsLocalPositionSpikes = pipeline.clampRetargetHipsLocalPositionSpikes;
+            MaxRetargetHipsLocalPositionDeltaPerFrame = pipeline.MaxRetargetHipsLocalPositionDeltaPerFrame;
+            smoothRetargetGrounding = pipeline.smoothRetargetGrounding;
+            MaxGroundingVerticalStepPerFrame = pipeline.MaxGroundingVerticalStepPerFrame;
+            GroundingSmoothing = pipeline.GroundingSmoothing;
+            GroundingDeadZone = pipeline.GroundingDeadZone;
+            FreezeRootYAfterInitialGrounding = pipeline.FreezeRootYAfterInitialGrounding;
+            clampRetargetVisualClipStep = pipeline.clampRetargetVisualClipStep;
+            RetargetVisualClipFrameRate = pipeline.RetargetVisualClipFrameRate;
+            smoothRetargetPoseOnVisualStepSpike = pipeline.smoothRetargetPoseOnVisualStepSpike;
+            RetargetPoseVisualSpikeCurrentWeight = pipeline.RetargetPoseVisualSpikeCurrentWeight;
+            RetargetPoseVisualSpikeForearmStretchClampMaxOffset = pipeline.RetargetPoseVisualSpikeForearmStretchClampMaxOffset;
+            RetargetPoseVisualMuscleDeltaThreshold = pipeline.RetargetPoseVisualMuscleDeltaThreshold;
+            rejectRendererGroundingOutliers = pipeline.rejectRendererGroundingOutliers;
+            MaxRendererFootGroundingSeparation = pipeline.MaxRendererFootGroundingSeparation;
+            smoothLateVisualGroundingCorrection = pipeline.smoothLateVisualGroundingCorrection;
+            LateVisualGroundingSnapThreshold = pipeline.LateVisualGroundingSnapThreshold;
+            LateVisualGroundingSmoothing = pipeline.LateVisualGroundingSmoothing;
+            MaxLateVisualGroundingStepPerFrame = pipeline.MaxLateVisualGroundingStepPerFrame;
+            ShouldLockTargetHumanoidBonePositions = pipeline.ShouldLockTargetHumanoidBonePositions;
+        }
+
+        public static RetargetingSettings CreateSnapshot(FBXVmdPipeline pipeline)
+        {
+            if (pipeline == null) throw new ArgumentNullException(nameof(pipeline));
+            return new RetargetingSettings(pipeline);
         }
     }
 }

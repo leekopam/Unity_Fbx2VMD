@@ -95,17 +95,7 @@ namespace Fbx2Vmd.Settings
             RecordingSetting recodingSetting = null,
             FBXVmdPipeline fileManager = null)
         {
-            if (fileManager != null)
-            {
-                return fileManager;
-            }
-
-            if (recodingSetting != null && recodingSetting.RecordingFBXVmdPipeline != null)
-            {
-                return recodingSetting.RecordingFBXVmdPipeline;
-            }
-
-            return UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            return fileManager ?? recodingSetting?.RecordingFBXVmdPipeline;
         }
     }
 }

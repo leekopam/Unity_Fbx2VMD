@@ -182,7 +182,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ReadRecordVmdAfterImport(FBXVmdPipeline fileManager)
         {
             FieldInfo field = typeof(FBXVmdPipeline).GetField(
-                "ShouldRecordVmdAfterImport",
+                "_shouldRecordVmdAfterImport",
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, "FBXVmdPipeline must expose a scene-level VMD recording mode flag.");
             return (bool)field.GetValue(fileManager);
