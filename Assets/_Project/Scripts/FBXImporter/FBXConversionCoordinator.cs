@@ -23,15 +23,18 @@ namespace Fbx2Vmd.FBXImporter
         public async Task<FBXConversionResult> ConvertAsync(FBXConversionRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.SourcePath))
-                return FBXConversionResult.Fail("FBX conversion request is empty.");
+                return FBXConversionResult.Fail("FBX 변환 요청이 비어 있습니다.");
 
             if (_pipeline.IsProcessing)
-                return FBXConversionResult.Fail("Already processing.");
+                return FBXConversionResult.Fail("이미 FBX 처리 중입니다.");
 
             try
             {
-                await _pipeline.ProcessFBXSessionAsync(request.SourcePath);
-                return FBXConversionResult.Succeed(string.Empty);
+                FBXConversionResult result = await _pipeline.ProcessFBXSessionAsync(request.SourcePath);
+                if (!result.IsSuccess)
+                    return result;
+
+                return result;
             }
             catch (Exception e)
             {
@@ -42,7 +45,7 @@ namespace Fbx2Vmd.FBXImporter
         /// <summary>
         /// 파이프라인 내부 세션 흐름에 위임하는 얇은 래퍼임.
         /// </summary>
-        public Task RunSessionAsync(FBXConversionRequest request)
+        public Task<FBXConversionResult> RunSessionAsync(FBXConversionRequest request)
         {
             return _pipeline.ProcessFBXSessionAsync(request.SourcePath);
         }

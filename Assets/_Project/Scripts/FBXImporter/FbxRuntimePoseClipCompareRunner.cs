@@ -109,17 +109,26 @@ namespace Fbx2Vmd.FBXImporter
                 projectRoot,
                 FallbackFbxPath,
                 fallbackSamples);
-            string reportPath = ResolveOutputPath(projectRoot, outputPath);
+            string reportPath = FbxPoseComparisonReportWriter.ResolveOutputPath(
+                projectRoot,
+                outputPath,
+                EvidenceDirectory);
             string reportDirectory = Path.GetDirectoryName(reportPath);
             Directory.CreateDirectory(reportDirectory);
             string csvPath = Path.Combine(reportDirectory, "rows.csv");
-            WriteRowsCsv(csvPath, rows);
-            WriteReportJson(
+            FbxPoseComparisonReportWriter.WriteRowsCsv(csvPath, rows);
+            FbxPoseComparisonReportWriter.WriteReportJson(
                 reportPath,
                 csvPath,
                 primaryClip,
                 fallbackClip,
-                controller,
+                PrimaryFbxPath,
+                FallbackFbxPath,
+                TestPrefabPath,
+                AssetDatabase.GetAssetPath(controller),
+                FrameRate,
+                SampleFrames,
+                HighRotationDifferenceThresholdDegrees,
                 summary,
                 rows,
                 importVariants,
@@ -127,7 +136,7 @@ namespace Fbx2Vmd.FBXImporter
                 reportDirectory,
                 projectRoot);
             AssetDatabase.Refresh();
-            return MakeProjectRelativePath(projectRoot, reportPath);
+            return FbxPoseComparisonReportWriter.MakeProjectRelativePath(projectRoot, reportPath);
         }
 
         public static ClipComparisonSummary BuildSummaryForTest(
@@ -192,34 +201,11 @@ namespace Fbx2Vmd.FBXImporter
             string variantName,
             string guid = "00000000000000000000000000000000")
         {
-            string meta;
-            switch (variantName)
-            {
-                case VariantFallbackFullMeta:
-                    meta = fallbackMeta;
-                    break;
-                case VariantFallbackAnimationScalars:
-                    meta = ReplaceScalar(
-                        primaryMeta,
-                        "animationCompression",
-                        ExtractRequiredScalar(fallbackMeta, "animationCompression"));
-                    meta = ReplaceScalar(
-                        meta,
-                        "animationWrapMode",
-                        ExtractRequiredScalar(fallbackMeta, "animationWrapMode"));
-                    break;
-                case VariantFallbackAvatarDefinition:
-                    meta = ReplaceYamlBlock(primaryMeta, fallbackMeta, "humanDescription");
-                    meta = ReplaceYamlBlock(meta, fallbackMeta, "skeleton");
-                    break;
-                case VariantFallbackSkeletonOnly:
-                    meta = ReplaceYamlBlock(primaryMeta, fallbackMeta, "skeleton");
-                    break;
-                default:
-                    throw new ArgumentException($"Unknown import variant: {variantName}", nameof(variantName));
-            }
-
-            return ReplaceGuid(meta, guid);
+            return FbxPoseComparisonReportWriter.BuildImportVariantMeta(
+                primaryMeta,
+                fallbackMeta,
+                variantName,
+                guid);
         }
 
         public static ImportVariantCorrelationSummary BuildImportVariantCorrelationSummaryForTest(
@@ -329,12 +315,12 @@ namespace Fbx2Vmd.FBXImporter
 
         public static string BuildRuntimeImporterVmdSampleCsvForTest(IEnumerable<RuntimeImporterVmdSampleRow> rows)
         {
-            return BuildRuntimeImporterVmdSampleCsv(rows);
+            return FbxPoseComparisonReportWriter.BuildRuntimeImporterVmdSampleCsv(rows);
         }
 
         public static Quaternion ConvertUnityRotationToVmdRotationForTest(Quaternion unityRotation)
         {
-            return ConvertUnityRotationToVmdRotation(unityRotation);
+            return FbxPoseComparisonReportWriter.ConvertUnityRotationToVmdRotation(unityRotation);
         }
 
         public static Quaternion SampleRawAssimpRotationKeysForTest(
@@ -378,6 +364,26 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return Normalize(ordered[lastIndex].Rotation);
+        }
+
+        private static Quaternion Normalize(Quaternion rotation)
+        {
+            float magnitude = Mathf.Sqrt(
+                rotation.x * rotation.x +
+                rotation.y * rotation.y +
+                rotation.z * rotation.z +
+                rotation.w * rotation.w);
+            if (magnitude <= 0.000001f)
+            {
+                return Quaternion.identity;
+            }
+
+            float scale = 1f / magnitude;
+            return new Quaternion(
+                rotation.x * scale,
+                rotation.y * scale,
+                rotation.z * scale,
+                rotation.w * scale);
         }
 
         private static List<ImportVariantComparison> BuildImportVariantComparisons(
@@ -627,7 +633,7 @@ namespace Fbx2Vmd.FBXImporter
                     SourceMode = sourceMode,
                     ExportSourceMode = exportSourceMode,
                     LocalRotation = pose.LocalRotation,
-                    ExportVmdRotation = ConvertUnityRotationToVmdRotation(pose.LocalRotation),
+                    ExportVmdRotation = FbxPoseComparisonReportWriter.ConvertUnityRotationToVmdRotation(pose.LocalRotation),
                 });
             }
 
@@ -957,499 +963,6 @@ namespace Fbx2Vmd.FBXImporter
             return AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
         }
 
-        private static string ResolveOutputPath(string projectRoot, string outputPath)
-        {
-            if (!string.IsNullOrWhiteSpace(outputPath))
-            {
-                return Path.GetFullPath(Path.IsPathRooted(outputPath) ? outputPath : Path.Combine(projectRoot, outputPath));
-            }
-
-            string directory = Path.Combine(
-                projectRoot,
-                EvidenceDirectory,
-                $"fbx_runtime_pose_clip_compare_satisfaction2_{DateTime.Now:yyyyMMdd-HHmmss}");
-            return Path.Combine(directory, "report.json");
-        }
-
-        private static void WriteRowsCsv(string path, IReadOnlyList<PoseComparisonRow> rows)
-        {
-            var builder = new StringBuilder(rows.Count * 160);
-            builder.AppendLine("frame,timeSeconds,bone,rotationDifferenceDegrees,primaryLocalEuler,fallbackLocalEuler");
-            foreach (PoseComparisonRow row in rows)
-            {
-                builder.AppendLine(string.Join(",", new[]
-                {
-                    row.Frame.ToString(CultureInfo.InvariantCulture),
-                    F(row.TimeSeconds),
-                    EscapeCsv(row.Bone),
-                    F(row.RotationDifferenceDegrees),
-                    EscapeCsv(V(row.PrimaryLocalEuler)),
-                    EscapeCsv(V(row.FallbackLocalEuler)),
-                }));
-            }
-
-            File.WriteAllText(path, builder.ToString(), Encoding.UTF8);
-        }
-
-        private static void WriteReportJson(
-            string reportPath,
-            string csvPath,
-            AnimationClip primaryClip,
-            AnimationClip fallbackClip,
-            RuntimeAnimatorController controller,
-            ClipComparisonSummary summary,
-            IReadOnlyList<PoseComparisonRow> rows,
-            IReadOnlyList<ImportVariantComparison> importVariants,
-            RuntimeImporterComparison runtimeImporterComparison,
-            string reportDirectory,
-            string projectRoot)
-        {
-            bool sourceFbxFilesIdentical = Sha256File(Path.Combine(projectRoot, PrimaryFbxPath.Replace('/', Path.DirectorySeparatorChar)))
-                == Sha256File(Path.Combine(projectRoot, FallbackFbxPath.Replace('/', Path.DirectorySeparatorChar)));
-            ImportVariantCorrelationSummary variantCorrelation = BuildImportVariantCorrelationSummaryForTest(
-                importVariants,
-                closeThresholdDegrees: 1f,
-                farThresholdDegrees: HighRotationDifferenceThresholdDegrees);
-            var builder = new StringBuilder(8192);
-            builder.AppendLine("{");
-            WriteJsonProperty(builder, 1, "schema", "fbx-runtime-pose-clip-compare-v1", comma: true);
-            WriteJsonProperty(builder, 1, "generated_at", DateTime.Now.ToString("O", CultureInfo.InvariantCulture), comma: true);
-            WriteJsonProperty(builder, 1, "primary_fbx_path", PrimaryFbxPath, comma: true);
-            WriteJsonProperty(builder, 1, "fallback_fbx_path", FallbackFbxPath, comma: true);
-            WriteJsonProperty(builder, 1, "source_fbx_files_identical_sha256", sourceFbxFilesIdentical, comma: true);
-            WriteJsonProperty(builder, 1, "target_prefab_path", TestPrefabPath, comma: true);
-            WriteJsonProperty(builder, 1, "controller_path", AssetDatabase.GetAssetPath(controller), comma: true);
-            WriteJsonProperty(builder, 1, "primary_clip_name", primaryClip.name, comma: true);
-            WriteJsonProperty(builder, 1, "primary_clip_length_seconds", primaryClip.length, comma: true);
-            WriteJsonProperty(builder, 1, "primary_human_motion", primaryClip.humanMotion, comma: true);
-            WriteJsonProperty(builder, 1, "fallback_clip_name", fallbackClip.name, comma: true);
-            WriteJsonProperty(builder, 1, "fallback_clip_length_seconds", fallbackClip.length, comma: true);
-            WriteJsonProperty(builder, 1, "fallback_human_motion", fallbackClip.humanMotion, comma: true);
-            WriteJsonProperty(builder, 1, "frame_rate", FrameRate, comma: true);
-            WriteJsonArray(builder, 1, "sample_frames", SampleFrames.Select(frame => frame.ToString(CultureInfo.InvariantCulture)), comma: true);
-            WriteJsonProperty(builder, 1, "rows_csv_path", MakeProjectRelativePath(projectRoot, csvPath), comma: true);
-            builder.AppendLine("  \"summary\": {");
-            WriteJsonProperty(builder, 2, "row_count", summary.RowCount, comma: true);
-            WriteJsonProperty(builder, 2, "sample_frame_count", summary.SampleFrameCount, comma: true);
-            WriteJsonProperty(builder, 2, "bone_count", summary.BoneCount, comma: true);
-            WriteJsonProperty(builder, 2, "high_rotation_difference_threshold_degrees", summary.HighRotationDifferenceThresholdDegrees, comma: true);
-            WriteJsonProperty(builder, 2, "high_rotation_difference_count", summary.HighRotationDifferenceCount, comma: true);
-            WriteJsonProperty(builder, 2, "max_rotation_difference_degrees", summary.MaxRotationDifferenceDegrees, comma: true);
-            WriteJsonProperty(builder, 2, "max_rotation_bone", summary.MaxRotationBone, comma: true);
-            WriteJsonProperty(builder, 2, "max_rotation_frame", summary.MaxRotationFrame, comma: false);
-            builder.AppendLine("  },");
-            builder.AppendLine("  \"focus_bones\": [");
-            int focusIndex = 0;
-            List<FocusBoneSummary> focusSummaries = summary.FocusBones.Values
-                .OrderBy(focus => focus.Bone, StringComparer.Ordinal)
-                .ToList();
-            foreach (FocusBoneSummary focus in focusSummaries)
-            {
-                builder.AppendLine("    {");
-                WriteJsonProperty(builder, 3, "bone", focus.Bone, comma: true);
-                WriteJsonProperty(builder, 3, "row_count", focus.RowCount, comma: true);
-                WriteJsonProperty(builder, 3, "max_rotation_difference_degrees", focus.MaxRotationDifferenceDegrees, comma: true);
-                WriteJsonProperty(builder, 3, "max_rotation_frame", focus.MaxRotationFrame, comma: true);
-                WriteJsonProperty(builder, 3, "high_rotation_difference_count", focus.HighRotationDifferenceCount, comma: false);
-                builder.Append("    }");
-                builder.AppendLine(++focusIndex == focusSummaries.Count ? "" : ",");
-            }
-            builder.AppendLine("  ],");
-
-            builder.AppendLine("  \"top_rows\": [");
-            for (int i = 0; i < summary.TopRows.Count; i++)
-            {
-                PoseComparisonRow row = summary.TopRows[i];
-                builder.AppendLine("    {");
-                WriteJsonProperty(builder, 3, "frame", row.Frame, comma: true);
-                WriteJsonProperty(builder, 3, "time_seconds", row.TimeSeconds, comma: true);
-                WriteJsonProperty(builder, 3, "bone", row.Bone, comma: true);
-                WriteJsonProperty(builder, 3, "rotation_difference_degrees", row.RotationDifferenceDegrees, comma: false);
-                builder.Append("    }");
-                builder.AppendLine(i == summary.TopRows.Count - 1 ? "" : ",");
-            }
-            builder.AppendLine("  ],");
-            builder.AppendLine("  \"import_variant_summary\": {");
-            WriteJsonProperty(builder, 2, "variant_count", variantCorrelation.VariantCount, comma: true);
-            WriteJsonProperty(builder, 2, "primary_like_count", variantCorrelation.PrimaryLikeCount, comma: true);
-            WriteJsonProperty(builder, 2, "fallback_like_count", variantCorrelation.FallbackLikeCount, comma: true);
-            WriteJsonProperty(builder, 2, "mixed_or_neutral_count", variantCorrelation.MixedOrNeutralCount, comma: false);
-            builder.AppendLine("  },");
-            builder.AppendLine("  \"import_variants\": [");
-            for (int i = 0; i < importVariants.Count; i++)
-            {
-                WriteImportVariantJson(builder, importVariants[i], i == importVariants.Count - 1);
-            }
-            builder.AppendLine("  ],");
-            WriteRuntimeImporterComparisonJson(builder, runtimeImporterComparison, reportDirectory, projectRoot);
-            builder.AppendLine("}");
-            File.WriteAllText(reportPath, builder.ToString(), Encoding.UTF8);
-        }
-
-        private static void WriteRuntimeImporterComparisonJson(
-            StringBuilder builder,
-            RuntimeImporterComparison comparison,
-            string reportDirectory,
-            string projectRoot)
-        {
-            string runtimeRowsCsvPath = Path.Combine(reportDirectory, "runtime_importer_rows.csv");
-            string runtimeVmdSamplesCsvPath = Path.Combine(reportDirectory, "runtime_importer_vmd_samples.csv");
-            string rawAssimpRowsCsvPath = Path.Combine(reportDirectory, "raw_assimp_vs_runtime_importer_rows.csv");
-            string rawAssimpVmdSamplesCsvPath = Path.Combine(reportDirectory, "raw_assimp_vmd_samples.csv");
-            WriteRowsCsv(runtimeRowsCsvPath, comparison.Rows);
-            File.WriteAllText(runtimeVmdSamplesCsvPath, BuildRuntimeImporterVmdSampleCsv(comparison.VmdSampleRows), Encoding.UTF8);
-            WriteRowsCsv(rawAssimpRowsCsvPath, comparison.RawAssimpRows);
-            File.WriteAllText(rawAssimpVmdSamplesCsvPath, BuildRuntimeImporterVmdSampleCsv(comparison.RawAssimpVmdSampleRows), Encoding.UTF8);
-
-            builder.AppendLine("  \"runtime_importer_comparison\": {");
-            WriteJsonProperty(builder, 2, "asset_path", comparison.AssetPath, comma: true);
-            WriteJsonProperty(builder, 2, "runtime_clip_name", comparison.RuntimeClipName, comma: true);
-            WriteJsonProperty(builder, 2, "rows_csv_path", MakeProjectRelativePath(projectRoot, runtimeRowsCsvPath), comma: true);
-            WriteJsonProperty(builder, 2, "vmd_samples_csv_path", MakeProjectRelativePath(projectRoot, runtimeVmdSamplesCsvPath), comma: true);
-            WriteJsonProperty(builder, 2, "vmd_sample_count", comparison.VmdSampleRows.Count, comma: true);
-            builder.AppendLine("    \"summary\": {");
-            WriteSummaryJson(builder, comparison.Summary, 3);
-            builder.AppendLine("    },");
-            builder.AppendLine("    \"top_rows\": [");
-            for (int i = 0; i < comparison.Summary.TopRows.Count; i++)
-            {
-                PoseComparisonRow row = comparison.Summary.TopRows[i];
-                builder.AppendLine("      {");
-                WriteJsonProperty(builder, 4, "frame", row.Frame, comma: true);
-                WriteJsonProperty(builder, 4, "time_seconds", row.TimeSeconds, comma: true);
-                WriteJsonProperty(builder, 4, "bone", row.Bone, comma: true);
-                WriteJsonProperty(builder, 4, "rotation_difference_degrees", row.RotationDifferenceDegrees, comma: false);
-                builder.Append("      }");
-                builder.AppendLine(i == comparison.Summary.TopRows.Count - 1 ? "" : ",");
-            }
-
-            builder.AppendLine("    ],");
-            builder.AppendLine("    \"raw_assimp_channel_comparison\": {");
-            WriteJsonProperty(builder, 3, "animation_name", comparison.RawAssimpAnimationName, comma: true);
-            WriteJsonProperty(builder, 3, "rows_csv_path", MakeProjectRelativePath(projectRoot, rawAssimpRowsCsvPath), comma: true);
-            WriteJsonProperty(builder, 3, "vmd_samples_csv_path", MakeProjectRelativePath(projectRoot, rawAssimpVmdSamplesCsvPath), comma: true);
-            WriteJsonProperty(builder, 3, "vmd_sample_count", comparison.RawAssimpVmdSampleRows.Count, comma: true);
-            builder.AppendLine("      \"summary\": {");
-            WriteSummaryJson(builder, comparison.RawAssimpSummary, 4);
-            builder.AppendLine("      },");
-            builder.AppendLine("      \"top_rows\": [");
-            for (int i = 0; i < comparison.RawAssimpSummary.TopRows.Count; i++)
-            {
-                PoseComparisonRow row = comparison.RawAssimpSummary.TopRows[i];
-                builder.AppendLine("        {");
-                WriteJsonProperty(builder, 5, "frame", row.Frame, comma: true);
-                WriteJsonProperty(builder, 5, "time_seconds", row.TimeSeconds, comma: true);
-                WriteJsonProperty(builder, 5, "bone", row.Bone, comma: true);
-                WriteJsonProperty(builder, 5, "rotation_difference_degrees", row.RotationDifferenceDegrees, comma: false);
-                builder.Append("        }");
-                builder.AppendLine(i == comparison.RawAssimpSummary.TopRows.Count - 1 ? "" : ",");
-            }
-
-            builder.AppendLine("      ],");
-            WriteRawAssimpImportVariantsJson(
-                builder,
-                comparison.RawAssimpImportVariantSummary,
-                comparison.RawAssimpImportVariants,
-                reportDirectory,
-                projectRoot);
-            builder.AppendLine("    }");
-            builder.AppendLine("  }");
-        }
-
-        private static void WriteRawAssimpImportVariantsJson(
-            StringBuilder builder,
-            RawAssimpImportVariantSummary summary,
-            IReadOnlyList<RawAssimpImportVariantComparison> variants,
-            string reportDirectory,
-            string projectRoot)
-        {
-            string variantDirectory = Path.Combine(reportDirectory, "raw_assimp_import_variants");
-            Directory.CreateDirectory(variantDirectory);
-            builder.AppendLine("      \"import_variant_summary\": {");
-            WriteJsonProperty(builder, 4, "variant_count", summary.VariantCount, comma: true);
-            WriteJsonProperty(builder, 4, "default_like_count", summary.DefaultLikeCount, comma: true);
-            WriteJsonProperty(builder, 4, "changed_count", summary.ChangedCount, comma: true);
-            WriteJsonProperty(builder, 4, "max_changed_variant_name", summary.MaxChangedVariantName, comma: true);
-            WriteJsonProperty(builder, 4, "max_changed_rotation_degrees", summary.MaxChangedRotationDegrees, comma: false);
-            builder.AppendLine("      },");
-            builder.AppendLine("      \"import_variants\": [");
-            for (int i = 0; i < variants.Count; i++)
-            {
-                RawAssimpImportVariantComparison variant = variants[i];
-                string rowsPath = Path.Combine(variantDirectory, variant.VariantName + "_rows.csv");
-                string vmdSamplesPath = Path.Combine(variantDirectory, variant.VariantName + "_vmd_samples.csv");
-                WriteRowsCsv(rowsPath, variant.Rows);
-                File.WriteAllText(vmdSamplesPath, BuildRuntimeImporterVmdSampleCsv(variant.VmdSampleRows), Encoding.UTF8);
-
-                builder.AppendLine("        {");
-                WriteJsonProperty(builder, 5, "variant_name", variant.VariantName, comma: true);
-                WriteJsonProperty(builder, 5, "preserve_pivots", variant.PreservePivots, comma: true);
-                WriteJsonProperty(builder, 5, "post_process_label", variant.PostProcessLabel, comma: true);
-                WriteJsonProperty(builder, 5, "animation_name", variant.AnimationName, comma: true);
-                WriteJsonProperty(builder, 5, "rows_csv_path", MakeProjectRelativePath(projectRoot, rowsPath), comma: true);
-                WriteJsonProperty(builder, 5, "vmd_samples_csv_path", MakeProjectRelativePath(projectRoot, vmdSamplesPath), comma: true);
-                WriteJsonProperty(builder, 5, "vmd_sample_count", variant.VmdSampleRows.Count, comma: true);
-                builder.AppendLine("          \"comparison_to_default\": {");
-                WriteSummaryJson(builder, variant.ComparisonToDefault, 6);
-                builder.AppendLine("          }");
-                builder.Append("        }");
-                builder.AppendLine(i == variants.Count - 1 ? "" : ",");
-            }
-
-            builder.AppendLine("      ]");
-        }
-
-        private static string BuildRuntimeImporterVmdSampleCsv(IEnumerable<RuntimeImporterVmdSampleRow> rows)
-        {
-            var builder = new StringBuilder();
-            builder.AppendLine("frameNumber,boneName,boneIndex,sourceMode,exportSourceMode,ghostVsSourceLocalDeltaDegrees,parentRestBasisCorrectedVsSourceLocalDeltaDegrees,exportVsSourceLocalDeltaDegrees,sourceLocalDeltaX,sourceLocalDeltaY,sourceLocalDeltaZ,sourceLocalDeltaW,exportLocalX,exportLocalY,exportLocalZ,exportLocalW,exportVmdX,exportVmdY,exportVmdZ,exportVmdW,humanBone,timeSeconds");
-            foreach (RuntimeImporterVmdSampleRow row in rows)
-            {
-                builder.Append(row.Frame.ToString(CultureInfo.InvariantCulture));
-                builder.Append(',');
-                builder.Append(EscapeCsv(row.VmdBoneName));
-                builder.Append(',');
-                builder.Append(row.BoneIndex.ToString(CultureInfo.InvariantCulture));
-                builder.Append(',');
-                builder.Append(EscapeCsv(string.IsNullOrWhiteSpace(row.SourceMode) ? "runtime_importer_local" : row.SourceMode));
-                builder.Append(',');
-                builder.Append(EscapeCsv(string.IsNullOrWhiteSpace(row.ExportSourceMode) ? "flip_xz_runtime_importer_local" : row.ExportSourceMode));
-                builder.Append(",,,,");
-                AppendQuaternion(builder, row.LocalRotation);
-                builder.Append(',');
-                AppendQuaternion(builder, row.LocalRotation);
-                builder.Append(',');
-                AppendQuaternion(builder, row.ExportVmdRotation);
-                builder.Append(',');
-                builder.Append(EscapeCsv(row.HumanBone));
-                builder.Append(',');
-                builder.Append(F(row.TimeSeconds));
-                builder.AppendLine();
-            }
-
-            return builder.ToString();
-        }
-
-        private static void AppendQuaternion(StringBuilder builder, Quaternion value)
-        {
-            builder.Append(F(value.x));
-            builder.Append(',');
-            builder.Append(F(value.y));
-            builder.Append(',');
-            builder.Append(F(value.z));
-            builder.Append(',');
-            builder.Append(F(value.w));
-        }
-
-        private static Quaternion ConvertUnityRotationToVmdRotation(Quaternion unityRotation)
-        {
-            return new Quaternion(-unityRotation.x, unityRotation.y, -unityRotation.z, unityRotation.w);
-        }
-
-        private static Quaternion Normalize(Quaternion rotation)
-        {
-            float magnitude = Mathf.Sqrt(
-                rotation.x * rotation.x +
-                rotation.y * rotation.y +
-                rotation.z * rotation.z +
-                rotation.w * rotation.w);
-            if (magnitude <= 0.000001f)
-            {
-                return Quaternion.identity;
-            }
-
-            float scale = 1f / magnitude;
-            return new Quaternion(
-                rotation.x * scale,
-                rotation.y * scale,
-                rotation.z * scale,
-                rotation.w * scale);
-        }
-
-        private static void WriteImportVariantJson(StringBuilder builder, ImportVariantComparison comparison, bool last)
-        {
-            builder.AppendLine("    {");
-            WriteJsonProperty(builder, 3, "variant_name", comparison.VariantName, comma: true);
-            WriteJsonProperty(builder, 3, "asset_path", comparison.AssetPath, comma: true);
-            WriteJsonProperty(builder, 3, "clip_name", comparison.ClipName, comma: true);
-            WriteJsonProperty(builder, 3, "clip_length_seconds", comparison.ClipLengthSeconds, comma: true);
-            builder.AppendLine("      \"comparison_to_primary\": {");
-            WriteSummaryJson(builder, comparison.ComparisonToPrimary, 4);
-            builder.AppendLine("      },");
-            builder.AppendLine("      \"comparison_to_fallback\": {");
-            WriteSummaryJson(builder, comparison.ComparisonToFallback, 4);
-            builder.AppendLine("      }");
-            builder.Append("    }");
-            builder.AppendLine(last ? "" : ",");
-        }
-
-        private static void WriteSummaryJson(StringBuilder builder, ClipComparisonSummary summary, int indent)
-        {
-            WriteJsonProperty(builder, indent, "row_count", summary.RowCount, comma: true);
-            WriteJsonProperty(builder, indent, "high_rotation_difference_count", summary.HighRotationDifferenceCount, comma: true);
-            WriteJsonProperty(builder, indent, "max_rotation_difference_degrees", summary.MaxRotationDifferenceDegrees, comma: true);
-            WriteJsonProperty(builder, indent, "max_rotation_bone", summary.MaxRotationBone, comma: true);
-            WriteJsonProperty(builder, indent, "max_rotation_frame", summary.MaxRotationFrame, comma: false);
-        }
-
-        private static void WriteJsonProperty(StringBuilder builder, int indent, string name, string value, bool comma)
-        {
-            builder.Append(' ', indent * 2);
-            builder.Append('"').Append(EscapeJson(name)).Append("\": \"").Append(EscapeJson(value)).Append('"');
-            builder.AppendLine(comma ? "," : "");
-        }
-
-        private static void WriteJsonProperty(StringBuilder builder, int indent, string name, int value, bool comma)
-        {
-            builder.Append(' ', indent * 2);
-            builder.Append('"').Append(EscapeJson(name)).Append("\": ").Append(value.ToString(CultureInfo.InvariantCulture));
-            builder.AppendLine(comma ? "," : "");
-        }
-
-        private static void WriteJsonProperty(StringBuilder builder, int indent, string name, float value, bool comma)
-        {
-            builder.Append(' ', indent * 2);
-            builder.Append('"').Append(EscapeJson(name)).Append("\": ").Append(F(value));
-            builder.AppendLine(comma ? "," : "");
-        }
-
-        private static void WriteJsonProperty(StringBuilder builder, int indent, string name, bool value, bool comma)
-        {
-            builder.Append(' ', indent * 2);
-            builder.Append('"').Append(EscapeJson(name)).Append("\": ").Append(value ? "true" : "false");
-            builder.AppendLine(comma ? "," : "");
-        }
-
-        private static void WriteJsonArray(StringBuilder builder, int indent, string name, IEnumerable<string> values, bool comma)
-        {
-            builder.Append(' ', indent * 2);
-            builder.Append('"').Append(EscapeJson(name)).Append("\": [");
-            builder.Append(string.Join(", ", values));
-            builder.Append(']');
-            builder.AppendLine(comma ? "," : "");
-        }
-
-        private static string Sha256File(string path)
-        {
-            using (SHA256 sha = SHA256.Create())
-            using (FileStream stream = File.OpenRead(path))
-            {
-                return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty);
-            }
-        }
-
-        private static string ReplaceGuid(string meta, string guid)
-        {
-            return Regex.Replace(
-                meta,
-                @"(?m)^guid:\s*[0-9a-fA-F]+",
-                "guid: " + guid,
-                RegexOptions.CultureInvariant);
-        }
-
-        private static string ReplaceScalar(string meta, string key, string value)
-        {
-            string pattern = @"(?m)^(\s*" + Regex.Escape(key) + @":\s*).*$";
-            string replaced = Regex.Replace(
-                meta,
-                pattern,
-                "${1}" + value,
-                RegexOptions.CultureInvariant);
-            if (string.Equals(replaced, meta, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException($"Scalar key not found in meta: {key}");
-            }
-
-            return replaced;
-        }
-
-        private static string ExtractRequiredScalar(string meta, string key)
-        {
-            Match match = Regex.Match(
-                meta,
-                @"(?m)^\s*" + Regex.Escape(key) + @":\s*(.*?)\s*$",
-                RegexOptions.CultureInvariant);
-            if (!match.Success)
-            {
-                throw new InvalidOperationException($"Scalar key not found in source meta: {key}");
-            }
-
-            return match.Groups[1].Value;
-        }
-
-        private static string ReplaceYamlBlock(string targetMeta, string sourceMeta, string key)
-        {
-            List<string> targetLines = SplitLines(targetMeta);
-            List<string> sourceLines = SplitLines(sourceMeta);
-            BlockRange targetRange = FindYamlBlock(targetLines, key);
-            BlockRange sourceRange = FindYamlBlock(sourceLines, key);
-
-            var result = new List<string>();
-            result.AddRange(targetLines.Take(targetRange.Start));
-            result.AddRange(sourceLines.Skip(sourceRange.Start).Take(sourceRange.End - sourceRange.Start));
-            result.AddRange(targetLines.Skip(targetRange.End));
-            return string.Join("\n", result) + "\n";
-        }
-
-        private static BlockRange FindYamlBlock(IReadOnlyList<string> lines, string key)
-        {
-            for (int index = 0; index < lines.Count; index++)
-            {
-                string line = lines[index];
-                if (!IsYamlKeyLine(line, key))
-                {
-                    continue;
-                }
-
-                int startIndent = CountIndent(line);
-                int end = index + 1;
-                while (end < lines.Count)
-                {
-                    string candidate = lines[end];
-                    string trimmedCandidate = candidate.TrimStart();
-                    if (
-                        !string.IsNullOrWhiteSpace(candidate)
-                        && CountIndent(candidate) <= startIndent
-                        && !trimmedCandidate.StartsWith("-", StringComparison.Ordinal))
-                    {
-                        break;
-                    }
-
-                    end++;
-                }
-
-                return new BlockRange(index, end);
-            }
-
-            throw new InvalidOperationException($"YAML block not found: {key}");
-        }
-
-        private static bool IsYamlKeyLine(string line, string key)
-        {
-            string trimmed = line.TrimStart();
-            return trimmed.StartsWith(key + ":", StringComparison.Ordinal);
-        }
-
-        private static int CountIndent(string line)
-        {
-            int count = 0;
-            while (count < line.Length && line[count] == ' ')
-            {
-                count++;
-            }
-
-            return count;
-        }
-
-        private static List<string> SplitLines(string text)
-        {
-            return text
-                .Replace("\r\n", "\n")
-                .Replace('\r', '\n')
-                .TrimEnd('\n')
-                .Split('\n')
-                .ToList();
-        }
 
         private static string GetArgumentValue(string name)
         {
@@ -1465,17 +978,6 @@ namespace Fbx2Vmd.FBXImporter
             return null;
         }
 
-        private static string MakeProjectRelativePath(string projectRoot, string path)
-        {
-            string fullPath = Path.GetFullPath(path).Replace('\\', '/');
-            string fullRoot = Path.GetFullPath(projectRoot).Replace('\\', '/').TrimEnd('/');
-            if (fullPath.StartsWith(fullRoot + "/", StringComparison.OrdinalIgnoreCase))
-            {
-                return fullPath.Substring(fullRoot.Length + 1);
-            }
-
-            return fullPath;
-        }
 
         private static string SanitizeName(string value)
         {
@@ -1488,45 +990,6 @@ namespace Fbx2Vmd.FBXImporter
             return builder.ToString();
         }
 
-        private static string EscapeJson(string value)
-        {
-            if (value == null)
-            {
-                return string.Empty;
-            }
-
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("\r", "\\r")
-                .Replace("\n", "\\n")
-                .Replace("\t", "\\t");
-        }
-
-        private static string EscapeCsv(string value)
-        {
-            if (value == null)
-            {
-                return string.Empty;
-            }
-
-            if (value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) < 0)
-            {
-                return value;
-            }
-
-            return "\"" + value.Replace("\"", "\"\"") + "\"";
-        }
-
-        private static string F(float value)
-        {
-            return value.ToString("0.######", CultureInfo.InvariantCulture);
-        }
-
-        private static string V(Vector3 value)
-        {
-            return $"{F(value.x)} {F(value.y)} {F(value.z)}";
-        }
 
         private readonly struct FocusBone
         {

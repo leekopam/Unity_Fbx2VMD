@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Fbx2Vmd.Retargeting
 {
     /// <summary>
-    /// Root motion 보정 유틸리티. PoseSpaceRetargeter에서 추출 (Phase B-2).
+    /// Root motion 보정 유틸리티. PoseSpaceRetargeter에서 추출함.
     /// ponytail: 순수 static 계산만 — HumanPose 변형은 PoseSpaceRetargeter에 유지.
     /// </summary>
     public static class RootMotionGuard

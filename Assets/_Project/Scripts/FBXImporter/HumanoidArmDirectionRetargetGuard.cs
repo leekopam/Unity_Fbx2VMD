@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -8,27 +9,43 @@ namespace Fbx2Vmd.FBXImporter
     public class HumanoidArmDirectionRetargetGuard : MonoBehaviour
     {
         [Header("YYB Arm Direction Retarget Guard")]
-        public bool enableDirectionRetarget = true;
+        [FormerlySerializedAs("enableDirectionRetarget")]
+        [SerializeField] private bool _enableDirectionRetarget= true;
+        public bool enableDirectionRetarget { get => _enableDirectionRetarget; set => _enableDirectionRetarget = value; }
 
         [Range(0f, 1f)]
-        public float upperArmWeight = 0.65f;
+        [FormerlySerializedAs("upperArmWeight")]
+        [SerializeField] private float _upperArmWeight= 0.65f;
+        public float upperArmWeight { get => _upperArmWeight; private set => _upperArmWeight = value; }
 
         [Range(0f, 1f)]
-        public float forearmWeight = 0.75f;
+        [FormerlySerializedAs("forearmWeight")]
+        [SerializeField] private float _forearmWeight= 0.75f;
+        public float forearmWeight { get => _forearmWeight; private set => _forearmWeight = value; }
 
         [Range(0f, 120f)]
-        public float upperArmMaxDegrees = 65f;
+        [FormerlySerializedAs("upperArmMaxDegrees")]
+        [SerializeField] private float _upperArmMaxDegrees= 65f;
+        public float upperArmMaxDegrees { get => _upperArmMaxDegrees; private set => _upperArmMaxDegrees = value; }
 
         [Range(0f, 120f)]
-        public float forearmMaxDegrees = 85f;
+        [FormerlySerializedAs("forearmMaxDegrees")]
+        [SerializeField] private float _forearmMaxDegrees= 85f;
+        public float forearmMaxDegrees { get => _forearmMaxDegrees; private set => _forearmMaxDegrees = value; }
 
         [Range(0f, 1f)]
-        public float leftSideWeightScale = 1f;
+        [FormerlySerializedAs("leftSideWeightScale")]
+        [SerializeField] private float _leftSideWeightScale= 1f;
+        public float leftSideWeightScale { get => _leftSideWeightScale; private set => _leftSideWeightScale = value; }
 
         [Range(0f, 1f)]
-        public float rightSideWeightScale = 1f;
+        [FormerlySerializedAs("rightSideWeightScale")]
+        [SerializeField] private float _rightSideWeightScale= 1f;
+        public float rightSideWeightScale { get => _rightSideWeightScale; private set => _rightSideWeightScale = value; }
 
-        public bool logConfiguration = false;
+        [FormerlySerializedAs("logConfiguration")]
+        [SerializeField] private bool _logConfiguration= false;
+        public bool logConfiguration { get => _logConfiguration; private set => _logConfiguration = value; }
 
         private Animator _ghostAnimator;
         private Animator _targetAnimator;

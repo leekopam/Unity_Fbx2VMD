@@ -293,7 +293,7 @@ namespace Fbx2Vmd.Settings
                 return camera;
             }
 
-            return FindObjectOfType<Camera>();
+            return null;
         }
 
         private void EnsurePreviewCamera()

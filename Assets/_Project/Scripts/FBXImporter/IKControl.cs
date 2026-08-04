@@ -1,12 +1,17 @@
 ﻿using UnityEngine;
+using UnityEngine.Serialization;
 using System;
 using System.Collections;
 
 [RequireComponent(typeof(Animator))] // Animator 컴포넌트 필수
 public class IKControl : MonoBehaviour
 {
-    public Animator animator;          // 애니메이터 참조
-    public LayerMask groundLayer;      // 지면 레이어 (레이캐스트 대상)
+    [FormerlySerializedAs("animator")]
+    [SerializeField] private Animator _animator;          // 애니메이터 참조
+    public Animator animator { get => _animator; set => _animator = value; }
+    [FormerlySerializedAs("groundLayer")]
+    [SerializeField] private LayerMask _groundLayer;      // 지면 레이어 (레이캐스트 대상)
+    public LayerMask groundLayer { get => _groundLayer; private set => _groundLayer = value; }
 
     // Animator IK Pass 진입 (매 프레임, Animator 업데이트 직후)
     void OnAnimatorIK(int layerIndex)

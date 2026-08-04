@@ -4,7 +4,7 @@ namespace Fbx2Vmd.Retargeting
 {
     /// <summary>
     /// 수동 Animator 참조 포즈 계산 유틸리티.
-    /// PoseSpaceRetargeter에서 추출 (Phase B-5).
+    /// PoseSpaceRetargeter에서 추출함.
     /// ponytail: 순수 static — Animator 읽기만. HumanPose 변형은 PoseSpaceRetargeter가 담당.
     /// </summary>
     public static class ManualPoseReferenceProvider

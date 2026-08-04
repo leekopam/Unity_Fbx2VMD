@@ -109,7 +109,6 @@ public sealed class RecordingSetting : MonoBehaviour
 
     private void Reset()
     {
-        recordingFBXVmdPipeline = FindObjectOfType<FBXVmdPipeline>();
         manualRecordButton = ResolveManualRecordButton();
         recordingController = ResolveRecordingController();
         PullDiagnosticsFromFBXVmdPipeline();
@@ -568,7 +567,6 @@ public sealed class RecordingSetting : MonoBehaviour
             return recordingFBXVmdPipeline;
         }
 
-        recordingFBXVmdPipeline = FindObjectOfType<FBXVmdPipeline>();
         return recordingFBXVmdPipeline;
     }
 
@@ -583,11 +581,6 @@ public sealed class RecordingSetting : MonoBehaviour
         if (fileManager != null && fileManager.targetCharacter != null)
         {
             recordingController = fileManager.targetCharacter.GetComponent<HumanoidSampleCode>();
-        }
-
-        if (recordingController == null)
-        {
-            recordingController = FindObjectOfType<HumanoidSampleCode>();
         }
 
         return recordingController;

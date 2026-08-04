@@ -135,7 +135,7 @@ namespace Fbx2Vmd.FBXImporter
                     recordingOutputBaseName = FBXVmdPipeline.BuildEditorSmokeOutputBaseName(outputBaseName, recordingLength, _pipeline._editorSmokeSegment);
                     comparisonLabel = $"auto_{recordingOutputBaseName}";
                     Debug.Log(
-                        $"[FBXVmdPipeline] Editor smoke cap 적용: VMD={recordingOutputBaseName}.vmd, " +
+                        $"[Recording] 에디터 스모크 녹화 제한 적용됨. VMD={recordingOutputBaseName}.vmd, " +
                         $"segment={FBXVmdPipeline.GetEditorSmokeSegmentLabel(_pipeline._editorSmokeSegment)}, " +
                         $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
                         $"targetFrameCount={recordingTargetFrameCount}");
@@ -163,7 +163,7 @@ namespace Fbx2Vmd.FBXImporter
                         }
 
                         Debug.Log(
-                            $"[FBXVmdPipeline] YYB Satisfaction editor smoke reference timing applied: " +
+                            $"[Recording] 에디터 스모크 기준 녹화 시간이 적용됨. " +
                             $"clipLength={clip.length:F3}s, recordingLength={recordingLength:F3}s, " +
                             $"targetFrameCount={recordingTargetFrameCount}, playbackSpeed={recordingPlaybackSpeed:F5}");
                     }
@@ -190,7 +190,7 @@ namespace Fbx2Vmd.FBXImporter
                     }
 
                     Debug.Log(
-                        $"[FBXVmdPipeline] YYB Satisfaction reference timing applied: " +
+                        $"[Recording] 기준 녹화 시간이 적용됨. " +
                         $"clipLength={clip.length:F3}s, recordingLength={recordingLength:F3}s, " +
                         $"targetFrameCount={recordingTargetFrameCount}, playbackSpeed={recordingPlaybackSpeed:F5}");
                 }
@@ -216,13 +216,13 @@ namespace Fbx2Vmd.FBXImporter
             if (!shouldStartVmdRecording)
             {
                 _pipeline.SetSessionState(FBXVmdPipeline.FBXSessionState.Success, $"FBX 임포트/촬영 준비 완료됨: {outputBaseName}", 1f);
-                Debug.Log($"[FBXVmdPipeline] FBX 임포트/Unity 촬영 준비 완료: {outputBaseName} (VMD 자동 녹화 생략)");
+                Debug.Log($"[Recording] FBX 임포트 및 Unity 촬영 준비 완료됨. 출력={outputBaseName}, VMD 자동 녹화=생략");
                 _pipeline._isProcessing = false;
                 yield break;
             }
 
             _pipeline.SetSessionState(FBXVmdPipeline.FBXSessionState.Recording, $"녹화 중: {recordingOutputBaseName}", 0.75f);
-            Debug.Log($"[FBXVmdPipeline] 자동 녹화 시작: VMD={recordingOutputBaseName}.vmd, 비교라벨={comparisonLabel}");
+            Debug.Log($"[Recording] 자동 녹화 시작됨. VMD={recordingOutputBaseName}.vmd, 비교 라벨={comparisonLabel}");
             bool started = recorderController.StartAutoRecording(
                 recordingLength,
                 recordingOutputBaseName,
@@ -311,7 +311,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             retargeter?.ApplyLateVisualGroundingCorrection();
-            Debug.Log($"[FBXVmdPipeline] Retarget prewarm 완료: {prewarmFrames} frame(s) at clip time {sampleTime:F2}.");
+            Debug.Log($"[Retargeting] 리타게팅 프리웜 완료됨. 프레임={prewarmFrames}, 클립 시간={sampleTime:F2}초");
         }
 
         /// <summary>

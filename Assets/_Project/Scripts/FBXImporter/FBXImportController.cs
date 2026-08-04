@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using System.IO;
 using Fbx2Vmd.FileSystem;
@@ -11,24 +12,17 @@ namespace Fbx2Vmd.FBXImporter
     public class FBXImportController
     {
         private readonly FBXVmdPipeline _pipeline;
+        private readonly IFileBrowserService _fileBrowserService;
 
-        public FBXImportController(FBXVmdPipeline pipeline)
+        public FBXImportController(FBXVmdPipeline pipeline, IFileBrowserService fileBrowserService)
         {
-            _pipeline = pipeline;
+            _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _fileBrowserService = fileBrowserService ?? throw new ArgumentNullException(nameof(fileBrowserService));
         }
 
         public void ImportFromDialog()
         {
-            if (TryImportFromDialog()) return;
-
-            string[] paths = _pipeline._fileBrowserService.OpenFilePanel(
-                "Import FBX", "", FBXVmdPipeline.FBX_EXTENSION, false);
-            if (paths.Length > 0 && !string.IsNullOrEmpty(paths[0]))
-            {
-                string sourcePath = paths[0];
-                Debug.Log($"선택된 파일: {sourcePath}");
-                _pipeline.ProcessFBXAsync(sourcePath);
-            }
+            TryImportFromDialog();
         }
 
         internal bool TryImportFromDialog()
@@ -42,7 +36,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _pipeline.SetSessionState(FBXVmdPipeline.FBXSessionState.Idle, "FBX 파일 선택 대기", 0f);
-            string[] paths = _pipeline._fileBrowserService.OpenFilePanel(
+            string[] paths = _fileBrowserService.OpenFilePanel(
                 "Import FBX", "", FBXVmdPipeline.FBX_EXTENSION, false);
             if (paths.Length == 0 || string.IsNullOrEmpty(paths[0]))
             {
@@ -51,33 +45,14 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             string sourcePath = paths[0];
-            Debug.Log($"[FBXVmdPipeline] 선택된 파일: {sourcePath}");
+            Debug.Log($"[FBXImport] 파일 선택됨. 경로={sourcePath}");
             _pipeline.ProcessFBXAsync(sourcePath);
             return true;
         }
 
         public void LoadFromImportFolder()
         {
-            if (TryLoadFromImportFolder()) return;
-
-            string targetDir = Path.Combine(Application.dataPath, "Resources", FBXVmdPipeline.IMPORT_FBX_FOLDER);
-
-            if (!Directory.Exists(targetDir))
-            {
-                Debug.LogWarning($"Import_FBX 폴더가 존재하지 않습니다: {targetDir}");
-                return;
-            }
-
-            string[] fbxFiles = Directory.GetFiles(targetDir, "*.fbx", SearchOption.TopDirectoryOnly);
-
-            if (fbxFiles.Length == 0)
-            {
-                Debug.LogWarning("Import_FBX 폴더에 FBX 파일이 없습니다");
-                return;
-            }
-
-            string selectedFile = fbxFiles[0];
-            _pipeline.ProcessFBXAsync(selectedFile);
+            TryLoadFromImportFolder();
         }
 
         internal bool TryLoadFromImportFolder()

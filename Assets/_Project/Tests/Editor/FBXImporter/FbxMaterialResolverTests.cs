@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class RuntimeFbxMaterialResolverTests
+    public class FbxMaterialResolverTests
     {
         [Test]
         public void Given_TexturePathIsRelative_When_ResolveTextureCandidate_Then_UsesFbxDirectoryOnly()
@@ -123,8 +123,8 @@ namespace Tests.Editor.FBXImporter
         private static string InvokeResolve(string fbxPath, string textureReference)
         {
             Type resolverType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.RuntimeFbxMaterialResolver, Assembly-CSharp");
-            Assert.That(resolverType, Is.Not.Null, "RuntimeFbxMaterialResolver must expose a testable pure texture candidate resolver.");
+                "Fbx2Vmd.FBXImporter.FbxMaterialResolver, Assembly-CSharp");
+            Assert.That(resolverType, Is.Not.Null, "FbxMaterialResolver must expose a testable pure texture candidate resolver.");
 
             MethodInfo method = resolverType.GetMethod(
                 "ResolveTextureCandidate",
@@ -137,7 +137,7 @@ namespace Tests.Editor.FBXImporter
         private static string InvokeResolveForMaterial(string fbxDirectory, string materialName)
         {
             Type resolverType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.RuntimeFbxMaterialResolver, Assembly-CSharp");
+                "Fbx2Vmd.FBXImporter.FbxMaterialResolver, Assembly-CSharp");
             Assert.That(resolverType, Is.Not.Null);
 
             MethodInfo method = resolverType.GetMethod(

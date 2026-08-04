@@ -609,7 +609,7 @@ namespace Fbx2Vmd.Settings
             }
 
             Material[] materials = CollectMaterials(setting);
-            GraphicMaterialShaderApplyResult result = GraphicMaterialShaderUtility.Apply(
+            GraphicMaterialShaderApplyResult result = GraphicMaterialShaderController.Apply(
                 setting.CreateMaterialShaderPlan(),
                 materials);
 
@@ -1160,12 +1160,6 @@ namespace Fbx2Vmd.Settings
                 return root;
             }
 
-            GraphicSetting existingSetting = UnityEngine.Object.FindObjectOfType<GraphicSetting>();
-            if (existingSetting != null)
-            {
-                return existingSetting.gameObject;
-            }
-
             return GameObject.Find("SettingManager");
         }
 
@@ -1248,7 +1242,7 @@ namespace Fbx2Vmd.Settings
                 return;
             }
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = recodingSetting.RecordingFBXVmdPipeline;
             Button button = ResolveManualRecordButton();
             HumanoidSampleCode controller = ResolveRecordingController(fileManager);
             var serialized = new SerializedObject(recodingSetting);
@@ -1302,7 +1296,7 @@ namespace Fbx2Vmd.Settings
                 }
             }
 
-            return UnityEngine.Object.FindObjectOfType<HumanoidSampleCode>();
+            return null;
         }
 
         private static void SetObjectReference(SerializedObject serialized, string propertyName, UnityEngine.Object value)

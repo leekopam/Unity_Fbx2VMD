@@ -145,51 +145,51 @@ namespace Fbx2Vmd.FBXImporter
         private sealed class RequestEnvelope
         {
             public string request_id;
-            public string requested_at;
-            public string fbx_file;
+            public string requested_at = default;
+            public string fbx_file = default;
             public float duration_seconds = 31f;
-            public bool finger_closeups;
+            public bool finger_closeups = default;
             public float mmd_ik_delta_guard_limit_vmd = float.NaN;
             public float mmd_ik_delta_guard_recovery_trigger_vmd = float.NaN;
             public float mmd_ik_delta_guard_recovery_debt_vmd = float.NaN;
-            public int mmd_ik_delta_guard_recovery_hold_frames;
-            public bool final_ik_foot_grounding_enabled;
-            public bool manual_animator_foot_local_rotation_enabled;
-            public bool manual_animator_foot_local_rotation_disabled;
-            public bool manual_animator_full_body_pose_enabled;
-            public bool manual_animator_full_body_pose_disabled;
+            public int mmd_ik_delta_guard_recovery_hold_frames = default;
+            public bool final_ik_foot_grounding_enabled = default;
+            public bool manual_animator_foot_local_rotation_enabled = default;
+            public bool manual_animator_foot_local_rotation_disabled = default;
+            public bool manual_animator_full_body_pose_enabled = default;
+            public bool manual_animator_full_body_pose_disabled = default;
             public float manual_animator_full_body_pose_weight =
                 DefaultManualAnimatorFullBodyPoseReferenceWeight;
-            public bool manual_animator_full_body_pose_exclude_lower_body_muscles;
-            public bool manual_animator_full_body_pose_lower_body_muscles_only;
-            public bool manual_animator_full_body_pose_leg_twist_muscles_only;
-            public bool manual_animator_full_body_pose_right_arm_muscles_only;
-            public bool manual_animator_full_body_pose_left_arm_muscles_only;
-            public bool manual_animator_full_body_pose_right_sleeve_chain_muscles_only;
-            public float manual_animator_full_body_pose_frame_gate_start;
-            public float manual_animator_full_body_pose_frame_gate_end;
-            public bool set_human_pose_right_leg_twist_output_enabled;
+            public bool manual_animator_full_body_pose_exclude_lower_body_muscles = default;
+            public bool manual_animator_full_body_pose_lower_body_muscles_only = default;
+            public bool manual_animator_full_body_pose_leg_twist_muscles_only = default;
+            public bool manual_animator_full_body_pose_right_arm_muscles_only = default;
+            public bool manual_animator_full_body_pose_left_arm_muscles_only = default;
+            public bool manual_animator_full_body_pose_right_sleeve_chain_muscles_only = default;
+            public float manual_animator_full_body_pose_frame_gate_start = default;
+            public float manual_animator_full_body_pose_frame_gate_end = default;
+            public bool set_human_pose_right_leg_twist_output_enabled = default;
             public float set_human_pose_right_leg_twist_output_weight =
                 DefaultSetHumanPoseRightLegTwistOutputReferenceWeight;
             public float set_human_pose_right_leg_twist_output_max_delta =
                 DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta;
-            public bool manual_animator_body_rotation_enabled;
-            public bool manual_animator_body_rotation_disabled;
+            public bool manual_animator_body_rotation_enabled = default;
+            public bool manual_animator_body_rotation_disabled = default;
             public float manual_animator_body_rotation_weight =
                 DefaultManualAnimatorBodyRotationReferenceWeight;
-            public bool manual_animator_hand_local_rotation_enabled;
-            public bool manual_animator_thumb_local_rotation_enabled;
-            public bool manual_animator_hand_palm_frame_enabled;
+            public bool manual_animator_hand_local_rotation_enabled = default;
+            public bool manual_animator_thumb_local_rotation_enabled = default;
+            public bool manual_animator_hand_palm_frame_enabled = default;
             public float manual_animator_hand_palm_frame_weight = DefaultManualAnimatorHandPalmFrameWeight;
-            public bool retarget_pose_visual_spike_smoothing_override;
+            public bool retarget_pose_visual_spike_smoothing_override = default;
             public bool retarget_pose_visual_spike_smoothing_enabled = true;
             public float retarget_pose_visual_spike_current_weight =
                 DefaultRetargetPoseVisualSpikeCurrentWeight;
             public float retarget_pose_visual_spike_forearm_stretch_clamp_max_offset =
                 DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset;
-            public bool retarget_arm_stretch_clamp_enabled;
+            public bool retarget_arm_stretch_clamp_enabled = default;
             public float retarget_arm_stretch_muscle_limit = DefaultRetargetArmStretchMuscleLimit;
-            public bool yyb_arm_swing_limit_enabled;
+            public bool yyb_arm_swing_limit_enabled = default;
             public float yyb_arm_swing_limit_weight = DefaultYybArmSwingLimitWeight;
             public float yyb_arm_swing_max_down_dot = DefaultYybArmSwingMaxDownDot;
             public float yyb_arm_swing_min_hand_horizontal_ratio =
@@ -212,7 +212,7 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio;
             public float yyb_arm_swing_raised_pose_max_hand_horizontal_reach_ratio =
                 DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
-            public bool yyb_arm_direction_retarget_enabled;
+            public bool yyb_arm_direction_retarget_enabled = default;
             public float yyb_arm_direction_upper_arm_weight = DefaultYybArmDirectionUpperArmWeight;
             public float yyb_arm_direction_forearm_weight = DefaultYybArmDirectionForearmWeight;
             public float yyb_arm_direction_upper_arm_max_degrees = DefaultYybArmDirectionUpperArmMaxDegrees;
@@ -221,27 +221,27 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultYybArmDirectionLeftSideWeightScale;
             public float yyb_arm_direction_right_side_weight_scale =
                 DefaultYybArmDirectionRightSideWeightScale;
-            public bool yyb_arm_sleeve_anchor_override;
+            public bool yyb_arm_sleeve_anchor_override = default;
             public bool yyb_arm_sleeve_anchor_enabled = true;
             public float yyb_arm_sleeve_anchor_influence = DefaultYybArmSleeveAnchorInfluence;
             public float yyb_arm_shoulder_cap_anchor_influence = DefaultYybArmShoulderCapAnchorInfluence;
             public float yyb_arm_sleeve_anchor_max_degrees = DefaultYybArmSleeveAnchorMaxDegrees;
-            public bool yyb_arm_visual_twist_override;
+            public bool yyb_arm_visual_twist_override = default;
             public bool yyb_arm_visual_twist_enabled = true;
             public float yyb_arm_visual_upper_arm_influence = DefaultYybArmVisualUpperArmInfluence;
             public float yyb_arm_visual_forearm_influence = DefaultYybArmVisualForearmInfluence;
             public float yyb_arm_visual_upper_arm_max_degrees = DefaultYybArmVisualUpperArmMaxDegrees;
             public float yyb_arm_visual_forearm_max_degrees = DefaultYybArmVisualForearmMaxDegrees;
-            public bool manual_animator_lower_body_segment_direction_enabled;
-            public bool manual_animator_lower_body_segment_direction_disabled;
+            public bool manual_animator_lower_body_segment_direction_enabled = default;
+            public bool manual_animator_lower_body_segment_direction_disabled = default;
             public float manual_animator_lower_body_segment_direction_weight =
                 DefaultManualAnimatorLowerBodySegmentDirectionReferenceWeight;
             public float manual_animator_lower_body_segment_direction_max_angle =
                 DefaultManualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-            public bool manual_animator_upper_leg_to_lower_leg_segment_direction_disabled;
+            public bool manual_animator_upper_leg_to_lower_leg_segment_direction_disabled = default;
             public float manual_animator_upper_leg_to_lower_leg_segment_direction_max_angle =
                 DefaultManualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-            public bool manual_animator_lower_leg_to_foot_segment_direction_disabled;
+            public bool manual_animator_lower_leg_to_foot_segment_direction_disabled = default;
             public float manual_animator_lower_leg_to_foot_segment_direction_max_angle =
                 DefaultManualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
             public float manual_animator_left_lower_leg_to_foot_segment_direction_max_angle =
@@ -258,16 +258,16 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
             public float manual_animator_right_lower_leg_to_foot_segment_direction_endpoint_blend_weight =
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-            public bool manual_animator_foot_to_toes_segment_direction_disabled;
+            public bool manual_animator_foot_to_toes_segment_direction_disabled = default;
             public float manual_animator_foot_to_toes_segment_direction_max_angle =
                 DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-            public bool manual_animator_foot_hips_aligned_residual_yaw_enabled;
-            public bool manual_animator_foot_hips_aligned_residual_yaw_disabled;
+            public bool manual_animator_foot_hips_aligned_residual_yaw_enabled = default;
+            public bool manual_animator_foot_hips_aligned_residual_yaw_disabled = default;
             public float manual_animator_foot_hips_aligned_residual_yaw_weight =
                 DefaultManualAnimatorFootHipsAlignedResidualYawReferenceWeight;
             public float manual_animator_foot_hips_aligned_residual_yaw_max_angle =
                 DefaultManualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
-            public bool post_set_human_pose_right_endpoint_position_enabled;
+            public bool post_set_human_pose_right_endpoint_position_enabled = default;
             public float post_set_human_pose_right_endpoint_position_weight =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceWeight;
             public float post_set_human_pose_right_endpoint_position_max_offset =
@@ -280,8 +280,8 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float post_set_human_pose_right_endpoint_position_frame_gate_end =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool post_set_human_pose_endpoint_position_use_left_side;
-            public bool pre_set_human_pose_right_endpoint_position_enabled;
+            public bool post_set_human_pose_endpoint_position_use_left_side = default;
+            public bool pre_set_human_pose_right_endpoint_position_enabled = default;
             public float pre_set_human_pose_right_endpoint_position_weight =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight;
             public float pre_set_human_pose_right_endpoint_position_max_offset =
@@ -294,45 +294,45 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
             public float pre_set_human_pose_right_endpoint_position_frame_gate_end =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool pre_set_human_pose_endpoint_position_use_left_side;
-            public bool pre_set_human_pose_endpoint_position_use_ghost_current_basis;
-            public bool pre_set_human_pose_endpoint_position_invert_body_position_x;
-            public bool pre_set_human_pose_endpoint_position_invert_body_position_z;
-            public bool post_set_human_pose_right_foot_evaluator_xz_reference_enabled;
+            public bool pre_set_human_pose_endpoint_position_use_left_side = default;
+            public bool pre_set_human_pose_endpoint_position_use_ghost_current_basis = default;
+            public bool pre_set_human_pose_endpoint_position_invert_body_position_x = default;
+            public bool pre_set_human_pose_endpoint_position_invert_body_position_z = default;
+            public bool post_set_human_pose_right_foot_evaluator_xz_reference_enabled = default;
             public float post_set_human_pose_right_foot_evaluator_xz_reference_target_magnitude =
                 DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-            public bool manual_animator_biped_ik_foot_position_enabled;
+            public bool manual_animator_biped_ik_foot_position_enabled = default;
             public float manual_animator_biped_ik_foot_position_weight =
                 DefaultManualAnimatorBipedIkFootPositionReferenceWeight;
             public float manual_animator_biped_ik_foot_position_max_offset =
                 DefaultManualAnimatorBipedIkFootPositionReferenceMaxOffset;
-            public bool manual_animator_hips_local_position_enabled;
+            public bool manual_animator_hips_local_position_enabled = default;
             public float manual_animator_hips_local_position_weight =
                 DefaultManualAnimatorHipsLocalPositionReferenceWeight;
             public float manual_animator_hips_local_position_max_offset =
                 DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset;
-            public bool manual_animator_body_position_xz_enabled;
+            public bool manual_animator_body_position_xz_enabled = default;
             public float manual_animator_body_position_xz_weight =
                 DefaultManualAnimatorBodyPositionXzReferenceWeight;
             public float manual_animator_body_position_xz_max_offset =
                 DefaultManualAnimatorBodyPositionXzReferenceMaxOffset;
-            public float manual_animator_body_position_xz_frame_gate_start;
-            public float manual_animator_body_position_xz_frame_gate_end;
-            public float manual_animator_body_position_xz_frame_gate_blend_frames;
+            public float manual_animator_body_position_xz_frame_gate_start = default;
+            public float manual_animator_body_position_xz_frame_gate_end = default;
+            public float manual_animator_body_position_xz_frame_gate_blend_frames = default;
             public float manual_animator_body_position_xz_axis_x_scale = 1f;
             public float manual_animator_body_position_xz_axis_z_scale = 1f;
-            public bool yyb_right_sleeve_silhouette_offset_enabled;
-            public float yyb_right_sleeve_silhouette_local_offset_x;
-            public float yyb_right_sleeve_silhouette_local_offset_frame_gate_start;
-            public float yyb_right_sleeve_silhouette_local_offset_frame_gate_end;
-            public bool retarget_body_position_xz_root_motion_enabled;
-            public bool target_humanoid_bone_position_lock_disabled;
-            public bool vmd_playback_probe_enabled;
-            public bool vmd_playback_probe_apply_ik_targets;
-            public bool reference_mmd_timing_enabled;
+            public bool yyb_right_sleeve_silhouette_offset_enabled = default;
+            public float yyb_right_sleeve_silhouette_local_offset_x = default;
+            public float yyb_right_sleeve_silhouette_local_offset_frame_gate_start = default;
+            public float yyb_right_sleeve_silhouette_local_offset_frame_gate_end = default;
+            public bool retarget_body_position_xz_root_motion_enabled = default;
+            public bool target_humanoid_bone_position_lock_disabled = default;
+            public bool vmd_playback_probe_enabled = default;
+            public bool vmd_playback_probe_apply_ik_targets = default;
+            public bool reference_mmd_timing_enabled = default;
             public string segment = "head";
-            public int diagnostic_capture_width_override;
-            public int diagnostic_capture_height_override;
+            public int diagnostic_capture_width_override = default;
+            public int diagnostic_capture_height_override = default;
             public float diagnostic_screenshot_padding_override = float.NaN;
             public float diagnostic_screenshot_vertical_viewport_center_override = float.NaN;
         }

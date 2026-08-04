@@ -56,7 +56,7 @@ namespace Fbx2Vmd.Settings
 
         public static MainRecordingSettingsPopup EnsurePopupForScene(RecordingSetting owner)
         {
-            Canvas canvas = ResolveCanvas();
+            Canvas canvas = ResolveCanvas(owner);
             MainRecordingSettingsPopup popup = canvas.GetComponentInChildren<MainRecordingSettingsPopup>(true);
             if (popup == null)
             {
@@ -194,16 +194,16 @@ namespace Fbx2Vmd.Settings
             return texts.ToArray();
         }
 
-        private static Canvas ResolveCanvas()
+        private static Canvas ResolveCanvas(RecordingSetting owner)
         {
-            GameObject canvasObject = GameObject.Find(MainRecordingSettingsLayoutSpec.CanvasObjectName);
-            Canvas canvas = canvasObject != null ? canvasObject.GetComponent<Canvas>() : null;
+            Canvas canvas = owner != null ? owner.GetComponentInParent<Canvas>() : null;
             if (canvas != null)
             {
                 return canvas;
             }
 
-            canvas = FindObjectOfType<Canvas>();
+            GameObject canvasObject = GameObject.Find(MainRecordingSettingsLayoutSpec.CanvasObjectName);
+            canvas = canvasObject != null ? canvasObject.GetComponent<Canvas>() : null;
             if (canvas != null)
             {
                 return canvas;

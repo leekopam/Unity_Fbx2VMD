@@ -5,14 +5,15 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     public class FBXConversionResult
     {
-        public bool Success { get; }
+        public bool IsSuccess { get; }
+        public bool Success => IsSuccess;
         public string OutputBaseName { get; }
         public string ErrorMessage { get; }
         public string VmdFilePath { get; }
 
         private FBXConversionResult(bool success, string outputBaseName, string errorMessage, string vmdFilePath)
         {
-            Success = success;
+            IsSuccess = success;
             OutputBaseName = outputBaseName ?? string.Empty;
             ErrorMessage = errorMessage ?? string.Empty;
             VmdFilePath = vmdFilePath ?? string.Empty;

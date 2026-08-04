@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 using RootMotion.FinalIK;
 
 namespace Fbx2Vmd.FBXImporter
@@ -7,15 +8,20 @@ namespace Fbx2Vmd.FBXImporter
     {
         #region Public Fields
         [Header("Target (애니메이션이 적용될 캐릭터)")]
-        public Animator targetAnimator;
+        [FormerlySerializedAs("targetAnimator")]
+        [SerializeField] private Animator _targetAnimator;
+        public Animator targetAnimator { get => _targetAnimator; set => _targetAnimator = value; }
         
         [Header("Ghost (애니메이션 소스)")]
-        public GameObject ghostObject;
-        public Animator ghostAnimator;
-        public AnimationClip ghostClip;
-        
-        [Header("Debug")]
-        public bool showDebugLog = true;
+        [FormerlySerializedAs("ghostObject")]
+        [SerializeField] private GameObject _ghostObject;
+        public GameObject ghostObject { get => _ghostObject; private set => _ghostObject = value; }
+        [FormerlySerializedAs("ghostAnimator")]
+        [SerializeField] private Animator _ghostAnimator;
+        public Animator ghostAnimator { get => _ghostAnimator; private set => _ghostAnimator = value; }
+        [FormerlySerializedAs("ghostClip")]
+        [SerializeField] private AnimationClip _ghostClip;
+        public AnimationClip ghostClip { get => _ghostClip; private set => _ghostClip = value; }
         #endregion
 
         #region Private Fields
@@ -79,10 +85,6 @@ namespace Fbx2Vmd.FBXImporter
             SetupVRIK();
 
             _isInitialized = true;
-            
-            if (showDebugLog)
-            {
-            }
         }
 
         /// <summary>
@@ -101,10 +103,6 @@ namespace Fbx2Vmd.FBXImporter
 
             float ratio = targetHeight / ghostHeight;
             ghostObject.transform.localScale = Vector3.one * ratio;
-
-            if (showDebugLog)
-            {
-            }
         }
 
         /// <summary>
@@ -158,17 +156,6 @@ namespace Fbx2Vmd.FBXImporter
             _ghostRightHand = GetGhostBone(HumanBodyBones.RightHand, "RightHand", "mixamorig:RightHand");
             _ghostLeftFoot = GetGhostBone(HumanBodyBones.LeftFoot, "LeftFoot", "mixamorig:LeftFoot");
             _ghostRightFoot = GetGhostBone(HumanBodyBones.RightFoot, "RightFoot", "mixamorig:RightFoot");
-
-            if (showDebugLog)
-            {
-                int mappedCount = 0;
-                if (_ghostHead != null) mappedCount++;
-                if (_ghostHips != null) mappedCount++;
-                if (_ghostLeftHand != null) mappedCount++;
-                if (_ghostRightHand != null) mappedCount++;
-                if (_ghostLeftFoot != null) mappedCount++;
-                if (_ghostRightFoot != null) mappedCount++;
-            }
         }
 
         /// <summary>
@@ -223,9 +210,6 @@ namespace Fbx2Vmd.FBXImporter
             if (_vrik == null)
             {
                 _vrik = targetAnimator.gameObject.AddComponent<VRIK>();
-                if (showDebugLog)
-                {
-                }
             }
 
             // VRIK References 자동 감지
@@ -278,10 +262,6 @@ namespace Fbx2Vmd.FBXImporter
                 _vrik.solver.rightLeg.target = _ghostRightFoot;
                 _vrik.solver.rightLeg.positionWeight = 1f;
                 _vrik.solver.rightLeg.rotationWeight = 1f;
-            }
-
-            if (showDebugLog)
-            {
             }
         }
         #endregion
