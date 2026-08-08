@@ -311,3 +311,7 @@ __pycache__/
 /Docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
 /docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
 Assets/_ManualReference/Model/
+"*.pmx" 
+"*.pmx.meta" 
+*.pmx
+*.pmx.meta
