@@ -1,4 +1,5 @@
 using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Settings;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -443,6 +444,46 @@ namespace Tests.Editor.FBXImporter
                 playbackSpeed: 2f);
 
             Assert.That(recordingLengthSeconds, Is.EqualTo(103.88335f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_RecordingSettings_When_CreatingPlan_Then_SnapshotsTimingCaptureAndDiagnostics()
+        {
+            float[] diagnosticSampleTimes = { 0.5f };
+            Type recordingPlanType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.RecordingPlan",
+                throwOnError: true);
+            object plan = Activator.CreateInstance(
+                recordingPlanType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[]
+                {
+                    10f,
+                    2f,
+                    3f,
+                    RecordingCaptureResolution.CreateCustomPlan(1920, 1080),
+                    true,
+                    true,
+                    true,
+                    true,
+                    6,
+                    false,
+                    diagnosticSampleTimes,
+                    1.8f,
+                    0.28f
+                },
+                culture: null);
+            diagnosticSampleTimes[0] = 9f;
+
+            Assert.That(GetPlanProperty<float>(recordingPlanType, plan, "RecordingLengthSeconds"), Is.EqualTo(5f));
+            RecordingCaptureResolutionPlan captureResolution = GetPlanProperty<RecordingCaptureResolutionPlan>(recordingPlanType, plan, "CaptureResolution");
+            Assert.That(captureResolution.Width, Is.EqualTo(1920));
+            Assert.That(captureResolution.Height, Is.EqualTo(1080));
+            float[] snapshotSampleTimes = (float[])recordingPlanType
+                .GetMethod("CreateDiagnosticSampleTimesCopy", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .Invoke(plan, null);
+            Assert.That(snapshotSampleTimes[0], Is.EqualTo(0.5f));
         }
 
         [Test]
@@ -1182,6 +1223,16 @@ namespace Tests.Editor.FBXImporter
             Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must keep a private {fieldName} field for this visibility regression test.");
 
             return (T)field.GetValue(target);
+        }
+
+        private static T GetPlanProperty<T>(Type recordingPlanType, object plan, string propertyName)
+        {
+            PropertyInfo property = recordingPlanType.GetProperty(
+                propertyName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            Assert.That(property, Is.Not.Null, $"RecordingPlan must expose {propertyName} for recording execution.");
+            return (T)property.GetValue(plan);
         }
 
         private static void SetPrivateField<T>(object target, string fieldName, T value)

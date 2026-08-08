@@ -63,6 +63,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_SatisfactionFullClipAndReferenceTimingDisabled_When_CalculatingReferenceTiming_Then_KeepsNormalPlayback);
             RunTest(results, nameof(tests.Given_CustomVmdPlaybackSpeed_When_ResolvingRecordingLength_Then_PreservesFullClipAtThatSpeed),
                 tests.Given_CustomVmdPlaybackSpeed_When_ResolvingRecordingLength_Then_PreservesFullClipAtThatSpeed);
+            RunTest(results, nameof(tests.Given_RecordingSettings_When_CreatingPlan_Then_SnapshotsTimingCaptureAndDiagnostics),
+                tests.Given_RecordingSettings_When_CreatingPlan_Then_SnapshotsTimingCaptureAndDiagnostics);
             RunTest(results, nameof(tests.Given_GhostHasNoRenderers_When_ShowGhostModelIsEnabled_Then_UsesSkeletonDebugFallback),
                 tests.Given_GhostHasNoRenderers_When_ShowGhostModelIsEnabled_Then_UsesSkeletonDebugFallback);
             RunTest(results, nameof(tests.Given_GhostHasRenderers_When_ShowGhostModelIsEnabled_Then_StillUsesSkeletonDebugVisibilityAid),

@@ -1312,6 +1312,7 @@ namespace Fbx2Vmd.FBXImporter
         #region Private 필드
         internal IFileBrowserService _fileBrowserService;
         private AssimpFBXImporter _fbxImporter;
+        private FBXConversionCoordinator _conversionCoordinator;
         internal bool _isProcessing;
         private GameObject _activeGhostContainer;
         internal HumanoidSampleCode _activeRecorderController;
@@ -1358,7 +1359,23 @@ namespace Fbx2Vmd.FBXImporter
         public event Action<string, VmdSaveResult> EditorDiagnosticSmokeFinished;
 #endif
 
+        /// <summary>
+        /// 현재 FBX 변환 세션이 진행 중인지 반환함.
+        /// </summary>
         public bool IsProcessing => _isProcessing;
+
+        internal FBXConversionCoordinator ConversionCoordinator
+        {
+            get
+            {
+                if (_conversionCoordinator == null)
+                {
+                    _conversionCoordinator = new FBXConversionCoordinator(this);
+                }
+
+                return _conversionCoordinator;
+            }
+        }
 
         public float EffectiveThumbProximalMaxLocalAngle
         {
@@ -2119,7 +2136,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (_isProcessing)
             {
-                SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
                 return false;
             }
 
@@ -2141,7 +2158,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (_isProcessing)
             {
-                SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
                 return;
             }
 
@@ -2178,7 +2195,7 @@ namespace Fbx2Vmd.FBXImporter
                     return FBXConversionResult.Fail("FBX 파일만 선택할 수 있습니다.");
                 }
 
-                SetSessionState(FBXSessionState.Selected, $"선택됨: {Path.GetFileName(sourcePath)}", 0.05f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.Selected, $"선택됨: {Path.GetFileName(sourcePath)}", 0.05f);
                 string targetPath = CopyToControlledImportFolder(sourcePath);
                 string outputBaseName = Path.GetFileNameWithoutExtension(targetPath);
                 if (_shouldRecordVmdAfterImport)
@@ -2189,7 +2206,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     Debug.Log($"[FBXImport] Unity 촬영 전용 모드 선택됨. 출력={outputBaseName}, VMD 자동 녹화=생략");
                 }
-                SetSessionState(FBXSessionState.Copied, $"복제 완료: {Path.GetFileName(targetPath)}", 0.15f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.Copied, $"복제 완료: {Path.GetFileName(targetPath)}", 0.15f);
 
 #if UNITY_EDITOR
                 if (ShouldConfigureEditorImportSettings(sourcePath, targetPath, Application.dataPath))
@@ -2202,7 +2219,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
 #endif
 
-                SetSessionState(FBXSessionState.LoadingFbx, "FBX 로드 중", 0.25f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.LoadingFbx, "FBX 로드 중", 0.25f);
                 GameObject importedModel = await _fbxImporter.ImportAsync(targetPath);
                 if (importedModel == null)
                 {
@@ -2235,7 +2252,7 @@ namespace Fbx2Vmd.FBXImporter
                     }
                 }
 
-                SetSessionState(FBXSessionState.AvatarReady, "Humanoid Avatar 준비 완료", 0.45f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.AvatarReady, "Humanoid Avatar 준비 완료", 0.45f);
 
                 Animation ghostAnim = importedModel.GetComponent<Animation>();
                 AnimationClip targetClip = ExtractPrimaryClip(ghostAnim);
@@ -2271,7 +2288,7 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
                 ConfigureEditorHumanoidMuscleReference(retargeter, targetPath, sourcePath);
 #endif
-                SetSessionState(FBXSessionState.GhostReady, "Ghost Retarget 준비 완료", 0.6f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.GhostReady, "Ghost Retarget 준비 완료", 0.6f);
 
                 if (ghostAnim != null)
                 {
@@ -2303,20 +2320,12 @@ namespace Fbx2Vmd.FBXImporter
             AnimationClip clip,
             string outputBaseName)
         {
-#if UNITY_EDITOR
-            bool earlyEditorSmokeRecordingOverrideActive = _editorSmokeRecordingOverrideActive;
-#else
-            bool earlyEditorSmokeRecordingOverrideActive = false;
-#endif
-            bool earlyShouldStartVmdRecording = ShouldStartVmdRecordingAfterImport(
-                _shouldRecordVmdAfterImport,
-                earlyEditorSmokeRecordingOverrideActive);
-            float resolvedStartDelay = ResolveStartDelayForRecordingMode(startDelay, earlyShouldStartVmdRecording);
-            SetSessionState(FBXSessionState.Retargeting, $"녹화 시작 전 {resolvedStartDelay:F1}초 대기", 0.7f);
-            if (resolvedStartDelay > 0f)
-            {
-                yield return new WaitForSeconds(resolvedStartDelay);
-            }
+            RecordingPlan recordingPlan = CreateRecordingPlan(clip);
+            ConversionCoordinator.SetSessionState(
+                FBXSessionState.Retargeting,
+                $"녹화 시작 전 {recordingPlan.StartDelaySeconds:F1}초 대기",
+                0.7f);
+            yield return WaitForRecordingStartDelay(recordingPlan);
 
             if (ghostAnim == null || clip == null)
             {
@@ -2324,26 +2333,12 @@ namespace Fbx2Vmd.FBXImporter
                 yield break;
             }
 
-            float recordingStartTime = 0f;
-            float recordingPlaybackSpeed = ResolveVmdRecordingPlaybackSpeed(vmdRecordingPlaybackSpeed);
-            float recordingLength = ResolveRecordingLengthForPlaybackSpeed(clip.length, recordingPlaybackSpeed);
-            int recordingTargetFrameCount = 0;
             string recordingOutputBaseName = outputBaseName;
             string comparisonLabel = $"auto_{recordingOutputBaseName}";
-
-#if UNITY_EDITOR
-            bool editorSmokeRecordingOverrideActive = _editorSmokeRecordingOverrideActive;
-            float[] diagnosticSampleTimesOverride = _editorSmokeSampleTimesOverride;
-#else
-            bool editorSmokeRecordingOverrideActive = false;
-            float[] diagnosticSampleTimesOverride = null;
-#endif
-            bool shouldStartVmdRecording = ShouldStartVmdRecordingAfterImport(
-                _shouldRecordVmdAfterImport,
-                editorSmokeRecordingOverrideActive);
+            float recordingStartTime = 0f;
 
             HumanoidSampleCode recorderController = null;
-            if (shouldStartVmdRecording)
+            if (recordingPlan.ShouldStartVmdRecording)
             {
                 recorderController = targetObject.GetComponent<HumanoidSampleCode>();
                 if (recorderController == null)
@@ -2354,160 +2349,256 @@ namespace Fbx2Vmd.FBXImporter
 
                 _activeRecorderController = recorderController;
                 _activeRecorderController.RecordingFinished += OnRecordingFinished;
-                RecordingCaptureResolutionPlan recordingCapturePlan;
-                float diagnosticScreenshotPadding = 1.8f;
-                float diagnosticScreenshotVerticalViewportCenter = 0.28f;
+                ConfigureRecordingDiagnostics(recorderController, recordingPlan);
+                recordingPlan = ResolveRecordingParameters(
+                    recordingPlan,
+                    clip,
+                    outputBaseName,
+                    recorderController,
+                    out recordingStartTime,
+                    out recordingOutputBaseName,
+                    out comparisonLabel);
+            }
+
+            yield return PrewarmRetargetPose(
+                ghostAnim,
+                clip,
+                retargeter,
+                recordingStartTime,
+                recordingPlan.PlaybackSpeed,
+                recordingPlan.RetargetPrewarmFrameCount,
+                recordingPlan.ShouldStartVmdRecording);
+
+            retargeter?.CaptureRecordingStartBaselineSnapshot();
+            retargeter?.ResetPlaybackStabilityMetrics();
+
+            if (!recordingPlan.ShouldStartVmdRecording)
+            {
+                CompleteCaptureOnlyRecording(outputBaseName);
+                yield break;
+            }
+
+            StartVmdRecording(recorderController, recordingPlan, recordingOutputBaseName, comparisonLabel);
+        }
+
+        /// <summary>
+        /// 씬별 Inspector 값을 현재 녹화 세션에서만 사용할 스냅샷으로 만듦.
+        /// </summary>
+        private RecordingPlan CreateRecordingPlan(AnimationClip clip)
+        {
 #if UNITY_EDITOR
-                recordingCapturePlan = _editorSmokeCaptureResolutionOverrideActive
-                    ? RecordingCaptureResolution.CreateCustomPlan(_editorSmokeCaptureWidth, _editorSmokeCaptureHeight)
-                    : CreateRecordingCaptureResolutionPlan();
-                diagnosticScreenshotPadding = float.IsNaN(_editorSmokeDiagnosticScreenshotPaddingOverride)
-                    ? diagnosticScreenshotPadding
-                    : _editorSmokeDiagnosticScreenshotPaddingOverride;
-                diagnosticScreenshotVerticalViewportCenter = float.IsNaN(_editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride)
-                    ? diagnosticScreenshotVerticalViewportCenter
-                    : _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride;
+            bool editorSmokeRecordingOverrideActive = _editorSmokeRecordingOverrideActive;
+            RecordingCaptureResolutionPlan captureResolution = _editorSmokeCaptureResolutionOverrideActive
+                ? RecordingCaptureResolution.CreateCustomPlan(_editorSmokeCaptureWidth, _editorSmokeCaptureHeight)
+                : CreateRecordingCaptureResolutionPlan();
+            float diagnosticScreenshotPadding = float.IsNaN(_editorSmokeDiagnosticScreenshotPaddingOverride)
+                ? 1.8f
+                : _editorSmokeDiagnosticScreenshotPaddingOverride;
+            float diagnosticScreenshotVerticalViewportCenter = float.IsNaN(_editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride)
+                ? 0.28f
+                : _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride;
+            float[] diagnosticSampleTimes = _editorSmokeSampleTimesOverride;
 #else
-                recordingCapturePlan = CreateRecordingCaptureResolutionPlan();
+            bool editorSmokeRecordingOverrideActive = false;
+            RecordingCaptureResolutionPlan captureResolution = CreateRecordingCaptureResolutionPlan();
+            const float diagnosticScreenshotPadding = 1.8f;
+            const float diagnosticScreenshotVerticalViewportCenter = 0.28f;
+            float[] diagnosticSampleTimes = null;
 #endif
-                _activeRecorderController.SetRecordingDiagnostics(
-                    enableRecordingDiagnostics,
-                    enableRecordingDiagnostics && enableDiagnosticFingerCloseups,
-                    enableRecordingDiagnostics && useDeterministicCaptureFramerateForDiagnostics,
-                    diagnosticSampleTimesOverride,
-                    recordingCapturePlan.Width,
-                    recordingCapturePlan.Height,
-                    diagnosticScreenshotPadding,
-                    diagnosticScreenshotVerticalViewportCenter);
+            bool shouldStartVmdRecording = ShouldStartVmdRecordingAfterImport(
+                _shouldRecordVmdAfterImport,
+                editorSmokeRecordingOverrideActive);
+            return new RecordingPlan(
+                clip != null ? clip.length : 0f,
+                ResolveVmdRecordingPlaybackSpeed(vmdRecordingPlaybackSpeed),
+                ResolveStartDelayForRecordingMode(startDelay, shouldStartVmdRecording),
+                captureResolution,
+                shouldStartVmdRecording,
+                enableRecordingDiagnostics,
+                enableDiagnosticFingerCloseups,
+                useDeterministicCaptureFramerateForDiagnostics,
+                RetargetPrewarmFrameCount,
+                useKnownMmdReferenceTiming,
+                diagnosticSampleTimes,
+                diagnosticScreenshotPadding,
+                diagnosticScreenshotVerticalViewportCenter);
+        }
+
+        /// <summary>
+        /// 녹화 전 지연을 계획값으로만 수행해 실행 중 Inspector 변경을 무시함.
+        /// </summary>
+        private static IEnumerator WaitForRecordingStartDelay(RecordingPlan recordingPlan)
+        {
+            if (recordingPlan.StartDelaySeconds > 0f)
+            {
+                yield return new WaitForSeconds(recordingPlan.StartDelaySeconds);
+            }
+        }
+
+        /// <summary>
+        /// 에디터 스모크와 기준 타이밍을 반영한 실제 녹화 파라미터를 계산함.
+        /// </summary>
+        private RecordingPlan ResolveRecordingParameters(
+            RecordingPlan recordingPlan,
+            AnimationClip clip,
+            string outputBaseName,
+            HumanoidSampleCode recorderController,
+            out float recordingStartTime,
+            out string recordingOutputBaseName,
+            out string comparisonLabel)
+        {
+            recordingStartTime = 0f;
+            recordingOutputBaseName = outputBaseName;
+            comparisonLabel = $"auto_{recordingOutputBaseName}";
 #if UNITY_EDITOR
-                if (_editorSmokeRecordingOverrideActive)
+            if (_editorSmokeRecordingOverrideActive)
+            {
+                float requestedDuration = Mathf.Max(0.1f, _editorSmokeDurationSeconds);
+                bool hasEditorSmokeTimingOverride =
+                    !float.IsNaN(_editorSmokeRecordingStartTimeOverrideSeconds) ||
+                    !float.IsNaN(_editorSmokeRecordingPlaybackSpeedOverride);
+                recordingStartTime = CalculateEditorSmokeStartTime(clip, requestedDuration, _editorSmokeSegment);
+                if (!float.IsNaN(_editorSmokeRecordingStartTimeOverrideSeconds))
                 {
-                    float requestedDuration = Mathf.Max(0.1f, _editorSmokeDurationSeconds);
-                    bool hasEditorSmokeTimingOverride =
-                        !float.IsNaN(_editorSmokeRecordingStartTimeOverrideSeconds) ||
-                        !float.IsNaN(_editorSmokeRecordingPlaybackSpeedOverride);
-                    recordingStartTime = CalculateEditorSmokeStartTime(clip, requestedDuration, _editorSmokeSegment);
-                    if (!float.IsNaN(_editorSmokeRecordingStartTimeOverrideSeconds))
-                    {
-                        recordingStartTime = Mathf.Clamp(
-                            _editorSmokeRecordingStartTimeOverrideSeconds,
-                            0f,
-                            Mathf.Max(0f, clip.length));
-                    }
-
-                    if (!float.IsNaN(_editorSmokeRecordingPlaybackSpeedOverride))
-                    {
-                        recordingPlaybackSpeed = _editorSmokeRecordingPlaybackSpeedOverride;
-                    }
-
-                    float safePlaybackSpeed = Mathf.Max(0.0001f, recordingPlaybackSpeed);
-                    float remainingLength = Mathf.Max(0.1f, (clip.length - recordingStartTime) / safePlaybackSpeed);
-                    recordingLength = Mathf.Min(requestedDuration, remainingLength);
-                    recordingTargetFrameCount = Mathf.Min(
-                        Mathf.Max(1, _editorSmokeTargetFrameCount),
-                        Mathf.CeilToInt(recordingLength * EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
-                    recordingOutputBaseName = BuildEditorSmokeOutputBaseName(outputBaseName, recordingLength, _editorSmokeSegment);
-                    comparisonLabel = $"auto_{recordingOutputBaseName}";
-                    Debug.Log(
-                        $"[Recording] 에디터 스모크 녹화 제한 적용됨. VMD={recordingOutputBaseName}.vmd, " +
-                        $"segment={GetEditorSmokeSegmentLabel(_editorSmokeSegment)}, " +
-                        $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
-                        $"targetFrameCount={recordingTargetFrameCount}");
-
-                    if (!hasEditorSmokeTimingOverride &&
-                        TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
-                        outputBaseName,
-                        clip.length,
-                        recordingLength,
-                        recordingTargetFrameCount,
-                        EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
-                        _editorSmokeUseKnownMmdReferenceTiming,
-                        out float referenceRecordingLength,
-                        out int referenceTargetFrameCount,
-                        out float referencePlaybackSpeed))
-                    {
-                        recordingLength = referenceRecordingLength;
-                        recordingTargetFrameCount = referenceTargetFrameCount;
-                        recordingPlaybackSpeed = referencePlaybackSpeed;
-
-                        if (recorderController.vmdRecorder != null)
-                        {
-                            recorderController.vmdRecorder.UseCaptureFramerateDuringRecording = true;
-                            recorderController.vmdRecorder.DropLateFrameBacklogWhenNotUsingCaptureFramerate = false;
-                        }
-
-                        Debug.Log(
-                            $"[Recording] 에디터 스모크 기준 녹화 시간이 적용됨. " +
-                            $"clipLength={clip.length:F3}s, recordingLength={recordingLength:F3}s, " +
-                            $"targetFrameCount={recordingTargetFrameCount}, playbackSpeed={recordingPlaybackSpeed:F5}");
-                    }
+                    recordingStartTime = Mathf.Clamp(_editorSmokeRecordingStartTimeOverrideSeconds, 0f, Mathf.Max(0f, clip.length));
                 }
-                else
-#endif
-                if (TryBuildKnownMmdReferenceRecordingPlan(
+
+                float playbackSpeed = float.IsNaN(_editorSmokeRecordingPlaybackSpeedOverride)
+                    ? recordingPlan.PlaybackSpeed
+                    : _editorSmokeRecordingPlaybackSpeedOverride;
+                float recordingLength = Mathf.Min(
+                    requestedDuration,
+                    Mathf.Max(0.1f, (clip.length - recordingStartTime) / Mathf.Max(0.0001f, playbackSpeed)));
+                int targetFrameCount = Mathf.Min(
+                    Mathf.Max(1, _editorSmokeTargetFrameCount),
+                    Mathf.CeilToInt(recordingLength * EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
+                recordingPlan = recordingPlan.WithTiming(recordingLength, targetFrameCount, playbackSpeed);
+                recordingOutputBaseName = BuildEditorSmokeOutputBaseName(outputBaseName, recordingLength, _editorSmokeSegment);
+                comparisonLabel = $"auto_{recordingOutputBaseName}";
+                Debug.Log($"[Recording] 에디터 스모크 녹화 제한 적용됨. VMD={recordingOutputBaseName}.vmd, segment={GetEditorSmokeSegmentLabel(_editorSmokeSegment)}, start={recordingStartTime:F2}s, duration={recordingLength:F2}s, targetFrameCount={targetFrameCount}");
+
+                if (!hasEditorSmokeTimingOverride && TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
                     outputBaseName,
                     clip.length,
-                    MMD_REFERENCE_FRAME_RATE,
-                    useKnownMmdReferenceTiming,
+                    recordingPlan.RecordingLengthSeconds,
+                    recordingPlan.TargetFrameCount,
+                    EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
+                    _editorSmokeUseKnownMmdReferenceTiming,
                     out float referenceRecordingLength,
                     out int referenceTargetFrameCount,
                     out float referencePlaybackSpeed))
                 {
-                    recordingLength = referenceRecordingLength;
-                    recordingTargetFrameCount = referenceTargetFrameCount;
-                    recordingPlaybackSpeed = referencePlaybackSpeed;
-
-                    if (recorderController.vmdRecorder != null)
-                    {
-                        recorderController.vmdRecorder.UseCaptureFramerateDuringRecording = true;
-                        recorderController.vmdRecorder.DropLateFrameBacklogWhenNotUsingCaptureFramerate = false;
-                    }
-
-                    Debug.Log(
-                        $"[Recording] 기준 녹화 시간이 적용됨. " +
-                        $"clipLength={clip.length:F3}s, recordingLength={recordingLength:F3}s, " +
-                        $"targetFrameCount={recordingTargetFrameCount}, playbackSpeed={recordingPlaybackSpeed:F5}");
+                    recordingPlan = recordingPlan.WithTiming(referenceRecordingLength, referenceTargetFrameCount, referencePlaybackSpeed);
+                    EnableReferenceTimingFrameCapture(recorderController);
+                    Debug.Log($"[Recording] 에디터 스모크 기준 녹화 시간이 적용됨. clipLength={clip.length:F3}s, recordingLength={recordingPlan.RecordingLengthSeconds:F3}s, targetFrameCount={recordingPlan.TargetFrameCount}, playbackSpeed={recordingPlan.PlaybackSpeed:F5}");
                 }
+
+                return recordingPlan;
+            }
+#endif
+            if (TryBuildKnownMmdReferenceRecordingPlan(
+                outputBaseName,
+                clip.length,
+                MMD_REFERENCE_FRAME_RATE,
+                recordingPlan.UseKnownReferenceTiming,
+                out float standardReferenceRecordingLength,
+                out int standardReferenceTargetFrameCount,
+                out float standardReferencePlaybackSpeed))
+            {
+                recordingPlan = recordingPlan.WithTiming(
+                    standardReferenceRecordingLength,
+                    standardReferenceTargetFrameCount,
+                    standardReferencePlaybackSpeed);
+                EnableReferenceTimingFrameCapture(recorderController);
+                Debug.Log($"[Recording] 기준 녹화 시간이 적용됨. clipLength={clip.length:F3}s, recordingLength={recordingPlan.RecordingLengthSeconds:F3}s, targetFrameCount={recordingPlan.TargetFrameCount}, playbackSpeed={recordingPlan.PlaybackSpeed:F5}");
             }
 
-            int prewarmFrameCount = ResolveRetargetPrewarmFrameCountForRecordingMode(
-                RetargetPrewarmFrameCount,
-                shouldStartVmdRecording);
-            int visiblePrewarmYieldFrameCount = ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(
-                RetargetPrewarmFrameCount,
-                shouldStartVmdRecording);
+            return recordingPlan;
+        }
+
+        /// <summary>
+        /// 계획에 고정된 진단 옵션과 캡처 해상도를 녹화기에 적용함.
+        /// </summary>
+        private static void ConfigureRecordingDiagnostics(HumanoidSampleCode recorderController, RecordingPlan recordingPlan)
+        {
+            recorderController.SetRecordingDiagnostics(
+                recordingPlan.EnableDiagnostics,
+                recordingPlan.EnableDiagnostics && recordingPlan.EnableFingerCloseups,
+                recordingPlan.EnableDiagnostics && recordingPlan.UseDeterministicCaptureFramerate,
+                recordingPlan.CreateDiagnosticSampleTimesCopy(),
+                recordingPlan.CaptureResolution.Width,
+                recordingPlan.CaptureResolution.Height,
+                recordingPlan.DiagnosticScreenshotPadding,
+                recordingPlan.DiagnosticScreenshotVerticalViewportCenter);
+        }
+
+        /// <summary>
+        /// 기준 타이밍에 필요한 고정 프레임 녹화 옵션을 켬.
+        /// </summary>
+        private static void EnableReferenceTimingFrameCapture(HumanoidSampleCode recorderController)
+        {
+            if (recorderController.vmdRecorder == null)
+            {
+                return;
+            }
+
+            recorderController.vmdRecorder.UseCaptureFramerateDuringRecording = true;
+            recorderController.vmdRecorder.DropLateFrameBacklogWhenNotUsingCaptureFramerate = false;
+        }
+
+        /// <summary>
+        /// 녹화 시작 포즈를 프리웜해 리타게팅 첫 프레임을 안정화함.
+        /// </summary>
+        private IEnumerator PrewarmRetargetPose(
+            Animation ghostAnim,
+            AnimationClip clip,
+            PoseSpaceRetargeter retargeter,
+            float recordingStartTime,
+            float playbackSpeed,
+            int configuredPrewarmFrameCount,
+            bool shouldStartVmdRecording)
+        {
             yield return PrewarmRetargetStartPose(
                 ghostAnim,
                 clip,
                 retargeter,
                 recordingStartTime,
-                recordingPlaybackSpeed,
-                prewarmFrameCount,
-                visiblePrewarmYieldFrameCount);
-            retargeter?.CaptureRecordingStartBaselineSnapshot();
-            retargeter?.ResetPlaybackStabilityMetrics();
+                playbackSpeed,
+                ResolveRetargetPrewarmFrameCountForRecordingMode(configuredPrewarmFrameCount, shouldStartVmdRecording),
+                ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(configuredPrewarmFrameCount, shouldStartVmdRecording));
+        }
 
-            if (!shouldStartVmdRecording)
-            {
-                SetSessionState(FBXSessionState.Success, $"FBX 임포트/촬영 준비 완료: {outputBaseName}", 1f);
-                Debug.Log($"[Recording] FBX 임포트 및 Unity 촬영 준비 완료됨. 출력={outputBaseName}, VMD 자동 녹화=생략");
-                _isProcessing = false;
-                yield break;
-            }
-
-            SetSessionState(FBXSessionState.Recording, $"녹화 중: {recordingOutputBaseName}", 0.75f);
+        /// <summary>
+        /// VMD 자동 녹화를 시작하고 시작 실패를 세션 실패로 처리함.
+        /// </summary>
+        private void StartVmdRecording(
+            HumanoidSampleCode recorderController,
+            RecordingPlan recordingPlan,
+            string recordingOutputBaseName,
+            string comparisonLabel)
+        {
+            ConversionCoordinator.SetSessionState(FBXSessionState.Recording, $"녹화 중: {recordingOutputBaseName}", 0.75f);
             Debug.Log($"[Recording] 자동 녹화 시작됨. VMD={recordingOutputBaseName}.vmd, 비교 라벨={comparisonLabel}");
-            bool started = recorderController.StartAutoRecording(
-                recordingLength,
+            if (!recorderController.StartAutoRecording(
+                recordingPlan.RecordingLengthSeconds,
                 recordingOutputBaseName,
                 null,
-                recordingTargetFrameCount,
+                recordingPlan.TargetFrameCount,
                 comparisonLabel: comparisonLabel,
-                overwriteExistingOutput: true);
-            if (!started)
+                overwriteExistingOutput: true))
             {
                 FailSession("VMD 녹화를 시작하지 못했습니다.");
             }
+        }
+
+        /// <summary>
+        /// VMD 녹화 없이 촬영 준비만 마친 세션을 정상 종료함.
+        /// </summary>
+        private void CompleteCaptureOnlyRecording(string outputBaseName)
+        {
+            ConversionCoordinator.SetSessionState(FBXSessionState.Success, $"FBX 임포트/촬영 준비 완료: {outputBaseName}", 1f);
+            Debug.Log($"[Recording] FBX 임포트 및 Unity 촬영 준비 완료됨. 출력={outputBaseName}, VMD 자동 녹화=생략");
+            _isProcessing = false;
         }
 
         private IEnumerator PrewarmRetargetStartPose(
@@ -2663,12 +2754,12 @@ namespace Fbx2Vmd.FBXImporter
 
             if (effectiveResult.Success)
             {
-                SetSessionState(FBXSessionState.Success, $"VMD 저장 완료: {Path.GetFileName(effectiveResult.FilePath)}", 1f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.Success, $"VMD 저장 완료: {Path.GetFileName(effectiveResult.FilePath)}", 1f);
             }
             else
             {
                 string errorMessage = string.IsNullOrWhiteSpace(effectiveResult.ErrorMessage) ? "VMD 저장 실패" : effectiveResult.ErrorMessage;
-                SetSessionState(FBXSessionState.Failed, errorMessage, 0f);
+                ConversionCoordinator.SetSessionState(FBXSessionState.Failed, errorMessage, 0f);
             }
 
             CleanupActiveGhost();
@@ -3706,7 +3797,7 @@ namespace Fbx2Vmd.FBXImporter
             string exceptionDetails = exception == null ? string.Empty : $"\n{exception}";
             Debug.LogError($"[FBXImport] FBX 처리 실패함. 메시지={message}{exceptionDetails}");
 
-            SetSessionState(FBXSessionState.Failed, message, 0f, shouldLog: false);
+            ConversionCoordinator.SetSessionState(FBXSessionState.Failed, message, 0f, shouldLog: false);
             ClearActiveRecordingSubscription();
             CleanupActiveGhost();
             ResetTargetStateAfterSession(recaptureGuardBaselines: false);
@@ -3823,7 +3914,7 @@ namespace Fbx2Vmd.FBXImporter
             return string.Join("/", parts);
         }
 
-        internal void SetSessionState(FBXSessionState state, string message, float progress, bool shouldLog = true)
+        internal void ApplySessionState(FBXSessionState state, string message, float progress, bool shouldLog = true)
         {
             if (shouldLog)
             {
@@ -3892,48 +3983,6 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _activeRecorderController.RecordingFinished -= OnRecordingFinished;
                 _activeRecorderController = null;
-            }
-        }
-
-        private IEnumerator StartRecordingSequence(
-            GameObject ghostModel,
-            Animation ghostAnim,
-            GameObject targetCharacter,
-            AnimationClip clip,
-            PoseSpaceRetargeter retargeter,
-            string outputBaseName = "")
-        {
-            Debug.Log($"[FBXImport]  녹화 시작까지 {startDelay}초 대기 중...");
-
-            // 지연 대기
-            yield return new WaitForSeconds(startDelay);
-
-            // Ghost 애니메이션 재생 시작
-            if (ghostAnim != null && clip != null)
-            {
-                ghostAnim.clip = clip;
-                ghostAnim.Play();
-                Debug.Log($"[FBXImport]  Ghost 애니메이션 재생 시작: {clip.name}");
-            }
-
-            // VMD 녹화 시작
-            var recorderController = targetCharacter.GetComponent<HumanoidSampleCode>();
-            if (recorderController != null)
-            {
-                float clipLen = clip.length;
-                string recordingBaseName = !string.IsNullOrWhiteSpace(outputBaseName) ? outputBaseName : clip.name;
-                recorderController.StartAutoRecording(
-                    clipLen,
-                    recordingBaseName,
-                    null,
-                    0,
-                    comparisonLabel: $"auto_{recordingBaseName}",
-                    overwriteExistingOutput: true);
-                Debug.Log($"[FBXImport]  VMD 녹화 동시 시작! (길이: {clipLen:F2}초)");
-            }
-            else
-            {
-                Debug.LogWarning("[FBXImport]  HumanoidSampleCode 컴포넌트가 Target에 없습니다. 녹화 건너뜀.");
             }
         }
 
@@ -4586,213 +4635,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return (hips != null) ? hips.position.y : 0f;
-        }
-    }
-
-    [DisallowMultipleComponent]
-    public sealed class GhostSkeletonDebugRenderer : MonoBehaviour
-    {
-        private static readonly HumanBodyBones[,] BonePairs =
-        {
-            { HumanBodyBones.Hips, HumanBodyBones.Spine },
-            { HumanBodyBones.Spine, HumanBodyBones.Chest },
-            { HumanBodyBones.Chest, HumanBodyBones.Neck },
-            { HumanBodyBones.Neck, HumanBodyBones.Head },
-            { HumanBodyBones.Chest, HumanBodyBones.LeftUpperArm },
-            { HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm },
-            { HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand },
-            { HumanBodyBones.Chest, HumanBodyBones.RightUpperArm },
-            { HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm },
-            { HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand },
-            { HumanBodyBones.Hips, HumanBodyBones.LeftUpperLeg },
-            { HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg },
-            { HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot },
-            { HumanBodyBones.Hips, HumanBodyBones.RightUpperLeg },
-            { HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg },
-            { HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot },
-        };
-
-        private const float LineWidth = 0.018f;
-        private const float RootMarkerHalfSize = 0.16f;
-        private const float MinScaleForUncompensatedDebugLines = 0.25f;
-        private const float MaxDisplayScaleCompensation = 100f;
-        private const float MinLossyScaleForDebugLines = 0.0001f;
-        private static readonly Color LineColor = new Color(0.05f, 0.95f, 1f, 0.92f);
-        private static readonly Color RootMarkerColor = new Color(1f, 0.85f, 0.05f, 0.95f);
-
-        private readonly List<LineRenderer> boneLines = new List<LineRenderer>();
-        private readonly List<LineRenderer> rootMarkerLines = new List<LineRenderer>();
-        private Animator animator;
-        private Material lineMaterial;
-        private bool initialized;
-        private bool visible;
-
-        public void SetVisible(bool value)
-        {
-            visible = value;
-            enabled = value;
-            EnsureInitialized();
-            SetLinesEnabled(value);
-        }
-
-        private void Awake()
-        {
-            animator = GetComponent<Animator>();
-        }
-
-        private void LateUpdate()
-        {
-            if (!visible)
-            {
-                return;
-            }
-
-            EnsureInitialized();
-            UpdateRootMarker();
-            UpdateBoneLines();
-        }
-
-        private void OnDestroy()
-        {
-            if (lineMaterial != null)
-            {
-                Destroy(lineMaterial);
-            }
-        }
-
-        private void EnsureInitialized()
-        {
-            animator = animator != null ? animator : GetComponent<Animator>();
-            if (initialized)
-            {
-                return;
-            }
-
-            Shader shader = Shader.Find("Sprites/Default");
-            Shader fallbackShader = Shader.Find("Unlit/Color");
-            lineMaterial = new Material(shader != null ? shader : fallbackShader);
-            lineMaterial.color = LineColor;
-
-            for (int i = 0; i < BonePairs.GetLength(0); i++)
-            {
-                boneLines.Add(CreateLine($"GhostBoneLine_{i:00}", LineColor));
-            }
-
-            for (int i = 0; i < 3; i++)
-            {
-                rootMarkerLines.Add(CreateLine($"GhostRootMarker_{i:00}", RootMarkerColor));
-            }
-
-            initialized = true;
-        }
-
-        private LineRenderer CreateLine(string lineName, Color color)
-        {
-            var lineObject = new GameObject(lineName);
-            lineObject.transform.SetParent(transform, false);
-            var line = lineObject.AddComponent<LineRenderer>();
-            line.useWorldSpace = true;
-            line.positionCount = 2;
-            line.startWidth = LineWidth;
-            line.endWidth = LineWidth;
-            line.numCapVertices = 2;
-            line.numCornerVertices = 2;
-            line.material = lineMaterial;
-            line.startColor = color;
-            line.endColor = color;
-            line.enabled = visible;
-            return line;
-        }
-
-        private void SetLinesEnabled(bool enabledValue)
-        {
-            foreach (LineRenderer line in boneLines)
-            {
-                if (line != null)
-                {
-                    line.enabled = enabledValue;
-                }
-            }
-
-            foreach (LineRenderer line in rootMarkerLines)
-            {
-                if (line != null)
-                {
-                    line.enabled = enabledValue;
-                }
-            }
-        }
-
-        private void UpdateRootMarker()
-        {
-            Vector3 center = transform.position;
-            SetLine(rootMarkerLines[0], center - Vector3.right * RootMarkerHalfSize, center + Vector3.right * RootMarkerHalfSize, true);
-            SetLine(rootMarkerLines[1], center - Vector3.up * RootMarkerHalfSize, center + Vector3.up * RootMarkerHalfSize, true);
-            SetLine(rootMarkerLines[2], center - Vector3.forward * RootMarkerHalfSize, center + Vector3.forward * RootMarkerHalfSize, true);
-        }
-
-        private void UpdateBoneLines()
-        {
-            for (int i = 0; i < BonePairs.GetLength(0); i++)
-            {
-                Transform from = GetBone(BonePairs[i, 0]);
-                Transform to = GetBone(BonePairs[i, 1]);
-                bool hasPair = from != null && to != null;
-                SetLine(
-                    boneLines[i],
-                    hasPair ? GetDebugWorldPosition(from) : Vector3.zero,
-                    hasPair ? GetDebugWorldPosition(to) : Vector3.zero,
-                    hasPair);
-            }
-        }
-
-        private Transform GetBone(HumanBodyBones bone)
-        {
-            if (animator == null || !animator.isHuman)
-            {
-                return null;
-            }
-
-            return animator.GetBoneTransform(bone);
-        }
-
-        private Vector3 GetDebugWorldPosition(Transform bone)
-        {
-            Vector3 center = transform.position;
-            float displayScale = CalculateDisplayScaleCompensation(transform.lossyScale);
-            return center + (bone.position - center) * displayScale;
-        }
-
-        private static float CalculateDisplayScaleCompensation(Vector3 lossyScale)
-        {
-            float maxScale = Mathf.Max(
-                Mathf.Abs(lossyScale.x),
-                Mathf.Abs(lossyScale.y),
-                Mathf.Abs(lossyScale.z));
-
-            if (maxScale <= MinLossyScaleForDebugLines || maxScale >= MinScaleForUncompensatedDebugLines)
-            {
-                return 1f;
-            }
-
-            return Mathf.Min(MaxDisplayScaleCompensation, 1f / maxScale);
-        }
-
-        private static void SetLine(LineRenderer line, Vector3 from, Vector3 to, bool enabledValue)
-        {
-            if (line == null)
-            {
-                return;
-            }
-
-            line.enabled = enabledValue;
-            if (!enabledValue)
-            {
-                return;
-            }
-
-            line.SetPosition(0, from);
-            line.SetPosition(1, to);
         }
     }
 }

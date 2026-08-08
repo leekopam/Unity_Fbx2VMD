@@ -49,5 +49,17 @@ namespace Fbx2Vmd.FBXImporter
         {
             return _pipeline.ProcessFBXSessionAsync(request.SourcePath);
         }
+
+        /// <summary>
+        /// 세션 상태 변경을 단일 조정자 경로로 전달함.
+        /// </summary>
+        internal void SetSessionState(
+            FBXVmdPipeline.FBXSessionState state,
+            string message,
+            float progress,
+            bool shouldLog = true)
+        {
+            _pipeline.ApplySessionState(state, message, progress, shouldLog);
+        }
     }
 }
