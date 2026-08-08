@@ -735,6 +735,31 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ThumbRiskValueAboveWarning_When_EvaluatingRiskAbove_Then_ReturnsNormalizedRisk()
+        {
+            Assert.That(ThumbRiskEvaluator.RiskAbove(5f, 3f, 7f), Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(ThumbRiskEvaluator.RiskAbove(3f, 3f, 7f), Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(float.IsNaN(ThumbRiskEvaluator.RiskAbove(float.NaN, 3f, 7f)), Is.True);
+        }
+
+        [Test]
+        public void Given_ThumbRiskValueOutsideRange_When_EvaluatingRiskOutsideRange_Then_ReturnsNormalizedRisk()
+        {
+            Assert.That(ThumbRiskEvaluator.RiskOutsideRange(-0.25f, 0f, 1f, 0.5f), Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(ThumbRiskEvaluator.RiskOutsideRange(1.25f, 0f, 1f, 0.5f), Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(ThumbRiskEvaluator.RiskOutsideRange(0.5f, 0f, 1f, 0.5f), Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ThumbWebbingRiskInputs_When_EvaluatingPoseRisk_Then_ReturnsLargestFiniteRisk()
+        {
+            Assert.That(ThumbRiskEvaluator.MaxFinite(float.NaN, 0.25f, 0.75f), Is.EqualTo(0.75f).Within(0.0001f));
+            Assert.That(
+                ThumbRiskEvaluator.CalculateThumbWebbingPoseRisk(float.NaN, 0.25f, 0.75f, float.NaN),
+                Is.EqualTo(0.75f).Within(0.0001f));
+        }
+
+        [Test]
         public void MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier()
         {
             AssertSceneRootMotionPolicy(

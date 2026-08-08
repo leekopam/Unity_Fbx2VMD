@@ -48,6 +48,15 @@ namespace Tests.Editor.FBXImporter
                 nameof(MmdExportSafetyDefaultsTests.Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve),
                 () => new MmdExportSafetyDefaultsTests().Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ThumbRiskValueAboveWarning_When_EvaluatingRiskAbove_Then_ReturnsNormalizedRisk),
+                () => new MmdExportSafetyDefaultsTests().Given_ThumbRiskValueAboveWarning_When_EvaluatingRiskAbove_Then_ReturnsNormalizedRisk());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ThumbRiskValueOutsideRange_When_EvaluatingRiskOutsideRange_Then_ReturnsNormalizedRisk),
+                () => new MmdExportSafetyDefaultsTests().Given_ThumbRiskValueOutsideRange_When_EvaluatingRiskOutsideRange_Then_ReturnsNormalizedRisk());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
+                nameof(MmdExportSafetyDefaultsTests.Given_ThumbWebbingRiskInputs_When_EvaluatingPoseRisk_Then_ReturnsLargestFiniteRisk),
+                () => new MmdExportSafetyDefaultsTests().Given_ThumbWebbingRiskInputs_When_EvaluatingPoseRisk_Then_ReturnsLargestFiniteRisk());
+            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik),
                 () => new MmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
