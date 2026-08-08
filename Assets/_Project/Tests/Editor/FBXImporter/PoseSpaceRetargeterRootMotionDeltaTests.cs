@@ -278,7 +278,7 @@ namespace Tests.Editor.FBXImporter
             out bool skippedByNonFinite,
             out bool skippedBySpike)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetNestedType("PoseSpaceRootController", BindingFlags.NonPublic).GetMethod(
                 "CalculateRetargetRootDelta",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,

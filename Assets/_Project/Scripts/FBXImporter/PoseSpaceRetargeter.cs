@@ -1,7 +1,5 @@
 using UnityEngine;
 using UnityEngine.Serialization;
-using UnityEngine.Playables;
-using UnityEngine.Animations;
 using System;
 using System.Collections.Generic;
 using RootMotion;
@@ -31,8 +29,16 @@ namespace Fbx2Vmd.FBXImporter
         private readonly Dictionary<Transform, Vector3> _rightSleeveSilhouetteLocalOffsetBaseLocalPositions =
             new Dictionary<Transform, Vector3>();
         private PoseSpaceDiagnostics _diagnostics;
+        private LegacyAnimationDriver _legacyAnimationDriver;
+        private PoseSpaceGuardPipeline _guardPipeline;
+        private PoseSpaceGroundingController _groundingController;
+        private PoseSpaceRootController _rootController;
 
         private PoseSpaceDiagnostics Diagnostics => _diagnostics ?? (_diagnostics = new PoseSpaceDiagnostics(this));
+        private LegacyAnimationDriver AnimationDriver => _legacyAnimationDriver ?? (_legacyAnimationDriver = new LegacyAnimationDriver(this));
+        private PoseSpaceGuardPipeline GuardPipeline => _guardPipeline ?? (_guardPipeline = new PoseSpaceGuardPipeline(this));
+        private PoseSpaceGroundingController GroundingController => _groundingController ?? (_groundingController = new PoseSpaceGroundingController(this));
+        private PoseSpaceRootController RootController => _rootController ?? (_rootController = new PoseSpaceRootController(this));
         [Header("--- CORE COMPONENTS ---")]
         [FormerlySerializedAs("ghostAnimator")]
         [SerializeField] private Animator _ghostAnimator;  // (Container 내부의 모델)
@@ -2409,14 +2415,10 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (!_isInitialized || ghostAnimator == null || targetAnimator == null || _ghostHandler == null || _targetHandler == null) return;
 
-            UpdateLegacyAnimationVisualStep();
+            AnimationDriver.UpdateLegacyAnimationVisualStep();
 
             // 스케일 비율 계산 (매 프레임 체크하여 안정성 확보)
-            // Container가 작동 중이라면 ghostHip.position.y는 ~0.8m 수준이어야 함.
-            Transform ghostHip = ghostAnimator.GetBoneTransform(HumanBodyBones.Hips);
-            Transform targetHip = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
-
-            _scaleRatio = CalculateSafeScaleRatio(ghostHip, targetHip);
+            RootController.ComputeScaleRatio();
 
             // 포즈(근육) 동기화
             Diagnostics.ResetRetargetPoseStageDiagnostics();
@@ -2438,12 +2440,12 @@ namespace Fbx2Vmd.FBXImporter
             Diagnostics.CaptureAfterEditorMuscleReferenceDiagnostics(_humanPose);
             ApplyEditorHumanoidFingerPoseReference(ref _humanPose);
             ApplyEditorHumanoidBodyRotationReference(ref _humanPose);
-            ApplyThumbAnatomicalGuard(ref _humanPose, ShouldApplyThumbStretchOffset());
-            ClampPoseMuscles(ref _humanPose);
+            GuardPipeline.ApplyThumbAnatomicalGuard(ref _humanPose, GuardPipeline.ShouldApplyThumbStretchOffset());
+            GuardPipeline.ClampPoseMuscles(ref _humanPose);
             Diagnostics.CaptureAfterClampPoseMusclesDiagnostics(_humanPose);
-            ApplyAnatomicalArmGuard(ref _humanPose);
+            GuardPipeline.ApplyAnatomicalArmGuard(ref _humanPose);
             Diagnostics.CaptureAfterAnatomicalArmGuardDiagnostics(_humanPose);
-            SmoothPoseOnVisualSpike(ref _humanPose);
+            GuardPipeline.SmoothPoseOnVisualSpike(ref _humanPose);
             Diagnostics.CaptureAfterVisualSpikeSmoothingDiagnostics(_humanPose);
             Quaternion poseRootRotation = _humanPose.bodyRotation;
             if (ShouldPreserveFbxRootRotation && !_hasPoseRootRotationCorrection && IsFinite(poseRootRotation) && _legacyAnim != null && _legacyAnim.isPlaying)
@@ -2453,79 +2455,18 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             // Y축은 target 기준으로 안정화하고, X/Z 체중 이동은 FBX 값을 유지한다.
-            Vector3 bodyPos = _humanPose.bodyPosition;
-            bodyPos.x *= _scaleRatio;
-            bodyPos.z *= _scaleRatio;
-            Vector3 bodyRootMotionSource = bodyPos;
-#if UNITY_EDITOR
-            bodyRootMotionSource = SelectBodyPositionRootMotionSource(
-                bodyPos,
-                _editorReferenceBodyPosition,
-                _hasEditorReferenceBodyPosition,
-                ShouldUseManualAnimatorBodyRotationReference);
-#endif
-            Vector3 bodyRootDelta = ExtractBodyPositionXZRootDelta(bodyRootMotionSource);
-            if (preserveTargetBodyPosition && _hasTargetReferenceBodyPosition)
+            if (!RootController.ProcessBodyPosition(ref _humanPose))
             {
-                bodyPos = _targetReferenceBodyPosition;
-                // 수동 기준 Animator의 bodyPos.y로 Y를 대체: ghost Legacy bodyPos 스파이크 없이 애니메이션 높이를 따른다.
-                if (ShouldUseManualAnimatorBodyPositionYReference && _hasEditorReferenceBodyPosition)
-                {
-                    bodyPos.y = _editorReferenceBodyPosition.y;
-                }
-            }
-            else
-            {
-                bodyPos.y *= _scaleRatio;
-            }
-#if UNITY_EDITOR
-            float manualBodyPositionXzFrameGateWeight =
-                ResolveManualAnimatorBodyPositionXzFrameGateWeight();
-            if (ShouldUseManualAnimatorBodyPositionXzReference &&
-                manualBodyPositionXzFrameGateWeight > 0f &&
-                _hasEditorReferenceBodyPosition &&
-                TryCalculateManualAnimatorBodyPositionXzReference(
-                    bodyPos,
-                    _editorReferenceBodyPosition,
-                    manualAnimatorBodyPositionXzReferenceWeight * manualBodyPositionXzFrameGateWeight,
-                    manualAnimatorBodyPositionXzReferenceMaxOffset,
-                    manualAnimatorBodyPositionXzReferenceAxisXScale,
-                    manualAnimatorBodyPositionXzReferenceAxisZScale,
-                    out Vector3 manualBodyPositionXz))
-            {
-                bodyPos = manualBodyPositionXz;
-                if (!_editorBodyPositionXzReferenceLogged)
-                {
-                    Debug.Log(
-                        $"[PoseSpaceRetargeter] Manual Animator bodyPosition X/Z reference applied. " +
-                        $"weight={manualAnimatorBodyPositionXzReferenceWeight:F2}, " +
-                        $"maxOffset={manualAnimatorBodyPositionXzReferenceMaxOffset:F3}m, " +
-                        $"frameGate={manualAnimatorBodyPositionXzReferenceFrameGateStart:F0}-{manualAnimatorBodyPositionXzReferenceFrameGateEnd:F0}, " +
-                        $"blendFrames={manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames:F0}, " +
-                        $"axisScale={manualAnimatorBodyPositionXzReferenceAxisXScale:F2}/{manualAnimatorBodyPositionXzReferenceAxisZScale:F2}");
-                    _editorBodyPositionXzReferenceLogged = true;
-                }
-            }
-#endif
-            if (!IsFinite(bodyPos))
-            {
-                LogPoseWarning("Retarget body position became non-finite. Skipping this retarget frame.");
                 RestoreTargetLocalScales();
                 return;
             }
-            _humanPose.bodyPosition = bodyPos;
 
-            Vector3 rootMotionCarrierPositionBeforePose = targetAnimator.transform.position;
-            Vector3 poseSolveRootPosition = SelectPoseSolveRootPosition(
-                rootMotionCarrierPositionBeforePose,
-                _hasTargetRootPoseGuardAnchorPosition ? _targetRootPoseGuardAnchorPosition : rootMotionCarrierPositionBeforePose,
-                useBodyPositionXZRootMotion);
-            if (IsFinite(poseSolveRootPosition))
-            {
-                targetAnimator.transform.position = poseSolveRootPosition;
-            }
+            Vector3 targetPositionBeforePose;
+            RootController.BeginSetHumanPoseRoot();
+            targetPositionBeforePose = targetAnimator.transform.position;
 
-            Vector3 targetPositionBeforePose = targetAnimator.transform.position;
+
+
             _lastSetHumanPosePreSolveCurrentEndpointPositions = Diagnostics.CaptureEndpointStageWorldPositions(targetAnimator);
 #if UNITY_EDITOR
             ApplyPreSetHumanPoseSignCorrectedRowLocalBodyPositionReference(ref _humanPose);
@@ -2560,20 +2501,7 @@ namespace Fbx2Vmd.FBXImporter
             ApplyEditorHumanoidThumbHandDirectionReference();
             ApplyYybRightSleeveSilhouetteLocalOffsetReference();
 #endif
-            ClampTargetRootPositionSpike(targetPositionBeforePose, "SetHumanPose");
-            Vector3 implicitRootGuardReference = SelectImplicitRootGuardReference(
-                _hasTargetRootPoseGuardAnchorPosition ? _targetRootPoseGuardAnchorPosition : targetPositionBeforePose,
-                targetPositionBeforePose,
-                _movementScaleMultiplier);
-            targetAnimator.transform.position = ApplyImplicitBodyPositionRootGuard(
-                implicitRootGuardReference,
-                targetAnimator.transform.position,
-                useBodyPositionXZRootMotion,
-                bodyRootDelta);
-            targetAnimator.transform.position = RestoreRootMotionCarrierPositionAfterPose(
-                rootMotionCarrierPositionBeforePose,
-                targetAnimator.transform.position,
-                useBodyPositionXZRootMotion);
+            RootController.EndSetHumanPoseRoot(targetPositionBeforePose);
             _lastRetargetStageAfterRootRestoreEndpointPositions = Diagnostics.CaptureEndpointStageWorldPositions(targetAnimator);
 
             // 월드 회전 동기화 (180도 문제 해결)
@@ -2596,56 +2524,13 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             // 루트 모션 동기화 (호 그리기 방지)
-            // Ghost 이동량 계산
-            Vector3 ghostDelta = ghostAnimator.transform.position - _prevGhostPos;
-            Vector3 editorRootTranslationDelta = ExtractEditorRootTranslationDelta(ghostDelta);
-
-            // 내 캐릭터 크기에 맞춰 이동량 스케일링
-            Vector3 targetDelta = CalculateRetargetRootDelta(
-                ghostDelta,
-                _scaleRatio,
-                editorRootTranslationDelta,
-                bodyRootDelta,
-                _movementScaleMultiplier,
-                useBodyPositionXZRootMotion,
-                clampRootDeltaSpikes,
-                maxRootDeltaPerFrame,
-                out float targetDeltaMagnitude,
-                out bool skippedByNonFinite,
-                out bool limitedBySpike);
-            if (skippedByNonFinite)
-            {
-                LogPoseWarning("Retarget root delta became non-finite. Skipping root motion for this frame.");
-                _lastRootDeltaMagnitude = float.NaN;
-                _rootDeltaSpikeSkippedCount++;
-            }
-            else
-            {
-                _lastRootDeltaMagnitude = targetDeltaMagnitude;
-                _maxRootDeltaMagnitude = Mathf.Max(_maxRootDeltaMagnitude, _lastRootDeltaMagnitude);
-
-                if (limitedBySpike)
-                {
-                    _rootDeltaSpikeSkippedCount++;
-                    if (logRootDeltaSpikes && !_rootDeltaSpikeWarningLogged)
-                    {
-                        Debug.LogWarning($"[PoseSpaceRetargeter] Root delta spike {_lastRootDeltaMagnitude:F3}m limited. ghostDelta={ghostDelta.magnitude:F3}m, editorRootDelta={editorRootTranslationDelta.magnitude:F3}m, limit={maxRootDeltaPerFrame:F3}m");
-                        _rootDeltaSpikeWarningLogged = true;
-                    }
-                }
-            }
-
-            // 이동 적용
-            targetAnimator.transform.position += targetDelta;
+            RootController.ApplyRootDelta();
             _lastRetargetStageAfterRootDeltaEndpointPositions = Diagnostics.CaptureEndpointStageWorldPositions(targetAnimator);
-
-            // 위치 갱신
-            _prevGhostPos = ghostAnimator.transform.position;
 
             // 스마트 접지 (Raycast Grounding) - 공중 부양 해결
             if (useSmartGrounding)
             {
-                ApplyRaycastGrounding();
+                GroundingController.ApplyRaycastGrounding();
             }
             _lastRetargetStageAfterGroundingEndpointPositions = Diagnostics.CaptureEndpointStageWorldPositions(targetAnimator);
 
@@ -2657,44 +2542,6 @@ namespace Fbx2Vmd.FBXImporter
             Diagnostics.CaptureRetargetEndpointStageAttributionDiagnostics();
         }
 
-        private static Vector3 CalculateRetargetRootDelta(
-            Vector3 ghostDelta,
-            float scaleRatio,
-            Vector3 editorRootTranslationDelta,
-            Vector3 bodyRootDelta,
-            float movementScaleMultiplier,
-            bool useBodyPositionXZRootMotion,
-            bool clampRootDeltaSpikes,
-            float maxRootDeltaPerFrame,
-            out float deltaMagnitude,
-            out bool skippedByNonFinite,
-            out bool limitedBySpike)
-        {
-            skippedByNonFinite = false;
-            limitedBySpike = false;
-
-            Vector3 targetDelta = useBodyPositionXZRootMotion
-                ? bodyRootDelta * movementScaleMultiplier
-                : (ghostDelta * scaleRatio + editorRootTranslationDelta) * movementScaleMultiplier;
-            if (!IsFinite(targetDelta))
-            {
-                deltaMagnitude = float.NaN;
-                skippedByNonFinite = true;
-                return Vector3.zero;
-            }
-
-            deltaMagnitude = targetDelta.magnitude;
-            if (clampRootDeltaSpikes && deltaMagnitude > maxRootDeltaPerFrame)
-            {
-                limitedBySpike = true;
-                Vector3 limitedDelta = Vector3.ClampMagnitude(targetDelta, Mathf.Max(0f, maxRootDeltaPerFrame));
-                deltaMagnitude = limitedDelta.magnitude;
-                return limitedDelta;
-            }
-
-            return targetDelta;
-        }
-
         private static float NormalizeMovementScaleMultiplier(float value)
         {
             if (!IsFinite(value))
@@ -2703,366 +2550,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return Mathf.Clamp(value, 0f, 1.5f);
-        }
-
-        private void UpdateLegacyAnimationVisualStep()
-        {
-            _legacyAnimationStepSpikeThisFrame = false;
-
-            if (_legacyAnim == null)
-            {
-                return;
-            }
-
-            AnimationState state = _legacyAnim[LegacyClipStateName];
-            if (state == null)
-            {
-                return;
-            }
-
-            float length = Mathf.Max(0f, state.length);
-            float currentTime = Mathf.Clamp(state.time, 0f, length);
-            if (!_hasPreviousLegacyAnimationTime)
-            {
-                _previousLegacyAnimationTime = currentTime;
-                _hasPreviousLegacyAnimationTime = true;
-                _lastLegacyAnimationStep = 0f;
-                return;
-            }
-
-            if (TryCalculateManualLegacyAnimationTime(
-                currentTime,
-                _previousLegacyAnimationTime,
-                length,
-                state.speed,
-                Time.deltaTime,
-                Application.isPlaying,
-                out float manualAnimationTime))
-            {
-                currentTime = manualAnimationTime;
-                state.enabled = true;
-                state.time = currentTime;
-                _legacyAnim.Sample();
-            }
-
-            float maxStep = 1f / Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            if (TryClampLegacyAnimationEndWrap(
-                currentTime,
-                _previousLegacyAnimationTime,
-                length,
-                maxStep,
-                out float clampedEndTime))
-            {
-                currentTime = clampedEndTime;
-                state.enabled = true;
-                state.time = currentTime;
-                state.speed = 0f;
-                _legacyAnim.Sample();
-            }
-
-            if (currentTime + 0.0001f < _previousLegacyAnimationTime)
-            {
-                _previousLegacyAnimationTime = currentTime;
-                _lastLegacyAnimationStep = 0f;
-                ResetVisualPoseHistory();
-                return;
-            }
-
-            float step = currentTime - _previousLegacyAnimationTime;
-            _lastLegacyAnimationStep = step;
-            _maxLegacyAnimationStep = Mathf.Max(_maxLegacyAnimationStep, step);
-            float spikeTolerance = Mathf.Max(0.001f, maxStep * 0.05f);
-            if (step > maxStep + spikeTolerance)
-            {
-                _legacyAnimationStepSpikeThisFrame = true;
-                _legacyAnimationStepSpikeCount++;
-                if (clampLegacyAnimationVisualStep)
-                {
-                    currentTime = Mathf.Min(_previousLegacyAnimationTime + maxStep, length);
-                    state.time = currentTime;
-                    _legacyAnim.Sample();
-                    step = currentTime - _previousLegacyAnimationTime;
-                    _lastLegacyAnimationStep = step;
-                }
-            }
-
-            _previousLegacyAnimationTime = currentTime;
-        }
-
-        private static bool TryCalculateManualLegacyAnimationTime(
-            float currentTime,
-            float previousTime,
-            float length,
-            float playbackSpeed,
-            float deltaTime,
-            bool isPlaying,
-            out float manualAnimationTime)
-        {
-            manualAnimationTime = currentTime;
-
-            if (!isPlaying ||
-                length <= 0f ||
-                currentTime > previousTime + 0.0001f ||
-                currentTime + 0.0001f < previousTime ||
-                previousTime >= length - 0.0001f)
-            {
-                return false;
-            }
-
-            float effectivePlaybackSpeed = Mathf.Approximately(playbackSpeed, 0f)
-                ? 1f
-                : Mathf.Abs(playbackSpeed);
-            float manualStep = Mathf.Max(0f, deltaTime * effectivePlaybackSpeed);
-            if (manualStep <= 0f)
-            {
-                return false;
-            }
-
-            manualAnimationTime = Mathf.Min(previousTime + manualStep, length);
-            return true;
-        }
-
-        private static bool TryClampLegacyAnimationEndWrap(
-            float currentTime,
-            float previousTime,
-            float length,
-            float maxStep,
-            out float clampedTime)
-        {
-            clampedTime = currentTime;
-
-            if (!IsFinite(currentTime) ||
-                !IsFinite(previousTime) ||
-                !IsFinite(length) ||
-                !IsFinite(maxStep) ||
-                length <= 0f ||
-                maxStep <= 0f ||
-                currentTime + 0.0001f >= previousTime)
-            {
-                return false;
-            }
-
-            float endWindow = Mathf.Max(0.01f, maxStep * 2f + 0.005f);
-            if (previousTime < length - endWindow || currentTime > endWindow)
-            {
-                return false;
-            }
-
-            clampedTime = length;
-            return true;
-        }
-
-        private void SmoothPoseOnVisualSpike(ref HumanPose pose)
-        {
-            if (!smoothPoseOnLegacyAnimationStepSpike || pose.muscles == null || pose.muscles.Length == 0)
-            {
-                RememberVisualPose(pose);
-                return;
-            }
-
-            if (!_hasPreviousVisualPose ||
-                _previousVisualPoseMuscles == null ||
-                _previousVisualPoseMuscles.Length != pose.muscles.Length)
-            {
-                RememberVisualPose(pose);
-                return;
-            }
-
-            float maxMuscleDelta = 0f;
-            for (int i = 0; i < pose.muscles.Length; i++)
-            {
-                float delta = Mathf.Abs(pose.muscles[i] - _previousVisualPoseMuscles[i]);
-                if (delta > maxMuscleDelta)
-                {
-                    maxMuscleDelta = delta;
-                }
-            }
-
-            _lastPoseVisualMaxMuscleDelta = maxMuscleDelta;
-            _maxPoseVisualMaxMuscleDelta = Mathf.Max(_maxPoseVisualMaxMuscleDelta, maxMuscleDelta);
-
-            float bodyPositionDelta = Vector3.Distance(_previousVisualPoseBodyPosition, pose.bodyPosition);
-            float bodyRotationDelta = Quaternion.Angle(_previousVisualPoseBodyRotation, pose.bodyRotation);
-            bool shouldSmooth = ShouldSmoothVisualPoseSpike(
-                maxMuscleDelta,
-                bodyPositionDelta,
-                bodyRotationDelta,
-                poseVisualMuscleDeltaThreshold,
-                _legacyAnimationStepSpikeThisFrame,
-                out bool muscleDeltaOnlySpike);
-
-            if (shouldSmooth)
-            {
-                float currentWeight = CalculateVisualPoseSpikeCurrentWeight(
-                    poseVisualSpikeCurrentWeight,
-                    bodyPositionDelta,
-                    bodyRotationDelta,
-                    _legacyAnimationStepSpikeThisFrame);
-                bool useEditorHumanoidMuscleReference = false;
-#if UNITY_EDITOR
-                useEditorHumanoidMuscleReference = _useEditorHumanoidMuscleReference;
-#endif
-                for (int i = 0; i < pose.muscles.Length; i++)
-                {
-                    bool hasEditorHumanoidMuscleReferenceCurve = false;
-#if UNITY_EDITOR
-                    hasEditorHumanoidMuscleReferenceCurve = _editorHumanoidMuscleCurves.ContainsKey(i);
-#endif
-                    pose.muscles[i] = BlendVisualPoseSpikeMuscle(
-                        _previousVisualPoseMuscles[i],
-                        pose.muscles[i],
-                        currentWeight,
-                        i,
-                        useEditorHumanoidMuscleReference,
-                        hasEditorHumanoidMuscleReferenceCurve,
-                        poseVisualSpikeForearmStretchClampMaxOffset);
-                }
-
-                pose.bodyPosition = Vector3.Lerp(_previousVisualPoseBodyPosition, pose.bodyPosition, currentWeight);
-                pose.bodyRotation = Quaternion.Slerp(_previousVisualPoseBodyRotation, pose.bodyRotation, currentWeight);
-                _poseVisualSmoothingCount++;
-            }
-            else if (muscleDeltaOnlySpike)
-            {
-                // 빠른 손/팔 동작 자체를 smoothing하면 의도한 동작이 멈칫하고 몸통이 늦게 따라오는 것처럼 보인다.
-                _poseVisualMuscleDeltaOnlySkippedCount++;
-            }
-
-            RememberVisualPose(pose);
-        }
-
-        private static float CalculateVisualPoseSpikeCurrentWeight(
-            float configuredWeight,
-            float bodyPositionDelta,
-            float bodyRotationDelta,
-            bool legacyAnimationStepSpikeThisFrame)
-        {
-            float currentWeight = Mathf.Clamp(configuredWeight, 0.1f, 1f);
-            if (IsBodyPoseSpike(bodyPositionDelta, bodyRotationDelta))
-            {
-                return Mathf.Min(currentWeight, 0.1f);
-            }
-
-            return currentWeight;
-        }
-
-        private static float BlendVisualPoseSpikeMuscle(
-            float previousValue,
-            float currentValue,
-            float currentWeight,
-            int muscleIndex,
-            bool useEditorHumanoidMuscleReference,
-            bool hasEditorHumanoidMuscleReferenceCurve,
-            float forearmStretchClampMaxOffset)
-        {
-            if (ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
-                muscleIndex,
-                useEditorHumanoidMuscleReference,
-                hasEditorHumanoidMuscleReferenceCurve))
-            {
-                return currentValue;
-            }
-
-            float blended = Mathf.Lerp(previousValue, currentValue, currentWeight);
-            return ClampForearmStretchVisualSpikeBlend(
-                previousValue,
-                currentValue,
-                blended,
-                muscleIndex,
-                forearmStretchClampMaxOffset);
-        }
-
-        private static float ClampForearmStretchVisualSpikeBlend(
-            float previousValue,
-            float currentValue,
-            float blendedValue,
-            int muscleIndex,
-            float maxOffset)
-        {
-            if (maxOffset <= 0f ||
-                !IsForearmStretchMuscleIndex(muscleIndex) ||
-                !IsFinite(previousValue) ||
-                !IsFinite(currentValue) ||
-                !IsFinite(blendedValue))
-            {
-                return blendedValue;
-            }
-
-            if (currentValue > ForearmStretchVisualClampCurrentMax)
-            {
-                return blendedValue;
-            }
-
-            float safeOffset = Mathf.Clamp01(maxOffset);
-            return Mathf.Clamp(
-                blendedValue,
-                currentValue - safeOffset,
-                currentValue + safeOffset);
-        }
-
-        private static bool ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
-            int muscleIndex,
-            bool useEditorHumanoidMuscleReference,
-            bool hasEditorHumanoidMuscleReferenceCurve)
-        {
-#if UNITY_EDITOR
-            return useEditorHumanoidMuscleReference &&
-                hasEditorHumanoidMuscleReferenceCurve &&
-                ShouldUseEditorHumanoidMuscleReference(muscleIndex);
-#else
-            return false;
-#endif
-        }
-
-        private static bool IsForearmStretchMuscleIndex(int muscleIndex)
-        {
-            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
-            return normalized.Contains("forearm") && normalized.Contains("stretch");
-        }
-
-        private static bool ShouldSmoothVisualPoseSpike(
-            float maxMuscleDelta,
-            float bodyPositionDelta,
-            float bodyRotationDelta,
-            float poseVisualMuscleDeltaThreshold,
-            bool legacyAnimationStepSpikeThisFrame,
-            out bool muscleDeltaOnlySpike)
-        {
-            bool bodyPoseSpike = IsBodyPoseSpike(bodyPositionDelta, bodyRotationDelta);
-            muscleDeltaOnlySpike = maxMuscleDelta > poseVisualMuscleDeltaThreshold &&
-                !legacyAnimationStepSpikeThisFrame &&
-                !bodyPoseSpike;
-
-            return legacyAnimationStepSpikeThisFrame || bodyPoseSpike;
-        }
-
-        private static bool IsBodyPoseSpike(float bodyPositionDelta, float bodyRotationDelta)
-        {
-            return bodyPositionDelta > BodyPositionVisualSpikeThreshold ||
-                bodyRotationDelta > BodyRotationVisualSpikeThresholdDegrees;
-        }
-
-        private void RememberVisualPose(HumanPose pose)
-        {
-            if (pose.muscles == null || pose.muscles.Length == 0 || !IsFinite(pose))
-            {
-                return;
-            }
-
-            if (_previousVisualPoseMuscles == null || _previousVisualPoseMuscles.Length != pose.muscles.Length)
-            {
-                _previousVisualPoseMuscles = new float[pose.muscles.Length];
-            }
-
-            Array.Copy(pose.muscles, _previousVisualPoseMuscles, pose.muscles.Length);
-            _previousVisualPoseBodyPosition = pose.bodyPosition;
-            _previousVisualPoseBodyRotation = pose.bodyRotation;
-            _hasPreviousVisualPose = true;
         }
 
         private void ResetVisualPoseHistory()

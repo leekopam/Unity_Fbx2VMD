@@ -34,68 +34,14 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureAntennaTailHelperEvidenceCommand = "capture_antenna_tail_helper_evidence";
         private const string CaptureAntennaTailHelperEvidenceCleanCommand = "capture_antenna_tail_helper_evidence_clean";
         private const string CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand = "capture_antenna_tail_helper_evidence_resume_after_clean";
-        private const string SatisfactionFbxFileName = "satisfaction_2.fbx";
         private const float QuickVmdSmokeDurationSeconds = 2f;
         private const int QuickVmdSmokeTargetFrameCount = 60;
         private const float SmokeDurationSeconds = 31f;
         private const float SmokeFrameRate = 30f;
         private const float SmokeStartDelaySeconds = 0.2f;
-        private const float SatisfactionFullRegressionEvidenceDurationSeconds = 207.7833f;
-        private const int FullRegressionEvidenceCaptureWidth = 3840;
-        private const int FullRegressionEvidenceCaptureHeight = 2160;
-        private const float SatisfactionSmokeMidPeakTimeSeconds = 16.9f;
-        private const float SatisfactionSmokeLatePeakTimeSeconds = 27.2f;
-        private const float SatisfactionMiddleHelperEvidenceTimeSeconds = 102.125f;
-        private const float SatisfactionTailHelperEvidenceTimeSeconds = 181.25f;
-        private const float NeoMiddleHelperEvidenceTimeSeconds = 98.575f;
-        private const float NeoTailHelperEvidenceTimeSeconds = 183.85f;
-        private const float AntennaTailHelperEvidenceTimeSeconds = 188.567f;
-        private static readonly float[] SatisfactionSmokeSampleTimes =
-        {
-            ThumbEvidenceEarlyTimeSeconds,
-            ThumbEvidenceEarlyPeakTimeSeconds,
-            ThumbEvidencePeakTimeSeconds,
-            ThumbEvidenceTimeSeconds,
-            SatisfactionSmokeMidPeakTimeSeconds,
-            SatisfactionSmokeLatePeakTimeSeconds
-        };
-        private const float ThumbEvidenceEarlyTimeSeconds = 0.6f;
-        private const float ThumbEvidenceEarlyPeakTimeSeconds = 1f;
-        private const float ThumbEvidencePeakTimeSeconds = 12.6f;
-        private const float ThumbEvidenceTimeSeconds = 13.1f;
-        private const float ThumbEvidenceDurationSeconds = 14f;
-        private static readonly float[] ThumbEvidenceSampleTimes =
-        {
-            ThumbEvidenceEarlyTimeSeconds,
-            ThumbEvidenceEarlyPeakTimeSeconds,
-            ThumbEvidencePeakTimeSeconds,
-            ThumbEvidenceTimeSeconds
-        };
-        private static readonly float[] SatisfactionFullRegressionEvidenceSampleTimes =
-        {
-            ThumbEvidenceEarlyTimeSeconds,
-            ThumbEvidenceEarlyPeakTimeSeconds,
-            ThumbEvidencePeakTimeSeconds,
-            ThumbEvidenceTimeSeconds,
-            SatisfactionMiddleHelperEvidenceTimeSeconds,
-            SatisfactionTailHelperEvidenceTimeSeconds
-        };
-        private static readonly float[] SatisfactionMiddleHelperEvidenceSampleTimes =
-        {
-            SatisfactionMiddleHelperEvidenceTimeSeconds
-        };
-        private static readonly float[] SatisfactionTailHelperEvidenceSampleTimes =
-        {
-            SatisfactionTailHelperEvidenceTimeSeconds
-        };
-        private static readonly float[] NeoMiddleHelperEvidenceSampleTimes =
-        {
-            NeoMiddleHelperEvidenceTimeSeconds
-        };
-        private static readonly float[] NeoTailHelperEvidenceSampleTimes =
-        {
-            NeoTailHelperEvidenceTimeSeconds
-        };
+
+        // dataset slots — PERSONAL_LOCAL catalog defines which dataset maps to each slot
+        private const int DatasetSlotCount = 5;
 
         private static readonly Queue<string> PendingSmokeFiles = new Queue<string>();
         private static readonly List<string> BatchSuccesses = new List<string>();
@@ -106,8 +52,7 @@ namespace Fbx2Vmd.FBXImporter
         private static readonly string TracePath;
         private static FBXVmdPipeline _batchFBXVmdPipeline;
         private static FBXVmdPipeline _singleFBXVmdPipeline;
-        private static string _activeSingleFbxFileName;
-        private static string _singleSmokeMode;
+        private static string _activeSingleDatasetId;
         private static string _activeBatchFbxFileName;
         private static int _batchTotalCount;
         private static FBXVmdPipeline.EditorDiagnosticSmokeSegment _batchSegment = FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head;
@@ -150,6 +95,8 @@ namespace Fbx2Vmd.FBXImporter
             EditorApplication.update -= PollAutomationRequest;
             EditorApplication.update += PollAutomationRequest;
         }
+
+        // -- batch smoke (generic, scans directory) --
 
         [MenuItem(MenuRoot + "Run All Import_FBX 31s", false, 2090)]
         private static void RunAllImportFbxSmoke()
@@ -205,135 +152,112 @@ namespace Fbx2Vmd.FBXImporter
             StartSmokeBatch(fileManager, fbxFileNames, FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail);
         }
 
-        [MenuItem(MenuRoot + "Run satisfaction_2 Quick VMD Smoke 2s", false, 2099)]
-        private static void RunSatisfactionQuickVmdSmoke()
+        // -- single-smoke menu items (opaque IDs from catalog) --
+
+        [MenuItem(MenuRoot + "Run DS-01 (31s)", false, 2100)]
+        private static void RunDatasetSmoke01() { RunDatasetSmokeBySlot(0); }
+
+        [MenuItem(MenuRoot + "Run DS-02 (31s)", false, 2101)]
+        private static void RunDatasetSmoke02() { RunDatasetSmokeBySlot(1); }
+
+        [MenuItem(MenuRoot + "Run DS-03 (31s)", false, 2102)]
+        private static void RunDatasetSmoke03() { RunDatasetSmokeBySlot(2); }
+
+        [MenuItem(MenuRoot + "Run DS-04 (31s)", false, 2103)]
+        private static void RunDatasetSmoke04() { RunDatasetSmokeBySlot(3); }
+
+        [MenuItem(MenuRoot + "Run DS-05 (31s)", false, 2104)]
+        private static void RunDatasetSmoke05() { RunDatasetSmokeBySlot(4); }
+
+        // -- evidence capture menu items --
+
+        [MenuItem(MenuRoot + "Capture DS-01 Quick VMD Smoke 2s", false, 2099)]
+        private static void CaptureQuickVmdSmoke01()
         {
+            RunDatasetSmokeBySlot(0, QuickVmdSmokeDurationSeconds, false, null, "quick-vmd-smoke");
+        }
+
+        [MenuItem(MenuRoot + "Capture DS-01 Thumb Evidence", false, 2105)]
+        private static void CaptureThumbEvidence01()
+        {
+            SmokeDiagnosticDataset ds = GetDatasetSlot(0);
             RunSingleSmoke(
-                SatisfactionFbxFileName,
-                QuickVmdSmokeDurationSeconds,
-                enableFingerCloseups: false,
-                sampleTimesOverride: null,
-                mode: "quick-vmd-smoke");
-        }
-
-        [MenuItem(MenuRoot + "Run satisfaction_2 31s", false, 2100)]
-        private static void RunSatisfactionSmoke()
-        {
-            RunSingleSmoke(
-                SatisfactionFbxFileName,
-                SmokeDurationSeconds,
-                enableFingerCloseups: false,
-                sampleTimesOverride: SatisfactionSmokeSampleTimes);
-        }
-
-        [MenuItem(MenuRoot + "Run Antenna39 31s", false, 2101)]
-        private static void RunAntennaSmoke()
-        {
-            RunSingleSmoke("Antenna39 try_006 g.fbx");
-        }
-
-        [MenuItem(MenuRoot + "Run Snake 31s", false, 2102)]
-        private static void RunSnakeSmoke()
-        {
-            RunSingleSmoke("Snake Hip Hop Dance.fbx");
-        }
-
-        [MenuItem(MenuRoot + "Run mikumikuni_retake_000 31s", false, 2103)]
-        private static void RunMikumikuniSmoke()
-        {
-            RunSingleSmoke("mikumikuni_retake_000.fbx");
-        }
-
-        [MenuItem(MenuRoot + "Run neo_1_001 31s", false, 2104)]
-        private static void RunNeoSmoke()
-        {
-            RunSingleSmoke("neo_1_001.fbx");
-        }
-
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Thumb Evidence 0.6s+1.0s+12.6s+13.1s", false, 2105)]
-        private static void CaptureSatisfactionThumbEvidence()
-        {
-            RunSingleSmoke(
-                SatisfactionFbxFileName,
-                ThumbEvidenceDurationSeconds,
+                ds.Id,
+                SmokeDiagnosticDatasetCatalog.ThumbEvidenceDurationSeconds,
                 enableFingerCloseups: true,
-                sampleTimesOverride: ThumbEvidenceSampleTimes,
+                sampleTimesOverride: new[]
+                {
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyPeakTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidencePeakTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidenceTimeSeconds
+                },
                 mode: "thumb-evidence");
         }
 
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Full Regression Evidence 208s 4K", false, 2106)]
-        private static void CaptureSatisfactionFullRegressionEvidence()
+        [MenuItem(MenuRoot + "Capture DS-01 Full Regression Evidence 4K", false, 2106)]
+        private static void CaptureFullRegressionEvidence01()
         {
+            SmokeDiagnosticDataset ds = GetDatasetSlot(0);
             RunSingleSmoke(
-                SatisfactionFbxFileName,
-                SatisfactionFullRegressionEvidenceDurationSeconds,
+                ds.Id,
+                SmokeDiagnosticDatasetCatalog.SatisfactionFullRegressionEvidenceDurationSeconds,
                 enableFingerCloseups: true,
-                sampleTimesOverride: SatisfactionFullRegressionEvidenceSampleTimes,
+                sampleTimesOverride: new[]
+                {
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyPeakTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidencePeakTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.ThumbEvidenceTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.SatisfactionMiddleHelperEvidenceTimeSeconds,
+                    SmokeDiagnosticDatasetCatalog.SatisfactionTailHelperEvidenceTimeSeconds
+                },
                 mode: "full-regression-evidence",
                 segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
-                captureWidthOverride: FullRegressionEvidenceCaptureWidth,
-                captureHeightOverride: FullRegressionEvidenceCaptureHeight);
+                captureWidthOverride: SmokeDiagnosticDatasetCatalog.FullRegressionEvidenceCaptureWidth,
+                captureHeightOverride: SmokeDiagnosticDatasetCatalog.FullRegressionEvidenceCaptureHeight);
         }
 
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Middle Helper Evidence 102.125s", false, 2107)]
-        private static void CaptureSatisfactionMiddleHelperEvidence()
+        [MenuItem(MenuRoot + "Capture DS-01 Middle Helper Evidence", false, 2107)]
+        private static void CaptureMiddleHelperEvidence01()
         {
+            SmokeDiagnosticDataset ds = GetDatasetSlot(0);
             RunSingleSmoke(
-                SatisfactionFbxFileName,
+                ds.Id,
                 SmokeDurationSeconds,
                 enableFingerCloseups: true,
-                sampleTimesOverride: SatisfactionMiddleHelperEvidenceSampleTimes,
+                sampleTimesOverride: new[] { SmokeDiagnosticDatasetCatalog.SatisfactionMiddleHelperEvidenceTimeSeconds },
                 mode: "helper-evidence-middle",
                 segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle);
         }
 
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Tail Helper Evidence 181.25s", false, 2108)]
-        private static void CaptureSatisfactionTailHelperEvidence()
+        [MenuItem(MenuRoot + "Capture DS-01 Tail Helper Evidence", false, 2108)]
+        private static void CaptureTailHelperEvidence01()
         {
+            SmokeDiagnosticDataset ds = GetDatasetSlot(0);
             RunSingleSmoke(
-                SatisfactionFbxFileName,
+                ds.Id,
                 SmokeDurationSeconds,
                 enableFingerCloseups: true,
-                sampleTimesOverride: SatisfactionTailHelperEvidenceSampleTimes,
+                sampleTimesOverride: new[] { SmokeDiagnosticDatasetCatalog.SatisfactionTailHelperEvidenceTimeSeconds },
                 mode: "helper-evidence-tail",
                 segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail);
         }
 
-        [MenuItem(MenuRoot + "Capture neo_1_001 Middle Helper Evidence 98.575s", false, 2109)]
-        private static void CaptureNeoMiddleHelperEvidence()
+        [MenuItem(MenuRoot + "Capture DS-02 Tail Helper Evidence", false, 2111)]
+        private static void CaptureTailHelperEvidence02()
         {
+            SmokeDiagnosticDataset ds = GetDatasetSlot(1);
             RunSingleSmoke(
-                "neo_1_001.fbx",
+                ds.Id,
                 SmokeDurationSeconds,
                 enableFingerCloseups: true,
-                sampleTimesOverride: NeoMiddleHelperEvidenceSampleTimes,
-                mode: "helper-evidence-middle",
-                segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle);
-        }
-
-        [MenuItem(MenuRoot + "Capture neo_1_001 Tail Helper Evidence 183.85s", false, 2110)]
-        private static void CaptureNeoTailHelperEvidence()
-        {
-            RunSingleSmoke(
-                "neo_1_001.fbx",
-                SmokeDurationSeconds,
-                enableFingerCloseups: true,
-                sampleTimesOverride: NeoTailHelperEvidenceSampleTimes,
+                sampleTimesOverride: new[] { SmokeDiagnosticDatasetCatalog.AntennaTailHelperEvidenceTimeSeconds },
                 mode: "helper-evidence-tail",
                 segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail);
         }
 
-        [MenuItem(MenuRoot + "Capture Antenna39 Tail Helper Evidence 188.567s", false, 2111)]
-        private static void CaptureAntennaTailHelperEvidence()
-        {
-            RunSingleSmoke(
-                "Antenna39 try_006 g.fbx",
-                SmokeDurationSeconds,
-                enableFingerCloseups: true,
-                sampleTimesOverride: new[] { AntennaTailHelperEvidenceTimeSeconds },
-                mode: "helper-evidence-tail",
-                segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail);
-        }
+        // -- probe --
 
         [MenuItem(MenuRoot + "Dump Active FBXVmdPipeline Probe", false, 2112)]
         private static void DumpActiveFBXVmdPipelineProbe()
@@ -350,313 +274,69 @@ namespace Fbx2Vmd.FBXImporter
             Debug.Log($"[FbxPlaybackSmokeRunner] FBXVmdPipeline probe: {BuildMainAutoRuntimeSummary()}, runtimeLookup={fileManagerState}, thumbReference[{BuildRetargeterThumbReferenceSummary(runtimeFBXVmdPipeline)}]");
         }
 
+        // -- menu validation --
+
         [MenuItem(MenuRoot + "Run All Import_FBX 31s", true)]
         [MenuItem(MenuRoot + "Run All Import_FBX Middle 31s", true)]
         [MenuItem(MenuRoot + "Run All Import_FBX Tail 31s", true)]
-        [MenuItem(MenuRoot + "Run satisfaction_2 31s", true)]
-        [MenuItem(MenuRoot + "Run Antenna39 31s", true)]
-        [MenuItem(MenuRoot + "Run Snake 31s", true)]
-        [MenuItem(MenuRoot + "Run mikumikuni_retake_000 31s", true)]
-        [MenuItem(MenuRoot + "Run neo_1_001 31s", true)]
-        [MenuItem(MenuRoot + "Run satisfaction_2 Quick VMD Smoke 2s", true)]
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Thumb Evidence 0.6s+1.0s+12.6s+13.1s", true)]
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Full Regression Evidence 208s 4K", true)]
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Middle Helper Evidence 102.125s", true)]
-        [MenuItem(MenuRoot + "Capture satisfaction_2 Tail Helper Evidence 181.25s", true)]
-        [MenuItem(MenuRoot + "Capture neo_1_001 Middle Helper Evidence 98.575s", true)]
-        [MenuItem(MenuRoot + "Capture neo_1_001 Tail Helper Evidence 183.85s", true)]
-        [MenuItem(MenuRoot + "Capture Antenna39 Tail Helper Evidence 188.567s", true)]
+        [MenuItem(MenuRoot + "Run DS-01 (31s)", true)]
+        [MenuItem(MenuRoot + "Run DS-02 (31s)", true)]
+        [MenuItem(MenuRoot + "Run DS-03 (31s)", true)]
+        [MenuItem(MenuRoot + "Run DS-04 (31s)", true)]
+        [MenuItem(MenuRoot + "Run DS-05 (31s)", true)]
+        [MenuItem(MenuRoot + "Capture DS-01 Quick VMD Smoke 2s", true)]
+        [MenuItem(MenuRoot + "Capture DS-01 Thumb Evidence", true)]
+        [MenuItem(MenuRoot + "Capture DS-01 Full Regression Evidence 4K", true)]
+        [MenuItem(MenuRoot + "Capture DS-01 Middle Helper Evidence", true)]
+        [MenuItem(MenuRoot + "Capture DS-01 Tail Helper Evidence", true)]
+        [MenuItem(MenuRoot + "Capture DS-02 Tail Helper Evidence", true)]
         [MenuItem(MenuRoot + "Dump Active FBXVmdPipeline Probe", true)]
         private static bool ValidateSmokeMenu()
         {
             return EditorApplication.isPlaying && !EditorApplication.isPaused && !EditorApplication.isCompiling;
         }
 
-        private static void PollAutomationRequest()
+        // -- dataset slot helpers --
+
+        private static SmokeDiagnosticDataset GetDatasetSlot(int slotIndex)
         {
-            if (DateTime.UtcNow < _nextAutomationPollUtc)
+            if (slotIndex < 0 || slotIndex >= SmokeDiagnosticDatasetCatalog.Entries.Length)
             {
-                return;
+                Debug.LogError($"[FbxPlaybackSmokeRunner] Invalid dataset slot: {slotIndex}");
+                return default;
             }
 
-            _nextAutomationPollUtc = DateTime.UtcNow.AddSeconds(1);
-
-            if (!string.IsNullOrEmpty(_activeAutomationRequestId) ||
-                EditorApplication.isCompiling ||
-                EditorApplication.isUpdating ||
-                (!EditorApplication.isPlaying && EditorApplication.isPlayingOrWillChangePlaymode))
-            {
-                return;
-            }
-
-            if (!File.Exists(RequestPath))
-            {
-                return;
-            }
-
-            RequestEnvelope request;
-            try
-            {
-                request = JsonUtility.FromJson<RequestEnvelope>(File.ReadAllText(RequestPath));
-            }
-            catch (Exception ex)
-            {
-                TraceAutomation($"request read failed: {ex.Message}");
-                TryDeleteRequestFile();
-                WriteStatus(new StatusEnvelope
-                {
-                    request_id = string.Empty,
-                    status = "failed",
-                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                    command = string.Empty,
-                    message = $"request read failed: {ex.Message}",
-                    passed = false,
-                    failures = new[] { ex.Message }
-                });
-                return;
-            }
-
-            if (request == null || string.IsNullOrWhiteSpace(request.command))
-            {
-                TraceAutomation("request payload is invalid");
-                TryDeleteRequestFile();
-                WriteStatus(new StatusEnvelope
-                {
-                    request_id = request != null ? request.request_id ?? string.Empty : string.Empty,
-                    status = "failed",
-                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                    command = request != null ? request.command ?? string.Empty : string.Empty,
-                    message = "request payload is invalid",
-                    passed = false,
-                    failures = new[] { "request payload is invalid" }
-                });
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(request.request_id))
-            {
-                request.request_id = Guid.NewGuid().ToString("N");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.requested_command))
-            {
-                request.requested_command = request.command;
-            }
-
-            PersistRequest(request);
-            TraceAutomation($"loaded request id={request.request_id} command={request.command} requested={request.requested_command}");
-
-            if (TryBootstrapCleanAutomationRequest(request))
-            {
-                return;
-            }
-
-            if (!TryStartAutomationRequest(request, out string startMessage))
-            {
-                TraceAutomation($"request start failed id={request.request_id} command={request.command} requested={request.requested_command} message={startMessage}");
-                WriteStatus(new StatusEnvelope
-                {
-                    request_id = request.request_id,
-                    status = "failed",
-                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                    command = request.requested_command ?? request.command,
-                    message = startMessage,
-                    passed = false,
-                    failures = new[] { startMessage }
-                });
-                TryDeleteRequestFile();
-                return;
-            }
-
-            _activeAutomationRequestId = request.request_id;
-            _activeAutomationCommand = request.command;
-            _activeAutomationRequestedCommand = request.requested_command ?? request.command;
-            TraceAutomation($"started request id={request.request_id} command={request.command} requested={_activeAutomationRequestedCommand}");
-            WriteStatus(new StatusEnvelope
-            {
-                request_id = request.request_id,
-                status = "running",
-                updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                command = _activeAutomationRequestedCommand,
-                message = $"started command={request.command}",
-                passed = false,
-                failures = Array.Empty<string>()
-            });
+            return SmokeDiagnosticDatasetCatalog.Entries[slotIndex];
         }
 
-        private static bool TryStartAutomationRequest(RequestEnvelope request, out string message)
+        private static void RunDatasetSmokeBySlot(
+            int slotIndex,
+            float durationOverride = -1f,
+            bool? enableFingerCloseupsOverride = null,
+            float[] sampleTimesOverride = null,
+            string modeOverride = null)
         {
-            message = string.Empty;
-            if (request == null || string.IsNullOrWhiteSpace(request.command))
+            SmokeDiagnosticDataset ds = GetDatasetSlot(slotIndex);
+            if (ds.Id == null)
             {
-                message = "request command is missing";
-                return false;
+                return;
             }
 
-            if (IsBatchRunning() || _singleFBXVmdPipeline != null)
-            {
-                message = "smoke runner is already active";
-                return false;
-            }
-
-            switch (request.command)
-            {
-                case CaptureSatisfactionQuickVmdSmokeCommand:
-                    return TryStartAutomationSingleSmoke(
-                        SatisfactionFbxFileName,
-                        QuickVmdSmokeDurationSeconds,
-                        false,
-                        null,
-                        "quick-vmd-smoke",
-                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
-                        out message);
-                case CaptureSatisfactionThumbEvidenceCommand:
-                    return TryStartAutomationSingleSmoke(
-                        "satisfaction_2.fbx",
-                        ThumbEvidenceDurationSeconds,
-                        true,
-                        ThumbEvidenceSampleTimes,
-                        "thumb-evidence",
-                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
-                        out message);
-                case CaptureSatisfactionFullRegressionEvidenceCommand:
-                    return TryStartAutomationSingleSmoke(
-                        "satisfaction_2.fbx",
-                        SatisfactionFullRegressionEvidenceDurationSeconds,
-                        true,
-                        SatisfactionFullRegressionEvidenceSampleTimes,
-                        "full-regression-evidence",
-                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
-                        out message,
-                        FullRegressionEvidenceCaptureWidth,
-                        FullRegressionEvidenceCaptureHeight);
-                case CaptureAntennaTailHelperEvidenceCommand:
-                    return TryStartAutomationSingleSmoke(
-                        "Antenna39 try_006 g.fbx",
-                        SmokeDurationSeconds,
-                        true,
-                        new[] { AntennaTailHelperEvidenceTimeSeconds },
-                        "helper-evidence-tail",
-                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail,
-                        out message);
-                case RunAllImportFbxHeadCommand:
-                    return TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head, out message);
-                case RunAllImportFbxMiddleCommand:
-                    return TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, out message);
-                case RunAllImportFbxTailCommand:
-                    return TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail, out message);
-                default:
-                    message = $"unsupported command: {request.command}";
-                    return false;
-            }
+            RunSingleSmoke(
+                ds.Id,
+                durationOverride > 0f ? durationOverride : ds.DefaultDurationSeconds,
+                enableFingerCloseupsOverride ?? ds.EnableFingerCloseups,
+                sampleTimesOverride ?? (ds.HasSampleTimes ? ds.SampleTimes : null),
+                modeOverride ?? ds.DefaultMode,
+                ds.DefaultSegment,
+                ds.CaptureWidthOverride,
+                ds.CaptureHeightOverride);
         }
 
-        private static bool TryBootstrapCleanAutomationRequest(RequestEnvelope request)
-        {
-            if (request == null || string.IsNullOrWhiteSpace(request.command))
-            {
-                return false;
-            }
-
-            if (string.Equals(request.command, CaptureAntennaTailHelperEvidenceCleanCommand, StringComparison.Ordinal))
-            {
-                request.command = CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand;
-                PersistRequest(request);
-                TraceAutomation(
-                    $"clean bootstrap request id={request.request_id} requested={request.requested_command} action=" +
-                    (EditorApplication.isPlaying ? "restart-playmode" : "enter-playmode"));
-                WriteStatus(new StatusEnvelope
-                {
-                    request_id = request.request_id ?? string.Empty,
-                    status = "running",
-                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                    command = CaptureAntennaTailHelperEvidenceCleanCommand,
-                    message = EditorApplication.isPlaying
-                        ? "restarting play mode for clean smoke"
-                        : "entering play mode for clean smoke",
-                    passed = false,
-                    failures = Array.Empty<string>()
-                });
-                EditorApplication.isPlaying = !EditorApplication.isPlaying;
-                return true;
-            }
-
-            if (!string.Equals(request.command, CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            if (!EditorApplication.isPlaying)
-            {
-                TraceAutomation($"clean bootstrap resume request id={request.request_id} requested={request.requested_command} action=enter-playmode");
-                WriteStatus(new StatusEnvelope
-                {
-                    request_id = request.request_id ?? string.Empty,
-                    status = "running",
-                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                    command = CaptureAntennaTailHelperEvidenceCleanCommand,
-                    message = "entering play mode for clean smoke",
-                    passed = false,
-                    failures = Array.Empty<string>()
-                });
-                EditorApplication.isPlaying = true;
-                return true;
-            }
-
-            request.command = CaptureAntennaTailHelperEvidenceCommand;
-            PersistRequest(request);
-            TraceAutomation($"clean bootstrap resume request id={request.request_id} requested={request.requested_command} action=run-base-command");
-            return false;
-        }
-
-        private static bool TryStartAutomationSingleSmoke(
-            string fbxFileName,
-            float durationSeconds,
-            bool enableFingerCloseups,
-            float[] sampleTimesOverride,
-            string mode,
-            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment,
-            out string message,
-            int captureWidthOverride = 0,
-            int captureHeightOverride = 0)
-        {
-            message = string.Empty;
-            if (!TryGetFBXVmdPipeline(fbxFileName, out FBXVmdPipeline fileManager, interactive: false, out message))
-            {
-                return false;
-            }
-
-            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride))
-            {
-                message = $"smoke start failed: {fbxFileName}";
-                return false;
-            }
-
-            TrackSingleSmoke(fileManager, fbxFileName, mode);
-            return true;
-        }
-
-        private static bool TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment segment, out string message)
-        {
-            message = string.Empty;
-            if (!TryGetFBXVmdPipeline(null, out FBXVmdPipeline fileManager, interactive: false, out message))
-            {
-                return false;
-            }
-
-            string[] fbxFileNames = GetImportFbxFileNames();
-            if (fbxFileNames.Length == 0)
-            {
-                message = "Import_FBX directory is empty";
-                return false;
-            }
-
-            StartSmokeBatch(fileManager, fbxFileNames, segment);
-            return true;
-        }
+        // -- smoke execution --
 
         private static void RunSingleSmoke(
-            string fbxFileName,
+            string datasetId,
             float durationSeconds = SmokeDurationSeconds,
             bool enableFingerCloseups = false,
             float[] sampleTimesOverride = null,
@@ -671,6 +351,12 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
+            string fbxFileName = ResolveFbxFileName(datasetId);
+            if (fbxFileName == null)
+            {
+                return;
+            }
+
             if (!TryGetFBXVmdPipeline(fbxFileName, out FBXVmdPipeline fileManager))
             {
                 return;
@@ -678,8 +364,19 @@ namespace Fbx2Vmd.FBXImporter
 
             if (StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride))
             {
-                TrackSingleSmoke(fileManager, fbxFileName, mode);
+                TrackSingleSmoke(fileManager, datasetId, mode);
             }
+        }
+
+        private static string ResolveFbxFileName(string datasetId)
+        {
+            if (SmokeDiagnosticDatasetCatalog.TryFind(datasetId, out SmokeDiagnosticDataset ds))
+            {
+                return ds.FbxFileName;
+            }
+
+            Debug.LogError($"[FbxPlaybackSmokeRunner] Unknown dataset ID: {datasetId}");
+            return null;
         }
 
         private static void StartSmokeBatch(FBXVmdPipeline fileManager, IEnumerable<string> fbxFileNames, FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
@@ -808,6 +505,8 @@ namespace Fbx2Vmd.FBXImporter
             return started;
         }
 
+        // -- *ForTest reflection accessors (used by FBXVmdPipelineEditorSmokePathTests) --
+
         private static string GetFullRegressionEvidenceCommandForTest()
         {
             return CaptureSatisfactionFullRegressionEvidenceCommand;
@@ -815,22 +514,30 @@ namespace Fbx2Vmd.FBXImporter
 
         private static float GetFullRegressionEvidenceDurationSecondsForTest()
         {
-            return SatisfactionFullRegressionEvidenceDurationSeconds;
+            return SmokeDiagnosticDatasetCatalog.SatisfactionFullRegressionEvidenceDurationSeconds;
         }
 
         private static string GetFullRegressionEvidenceFbxFileNameForTest()
         {
-            return SatisfactionFbxFileName;
+            return SmokeDiagnosticDatasetCatalog.Find(SmokeDiagnosticDatasetCatalog.Satisfaction2Id).FbxFileName;
         }
 
         private static int[] GetFullRegressionEvidenceCaptureResolutionForTest()
         {
-            return new[] { FullRegressionEvidenceCaptureWidth, FullRegressionEvidenceCaptureHeight };
+            return new[] { SmokeDiagnosticDatasetCatalog.FullRegressionEvidenceCaptureWidth, SmokeDiagnosticDatasetCatalog.FullRegressionEvidenceCaptureHeight };
         }
 
         private static float[] GetFullRegressionEvidenceSampleTimesForTest()
         {
-            return (float[])SatisfactionFullRegressionEvidenceSampleTimes.Clone();
+            return new[]
+            {
+                SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyTimeSeconds,
+                SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyPeakTimeSeconds,
+                SmokeDiagnosticDatasetCatalog.ThumbEvidencePeakTimeSeconds,
+                SmokeDiagnosticDatasetCatalog.ThumbEvidenceTimeSeconds,
+                SmokeDiagnosticDatasetCatalog.SatisfactionMiddleHelperEvidenceTimeSeconds,
+                SmokeDiagnosticDatasetCatalog.SatisfactionTailHelperEvidenceTimeSeconds
+            };
         }
 
         private static string GetQuickVmdSmokeCommandForTest()
@@ -840,7 +547,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string GetQuickVmdSmokeFbxFileNameForTest()
         {
-            return SatisfactionFbxFileName;
+            return SmokeDiagnosticDatasetCatalog.Find(SmokeDiagnosticDatasetCatalog.Satisfaction2Id).FbxFileName;
         }
 
         private static float GetQuickVmdSmokeDurationSecondsForTest()
@@ -853,12 +560,13 @@ namespace Fbx2Vmd.FBXImporter
             return QuickVmdSmokeTargetFrameCount;
         }
 
-        private static void TrackSingleSmoke(FBXVmdPipeline fileManager, string fbxFileName, string mode)
+        // -- single smoke tracking --
+
+        private static void TrackSingleSmoke(FBXVmdPipeline fileManager, string datasetId, string mode)
         {
             ClearSingleSmokeTracking();
             _singleFBXVmdPipeline = fileManager;
-            _activeSingleFbxFileName = fbxFileName;
-            _singleSmokeMode = mode;
+            _activeSingleDatasetId = datasetId;
             _singleFBXVmdPipeline.EditorDiagnosticSmokeFinished += HandleSingleSmokeFinished;
         }
 
@@ -869,8 +577,9 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            if (!string.IsNullOrEmpty(_activeSingleFbxFileName) &&
-                !string.Equals(_activeSingleFbxFileName, fbxFileName, StringComparison.OrdinalIgnoreCase))
+            string resolvedFileName = _activeSingleDatasetId != null ? ResolveFbxFileName(_activeSingleDatasetId) : null;
+            if (!string.IsNullOrEmpty(resolvedFileName) &&
+                !string.Equals(resolvedFileName, fbxFileName, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -882,11 +591,11 @@ namespace Fbx2Vmd.FBXImporter
 
             if (result.Success)
             {
-                Debug.Log($"[FbxPlaybackSmokeRunner] 단일 smoke 성공: mode={_singleSmokeMode}, {resultLabel}{evidenceSummary}");
+                Debug.Log($"[FbxPlaybackSmokeRunner] 단일 smoke 성공: dataset={_activeSingleDatasetId}, {resultLabel}{evidenceSummary}");
             }
             else
             {
-                Debug.LogError($"[FbxPlaybackSmokeRunner] 단일 smoke 실패: mode={_singleSmokeMode}, {resultLabel}{evidenceSummary}");
+                Debug.LogError($"[FbxPlaybackSmokeRunner] 단일 smoke 실패: dataset={_activeSingleDatasetId}, {resultLabel}{evidenceSummary}");
             }
 
             if (!string.IsNullOrEmpty(_activeAutomationRequestId))
@@ -1054,8 +763,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _singleFBXVmdPipeline = null;
-            _activeSingleFbxFileName = null;
-            _singleSmokeMode = null;
+            _activeSingleDatasetId = null;
         }
 
         private static bool IsBatchRunning()
@@ -1072,6 +780,298 @@ namespace Fbx2Vmd.FBXImporter
 
             MotionComparisonProbe probe = fileManager.targetCharacter.GetComponent<MotionComparisonProbe>();
             return probe != null ? probe.LastSessionManifestPath ?? string.Empty : string.Empty;
+        }
+
+        // -- automation --
+
+        private static void PollAutomationRequest()
+        {
+            if (DateTime.UtcNow < _nextAutomationPollUtc)
+            {
+                return;
+            }
+
+            _nextAutomationPollUtc = DateTime.UtcNow.AddSeconds(1);
+
+            if (!string.IsNullOrEmpty(_activeAutomationRequestId) ||
+                EditorApplication.isCompiling ||
+                EditorApplication.isUpdating ||
+                (!EditorApplication.isPlaying && EditorApplication.isPlayingOrWillChangePlaymode))
+            {
+                return;
+            }
+
+            if (!File.Exists(RequestPath))
+            {
+                return;
+            }
+
+            RequestEnvelope request;
+            try
+            {
+                request = JsonUtility.FromJson<RequestEnvelope>(File.ReadAllText(RequestPath));
+            }
+            catch (Exception ex)
+            {
+                TraceAutomation($"request read failed: {ex.Message}");
+                TryDeleteRequestFile();
+                WriteStatus(new StatusEnvelope
+                {
+                    request_id = string.Empty,
+                    status = "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = string.Empty,
+                    message = $"request read failed: {ex.Message}",
+                    passed = false,
+                    failures = new[] { ex.Message }
+                });
+                return;
+            }
+
+            if (request == null || string.IsNullOrWhiteSpace(request.command))
+            {
+                TraceAutomation("request payload is invalid");
+                TryDeleteRequestFile();
+                WriteStatus(new StatusEnvelope
+                {
+                    request_id = request != null ? request.request_id ?? string.Empty : string.Empty,
+                    status = "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = request != null ? request.command ?? string.Empty : string.Empty,
+                    message = "request payload is invalid",
+                    passed = false,
+                    failures = new[] { "request payload is invalid" }
+                });
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(request.request_id))
+            {
+                request.request_id = Guid.NewGuid().ToString("N");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.requested_command))
+            {
+                request.requested_command = request.command;
+            }
+
+            PersistRequest(request);
+            TraceAutomation($"loaded request id={request.request_id} command={request.command} requested={request.requested_command}");
+
+            if (TryBootstrapCleanAutomationRequest(request))
+            {
+                return;
+            }
+
+            if (!TryStartAutomationRequest(request, out string startMessage))
+            {
+                TraceAutomation($"request start failed id={request.request_id} command={request.command} requested={request.requested_command} message={startMessage}");
+                WriteStatus(new StatusEnvelope
+                {
+                    request_id = request.request_id,
+                    status = "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = request.requested_command ?? request.command,
+                    message = startMessage,
+                    passed = false,
+                    failures = new[] { startMessage }
+                });
+                TryDeleteRequestFile();
+                return;
+            }
+
+            _activeAutomationRequestId = request.request_id;
+            _activeAutomationCommand = request.command;
+            _activeAutomationRequestedCommand = request.requested_command ?? request.command;
+            TraceAutomation($"started request id={request.request_id} command={request.command} requested={_activeAutomationRequestedCommand}");
+            WriteStatus(new StatusEnvelope
+            {
+                request_id = request.request_id,
+                status = "running",
+                updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                command = _activeAutomationRequestedCommand,
+                message = $"started command={request.command}",
+                passed = false,
+                failures = Array.Empty<string>()
+            });
+        }
+
+        private static bool TryStartAutomationRequest(RequestEnvelope request, out string message)
+        {
+            message = string.Empty;
+            if (request == null || string.IsNullOrWhiteSpace(request.command))
+            {
+                message = "request command is missing";
+                return false;
+            }
+
+            if (IsBatchRunning() || _singleFBXVmdPipeline != null)
+            {
+                message = "smoke runner is already active";
+                return false;
+            }
+
+            switch (request.command)
+            {
+                case CaptureSatisfactionQuickVmdSmokeCommand:
+                    return TryStartAutomationSingleSmoke(
+                        SmokeDiagnosticDatasetCatalog.Satisfaction2Id,
+                        QuickVmdSmokeDurationSeconds,
+                        false,
+                        null,
+                        "quick-vmd-smoke",
+                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
+                        out message);
+                case CaptureSatisfactionThumbEvidenceCommand:
+                    return TryStartAutomationSingleSmoke(
+                        SmokeDiagnosticDatasetCatalog.Satisfaction2Id,
+                        SmokeDiagnosticDatasetCatalog.ThumbEvidenceDurationSeconds,
+                        true,
+                        new[] { SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyTimeSeconds, SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyPeakTimeSeconds, SmokeDiagnosticDatasetCatalog.ThumbEvidencePeakTimeSeconds, SmokeDiagnosticDatasetCatalog.ThumbEvidenceTimeSeconds },
+                        "thumb-evidence",
+                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
+                        out message);
+                case CaptureSatisfactionFullRegressionEvidenceCommand:
+                    return TryStartAutomationSingleSmoke(
+                        SmokeDiagnosticDatasetCatalog.Satisfaction2Id,
+                        SmokeDiagnosticDatasetCatalog.SatisfactionFullRegressionEvidenceDurationSeconds,
+                        true,
+                        new[] { SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyTimeSeconds, SmokeDiagnosticDatasetCatalog.ThumbEvidenceEarlyPeakTimeSeconds, SmokeDiagnosticDatasetCatalog.ThumbEvidencePeakTimeSeconds, SmokeDiagnosticDatasetCatalog.ThumbEvidenceTimeSeconds, SmokeDiagnosticDatasetCatalog.SatisfactionMiddleHelperEvidenceTimeSeconds, SmokeDiagnosticDatasetCatalog.SatisfactionTailHelperEvidenceTimeSeconds },
+                        "full-regression-evidence",
+                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
+                        out message,
+                        SmokeDiagnosticDatasetCatalog.FullRegressionEvidenceCaptureWidth,
+                        SmokeDiagnosticDatasetCatalog.FullRegressionEvidenceCaptureHeight);
+                case CaptureAntennaTailHelperEvidenceCommand:
+                    return TryStartAutomationSingleSmoke(
+                        SmokeDiagnosticDatasetCatalog.Antenna39Id,
+                        SmokeDurationSeconds,
+                        true,
+                        new[] { SmokeDiagnosticDatasetCatalog.AntennaTailHelperEvidenceTimeSeconds },
+                        "helper-evidence-tail",
+                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail,
+                        out message);
+                case RunAllImportFbxHeadCommand:
+                    return TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head, out message);
+                case RunAllImportFbxMiddleCommand:
+                    return TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, out message);
+                case RunAllImportFbxTailCommand:
+                    return TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail, out message);
+                default:
+                    message = $"unsupported command: {request.command}";
+                    return false;
+            }
+        }
+
+        private static bool TryBootstrapCleanAutomationRequest(RequestEnvelope request)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.command))
+            {
+                return false;
+            }
+
+            if (string.Equals(request.command, CaptureAntennaTailHelperEvidenceCleanCommand, StringComparison.Ordinal))
+            {
+                request.command = CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand;
+                PersistRequest(request);
+                TraceAutomation(
+                    $"clean bootstrap request id={request.request_id} requested={request.requested_command} action=" +
+                    (EditorApplication.isPlaying ? "restart-playmode" : "enter-playmode"));
+                WriteStatus(new StatusEnvelope
+                {
+                    request_id = request.request_id ?? string.Empty,
+                    status = "running",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = CaptureAntennaTailHelperEvidenceCleanCommand,
+                    message = EditorApplication.isPlaying
+                        ? "restarting play mode for clean smoke"
+                        : "entering play mode for clean smoke",
+                    passed = false,
+                    failures = Array.Empty<string>()
+                });
+                EditorApplication.isPlaying = !EditorApplication.isPlaying;
+                return true;
+            }
+
+            if (!string.Equals(request.command, CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (!EditorApplication.isPlaying)
+            {
+                TraceAutomation($"clean bootstrap resume request id={request.request_id} requested={request.requested_command} action=enter-playmode");
+                WriteStatus(new StatusEnvelope
+                {
+                    request_id = request.request_id ?? string.Empty,
+                    status = "running",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = CaptureAntennaTailHelperEvidenceCleanCommand,
+                    message = "entering play mode for clean smoke",
+                    passed = false,
+                    failures = Array.Empty<string>()
+                });
+                EditorApplication.isPlaying = true;
+                return true;
+            }
+
+            request.command = CaptureAntennaTailHelperEvidenceCommand;
+            PersistRequest(request);
+            TraceAutomation($"clean bootstrap resume request id={request.request_id} requested={request.requested_command} action=run-base-command");
+            return false;
+        }
+
+        private static bool TryStartAutomationSingleSmoke(
+            string datasetId,
+            float durationSeconds,
+            bool enableFingerCloseups,
+            float[] sampleTimesOverride,
+            string mode,
+            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment,
+            out string message,
+            int captureWidthOverride = 0,
+            int captureHeightOverride = 0)
+        {
+            message = string.Empty;
+            string fbxFileName = ResolveFbxFileName(datasetId);
+            if (fbxFileName == null)
+            {
+                message = $"dataset not found: {datasetId}";
+                return false;
+            }
+
+            if (!TryGetFBXVmdPipeline(fbxFileName, out FBXVmdPipeline fileManager, interactive: false, out message))
+            {
+                return false;
+            }
+
+            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride))
+            {
+                message = $"smoke start failed: {fbxFileName}";
+                return false;
+            }
+
+            TrackSingleSmoke(fileManager, datasetId, mode);
+            return true;
+        }
+
+        private static bool TryStartAutomationBatch(FBXVmdPipeline.EditorDiagnosticSmokeSegment segment, out string message)
+        {
+            message = string.Empty;
+            if (!TryGetFBXVmdPipeline(null, out FBXVmdPipeline fileManager, interactive: false, out message))
+            {
+                return false;
+            }
+
+            string[] fbxFileNames = GetImportFbxFileNames();
+            if (fbxFileNames.Length == 0)
+            {
+                message = "Import_FBX directory is empty";
+                return false;
+            }
+
+            StartSmokeBatch(fileManager, fbxFileNames, segment);
+            return true;
         }
 
         private static void CompleteAutomationRequest(
@@ -1255,6 +1255,8 @@ namespace Fbx2Vmd.FBXImporter
 
             return true;
         }
+
+        // -- IsSupportedMainScene is public-accessible via reflection in tests --
 
         private static bool IsSupportedMainScene(string sceneName)
         {
@@ -1469,4 +1471,3 @@ namespace Fbx2Vmd.FBXImporter
     }
 }
 #endif
-

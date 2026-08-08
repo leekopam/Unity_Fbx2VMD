@@ -1074,7 +1074,7 @@ namespace Tests.Editor.FBXImporter
             bool isPlaying,
             out float advancedTime)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetNestedType("LegacyAnimationDriver", BindingFlags.NonPublic).GetMethod(
                 "TryCalculateManualLegacyAnimationTime",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
@@ -1106,7 +1106,7 @@ namespace Tests.Editor.FBXImporter
             float maxStep,
             out float clampedTime)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetNestedType("LegacyAnimationDriver", BindingFlags.NonPublic).GetMethod(
                 "TryClampLegacyAnimationEndWrap",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
@@ -1154,7 +1154,7 @@ namespace Tests.Editor.FBXImporter
             bool legacyAnimationStepSpikeThisFrame,
             out bool muscleDeltaOnlySpike)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetNestedType("PoseSpaceGuardPipeline", BindingFlags.NonPublic).GetMethod(
                 "ShouldSmoothVisualPoseSpike",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
@@ -1184,7 +1184,7 @@ namespace Tests.Editor.FBXImporter
             float bodyRotationDelta,
             bool legacyAnimationStepSpikeThisFrame)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetNestedType("PoseSpaceGuardPipeline", BindingFlags.NonPublic).GetMethod(
                 "CalculateVisualPoseSpikeCurrentWeight",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
@@ -1211,7 +1211,7 @@ namespace Tests.Editor.FBXImporter
             bool hasEditorHumanoidMuscleReferenceCurve,
             float forearmStretchClampMaxOffset = 0f)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = typeof(PoseSpaceRetargeter).GetNestedType("PoseSpaceGuardPipeline", BindingFlags.NonPublic).GetMethod(
                 "BlendVisualPoseSpikeMuscle",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
