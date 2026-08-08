@@ -310,3 +310,4 @@ __pycache__/
 # Local machine-specific config (do not commit)
 /Docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
 /docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
+Assets/_ManualReference/Model/
