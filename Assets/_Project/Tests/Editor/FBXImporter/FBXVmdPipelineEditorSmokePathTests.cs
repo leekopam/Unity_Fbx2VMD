@@ -162,6 +162,25 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ImportController_When_SubmittingFbxSource_Then_UsesPipelineInputBoundary()
+        {
+            MethodInfo submitImportSource = typeof(FBXVmdPipeline).GetMethod(
+                nameof(FBXVmdPipeline.TrySubmitImportSource),
+                BindingFlags.Instance | BindingFlags.Public);
+            string controllerSource = File.ReadAllText(Path.Combine(
+                Application.dataPath,
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXImportController.cs"));
+
+            Assert.That(submitImportSource, Is.Not.Null);
+            Assert.That(controllerSource, Does.Not.Contain(".ConversionCoordinator"));
+            Assert.That(controllerSource, Does.Not.Contain(".ProcessFBXAsync"));
+            Assert.That(controllerSource, Does.Contain(".TrySubmitImportSource"));
+        }
+
+        [Test]
         public void Given_ControlledMissingAndProjectFbxExists_When_ResolvingEditorSmokeFbxPath_Then_UsesProjectFallback()
         {
             string controlledDirectory = Path.Combine("C:", "Project", "Assets", "Resources", "Import_FBX");

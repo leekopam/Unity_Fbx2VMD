@@ -27,26 +27,23 @@ namespace Fbx2Vmd.FBXImporter
 
         internal bool TryImportFromDialog()
         {
-            _pipeline.EnsureServicesInitialized();
-
             if (_pipeline.IsProcessing)
             {
-                _pipeline.ConversionCoordinator.SetSessionState(FBXVmdPipeline.FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
+                _pipeline.TrySubmitImportSource(null);
                 return true;
             }
 
-            _pipeline.ConversionCoordinator.SetSessionState(FBXVmdPipeline.FBXSessionState.Idle, "FBX 파일 선택 대기", 0f);
             string[] paths = _fileBrowserService.OpenFilePanel(
                 "Import FBX", "", FBXVmdPipeline.FBX_EXTENSION, false);
             if (paths.Length == 0 || string.IsNullOrEmpty(paths[0]))
             {
-                _pipeline.ConversionCoordinator.SetSessionState(FBXVmdPipeline.FBXSessionState.Cancelled, "파일 선택이 취소됨.", 0f);
+                _pipeline.TrySubmitImportSource(null);
                 return true;
             }
 
             string sourcePath = paths[0];
             Debug.Log($"[FBXImport] 파일 선택됨. 경로={sourcePath}");
-            _pipeline.ProcessFBXAsync(sourcePath);
+            _pipeline.TrySubmitImportSource(sourcePath);
             return true;
         }
 
@@ -59,44 +56,32 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (_pipeline.IsProcessing)
             {
-                _pipeline.ConversionCoordinator.SetSessionState(FBXVmdPipeline.FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
+                _pipeline.TrySubmitImportSource(null);
                 return true;
             }
 
             string targetDir = _pipeline.GetControlledImportDirectory();
             if (!Directory.Exists(targetDir))
             {
-                _pipeline.ConversionCoordinator.SetSessionState(FBXVmdPipeline.FBXSessionState.Failed, $"Import_FBX 폴더가 없습니다: {targetDir}", 0f);
+                _pipeline.TrySubmitImportSource(null, $"Import_FBX 폴더가 없습니다: {targetDir}");
                 return true;
             }
 
             string[] fbxFiles = Directory.GetFiles(targetDir, "*.fbx", SearchOption.TopDirectoryOnly);
             if (fbxFiles.Length == 0)
             {
-                _pipeline.ConversionCoordinator.SetSessionState(FBXVmdPipeline.FBXSessionState.Failed, "Import_FBX 폴더에 FBX 파일이 없습니다", 0f);
+                _pipeline.TrySubmitImportSource(null, "Import_FBX 폴더에 FBX 파일이 없습니다");
                 return true;
             }
 
             string selectedFile = fbxFiles[0];
-            _pipeline.ProcessFBXAsync(selectedFile);
+            _pipeline.TrySubmitImportSource(selectedFile);
             return true;
         }
 
         public bool TryImportFromSharedSettings(string sourcePath)
         {
-            if (_pipeline.IsProcessing)
-            {
-                _pipeline.ConversionCoordinator.SetSessionState(FBXVmdPipeline.FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(sourcePath))
-            {
-                return false;
-            }
-
-            _pipeline.ProcessFBXAsync(sourcePath.Trim());
-            return true;
+            return _pipeline.TrySubmitImportSource(sourcePath);
         }
     }
 }

@@ -23,6 +23,8 @@ namespace Tests.Editor.FBXImporter
 
             RunTest(results, nameof(tests.Given_ControlledFileExists_When_ResolvingEditorSmokeFbxPath_Then_UsesControlledPath),
                 tests.Given_ControlledFileExists_When_ResolvingEditorSmokeFbxPath_Then_UsesControlledPath);
+            RunTest(results, nameof(tests.Given_ImportController_When_SubmittingFbxSource_Then_UsesPipelineInputBoundary),
+                tests.Given_ImportController_When_SubmittingFbxSource_Then_UsesPipelineInputBoundary);
             RunTest(results, nameof(tests.Given_ControlledMissingAndProjectFbxExists_When_ResolvingEditorSmokeFbxPath_Then_UsesProjectFallback),
                 tests.Given_ControlledMissingAndProjectFbxExists_When_ResolvingEditorSmokeFbxPath_Then_UsesProjectFallback);
             RunTest(results, nameof(tests.Given_NoCandidateExists_When_ResolvingEditorSmokeFbxPath_Then_ReturnsControlledCandidate),

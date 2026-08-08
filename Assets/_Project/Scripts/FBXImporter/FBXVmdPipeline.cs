@@ -2132,21 +2132,40 @@ namespace Fbx2Vmd.FBXImporter
             new FBXImportController(this, _fileBrowserService).LoadFromImportFolder();
         }
 
-        public bool TryStartFbxImportFromSharedSettings(string sourcePath)
+        /// <summary>
+        /// 선택된 FBX 입력을 현재 파이프라인 세션으로 제출함.
+        /// </summary>
+        /// <param name="sourcePath">선택된 FBX 경로입니다.</param>
+        /// <param name="sourceUnavailableMessage">경로가 없을 때 표시할 실패 메시지입니다. null이면 선택 취소로 처리합니다.</param>
+        /// <returns>처리가 시작되면 true, 이미 처리 중이거나 입력 경로가 없으면 false를 반환합니다.</returns>
+        public bool TrySubmitImportSource(string sourcePath, string sourceUnavailableMessage = null)
         {
-            if (_isProcessing)
+            if (IsProcessing)
             {
                 ConversionCoordinator.SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
                 return false;
             }
 
+            EnsureServicesInitialized();
+
             if (string.IsNullOrWhiteSpace(sourcePath))
             {
+                bool isSelectionCancelled = string.IsNullOrEmpty(sourceUnavailableMessage);
+                ConversionCoordinator.SetSessionState(
+                    isSelectionCancelled ? FBXSessionState.Cancelled : FBXSessionState.Failed,
+                    isSelectionCancelled ? "파일 선택이 취소됨." : sourceUnavailableMessage,
+                    0f);
                 return false;
             }
 
+            ConversionCoordinator.SetSessionState(FBXSessionState.Idle, "FBX 파일 처리 시작 대기", 0f);
             ProcessFBXAsync(sourcePath.Trim());
             return true;
+        }
+
+        public bool TryStartFbxImportFromSharedSettings(string sourcePath)
+        {
+            return TrySubmitImportSource(sourcePath);
         }
 
 
