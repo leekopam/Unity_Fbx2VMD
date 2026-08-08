@@ -58,6 +58,7 @@
 /Assets/GUIPack-Clean&Minimalist.meta
 /Assets/UI/GUIPack-Clean&Minimalist/
 /Assets/UI/GUIPack-Clean&Minimalist.meta
+Assets/_Project/UI/GUIPack-Clean&Minimalist/
 /Assets/MagicaCloth2/
 /Assets/MagicaCloth2.meta
 /Assets/_Project/Plugins/MagicaCloth2/
@@ -120,8 +121,10 @@ crashlytics-build.properties
 
 # FBX 파일은 업로드 되지 않도록 설정
 *.fbx
+*.fbx.meta
 *.FBX
 Assets/_Project/FBX/
+Assets/_Project/Model/YYB Hatsune Miku_default/
 Assets/Resources/Import_FBX/
 
 # MMD4Mecanim iOS binary ignore
