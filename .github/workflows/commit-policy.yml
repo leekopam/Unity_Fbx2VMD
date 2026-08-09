@@ -1,0 +1,42 @@
+name: Commit Policy
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  commit-policy:
+    name: Commit Policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Validate pull request commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/test-commit-policy.sh
+
+          message_file="$(mktemp)"
+          trap 'rm -f "$message_file"' EXIT
+          range="$BASE_SHA..$HEAD_SHA"
+          baseline_sha="$(git log --diff-filter=A --format=%H --reverse -- scripts/commit-policy-baseline | head -1)"
+
+          # ponytail: baseline keeps legacy history mergeable; new commits cannot bypass this check.
+          if [ -n "$baseline_sha" ] && git merge-base --is-ancestor "$baseline_sha" "$HEAD_SHA"; then
+            range="$baseline_sha..$HEAD_SHA"
+          fi
+
+          git rev-list --reverse --no-merges "$range" | while read -r commit_sha; do
+            printf 'Checking %s\n' "$commit_sha"
+            git log -1 --format=%B "$commit_sha" > "$message_file"
+            scripts/hooks/commit-msg "$message_file"
+          done

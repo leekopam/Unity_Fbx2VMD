@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # commit-msg 훅 — Conventional Commits 형식 검사 (agent-policy §11)
 # 설치: git config core.hooksPath scripts/hooks
-# 검사: type(scope): subject / 72자 / 마침표 없음 / body 파일목록 금지 / scope 화이트리스트
+# 검사: Conventional Commits / 72자 / body 검증 표기 / scope 화이트리스트
 # Merge/Revert 커밋은 예외 통과.
 # 우회: git commit --no-verify (사용자 본인만).
 
@@ -14,13 +14,27 @@ if echo "$SUBJECT" | grep -qE "^(Merge|Revert|merge|revert) "; then
   exit 0
 fi
 
-# 1. 형식: type(scope): subject 또는 type: subject
-if ! echo "$SUBJECT" | grep -qE "^(feat|fix|refactor|perf|docs|test|build|ci|chore)(\([a-z-]+\))?: .+"; then
+# 1. 형식: Conventional Commits type(scope)!: subject
+if ! echo "$SUBJECT" | grep -qE "^(feat|fix|refactor|perf|docs|test|build|ci|chore|revert)(\([a-z-]+\))?!?: .+"; then
   echo "❌ 커밋 제목 형식 오류: 'type(scope): subject' 형식이어야 합니다."
   echo "   예: refactor(fbx-import): Material 생성을 분리"
-  echo "   type: feat|fix|refactor|perf|docs|test|build|ci|chore"
+  echo "   type: feat|fix|refactor|perf|docs|test|build|ci|chore|revert"
   FAIL=1
 fi
+
+TYPE=$(echo "$SUBJECT" | sed -nE 's/^([a-z]+)(\([a-z-]+\))?!?:.*/\1/p')
+SCOPE=$(echo "$SUBJECT" | sed -nE 's/^[a-z]+\(([a-z-]+)\)!?:.*/\1/p')
+BODY=$(sed '1d' "$MSG_FILE")
+
+# 코드 동작 변경은 기능 경계 scope를 반드시 쓴다.
+case "$TYPE" in
+  feat|fix|refactor|perf)
+    if [ -z "$SCOPE" ]; then
+      echo "❌ $TYPE 커밋에는 기능 경계 scope가 필요합니다."
+      FAIL=1
+    fi
+    ;;
+esac
 
 # 2. 제목 길이 72자 이하
 SUBJ_LEN=${#SUBJECT}
@@ -51,7 +65,6 @@ if ! printf '%s' "$SUBJECT" | LC_ALL=C grep -q '[^ -~]'; then
 fi
 
 # 5. scope 화이트리스트 (FBX2VMD 프로젝트 기능 경계)
-SCOPE=$(echo "$SUBJECT" | sed -nE 's/^[a-z]+\(([a-z-]+)\):.*/\1/p')
 if [ -n "$SCOPE" ]; then
   case "$SCOPE" in
     fbx-import|retargeting|recording|motion-comparison|probe|report|pipeline|vmd|docs|build|test)
@@ -64,6 +77,21 @@ if [ -n "$SCOPE" ]; then
       ;;
   esac
 fi
+
+# 6. 코드 변경과 수동 revert는 WHY와 실제 검증을 body에 남긴다.
+# body는 diff를 반복하는 파일별 WHAT 목록이 아니라 변경 이유·보존 계약을 기록한다.
+case "$TYPE" in
+  feat|fix|refactor|perf|revert)
+    if ! printf '%s' "$BODY" | grep -q '[^[:space:]]'; then
+      echo "❌ $TYPE 커밋에는 WHY를 설명하는 body가 필요합니다."
+      FAIL=1
+    fi
+    if ! printf '%s\n' "$BODY" | grep -qE '^(검증|Verification):[[:space:]]*[^[:space:]]'; then
+      echo "❌ $TYPE 커밋 body에 '검증: <실행 결과>' 줄이 필요합니다."
+      FAIL=1
+    fi
+    ;;
+esac
 
 if [ "$FAIL" -ne 0 ]; then
   echo ""
