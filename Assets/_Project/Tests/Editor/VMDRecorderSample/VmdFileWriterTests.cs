@@ -1373,7 +1373,7 @@ namespace Tests.Editor.VMDRecorderSample
                     7,
                     BuildRotationDiagnostic(bone, ghostAngle: 9f, correctedAngle: 1.5f, exportAngle: 0.7f));
 
-                string csv = UnityHumanoidVMDRecorder.BuildExportRotationDiagnosticsCsv(
+                string csv = VmdExportDiagnosticsWriter.BuildExportRotationDiagnosticsCsv(
                     recorder.GetExportRotationDiagnosticAggregates());
                 string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -1412,7 +1412,7 @@ namespace Tests.Editor.VMDRecorderSample
                     7,
                     BuildRotationDiagnostic(bone, ghostAngle: 9f, correctedAngle: 1.5f, exportAngle: 0.7f));
 
-                string csv = UnityHumanoidVMDRecorder.BuildExportRotationDiagnosticSamplesCsv(
+                string csv = VmdExportDiagnosticsWriter.BuildExportRotationDiagnosticSamplesCsv(
                     recorder.GetExportRotationDiagnosticSamples());
                 string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -1448,7 +1448,7 @@ namespace Tests.Editor.VMDRecorderSample
                     new Vector3(0.2f, 0.1f, -0.3f),
                     new Vector3(0.25f, 0.1f, -0.35f));
 
-                string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(
+                string csv = VmdExportDiagnosticsWriter.BuildExportIkSourceDiagnosticsCsv(
                     recorder.GetExportIkSourceDiagnosticSamples());
                 string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -1496,7 +1496,7 @@ namespace Tests.Editor.VMDRecorderSample
                     directFootRecorderRootPosition: new Vector3(2.5f, 1.25f, 5.5f))
             };
 
-            string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(samples);
+            string csv = VmdExportDiagnosticsWriter.BuildExportIkSourceDiagnosticsCsv(samples);
             string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
             Assert.That(lines[0], Does.Contain("recorderRootPosition"));
@@ -1530,7 +1530,7 @@ namespace Tests.Editor.VMDRecorderSample
                     directFootRecorderRootPosition: new Vector3(2.5f, 1.25f, 5.5f))
             };
 
-            string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(samples);
+            string csv = VmdExportDiagnosticsWriter.BuildExportIkSourceDiagnosticsCsv(samples);
             string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
             Assert.That(lines[0], Does.Contain("sourceRelativeVsSourceRecorderRootDelta"));
@@ -1619,11 +1619,15 @@ namespace Tests.Editor.VMDRecorderSample
             };
 
             List<UnityHumanoidVMDRecorder.ExportIkSourceDiagnosticSample> finalSamples =
-                UnityHumanoidVMDRecorder.BuildFinalExportIkSourceDiagnosticSamples(
+                VmdExportDiagnosticsWriter.BuildFinalExportIkSourceDiagnosticSamples(
                     samples,
                     finalVmdPositions,
-                    safeFrameCount: 3);
-            string csv = UnityHumanoidVMDRecorder.BuildExportIkSourceDiagnosticsCsv(finalSamples);
+                    safeFrameCount: 3,
+                    convertVmdExportPositionToUnityMeters: position => new Vector3(
+                        -position.x / 12.5f,
+                        position.y / 12.5f,
+                        -position.z / 12.5f));
+            string csv = VmdExportDiagnosticsWriter.BuildExportIkSourceDiagnosticsCsv(finalSamples);
             string[] lines = csv.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
             string[] columns = lines[1].Split(',');

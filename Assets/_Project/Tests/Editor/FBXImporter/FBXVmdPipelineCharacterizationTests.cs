@@ -102,9 +102,9 @@ namespace Tests.Editor.FBXImporter
             {
                 var pipeline = go.AddComponent<FBXVmdPipeline>();
 
-                Assert.That(pipeline.ClampRetargetMusclesToHumanRange, Is.True,
+                Assert.That(pipeline.ShouldClampRetargetMusclesToHumanRange, Is.True,
                     "Humanoid muscle 범위 clamp가 기본 활성화되어야 한다.");
-                Assert.That(pipeline.EnableAnatomicalArmGuard, Is.True,
+                Assert.That(pipeline.ShouldEnableAnatomicalArmGuard, Is.True,
                     "해부학적 팔 가드가 기본 활성화되어야 한다.");
                 Assert.That(pipeline.ArmStretchMuscleLimit, Is.EqualTo(0f).Within(0.001f),
                     "Arm Stretch muscle 제한이 기본 0이어야 한다.");
