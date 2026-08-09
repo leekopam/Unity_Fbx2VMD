@@ -22,16 +22,16 @@ namespace Fbx2Vmd.FBXImporter
         private static readonly ProfilerMarker ImportMarker = new ProfilerMarker("FBX2VMD.Import");
         private static readonly ProfilerMarker AvatarSetupMarker = new ProfilerMarker("FBX2VMD.Import.AvatarSetup");
 
-        internal const string IMPORT_FBX_FOLDER = "Import_FBX";
-        internal const string FBX_EXTENSION = "fbx";
+        public const string IMPORT_FBX_FOLDER = "Import_FBX";
+        public const string FBX_EXTENSION = "fbx";
         private const string BONE_MAPPING_FILE = "BoneMapping_Data.txt";
         private const float GHOST_CONTAINER_SCALE = 0.01f;
         private const float THUMB_PROXIMAL_SAFE_MAX_LOCAL_ANGLE = 30f;
         private const float DEFAULT_THUMB_STRETCH_OFFSET = -0.1f;
         private const float LEGACY_THUMB_PROJECTION_MIN_PALM_NORMAL = 0.36f;
         private const float DEFAULT_THUMB_PROJECTION_MIN_PALM_NORMAL = 0.358f;
-        internal const float MMD_REFERENCE_FRAME_RATE = 30f;
-        internal const int MAX_RETARGET_PREWARM_FRAME_COUNT = 120;
+        public const float MMD_REFERENCE_FRAME_RATE = 30f;
+        public const int MAX_RETARGET_PREWARM_FRAME_COUNT = 120;
 #if UNITY_EDITOR
         internal const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
 #endif
