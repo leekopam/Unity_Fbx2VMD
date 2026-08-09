@@ -2,9 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 using System.Linq;
+using Unity.Profiling;
 
 public partial class UnityHumanoidVMDRecorder
 {
+    private static readonly ProfilerMarker RecordingFrameMarker = new ProfilerMarker("FBX2VMD.Recording.Frame");
     // [한글] [실행 순서 2-2] 레거시 호환 경로. 기본 자동 경로는 LateUpdate 저장을 사용한다.
     private void FixedUpdate()
     {
@@ -81,8 +83,10 @@ public partial class UnityHumanoidVMDRecorder
             return;
         }
 
-        // BoneGhost: 정규화된 본 구조 업데이트 (Unity 본 → VMD 본 변환)
-        if (boneGhost != null) { boneGhost.GhostAll(); }
+        using (RecordingFrameMarker.Auto())
+        {
+            // BoneGhost: 정규화된 본 구조 업데이트 (Unity 본 → VMD 본 변환)
+            if (boneGhost != null) { boneGhost.GhostAll(); }
         
         // MorphRecorder: 모든 BlendShape(모프) 값 기록
         if (morphRecorder != null) { morphRecorder.RecrodAllMorph(); }
@@ -320,6 +324,7 @@ public partial class UnityHumanoidVMDRecorder
             {
                 positionDictionary[boneName].Add(ShouldWriteLocalPosition(boneName) ? vmdPosition * DefaultBoneAmplifier : Vector3.zero);
             }
+        }
         }
     }
 

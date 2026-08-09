@@ -4,12 +4,15 @@ using System;
 using System.Collections.Generic;
 using RootMotion;
 using RootMotion.FinalIK;
+using Unity.Profiling;
 
 namespace Fbx2Vmd.FBXImporter
 {
     [DefaultExecutionOrder(20000)]
     public partial class PoseSpaceRetargeter : MonoBehaviour
     {
+        private static readonly ProfilerMarker RetargetMarker = new ProfilerMarker("FBX2VMD.Retarget");
+
         private const float LateVisualGroundingPenetrationRecoverySmoothing = 0.55f;
         private const float LateVisualGroundingPenetrationRecoveryMaxStep = 0.1f;
         private const float RecordingStartHipsBaselineFlipWarningThreshold = 0.02f;
@@ -2415,7 +2418,9 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (!_isInitialized || ghostAnimator == null || targetAnimator == null || _ghostHandler == null || _targetHandler == null) return;
 
-            AnimationDriver.UpdateLegacyAnimationVisualStep();
+            using (RetargetMarker.Auto())
+            {
+                AnimationDriver.UpdateLegacyAnimationVisualStep();
 
             // 스케일 비율 계산 (매 프레임 체크하여 안정성 확보)
             RootController.ComputeScaleRatio();
@@ -2540,6 +2545,7 @@ namespace Fbx2Vmd.FBXImporter
 #endif
             _lastRetargetStageAfterBipedIKEndpointPositions = Diagnostics.CaptureEndpointStageWorldPositions(targetAnimator);
             Diagnostics.CaptureRetargetEndpointStageAttributionDiagnostics();
+            }
         }
 
         private static float NormalizeMovementScaleMultiplier(float value)

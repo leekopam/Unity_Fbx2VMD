@@ -13,11 +13,15 @@ using Fbx2Vmd.Recording;
 using Fbx2Vmd.Character;
 using RootMotion;
 using RootMotion.FinalIK;
+using Unity.Profiling;
 
 namespace Fbx2Vmd.FBXImporter
 {
     public class FBXVmdPipeline : MonoBehaviour
     {
+        private static readonly ProfilerMarker ImportMarker = new ProfilerMarker("FBX2VMD.Import");
+        private static readonly ProfilerMarker AvatarSetupMarker = new ProfilerMarker("FBX2VMD.Import.AvatarSetup");
+
         internal const string IMPORT_FBX_FOLDER = "Import_FBX";
         internal const string FBX_EXTENSION = "fbx";
         private const string BONE_MAPPING_FILE = "BoneMapping_Data.txt";
@@ -2239,7 +2243,11 @@ namespace Fbx2Vmd.FBXImporter
 #endif
 
                 ConversionCoordinator.SetSessionState(FBXSessionState.LoadingFbx, "FBX 로드 중", 0.25f);
-                GameObject importedModel = await _fbxImporter.ImportAsync(targetPath);
+                GameObject importedModel;
+                using (ImportMarker.Auto())
+                {
+                    importedModel = await _fbxImporter.ImportAsync(targetPath);
+                }
                 if (importedModel == null)
                 {
                     FailSession("FBX 로드에 실패했습니다.");
@@ -2257,12 +2265,18 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 // BoneMapping_Data.txt는 특정 리그에 종속될 수 있으므로, 실패 시 자동 매핑으로 폴백합니다.
-                HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
+                using (AvatarSetupMarker.Auto())
+                {
+                    HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
+                }
                 if (!ValidateGhostAvatar(importedModel))
                 {
                     Debug.LogWarning("[FBXImport] Ghost Humanoid Avatar 생성 실패함. 자동 본 매핑으로 재시도함.");
                     boneMapping = HumanoidAvatarBuilder.BuildAutoMapping(importedModel);
-                    HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
+                    using (AvatarSetupMarker.Auto())
+                    {
+                        HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
+                    }
 
                     if (!ValidateGhostAvatar(importedModel))
                     {
