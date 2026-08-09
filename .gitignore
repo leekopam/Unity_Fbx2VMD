@@ -319,3 +319,8 @@ __pycache__/
 "*.pmx.meta" 
 *.pmx
 *.pmx.meta
+
+# 개인 환경 훅 래퍼 — repo에 올리지 않음 (실제 구현: ~/.hermes/git-hooks/)
+/scripts/hooks/post-checkout
+/scripts/hooks/post-commit
+/scripts/hooks/pre-push

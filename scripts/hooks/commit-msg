@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# commit-msg 훅 — Conventional Commits 형식 검사 (agent-policy §11)
+# 설치: git config core.hooksPath scripts/hooks
+# 검사: type(scope): subject / 72자 / 마침표 없음 / body 파일목록 금지 / scope 화이트리스트
+# Merge/Revert 커밋은 예외 통과.
+# 우회: git commit --no-verify (사용자 본인만).
+
+MSG_FILE="$1"
+SUBJECT=$(head -1 "$MSG_FILE")
+FAIL=0
+
+# --- Merge / Revert 커밋 예외 ---
+if echo "$SUBJECT" | grep -qE "^(Merge|Revert|merge|revert) "; then
+  exit 0
+fi
+
+# 1. 형식: type(scope): subject 또는 type: subject
+if ! echo "$SUBJECT" | grep -qE "^(feat|fix|refactor|perf|docs|test|build|ci|chore)(\([a-z-]+\))?: .+"; then
+  echo "❌ 커밋 제목 형식 오류: 'type(scope): subject' 형식이어야 합니다."
+  echo "   예: refactor(fbx-import): Material 생성을 분리"
+  echo "   type: feat|fix|refactor|perf|docs|test|build|ci|chore"
+  FAIL=1
+fi
+
+# 2. 제목 길이 72자 이하
+SUBJ_LEN=${#SUBJECT}
+if [ "$SUBJ_LEN" -gt 72 ]; then
+  echo "❌ 제목이 72자를 초과합니다 ($SUBJ_LEN자)."
+  FAIL=1
+fi
+
+# 3. 끝 마침표 금지
+if echo "$SUBJECT" | grep -qE "\.$"; then
+  echo "❌ 제목 끝에 마침표를 붙이지 마세요."
+  FAIL=1
+fi
+
+# 4. body에 파일별 변경 목록 금지 (diff가 이미 보여주는 WHAT)
+if grep -qE "\.(cs|py|ts|js|json|yaml|yml|md|sh|meta) ?\(?\+[0-9]+\)?" "$MSG_FILE"; then
+  echo "❌ body에 '파일명 (+N)' 형식의 변경 목록을 넣지 마세요. body는 WHY만."
+  FAIL=1
+fi
+
+# 4.5 제목은 한국어 기본 (기술 용어·식별자는 원문 가능)
+if ! echo "$SUBJECT" | grep -qE "[가-힣]"; then
+  echo "❌ 제목에 한국어가 없습니다. 규칙: '한국어 기본 (기술 용어·식별자 원문)'."
+  echo "   예: refactor(fbx-import): Material 생성을 분리"
+  FAIL=1
+fi
+
+# 5. scope 화이트리스트 (FBX2VMD 프로젝트 기능 경계)
+SCOPE=$(echo "$SUBJECT" | sed -nE 's/^[a-z]+\(([a-z-]+)\):.*/\1/p')
+if [ -n "$SCOPE" ]; then
+  case "$SCOPE" in
+    fbx-import|retargeting|recording|motion-comparison|probe|report|pipeline|vmd|docs|build|test)
+      ;;
+    *)
+      echo "❌ scope '$SCOPE' 는 프로젝트 기능 경계에 없습니다."
+      echo "   허용: fbx-import|retargeting|recording|motion-comparison|probe|report|pipeline|vmd|docs|build|test"
+      echo "   (새 scope 필요 시 규칙에 먼저 추가)"
+      FAIL=1
+      ;;
+  esac
+fi
+
+if [ "$FAIL" -ne 0 ]; then
+  echo ""
+  echo "=== 커밋 거부됨 — 메시지를 수정한 뒤 다시 커밋하세요 ==="
+  echo "   (git commit --amend 또는 git commit -m '새 메시지')"
+  exit 1
+fi
+
+exit 0
