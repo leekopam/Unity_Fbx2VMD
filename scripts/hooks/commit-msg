@@ -41,8 +41,10 @@ if grep -qE "\.(cs|py|ts|js|json|yaml|yml|md|sh|meta) ?\(?\+[0-9]+\)?" "$MSG_FIL
   FAIL=1
 fi
 
-# 4.5 제목은 한국어 기본 (기술 용어·식별자는 원문 가능)
-if ! echo "$SUBJECT" | grep -qE "[가-힣]"; then
+# 4.5 제목은 한국어 기본 (기술 용어·식별자는 원문 가능).
+# GitHub Desktop의 grep/locale은 [가-힣] 범위를 지원하지 않을 수 있어,
+# C locale에서 비-ASCII 문자가 하나 이상 있는지만 검사한다.
+if ! printf '%s' "$SUBJECT" | LC_ALL=C grep -q '[^ -~]'; then
   echo "❌ 제목에 한국어가 없습니다. 규칙: '한국어 기본 (기술 용어·식별자 원문)'."
   echo "   예: refactor(fbx-import): Material 생성을 분리"
   FAIL=1
