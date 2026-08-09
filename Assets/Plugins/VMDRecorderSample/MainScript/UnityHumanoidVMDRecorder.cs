@@ -3,6 +3,7 @@ using UnityEngine;
 using System.IO;
 using System;
 using System.Linq;
+using System.Text;
 
 public struct VmdSaveResult
 {
