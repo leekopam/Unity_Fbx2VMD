@@ -43,13 +43,13 @@ namespace Fbx2Vmd.FBXImporter
         private AnimationClip[] _animationClips;
         #endregion
 
-        public bool ImportScaleCurves { get; set; } = false;
-        public bool ImportNonRootPositionCurves { get; set; } = false;
+        public bool ShouldImportScaleCurves { get; set; } = false;
+        public bool ShouldImportNonRootPositionCurves { get; set; } = false;
 
         public sealed class AnimationInspectionReport
         {
-            public bool FileReadable;
-            public bool ImportSucceeded;
+            public bool IsFileReadable;
+            public bool HasImportSucceeded;
             public string ErrorMessage = "";
             public int AnimationCount;
             public int NodeAnimationChannelCount;
@@ -65,10 +65,10 @@ namespace Fbx2Vmd.FBXImporter
         {
             var report = new AnimationInspectionReport
             {
-                FileReadable = !string.IsNullOrEmpty(path) && File.Exists(path)
+                IsFileReadable = !string.IsNullOrEmpty(path) && File.Exists(path)
             };
 
-            if (!report.FileReadable)
+            if (!report.IsFileReadable)
             {
                 report.ErrorMessage = $"FBX file not found: {path}";
                 return report;
@@ -92,7 +92,7 @@ namespace Fbx2Vmd.FBXImporter
                         return report;
                     }
 
-                    report.ImportSucceeded = true;
+                    report.HasImportSucceeded = true;
                     report.AnimationCount = scene.AnimationCount;
 
                     var names = new List<string>();
@@ -587,7 +587,7 @@ namespace Fbx2Vmd.FBXImporter
                     // 위치 애니메이션
                     if (channel.HasPositionKeys)
                     {
-                        if (ImportNonRootPositionCurves || ShouldImportPositionCurves(relativePath, targetNode))
+                        if (ShouldImportNonRootPositionCurves || ShouldImportPositionCurves(relativePath, targetNode))
                         {
                             SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
                         }
@@ -600,7 +600,7 @@ namespace Fbx2Vmd.FBXImporter
                     // 스케일 애니메이션
                     if (channel.HasScalingKeys)
                     {
-                        if (ImportScaleCurves)
+                        if (ShouldImportScaleCurves)
                         {
                             SetScaleCurves(clip, relativePath, channel.ScalingKeys, timeScale);
                         }

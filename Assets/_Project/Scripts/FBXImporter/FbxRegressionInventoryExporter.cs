@@ -173,7 +173,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 AssimpFBXImporter.AnimationInspectionReport runtimeReport = AssimpFBXImporter.InspectAnimationFile(filePath);
-                row.RuntimeAnimationImportSucceeded = runtimeReport.ImportSucceeded;
+                row.RuntimeAnimationImportSucceeded = runtimeReport.HasImportSucceeded;
                 row.RuntimeAnimationCount = runtimeReport.AnimationCount;
                 row.RuntimeNodeAnimationChannelCount = runtimeReport.NodeAnimationChannelCount;
                 row.RuntimePositionKeyCount = runtimeReport.PositionKeyCount;
