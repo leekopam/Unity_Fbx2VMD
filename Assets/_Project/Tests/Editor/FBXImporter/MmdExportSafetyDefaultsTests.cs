@@ -734,6 +734,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That((bool)method.Invoke(null, new object[] { 0.505f, 0.358f, 0.5f }), Is.False);
         }
 
+        // @Temporary: private reflection으로 현재 clamp 경계를 고정하는 characterization 테스트임.
+        // 안정된 observable API 또는 전용 test seam 도입 시 해당 검증으로 교체·제거함.
         [Test]
         public void Given_ThumbLocalRotationBeyondSoftLimit_When_Clamped_Then_UsesSoftAndHardBoundaries()
         {
@@ -758,6 +760,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(Quaternion.Angle(baseline, beyondHardOvershoot), Is.EqualTo(36f).Within(0.0001f));
         }
 
+        // @Temporary: private reflection으로 현재 offset 복원 경계를 고정하는 characterization 테스트임.
+        // 안정된 observable API 또는 전용 test seam 도입 시 해당 검증으로 교체·제거함.
         [Test]
         public void Given_ProximalSideOffsets_When_ClampingInLimitSpace_Then_UsesSelectedOffsetAndRestoresBoundary()
         {
@@ -826,6 +830,8 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        // @Temporary: private reflection으로 현재 non-finite 거부 경계를 고정하는 characterization 테스트임.
+        // 안정된 observable API 또는 전용 test seam 도입 시 해당 검증으로 교체·제거함.
         [Test]
         public void Given_NonFiniteThumbQuaternion_When_CheckingFiniteBoundary_Then_RejectsNaNAndInfinity()
         {
