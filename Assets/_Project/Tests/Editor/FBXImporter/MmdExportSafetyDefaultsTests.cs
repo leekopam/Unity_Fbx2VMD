@@ -735,6 +735,114 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ThumbLocalRotationBeyondSoftLimit_When_Clamped_Then_UsesSoftAndHardBoundaries()
+        {
+            MethodInfo method = typeof(HumanoidThumbDeformationGuard).GetMethod(
+                "LimitLocalRotation",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Quaternion), typeof(Quaternion), typeof(float) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "Thumb rotation clamp must keep its private characterization boundary.");
+
+            Quaternion baseline = Quaternion.identity;
+            Quaternion withinHardOvershoot = (Quaternion)method.Invoke(
+                null,
+                new object[] { baseline, Quaternion.Euler(0f, 40f, 0f), 28f });
+            Quaternion beyondHardOvershoot = (Quaternion)method.Invoke(
+                null,
+                new object[] { baseline, Quaternion.Euler(0f, 100f, 0f), 28f });
+
+            Assert.That(Quaternion.Angle(baseline, withinHardOvershoot), Is.EqualTo(32.2f).Within(0.0001f));
+            Assert.That(Quaternion.Angle(baseline, beyondHardOvershoot), Is.EqualTo(36f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ProximalSideOffsets_When_ClampingInLimitSpace_Then_UsesSelectedOffsetAndRestoresBoundary()
+        {
+            var guardObject = new GameObject("thumb proximal side offset characterization");
+            try
+            {
+                HumanoidThumbDeformationGuard guard = guardObject.AddComponent<HumanoidThumbDeformationGuard>();
+                SetField(guard, "proximalLocalRotationOffset", new Vector3(10f, 20f, 30f));
+                SetField(guard, "mirrorRightProximalLocalRotationOffset", true);
+                SetField(guard, "leftProximalLocalRotationOffset", new Vector3(1f, 2f, 3f));
+                SetField(guard, "rightProximalLocalRotationOffset", new Vector3(1f, 2f, 3f));
+
+                MethodInfo getOffset = typeof(HumanoidThumbDeformationGuard).GetMethod(
+                    "GetProximalRotationOffset",
+                    BindingFlags.Instance | BindingFlags.NonPublic,
+                    binder: null,
+                    types: new[] { typeof(bool) },
+                    modifiers: null);
+                MethodInfo applyOffset = typeof(HumanoidThumbDeformationGuard).GetMethod(
+                    "ApplyLimitSpaceOffset",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: new[] { typeof(Quaternion), typeof(Quaternion) },
+                    modifiers: null);
+                MethodInfo removeOffset = typeof(HumanoidThumbDeformationGuard).GetMethod(
+                    "RemoveLimitSpaceOffset",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: new[] { typeof(Quaternion), typeof(Quaternion) },
+                    modifiers: null);
+                MethodInfo limitRotation = typeof(HumanoidThumbDeformationGuard).GetMethod(
+                    "LimitLocalRotation",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: new[] { typeof(Quaternion), typeof(Quaternion), typeof(float) },
+                    modifiers: null);
+
+                Assert.That(getOffset, Is.Not.Null);
+                Assert.That(applyOffset, Is.Not.Null);
+                Assert.That(removeOffset, Is.Not.Null);
+                Assert.That(limitRotation, Is.Not.Null);
+
+                Vector3 leftOffset = (Vector3)getOffset.Invoke(guard, new object[] { false });
+                Vector3 rightOffset = (Vector3)getOffset.Invoke(guard, new object[] { true });
+                Assert.That(leftOffset, Is.EqualTo(new Vector3(11f, 22f, 33f)));
+                Assert.That(rightOffset, Is.EqualTo(new Vector3(11f, -18f, -27f)));
+
+                Quaternion baseline = Quaternion.identity;
+                Quaternion current = Quaternion.Euler(0f, 50f, 0f);
+                foreach (Vector3 offset in new[] { leftOffset, rightOffset })
+                {
+                    Quaternion offsetRotation = Quaternion.Euler(offset);
+                    Quaternion limitSpaceBaseline = (Quaternion)applyOffset.Invoke(null, new object[] { baseline, offsetRotation });
+                    Quaternion limitSpaceCurrent = (Quaternion)applyOffset.Invoke(null, new object[] { current, offsetRotation });
+                    Quaternion limitedRotation = (Quaternion)limitRotation.Invoke(
+                        null,
+                        new object[] { limitSpaceBaseline, limitSpaceCurrent, 28f });
+                    Quaternion restoredRotation = (Quaternion)removeOffset.Invoke(null, new object[] { limitedRotation, offsetRotation });
+
+                    Assert.That(Quaternion.Angle(baseline, restoredRotation), Is.EqualTo(35.7f).Within(0.0001f));
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(guardObject);
+            }
+        }
+
+        [Test]
+        public void Given_NonFiniteThumbQuaternion_When_CheckingFiniteBoundary_Then_RejectsNaNAndInfinity()
+        {
+            MethodInfo method = typeof(HumanoidThumbDeformationGuard).GetMethod(
+                "IsFinite",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Quaternion) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "Thumb clamp must reject non-finite local rotations before limiting them.");
+            Assert.That((bool)method.Invoke(null, new object[] { Quaternion.identity }), Is.True);
+            Assert.That((bool)method.Invoke(null, new object[] { new Quaternion(float.NaN, 0f, 0f, 1f) }), Is.False);
+            Assert.That((bool)method.Invoke(null, new object[] { new Quaternion(0f, float.PositiveInfinity, 0f, 1f) }), Is.False);
+        }
+
+        [Test]
         public void Given_ThumbRiskValueAboveWarning_When_EvaluatingRiskAbove_Then_ReturnsNormalizedRisk()
         {
             Assert.That(ThumbRiskEvaluator.RiskAbove(5f, 3f, 7f), Is.EqualTo(0.5f).Within(0.0001f));
