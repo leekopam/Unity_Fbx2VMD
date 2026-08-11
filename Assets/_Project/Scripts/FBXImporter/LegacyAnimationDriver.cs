@@ -7,40 +7,143 @@ namespace Fbx2Vmd.FBXImporter
         private sealed class LegacyAnimationDriver
         {
             private readonly PoseSpaceRetargeter _retargeter;
+            private Animation _legacyAnim;
+            private AnimationClip _ownedLegacyClip;
+            private bool _addedLegacyAnimationComponent;
+            private bool _ghostAnimatorWasEnabled;
+            private bool _hasPreviousLegacyAnimationTime;
+            private float _previousLegacyAnimationTime;
+            private float _lastLegacyAnimationStep = float.NaN;
+            private float _maxLegacyAnimationStep;
+            private int _legacyAnimationStepSpikeCount;
+            private bool _legacyAnimationStepSpikeThisFrame;
 
             public LegacyAnimationDriver(PoseSpaceRetargeter retargeter)
             {
                 _retargeter = retargeter;
             }
 
-            public void UpdateLegacyAnimationVisualStep()
-            {
-                _retargeter._legacyAnimationStepSpikeThisFrame = false;
+            public float LastLegacyAnimationStep => _lastLegacyAnimationStep;
+            public float MaxLegacyAnimationStep => _maxLegacyAnimationStep;
+            public int LegacyAnimationStepSpikeCount => _legacyAnimationStepSpikeCount;
+            public bool LegacyAnimationStepSpikeThisFrame => _legacyAnimationStepSpikeThisFrame;
+            public Animation Animation => _legacyAnim;
+            public bool IsPlaying => _legacyAnim != null && _legacyAnim.isPlaying;
 
-                if (_retargeter._legacyAnim == null)
+            public void Initialize(GameObject ghostRoot, Animator ghostAnimator, AnimationClip clip)
+            {
+                _ghostAnimatorWasEnabled = ghostAnimator != null && ghostAnimator.enabled;
+                if (ghostAnimator != null) ghostAnimator.enabled = false;
+
+                _legacyAnim = ghostRoot.GetComponent<Animation>();
+                _addedLegacyAnimationComponent = _legacyAnim == null;
+                if (_legacyAnim == null) _legacyAnim = ghostRoot.AddComponent<Animation>();
+                _legacyAnim.Stop();
+
+                AnimationClip legacyClip = clip;
+                if (legacyClip != null && !legacyClip.legacy)
                 {
-                    return;
+                    string legacyClipName = legacyClip.name;
+                    _ownedLegacyClip = UnityEngine.Object.Instantiate(legacyClip);
+                    _ownedLegacyClip.name = legacyClipName;
+                    _ownedLegacyClip.legacy = true;
+                    legacyClip = _ownedLegacyClip;
                 }
 
-                AnimationState state = _retargeter._legacyAnim[LegacyClipStateName];
+                RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
+                _legacyAnim.AddClip(legacyClip, LegacyClipStateName);
+                _legacyAnim.clip = legacyClip;
+                AnimationState state = _legacyAnim[LegacyClipStateName];
+                if (state != null)
+                {
+                    state.wrapMode = WrapMode.Once;
+                    state.time = 0f;
+                }
+
+                _legacyAnim.Play(LegacyClipStateName);
+            }
+
+            public void Cleanup(Animator ghostAnimator)
+            {
+                if (_legacyAnim != null)
+                {
+                    _legacyAnim.Stop();
+                    RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
+                }
+
+                if (_ownedLegacyClip != null)
+                {
+                    UnityEngine.Object.Destroy(_ownedLegacyClip);
+                    _ownedLegacyClip = null;
+                }
+
+                if (_addedLegacyAnimationComponent && _legacyAnim != null)
+                {
+                    UnityEngine.Object.Destroy(_legacyAnim);
+                }
+
+                if (ghostAnimator != null)
+                {
+                    ghostAnimator.enabled = _ghostAnimatorWasEnabled;
+                }
+
+                _legacyAnim = null;
+                _addedLegacyAnimationComponent = false;
+                _ghostAnimatorWasEnabled = false;
+            }
+
+            public void ResetPlaybackStabilityMetrics()
+            {
+                _hasPreviousLegacyAnimationTime = false;
+                _previousLegacyAnimationTime = 0f;
+                _lastLegacyAnimationStep = float.NaN;
+                _maxLegacyAnimationStep = 0f;
+                _legacyAnimationStepSpikeCount = 0;
+                _legacyAnimationStepSpikeThisFrame = false;
+            }
+
+            public bool PrepareRecordingStartPose(float startTimeSeconds, float playbackSpeed, bool holdPose)
+            {
+                if (!TryPrepareRecordingStartPose(_legacyAnim, startTimeSeconds, playbackSpeed, holdPose))
+                {
+                    return false;
+                }
+
+                _hasPreviousLegacyAnimationTime = false;
+                _previousLegacyAnimationTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, _legacyAnim[LegacyClipStateName].length));
+                _lastLegacyAnimationStep = 0f;
+                _legacyAnimationStepSpikeThisFrame = false;
+                return true;
+            }
+
+            public bool UpdateLegacyAnimationVisualStep()
+            {
+                _legacyAnimationStepSpikeThisFrame = false;
+
+                if (_legacyAnim == null)
+                {
+                    return false;
+                }
+
+                AnimationState state = _legacyAnim[LegacyClipStateName];
                 if (state == null)
                 {
-                    return;
+                    return false;
                 }
 
                 float length = Mathf.Max(0f, state.length);
                 float currentTime = Mathf.Clamp(state.time, 0f, length);
-                if (!_retargeter._hasPreviousLegacyAnimationTime)
+                if (!_hasPreviousLegacyAnimationTime)
                 {
-                    _retargeter._previousLegacyAnimationTime = currentTime;
-                    _retargeter._hasPreviousLegacyAnimationTime = true;
-                    _retargeter._lastLegacyAnimationStep = 0f;
-                    return;
+                    _previousLegacyAnimationTime = currentTime;
+                    _hasPreviousLegacyAnimationTime = true;
+                    _lastLegacyAnimationStep = 0f;
+                    return false;
                 }
 
                 if (TryCalculateManualLegacyAnimationTime(
                     currentTime,
-                    _retargeter._previousLegacyAnimationTime,
+                    _previousLegacyAnimationTime,
                     length,
                     state.speed,
                     Time.deltaTime,
@@ -50,13 +153,13 @@ namespace Fbx2Vmd.FBXImporter
                     currentTime = manualAnimationTime;
                     state.enabled = true;
                     state.time = currentTime;
-                    _retargeter._legacyAnim.Sample();
+                    _legacyAnim.Sample();
                 }
 
                 float maxStep = 1f / Mathf.Clamp(_retargeter.legacyAnimationVisualFrameRate, 15f, 120f);
                 if (TryClampLegacyAnimationEndWrap(
                     currentTime,
-                    _retargeter._previousLegacyAnimationTime,
+                    _previousLegacyAnimationTime,
                     length,
                     maxStep,
                     out float clampedEndTime))
@@ -65,36 +168,36 @@ namespace Fbx2Vmd.FBXImporter
                     state.enabled = true;
                     state.time = currentTime;
                     state.speed = 0f;
-                    _retargeter._legacyAnim.Sample();
+                    _legacyAnim.Sample();
                 }
 
-                if (currentTime + 0.0001f < _retargeter._previousLegacyAnimationTime)
+                if (currentTime + 0.0001f < _previousLegacyAnimationTime)
                 {
-                    _retargeter._previousLegacyAnimationTime = currentTime;
-                    _retargeter._lastLegacyAnimationStep = 0f;
-                    _retargeter.ResetVisualPoseHistory();
-                    return;
+                    _previousLegacyAnimationTime = currentTime;
+                    _lastLegacyAnimationStep = 0f;
+                    return true;
                 }
 
-                float step = currentTime - _retargeter._previousLegacyAnimationTime;
-                _retargeter._lastLegacyAnimationStep = step;
-                _retargeter._maxLegacyAnimationStep = Mathf.Max(_retargeter._maxLegacyAnimationStep, step);
+                float step = currentTime - _previousLegacyAnimationTime;
+                _lastLegacyAnimationStep = step;
+                _maxLegacyAnimationStep = Mathf.Max(_maxLegacyAnimationStep, step);
                 float spikeTolerance = Mathf.Max(0.001f, maxStep * 0.05f);
                 if (step > maxStep + spikeTolerance)
                 {
-                    _retargeter._legacyAnimationStepSpikeThisFrame = true;
-                    _retargeter._legacyAnimationStepSpikeCount++;
+                    _legacyAnimationStepSpikeThisFrame = true;
+                    _legacyAnimationStepSpikeCount++;
                     if (_retargeter.clampLegacyAnimationVisualStep)
                     {
-                        currentTime = Mathf.Min(_retargeter._previousLegacyAnimationTime + maxStep, length);
+                        currentTime = Mathf.Min(_previousLegacyAnimationTime + maxStep, length);
                         state.time = currentTime;
-                        _retargeter._legacyAnim.Sample();
-                        step = currentTime - _retargeter._previousLegacyAnimationTime;
-                        _retargeter._lastLegacyAnimationStep = step;
+                        _legacyAnim.Sample();
+                        step = currentTime - _previousLegacyAnimationTime;
+                        _lastLegacyAnimationStep = step;
                     }
                 }
 
-                _retargeter._previousLegacyAnimationTime = currentTime;
+                _previousLegacyAnimationTime = currentTime;
+                return false;
             }
 
             private static bool TryCalculateManualLegacyAnimationTime(

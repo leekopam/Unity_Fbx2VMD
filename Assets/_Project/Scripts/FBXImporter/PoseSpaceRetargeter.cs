@@ -39,6 +39,8 @@ namespace Fbx2Vmd.FBXImporter
 
         private PoseSpaceDiagnostics Diagnostics => _diagnostics ?? (_diagnostics = new PoseSpaceDiagnostics(this));
         private LegacyAnimationDriver AnimationDriver => _legacyAnimationDriver ?? (_legacyAnimationDriver = new LegacyAnimationDriver(this));
+        private Animation _legacyAnim => AnimationDriver.Animation;
+        private bool _legacyAnimationStepSpikeThisFrame => AnimationDriver.LegacyAnimationStepSpikeThisFrame;
         private PoseSpaceGuardPipeline GuardPipeline => _guardPipeline ?? (_guardPipeline = new PoseSpaceGuardPipeline(this));
         private PoseSpaceGroundingController GroundingController => _groundingController ?? (_groundingController = new PoseSpaceGroundingController(this));
         private PoseSpaceRootController RootController => _rootController ?? (_rootController = new PoseSpaceRootController(this));
@@ -874,9 +876,9 @@ namespace Fbx2Vmd.FBXImporter
         public float RecordingStartHipsReferenceDeltaY => _recordingStartHipsReferenceDeltaY;
         public int RecordingStartHipsReferenceFlipDetected => _recordingStartHipsReferenceFlipDetected ? 1 : 0;
         public string RecordingStartHipsReferenceStage => _recordingStartHipsReferenceStage;
-        public float LastLegacyAnimationStep => _lastLegacyAnimationStep;
-        public float MaxLegacyAnimationStep => _maxLegacyAnimationStep;
-        public int LegacyAnimationStepSpikeCount => _legacyAnimationStepSpikeCount;
+        public float LastLegacyAnimationStep => AnimationDriver.LastLegacyAnimationStep;
+        public float MaxLegacyAnimationStep => AnimationDriver.MaxLegacyAnimationStep;
+        public int LegacyAnimationStepSpikeCount => AnimationDriver.LegacyAnimationStepSpikeCount;
         public int PoseVisualSmoothingCount => _poseVisualSmoothingCount;
         public int PoseVisualMuscleDeltaOnlySkippedCount => _poseVisualMuscleDeltaOnlySkippedCount;
         public float LastPoseVisualMaxMuscleDelta => _lastPoseVisualMaxMuscleDelta;
@@ -1291,14 +1293,9 @@ namespace Fbx2Vmd.FBXImporter
 
         public void ResetPlaybackStabilityMetrics()
         {
-            _hasPreviousLegacyAnimationTime = false;
-            _previousLegacyAnimationTime = 0f;
+            AnimationDriver.ResetPlaybackStabilityMetrics();
             ResetEditorHumanoidRootTranslationReferenceState();
             ResetTargetHipsLocalPositionSpikeState();
-            _lastLegacyAnimationStep = float.NaN;
-            _maxLegacyAnimationStep = 0f;
-            _legacyAnimationStepSpikeCount = 0;
-            _legacyAnimationStepSpikeThisFrame = false;
             ResetVisualPoseHistory();
             _poseVisualSmoothingCount = 0;
             _poseVisualMuscleDeltaOnlySkippedCount = 0;
@@ -1317,16 +1314,11 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool PrepareRecordingStartPose(float startTimeSeconds, float playbackSpeed, bool holdPose)
         {
-            bool prepared = TryPrepareRecordingStartPose(_legacyAnim, startTimeSeconds, playbackSpeed, holdPose);
-            if (!prepared)
+            if (!AnimationDriver.PrepareRecordingStartPose(startTimeSeconds, playbackSpeed, holdPose))
             {
                 return false;
             }
 
-            _hasPreviousLegacyAnimationTime = false;
-            _previousLegacyAnimationTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, _legacyAnim[LegacyClipStateName].length));
-            _lastLegacyAnimationStep = 0f;
-            _legacyAnimationStepSpikeThisFrame = false;
             ResetVisualPoseHistory();
             return true;
         }
@@ -1517,12 +1509,6 @@ namespace Fbx2Vmd.FBXImporter
         private bool _lateVisualGroundingInitialized;
         private bool _hasFrozenGroundingRootY;
         private float _frozenGroundingRootY;
-        private bool _hasPreviousLegacyAnimationTime;
-        private float _previousLegacyAnimationTime;
-        private float _lastLegacyAnimationStep = float.NaN;
-        private float _maxLegacyAnimationStep;
-        private int _legacyAnimationStepSpikeCount;
-        private bool _legacyAnimationStepSpikeThisFrame;
         private bool _hasPreviousVisualPose;
         private float[] _previousVisualPoseMuscles;
         private Vector3 _previousVisualPoseBodyPosition;
@@ -1835,10 +1821,6 @@ namespace Fbx2Vmd.FBXImporter
         // --- 초기화 ---
         private bool _isInitialized = false;
         private const string LegacyClipStateName = "__PoseSpaceRetargeter_GhostClip";
-        private Animation _legacyAnim;
-        private bool _ghostAnimatorWasEnabled;
-        private bool _addedLegacyAnimationComponent;
-        private AnimationClip _ownedLegacyClip;
 
         public void Initialize(RetargetingContext context, RetargetingSettings settings)
         {
@@ -1856,36 +1838,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (clip == null) return;
 
-            // Ghost Animator 끄기 (Legacy 구동용)
-            _ghostAnimatorWasEnabled = ghostAnimator != null && ghostAnimator.enabled;
-            if (ghostAnimator != null) ghostAnimator.enabled = false;
-
-            // Legacy Animation playback
-            _legacyAnim = ghostRoot.GetComponent<Animation>();
-            _addedLegacyAnimationComponent = _legacyAnim == null;
-            if (_legacyAnim == null) _legacyAnim = ghostRoot.AddComponent<Animation>();
-            _legacyAnim.Stop();
-
-            AnimationClip legacyClip = clip;
-            if (legacyClip != null && !legacyClip.legacy)
-            {
-                string legacyClipName = legacyClip.name;
-                _ownedLegacyClip = Instantiate(legacyClip);
-                _ownedLegacyClip.name = legacyClipName;
-                _ownedLegacyClip.legacy = true;
-                legacyClip = _ownedLegacyClip;
-            }
-
-            RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
-            _legacyAnim.AddClip(legacyClip, LegacyClipStateName);
-            _legacyAnim.clip = legacyClip;
-            AnimationState state = _legacyAnim[LegacyClipStateName];
-            if (state != null)
-            {
-                state.wrapMode = WrapMode.Once;
-                state.time = 0f;
-            }
-            _legacyAnim.Play(LegacyClipStateName);
+            AnimationDriver.Initialize(ghostRoot, ghostAnimator, clip);
 
             // 포즈 핸들러 초기화
             if (!ghostAnimator.avatar || !targetAnimator.avatar) return;
@@ -2120,31 +2073,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private void CleanupLegacyGhostPlayback()
         {
-            if (_legacyAnim != null)
-            {
-                _legacyAnim.Stop();
-                RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
-            }
-
-            if (_ownedLegacyClip != null)
-            {
-                Destroy(_ownedLegacyClip);
-                _ownedLegacyClip = null;
-            }
-
-            if (_addedLegacyAnimationComponent && _legacyAnim != null)
-            {
-                Destroy(_legacyAnim);
-            }
-
-            if (ghostAnimator != null)
-            {
-                ghostAnimator.enabled = _ghostAnimatorWasEnabled;
-            }
-
-            _legacyAnim = null;
-            _addedLegacyAnimationComponent = false;
-            _ghostAnimatorWasEnabled = false;
+            AnimationDriver.Cleanup(ghostAnimator);
         }
 
         private static bool HasLegacyAnimationClipState(Animation legacyAnimation, string stateName)
@@ -2420,7 +2349,10 @@ namespace Fbx2Vmd.FBXImporter
 
             using (RetargetMarker.Auto())
             {
-                AnimationDriver.UpdateLegacyAnimationVisualStep();
+                if (AnimationDriver.UpdateLegacyAnimationVisualStep())
+                {
+                    ResetVisualPoseHistory();
+                }
 
             // 스케일 비율 계산 (매 프레임 체크하여 안정성 확보)
             RootController.ComputeScaleRatio();
@@ -2453,7 +2385,7 @@ namespace Fbx2Vmd.FBXImporter
             GuardPipeline.SmoothPoseOnVisualSpike(ref _humanPose);
             Diagnostics.CaptureAfterVisualSpikeSmoothingDiagnostics(_humanPose);
             Quaternion poseRootRotation = _humanPose.bodyRotation;
-            if (ShouldPreserveFbxRootRotation && !_hasPoseRootRotationCorrection && IsFinite(poseRootRotation) && _legacyAnim != null && _legacyAnim.isPlaying)
+            if (ShouldPreserveFbxRootRotation && !_hasPoseRootRotationCorrection && IsFinite(poseRootRotation) && AnimationDriver.IsPlaying)
             {
                 _poseRootRotationCorrection = Quaternion.Inverse(poseRootRotation);
                 _hasPoseRootRotationCorrection = true;
@@ -5411,12 +5343,7 @@ namespace Fbx2Vmd.FBXImporter
             _groundingInitialized = false;
             _hasFrozenGroundingRootY = false;
             _frozenGroundingRootY = 0f;
-            _hasPreviousLegacyAnimationTime = false;
-            _previousLegacyAnimationTime = 0f;
-            _lastLegacyAnimationStep = float.NaN;
-            _maxLegacyAnimationStep = 0f;
-            _legacyAnimationStepSpikeCount = 0;
-            _legacyAnimationStepSpikeThisFrame = false;
+            AnimationDriver.ResetPlaybackStabilityMetrics();
             _hasPreviousVisualPose = false;
             _poseVisualSmoothingCount = 0;
             _poseVisualMuscleDeltaOnlySkippedCount = 0;
