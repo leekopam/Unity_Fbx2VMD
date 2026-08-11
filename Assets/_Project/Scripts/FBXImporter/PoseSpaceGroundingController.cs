@@ -103,7 +103,9 @@ namespace Fbx2Vmd.FBXImporter
                 float contactBottomY = ResolveGroundingContactBottomY(lowestFootCurrentY);
 
                 float targetGroundY = 0.0f;
-                float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + _retargeter.groundOffset);
+                float targetHeight = _retargeter.ResolveEditorFootHeightGroundingReferenceTarget(
+                    targetGroundY + _retargeter.groundOffset,
+                    out _lastEditorFootHeightGroundingReferenceLift);
                 _lastGroundingTargetY = targetGroundY;
                 _lastGroundingLowestFootBottomY = contactBottomY;
 
@@ -200,116 +202,107 @@ namespace Fbx2Vmd.FBXImporter
 
             public void ApplyLateVisualGroundingCorrection()
             {
-                try
+                if (!_retargeter._isInitialized || !_retargeter.useSmartGrounding || !_retargeter.enableLateVisualGroundingCorrection || _retargeter.targetAnimator == null)
                 {
-                    if (!_retargeter._isInitialized || !_retargeter.useSmartGrounding || !_retargeter.enableLateVisualGroundingCorrection || _retargeter.targetAnimator == null)
-                    {
-                        return;
-                    }
-
-                    if (_retargeter.freezeRootYAfterInitialGrounding && _groundingInitialized && _hasFrozenGroundingRootY)
-                    {
-                        Vector3 frozenPos = _retargeter.targetAnimator.transform.position;
-                        frozenPos.y = _frozenGroundingRootY;
-                        if (IsFinite(frozenPos))
-                        {
-                            _retargeter.targetAnimator.transform.position = frozenPos;
-                        }
-
-                        _lateVisualGroundingInitialized = true;
-                        _lastGroundingVerticalStep = 0f;
-                        return;
-                    }
-
-                    if (!TryGetLowestFootBottomY(out float lowestFootBottomY))
-                    {
-                        return;
-                    }
-
-                    float rendererMinY = ResolveGroundingContactBottomY(lowestFootBottomY);
-
-                    float targetGroundY = 0.0f;
-                    float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + _retargeter.groundOffset);
-                    _lastGroundingTargetY = targetGroundY;
-                    _lastGroundingLowestFootBottomY = rendererMinY;
-
-                    if (!GroundingStabilizer.TryCalculateAdjustment(targetHeight, rendererMinY, out float residual))
-                    {
-                        _retargeter.LogPoseWarning("Late visual grounding residual became non-finite. Skipping final grounding for this frame.");
-                        return;
-                    }
-
-                    if (ShouldSkipLateVisualGroundingForActiveVerticalStep(
-                        residual,
-                        _retargeter.smoothLateVisualGroundingCorrection,
-                        _lastGroundingVerticalStep))
-                    {
-                        _lateVisualGroundingInitialized = true;
-                        return;
-                    }
-
-                    if (!TryCalculateLateVisualGroundingEffectiveResidual(
-                        residual,
-                        _retargeter.smoothLateVisualGroundingCorrection,
-                        _retargeter.groundingDeadZone,
-                        _retargeter.maxLateVisualGroundingCorrection,
-                        out float effectiveResidual,
-                        out bool exceededMaxCorrection))
-                    {
-                        if (exceededMaxCorrection && !_lateVisualGroundingWarningLogged)
-                        {
-                            float maxCorrection = Mathf.Max(0.001f, _retargeter.maxLateVisualGroundingCorrection);
-                            Debug.LogWarning($"[PoseSpaceRetargeter] Late visual grounding residual {residual:F3}m exceeded max {maxCorrection:F3}m. Skipping this frame to avoid collapsing a real jump.");
-                            _lateVisualGroundingWarningLogged = true;
-                        }
-
-                        _lateVisualGroundingInitialized = true;
-                        return;
-                    }
-
-                    Vector3 currentPos = _retargeter.targetAnimator.transform.position;
-                    if (!IsFinite(currentPos))
-                    {
-                        _retargeter.LogPoseWarning("Target position became non-finite before late visual grounding. Skipping final grounding for this frame.");
-                        return;
-                    }
-
-                    float appliedResidual = CalculateLateVisualGroundingStep(effectiveResidual);
-                    if (Mathf.Abs(appliedResidual) <= 0.000001f)
-                    {
-                        return;
-                    }
-
-                    if (!TryCalculateLateVisualGroundingAppliedPosition(currentPos, appliedResidual, out Vector3 appliedPosition))
-                    {
-                        _retargeter.LogPoseWarning("Target position became non-finite after late visual grounding. Skipping final grounding for this frame.");
-                        return;
-                    }
-
-                    _retargeter.targetAnimator.transform.position = appliedPosition;
-                    _lateVisualGroundingInitialized = true;
-
-                    _lastGroundingAdjustment = appliedResidual;
-                    _maxGroundingAdjustment = Mathf.Max(_maxGroundingAdjustment, Mathf.Abs(appliedResidual));
-                    _lastGroundingVerticalStep = appliedResidual;
-                    _maxGroundingVerticalStep = Mathf.Max(_maxGroundingVerticalStep, Mathf.Abs(appliedResidual));
-                    if (_groundingInitialized)
-                    {
-                        _maxGroundingVerticalStepAfterInitial = Mathf.Max(_maxGroundingVerticalStepAfterInitial, Mathf.Abs(appliedResidual));
-                    }
-                    else
-                    {
-                        _groundingInitialized = true;
-                        _initialGroundingVerticalStep = appliedResidual;
-                    }
+                    return;
                 }
-                finally
+
+                if (_retargeter.freezeRootYAfterInitialGrounding && _groundingInitialized && _hasFrozenGroundingRootY)
                 {
-                    if (_retargeter.targetAnimator != null)
+                    Vector3 frozenPos = _retargeter.targetAnimator.transform.position;
+                    frozenPos.y = _frozenGroundingRootY;
+                    if (IsFinite(frozenPos))
                     {
-                        _retargeter._lastRetargetStageAfterLateVisualGroundingEndpointPositions = _retargeter.Diagnostics.CaptureEndpointStageWorldPositions(_retargeter.targetAnimator);
-                        _retargeter.Diagnostics.CaptureRetargetEndpointStageAttributionDiagnostics();
+                        _retargeter.targetAnimator.transform.position = frozenPos;
                     }
+
+                    _lateVisualGroundingInitialized = true;
+                    _lastGroundingVerticalStep = 0f;
+                    return;
+                }
+
+                if (!TryGetLowestFootBottomY(out float lowestFootBottomY))
+                {
+                    return;
+                }
+
+                float rendererMinY = ResolveGroundingContactBottomY(lowestFootBottomY);
+
+                float targetGroundY = 0.0f;
+                float targetHeight = _retargeter.ResolveEditorFootHeightGroundingReferenceTarget(
+                    targetGroundY + _retargeter.groundOffset,
+                    out _lastEditorFootHeightGroundingReferenceLift);
+                _lastGroundingTargetY = targetGroundY;
+                _lastGroundingLowestFootBottomY = rendererMinY;
+
+                if (!GroundingStabilizer.TryCalculateAdjustment(targetHeight, rendererMinY, out float residual))
+                {
+                    _retargeter.LogPoseWarning("Late visual grounding residual became non-finite. Skipping final grounding for this frame.");
+                    return;
+                }
+
+                if (ShouldSkipLateVisualGroundingForActiveVerticalStep(
+                    residual,
+                    _retargeter.smoothLateVisualGroundingCorrection,
+                    _lastGroundingVerticalStep))
+                {
+                    _lateVisualGroundingInitialized = true;
+                    return;
+                }
+
+                if (!TryCalculateLateVisualGroundingEffectiveResidual(
+                    residual,
+                    _retargeter.smoothLateVisualGroundingCorrection,
+                    _retargeter.groundingDeadZone,
+                    _retargeter.maxLateVisualGroundingCorrection,
+                    out float effectiveResidual,
+                    out bool exceededMaxCorrection))
+                {
+                    if (exceededMaxCorrection && !_lateVisualGroundingWarningLogged)
+                    {
+                        float maxCorrection = Mathf.Max(0.001f, _retargeter.maxLateVisualGroundingCorrection);
+                        Debug.LogWarning($"[PoseSpaceRetargeter] Late visual grounding residual {residual:F3}m exceeded max {maxCorrection:F3}m. Skipping this frame to avoid collapsing a real jump.");
+                        _lateVisualGroundingWarningLogged = true;
+                    }
+
+                    _lateVisualGroundingInitialized = true;
+                    return;
+                }
+
+                Vector3 currentPos = _retargeter.targetAnimator.transform.position;
+                if (!IsFinite(currentPos))
+                {
+                    _retargeter.LogPoseWarning("Target position became non-finite before late visual grounding. Skipping final grounding for this frame.");
+                    return;
+                }
+
+                float appliedResidual = CalculateLateVisualGroundingStep(effectiveResidual);
+                if (Mathf.Abs(appliedResidual) <= 0.000001f)
+                {
+                    return;
+                }
+
+                if (!TryCalculateLateVisualGroundingAppliedPosition(currentPos, appliedResidual, out Vector3 appliedPosition))
+                {
+                    _retargeter.LogPoseWarning("Target position became non-finite after late visual grounding. Skipping final grounding for this frame.");
+                    return;
+                }
+
+                _retargeter.targetAnimator.transform.position = appliedPosition;
+                _lateVisualGroundingInitialized = true;
+
+                _lastGroundingAdjustment = appliedResidual;
+                _maxGroundingAdjustment = Mathf.Max(_maxGroundingAdjustment, Mathf.Abs(appliedResidual));
+                _lastGroundingVerticalStep = appliedResidual;
+                _maxGroundingVerticalStep = Mathf.Max(_maxGroundingVerticalStep, Mathf.Abs(appliedResidual));
+                if (_groundingInitialized)
+                {
+                    _maxGroundingVerticalStepAfterInitial = Mathf.Max(_maxGroundingVerticalStepAfterInitial, Mathf.Abs(appliedResidual));
+                }
+                else
+                {
+                    _groundingInitialized = true;
+                    _initialGroundingVerticalStep = appliedResidual;
                 }
             }
 
@@ -343,50 +336,6 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     _retargeter.targetAnimator.transform.position = rootPosition;
                 }
-            }
-
-            private float ResolveEditorFootHeightGroundingReferenceTarget(float baseTargetHeight)
-            {
-#if UNITY_EDITOR
-                _lastEditorFootHeightGroundingReferenceLift = 0f;
-                if (!_retargeter.ShouldUseManualAnimatorFootHeightGroundingReference ||
-                    !_retargeter._allowEditorFootHeightGroundingReference ||
-                    _retargeter.manualAnimatorFootHeightGroundingReferenceWeight <= 0f ||
-                    _retargeter._editorFingerReferenceAnimator == null)
-                {
-                    return baseTargetHeight;
-                }
-
-                if (!_retargeter.UpdateEditorManualReferenceAnimator() ||
-                    !TryGetAnimatorLowestFootY(_retargeter._editorFingerReferenceAnimator, out float referenceCurrentLowestFootY))
-                {
-                    return baseTargetHeight;
-                }
-
-                if (!_retargeter._hasEditorReferenceLowestFootRestY)
-                {
-                    _retargeter._editorReferenceLowestFootRestY = referenceCurrentLowestFootY;
-                    _retargeter._hasEditorReferenceLowestFootRestY = true;
-                    return baseTargetHeight;
-                }
-
-                if (PoseSpaceRetargeter.TryCalculateEditorFootHeightGroundingReferenceTarget(
-                        baseTargetHeight,
-                        referenceCurrentLowestFootY,
-                        _retargeter._editorReferenceLowestFootRestY,
-                        _retargeter.manualAnimatorFootHeightGroundingReferenceWeight,
-                        _retargeter.manualAnimatorFootHeightGroundingReferenceMaxLift,
-                        out float targetHeight))
-                {
-                    _lastEditorFootHeightGroundingReferenceLift = targetHeight - baseTargetHeight;
-                    return targetHeight;
-                }
-
-                _lastEditorFootHeightGroundingReferenceLift = float.NaN;
-                return baseTargetHeight;
-#else
-                return baseTargetHeight;
-#endif
             }
 
             private float CalculateLateVisualGroundingStep(float residual)
@@ -671,33 +620,6 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 return step;
-            }
-
-            private static bool TryGetAnimatorLowestFootY(Animator animator, out float lowestFootY)
-            {
-                lowestFootY = 0f;
-                if (animator == null || !animator.isHuman)
-                {
-                    return false;
-                }
-
-                Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
-                Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
-                if (leftFoot == null || rightFoot == null)
-                {
-                    return false;
-                }
-
-                Vector3 leftLocal = animator.transform.InverseTransformPoint(leftFoot.position);
-                Vector3 rightLocal = animator.transform.InverseTransformPoint(rightFoot.position);
-                lowestFootY = Mathf.Min(leftLocal.y, rightLocal.y);
-                if (!IsFinite(lowestFootY))
-                {
-                    lowestFootY = 0f;
-                    return false;
-                }
-
-                return true;
             }
 
             private static bool TryCalculateLowestFootBottomY(

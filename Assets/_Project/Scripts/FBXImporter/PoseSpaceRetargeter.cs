@@ -5764,7 +5764,90 @@ namespace Fbx2Vmd.FBXImporter
 
         public void ApplyLateVisualGroundingCorrection()
         {
-            GroundingController.ApplyLateVisualGroundingCorrection();
+            try
+            {
+                GroundingController.ApplyLateVisualGroundingCorrection();
+            }
+            finally
+            {
+                if (targetAnimator != null)
+                {
+                    _lastRetargetStageAfterLateVisualGroundingEndpointPositions = Diagnostics.CaptureEndpointStageWorldPositions(targetAnimator);
+                    Diagnostics.CaptureRetargetEndpointStageAttributionDiagnostics();
+                }
+            }
+        }
+
+        private float ResolveEditorFootHeightGroundingReferenceTarget(float baseTargetHeight, out float referenceLift)
+        {
+#if UNITY_EDITOR
+            referenceLift = 0f;
+            if (!ShouldUseManualAnimatorFootHeightGroundingReference ||
+                !_allowEditorFootHeightGroundingReference ||
+                manualAnimatorFootHeightGroundingReferenceWeight <= 0f ||
+                _editorFingerReferenceAnimator == null)
+            {
+                return baseTargetHeight;
+            }
+
+            if (!UpdateEditorManualReferenceAnimator() ||
+                !TryGetAnimatorLowestFootY(_editorFingerReferenceAnimator, out float referenceCurrentLowestFootY))
+            {
+                return baseTargetHeight;
+            }
+
+            if (!_hasEditorReferenceLowestFootRestY)
+            {
+                _editorReferenceLowestFootRestY = referenceCurrentLowestFootY;
+                _hasEditorReferenceLowestFootRestY = true;
+                return baseTargetHeight;
+            }
+
+            if (TryCalculateEditorFootHeightGroundingReferenceTarget(
+                    baseTargetHeight,
+                    referenceCurrentLowestFootY,
+                    _editorReferenceLowestFootRestY,
+                    manualAnimatorFootHeightGroundingReferenceWeight,
+                    manualAnimatorFootHeightGroundingReferenceMaxLift,
+                    out float targetHeight))
+            {
+                referenceLift = targetHeight - baseTargetHeight;
+                return targetHeight;
+            }
+
+            referenceLift = float.NaN;
+            return baseTargetHeight;
+#else
+            referenceLift = 0f;
+            return baseTargetHeight;
+#endif
+        }
+
+        private static bool TryGetAnimatorLowestFootY(Animator animator, out float lowestFootY)
+        {
+            lowestFootY = 0f;
+            if (animator == null || !animator.isHuman)
+            {
+                return false;
+            }
+
+            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            if (leftFoot == null || rightFoot == null)
+            {
+                return false;
+            }
+
+            Vector3 leftLocal = animator.transform.InverseTransformPoint(leftFoot.position);
+            Vector3 rightLocal = animator.transform.InverseTransformPoint(rightFoot.position);
+            lowestFootY = Mathf.Min(leftLocal.y, rightLocal.y);
+            if (!IsFinite(lowestFootY))
+            {
+                lowestFootY = 0f;
+                return false;
+            }
+
+            return true;
         }
 
         // Editor characterization tests exercise these pure calculations through reflection.
