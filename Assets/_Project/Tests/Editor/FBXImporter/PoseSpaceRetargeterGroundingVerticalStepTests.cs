@@ -159,13 +159,14 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var retargeter = gameObject.AddComponent<PoseSpaceRetargeter>();
-                SetField(retargeter, "_groundingInitialized", true);
-                SetField(retargeter, "_groundingStepClampedCount", 12);
-                SetField(retargeter, "_groundingSmoothedCount", 60);
-                SetField(retargeter, "_maxGroundingAdjustment", 0.52f);
-                SetField(retargeter, "_lastGroundingVerticalStep", 0.028f);
-                SetField(retargeter, "_maxGroundingVerticalStep", 0.45f);
-                SetField(retargeter, "_maxGroundingVerticalStepAfterInitial", 0.1f);
+                object groundingController = GetGroundingController(retargeter);
+                SetField(groundingController, "_groundingInitialized", true);
+                SetField(groundingController, "_groundingStepClampedCount", 12);
+                SetField(groundingController, "_groundingSmoothedCount", 60);
+                SetField(groundingController, "_maxGroundingAdjustment", 0.52f);
+                SetField(groundingController, "_lastGroundingVerticalStep", 0.028f);
+                SetField(groundingController, "_maxGroundingVerticalStep", 0.45f);
+                SetField(groundingController, "_maxGroundingVerticalStepAfterInitial", 0.1f);
                 SetField(retargeter, "_allowEditorFootHeightGroundingReference", false);
 
                 retargeter.ResetPlaybackStabilityMetrics();
@@ -176,7 +177,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(retargeter.MaxGroundingVerticalStep, Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(retargeter.MaxGroundingVerticalStepAfterInitial, Is.EqualTo(0f).Within(0.0001f));
                 Assert.That(retargeter.LastGroundingVerticalStep, Is.EqualTo(0.028f).Within(0.0001f));
-                Assert.That(GetField<bool>(retargeter, "_groundingInitialized"), Is.True);
+                Assert.That(GetField<bool>(groundingController, "_groundingInitialized"), Is.True);
                 Assert.That(GetField<bool>(retargeter, "_allowEditorFootHeightGroundingReference"), Is.True);
             }
             finally
@@ -347,24 +348,34 @@ namespace Tests.Editor.FBXImporter
             return calculated;
         }
 
-        private static void SetField<T>(PoseSpaceRetargeter retargeter, string fieldName, T value)
+        private static object GetGroundingController(PoseSpaceRetargeter retargeter)
         {
-            FieldInfo field = typeof(PoseSpaceRetargeter).GetField(
-                fieldName,
+            PropertyInfo property = typeof(PoseSpaceRetargeter).GetProperty(
+                "GroundingController",
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
-            Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}' to exist.");
-            field.SetValue(retargeter, value);
+            Assert.That(property, Is.Not.Null, "PoseSpaceRetargeter should provide the grounding controller.");
+            return property.GetValue(retargeter);
         }
 
-        private static T GetField<T>(PoseSpaceRetargeter retargeter, string fieldName)
+        private static void SetField<T>(object instance, string fieldName, T value)
         {
-            FieldInfo field = typeof(PoseSpaceRetargeter).GetField(
+            FieldInfo field = instance.GetType().GetField(
                 fieldName,
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
             Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}' to exist.");
-            return (T)field.GetValue(retargeter);
+            field.SetValue(instance, value);
+        }
+
+        private static T GetField<T>(object instance, string fieldName)
+        {
+            FieldInfo field = instance.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}' to exist.");
+            return (T)field.GetValue(instance);
         }
     }
 }

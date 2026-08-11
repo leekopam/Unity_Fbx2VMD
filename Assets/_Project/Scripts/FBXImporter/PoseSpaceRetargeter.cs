@@ -856,17 +856,17 @@ namespace Fbx2Vmd.FBXImporter
         public float LastTargetHipsLocalPositionDelta => _lastTargetHipsLocalPositionDelta;
         public float MaxTargetHipsLocalPositionDelta => _maxTargetHipsLocalPositionDelta;
         public int TargetHipsLocalPositionSpikeClampedCount => _targetHipsLocalPositionSpikeClampedCount;
-        public float LastGroundingAdjustment => _lastGroundingAdjustment;
-        public float MaxGroundingAdjustment => _maxGroundingAdjustment;
-        public int GroundingStepClampedCount => _groundingStepClampedCount;
-        public int GroundingSmoothedCount => _groundingSmoothedCount;
-        public float LastGroundingVerticalStep => _lastGroundingVerticalStep;
-        public float MaxGroundingVerticalStep => _maxGroundingVerticalStep;
-        public float InitialGroundingVerticalStep => _initialGroundingVerticalStep;
-        public float MaxGroundingVerticalStepAfterInitial => _maxGroundingVerticalStepAfterInitial;
-        public float LastGroundingTargetY => _lastGroundingTargetY;
-        public float LastGroundingLowestFootBottomY => _lastGroundingLowestFootBottomY;
-        public float LastEditorFootHeightGroundingReferenceLift => _lastEditorFootHeightGroundingReferenceLift;
+        public float LastGroundingAdjustment => GroundingController.LastGroundingAdjustment;
+        public float MaxGroundingAdjustment => GroundingController.MaxGroundingAdjustment;
+        public int GroundingStepClampedCount => GroundingController.GroundingStepClampedCount;
+        public int GroundingSmoothedCount => GroundingController.GroundingSmoothedCount;
+        public float LastGroundingVerticalStep => GroundingController.LastGroundingVerticalStep;
+        public float MaxGroundingVerticalStep => GroundingController.MaxGroundingVerticalStep;
+        public float InitialGroundingVerticalStep => GroundingController.InitialGroundingVerticalStep;
+        public float MaxGroundingVerticalStepAfterInitial => GroundingController.MaxGroundingVerticalStepAfterInitial;
+        public float LastGroundingTargetY => GroundingController.LastGroundingTargetY;
+        public float LastGroundingLowestFootBottomY => GroundingController.LastGroundingLowestFootBottomY;
+        public float LastEditorFootHeightGroundingReferenceLift => GroundingController.LastEditorFootHeightGroundingReferenceLift;
         public float RecordingStartRootY => _recordingStartRootY;
         public float RecordingStartBodyPositionY => _recordingStartBodyPositionY;
         public float RecordingStartHipsLocalY => _recordingStartHipsLocalY;
@@ -1301,12 +1301,7 @@ namespace Fbx2Vmd.FBXImporter
             _poseVisualMuscleDeltaOnlySkippedCount = 0;
             _lastPoseVisualMaxMuscleDelta = float.NaN;
             _maxPoseVisualMaxMuscleDelta = 0f;
-            _maxGroundingAdjustment = 0f;
-            _groundingStepClampedCount = 0;
-            _groundingSmoothedCount = 0;
-            _maxGroundingVerticalStep = 0f;
-            _maxGroundingVerticalStepAfterInitial = 0f;
-            _lastEditorFootHeightGroundingReferenceLift = float.NaN;
+            GroundingController.ResetPlaybackStabilityMetrics();
             _hasEditorReferenceLowestFootRestY = false;
             _allowEditorFootHeightGroundingReference = true;
             Diagnostics.ResetRetargetPoseStageDiagnostics();
@@ -1441,10 +1436,7 @@ namespace Fbx2Vmd.FBXImporter
         private bool _hasTargetRootPoseGuardAnchorPosition;
         private Vector3 _previousBodyRootMotionPosition;
         private bool _hasPreviousBodyRootMotionPosition;
-        private Vector3 _leftFootLockPosition;
-        private Vector3 _rightFootLockPosition;
-        private bool _leftFootLocked;
-        private bool _rightFootLocked;
+
         private float _scaleRatio = 1.0f; // 체형 차이 비율
         private float _movementScaleMultiplier = 1.0f;
         private float _initialGhostHipHeight = 1.0f;
@@ -1480,18 +1472,7 @@ namespace Fbx2Vmd.FBXImporter
         private float _lastTargetHipsLocalPositionDelta = float.NaN;
         private float _maxTargetHipsLocalPositionDelta;
         private int _targetHipsLocalPositionSpikeClampedCount;
-        private bool _groundingInitialized;
-        private float _lastGroundingAdjustment = float.NaN;
-        private float _maxGroundingAdjustment;
-        private int _groundingStepClampedCount;
-        private int _groundingSmoothedCount;
-        private float _lastGroundingVerticalStep = float.NaN;
-        private float _maxGroundingVerticalStep;
-        private float _initialGroundingVerticalStep = float.NaN;
-        private float _maxGroundingVerticalStepAfterInitial;
-        private float _lastGroundingTargetY = float.NaN;
-        private float _lastGroundingLowestFootBottomY = float.NaN;
-        private float _lastEditorFootHeightGroundingReferenceLift = float.NaN;
+
         private float _lastEditorHipsLocalReferenceBeforeLocalY = float.NaN;
         private float _lastEditorHipsLocalReferenceAfterLocalY = float.NaN;
         private float _lastEditorHipsLocalReferenceDeltaY = float.NaN;
@@ -1504,11 +1485,7 @@ namespace Fbx2Vmd.FBXImporter
         private float _recordingStartHipsReferenceDeltaY = float.NaN;
         private bool _recordingStartHipsReferenceFlipDetected;
         private string _recordingStartHipsReferenceStage = string.Empty;
-        private bool _lateVisualGroundingWarningLogged;
-        private bool _rendererGroundingOutlierWarningLogged;
-        private bool _lateVisualGroundingInitialized;
-        private bool _hasFrozenGroundingRootY;
-        private float _frozenGroundingRootY;
+
         private bool _hasPreviousVisualPose;
         private float[] _previousVisualPoseMuscles;
         private Vector3 _previousVisualPoseBodyPosition;
@@ -1746,8 +1723,6 @@ namespace Fbx2Vmd.FBXImporter
         private int _setHumanPoseRightFootTwistInOutMuscleIndex = UnresolvedHumanMuscleIndex;
         private int _setHumanPoseLeftToesUpDownMuscleIndex = UnresolvedHumanMuscleIndex;
         private int _setHumanPoseRightToesUpDownMuscleIndex = UnresolvedHumanMuscleIndex;
-        private bool _hasEstimatedFootRadius;
-        private float _estimatedFootRadius = DefaultFootRadius;
         private const float DefaultFootRadius = 0.04f;
         private const float UpperArmTwistReferenceSignMagnitudeTolerance = 0.35f;
         private const float UpperArmTwistOverrangeReferenceSignMagnitudeTolerance = 1.5f;
@@ -1847,7 +1822,7 @@ namespace Fbx2Vmd.FBXImporter
             _humanPose = new HumanPose();
             _appliedTargetPose = new HumanPose();
             CacheTargetReferenceBodyPosition();
-            CalibrateTargetFootRadius();
+            GroundingController.CalibrateTargetFootRadius();
 
             // 초기 위치 저장
             _prevGhostPos = ghostAnimator.transform.position;
@@ -5332,37 +5307,19 @@ namespace Fbx2Vmd.FBXImporter
             _rootDeltaSpikeWarningLogged = false;
             _hasPreviousBodyRootMotionPosition = false;
             ResetTargetHipsLocalPositionSpikeState();
-            _leftFootLocked = false;
-            _rightFootLocked = false;
+            GroundingController.ResetRuntimeState();
             _lastRootDeltaMagnitude = float.NaN;
             _maxRootDeltaMagnitude = 0f;
             _rootDeltaSpikeSkippedCount = 0;
             _lastRootPositionPoseDeltaMagnitude = float.NaN;
             _maxRootPositionPoseDeltaMagnitude = 0f;
             _rootPositionSpikeClampedCount = 0;
-            _groundingInitialized = false;
-            _hasFrozenGroundingRootY = false;
-            _frozenGroundingRootY = 0f;
             AnimationDriver.ResetPlaybackStabilityMetrics();
             _hasPreviousVisualPose = false;
             _poseVisualSmoothingCount = 0;
             _poseVisualMuscleDeltaOnlySkippedCount = 0;
             _lastPoseVisualMaxMuscleDelta = float.NaN;
             _maxPoseVisualMaxMuscleDelta = 0f;
-            _lastGroundingAdjustment = float.NaN;
-            _maxGroundingAdjustment = 0f;
-            _groundingStepClampedCount = 0;
-            _groundingSmoothedCount = 0;
-            _lastGroundingVerticalStep = float.NaN;
-            _maxGroundingVerticalStep = 0f;
-            _initialGroundingVerticalStep = float.NaN;
-            _maxGroundingVerticalStepAfterInitial = 0f;
-            _lastGroundingTargetY = float.NaN;
-            _lastGroundingLowestFootBottomY = float.NaN;
-            _lastEditorFootHeightGroundingReferenceLift = float.NaN;
-            _lateVisualGroundingWarningLogged = false;
-            _rendererGroundingOutlierWarningLogged = false;
-            _lateVisualGroundingInitialized = false;
             _appliedPoseClampWarningLogged = false;
             _targetHipsRestLocalPosition = Vector3.zero;
             _hasTargetHipsRestLocalPosition = false;
@@ -5805,138 +5762,13 @@ namespace Fbx2Vmd.FBXImporter
             correction.Initialize(this);
         }
 
-        void ApplyRaycastGrounding()
+        public void ApplyLateVisualGroundingCorrection()
         {
-            // 양발 위치 확보 (발목)
-            Transform lFoot = targetAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
-            Transform rFoot = targetAnimator.GetBoneTransform(HumanBodyBones.RightFoot);
-
-            if (lFoot == null || rFoot == null) return;
-
-            // 발바닥 위치 (발목 - 반지름)
-            if (!_hasEstimatedFootRadius)
-            {
-                CalibrateTargetFootRadius();
-            }
-
-            float footRadius = GetEstimatedFootRadius();
-            if (!TryCalculateFootBottomY(lFoot.position.y, footRadius, out float lBottom) ||
-                !TryCalculateFootBottomY(rFoot.position.y, footRadius, out float rBottom))
-            {
-                LogPoseWarning("Foot position became non-finite. Skipping grounding for this frame.");
-                return;
-            }
-
-            // 현재 가장 낮은 발바닥 높이. Renderer bounds가 발에서 너무 멀면
-            // 옷/머리카락/소매 outlier로 보고 발 기준을 유지한다.
-            float lowestFootCurrentY = Mathf.Min(lBottom, rBottom);
-            float contactBottomY = ResolveGroundingContactBottomY(lowestFootCurrentY);
-
-            // 목표는 지면(0) + Offset
-            // Raycast를 사용하여 실제 지면을 찾을 수도 있으나, 현재는 평면(Plane) 위라고 가정하고 0.0f 사용
-            // 만약 계단이나 경사면이라면 Physics.Raycast로 hit.point.y를 구해야 함.
-            float targetGroundY = 0.0f; // 평면 가정
-            float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + groundOffset);
-            _lastGroundingTargetY = targetGroundY;
-            _lastGroundingLowestFootBottomY = contactBottomY;
-
-            // 보정값 계산 (목표 - 현재)
-            // 양수면 들어 올리고, 음수면 내림 (양방향)
-            if (!TryCalculateGroundingAdjustment(targetHeight, contactBottomY, out float adjustment))
-            {
-                LogPoseWarning("Grounding adjustment became non-finite. Skipping grounding for this frame.");
-                _lastGroundingAdjustment = float.NaN;
-                return;
-            }
-
-            _lastGroundingAdjustment = adjustment;
-            _maxGroundingAdjustment = Mathf.Max(_maxGroundingAdjustment, Mathf.Abs(adjustment));
-
-            Vector3 currentPos = targetAnimator.transform.position;
-            if (!IsFinite(currentPos))
-            {
-                LogPoseWarning("Target position became non-finite before grounding. Resetting to origin.");
-                currentPos = Vector3.zero;
-            }
-
-            if (freezeRootYAfterInitialGrounding && _groundingInitialized && _hasFrozenGroundingRootY)
-            {
-                currentPos.y = _frozenGroundingRootY;
-                if (IsFinite(currentPos))
-                {
-                    targetAnimator.transform.position = currentPos;
-                    ApplyGroundedFootLockXZ(lFoot, rFoot, targetHeight, footRadius);
-                }
-
-                _lastGroundingVerticalStep = 0f;
-                return;
-            }
-
-            bool wasGroundingInitialized = _groundingInitialized;
-            float appliedVerticalStep = CalculateGroundingVerticalStep(
-                currentPos.y,
-                adjustment,
-                wasGroundingInitialized,
-                smoothGrounding,
-                groundingSmoothing,
-                maxGroundingVerticalStepPerFrame,
-                groundingDeadZone,
-                _lastGroundingVerticalStep,
-                out bool skippedByDeadZone,
-                out bool smoothedGrounding,
-                out bool clampedGroundingStep);
-            if (skippedByDeadZone)
-            {
-                _lastGroundingVerticalStep = 0f;
-                return;
-            }
-
-            if (!wasGroundingInitialized)
-            {
-                _groundingInitialized = true;
-            }
-
-            if (smoothedGrounding)
-            {
-                _groundingSmoothedCount++;
-            }
-
-            if (clampedGroundingStep)
-            {
-                _groundingStepClampedCount++;
-            }
-
-            float clampedNextY = currentPos.y + appliedVerticalStep;
-            _lastGroundingVerticalStep = appliedVerticalStep;
-            _maxGroundingVerticalStep = Mathf.Max(_maxGroundingVerticalStep, Mathf.Abs(appliedVerticalStep));
-            if (wasGroundingInitialized)
-            {
-                _maxGroundingVerticalStepAfterInitial = Mathf.Max(_maxGroundingVerticalStepAfterInitial, Mathf.Abs(appliedVerticalStep));
-            }
-            else
-            {
-                _initialGroundingVerticalStep = appliedVerticalStep;
-            }
-
-            currentPos.y = clampedNextY;
-
-            if (IsFinite(currentPos))
-            {
-                targetAnimator.transform.position = currentPos;
-                if (freezeRootYAfterInitialGrounding && !_hasFrozenGroundingRootY)
-                {
-                    _frozenGroundingRootY = currentPos.y;
-                    _hasFrozenGroundingRootY = true;
-                }
-
-                ApplyGroundedFootLockXZ(lFoot, rFoot, targetHeight, footRadius);
-            }
+            GroundingController.ApplyLateVisualGroundingCorrection();
         }
 
-        private static bool TryCalculateGroundingAdjustment(
-            float targetHeight,
-            float contactBottomY,
-            out float adjustment)
+        // Editor characterization tests exercise these pure calculations through reflection.
+        private static bool TryCalculateGroundingAdjustment(float targetHeight, float contactBottomY, out float adjustment)
         {
             adjustment = targetHeight - contactBottomY;
             if (!IsFinite(adjustment))
@@ -5948,64 +5780,13 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        private float ResolveEditorFootHeightGroundingReferenceTarget(float baseTargetHeight)
-        {
-#if UNITY_EDITOR
-            _lastEditorFootHeightGroundingReferenceLift = 0f;
-            if (!ShouldUseManualAnimatorFootHeightGroundingReference ||
-                !_allowEditorFootHeightGroundingReference ||
-                manualAnimatorFootHeightGroundingReferenceWeight <= 0f ||
-                _editorFingerReferenceAnimator == null)
-            {
-                return baseTargetHeight;
-            }
-
-            if (!UpdateEditorManualReferenceAnimator() ||
-                !TryGetAnimatorLowestFootY(_editorFingerReferenceAnimator, out float referenceCurrentLowestFootY))
-            {
-                return baseTargetHeight;
-            }
-
-            if (!_hasEditorReferenceLowestFootRestY)
-            {
-                _editorReferenceLowestFootRestY = referenceCurrentLowestFootY;
-                _hasEditorReferenceLowestFootRestY = true;
-                return baseTargetHeight;
-            }
-
-            if (TryCalculateEditorFootHeightGroundingReferenceTarget(
-                    baseTargetHeight,
-                    referenceCurrentLowestFootY,
-                    _editorReferenceLowestFootRestY,
-                    manualAnimatorFootHeightGroundingReferenceWeight,
-                    manualAnimatorFootHeightGroundingReferenceMaxLift,
-                    out float targetHeight))
-            {
-                _lastEditorFootHeightGroundingReferenceLift = targetHeight - baseTargetHeight;
-                return targetHeight;
-            }
-
-            _lastEditorFootHeightGroundingReferenceLift = float.NaN;
-            return baseTargetHeight;
-#else
-            return baseTargetHeight;
-#endif
-        }
-
         private static bool TryCalculateEditorFootHeightGroundingReferenceTarget(
-            float baseTargetHeight,
-            float referenceCurrentLowestFootY,
-            float referenceRestLowestFootY,
-            float weight,
-            float maxLift,
-            out float targetHeight)
+            float baseTargetHeight, float referenceCurrentLowestFootY, float referenceRestLowestFootY,
+            float weight, float maxLift, out float targetHeight)
         {
             targetHeight = baseTargetHeight;
-            if (!IsFinite(baseTargetHeight) ||
-                !IsFinite(referenceCurrentLowestFootY) ||
-                !IsFinite(referenceRestLowestFootY) ||
-                !IsFinite(weight) ||
-                !IsFinite(maxLift))
+            if (!IsFinite(baseTargetHeight) || !IsFinite(referenceCurrentLowestFootY) ||
+                !IsFinite(referenceRestLowestFootY) || !IsFinite(weight) || !IsFinite(maxLift))
             {
                 return false;
             }
@@ -6033,17 +5814,9 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static float CalculateGroundingVerticalStep(
-            float currentY,
-            float adjustment,
-            bool wasGroundingInitialized,
-            bool smoothGrounding,
-            float groundingSmoothing,
-            float maxGroundingVerticalStepPerFrame,
-            float groundingDeadZone,
-            float previousGroundingVerticalStep,
-            out bool skippedByDeadZone,
-            out bool smoothed,
-            out bool clamped)
+            float currentY, float adjustment, bool wasGroundingInitialized, bool smoothGrounding,
+            float groundingSmoothing, float maxGroundingVerticalStepPerFrame, float groundingDeadZone,
+            float previousGroundingVerticalStep, out bool skippedByDeadZone, out bool smoothed, out bool clamped)
         {
             skippedByDeadZone = false;
             smoothed = false;
@@ -6059,7 +5832,6 @@ namespace Fbx2Vmd.FBXImporter
             float effectiveAdjustment = adjustment;
             if (wasGroundingInitialized && deadZone > 0f)
             {
-                // Subtracting the dead zone prevents the root from chasing small foot noise.
                 effectiveAdjustment = Mathf.Sign(adjustment) * Mathf.Max(0f, Mathf.Abs(adjustment) - deadZone);
             }
 
@@ -6091,14 +5863,10 @@ namespace Fbx2Vmd.FBXImporter
             return nextY - currentY;
         }
 
-        private bool IsGroundingDirectionReversal(float verticalStep)
-        {
-            return IsGroundingDirectionReversal(verticalStep, _lastGroundingVerticalStep);
-        }
-
         private static bool IsGroundingDirectionReversal(float verticalStep, float previousGroundingVerticalStep)
         {
-            if (!IsFinite(previousGroundingVerticalStep) || Mathf.Abs(verticalStep) <= 0.0005f || Mathf.Abs(previousGroundingVerticalStep) <= 0.0005f)
+            if (!IsFinite(previousGroundingVerticalStep) || Mathf.Abs(verticalStep) <= 0.0005f ||
+                Mathf.Abs(previousGroundingVerticalStep) <= 0.0005f)
             {
                 return false;
             }
@@ -6106,644 +5874,6 @@ namespace Fbx2Vmd.FBXImporter
             return Mathf.Sign(verticalStep) != Mathf.Sign(previousGroundingVerticalStep);
         }
 
-        public void ApplyLateVisualGroundingCorrection()
-        {
-            try
-            {
-                if (!_isInitialized || !useSmartGrounding || !enableLateVisualGroundingCorrection || targetAnimator == null)
-                {
-                    return;
-                }
-
-                if (freezeRootYAfterInitialGrounding && _groundingInitialized && _hasFrozenGroundingRootY)
-                {
-                    Vector3 frozenPos = targetAnimator.transform.position;
-                    frozenPos.y = _frozenGroundingRootY;
-                    if (IsFinite(frozenPos))
-                    {
-                        targetAnimator.transform.position = frozenPos;
-                    }
-
-                    _lateVisualGroundingInitialized = true;
-                    _lastGroundingVerticalStep = 0f;
-                    return;
-                }
-
-                if (!TryGetLowestFootBottomY(out float lowestFootBottomY))
-                {
-                    return;
-                }
-
-                float rendererMinY = ResolveGroundingContactBottomY(lowestFootBottomY);
-
-                float targetGroundY = 0.0f;
-                float targetHeight = ResolveEditorFootHeightGroundingReferenceTarget(targetGroundY + groundOffset);
-                _lastGroundingTargetY = targetGroundY;
-                _lastGroundingLowestFootBottomY = rendererMinY;
-
-                if (!TryCalculateGroundingAdjustment(targetHeight, rendererMinY, out float residual))
-                {
-                    LogPoseWarning("Late visual grounding residual became non-finite. Skipping final grounding for this frame.");
-                    return;
-                }
-
-                if (ShouldSkipLateVisualGroundingForActiveVerticalStep(
-                    residual,
-                    smoothLateVisualGroundingCorrection,
-                    _lastGroundingVerticalStep))
-                {
-                    _lateVisualGroundingInitialized = true;
-                    return;
-                }
-
-                if (!TryCalculateLateVisualGroundingEffectiveResidual(
-                    residual,
-                    smoothLateVisualGroundingCorrection,
-                    groundingDeadZone,
-                    maxLateVisualGroundingCorrection,
-                    out float effectiveResidual,
-                    out bool exceededMaxCorrection))
-                {
-                    if (exceededMaxCorrection && !_lateVisualGroundingWarningLogged)
-                    {
-                        float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
-                        Debug.LogWarning($"[PoseSpaceRetargeter] Late visual grounding residual {residual:F3}m exceeded max {maxCorrection:F3}m. Skipping this frame to avoid collapsing a real jump.");
-                        _lateVisualGroundingWarningLogged = true;
-                    }
-
-                    _lateVisualGroundingInitialized = true;
-                    return;
-                }
-
-                Vector3 currentPos = targetAnimator.transform.position;
-                if (!IsFinite(currentPos))
-                {
-                    LogPoseWarning("Target position became non-finite before late visual grounding. Skipping final grounding for this frame.");
-                    return;
-                }
-
-                float appliedResidual = CalculateLateVisualGroundingStep(effectiveResidual);
-                if (Mathf.Abs(appliedResidual) <= 0.000001f)
-                {
-                    return;
-                }
-
-                if (!TryCalculateLateVisualGroundingAppliedPosition(currentPos, appliedResidual, out Vector3 appliedPosition))
-                {
-                    LogPoseWarning("Target position became non-finite after late visual grounding. Skipping final grounding for this frame.");
-                    return;
-                }
-
-                targetAnimator.transform.position = appliedPosition;
-                _lateVisualGroundingInitialized = true;
-
-                _lastGroundingAdjustment = appliedResidual;
-                _maxGroundingAdjustment = Mathf.Max(_maxGroundingAdjustment, Mathf.Abs(appliedResidual));
-                _lastGroundingVerticalStep = appliedResidual;
-                _maxGroundingVerticalStep = Mathf.Max(_maxGroundingVerticalStep, Mathf.Abs(appliedResidual));
-                if (_groundingInitialized)
-                {
-                    _maxGroundingVerticalStepAfterInitial = Mathf.Max(_maxGroundingVerticalStepAfterInitial, Mathf.Abs(appliedResidual));
-                }
-                else
-                {
-                    _groundingInitialized = true;
-                    _initialGroundingVerticalStep = appliedResidual;
-                }
-            }
-            finally
-            {
-                if (targetAnimator != null)
-                {
-                    _lastRetargetStageAfterLateVisualGroundingEndpointPositions = Diagnostics.CaptureEndpointStageWorldPositions(targetAnimator);
-                    Diagnostics.CaptureRetargetEndpointStageAttributionDiagnostics();
-                }
-            }
-        }
-
-        private float CalculateLateVisualGroundingStep(float residual)
-        {
-            return CalculateLateVisualGroundingStep(
-                residual,
-                smoothLateVisualGroundingCorrection,
-                _lateVisualGroundingInitialized,
-                lateVisualGroundingSnapThreshold,
-                lateVisualGroundingSmoothing,
-                maxLateVisualGroundingStepPerFrame);
-        }
-
-        private static bool TryCalculateLateVisualGroundingEffectiveResidual(
-            float residual,
-            bool smoothLateVisualGroundingCorrection,
-            float groundingDeadZone,
-            float maxLateVisualGroundingCorrection,
-            out float effectiveResidual,
-            out bool exceededMaxCorrection)
-        {
-            effectiveResidual = 0f;
-            exceededMaxCorrection = false;
-
-            bool isPenetrationResidual = residual > 0.0001f;
-            bool isFloatingResidual = residual < -0.0001f;
-            bool isVisualFloorResidual = isPenetrationResidual || isFloatingResidual;
-            float deadZone = Mathf.Max(0.001f, groundingDeadZone);
-            float skipDeadZone = isVisualFloorResidual ? 0.001f : deadZone;
-            if (Mathf.Abs(residual) <= skipDeadZone)
-            {
-                return false;
-            }
-
-            float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
-            if (Mathf.Abs(residual) > maxCorrection)
-            {
-                exceededMaxCorrection = true;
-                return false;
-            }
-
-            effectiveResidual = residual;
-            if (smoothLateVisualGroundingCorrection && deadZone > 0f && !isVisualFloorResidual)
-            {
-                effectiveResidual = Mathf.Sign(residual) * Mathf.Max(0f, Mathf.Abs(residual) - deadZone);
-                if (Mathf.Abs(effectiveResidual) <= 0.0001f)
-                {
-                    effectiveResidual = 0f;
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool ShouldSkipLateVisualGroundingForActiveVerticalStep(
-            float residual,
-            bool smoothLateVisualGroundingCorrection,
-            float lastGroundingVerticalStep)
-        {
-            if (!smoothLateVisualGroundingCorrection ||
-                !IsFinite(residual) ||
-                !IsFinite(lastGroundingVerticalStep) ||
-                Mathf.Abs(residual) <= 0.0005f ||
-                Mathf.Abs(lastGroundingVerticalStep) <= 0.0005f)
-            {
-                return false;
-            }
-
-            return Mathf.Sign(residual) != Mathf.Sign(lastGroundingVerticalStep);
-        }
-
-        private static bool TryCalculateLateVisualGroundingAppliedPosition(
-            Vector3 currentPosition,
-            float appliedResidual,
-            out Vector3 appliedPosition)
-        {
-            appliedPosition = Vector3.zero;
-            if (!IsFinite(currentPosition))
-            {
-                return false;
-            }
-
-            appliedPosition = currentPosition;
-            appliedPosition.y += appliedResidual;
-            if (!IsFinite(appliedPosition))
-            {
-                appliedPosition = Vector3.zero;
-                return false;
-            }
-
-            return true;
-        }
-
-        private static float CalculateLateVisualGroundingStep(
-            float residual,
-            bool smoothLateVisualGroundingCorrection,
-            bool lateVisualGroundingInitialized,
-            float lateVisualGroundingSnapThreshold,
-            float lateVisualGroundingSmoothing,
-            float maxLateVisualGroundingStepPerFrame)
-        {
-            if (!smoothLateVisualGroundingCorrection)
-            {
-                return residual;
-            }
-
-            if (!lateVisualGroundingInitialized)
-            {
-                return residual;
-            }
-
-            float snapThreshold = Mathf.Max(0.005f, lateVisualGroundingSnapThreshold);
-            if (residual > 0.0001f && residual <= snapThreshold)
-            {
-                return residual;
-            }
-
-            bool isFloorPenetration = residual > 0.0001f;
-            float smoothing = Mathf.Clamp01(lateVisualGroundingSmoothing);
-            if (isFloorPenetration)
-            {
-                smoothing = Mathf.Max(smoothing, LateVisualGroundingPenetrationRecoverySmoothing);
-            }
-
-            float step = Mathf.Abs(residual) > snapThreshold
-                ? residual * Mathf.Max(0.1f, smoothing)
-                : residual * smoothing;
-            float maxStep = Mathf.Max(0.001f, maxLateVisualGroundingStepPerFrame);
-            if (isFloorPenetration)
-            {
-                maxStep = Mathf.Max(maxStep, LateVisualGroundingPenetrationRecoveryMaxStep);
-            }
-
-            if (Mathf.Abs(step) > maxStep)
-            {
-                step = Mathf.Sign(step) * maxStep;
-            }
-
-            return step;
-        }
-
-        private static bool TryGetAnimatorLowestFootY(Animator animator, out float lowestFootY)
-        {
-            lowestFootY = 0f;
-            if (animator == null || !animator.isHuman)
-            {
-                return false;
-            }
-
-            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
-            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
-            if (leftFoot == null || rightFoot == null)
-            {
-                return false;
-            }
-
-            Vector3 leftLocal = animator.transform.InverseTransformPoint(leftFoot.position);
-            Vector3 rightLocal = animator.transform.InverseTransformPoint(rightFoot.position);
-            lowestFootY = Mathf.Min(leftLocal.y, rightLocal.y);
-            if (!IsFinite(lowestFootY))
-            {
-                lowestFootY = 0f;
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool TryGetLowestFootBottomY(out float lowestFootBottomY)
-        {
-            lowestFootBottomY = 0f;
-            if (targetAnimator == null)
-            {
-                return false;
-            }
-
-            Transform leftFoot = targetAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
-            Transform rightFoot = targetAnimator.GetBoneTransform(HumanBodyBones.RightFoot);
-            if (leftFoot == null || rightFoot == null)
-            {
-                return false;
-            }
-
-            float footRadius = GetEstimatedFootRadius();
-            return TryCalculateLowestFootBottomY(leftFoot.position.y, rightFoot.position.y, footRadius, out lowestFootBottomY);
-        }
-
-        private static bool TryCalculateLowestFootBottomY(
-            float leftFootY,
-            float rightFootY,
-            float footRadius,
-            out float lowestFootBottomY)
-        {
-            lowestFootBottomY = 0f;
-            if (!TryCalculateFootBottomY(leftFootY, footRadius, out float leftBottom) ||
-                !TryCalculateFootBottomY(rightFootY, footRadius, out float rightBottom))
-            {
-                return false;
-            }
-
-            lowestFootBottomY = Mathf.Min(leftBottom, rightBottom);
-            return true;
-        }
-
-        private static bool TryCalculateFootBottomY(
-            float footY,
-            float footRadius,
-            out float footBottomY)
-        {
-            footBottomY = footY - footRadius;
-            if (!IsFinite(footBottomY))
-            {
-                footBottomY = 0f;
-                return false;
-            }
-
-            return true;
-        }
-
-        private float GetEstimatedFootRadius()
-        {
-            return _hasEstimatedFootRadius ? _estimatedFootRadius : DefaultFootRadius;
-        }
-
-        private void CalibrateTargetFootRadius()
-        {
-            _hasEstimatedFootRadius = false;
-            _estimatedFootRadius = DefaultFootRadius;
-            if (targetAnimator == null || !TryGetRendererBoundsMinY(out float rendererMinY))
-            {
-                return;
-            }
-
-            Transform leftFoot = targetAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
-            Transform rightFoot = targetAnimator.GetBoneTransform(HumanBodyBones.RightFoot);
-            if (leftFoot == null || rightFoot == null)
-            {
-                return;
-            }
-
-            if (!TryCalculateEstimatedFootRadius(leftFoot.position.y, rightFoot.position.y, rendererMinY, out float estimatedRadius))
-            {
-                return;
-            }
-
-            _estimatedFootRadius = estimatedRadius;
-            _hasEstimatedFootRadius = true;
-        }
-
-        private static bool TryCalculateEstimatedFootRadius(
-            float leftFootY,
-            float rightFootY,
-            float rendererMinY,
-            out float estimatedRadius)
-        {
-            float lowestFootY = Mathf.Min(leftFootY, rightFootY);
-            estimatedRadius = lowestFootY - rendererMinY;
-            if (!IsFinite(estimatedRadius))
-            {
-                return false;
-            }
-
-            estimatedRadius = Mathf.Clamp(estimatedRadius, 0.02f, 0.16f);
-            return true;
-        }
-
-        private float ResolveGroundingContactBottomY(float lowestFootBottomY)
-        {
-            bool hasRendererBounds = TryGetRendererBoundsMinY(out float rendererMinY);
-            float contactBottomY = ResolvePrimaryGroundingContactBottomY(
-                lowestFootBottomY,
-                _hasEstimatedFootRadius,
-                hasRendererBounds,
-                rendererMinY,
-                rejectRendererGroundingOutliers,
-                maxRendererFootGroundingSeparation,
-                out bool rendererGroundingOutlier);
-
-            if (rendererGroundingOutlier && !_rendererGroundingOutlierWarningLogged)
-            {
-                float separation = Mathf.Abs(rendererMinY - lowestFootBottomY);
-                float maxSeparation = Mathf.Max(0.02f, maxRendererFootGroundingSeparation);
-                Debug.LogWarning($"[PoseSpaceRetargeter] Renderer bounds grounding outlier ignored. rendererMinY={rendererMinY:F3}, footBottomY={lowestFootBottomY:F3}, separation={separation:F3}, limit={maxSeparation:F3}");
-                _rendererGroundingOutlierWarningLogged = true;
-            }
-
-            return contactBottomY;
-        }
-
-        private static float ResolvePrimaryGroundingContactBottomY(
-            float lowestFootBottomY,
-            bool hasEstimatedFootRadius,
-            bool hasRendererBounds,
-            float rendererMinY,
-            bool rejectRendererGroundingOutliers,
-            float maxRendererFootGroundingSeparation,
-            out bool rendererGroundingOutlier)
-        {
-            // Estimated foot radius changes the foot-bottom input; it must not bypass nearby renderer contact.
-            return ResolveGroundingContactBottomY(
-                lowestFootBottomY,
-                hasRendererBounds,
-                rendererMinY,
-                rejectRendererGroundingOutliers,
-                maxRendererFootGroundingSeparation,
-                out rendererGroundingOutlier);
-        }
-
-        private static float ResolveGroundingContactBottomY(
-            float lowestFootBottomY,
-            bool hasRendererBounds,
-            float rendererMinY,
-            bool rejectRendererGroundingOutliers,
-            float maxRendererFootGroundingSeparation,
-            out bool rendererGroundingOutlier)
-        {
-            rendererGroundingOutlier = false;
-            if (!hasRendererBounds)
-            {
-                return lowestFootBottomY;
-            }
-
-            if (!rejectRendererGroundingOutliers)
-            {
-                return rendererMinY;
-            }
-
-            float separation = Mathf.Abs(rendererMinY - lowestFootBottomY);
-            float maxSeparation = Mathf.Max(0.02f, maxRendererFootGroundingSeparation);
-            if (separation <= maxSeparation)
-            {
-                return rendererMinY;
-            }
-
-            rendererGroundingOutlier = true;
-            return lowestFootBottomY;
-        }
-
-        private void ApplyGroundedFootLockXZ(Transform leftFoot, Transform rightFoot, float targetHeight, float footRadius)
-        {
-            if (!ShouldStabilizeGroundedFootXZ || groundedFootLockWeight <= 0f || targetAnimator == null)
-            {
-                _leftFootLocked = false;
-                _rightFootLocked = false;
-                return;
-            }
-
-            Vector3 correctionSum = Vector3.zero;
-            int correctionCount = 0;
-            AddFootLockCorrection(leftFoot, targetHeight, footRadius, ref _leftFootLocked, ref _leftFootLockPosition, ref correctionSum, ref correctionCount);
-            AddFootLockCorrection(rightFoot, targetHeight, footRadius, ref _rightFootLocked, ref _rightFootLockPosition, ref correctionSum, ref correctionCount);
-            if (!TryCalculateGroundedFootLockRootCorrection(
-                correctionSum,
-                correctionCount,
-                groundedFootLockWeight,
-                maxGroundedFootLockStep,
-                out Vector3 correction))
-            {
-                return;
-            }
-
-            Vector3 rootPosition = targetAnimator.transform.position + correction;
-            if (IsFinite(rootPosition))
-            {
-                targetAnimator.transform.position = rootPosition;
-            }
-        }
-
-        private static bool TryCalculateGroundedFootLockRootCorrection(
-            Vector3 correctionSum,
-            int correctionCount,
-            float groundedFootLockWeight,
-            float maxGroundedFootLockStep,
-            out Vector3 correction)
-        {
-            correction = Vector3.zero;
-            if (correctionCount <= 0)
-            {
-                return false;
-            }
-
-            correction = correctionSum / correctionCount;
-            correction.y = 0f;
-            correction *= Mathf.Clamp01(groundedFootLockWeight);
-
-            float maxStep = Mathf.Max(0.001f, maxGroundedFootLockStep);
-            if (correction.magnitude > maxStep)
-            {
-                correction = correction.normalized * maxStep;
-            }
-
-            return IsFinite(correction) && correction.sqrMagnitude > 0.00000001f;
-        }
-
-        private void AddFootLockCorrection(
-            Transform foot,
-            float targetHeight,
-            float footRadius,
-            ref bool locked,
-            ref Vector3 lockPosition,
-            ref Vector3 correctionSum,
-            ref int correctionCount)
-        {
-            if (foot == null)
-            {
-                locked = false;
-                return;
-            }
-
-            if (!TryCalculateFootBottomY(foot.position.y, footRadius, out float bottomY))
-            {
-                locked = false;
-                return;
-            }
-
-            bool shouldAccumulate = TryCalculateFootLockCorrection(
-                bottomY,
-                foot.position,
-                targetHeight,
-                locked,
-                lockPosition,
-                out bool nextLocked,
-                out Vector3 nextLockPosition,
-                out Vector3 correction);
-            locked = nextLocked;
-            lockPosition = nextLockPosition;
-            if (!shouldAccumulate)
-            {
-                return;
-            }
-
-            correctionSum += correction;
-            correctionCount++;
-        }
-
-        private static bool TryCalculateFootLockCorrection(
-            float bottomY,
-            Vector3 footPosition,
-            float targetHeight,
-            bool locked,
-            Vector3 lockPosition,
-            out bool nextLocked,
-            out Vector3 nextLockPosition,
-            out Vector3 correction)
-        {
-            const float contactHeight = 0.08f;
-            const float releaseHeight = 0.14f;
-            const float resetDistance = 0.25f;
-
-            nextLocked = locked;
-            nextLockPosition = lockPosition;
-            correction = Vector3.zero;
-
-            if (!IsFinite(bottomY))
-            {
-                nextLocked = false;
-                return false;
-            }
-
-            if (bottomY > targetHeight + releaseHeight)
-            {
-                nextLocked = false;
-                return false;
-            }
-
-            footPosition.y = 0f;
-            if (!IsFinite(footPosition))
-            {
-                nextLocked = false;
-                return false;
-            }
-
-            if (!locked || bottomY > targetHeight + contactHeight)
-            {
-                nextLockPosition = footPosition;
-                nextLocked = bottomY <= targetHeight + contactHeight;
-                return false;
-            }
-
-            correction = lockPosition - footPosition;
-            correction.y = 0f;
-            if (!IsFinite(correction))
-            {
-                nextLocked = false;
-                return false;
-            }
-
-            if (correction.magnitude > resetDistance)
-            {
-                nextLockPosition = footPosition;
-                correction = Vector3.zero;
-            }
-
-            return true;
-        }
-
-        private bool TryGetRendererBoundsMinY(out float minY)
-        {
-            minY = float.NaN;
-            if (targetAnimator == null)
-            {
-                return false;
-            }
-
-            Renderer[] renderers = targetAnimator.GetComponentsInChildren<Renderer>(true);
-            bool hasBounds = false;
-            foreach (Renderer renderer in renderers)
-            {
-                if (renderer == null || !renderer.enabled || renderer.bounds.size.sqrMagnitude <= 0f)
-                {
-                    continue;
-                }
-
-                if (!IsFinite(renderer.bounds.min.y))
-                {
-                    continue;
-                }
-
-                minY = hasBounds ? Mathf.Min(minY, renderer.bounds.min.y) : renderer.bounds.min.y;
-                hasBounds = true;
-            }
-
-            return hasBounds;
-        }
     }
 
     [DisallowMultipleComponent]
