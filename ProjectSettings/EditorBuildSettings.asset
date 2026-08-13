@@ -12,9 +12,6 @@ EditorBuildSettings:
     path: Assets/_Project/Scene/Main_Recoding.unity
     guid: 0f171e57dc96eae469164342e21d12ff
   - enabled: 1
-    path: Assets/_Project/Scene/MainRecording_SettingsCompanion.unity
-    guid: 08cbc6d950bf49b448a66f823ff35489
-  - enabled: 1
     path: Assets/_Project/Scene/Sub_Manual.unity
     guid: 14dea031bbf2c7f4d99689d7223d0e64
   - enabled: 1

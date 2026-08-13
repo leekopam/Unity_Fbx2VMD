@@ -1,18 +1,7 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
-using System.Reflection;
 using Fbx2Vmd.Build;
-using Fbx2Vmd.FBXImporter;
-using Fbx2Vmd.Settings;
 using NUnit.Framework;
-using TMPro;
-using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 namespace Tests.Editor.Settings
 {
@@ -22,128 +11,10 @@ namespace Tests.Editor.Settings
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
         private const string FbxImportCaptureScenePath = "Assets/_Project/Scene/FbxImport_Capture.unity";
-        private const string CompanionScenePath = "Assets/_Project/Scene/MainRecording_SettingsCompanion.unity";
         private const string ReleaseSmokeScriptPath = "Docs/Workflow/Tools/Local/scripts/harness/build_main_recording_release_smoke.ps1";
         private const string ElectronPackageScriptPath = "Assets/_Project/Tools/MainRecordingSettings/scripts/packageElectronRelease.mjs";
         private const string ElectronPackageJsonPath = "Assets/_Project/Tools/MainRecordingSettings/package.json";
 
-        [Test]
-        public void Given_BuildSettings_When_InspectingScenes_Then_IncludesCompanionSceneAfterMainRecording()
-        {
-            Assert.That(File.Exists(CompanionScenePath), Is.True, "Companion settings scene asset must exist.");
-
-            string[] enabledScenePaths = EditorBuildSettings.scenes
-                .Where(scene => scene.enabled)
-                .Select(scene => NormalizePath(scene.path))
-                .ToArray();
-
-            Assert.That(enabledScenePaths, Does.Contain(CompanionScenePath));
-            Assert.That(enabledScenePaths.Count(path => path == CompanionScenePath), Is.EqualTo(1));
-
-            int mainRecordingIndex = Array.IndexOf(enabledScenePaths, MainRecordingScenePath);
-            int companionIndex = Array.IndexOf(enabledScenePaths, CompanionScenePath);
-
-            Assert.That(mainRecordingIndex, Is.GreaterThanOrEqualTo(0));
-            Assert.That(companionIndex, Is.GreaterThan(mainRecordingIndex));
-            Assert.That(enabledScenePaths.Length, Is.GreaterThanOrEqualTo(5));
-        }
-
-        [Test]
-        public void Given_CompanionScene_When_Loaded_Then_ContainsDedicatedSettingsHierarchy()
-        {
-            string previousScenePath = SceneManager.GetActiveScene().path;
-            Scene scene = EditorSceneManager.OpenScene(CompanionScenePath, OpenSceneMode.Single);
-
-            try
-            {
-                Assert.That(scene.name, Is.EqualTo("MainRecording_SettingsCompanion"));
-
-                GameObject root = GameObject.Find("SettingsCompanionRoot");
-                Assert.That(root, Is.Not.Null);
-
-                var controller = root.GetComponent<MainRecordingSettingsCompanionController>();
-                Assert.That(controller, Is.Not.Null);
-
-                Transform canvasTransform = RequireChild(root.transform, "UI_Canvas");
-                Transform panelTransform = RequireChild(canvasTransform, "SettingsPanel");
-                RequireChild(panelTransform, "LeftRail");
-                RequireChild(panelTransform, "Sidebar");
-                RequireChild(panelTransform, "MainCards");
-                Transform footerActions = RequireChild(panelTransform, "FooterActions");
-
-                Canvas canvas = canvasTransform.GetComponent<Canvas>();
-                Assert.That(canvas, Is.Not.Null);
-                Assert.That(canvas.renderMode, Is.EqualTo(RenderMode.ScreenSpaceOverlay));
-
-                CanvasScaler scaler = canvasTransform.GetComponent<CanvasScaler>();
-                Assert.That(scaler, Is.Not.Null);
-                Assert.That(scaler.uiScaleMode, Is.EqualTo(CanvasScaler.ScaleMode.ScaleWithScreenSize));
-                Assert.That(scaler.referenceResolution, Is.EqualTo(MainRecordingSettingsLayoutSpec.ReferenceSize));
-
-                Assert.That(UnityEngine.Object.FindObjectOfType<EventSystem>(), Is.Not.Null);
-                Assert.That(footerActions.GetComponentInChildren<Button>(true), Is.Not.Null);
-
-                AssertSerializedReference(controller, "fbxPathInput", true);
-                AssertSerializedReference(controller, "captureWidthInput", true);
-                AssertSerializedReference(controller, "captureHeightInput", true);
-                AssertSerializedReference(controller, "openSettingsOnStartToggle", true);
-                AssertSerializedReference(controller, "saveButton", true);
-                AssertSerializedReference(controller, "feedbackText", true);
-                AssertSerializedReference(controller, "characterModelPathInput", false);
-
-                string[] visibleLabels = canvasTransform
-                    .GetComponentsInChildren<TMP_Text>(true)
-                    .Select(text => text.text)
-                    .ToArray();
-                Assert.That(visibleLabels, Does.Contain("FBX 파일 임포트"));
-                Assert.That(visibleLabels, Does.Contain("FBX 파일을 선택해 프로젝트로 가져오고 모션 캡쳐 설정을 시작합니다"));
-                Assert.That(visibleLabels, Does.Contain("공유 설정"));
-                Assert.That(visibleLabels, Does.Contain("FBX 경로"));
-                Assert.That(visibleLabels, Does.Contain("설정을 저장"));
-                Assert.That(visibleLabels, Does.Not.Contain("FBX 파일 선택"));
-                Assert.That(visibleLabels, Does.Not.Contain("기본 설정"));
-                Assert.That(visibleLabels.Any(label => label.Contains("모델을 가져오고")), Is.False);
-                Assert.That(visibleLabels, Does.Contain("Character 1 (비활성화)"));
-                Assert.That(InvokeInstance<bool>(controller, "HasReadableKoreanTextForTests"), Is.True);
-                Canvas.ForceUpdateCanvases();
-                TextMeshProUGUI saveButtonLabel = canvasTransform
-                    .GetComponentsInChildren<TextMeshProUGUI>(true)
-                    .Single(text => text.text == "설정을 저장");
-                RectTransform saveButtonLabelRect = saveButtonLabel.rectTransform;
-                float availableWidth =
-                    saveButtonLabelRect.rect.width -
-                    saveButtonLabel.margin.x -
-                    saveButtonLabel.margin.z;
-                Vector2 preferredSize = saveButtonLabel.GetPreferredValues(
-                    saveButtonLabel.text,
-                    float.PositiveInfinity,
-                    saveButtonLabelRect.rect.height);
-                Assert.That(availableWidth, Is.GreaterThan(0f));
-                Assert.That(
-                    preferredSize.x,
-                    Is.LessThanOrEqualTo(availableWidth),
-                    $"Companion save label preferred width ({preferredSize.x}) must fit in the available TMP rect width ({availableWidth}).");
-                Assert.That(
-                    saveButtonLabel.enableAutoSizing,
-                    Is.True,
-                    "Companion TMP action label must enable autosizing to avoid Korean label clipping across font fallback differences.");
-                Assert.That(
-                    saveButtonLabel.fontSizeMax,
-                    Is.LessThanOrEqualTo(15f),
-                    "Companion TMP action label max font size must stay within the measured safe button contract.");
-
-                Assert.That(UnityEngine.Object.FindObjectOfType<RecordingSetting>(), Is.Null);
-                Assert.That(UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>(), Is.Null);
-                Assert.That(UnityEngine.Object.FindObjectOfType<UnityHumanoidVMDRecorder>(), Is.Null);
-            }
-            finally
-            {
-                if (!string.IsNullOrEmpty(previousScenePath) && File.Exists(previousScenePath))
-                {
-                    EditorSceneManager.OpenScene(previousScenePath, OpenSceneMode.Single);
-                }
-            }
-        }
 
         [Test]
         public void Given_ReleaseBuildRunner_When_InspectingContract_Then_MainAndElectronSettingsOutputsAreSeparate()
@@ -159,7 +30,6 @@ namespace Tests.Editor.Settings
                 SubManualScenePath,
                 FbxImportCaptureScenePath,
             }));
-            Assert.That(mainScenes, Does.Not.Contain(CompanionScenePath));
             Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.MainExecutablePath), Is.EqualTo("Builds/Local/MainRecordingRelease/Unity_Fbx2VMD.exe"));
             Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.SettingsPackageDirectory), Is.EqualTo("Builds/Local/MainRecordingRelease/MainRecordingSettings"));
             Assert.That(NormalizePath(MainRecordingReleaseBuildRunner.SettingsExecutablePath), Is.EqualTo("Builds/Local/MainRecordingRelease/MainRecordingSettings/Unity_Fbx2VMD_Settings.exe"));
@@ -282,40 +152,6 @@ namespace Tests.Editor.Settings
             Assert.That(gitIgnore, Does.Contain("/Assets/_Project/Plugins/MagicaCloth2.meta"));
         }
 
-        private static Transform RequireChild(Transform parent, string childName)
-        {
-            Transform child = parent.Find(childName);
-            Assert.That(child, Is.Not.Null, $"{parent.name}/{childName} must exist.");
-            return child;
-        }
-
-        private static void AssertSerializedReference(
-            MainRecordingSettingsCompanionController controller,
-            string propertyName,
-            bool expectedAssigned)
-        {
-            var serializedObject = new SerializedObject(controller);
-            SerializedProperty property = serializedObject.FindProperty(propertyName);
-
-            Assert.That(property, Is.Not.Null, $"{propertyName} must be serialized.");
-            if (expectedAssigned)
-            {
-                Assert.That(property.objectReferenceValue, Is.Not.Null, $"{propertyName} must be wired in the scene.");
-            }
-            else
-            {
-                Assert.That(property.objectReferenceValue, Is.Null, $"{propertyName} must stay unwired for excluded character features.");
-            }
-        }
-
-        private static T InvokeInstance<T>(object target, string methodName)
-        {
-            MethodInfo method = target.GetType().GetMethod(
-                methodName,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(method, Is.Not.Null, $"{target.GetType().Name}.{methodName} must exist.");
-            return (T)method.Invoke(target, Array.Empty<object>());
-        }
 
         private static string NormalizePath(string path)
         {
