@@ -1254,9 +1254,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 88bd915d87aaf2e429c007437754df00, type: 3}
       insertIndex: -1
       addedObject: {fileID: 284875389}
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 88bd915d87aaf2e429c007437754df00, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 284875388}
     - targetCorrespondingSourceObject: {fileID: -322271131297604786, guid: 88bd915d87aaf2e429c007437754df00, type: 3}
       insertIndex: -1
       addedObject: {fileID: 241108105}
@@ -5135,62 +5132,6 @@ MonoBehaviour:
   boneID: 204
   ikEnabled: 0
   ikWeight: 1
---- !u!114 &284875388
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 241107636}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1fde9fa28c1a2864d9a1d1adbe4b9a5a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  UseParentOfAll: 1
-  UseCenterAsParentOfAll: 1
-  RouteHumanoidCenterToGroove: 0
-  UseAbsoluteCoordinateSystem: 0
-  EnableParentFrameIkOffsetCompensationWhenCenterParented: 1
-  IgnoreInitialPosition: 0
-  IgnoreInitialRotation: 0
-  FreezeParentOfAllMotionWhenIgnoringInitialPosition: 0
-  UseBottomCenter: 0
-  TrimMorphNumber: 0
-  ZeroNonRootBonePositions: 1
-  ApplyRecorderInitialPose: 0
-  ApplyRecorderAPose: 0
-  RecordAfterLateVisualPose: 1
-  UseCaptureFramerateDuringRecording: 0
-  MaxRecordedFramesPerLateUpdate: 1
-  DropLateFrameBacklogWhenNotUsingCaptureFramerate: 1
-  KeyReductionLevel: 2
-  ForceLeftToeEnd: {fileID: 0}
-  ForceRightToeEnd: {fileID: 0}
-  ParentOfAllOffset: {x: 0, y: 0, z: 0}
-  MmdFootIkExportOffset: {x: 0, y: 0, z: 0}
-  ClampMmdFootIkYToFloor: 0
-  LiftMmdCenterYToKeepFeetAboveFloor: 1
-  MinMmdFootIkY: 0.05
-  ClampMmdCenterExportDeltaSpikes: 1
-  MaxMmdCenterExportDeltaPerFrame: 0.11
-  ClampMmdIkExportDeltaSpikes: 1
-  MaxMmdFootIkExportDeltaPerFrame: 0.11
-  MaxMmdToeIkExportDeltaPerFrame: 0.11
-  UseMmdIkExportDeltaRecoveryLimit: 1
-  MmdIkExportDeltaRecoveryTriggerPerFrame: 0.26
-  MmdIkExportDeltaRecoveryLimitPerFrame: 0.1209
-  MmdIkExportDeltaRecoveryDebtThresholdPerFrame: 0.08
-  MmdIkExportDeltaRecoveryHoldFrames: 3
-  UseMmdIkDynamicToggleOnLargeExportSteps: 1
-  MmdIkDynamicToggleFootStepThreshold: 0.12
-  MmdIkDynamicToggleToeStepThreshold: 0.12
-  EnableExportRotationDiagnostics: 0
-  EnableExportIkSourceDiagnostics: 0
-  LeftFootIKOffset: {x: 0, y: 0, z: 0}
-  RightFootIKOffset: {x: 0, y: 0, z: 0}
-  LeftToeIKOffset: {x: 0, y: 0, z: 0}
-  RightToeIKOffset: {x: 0, y: 0, z: 0}
 --- !u!114 &284875389
 MonoBehaviour:
   m_ObjectHideFlags: 0
