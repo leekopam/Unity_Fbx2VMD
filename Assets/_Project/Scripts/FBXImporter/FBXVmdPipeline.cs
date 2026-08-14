@@ -537,6 +537,7 @@ namespace Fbx2Vmd.FBXImporter
 
         [Header("Anatomical Retarget Guard")]
         [Tooltip("FBX Humanoid muscle 값을 [-1, 1] 범위로 제한합니다.")]
+        [FormerlySerializedAs("_shouldClampRetargetMusclesToHumanRange")]
         [FormerlySerializedAs("clampRetargetMusclesToHumanRange")]
         [SerializeField] private bool _clampRetargetMusclesToHumanRange= true;
         public bool clampRetargetMusclesToHumanRange { get => _clampRetargetMusclesToHumanRange; private set => _clampRetargetMusclesToHumanRange = value; }

@@ -622,7 +622,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            EditorDrawUtility.DrawProperty(serializedObject, "_shouldClampRetargetMusclesToHumanRange", "Muscle 기본 범위 제한", showWarningOnNull: true);
+            EditorDrawUtility.DrawProperty(serializedObject, "_clampRetargetMusclesToHumanRange", "Muscle 기본 범위 제한", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_shouldLockTargetHumanoidBonePositions", "Humanoid 본 길이 잠금", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_shouldLockTargetLimbChildLocalPositions", "Limb 보조본 위치 잠금", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_shouldLockTargetLimbChildLocalRotations", "Limb 보조본 회전 잠금", showWarningOnNull: true);
