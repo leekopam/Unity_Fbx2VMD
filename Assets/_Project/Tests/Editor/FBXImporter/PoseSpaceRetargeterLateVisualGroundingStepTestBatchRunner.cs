@@ -20,6 +20,7 @@ namespace Tests.Editor.FBXImporter
             DateTimeOffset start = DateTimeOffset.UtcNow;
             var results = new List<TestResultRecord>();
             var tests = new PoseSpaceRetargeterLateVisualGroundingStepTests();
+            var lifecycleTests = new PoseSpaceLateVisualGroundingCorrectionLifecycleTests();
 
             RunTest(results, nameof(tests.Given_SmoothingDisabled_When_CalculatingLateVisualGroundingStep_Then_ReturnsResidual),
                 tests.Given_SmoothingDisabled_When_CalculatingLateVisualGroundingStep_Then_ReturnsResidual);
@@ -55,6 +56,12 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_ActiveGroundingStepOppositeDirection_When_CheckingLateVisualGroundingSkip_Then_Skips);
             RunTest(results, nameof(tests.Given_SmoothingDisabled_When_CheckingLateVisualGroundingSkip_Then_DoesNotSkip),
                 tests.Given_SmoothingDisabled_When_CheckingLateVisualGroundingSkip_Then_DoesNotSkip);
+            RunTest(results, typeof(PoseSpaceLateVisualGroundingCorrectionLifecycleTests),
+                nameof(lifecycleTests.Given_NullOwner_When_InitializingLateVisualGroundingCorrection_Then_DisablesComponent),
+                lifecycleTests.Given_NullOwner_When_InitializingLateVisualGroundingCorrection_Then_DisablesComponent);
+            RunTest(results, typeof(PoseSpaceLateVisualGroundingCorrectionLifecycleTests),
+                nameof(lifecycleTests.Given_RetargeterOwner_When_InitializingLateVisualGroundingCorrection_Then_EnablesComponent),
+                lifecycleTests.Given_RetargeterOwner_When_InitializingLateVisualGroundingCorrection_Then_EnablesComponent);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);
@@ -81,7 +88,12 @@ namespace Tests.Editor.FBXImporter
 
         private static void RunTest(List<TestResultRecord> results, string methodName, TestDelegate action)
         {
-            string name = typeof(PoseSpaceRetargeterLateVisualGroundingStepTests).FullName + "." + methodName;
+            RunTest(results, typeof(PoseSpaceRetargeterLateVisualGroundingStepTests), methodName, action);
+        }
+
+        private static void RunTest(List<TestResultRecord> results, Type fixtureType, string methodName, TestDelegate action)
+        {
+            string name = fixtureType.FullName + "." + methodName;
             DateTimeOffset start = DateTimeOffset.UtcNow;
             string failure = null;
 
