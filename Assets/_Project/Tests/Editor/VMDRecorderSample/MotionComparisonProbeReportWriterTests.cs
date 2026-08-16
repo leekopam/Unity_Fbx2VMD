@@ -570,7 +570,7 @@ namespace Tests.Editor.VMDRecorderSample
         [Test]
         public void Given_ScreenshotIndexCsvHeader_When_BuildHeader_Then_KeepsColumnOrderAndCount()
         {
-            string header = MotionComparisonProbeReportWriter.BuildScreenshotIndexCsvHeader();
+            string header = MotionComparisonProbeScreenshotIndexCsvHeaderFormatter.Build();
             string[] columns = header.Split(',');
 
             Assert.That(columns.Length, Is.EqualTo(6));
