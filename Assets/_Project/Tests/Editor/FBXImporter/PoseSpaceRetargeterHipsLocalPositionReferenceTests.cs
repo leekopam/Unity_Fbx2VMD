@@ -76,7 +76,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_RestReference_When_CalculatingHipsLocalPosition_Then_AppliesReferenceDeltaWithWeight()
         {
-            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+            bool calculated = TryCalculateHipsLocalPositionReference(
                 referenceCurrentLocalPosition: new Vector3(0.1f, 0.08f, -0.02f),
                 referenceRestLocalPosition: new Vector3(0.02f, 0.04f, -0.01f),
                 hasReferenceRestLocalPosition: true,
@@ -94,7 +94,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_NoRestReference_When_CalculatingHipsLocalPosition_Then_UsesReferenceAbsolutePosition()
         {
-            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+            bool calculated = TryCalculateHipsLocalPositionReference(
                 referenceCurrentLocalPosition: new Vector3(0.02f, 0.9f, 0.03f),
                 referenceRestLocalPosition: Vector3.zero,
                 hasReferenceRestLocalPosition: false,
@@ -112,7 +112,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_MaxOffset_When_CalculatingHipsLocalPosition_Then_ClampsDeltaBeforeApplyingWeight()
         {
-            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+            bool calculated = TryCalculateHipsLocalPositionReference(
                 referenceCurrentLocalPosition: new Vector3(0.2f, 0f, 0f),
                 referenceRestLocalPosition: Vector3.zero,
                 hasReferenceRestLocalPosition: false,
@@ -130,7 +130,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_TargetRestAnchor_When_CurrentHipsCollapsed_Then_AppliesReferenceDeltaFromTargetRest()
         {
-            bool calculated = TryCalculateAnchoredEditorHipsLocalPositionReference(
+            bool calculated = TryCalculateAnchoredHipsLocalPositionReference(
                 referenceCurrentLocalPosition: new Vector3(0f, 0.02f, 0f),
                 referenceRestLocalPosition: new Vector3(0f, 0.04f, 0f),
                 hasReferenceRestLocalPosition: true,
@@ -150,7 +150,7 @@ namespace Tests.Editor.FBXImporter
         {
             Vector3 current = new Vector3(0f, 1f, 0f);
 
-            bool calculated = TryCalculateEditorHipsLocalPositionReference(
+            bool calculated = TryCalculateHipsLocalPositionReference(
                 referenceCurrentLocalPosition: new Vector3(float.NaN, 0f, 0f),
                 referenceRestLocalPosition: Vector3.zero,
                 hasReferenceRestLocalPosition: false,
@@ -229,6 +229,33 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ManualHipsLocalPositionAccess_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            string[] applierMethodNames =
+            {
+                "TryResolveHipsLocalPositionReference",
+                "ApplyHipsLocalPosition",
+                "TryCalculateHipsLocalPositionReference"
+            };
+            foreach (string methodName in applierMethodNames)
+            {
+                Assert.That(
+                    ManualPoseReferenceApplierType.GetMember(
+                        methodName,
+                        BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Not.Empty,
+                    $"ManualPoseReferenceApplier should own {methodName}.");
+            }
+
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateEditorHipsLocalPositionReference",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty,
+                "PoseSpaceRetargeter should delegate Hips localPosition calculation.");
+        }
+
+        [Test]
         public void Given_ManualFootReference_When_CalculatingFootIkTarget_Then_UsesReferenceHipsRelativePosition()
         {
             Vector3 referenceHips = new Vector3(1f, 1f, 1f);
@@ -299,7 +326,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(Quaternion.Angle(Quaternion.identity, nextRotation), Is.EqualTo(10f).Within(0.05f));
         }
 
-        private static bool TryCalculateEditorHipsLocalPositionReference(
+        private static bool TryCalculateHipsLocalPositionReference(
             Vector3 referenceCurrentLocalPosition,
             Vector3 referenceRestLocalPosition,
             bool hasReferenceRestLocalPosition,
@@ -308,14 +335,14 @@ namespace Tests.Editor.FBXImporter
             float maxOffset,
             out Vector3 nextLocalPosition)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateEditorHipsLocalPositionReference",
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateHipsLocalPositionReference",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: HipsLocalPositionReferenceParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for Manual Animator Hips localPosition reference calculation.");
+            Assert.That(method, Is.Not.Null, "ManualPoseReferenceApplier should expose the pure Hips localPosition reference calculation.");
 
             object[] args =
             {
@@ -333,7 +360,7 @@ namespace Tests.Editor.FBXImporter
             return calculated;
         }
 
-        private static bool TryCalculateAnchoredEditorHipsLocalPositionReference(
+        private static bool TryCalculateAnchoredHipsLocalPositionReference(
             Vector3 referenceCurrentLocalPosition,
             Vector3 referenceRestLocalPosition,
             bool hasReferenceRestLocalPosition,
@@ -344,14 +371,14 @@ namespace Tests.Editor.FBXImporter
             float maxOffset,
             out Vector3 nextLocalPosition)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateEditorHipsLocalPositionReference",
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateHipsLocalPositionReference",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: AnchoredHipsLocalPositionReferenceParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose an anchored Hips localPosition helper so manual reference deltas do not compound current-pose collapse.");
+            Assert.That(method, Is.Not.Null, "ManualPoseReferenceApplier should expose the anchored Hips localPosition calculation so reference deltas do not compound current-pose collapse.");
 
             object[] args =
             {

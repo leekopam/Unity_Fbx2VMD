@@ -3029,22 +3029,23 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            Transform referenceHips = _editorFingerReferenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
-            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
-            if (referenceHips == null || targetHips == null)
+            if (!ManualPoseReferenceApplier.TryResolveHipsLocalPositionReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                out Transform targetHips,
+                out Vector3 refCurrentLocalPosition,
+                out Vector3 currentLocalPosition))
             {
                 return;
             }
 
-            Vector3 refCurrentLocalPosition = referenceHips.localPosition;
-            Vector3 currentLocalPosition = targetHips.localPosition;
             Vector3 ghostRightFootPosition = ReadAnimatorBoneWorldPosition(ghostAnimator, HumanBodyBones.RightFoot);
             Vector3 ghostRightToesPosition = ReadAnimatorBoneWorldPosition(ghostAnimator, HumanBodyBones.RightToes);
             Vector3 beforeRightFootPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightFoot);
             Vector3 beforeRightToesPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightToes);
             // Delta 방식: testprefab의 clip 시작 대비 현재 변위만 YYB 자연 위치에 더한다.
             // 절대 복사는 모델 비율 차이(YYB Hips Y≈1.024 vs testprefab≈1.056)로 인해 YYB Hips를 잘못된 높이로 강제한다.
-            if (!TryCalculateEditorHipsLocalPositionReference(
+            if (!ManualPoseReferenceApplier.TryCalculateHipsLocalPositionReference(
                 refCurrentLocalPosition,
                 _editorReferenceHipsRestLocalPosition,
                 _hasEditorReferenceHipsRestLocalPosition,
@@ -3058,7 +3059,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            targetHips.localPosition = nextLocalPosition;
+            ManualPoseReferenceApplier.ApplyHipsLocalPosition(targetHips, nextLocalPosition);
             Vector3 afterRightFootPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightFoot);
             Vector3 afterRightToesPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightToes);
             if (!ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
@@ -3070,7 +3071,7 @@ namespace Fbx2Vmd.FBXImporter
                 afterRightToesPosition,
                 HipsLocalPositionTargetGapGuardMaxIncreaseMeters))
             {
-                targetHips.localPosition = currentLocalPosition;
+                ManualPoseReferenceApplier.ApplyHipsLocalPosition(targetHips, currentLocalPosition);
                 RecordEditorHipsLocalReferenceDiagnostics(currentLocalPosition, currentLocalPosition);
                 return;
             }
@@ -3081,85 +3082,6 @@ namespace Fbx2Vmd.FBXImporter
                 Debug.Log($"[PoseSpaceRetargeter] Manual Animator Hips localPosition reference applied. weight={manualAnimatorHipsLocalPositionWeight:F2}, maxOffset={manualAnimatorHipsLocalPositionMaxOffset:F3}m");
                 _editorHipsLocalPositionReferenceLogged = true;
             }
-        }
-
-        private static bool TryCalculateEditorHipsLocalPositionReference(
-            Vector3 referenceCurrentLocalPosition,
-            Vector3 referenceRestLocalPosition,
-            bool hasReferenceRestLocalPosition,
-            Vector3 currentLocalPosition,
-            float weight,
-            float maxOffset,
-            out Vector3 nextLocalPosition)
-        {
-            return TryCalculateEditorHipsLocalPositionReference(
-                referenceCurrentLocalPosition,
-                referenceRestLocalPosition,
-                hasReferenceRestLocalPosition,
-                currentLocalPosition,
-                false,
-                currentLocalPosition,
-                weight,
-                maxOffset,
-                out nextLocalPosition);
-        }
-
-        private static bool TryCalculateEditorHipsLocalPositionReference(
-            Vector3 referenceCurrentLocalPosition,
-            Vector3 referenceRestLocalPosition,
-            bool hasReferenceRestLocalPosition,
-            Vector3 targetRestLocalPosition,
-            bool hasTargetRestLocalPosition,
-            Vector3 currentLocalPosition,
-            float weight,
-            float maxOffset,
-            out Vector3 nextLocalPosition)
-        {
-            nextLocalPosition = currentLocalPosition;
-            if (!IsFinite(referenceCurrentLocalPosition) || !IsFinite(currentLocalPosition))
-            {
-                return false;
-            }
-
-            if (hasReferenceRestLocalPosition && !IsFinite(referenceRestLocalPosition))
-            {
-                return false;
-            }
-
-            Vector3 desiredLocalPosition;
-            if (hasReferenceRestLocalPosition)
-            {
-                Vector3 referenceDelta = referenceCurrentLocalPosition - referenceRestLocalPosition;
-                Vector3 anchorLocalPosition = hasTargetRestLocalPosition && IsFinite(targetRestLocalPosition)
-                    ? targetRestLocalPosition
-                    : currentLocalPosition;
-                desiredLocalPosition = anchorLocalPosition + referenceDelta;
-            }
-            else
-            {
-                desiredLocalPosition = referenceCurrentLocalPosition;
-            }
-
-            Vector3 delta = desiredLocalPosition - currentLocalPosition;
-            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
-            {
-                return false;
-            }
-
-            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
-            if (clampedMaxOffset > 0f)
-            {
-                delta = Vector3.ClampMagnitude(delta, clampedMaxOffset);
-            }
-
-            nextLocalPosition = currentLocalPosition + delta * Mathf.Clamp01(weight);
-            if (!IsFinite(nextLocalPosition))
-            {
-                nextLocalPosition = currentLocalPosition;
-                return false;
-            }
-
-            return true;
         }
 
         private static bool ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
