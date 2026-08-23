@@ -36,7 +36,7 @@ namespace Fbx2Vmd.FBXImporter
 #else
             bool earlyEditorSmokeRecordingOverrideActive = false;
 #endif
-            bool earlyShouldStartVmdRecording = FBXVmdPipeline.ShouldStartVmdRecordingAfterImport(
+            bool earlyShouldStartVmdRecording = ShouldStartVmdRecording(
                 _pipeline.ShouldRecordVmdAfterImport,
                 earlyEditorSmokeRecordingOverrideActive);
             float resolvedStartDelay = VMDRecordingController.ResolveStartDelay(_pipeline.startDelay, earlyShouldStartVmdRecording);
@@ -66,7 +66,7 @@ namespace Fbx2Vmd.FBXImporter
             bool editorSmokeRecordingOverrideActive = false;
             float[] diagnosticSampleTimesOverride = null;
 #endif
-            bool shouldStartVmdRecording = FBXVmdPipeline.ShouldStartVmdRecordingAfterImport(
+            bool shouldStartVmdRecording = ShouldStartVmdRecording(
                 _pipeline.ShouldRecordVmdAfterImport,
                 editorSmokeRecordingOverrideActive);
 
@@ -204,10 +204,10 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
 
-            int prewarmFrameCount = FBXVmdPipeline.ResolveRetargetPrewarmFrameCountForRecordingMode(
+            int prewarmFrameCount = ResolvePrewarmFrameCountForRecordingMode(
                 _pipeline.RetargetPrewarmFrameCount,
                 shouldStartVmdRecording);
-            int visiblePrewarmYieldFrameCount = FBXVmdPipeline.ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(
+            int visiblePrewarmYieldFrameCount = ResolveVisiblePrewarmYieldFrameCountForRecordingMode(
                 _pipeline.RetargetPrewarmFrameCount,
                 shouldStartVmdRecording);
             yield return PrewarmStartPose(
@@ -479,6 +479,35 @@ namespace Fbx2Vmd.FBXImporter
         public static int ResolvePrewarmFrameCount(int configuredFrameCount)
         {
             return Mathf.Clamp(configuredFrameCount, 0, FBXVmdPipeline.MAX_RETARGET_PREWARM_FRAME_COUNT);
+        }
+
+        public static int ResolvePrewarmFrameCountForRecordingMode(
+            int configuredFrameCount,
+            bool shouldStartVmdRecording)
+        {
+            return shouldStartVmdRecording
+                ? ResolvePrewarmFrameCount(configuredFrameCount)
+                : 0;
+        }
+
+        public static int ResolveVisiblePrewarmYieldFrameCountForRecordingMode(
+            int configuredFrameCount,
+            bool shouldStartVmdRecording)
+        {
+            if (!shouldStartVmdRecording)
+            {
+                return 0;
+            }
+
+            int prewarmFrames = ResolvePrewarmFrameCount(configuredFrameCount);
+            return prewarmFrames > 0 ? prewarmFrames : 1;
+        }
+
+        public static bool ShouldStartVmdRecording(
+            bool shouldRecordVmdAfterImport,
+            bool editorSmokeRecordingOverrideActive)
+        {
+            return shouldRecordVmdAfterImport || editorSmokeRecordingOverrideActive;
         }
 
         /// <summary>

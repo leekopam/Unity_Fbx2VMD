@@ -2284,44 +2284,6 @@ namespace Fbx2Vmd.FBXImporter
             return new WaitForEndOfFrame();
         }
 
-        private static int ResolveRetargetPrewarmFrameCount(int configuredFrameCount)
-        {
-            return VMDRecordingController.ResolvePrewarmFrameCount(configuredFrameCount);
-        }
-
-        internal static int ResolveRetargetPrewarmFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
-        {
-            if (!shouldStartVmdRecording)
-            {
-                return 0;
-            }
-
-            return ResolveRetargetPrewarmFrameCount(configuredFrameCount);
-        }
-
-        internal static int ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
-        {
-            if (!shouldStartVmdRecording)
-            {
-                return 0;
-            }
-
-            int prewarmFrames = ResolveRetargetPrewarmFrameCount(configuredFrameCount);
-            return prewarmFrames > 0 ? prewarmFrames : 1;
-        }
-
-        private static float ResolveStartDelayForRecordingMode(float configuredStartDelay, bool shouldStartVmdRecording)
-        {
-            return VMDRecordingController.ResolveStartDelay(configuredStartDelay, shouldStartVmdRecording);
-        }
-
-        internal static bool ShouldStartVmdRecordingAfterImport(
-            bool _shouldRecordVmdAfterImport,
-            bool editorSmokeRecordingOverrideActive)
-        {
-            return _shouldRecordVmdAfterImport || editorSmokeRecordingOverrideActive;
-        }
-
         internal VmdSaveResult ApplyEditorSmokeThumbRiskFailure(VmdSaveResult result, MotionComparisonProbe probe)
         {
 #if UNITY_EDITOR
