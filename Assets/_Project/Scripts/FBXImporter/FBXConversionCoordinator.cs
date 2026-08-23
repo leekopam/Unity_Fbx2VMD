@@ -45,18 +45,10 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        internal static HumanoidArmDirectionRetargetGuard ConfigureArmDirectionGuard(
+        internal HumanoidArmDirectionRetargetGuard ConfigureArmDirectionGuard(
             GameObject targetObject,
             Animator targetAnimator,
-            Animator ghostAnimator,
-            bool shouldEnable,
-            float upperArmWeight,
-            float forearmWeight,
-            float upperArmMaxDegrees,
-            float forearmMaxDegrees,
-            float leftSideWeightScale,
-            float rightSideWeightScale,
-            bool shouldLogConfiguration)
+            Animator ghostAnimator)
         {
             if (targetObject == null)
             {
@@ -65,7 +57,7 @@ namespace Fbx2Vmd.FBXImporter
 
             HumanoidArmDirectionRetargetGuard directionGuard =
                 targetObject.GetComponent<HumanoidArmDirectionRetargetGuard>();
-            if (!shouldEnable)
+            if (!_pipeline.enableYybArmDirectionRetargetCorrection)
             {
                 if (directionGuard != null)
                 {
@@ -86,13 +78,13 @@ namespace Fbx2Vmd.FBXImporter
             bool configured = directionGuard.Configure(
                 ghostAnimator,
                 targetAnimator,
-                upperArmWeight,
-                forearmWeight,
-                upperArmMaxDegrees,
-                forearmMaxDegrees,
-                leftSideWeightScale,
-                rightSideWeightScale,
-                shouldLogConfiguration);
+                _pipeline.YybArmDirectionUpperArmWeight,
+                _pipeline.YybArmDirectionForearmWeight,
+                _pipeline.YybArmDirectionUpperArmMaxDegrees,
+                _pipeline.YybArmDirectionForearmMaxDegrees,
+                _pipeline.YybArmDirectionLeftSideWeightScale,
+                _pipeline.YybArmDirectionRightSideWeightScale,
+                _pipeline.logYybArmDirectionRetargetCorrection);
 
             if (!configured)
             {
@@ -101,6 +93,53 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return directionGuard;
+        }
+
+        internal HumanoidArmSwingLimitGuard ConfigureArmSwingLimitGuard(
+            GameObject targetObject,
+            Animator targetAnimator)
+        {
+            if (targetObject == null)
+            {
+                return null;
+            }
+
+            HumanoidArmSwingLimitGuard swingLimitGuard =
+                targetObject.GetComponent<HumanoidArmSwingLimitGuard>();
+            if (!_pipeline.enableYybArmSwingLimitCorrection)
+            {
+                if (swingLimitGuard != null)
+                {
+                    swingLimitGuard.enableSwingLimit = false;
+                    swingLimitGuard.enabled = false;
+                }
+
+                return null;
+            }
+
+            if (swingLimitGuard == null)
+            {
+                swingLimitGuard = targetObject.AddComponent<HumanoidArmSwingLimitGuard>();
+            }
+
+            swingLimitGuard.Configure(
+                targetAnimator,
+                true,
+                _pipeline.YybArmSwingLimitWeight,
+                _pipeline.YybArmSwingMaxDownDot,
+                _pipeline.YybArmSwingMinHandHorizontalRatio,
+                _pipeline.YybArmSwingMaxHandBelowShoulderRatio,
+                _pipeline.YybArmSwingHorizontalReachLimitWeight,
+                _pipeline.YybArmSwingMaxHandHorizontalReachRatio,
+                _pipeline.YybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
+                _pipeline.YybArmSwingHorizontalReachMinElbowAngleAfterApply,
+                _pipeline.YybArmSwingRaisedPoseHorizontalReachLimitWeight,
+                _pipeline.YybArmSwingRaisedPoseMinUpperArmDownDot,
+                _pipeline.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
+                _pipeline.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
+                _pipeline.logYybArmSwingLimitCorrection);
+
+            return swingLimitGuard;
         }
 
         /// <summary>

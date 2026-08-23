@@ -44,19 +44,23 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_DisabledArmDirectionCorrection_When_ConfiguringTargetGuard_Then_DisablesExistingGuard()
         {
+            GameObject pipelineObject = new GameObject("Pipeline");
             GameObject targetObject = new GameObject("TargetWithDirectionGuard");
             try
             {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.enableYybArmDirectionRetargetCorrection = false;
+                var coordinator = new FBXConversionCoordinator(pipeline);
                 HumanoidArmDirectionRetargetGuard existingGuard =
                     targetObject.AddComponent<HumanoidArmDirectionRetargetGuard>();
                 existingGuard.enableDirectionRetarget = true;
                 existingGuard.enabled = true;
 
                 HumanoidArmDirectionRetargetGuard configuredGuard = ConfigureArmDirectionGuard(
+                    coordinator,
                     targetObject,
                     targetAnimator: null,
-                    ghostAnimator: null,
-                    shouldEnable: false);
+                    ghostAnimator: null);
 
                 Assert.That(configuredGuard, Is.Null);
                 Assert.That(existingGuard.enableDirectionRetarget, Is.False);
@@ -65,6 +69,40 @@ namespace Tests.Editor.FBXImporter
             finally
             {
                 Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_ArmSwingGuardAssembly_When_InspectingOwnership_Then_CoordinatorOwnsIt()
+        {
+            GameObject pipelineObject = new GameObject("Pipeline");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                MethodInfo ensureServicesMethod = typeof(FBXVmdPipeline).GetMethod(
+                    "EnsureServicesInitialized",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                    "ConfigureArmSwingLimitGuard",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo pipelineMethod = typeof(FBXVmdPipeline).GetMethod(
+                    "ConfigureTargetArmSwingLimitCorrection",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo coordinatorField = typeof(FBXVmdPipeline).GetField(
+                    "_conversionCoordinator",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(ensureServicesMethod, Is.Not.Null);
+                ensureServicesMethod.Invoke(pipeline, null);
+                Assert.That(coordinatorMethod, Is.Not.Null);
+                Assert.That(pipelineMethod, Is.Null);
+                Assert.That(coordinatorField, Is.Not.Null);
+                Assert.That(coordinatorField.GetValue(pipeline), Is.TypeOf<FBXConversionCoordinator>());
+            }
+            finally
+            {
+                Object.DestroyImmediate(pipelineObject);
             }
         }
 
@@ -86,31 +124,23 @@ namespace Tests.Editor.FBXImporter
         }
 
         private HumanoidArmDirectionRetargetGuard ConfigureArmDirectionGuard(
+            FBXConversionCoordinator coordinator,
             GameObject targetObject,
             Animator targetAnimator,
-            Animator ghostAnimator,
-            bool shouldEnable)
+            Animator ghostAnimator)
         {
             MethodInfo method = typeof(FBXConversionCoordinator).GetMethod(
                 "ConfigureArmDirectionGuard",
-                BindingFlags.Static | BindingFlags.NonPublic);
+                BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null);
 
             object[] arguments =
             {
                 targetObject,
                 targetAnimator,
-                ghostAnimator,
-                shouldEnable,
-                0.65f,
-                0.75f,
-                65f,
-                85f,
-                1f,
-                1f,
-                false
+                ghostAnimator
             };
-            return (HumanoidArmDirectionRetargetGuard)method.Invoke(null, arguments);
+            return (HumanoidArmDirectionRetargetGuard)method.Invoke(coordinator, arguments);
         }
     }
 }
