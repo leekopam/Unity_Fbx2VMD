@@ -1,4 +1,5 @@
 using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Retargeting;
 using NUnit.Framework;
 using System;
 using System.Reflection;
@@ -8,27 +9,7 @@ namespace Tests.Editor.FBXImporter
 {
     public class PoseSpaceRetargeterGroundingVerticalStepTests
     {
-        private static readonly Type[] GroundingVerticalStepParameterTypes =
-        {
-            typeof(float),
-            typeof(float),
-            typeof(bool),
-            typeof(bool),
-            typeof(float),
-            typeof(float),
-            typeof(float),
-            typeof(float),
-            typeof(bool).MakeByRefType(),
-            typeof(bool).MakeByRefType(),
-            typeof(bool).MakeByRefType()
-        };
-
-        private static readonly Type[] GroundingAdjustmentParameterTypes =
-        {
-            typeof(float),
-            typeof(float),
-            typeof(float).MakeByRefType()
-        };
+        private const float GroundingDirectionReversalStepScale = 0.4f;
 
         private static readonly Type[] EditorFootHeightGroundingReferenceParameterTypes =
         {
@@ -153,6 +134,51 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_PreviousStepBelowNoiseThreshold_When_CalculatingVerticalStep_Then_KeepsRegularClampLimit()
+        {
+            float step = CalculateGroundingVerticalStep(
+                currentY: 1.0f,
+                adjustment: 0.05f,
+                wasGroundingInitialized: true,
+                smoothGrounding: true,
+                groundingSmoothing: 1f,
+                maxGroundingVerticalStepPerFrame: 0.1f,
+                groundingDeadZone: 0f,
+                previousGroundingVerticalStep: -0.0001f,
+                out bool skippedByDeadZone,
+                out bool smoothed,
+                out bool clamped);
+
+            Assert.That(step, Is.EqualTo(0.05f).Within(0.0001f));
+            Assert.That(skippedByDeadZone, Is.False);
+            Assert.That(smoothed, Is.False);
+            Assert.That(clamped, Is.False);
+        }
+
+        [Test]
+        public void Given_GroundingCalculation_When_CheckingOwnership_Then_UsesGroundingStabilizer()
+        {
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod("CalculateVerticalStep", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod("TryCalculateAdjustment", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
+
+            const BindingFlags RetargeterCalculationFlags =
+                BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic;
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember("CalculateGroundingVerticalStep", RetargeterCalculationFlags),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember("TryCalculateGroundingAdjustment", RetargeterCalculationFlags),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember("IsGroundingDirectionReversal", RetargeterCalculationFlags),
+                Is.Empty);
+        }
+
+        [Test]
         public void Given_PrewarmGroundingDiagnostics_When_ResettingPlaybackStabilityMetrics_Then_ResetsCountersWithoutClearingSettledState()
         {
             var gameObject = new GameObject("retargeter-reset-metrics-test");
@@ -258,17 +284,7 @@ namespace Tests.Editor.FBXImporter
             out bool smoothed,
             out bool clamped)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "CalculateGroundingVerticalStep",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: GroundingVerticalStepParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for raycast grounding vertical step calculation.");
-
-            object[] args =
-            {
+            return GroundingStabilizer.CalculateVerticalStep(
                 currentY,
                 adjustment,
                 wasGroundingInitialized,
@@ -277,16 +293,10 @@ namespace Tests.Editor.FBXImporter
                 maxGroundingVerticalStepPerFrame,
                 groundingDeadZone,
                 previousGroundingVerticalStep,
-                false,
-                false,
-                false
-            };
-
-            float step = (float)method.Invoke(null, args);
-            skippedByDeadZone = (bool)args[8];
-            smoothed = (bool)args[9];
-            clamped = (bool)args[10];
-            return step;
+                GroundingDirectionReversalStepScale,
+                out skippedByDeadZone,
+                out smoothed,
+                out clamped);
         }
 
         private static bool TryCalculateGroundingAdjustment(
@@ -294,25 +304,10 @@ namespace Tests.Editor.FBXImporter
             float contactBottomY,
             out float adjustment)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateGroundingAdjustment",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: GroundingAdjustmentParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for grounding adjustment calculation.");
-
-            object[] args =
-            {
+            return GroundingStabilizer.TryCalculateAdjustment(
                 targetHeight,
                 contactBottomY,
-                0f
-            };
-
-            bool resolved = (bool)method.Invoke(null, args);
-            adjustment = (float)args[2];
-            return resolved;
+                out adjustment);
         }
 
         private static bool TryCalculateEditorFootHeightGroundingReferenceTarget(

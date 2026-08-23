@@ -3,12 +3,12 @@ using UnityEngine;
 namespace Fbx2Vmd.Retargeting
 {
     /// <summary>
-    /// 접지(Grounding) 계산 유틸리티.
-    /// PoseSpaceRetargeter에서 추출함.
-    /// ponytail: 순수 static 계산만 — HumanPose 변형은 PoseSpaceRetargeter에 유지.
+    /// 접지 보정값과 수직 이동량을 입력 값만으로 계산함.
     /// </summary>
     public static class GroundingStabilizer
     {
+        private const float DirectionReversalNoiseThreshold = 0.0005f;
+
         /// <summary>
         /// 발 접지 높이 보정값 계산. targetHeight - contactBottomY.
         /// </summary>
@@ -28,7 +28,7 @@ namespace Fbx2Vmd.Retargeting
         }
 
         /// <summary>
-        /// 수직 보정 step을 dead zone, smoothing, max step 제한으로 clamp.
+        /// 수직 보정량에 사각 구간, 평활화와 최대 이동량 제한을 적용함.
         /// </summary>
         public static float CalculateVerticalStep(
             float currentY,
@@ -94,16 +94,17 @@ namespace Fbx2Vmd.Retargeting
         /// </summary>
         public static bool IsDirectionReversal(float verticalStep, float previousGroundingVerticalStep)
         {
-            if (!IsFinite(previousGroundingVerticalStep))
+            if (!IsFinite(previousGroundingVerticalStep) ||
+                Mathf.Abs(verticalStep) <= DirectionReversalNoiseThreshold ||
+                Mathf.Abs(previousGroundingVerticalStep) <= DirectionReversalNoiseThreshold)
             {
                 return false;
             }
 
-            return (verticalStep > 0f && previousGroundingVerticalStep < 0f) ||
-                   (verticalStep < 0f && previousGroundingVerticalStep > 0f);
+            return Mathf.Sign(verticalStep) != Mathf.Sign(previousGroundingVerticalStep);
         }
 
-        // ponytail: float.IsFinite polyfill for Unity's .NET runtime
+        // 현재 Unity의 .NET 런타임에서 사용할 수 있는 유한값 판정을 유지함.
         private static bool IsFinite(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);
