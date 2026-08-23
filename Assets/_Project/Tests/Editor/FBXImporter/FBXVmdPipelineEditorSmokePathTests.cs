@@ -39,31 +39,10 @@ namespace Tests.Editor.FBXImporter
             typeof(string)
         };
 
-        private static readonly Type[] ReferenceTimingWithOptionParameterTypes =
-        {
-            typeof(string),
-            typeof(float),
-            typeof(float),
-            typeof(bool),
-            typeof(float).MakeByRefType(),
-            typeof(int).MakeByRefType(),
-            typeof(float).MakeByRefType()
-        };
-
         private static readonly Type[] GhostSkeletonFallbackParameterTypes =
         {
             typeof(bool),
             typeof(int)
-        };
-
-        private static readonly Type[] ReferenceTimingParameterTypes =
-        {
-            typeof(string),
-            typeof(float),
-            typeof(float),
-            typeof(float).MakeByRefType(),
-            typeof(int).MakeByRefType(),
-            typeof(float).MakeByRefType()
         };
 
         private static readonly Type[] EditorSmokeReferenceTimingParameterTypes =
@@ -368,7 +347,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_SatisfactionFullClip_When_CalculatingReferenceTiming_Then_Matches6000FrameYybReference()
         {
-            bool hasPlan = TryBuildKnownMmdReferenceRecordingPlan(
+            bool hasPlan = VMDRecordingController.TryBuildKnownMmdReferenceRecordingPlan(
                 "satisfaction_2",
                 clipLengthSeconds: 207.7667f,
                 recordingFrameRate: 30f,
@@ -385,7 +364,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_SatisfactionFullClipAndReferenceTimingDisabled_When_CalculatingReferenceTiming_Then_KeepsNormalPlayback()
         {
-            bool hasPlan = TryBuildKnownMmdReferenceRecordingPlan(
+            bool hasPlan = VMDRecordingController.TryBuildKnownMmdReferenceRecordingPlan(
                 "satisfaction_2",
                 clipLengthSeconds: 207.7667f,
                 recordingFrameRate: 30f,
@@ -570,7 +549,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_NonSatisfactionClip_When_CalculatingReferenceTiming_Then_KeepsDefaultClipTiming()
         {
-            bool hasPlan = TryBuildKnownMmdReferenceRecordingPlan(
+            bool hasPlan = VMDRecordingController.TryBuildKnownMmdReferenceRecordingPlan(
                 "other_dance",
                 clipLengthSeconds: 207.7667f,
                 recordingFrameRate: 30f,
@@ -1024,76 +1003,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "VMDRecordingController must own a fakeable project-relative path policy.");
 
             return (string)method.Invoke(null, new object[] { path, projectRoot });
-        }
-
-        private static bool TryBuildKnownMmdReferenceRecordingPlan(
-            string outputBaseName,
-            float clipLengthSeconds,
-            float recordingFrameRate,
-            out float recordingLengthSeconds,
-            out int targetFrameCount,
-            out float playbackSpeed)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "TryBuildKnownMmdReferenceRecordingPlan",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: ReferenceTimingParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a fakeable reference timing helper for YYB MMD acceptance.");
-
-            object[] args =
-            {
-                outputBaseName,
-                clipLengthSeconds,
-                recordingFrameRate,
-                0f,
-                0,
-                0f
-            };
-
-            bool result = (bool)method.Invoke(null, args);
-            recordingLengthSeconds = (float)args[3];
-            targetFrameCount = (int)args[4];
-            playbackSpeed = (float)args[5];
-            return result;
-        }
-
-        private static bool TryBuildKnownMmdReferenceRecordingPlan(
-            string outputBaseName,
-            float clipLengthSeconds,
-            float recordingFrameRate,
-            bool useKnownReferenceTiming,
-            out float recordingLengthSeconds,
-            out int targetFrameCount,
-            out float playbackSpeed)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "TryBuildKnownMmdReferenceRecordingPlan",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: ReferenceTimingWithOptionParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a reference timing option so Main_Auto can default to 1x VMD recording.");
-
-            object[] args =
-            {
-                outputBaseName,
-                clipLengthSeconds,
-                recordingFrameRate,
-                useKnownReferenceTiming,
-                clipLengthSeconds,
-                0,
-                1f
-            };
-
-            bool result = (bool)method.Invoke(null, args);
-            recordingLengthSeconds = (float)args[4];
-            targetFrameCount = (int)args[5];
-            playbackSpeed = (float)args[6];
-            return result;
         }
 
         private static bool ShouldAttachGhostSkeletonDebugRenderer(bool visible, int rendererCount)

@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.IO;
 using static Fbx2Vmd.FBXImporter.FBXVmdPipeline;
+using Fbx2Vmd.Recording;
 using Fbx2Vmd.Settings;
 
 namespace Fbx2Vmd.FBXImporter
@@ -178,7 +179,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 else
 #endif
-                if (FBXVmdPipeline.TryBuildKnownMmdReferenceRecordingPlan(
+                if (TryBuildKnownMmdReferenceRecordingPlan(
                     outputBaseName,
                     clip.length,
                     FBXVmdPipeline.MMD_REFERENCE_FRAME_RATE,
@@ -471,6 +472,73 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return clipLengthSeconds / ResolveVmdRecordingPlaybackSpeed(playbackSpeed);
+        }
+
+        public static bool TryBuildKnownMmdReferenceRecordingPlan(
+            string outputBaseName,
+            float clipLengthSeconds,
+            float recordingFrameRate,
+            out float recordingLengthSeconds,
+            out int targetFrameCount,
+            out float playbackSpeed)
+        {
+            return TryBuildKnownMmdReferenceRecordingPlan(
+                outputBaseName,
+                clipLengthSeconds,
+                recordingFrameRate,
+                useKnownReferenceTiming: true,
+                out recordingLengthSeconds,
+                out targetFrameCount,
+                out playbackSpeed);
+        }
+
+        public static bool TryBuildKnownMmdReferenceRecordingPlan(
+            string outputBaseName,
+            float clipLengthSeconds,
+            float recordingFrameRate,
+            bool useKnownReferenceTiming,
+            out float recordingLengthSeconds,
+            out int targetFrameCount,
+            out float playbackSpeed)
+        {
+            recordingLengthSeconds = clipLengthSeconds;
+            targetFrameCount = 0;
+            playbackSpeed = 1f;
+
+            if (!useKnownReferenceTiming)
+            {
+                return false;
+            }
+
+            if (recordingFrameRate <= 0f ||
+                float.IsNaN(recordingFrameRate) ||
+                float.IsInfinity(recordingFrameRate) ||
+                clipLengthSeconds <= 0f ||
+                float.IsNaN(clipLengthSeconds) ||
+                float.IsInfinity(clipLengthSeconds))
+            {
+                return false;
+            }
+
+            string cleanBaseName = Path.GetFileNameWithoutExtension(outputBaseName ?? string.Empty);
+            if (!string.Equals(cleanBaseName, VMDOutputNamePolicy.SatisfactionReferenceBaseName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            int referenceFrameCount = VMDOutputNamePolicy.SatisfactionReferenceMaxMmdFrame + 1;
+            float referenceDurationSeconds = referenceFrameCount / recordingFrameRate;
+            float frameToleranceSeconds = 0.5f / recordingFrameRate;
+
+            if (clipLengthSeconds + frameToleranceSeconds < referenceDurationSeconds)
+            {
+                return false;
+            }
+
+            recordingLengthSeconds = referenceDurationSeconds;
+            targetFrameCount = referenceFrameCount;
+            playbackSpeed = Mathf.Max(0.0001f, clipLengthSeconds / referenceDurationSeconds);
+            return true;
         }
 
         /// <summary>

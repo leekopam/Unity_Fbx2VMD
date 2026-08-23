@@ -202,6 +202,59 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_KnownReferenceRecordingTiming_When_CheckingOwnership_Then_ControllerOwnsPureCalculations()
+        {
+            Type[] defaultParameterTypes =
+            {
+                typeof(string),
+                typeof(float),
+                typeof(float),
+                typeof(float).MakeByRefType(),
+                typeof(int).MakeByRefType(),
+                typeof(float).MakeByRefType()
+            };
+            Type[] optionalParameterTypes =
+            {
+                typeof(string),
+                typeof(float),
+                typeof(float),
+                typeof(bool),
+                typeof(float).MakeByRefType(),
+                typeof(int).MakeByRefType(),
+                typeof(float).MakeByRefType()
+            };
+            MethodInfo controllerDefaultMethod = typeof(VMDRecordingController).GetMethod(
+                "TryBuildKnownMmdReferenceRecordingPlan",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: defaultParameterTypes,
+                modifiers: null);
+            MethodInfo controllerOptionalMethod = typeof(VMDRecordingController).GetMethod(
+                "TryBuildKnownMmdReferenceRecordingPlan",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: optionalParameterTypes,
+                modifiers: null);
+            MethodInfo pipelineDefaultMethod = typeof(FBXVmdPipeline).GetMethod(
+                "TryBuildKnownMmdReferenceRecordingPlan",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: defaultParameterTypes,
+                modifiers: null);
+            MethodInfo pipelineOptionalMethod = typeof(FBXVmdPipeline).GetMethod(
+                "TryBuildKnownMmdReferenceRecordingPlan",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: optionalParameterTypes,
+                modifiers: null);
+
+            Assert.That(controllerDefaultMethod, Is.Not.Null);
+            Assert.That(controllerOptionalMethod, Is.Not.Null);
+            Assert.That(pipelineDefaultMethod, Is.Null);
+            Assert.That(pipelineOptionalMethod, Is.Null);
+        }
+
+        [Test]
         public void Given_RecordingModePolicies_When_CheckingOwnership_Then_ControllerOwnsPureCalculations()
         {
             Type[] recordingModeParameterTypes = { typeof(bool), typeof(bool) };
