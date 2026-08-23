@@ -4329,7 +4329,9 @@ namespace Fbx2Vmd.FBXImporter
             residual = float.NaN;
             Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
             if (targetFoot == null ||
-                !TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                !ManualPoseReferenceApplier.TryResolveHipsAlignedEndpointPositionReference(
+                    _editorFingerReferenceAnimator,
+                    targetAnimator,
                     footBone,
                     referenceHips,
                     targetHips,
@@ -4355,13 +4357,14 @@ namespace Fbx2Vmd.FBXImporter
         {
             Transform targetUpperLeg = targetAnimator.GetBoneTransform(upperLegBone);
             Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
-            Transform referenceFoot = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
-            if (targetUpperLeg == null || targetFoot == null || referenceFoot == null)
+            if (targetUpperLeg == null || targetFoot == null)
             {
                 return 0;
             }
 
-            if (!TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+            if (!ManualPoseReferenceApplier.TryResolveHipsAlignedEndpointPositionReference(
+                    _editorFingerReferenceAnimator,
+                    targetAnimator,
                     footBone,
                     referenceHips,
                     targetHips,
@@ -4385,47 +4388,6 @@ namespace Fbx2Vmd.FBXImporter
 
             targetUpperLeg.rotation = nextWorldRotation;
             return 1;
-        }
-
-        private bool TryCalculateEditorFootHipsAlignedDesiredFootPosition(
-            HumanBodyBones footBone,
-            Transform referenceHips,
-            Transform targetHips,
-            Transform targetFoot,
-            out Vector3 desiredFootPosition)
-        {
-            desiredFootPosition = targetFoot != null ? targetFoot.position : Vector3.zero;
-            if (_editorFingerReferenceAnimator == null ||
-                targetAnimator == null ||
-                referenceHips == null ||
-                targetHips == null ||
-                targetFoot == null)
-            {
-                return false;
-            }
-
-            Transform referenceFoot = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
-            if (referenceFoot == null)
-            {
-                return false;
-            }
-
-            Vector3 referenceOffset = referenceFoot.position - referenceHips.position;
-            if (!IsFinite(referenceOffset))
-            {
-                return false;
-            }
-
-            Vector3 referenceRootOffset = _editorFingerReferenceAnimator.transform.InverseTransformVector(referenceOffset);
-            Vector3 desiredTargetOffset = targetAnimator.transform.TransformVector(referenceRootOffset);
-            if (!IsFinite(desiredTargetOffset))
-            {
-                return false;
-            }
-
-            desiredFootPosition = targetHips.position + desiredTargetOffset;
-            desiredFootPosition.y = targetFoot.position.y;
-            return IsFinite(desiredFootPosition);
         }
 
         private static bool TryCalculateEditorFootHipsAlignedResidualYawReference(
@@ -4581,7 +4543,9 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            if (!TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+            if (!ManualPoseReferenceApplier.TryResolveHipsAlignedEndpointPositionReference(
+                    _editorFingerReferenceAnimator,
+                    targetAnimator,
                     footBone,
                     referenceHips,
                     targetHips,
@@ -4594,7 +4558,9 @@ namespace Fbx2Vmd.FBXImporter
             Vector3 desiredToesPosition = BuildNaNVector3();
             if (targetToes != null)
             {
-                TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                ManualPoseReferenceApplier.TryResolveHipsAlignedEndpointPositionReference(
+                    _editorFingerReferenceAnimator,
+                    targetAnimator,
                     toesBone,
                     referenceHips,
                     targetHips,
@@ -4775,7 +4741,9 @@ namespace Fbx2Vmd.FBXImporter
             }
             else
             {
-                if (!TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                if (!ManualPoseReferenceApplier.TryResolveHipsAlignedEndpointPositionReference(
+                        _editorFingerReferenceAnimator,
+                        targetAnimator,
                         footBone,
                         referenceHips,
                         targetHips,
@@ -4788,7 +4756,9 @@ namespace Fbx2Vmd.FBXImporter
                 Vector3 desiredToesPosition = BuildNaNVector3();
                 if (targetToes != null)
                 {
-                    TryCalculateEditorFootHipsAlignedDesiredFootPosition(
+                    ManualPoseReferenceApplier.TryResolveHipsAlignedEndpointPositionReference(
+                        _editorFingerReferenceAnimator,
+                        targetAnimator,
                         toesBone,
                         referenceHips,
                         targetHips,
