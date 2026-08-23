@@ -215,7 +215,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (!shouldStartVmdRecording)
             {
-                _pipeline.SetSessionState(FBXVmdPipeline.FBXSessionState.Success, $"FBX 임포트/촬영 준비 완료됨: {outputBaseName}", 1f);
+                _pipeline.SetSessionState(FBXVmdPipeline.FBXSessionState.Success, $"FBX 임포트/촬영 준비 완료: {outputBaseName}", 1f);
                 Debug.Log($"[Recording] FBX 임포트 및 Unity 촬영 준비 완료됨. 출력={outputBaseName}, VMD 자동 녹화=생략");
                 _pipeline._isProcessing = false;
                 yield break;
