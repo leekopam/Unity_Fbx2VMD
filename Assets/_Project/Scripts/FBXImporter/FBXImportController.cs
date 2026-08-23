@@ -60,6 +60,102 @@ namespace Fbx2Vmd.FBXImporter
             return safeName;
         }
 
+        internal static Dictionary<string, string> LoadBoneMappingRuntime()
+        {
+            Dictionary<string, string> mapping = new Dictionary<string, string>();
+            string loadName = Path.GetFileNameWithoutExtension(BONE_MAPPING_FILE);
+            TextAsset mappingAsset = Resources.Load<TextAsset>(loadName);
+
+            if (mappingAsset == null)
+            {
+                Debug.LogWarning($"[FBXImport] BoneMapping 로드 실패: Resources/{loadName}.txt (자동 본 매핑으로 폴백합니다.)");
+                return mapping;
+            }
+
+            Debug.Log($"[FBXImport] BoneMapping 로드 성공 (Resources/{loadName})");
+            string[] lines = mappingAsset.text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            bool insideBoneTemplate = false;
+            foreach (string line in lines)
+            {
+                string trimmedLine = line.Trim();
+                if (trimmedLine.StartsWith("m_BoneTemplate:"))
+                {
+                    insideBoneTemplate = true;
+                    continue;
+                }
+
+                if (!insideBoneTemplate)
+                {
+                    continue;
+                }
+
+                if (trimmedLine.StartsWith("m_"))
+                {
+                    break;
+                }
+
+                int colonIndex = trimmedLine.IndexOf(':');
+                if (colonIndex <= 0)
+                {
+                    continue;
+                }
+
+                string key = trimmedLine[..colonIndex].Trim();
+                string value = trimmedLine[(colonIndex + 1)..].Trim();
+                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
+                {
+                    mapping[key] = value;
+                }
+            }
+
+            return mapping;
+        }
+
+        internal static bool ValidateGhostAvatar(GameObject importedModel)
+        {
+            Animator ghostAnimator = importedModel.GetComponent<Animator>();
+            if (ghostAnimator == null || ghostAnimator.avatar == null)
+            {
+                Debug.LogError("[FBXImport] Ghost Animator 또는 Avatar가 없습니다.");
+                return false;
+            }
+
+            if (!ghostAnimator.avatar.isValid || !ghostAnimator.avatar.isHuman)
+            {
+                Debug.LogError($"[FBXImport] Ghost Avatar가 유효하지 않습니다. valid={ghostAnimator.avatar.isValid}, human={ghostAnimator.avatar.isHuman}");
+                return false;
+            }
+
+            return true;
+        }
+
+        internal static AnimationClip ExtractPrimaryClip(Animation ghostAnimation, bool shouldLogRuntimeAnimation)
+        {
+            if (ghostAnimation == null || ghostAnimation.clip == null)
+            {
+                return null;
+            }
+
+            AnimationClip targetClip = ghostAnimation.clip;
+            if (targetClip.length <= 0f || float.IsNaN(targetClip.length) || float.IsInfinity(targetClip.length))
+            {
+                Debug.LogError($"[FBXImport] 애니메이션 길이가 올바르지 않습니다: {targetClip.length}");
+                return null;
+            }
+
+            if (targetClip.length > 1000f)
+            {
+                Debug.LogWarning("[FBXImport] 애니메이션 길이가 비정상적으로 깁니다. Assimp timeScale을 확인하세요.");
+            }
+
+            if (shouldLogRuntimeAnimation)
+            {
+                Debug.Log($"[FBXImport] Clip: {targetClip.name}, Length: {targetClip.length:F3}s, FrameRate: {targetClip.frameRate}");
+            }
+
+            return targetClip;
+        }
+
 #if UNITY_EDITOR
         internal void ConfigureEditorImportSettingsIfNeeded(string sourcePath, string targetPath)
         {

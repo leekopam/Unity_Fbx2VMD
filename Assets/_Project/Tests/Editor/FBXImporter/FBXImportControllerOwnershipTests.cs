@@ -3,6 +3,7 @@ using NUnit.Framework;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -91,6 +92,64 @@ namespace Tests.Editor.FBXImporter
             Assert.That(controllerConfigureMethod, Is.Not.Null);
             Assert.That(pipelineDecisionMethod, Is.Null);
             Assert.That(pipelineConfigureMethod, Is.Null);
+        }
+
+        [Test]
+        public void Given_RuntimeImportResult_When_CheckingOwnership_Then_ControllerOwnsInterpretation()
+        {
+            string[] methodNames =
+            {
+                "LoadBoneMappingRuntime",
+                "ValidateGhostAvatar",
+                "ExtractPrimaryClip"
+            };
+
+            foreach (string methodName in methodNames)
+            {
+                MethodInfo controllerMethod = typeof(FBXImportController).GetMethod(
+                    methodName,
+                    BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+                MethodInfo pipelineMethod = typeof(FBXVmdPipeline).GetMethod(
+                    methodName,
+                    BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+                Assert.That(controllerMethod, Is.Not.Null, $"{methodName}은 FBXImportController가 소유해야 합니다.");
+                Assert.That(pipelineMethod, Is.Null, $"{methodName}은 FBXVmdPipeline에 남으면 안 됩니다.");
+            }
+        }
+
+        [Test]
+        public void Given_ValidRuntimeAnimation_When_ExtractingPrimaryClip_Then_ReturnsAssignedClip()
+        {
+            GameObject root = new GameObject("runtime-import-clip-test");
+            AnimationClip clip = new AnimationClip { legacy = true };
+
+            try
+            {
+                clip.SetCurve(
+                    "",
+                    typeof(Transform),
+                    "localPosition.x",
+                    AnimationCurve.Linear(0f, 0f, 1f, 1f));
+
+                Animation animation = root.AddComponent<Animation>();
+                animation.AddClip(clip, "motion");
+                animation.clip = clip;
+
+                MethodInfo extractMethod = typeof(FBXImportController).GetMethod(
+                    "ExtractPrimaryClip",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+                AnimationClip result = (AnimationClip)extractMethod.Invoke(
+                    null,
+                    new object[] { animation, false });
+
+                Assert.That(result, Is.SameAs(clip));
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+                Object.DestroyImmediate(clip);
+            }
         }
     }
 }

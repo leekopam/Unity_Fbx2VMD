@@ -2114,7 +2114,7 @@ namespace Fbx2Vmd.FBXImporter
                 _activeGhostContainer = ghostContainer;
                 SetGhostVisibility(importedModel, showGhostModel, showGhostSkeletonWhenNoRenderers);
 
-                Dictionary<string, string> boneMapping = LoadBoneMappingRuntime();
+                Dictionary<string, string> boneMapping = FBXImportController.LoadBoneMappingRuntime();
                 if (boneMapping == null)
                 {
                     boneMapping = new Dictionary<string, string>();
@@ -2122,13 +2122,13 @@ namespace Fbx2Vmd.FBXImporter
 
                 // BoneMapping_Data.txt는 특정 리그에 종속될 수 있으므로, 실패 시 자동 매핑으로 폴백합니다.
                 HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
-                if (!ValidateGhostAvatar(importedModel))
+                if (!FBXImportController.ValidateGhostAvatar(importedModel))
                 {
                     Debug.LogWarning("[FBXImport] Ghost Humanoid Avatar 생성 실패함. 자동 본 매핑으로 재시도함.");
                     boneMapping = HumanoidAvatarBuilder.BuildAutoMapping(importedModel);
                     HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
 
-                    if (!ValidateGhostAvatar(importedModel))
+                    if (!FBXImportController.ValidateGhostAvatar(importedModel))
                     {
                         FailSession("Ghost Humanoid Avatar 생성에 실패했습니다.");
                         return FBXConversionResult.Fail("Ghost Humanoid Avatar 생성에 실패했습니다.");
@@ -2138,7 +2138,7 @@ namespace Fbx2Vmd.FBXImporter
                 SetSessionState(FBXSessionState.AvatarReady, "Humanoid Avatar 준비 완료", 0.45f);
 
                 Animation ghostAnim = importedModel.GetComponent<Animation>();
-                AnimationClip targetClip = ExtractPrimaryClip(ghostAnim);
+                AnimationClip targetClip = FBXImportController.ExtractPrimaryClip(ghostAnim, showRuntimeAnimationLog);
                 if (targetClip == null)
                 {
                     FailSession("FBX에서 유효한 애니메이션 클립을 찾지 못했습니다.");
@@ -2463,51 +2463,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return valid;
-        }
-
-        private bool ValidateGhostAvatar(GameObject importedModel)
-        {
-            Animator ghostAnimator = importedModel.GetComponent<Animator>();
-            if (ghostAnimator == null || ghostAnimator.avatar == null)
-            {
-                Debug.LogError("[FBXImport] Ghost Animator 또는 Avatar가 없습니다.");
-                return false;
-            }
-
-            if (!ghostAnimator.avatar.isValid || !ghostAnimator.avatar.isHuman)
-            {
-                Debug.LogError($"[FBXImport] Ghost Avatar가 유효하지 않습니다. valid={ghostAnimator.avatar.isValid}, human={ghostAnimator.avatar.isHuman}");
-                return false;
-            }
-
-            return true;
-        }
-
-        private AnimationClip ExtractPrimaryClip(Animation ghostAnim)
-        {
-            if (ghostAnim == null || ghostAnim.clip == null)
-            {
-                return null;
-            }
-
-            AnimationClip targetClip = ghostAnim.clip;
-            if (targetClip.length <= 0f || float.IsNaN(targetClip.length) || float.IsInfinity(targetClip.length))
-            {
-                Debug.LogError($"[FBXImport] 애니메이션 길이가 올바르지 않습니다: {targetClip.length}");
-                return null;
-            }
-
-            if (targetClip.length > 1000f)
-            {
-                Debug.LogWarning("[FBXImport] 애니메이션 길이가 비정상적으로 깁니다. Assimp timeScale을 확인하세요.");
-            }
-
-            if (showRuntimeAnimationLog)
-            {
-                Debug.Log($"[FBXImport] Clip: {targetClip.name}, Length: {targetClip.length:F3}s, FrameRate: {targetClip.frameRate}");
-            }
-
-            return targetClip;
         }
 
         private void PrepareTargetCharacter(GameObject targetObject, Animator targetAnimator, Animator ghostAnimator)
@@ -3009,57 +2964,6 @@ namespace Fbx2Vmd.FBXImporter
             }
             _activeGhostContainer = null;
             _activeRetargeter = null;
-        }
-
-        /// <summary>
-        /// 런타임에서도 BoneMapping_Data.txt를 읽어오는 함수
-        /// </summary>
-        private Dictionary<string, string> LoadBoneMappingRuntime()
-        {
-            var mapping = new Dictionary<string, string>();
-
-            // Resources 폴더에서 로드 (확장자 .txt 제외)
-            string loadName = Path.GetFileNameWithoutExtension(FBXImportController.BONE_MAPPING_FILE);
-            TextAsset mappingAsset = Resources.Load<TextAsset>(loadName);
-
-            if (mappingAsset != null)
-            {
-                Debug.Log($"[FBXImport] BoneMapping 로드 성공 (Resources/{loadName})");
-                string[] lines = mappingAsset.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
-                bool insideBoneTemplate = false;
-
-                foreach (string line in lines)
-                {
-                    string trimmedLine = line.Trim();
-                    if (trimmedLine.StartsWith("m_BoneTemplate:"))
-                    {
-                        insideBoneTemplate = true;
-                        continue;
-                    }
-
-                    if (insideBoneTemplate)
-                    {
-                        if (trimmedLine.StartsWith("m_")) break; // 섹션 종료
-
-                        int colonIndex = trimmedLine.IndexOf(':');
-                        if (colonIndex > 0)
-                        {
-                            string key = trimmedLine[..colonIndex].Trim();
-                            string value = trimmedLine[(colonIndex + 1)..].Trim();
-                            if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
-                            {
-                                mapping[key] = value;
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[FBXImport] BoneMapping 로드 실패: Resources/{loadName}.txt (자동 본 매핑으로 폴백합니다.)");
-            }
-
-            return mapping;
         }
 
         private void SetupGhostRetargeting(GameObject ghostObject, AnimationClip ghostClip, GameObject targetPrefab)
