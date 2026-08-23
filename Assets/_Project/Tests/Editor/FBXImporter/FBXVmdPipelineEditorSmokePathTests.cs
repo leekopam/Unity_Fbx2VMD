@@ -50,12 +50,6 @@ namespace Tests.Editor.FBXImporter
             typeof(float).MakeByRefType()
         };
 
-        private static readonly Type[] RecordingLengthParameterTypes =
-        {
-            typeof(float),
-            typeof(float)
-        };
-
         private static readonly Type[] GhostSkeletonFallbackParameterTypes =
         {
             typeof(bool),
@@ -438,7 +432,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_CustomVmdPlaybackSpeed_When_ResolvingRecordingLength_Then_PreservesFullClipAtThatSpeed()
         {
-            float recordingLengthSeconds = ResolveRecordingLengthForPlaybackSpeed(
+            float recordingLengthSeconds = VMDRecordingController.ResolveRecordingLengthForPlaybackSpeed(
                 clipLengthSeconds: 207.7667f,
                 playbackSpeed: 2f);
 
@@ -1143,20 +1137,6 @@ namespace Tests.Editor.FBXImporter
             targetFrameCount = (int)args[5];
             playbackSpeed = (float)args[6];
             return result;
-        }
-
-        private static float ResolveRecordingLengthForPlaybackSpeed(float clipLengthSeconds, float playbackSpeed)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ResolveRecordingLengthForPlaybackSpeed",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RecordingLengthParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a fakeable playback-speed duration helper.");
-
-            return (float)method.Invoke(null, new object[] { clipLengthSeconds, playbackSpeed });
         }
 
         private static bool ShouldAttachGhostSkeletonDebugRenderer(bool visible, int rendererCount)

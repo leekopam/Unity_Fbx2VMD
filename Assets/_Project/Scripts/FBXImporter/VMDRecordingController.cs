@@ -53,8 +53,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float recordingStartTime = 0f;
-            float recordingPlaybackSpeed = FBXVmdPipeline.ResolveVmdRecordingPlaybackSpeed(_pipeline.vmdRecordingPlaybackSpeed);
-            float recordingLength = FBXVmdPipeline.ResolveRecordingLengthForPlaybackSpeed(clip.length, recordingPlaybackSpeed);
+            float recordingPlaybackSpeed = ResolveVmdRecordingPlaybackSpeed(_pipeline.vmdRecordingPlaybackSpeed);
+            float recordingLength = ResolveRecordingLengthForPlaybackSpeed(clip.length, recordingPlaybackSpeed);
             int recordingTargetFrameCount = 0;
             string recordingOutputBaseName = outputBaseName;
             string comparisonLabel = $"auto_{recordingOutputBaseName}";
@@ -447,6 +447,30 @@ namespace Fbx2Vmd.FBXImporter
 
             retargeter?.ApplyLateVisualGroundingCorrection();
             Debug.Log($"[Retargeting] 리타게팅 프리웜 완료됨. 프레임={prewarmFrames}, 클립 시간={sampleTime:F2}초");
+        }
+
+        public static float ResolveVmdRecordingPlaybackSpeed(float configuredPlaybackSpeed)
+        {
+            if (configuredPlaybackSpeed <= 0f ||
+                float.IsNaN(configuredPlaybackSpeed) ||
+                float.IsInfinity(configuredPlaybackSpeed))
+            {
+                return 1f;
+            }
+
+            return Mathf.Max(0.0001f, configuredPlaybackSpeed);
+        }
+
+        public static float ResolveRecordingLengthForPlaybackSpeed(float clipLengthSeconds, float playbackSpeed)
+        {
+            if (clipLengthSeconds <= 0f ||
+                float.IsNaN(clipLengthSeconds) ||
+                float.IsInfinity(clipLengthSeconds))
+            {
+                return 0f;
+            }
+
+            return clipLengthSeconds / ResolveVmdRecordingPlaybackSpeed(playbackSpeed);
         }
 
         /// <summary>

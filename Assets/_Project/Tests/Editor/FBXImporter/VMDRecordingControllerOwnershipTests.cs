@@ -1,5 +1,6 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
+using System;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -172,11 +173,45 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RecordingPlaybackTiming_When_CheckingOwnership_Then_ControllerOwnsPureCalculations()
+        {
+            Type[] parameterTypes = { typeof(float), typeof(float) };
+            MethodInfo controllerPlaybackSpeedMethod = typeof(VMDRecordingController).GetMethod(
+                "ResolveVmdRecordingPlaybackSpeed",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: new[] { typeof(float) },
+                modifiers: null);
+            MethodInfo controllerRecordingLengthMethod = typeof(VMDRecordingController).GetMethod(
+                "ResolveRecordingLengthForPlaybackSpeed",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: parameterTypes,
+                modifiers: null);
+            MethodInfo pipelinePlaybackSpeedMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ResolveVmdRecordingPlaybackSpeed",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo pipelineRecordingLengthMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ResolveRecordingLengthForPlaybackSpeed",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+            Assert.That(controllerPlaybackSpeedMethod, Is.Not.Null);
+            Assert.That(controllerRecordingLengthMethod, Is.Not.Null);
+            Assert.That(pipelinePlaybackSpeedMethod, Is.Null);
+            Assert.That(pipelineRecordingLengthMethod, Is.Null);
+        }
+
+        [Test]
         public void Given_RecordingBoundaryValues_When_ResolvingControllerPolicies_Then_ClampsSafely()
         {
             Assert.That(VMDRecordingController.ResolveStartDelay(1f, false), Is.EqualTo(0f));
             Assert.That(VMDRecordingController.ResolveStartDelay(float.NaN, true), Is.EqualTo(0f));
             Assert.That(VMDRecordingController.ResolveStartDelay(20f, true), Is.EqualTo(10f));
+            Assert.That(VMDRecordingController.ResolveVmdRecordingPlaybackSpeed(float.NaN), Is.EqualTo(1f));
+            Assert.That(VMDRecordingController.ResolveVmdRecordingPlaybackSpeed(-1f), Is.EqualTo(1f));
+            Assert.That(VMDRecordingController.ResolveVmdRecordingPlaybackSpeed(0.00001f), Is.EqualTo(0.0001f));
+            Assert.That(VMDRecordingController.ResolveRecordingLengthForPlaybackSpeed(float.NaN, 1f), Is.EqualTo(0f));
+            Assert.That(VMDRecordingController.ResolveRecordingLengthForPlaybackSpeed(10f, 2f), Is.EqualTo(5f));
             Assert.That(VMDRecordingController.ResolvePrewarmFrameCount(-1), Is.EqualTo(0));
             Assert.That(VMDRecordingController.ResolvePrewarmFrameCount(121), Is.EqualTo(120));
         }
