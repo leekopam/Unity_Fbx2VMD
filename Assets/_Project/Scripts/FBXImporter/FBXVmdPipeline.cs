@@ -1594,7 +1594,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             return ResolveEditorSmokeFbxPath(
                 fbxFileName,
-                GetControlledImportDirectory(),
+                FBXImportController.GetControlledImportDirectory(),
                 Application.dataPath,
                 File.Exists);
         }
@@ -1628,7 +1628,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static string BuildEditorSmokeOutputBaseName(string outputBaseName, float durationSeconds, EditorDiagnosticSmokeSegment segment)
         {
-            string cleanBaseName = SanitizeFileName(
+            string cleanBaseName = FBXImportController.SanitizeFileName(
                 string.IsNullOrWhiteSpace(outputBaseName) ? VMDOutputNamePolicy.DefaultOutputBaseName : outputBaseName);
             int roundedSeconds = Mathf.Max(1, Mathf.CeilToInt(durationSeconds));
             string prefix;
@@ -2087,7 +2087,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 SetSessionState(FBXSessionState.Selected, $"선택됨: {Path.GetFileName(sourcePath)}", 0.05f);
-                string targetPath = CopyToControlledImportFolder(sourcePath);
+                string targetPath = _importController.CopyToControlledImportFolder(sourcePath);
                 string outputBaseName = Path.GetFileNameWithoutExtension(targetPath);
                 if (_shouldRecordVmdAfterImport)
                 {
@@ -2335,42 +2335,6 @@ namespace Fbx2Vmd.FBXImporter
             return IsFiniteDiagnosticRisk(value)
                 ? value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
                 : "n/a";
-        }
-
-        private string CopyToControlledImportFolder(string sourcePath)
-        {
-            string targetDir = GetControlledImportDirectory();
-            Directory.CreateDirectory(targetDir);
-
-            string safeFileName = SanitizeFileName(Path.GetFileName(sourcePath));
-            string targetPath = Path.Combine(targetDir, safeFileName);
-
-            if (!string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase))
-            {
-                File.Copy(sourcePath, targetPath, true);
-            }
-
-            return targetPath;
-        }
-
-        internal string GetControlledImportDirectory()
-        {
-#if UNITY_EDITOR
-            return Path.Combine(Application.dataPath, "Resources", IMPORT_FBX_FOLDER);
-#else
-            return Path.Combine(Application.persistentDataPath, IMPORT_FBX_FOLDER);
-#endif
-        }
-
-        private static string SanitizeFileName(string fileName)
-        {
-            string safeName = string.IsNullOrWhiteSpace(fileName) ? "motion.fbx" : fileName.Trim();
-            foreach (char invalidChar in Path.GetInvalidFileNameChars())
-            {
-                safeName = safeName.Replace(invalidChar, '_');
-            }
-
-            return safeName;
         }
 
         internal void ResetTargetStateAfterSession(bool recaptureGuardBaselines)

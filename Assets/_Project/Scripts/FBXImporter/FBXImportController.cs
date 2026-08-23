@@ -20,6 +20,42 @@ namespace Fbx2Vmd.FBXImporter
             _fileBrowserService = fileBrowserService ?? throw new ArgumentNullException(nameof(fileBrowserService));
         }
 
+        internal string CopyToControlledImportFolder(string sourcePath)
+        {
+            string targetDir = GetControlledImportDirectory();
+            Directory.CreateDirectory(targetDir);
+
+            string safeFileName = SanitizeFileName(Path.GetFileName(sourcePath));
+            string targetPath = Path.Combine(targetDir, safeFileName);
+
+            if (!string.Equals(Path.GetFullPath(sourcePath), Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(sourcePath, targetPath, true);
+            }
+
+            return targetPath;
+        }
+
+        internal static string GetControlledImportDirectory()
+        {
+#if UNITY_EDITOR
+            return Path.Combine(Application.dataPath, "Resources", FBXVmdPipeline.IMPORT_FBX_FOLDER);
+#else
+            return Path.Combine(Application.persistentDataPath, FBXVmdPipeline.IMPORT_FBX_FOLDER);
+#endif
+        }
+
+        internal static string SanitizeFileName(string fileName)
+        {
+            string safeName = string.IsNullOrWhiteSpace(fileName) ? "motion.fbx" : fileName.Trim();
+            foreach (char invalidChar in Path.GetInvalidFileNameChars())
+            {
+                safeName = safeName.Replace(invalidChar, '_');
+            }
+
+            return safeName;
+        }
+
         public void ImportFromDialog()
         {
             TryImportFromDialog();
@@ -63,7 +99,7 @@ namespace Fbx2Vmd.FBXImporter
                 return true;
             }
 
-            string targetDir = _pipeline.GetControlledImportDirectory();
+            string targetDir = GetControlledImportDirectory();
             if (!Directory.Exists(targetDir))
             {
                 _pipeline.SetSessionState(FBXVmdPipeline.FBXSessionState.Failed, $"Import_FBX 폴더가 없습니다: {targetDir}", 0f);
