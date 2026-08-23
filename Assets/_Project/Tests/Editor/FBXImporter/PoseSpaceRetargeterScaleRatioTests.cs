@@ -128,14 +128,19 @@ namespace Tests.Editor.FBXImporter
             float targetHipY,
             out bool usedInvalidFallback)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            Type calculatorType = typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.RetargetingScaleRatioCalculator",
+                throwOnError: false);
+            Assert.That(calculatorType, Is.Not.Null, "RetargetingScaleRatioCalculator should own scale ratio selection.");
+
+            MethodInfo method = calculatorType.GetMethod(
                 "CalculateSafeScaleRatio",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: ScaleRatioParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for scale ratio selection.");
+            Assert.That(method, Is.Not.Null, "RetargetingScaleRatioCalculator should expose the pure scale ratio calculation.");
 
             object[] args =
             {
