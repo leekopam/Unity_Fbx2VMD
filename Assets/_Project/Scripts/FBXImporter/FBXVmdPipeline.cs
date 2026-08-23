@@ -3117,7 +3117,8 @@ namespace Fbx2Vmd.FBXImporter
             targetAnimator.applyRootMotion = false;
             targetAnimator.runtimeAnimatorController = null;
             DisableMmdPostPoseCorrectionForRetarget(targetObject);
-            HumanoidArmTwistRiggingGuard twistRiggingGuard = ConfigureTargetAnimationRiggingArmTwistCorrection(targetObject, targetAnimator);
+            HumanoidArmTwistRiggingGuard twistRiggingGuard =
+                _conversionCoordinator.ConfigureArmTwistRiggingGuard(targetObject, targetAnimator);
             _conversionCoordinator.ConfigureArmDirectionGuard(
                 targetObject,
                 targetAnimator,
@@ -3234,65 +3235,6 @@ namespace Fbx2Vmd.FBXImporter
                     $"weight={grounder.weight:F3}, maxStep={grounder.solver.maxStep:F3}, " +
                     $"footRadius={grounder.solver.footRadius:F3}");
             }
-        }
-
-        private HumanoidArmTwistRiggingGuard ConfigureTargetAnimationRiggingArmTwistCorrection(GameObject targetObject, Animator targetAnimator)
-        {
-            if (targetObject == null)
-            {
-                return null;
-            }
-
-            HumanoidArmTwistRiggingGuard twistRiggingGuard = targetObject.GetComponent<HumanoidArmTwistRiggingGuard>();
-            if (!enableAnimationRiggingArmTwistCorrection)
-            {
-                if (twistRiggingGuard != null)
-                {
-                    twistRiggingGuard.DisableRigging();
-                    twistRiggingGuard.enabled = false;
-                }
-
-                DisableTargetRigBuilder(targetObject);
-
-                return null;
-            }
-
-            if (twistRiggingGuard == null)
-            {
-                twistRiggingGuard = targetObject.AddComponent<HumanoidArmTwistRiggingGuard>();
-            }
-
-            twistRiggingGuard.enableTwistRigging = true;
-            twistRiggingGuard.enabled = true;
-            bool configured = twistRiggingGuard.Configure(
-                targetAnimator,
-                AnimationRiggingArmTwistRigWeight,
-                AnimationRiggingUpperArmTwistWeight,
-                AnimationRiggingForearmTwistWeight,
-                logAnimationRiggingArmTwistCorrection);
-
-            return configured ? twistRiggingGuard : null;
-        }
-
-        private static void DisableTargetRigBuilder(GameObject targetObject)
-        {
-            if (targetObject == null)
-            {
-                return;
-            }
-
-            var rigBuilder = targetObject.GetComponent<UnityEngine.Animations.Rigging.RigBuilder>();
-            if (rigBuilder == null)
-            {
-                return;
-            }
-
-            if (rigBuilder.graph.IsValid())
-            {
-                rigBuilder.Clear();
-            }
-
-            rigBuilder.enabled = false;
         }
 
         private void ConfigureTargetThumbDeformationGuard(

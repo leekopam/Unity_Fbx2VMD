@@ -46,6 +46,68 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal HumanoidArmTwistRiggingGuard ConfigureArmTwistRiggingGuard(
+            GameObject targetObject,
+            Animator targetAnimator)
+        {
+            if (targetObject == null)
+            {
+                return null;
+            }
+
+            HumanoidArmTwistRiggingGuard twistRiggingGuard =
+                targetObject.GetComponent<HumanoidArmTwistRiggingGuard>();
+            if (!_pipeline.enableAnimationRiggingArmTwistCorrection)
+            {
+                if (twistRiggingGuard != null)
+                {
+                    twistRiggingGuard.DisableRigging();
+                    twistRiggingGuard.enabled = false;
+                }
+
+                DisableTargetRigBuilder(targetObject);
+                return null;
+            }
+
+            if (twistRiggingGuard == null)
+            {
+                twistRiggingGuard = targetObject.AddComponent<HumanoidArmTwistRiggingGuard>();
+            }
+
+            twistRiggingGuard.enableTwistRigging = true;
+            twistRiggingGuard.enabled = true;
+            bool configured = twistRiggingGuard.Configure(
+                targetAnimator,
+                _pipeline.AnimationRiggingArmTwistRigWeight,
+                _pipeline.AnimationRiggingUpperArmTwistWeight,
+                _pipeline.AnimationRiggingForearmTwistWeight,
+                _pipeline.logAnimationRiggingArmTwistCorrection);
+
+            return configured ? twistRiggingGuard : null;
+        }
+
+        private static void DisableTargetRigBuilder(GameObject targetObject)
+        {
+            if (targetObject == null)
+            {
+                return;
+            }
+
+            var rigBuilder =
+                targetObject.GetComponent<UnityEngine.Animations.Rigging.RigBuilder>();
+            if (rigBuilder == null)
+            {
+                return;
+            }
+
+            if (rigBuilder.graph.IsValid())
+            {
+                rigBuilder.Clear();
+            }
+
+            rigBuilder.enabled = false;
+        }
+
         internal HumanoidArmDirectionRetargetGuard ConfigureArmDirectionGuard(
             GameObject targetObject,
             Animator targetAnimator,

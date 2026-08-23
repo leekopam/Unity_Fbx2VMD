@@ -196,6 +196,58 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_ArmTwistRiggingAssembly_When_InspectingOwnership_Then_CoordinatorOwnsIt()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureArmTwistRiggingGuard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineConfigureMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ConfigureTargetAnimationRiggingArmTwistCorrection",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineDisableMethod = typeof(FBXVmdPipeline).GetMethod(
+                "DisableTargetRigBuilder",
+                BindingFlags.Static | BindingFlags.NonPublic);
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineConfigureMethod, Is.Null);
+            Assert.That(pipelineDisableMethod, Is.Null);
+        }
+
+        [Test]
+        public void Given_DisabledArmTwistRigging_When_ConfiguringTargetGuard_Then_DisablesExistingRigging()
+        {
+            GameObject pipelineObject = new GameObject("Pipeline");
+            GameObject targetObject = new GameObject("TargetWithTwistRigging");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                var coordinator = new FBXConversionCoordinator(pipeline);
+                HumanoidArmTwistRiggingGuard existingGuard =
+                    targetObject.AddComponent<HumanoidArmTwistRiggingGuard>();
+                existingGuard.enableTwistRigging = true;
+                existingGuard.enabled = true;
+                var rigBuilder =
+                    targetObject.AddComponent<UnityEngine.Animations.Rigging.RigBuilder>();
+                rigBuilder.enabled = true;
+
+                HumanoidArmTwistRiggingGuard configuredGuard = ConfigureArmTwistRiggingGuard(
+                    coordinator,
+                    targetObject,
+                    targetAnimator: null);
+
+                Assert.That(configuredGuard, Is.Null);
+                Assert.That(existingGuard.enableTwistRigging, Is.False);
+                Assert.That(existingGuard.enabled, Is.False);
+                Assert.That(rigBuilder.enabled, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,
@@ -244,6 +296,20 @@ namespace Tests.Editor.FBXImporter
 
             object[] arguments = { targetObject, null, null, null };
             method.Invoke(coordinator, arguments);
+        }
+
+        private HumanoidArmTwistRiggingGuard ConfigureArmTwistRiggingGuard(
+            FBXConversionCoordinator coordinator,
+            GameObject targetObject,
+            Animator targetAnimator)
+        {
+            MethodInfo method = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureArmTwistRiggingGuard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+
+            object[] arguments = { targetObject, targetAnimator };
+            return (HumanoidArmTwistRiggingGuard)method.Invoke(coordinator, arguments);
         }
     }
 }
