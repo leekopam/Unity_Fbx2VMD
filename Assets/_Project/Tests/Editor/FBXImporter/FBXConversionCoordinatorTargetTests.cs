@@ -301,6 +301,67 @@ namespace Tests.Editor.FBXImporter
             Assert.That(pipelineSource, Does.Not.Contain("targetObject.GetComponent<IKControl>()"));
         }
 
+        [Test]
+        public void Given_MmdPostPoseCorrectionLifecycle_When_CheckingOwnership_Then_CoordinatorOwnsSnapshots()
+        {
+            MethodInfo disableMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "DisableMmdPostPoseCorrectionForRetarget",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo restoreMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "RestoreMmdPostPoseCorrectionForRetarget",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string pipelinePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs");
+            string pipelineSource = File.ReadAllText(pipelinePath);
+
+            Assert.That(disableMethod, Is.Not.Null);
+            Assert.That(restoreMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.DisableMmdPostPoseCorrectionForRetarget("));
+            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator?.RestoreMmdPostPoseCorrectionForRetarget("));
+            Assert.That(pipelineSource, Does.Not.Contain("private struct BooleanFieldSnapshot"));
+            Assert.That(pipelineSource, Does.Not.Contain("_retargetBooleanSnapshots"));
+            Assert.That(pipelineSource, Does.Not.Contain("private bool TrySetBooleanField("));
+            Assert.That(pipelineSource, Does.Not.Contain("private static FieldInfo FindFieldInHierarchy("));
+        }
+
+        [Test]
+        public void Given_InheritedBooleanField_When_RestoringMmdPostPoseCorrection_Then_OriginalValueReturns()
+        {
+            GameObject pipelineObject = new GameObject("Pipeline");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                var coordinator = new FBXConversionCoordinator(pipeline);
+                var probe = new MmdBooleanFieldProbe();
+                MethodInfo setMethod = typeof(FBXConversionCoordinator).GetMethod(
+                    "TrySetBooleanField",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                MethodInfo restoreMethod = typeof(FBXConversionCoordinator).GetMethod(
+                    "RestoreMmdPostPoseCorrectionForRetarget",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(setMethod, Is.Not.Null);
+                Assert.That(restoreMethod, Is.Not.Null);
+                Assert.That(
+                    (bool)setMethod.Invoke(coordinator, new object[] { probe, "pphShoulderEnabled", false }),
+                    Is.True);
+                Assert.That(probe.IsShoulderPostPoseEnabled, Is.False);
+
+                restoreMethod.Invoke(coordinator, null);
+
+                Assert.That(probe.IsShoulderPostPoseEnabled, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,
@@ -363,6 +424,17 @@ namespace Tests.Editor.FBXImporter
 
             object[] arguments = { targetObject, targetAnimator };
             return (HumanoidArmTwistRiggingGuard)method.Invoke(coordinator, arguments);
+        }
+
+        private class MmdBooleanFieldProbeBase
+        {
+            private bool pphShoulderEnabled = true;
+
+            public bool IsShoulderPostPoseEnabled => pphShoulderEnabled;
+        }
+
+        private sealed class MmdBooleanFieldProbe : MmdBooleanFieldProbeBase
+        {
         }
     }
 }
