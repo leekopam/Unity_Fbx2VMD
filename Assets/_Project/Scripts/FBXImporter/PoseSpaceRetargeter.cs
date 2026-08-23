@@ -3247,12 +3247,18 @@ namespace Fbx2Vmd.FBXImporter
             int changed = 0;
             if (!ShouldSuppressCompetingManualThumbOverride(true))
             {
-                changed += ApplyEditorHumanoidHandLocalRotationReferenceBone(HumanBodyBones.LeftHand);
+                changed += ManualPoseReferenceApplier.ApplyExactLocalRotationReference(
+                    _editorFingerReferenceAnimator,
+                    targetAnimator,
+                    HumanBodyBones.LeftHand);
             }
 
             if (!ShouldSuppressCompetingManualThumbOverride(false))
             {
-                changed += ApplyEditorHumanoidHandLocalRotationReferenceBone(HumanBodyBones.RightHand);
+                changed += ManualPoseReferenceApplier.ApplyExactLocalRotationReference(
+                    _editorFingerReferenceAnimator,
+                    targetAnimator,
+                    HumanBodyBones.RightHand);
             }
 
             if (changed > 0 && !_editorHandLocalRotationReferenceLogged)
@@ -3260,25 +3266,6 @@ namespace Fbx2Vmd.FBXImporter
                 Debug.Log($"[PoseSpaceRetargeter] Manual Animator hand localRotation reference applied. bones={changed}");
                 _editorHandLocalRotationReferenceLogged = true;
             }
-        }
-
-        private int ApplyEditorHumanoidHandLocalRotationReferenceBone(HumanBodyBones handBone)
-        {
-            Transform source = _editorFingerReferenceAnimator.GetBoneTransform(handBone);
-            Transform target = targetAnimator.GetBoneTransform(handBone);
-            if (source == null || target == null)
-            {
-                return 0;
-            }
-
-            Quaternion sourceRotation = source.localRotation;
-            if (!IsFinite(sourceRotation) || Quaternion.Angle(target.localRotation, sourceRotation) <= 0.001f)
-            {
-                return 0;
-            }
-
-            target.localRotation = sourceRotation;
-            return 1;
         }
 
         private void ApplyEditorHumanoidFootLocalRotationReference()
@@ -3298,14 +3285,46 @@ namespace Fbx2Vmd.FBXImporter
 
             CaptureTargetFootPositions(out Vector3 leftFootBefore, out Vector3 rightFootBefore);
             int changed = 0;
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftUpperLeg);
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightUpperLeg);
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftLowerLeg);
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightLowerLeg);
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftFoot);
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightFoot);
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.LeftToes);
-            changed += ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones.RightToes);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.LeftUpperLeg,
+                manualAnimatorFootLocalRotationReferenceWeight);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.RightUpperLeg,
+                manualAnimatorFootLocalRotationReferenceWeight);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.LeftLowerLeg,
+                manualAnimatorFootLocalRotationReferenceWeight);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.RightLowerLeg,
+                manualAnimatorFootLocalRotationReferenceWeight);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.LeftFoot,
+                manualAnimatorFootLocalRotationReferenceWeight);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.RightFoot,
+                manualAnimatorFootLocalRotationReferenceWeight);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.LeftToes,
+                manualAnimatorFootLocalRotationReferenceWeight);
+            changed += ManualPoseReferenceApplier.ApplyBlendedLocalRotationReference(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                HumanBodyBones.RightToes,
+                manualAnimatorFootLocalRotationReferenceWeight);
             RecordEditorFootLocalRotationReferenceDiagnostics(leftFootBefore, rightFootBefore);
 
             if (changed > 0 && !_editorFootLocalRotationReferenceLogged)
@@ -3313,55 +3332,6 @@ namespace Fbx2Vmd.FBXImporter
                 Debug.Log($"[PoseSpaceRetargeter] Manual Animator lower-body localRotation reference applied. bones={changed}, weight={manualAnimatorFootLocalRotationReferenceWeight:F2}");
                 _editorFootLocalRotationReferenceLogged = true;
             }
-        }
-
-        private int ApplyEditorHumanoidFootLocalRotationReferenceBone(HumanBodyBones footBone)
-        {
-            Transform source = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
-            Transform target = targetAnimator.GetBoneTransform(footBone);
-            if (source == null || target == null)
-            {
-                return 0;
-            }
-
-            if (!TryCalculateEditorFootLocalRotationReference(
-                    source.localRotation,
-                    target.localRotation,
-                    manualAnimatorFootLocalRotationReferenceWeight,
-                    out Quaternion nextLocalRotation))
-            {
-                return 0;
-            }
-
-            target.localRotation = nextLocalRotation;
-            return 1;
-        }
-
-        private static bool TryCalculateEditorFootLocalRotationReference(
-            Quaternion referenceLocalRotation,
-            Quaternion currentLocalRotation,
-            float weight,
-            out Quaternion nextLocalRotation)
-        {
-            nextLocalRotation = currentLocalRotation;
-            if (!IsFinite(referenceLocalRotation) || !IsFinite(currentLocalRotation))
-            {
-                return false;
-            }
-
-            if (Quaternion.Angle(currentLocalRotation, referenceLocalRotation) <= 0.001f)
-            {
-                return false;
-            }
-
-            nextLocalRotation = Quaternion.Slerp(currentLocalRotation, referenceLocalRotation, Mathf.Clamp01(weight));
-            if (!IsFinite(nextLocalRotation))
-            {
-                nextLocalRotation = currentLocalRotation;
-                return false;
-            }
-
-            return true;
         }
 
         private void CaptureTargetFootPositions(out Vector3 leftFootPosition, out Vector3 rightFootPosition)
