@@ -8,6 +8,9 @@ namespace Tests.Editor.FBXImporter
 {
     public class PoseSpaceRetargeterLegacyAnimationStepTests
     {
+        private static Type LegacyAnimationDriverType =>
+            typeof(PoseSpaceRetargeter).Assembly.GetType("Fbx2Vmd.FBXImporter.LegacyAnimationDriver", throwOnError: true);
+
         private static readonly Type[] ManualAdvanceParameterTypes =
         {
             typeof(float),
@@ -805,7 +808,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var retargeter = root.AddComponent<PoseSpaceRetargeter>();
-                SetInstanceBool(retargeter, "ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly", true);
+                retargeter.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = true;
 
                 Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Left Upper Leg In-Out")), Is.True);
                 Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Right Upper Leg Twist In-Out")), Is.True);
@@ -1074,14 +1077,14 @@ namespace Tests.Editor.FBXImporter
             bool isPlaying,
             out float advancedTime)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = LegacyAnimationDriverType.GetMethod(
                 "TryCalculateManualLegacyAnimationTime",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: ManualAdvanceParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for Legacy Animation manual advance timing.");
+            Assert.That(method, Is.Not.Null, "LegacyAnimationDriver should expose a pure static helper for Legacy Animation manual advance timing.");
 
             object[] args =
             {
@@ -1106,14 +1109,14 @@ namespace Tests.Editor.FBXImporter
             float maxStep,
             out float clampedTime)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = LegacyAnimationDriverType.GetMethod(
                 "TryClampLegacyAnimationEndWrap",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: EndWrapClampParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for tail-end Legacy Animation wrap clamping.");
+            Assert.That(method, Is.Not.Null, "LegacyAnimationDriver should expose a pure static helper for tail-end Legacy Animation wrap clamping.");
 
             object[] args =
             {
@@ -1582,14 +1585,14 @@ namespace Tests.Editor.FBXImporter
 
         private static bool HasLegacyAnimationClipState(Animation legacyAnimation, string stateName)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = LegacyAnimationDriverType.GetMethod(
                 "HasLegacyAnimationClipState",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: new[] { typeof(Animation), typeof(string) },
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should check legacy clip presence before RemoveClip to avoid Unity console asserts.");
+            Assert.That(method, Is.Not.Null, "LegacyAnimationDriver should check legacy clip presence before RemoveClip to avoid Unity console asserts.");
 
             return (bool)method.Invoke(null, new object[] { legacyAnimation, stateName });
         }
