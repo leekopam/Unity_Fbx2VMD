@@ -1,5 +1,6 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
+using RootMotion.FinalIK;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
@@ -358,6 +359,66 @@ namespace Tests.Editor.FBXImporter
             }
             finally
             {
+                Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_FinalIkFootGroundingExperiment_When_CheckingOwnership_Then_CoordinatorOwnsAssembly()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureFinalIkFootGroundingExperiment",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ConfigureFinalIkFootGroundingExperiment",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string pipelinePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs");
+            string pipelineSource = File.ReadAllText(pipelinePath);
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineMethod, Is.Null);
+            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.ConfigureFinalIkFootGroundingExperiment("));
+            Assert.That(pipelineSource, Does.Not.Contain("targetObject.GetComponent<GrounderBipedIK>()"));
+            Assert.That(pipelineSource, Does.Not.Contain("targetObject.GetComponent<BipedIK>()"));
+        }
+
+        [Test]
+        public void Given_DisabledFinalIkFootGrounding_When_ConfiguringTarget_Then_DisablesExistingComponents()
+        {
+            GameObject pipelineObject = new GameObject("Pipeline");
+            GameObject targetObject = new GameObject("TargetWithFinalIkGrounding");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.enableFinalIkFootGroundingExperiment = false;
+                var coordinator = new FBXConversionCoordinator(pipeline);
+                BipedIK bipedIk = targetObject.AddComponent<BipedIK>();
+                bipedIk.fixTransforms = true;
+                bipedIk.enabled = true;
+                GrounderBipedIK grounder = targetObject.AddComponent<GrounderBipedIK>();
+                grounder.weight = 0.2f;
+                grounder.enabled = true;
+                MethodInfo configureMethod = typeof(FBXConversionCoordinator).GetMethod(
+                    "ConfigureFinalIkFootGroundingExperiment",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(configureMethod, Is.Not.Null);
+                configureMethod.Invoke(coordinator, new object[] { targetObject });
+
+                Assert.That(grounder.weight, Is.Zero);
+                Assert.That(grounder.enabled, Is.False);
+                Assert.That(bipedIk.fixTransforms, Is.False);
+                Assert.That(bipedIk.enabled, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetObject);
                 Object.DestroyImmediate(pipelineObject);
             }
         }
