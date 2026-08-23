@@ -1317,7 +1317,6 @@ namespace Fbx2Vmd.FBXImporter
         private VMDRecordingController _recordingController;
         internal bool _isProcessing;
         private GameObject _activeGhostContainer;
-        internal HumanoidSampleCode _activeRecorderController;
         private PoseSpaceRetargeter _activeRetargeter;
         private TargetIdlePoseGuard _idlePoseGuard;
         private readonly List<BooleanFieldSnapshot> _retargetBooleanSnapshots = new List<BooleanFieldSnapshot>();
@@ -1713,7 +1712,7 @@ namespace Fbx2Vmd.FBXImporter
             _editorSmokeSettingsSnapshotActive = true;
         }
 
-        private void ClearEditorSmokeOverride()
+        internal void ClearEditorSmokeOverride()
         {
             if (_editorSmokeSettingsSnapshotActive)
             {
@@ -1813,7 +1812,7 @@ namespace Fbx2Vmd.FBXImporter
             continuation?.Invoke();
         }
 
-        private void NotifyEditorSmokeFinished(VmdSaveResult result)
+        internal void NotifyEditorSmokeFinished(VmdSaveResult result)
         {
             if (string.IsNullOrEmpty(_editorSmokeCurrentFbxFileName))
             {
@@ -2067,6 +2066,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private void OnDestroy()
         {
+            _recordingController?.ClearActiveRecordingSubscription();
             RestoreMmdPostPoseCorrectionForRetarget();
             _idlePoseGuard?.RestoreAnimatorController();
         }
@@ -2172,7 +2172,7 @@ namespace Fbx2Vmd.FBXImporter
             EnsureServicesInitialized();
             _idlePoseGuard?.Apply();
             _isProcessing = true;
-            ClearActiveRecordingSubscription();
+            _recordingController.ClearActiveRecordingSubscription();
             CleanupActiveGhost();
 
             try
@@ -2358,37 +2358,7 @@ namespace Fbx2Vmd.FBXImporter
             return _shouldRecordVmdAfterImport || editorSmokeRecordingOverrideActive;
         }
 
-        internal void OnRecordingFinished(VmdSaveResult result)
-        {
-            MotionComparisonProbe probe = _activeRecorderController != null
-                ? _activeRecorderController.GetComponent<MotionComparisonProbe>()
-                : null;
-            VmdSaveResult effectiveResult = ApplyEditorSmokeThumbRiskFailure(result, probe);
-            TryAppendVmdArtifactToComparisonSessionManifest(probe, effectiveResult);
-            TryCopyVmdToAdditionalFolder(effectiveResult);
-            ClearActiveRecordingSubscription();
-            LogRetargetPlaybackStabilitySummary();
-
-            if (effectiveResult.Success)
-            {
-                SetSessionState(FBXSessionState.Success, $"VMD 저장 완료: {Path.GetFileName(effectiveResult.FilePath)}", 1f);
-            }
-            else
-            {
-                string errorMessage = string.IsNullOrWhiteSpace(effectiveResult.ErrorMessage) ? "VMD 저장 실패" : effectiveResult.ErrorMessage;
-                SetSessionState(FBXSessionState.Failed, errorMessage, 0f);
-            }
-
-            CleanupActiveGhost();
-            ResetTargetStateAfterSession(recaptureGuardBaselines: false);
-#if UNITY_EDITOR
-            NotifyEditorSmokeFinished(effectiveResult);
-            ClearEditorSmokeOverride();
-#endif
-            _isProcessing = false;
-        }
-
-        private static void TryAppendVmdArtifactToComparisonSessionManifest(MotionComparisonProbe probe, VmdSaveResult result)
+        internal static void TryAppendVmdArtifactToComparisonSessionManifest(MotionComparisonProbe probe, VmdSaveResult result)
         {
             if (probe == null ||
                 result.Success == false ||
@@ -2437,7 +2407,7 @@ namespace Fbx2Vmd.FBXImporter
                 .Replace("\\", "/");
         }
 
-        private void TryCopyVmdToAdditionalFolder(VmdSaveResult result)
+        internal void TryCopyVmdToAdditionalFolder(VmdSaveResult result)
         {
             if (!result.Success)
             {
@@ -2474,7 +2444,7 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private VmdSaveResult ApplyEditorSmokeThumbRiskFailure(VmdSaveResult result, MotionComparisonProbe probe)
+        internal VmdSaveResult ApplyEditorSmokeThumbRiskFailure(VmdSaveResult result, MotionComparisonProbe probe)
         {
 #if UNITY_EDITOR
             if (!_editorSmokeRecordingOverrideActive || !result.Success || !failEditorSmokeOnThumbRisk)
@@ -2630,7 +2600,7 @@ namespace Fbx2Vmd.FBXImporter
             return safeName;
         }
 
-        private void ResetTargetStateAfterSession(bool recaptureGuardBaselines)
+        internal void ResetTargetStateAfterSession(bool recaptureGuardBaselines)
         {
             RestoreMmdPostPoseCorrectionForRetarget();
             _idlePoseGuard?.Apply();
@@ -3133,7 +3103,7 @@ namespace Fbx2Vmd.FBXImporter
             Debug.LogError($"[FBXImport] FBX 처리 실패함. 메시지={message}{exceptionDetails}");
 
             SetSessionState(FBXSessionState.Failed, message, 0f, shouldLog: false);
-            ClearActiveRecordingSubscription();
+            _recordingController?.ClearActiveRecordingSubscription();
             CleanupActiveGhost();
             ResetTargetStateAfterSession(recaptureGuardBaselines: false);
 #if UNITY_EDITOR
@@ -3143,7 +3113,7 @@ namespace Fbx2Vmd.FBXImporter
             _isProcessing = false;
         }
 
-        private void LogRetargetPlaybackStabilitySummary()
+        internal void LogRetargetPlaybackStabilitySummary()
         {
             if (_activeRetargeter == null)
             {
@@ -3284,7 +3254,7 @@ namespace Fbx2Vmd.FBXImporter
             return targetCharacter != null ? targetCharacter.GetComponent<HumanoidSampleCode>() : null;
         }
 
-        private void CleanupActiveGhost()
+        internal void CleanupActiveGhost()
         {
             if (_activeGhostContainer == null)
             {
@@ -3310,15 +3280,6 @@ namespace Fbx2Vmd.FBXImporter
             }
             _activeGhostContainer = null;
             _activeRetargeter = null;
-        }
-
-        private void ClearActiveRecordingSubscription()
-        {
-            if (_activeRecorderController != null)
-            {
-                _activeRecorderController.RecordingFinished -= OnRecordingFinished;
-                _activeRecorderController = null;
-            }
         }
 
         /// <summary>

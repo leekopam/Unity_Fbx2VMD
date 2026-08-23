@@ -49,6 +49,60 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RecordingCompletion_When_CheckingOwnership_Then_ControllerOwnsSubscriptionLifecycle()
+        {
+            FieldInfo controllerRecorderField = typeof(VMDRecordingController).GetField(
+                "_activeRecorderController",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo controllerCompletionMethod = typeof(VMDRecordingController).GetMethod(
+                "OnRecordingFinished",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo controllerClearMethod = typeof(VMDRecordingController).GetMethod(
+                "ClearActiveRecordingSubscription",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo pipelineRecorderField = typeof(FBXVmdPipeline).GetField(
+                "_activeRecorderController",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineCompletionMethod = typeof(FBXVmdPipeline).GetMethod(
+                "OnRecordingFinished",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineClearMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ClearActiveRecordingSubscription",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            string controllerSourcePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "VMDRecordingController.cs");
+            string controllerSource = File.ReadAllText(controllerSourcePath);
+            string pipelineSourcePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs");
+            string pipelineSource = File.ReadAllText(pipelineSourcePath);
+
+            Assert.That(controllerRecorderField, Is.Not.Null);
+            Assert.That(controllerCompletionMethod, Is.Not.Null);
+            Assert.That(controllerClearMethod, Is.Not.Null);
+            Assert.That(controllerSource, Does.Contain("RecordingFinished += OnRecordingFinished"));
+            Assert.That(controllerSource, Does.Contain("RecordingFinished -= OnRecordingFinished"));
+            Assert.That(
+                Regex.IsMatch(
+                    pipelineSource,
+                    @"private void OnDestroy\(\)\s*\{\s*_recordingController\?\.ClearActiveRecordingSubscription\(\);"),
+                Is.True);
+            Assert.That(pipelineRecorderField, Is.Null);
+            Assert.That(pipelineCompletionMethod, Is.Null);
+            Assert.That(pipelineClearMethod, Is.Null);
+        }
+
+        [Test]
         public void Given_RecordingBoundaryValues_When_ResolvingControllerPolicies_Then_ClampsSafely()
         {
             Assert.That(VMDRecordingController.ResolveStartDelay(1f, false), Is.EqualTo(0f));

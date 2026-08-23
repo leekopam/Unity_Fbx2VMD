@@ -7,12 +7,13 @@ using Fbx2Vmd.Settings;
 namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
-    /// FBXVmdPipeline의 VMD 녹화 시퀀스 오케스트레이션을 담당하는 컴패니언 컨트롤러입니다.
-    /// 녹화 시작 전 프리웜, 타이밍 해석, 녹화 실행을 캡슐화함.
+    /// FBXVmdPipeline의 VMD 녹화 수명주기를 담당하는 컴패니언 컨트롤러입니다.
+    /// 프리웜, 녹화 실행, 완료 처리와 이벤트 구독 해제를 캡슐화함.
     /// </summary>
     public class VMDRecordingController
     {
         private readonly FBXVmdPipeline _pipeline;
+        private HumanoidSampleCode _activeRecorderController;
 
         public VMDRecordingController(FBXVmdPipeline pipeline)
         {
@@ -78,8 +79,8 @@ namespace Fbx2Vmd.FBXImporter
                     yield break;
                 }
 
-                _pipeline._activeRecorderController = recorderController;
-                _pipeline._activeRecorderController.RecordingFinished += _pipeline.OnRecordingFinished;
+                _activeRecorderController = recorderController;
+                _activeRecorderController.RecordingFinished += OnRecordingFinished;
                 RecordingCaptureResolutionPlan recordingCapturePlan;
                 float diagnosticScreenshotPadding = 1.8f;
                 float diagnosticScreenshotVerticalViewportCenter = 0.28f;
@@ -96,7 +97,7 @@ namespace Fbx2Vmd.FBXImporter
 #else
                 recordingCapturePlan = _pipeline.CreateRecordingCaptureResolutionPlan();
 #endif
-                _pipeline._activeRecorderController.SetRecordingDiagnostics(
+                _activeRecorderController.SetRecordingDiagnostics(
                     _pipeline.enableRecordingDiagnostics,
                     _pipeline.enableRecordingDiagnostics && _pipeline.enableDiagnosticFingerCloseups,
                     _pipeline.enableRecordingDiagnostics && _pipeline.useDeterministicCaptureFramerateForDiagnostics,
@@ -234,6 +235,52 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _pipeline.FailSession("VMD 녹화를 시작하지 못했습니다.");
             }
+        }
+
+        private void OnRecordingFinished(VmdSaveResult result)
+        {
+            MotionComparisonProbe probe = _activeRecorderController != null
+                ? _activeRecorderController.GetComponent<MotionComparisonProbe>()
+                : null;
+            VmdSaveResult effectiveResult = _pipeline.ApplyEditorSmokeThumbRiskFailure(result, probe);
+            FBXVmdPipeline.TryAppendVmdArtifactToComparisonSessionManifest(probe, effectiveResult);
+            _pipeline.TryCopyVmdToAdditionalFolder(effectiveResult);
+            ClearActiveRecordingSubscription();
+            _pipeline.LogRetargetPlaybackStabilitySummary();
+
+            if (effectiveResult.Success)
+            {
+                _pipeline.SetSessionState(
+                    FBXSessionState.Success,
+                    $"VMD 저장 완료: {Path.GetFileName(effectiveResult.FilePath)}",
+                    1f);
+            }
+            else
+            {
+                string errorMessage = string.IsNullOrWhiteSpace(effectiveResult.ErrorMessage)
+                    ? "VMD 저장 실패"
+                    : effectiveResult.ErrorMessage;
+                _pipeline.SetSessionState(FBXSessionState.Failed, errorMessage, 0f);
+            }
+
+            _pipeline.CleanupActiveGhost();
+            _pipeline.ResetTargetStateAfterSession(recaptureGuardBaselines: false);
+#if UNITY_EDITOR
+            _pipeline.NotifyEditorSmokeFinished(effectiveResult);
+            _pipeline.ClearEditorSmokeOverride();
+#endif
+            _pipeline._isProcessing = false;
+        }
+
+        internal void ClearActiveRecordingSubscription()
+        {
+            if (_activeRecorderController == null)
+            {
+                return;
+            }
+
+            _activeRecorderController.RecordingFinished -= OnRecordingFinished;
+            _activeRecorderController = null;
         }
 
         /// <summary>
