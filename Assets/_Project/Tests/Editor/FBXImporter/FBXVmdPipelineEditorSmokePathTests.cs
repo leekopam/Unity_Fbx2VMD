@@ -100,35 +100,6 @@ namespace Tests.Editor.FBXImporter
             typeof(bool)
         };
 
-        private static readonly Type[] RetargetPrewarmFrameCountParameterTypes =
-        {
-            typeof(int)
-        };
-
-        private static readonly Type[] RetargetPrewarmFrameCountForRecordingModeParameterTypes =
-        {
-            typeof(int),
-            typeof(bool)
-        };
-
-        private static readonly Type[] RetargetPrewarmVisibleYieldFrameCountForRecordingModeParameterTypes =
-        {
-            typeof(int),
-            typeof(bool)
-        };
-
-        private static readonly Type[] StartDelayForRecordingModeParameterTypes =
-        {
-            typeof(float),
-            typeof(bool)
-        };
-
-        private static readonly Type[] RecordingModeParameterTypes =
-        {
-            typeof(bool),
-            typeof(bool)
-        };
-
         private static readonly Type[] SceneSupportParameterTypes =
         {
             typeof(string)
@@ -308,8 +279,8 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_CaptureOnlyModeWithoutEditorSmoke_When_DecidingRecordingMode_Then_SkipsVmdRecording()
         {
-            bool shouldRecord = ShouldStartVmdRecordingAfterImport(
-                ShouldRecordVmdAfterImport: false,
+            bool shouldRecord = VMDRecordingController.ShouldStartVmdRecording(
+                shouldRecordVmdAfterImport: false,
                 editorSmokeRecordingOverrideActive: false);
 
             Assert.That(shouldRecord, Is.False);
@@ -318,8 +289,8 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_CaptureOnlyModeWithEditorSmoke_When_DecidingRecordingMode_Then_AllowsDiagnosticVmdRecording()
         {
-            bool shouldRecord = ShouldStartVmdRecordingAfterImport(
-                ShouldRecordVmdAfterImport: false,
+            bool shouldRecord = VMDRecordingController.ShouldStartVmdRecording(
+                shouldRecordVmdAfterImport: false,
                 editorSmokeRecordingOverrideActive: true);
 
             Assert.That(shouldRecord, Is.True);
@@ -328,8 +299,8 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_VmdMode_When_DecidingRecordingMode_Then_StartsVmdRecording()
         {
-            bool shouldRecord = ShouldStartVmdRecordingAfterImport(
-                ShouldRecordVmdAfterImport: true,
+            bool shouldRecord = VMDRecordingController.ShouldStartVmdRecording(
+                shouldRecordVmdAfterImport: true,
                 editorSmokeRecordingOverrideActive: false);
 
             Assert.That(shouldRecord, Is.True);
@@ -569,7 +540,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_LongRetargetPrewarmConfigured_When_ResolvingPrewarmFrameCount_Then_DoesNotCapAtLegacyTenFrames()
         {
-            int resolved = ResolveRetargetPrewarmFrameCount(60);
+            int resolved = VMDRecordingController.ResolvePrewarmFrameCount(60);
 
             Assert.That(resolved, Is.EqualTo(60));
         }
@@ -577,23 +548,23 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_PreviewOnlyImport_When_ResolvingPrewarmFrameCount_Then_DoesNotHoldStartPoseAcrossVisibleFrames()
         {
-            Assert.That(ResolveRetargetPrewarmFrameCountForRecordingMode(6, shouldStartVmdRecording: false), Is.EqualTo(0));
-            Assert.That(ResolveRetargetPrewarmFrameCountForRecordingMode(6, shouldStartVmdRecording: true), Is.EqualTo(6));
+            Assert.That(VMDRecordingController.ResolvePrewarmFrameCountForRecordingMode(6, shouldStartVmdRecording: false), Is.EqualTo(0));
+            Assert.That(VMDRecordingController.ResolvePrewarmFrameCountForRecordingMode(6, shouldStartVmdRecording: true), Is.EqualTo(6));
         }
 
         [Test]
         public void Given_PreviewOnlyImport_When_ResolvingPrewarmVisibleYieldFrames_Then_DoesNotRenderExtraStartFrame()
         {
-            Assert.That(ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(6, shouldStartVmdRecording: false), Is.EqualTo(0));
-            Assert.That(ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(6, shouldStartVmdRecording: true), Is.EqualTo(6));
-            Assert.That(ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(0, shouldStartVmdRecording: true), Is.EqualTo(1));
+            Assert.That(VMDRecordingController.ResolveVisiblePrewarmYieldFrameCountForRecordingMode(6, shouldStartVmdRecording: false), Is.EqualTo(0));
+            Assert.That(VMDRecordingController.ResolveVisiblePrewarmYieldFrameCountForRecordingMode(6, shouldStartVmdRecording: true), Is.EqualTo(6));
+            Assert.That(VMDRecordingController.ResolveVisiblePrewarmYieldFrameCountForRecordingMode(0, shouldStartVmdRecording: true), Is.EqualTo(1));
         }
 
         [Test]
         public void Given_PreviewOnlyImport_When_ResolvingStartDelay_Then_DoesNotHoldInitialPoseBeforePlayback()
         {
-            Assert.That(ResolveStartDelayForRecordingMode(1f, shouldStartVmdRecording: false), Is.EqualTo(0f));
-            Assert.That(ResolveStartDelayForRecordingMode(1f, shouldStartVmdRecording: true), Is.EqualTo(1f));
+            Assert.That(VMDRecordingController.ResolveStartDelay(1f, shouldStartVmdRecording: false), Is.EqualTo(0f));
+            Assert.That(VMDRecordingController.ResolveStartDelay(1f, shouldStartVmdRecording: true), Is.EqualTo(1f));
         }
 
         [Test]
@@ -884,20 +855,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a fakeable import-settings decision helper.");
 
             return (bool)method.Invoke(null, new object[] { sourcePath, targetPath, dataPath });
-        }
-
-        private static bool ShouldStartVmdRecordingAfterImport(bool ShouldRecordVmdAfterImport, bool editorSmokeRecordingOverrideActive)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ShouldStartVmdRecordingAfterImport",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RecordingModeParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a testable recording-mode decision helper.");
-
-            return (bool)method.Invoke(null, new object[] { ShouldRecordVmdAfterImport, editorSmokeRecordingOverrideActive });
         }
 
         private static bool ShouldApplyTargetIdlePoseGuardThisFrame(bool isProcessing, bool hasActiveRetargeter)
@@ -1342,48 +1299,6 @@ namespace Tests.Editor.FBXImporter
             return (bool)method.Invoke(null, new object[] { sceneName });
         }
 
-        private static int ResolveRetargetPrewarmFrameCount(int configuredFrameCount)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ResolveRetargetPrewarmFrameCount",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RetargetPrewarmFrameCountParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline should expose a deterministic prewarm frame resolver for full-reference smoke stabilization.");
-
-            return (int)method.Invoke(null, new object[] { configuredFrameCount });
-        }
-
-        private static int ResolveRetargetPrewarmFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ResolveRetargetPrewarmFrameCountForRecordingMode",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RetargetPrewarmFrameCountForRecordingModeParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline should expose recording-mode aware prewarm frame policy for preview-only import.");
-
-            return (int)method.Invoke(null, new object[] { configuredFrameCount, shouldStartVmdRecording });
-        }
-
-        private static int ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode(int configuredFrameCount, bool shouldStartVmdRecording)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RetargetPrewarmVisibleYieldFrameCountForRecordingModeParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline should expose recording-mode aware visible prewarm yield policy so preview-only import does not render an extra start frame.");
-
-            return (int)method.Invoke(null, new object[] { configuredFrameCount, shouldStartVmdRecording });
-        }
-
         private static float CalculateGhostSkeletonDebugDisplayScale(Vector3 lossyScale)
         {
             MethodInfo method = typeof(GhostSkeletonDebugRenderer).GetMethod(
@@ -1398,18 +1313,5 @@ namespace Tests.Editor.FBXImporter
             return (float)method.Invoke(null, new object[] { lossyScale });
         }
 
-        private static float ResolveStartDelayForRecordingMode(float configuredStartDelay, bool shouldStartVmdRecording)
-        {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ResolveStartDelayForRecordingMode",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: StartDelayForRecordingModeParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline should expose recording-mode aware start delay policy so preview-only import does not hold the initial pose before playback.");
-
-            return (float)method.Invoke(null, new object[] { configuredStartDelay, shouldStartVmdRecording });
-        }
     }
 }

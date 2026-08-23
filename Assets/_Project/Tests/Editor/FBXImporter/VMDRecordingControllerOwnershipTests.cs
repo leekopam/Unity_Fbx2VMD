@@ -202,6 +202,46 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RecordingModePolicies_When_CheckingOwnership_Then_ControllerOwnsPureCalculations()
+        {
+            Type[] recordingModeParameterTypes = { typeof(bool), typeof(bool) };
+            Type[] prewarmModeParameterTypes = { typeof(int), typeof(bool) };
+            MethodInfo controllerRecordingDecisionMethod = typeof(VMDRecordingController).GetMethod(
+                "ShouldStartVmdRecording",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: recordingModeParameterTypes,
+                modifiers: null);
+            MethodInfo controllerPrewarmMethod = typeof(VMDRecordingController).GetMethod(
+                "ResolvePrewarmFrameCountForRecordingMode",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: prewarmModeParameterTypes,
+                modifiers: null);
+            MethodInfo controllerVisiblePrewarmMethod = typeof(VMDRecordingController).GetMethod(
+                "ResolveVisiblePrewarmYieldFrameCountForRecordingMode",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: prewarmModeParameterTypes,
+                modifiers: null);
+            MethodInfo pipelineRecordingDecisionMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ShouldStartVmdRecordingAfterImport",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo pipelinePrewarmMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ResolveRetargetPrewarmFrameCountForRecordingMode",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo pipelineVisiblePrewarmMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ResolveRetargetPrewarmVisibleYieldFrameCountForRecordingMode",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(controllerRecordingDecisionMethod, Is.Not.Null);
+            Assert.That(controllerPrewarmMethod, Is.Not.Null);
+            Assert.That(controllerVisiblePrewarmMethod, Is.Not.Null);
+            Assert.That(pipelineRecordingDecisionMethod, Is.Null);
+            Assert.That(pipelinePrewarmMethod, Is.Null);
+            Assert.That(pipelineVisiblePrewarmMethod, Is.Null);
+        }
+
+        [Test]
         public void Given_RecordingBoundaryValues_When_ResolvingControllerPolicies_Then_ClampsSafely()
         {
             Assert.That(VMDRecordingController.ResolveStartDelay(1f, false), Is.EqualTo(0f));
