@@ -37,6 +37,27 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_CustomPresetAndDimensions_When_CreatingPlan_Then_UsesClampedCustomDimensions()
+        {
+            Type resolutionType = RequireType(ResolutionTypeName);
+            Type presetType = RequireType(PresetTypeName);
+            object preset = Enum.Parse(presetType, "Custom");
+            MethodInfo method = resolutionType.GetMethod(
+                "CreatePlan",
+                StaticMethods,
+                binder: null,
+                types: new[] { presetType, typeof(int), typeof(int) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "Expected custom-aware static CreatePlan overload.");
+
+            object plan = method.Invoke(null, new object[] { preset, 32, 99999 });
+
+            Assert.That(GetMemberValue<int>(plan, "Width"), Is.EqualTo(128));
+            Assert.That(GetMemberValue<int>(plan, "Height"), Is.EqualTo(4320));
+        }
+
+        [Test]
         public void Given_MotionComparisonProbe_When_SetRecordingCaptureResolution_Then_UsesClampedDimensions()
         {
             Type probeType = RequireType(MotionComparisonProbeTypeName);
@@ -65,6 +86,7 @@ namespace Tests.Editor.Settings
         [Test]
         public void Given_RecodingSetting_When_ApplyingCaptureResolution_Then_FBXVmdPipelineReceivesUhd4KPlan()
         {
+            Type resolutionType = RequireType(ResolutionTypeName);
             Type fileManagerType = RequireType(FBXVmdPipelineTypeName);
             Type recodingSettingType = RequireType(RecodingSettingTypeName);
             Type presetType = RequireType(PresetTypeName);
@@ -83,11 +105,17 @@ namespace Tests.Editor.Settings
                 SetField(recodingSetting, "customRecordingCaptureHeight", 222);
 
                 InvokeInstance(recodingSetting, "ApplyDiagnosticsToFBXVmdPipeline");
-                object plan = InvokeInstance(fileManager, "CreateRecordingCaptureResolutionPlan");
+                object plan = InvokeStatic(
+                    resolutionType,
+                    "CreatePlan",
+                    new[] { presetType, typeof(int), typeof(int) },
+                    GetMemberValue<object>(fileManager, "recordingCaptureQuality"),
+                    GetMemberValue<int>(fileManager, "customRecordingCaptureWidth"),
+                    GetMemberValue<int>(fileManager, "customRecordingCaptureHeight"));
 
-                Assert.That(GetField<object>(fileManager, "recordingCaptureQuality").ToString(), Is.EqualTo("Uhd4K"));
-                Assert.That(GetField<int>(fileManager, "customRecordingCaptureWidth"), Is.EqualTo(111));
-                Assert.That(GetField<int>(fileManager, "customRecordingCaptureHeight"), Is.EqualTo(222));
+                Assert.That(GetMemberValue<object>(fileManager, "recordingCaptureQuality").ToString(), Is.EqualTo("Uhd4K"));
+                Assert.That(GetMemberValue<int>(fileManager, "customRecordingCaptureWidth"), Is.EqualTo(111));
+                Assert.That(GetMemberValue<int>(fileManager, "customRecordingCaptureHeight"), Is.EqualTo(222));
                 Assert.That(GetMemberValue<int>(plan, "Width"), Is.EqualTo(3840));
                 Assert.That(GetMemberValue<int>(plan, "Height"), Is.EqualTo(2160));
             }
@@ -138,9 +166,18 @@ namespace Tests.Editor.Settings
 
         private static object InvokeStatic(Type type, string methodName, Type parameterType, object argument)
         {
-            MethodInfo method = type.GetMethod(methodName, StaticMethods, null, new[] { parameterType }, null);
+            return InvokeStatic(type, methodName, new[] { parameterType }, argument);
+        }
+
+        private static object InvokeStatic(
+            Type type,
+            string methodName,
+            Type[] parameterTypes,
+            params object[] arguments)
+        {
+            MethodInfo method = type.GetMethod(methodName, StaticMethods, null, parameterTypes, null);
             Assert.That(method, Is.Not.Null, $"Expected static method '{methodName}'.");
-            return method.Invoke(null, new[] { argument });
+            return method.Invoke(null, arguments);
         }
 
         private static object InvokeInstance(object target, string methodName, params object[] arguments)
@@ -155,13 +192,6 @@ namespace Tests.Editor.Settings
             FieldInfo field = target.GetType().GetField(fieldName, InstanceMembers);
             Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}'.");
             field.SetValue(target, value);
-        }
-
-        private static T GetField<T>(object target, string fieldName)
-        {
-            FieldInfo field = target.GetType().GetField(fieldName, InstanceMembers);
-            Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}'.");
-            return (T)field.GetValue(target);
         }
 
         private static T GetMemberValue<T>(object target, string memberName)

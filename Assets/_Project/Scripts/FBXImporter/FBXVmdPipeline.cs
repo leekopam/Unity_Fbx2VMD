@@ -1480,18 +1480,6 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        public RecordingCaptureResolutionPlan CreateRecordingCaptureResolutionPlan()
-        {
-            if (recordingCaptureQuality == RecordingCaptureQualityPreset.Custom)
-            {
-                return RecordingCaptureResolution.CreateCustomPlan(
-                    customRecordingCaptureWidth,
-                    customRecordingCaptureHeight);
-            }
-
-            return RecordingCaptureResolution.CreatePlan(recordingCaptureQuality);
-        }
-
 #if UNITY_EDITOR
         public bool StartEditorDiagnosticSmoke(
             string fbxFileName,

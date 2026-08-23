@@ -153,6 +153,25 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RecordingCaptureResolution_When_CheckingOwnership_Then_ControllerUsesPurePlan()
+        {
+            MethodInfo pipelinePlanMethod = typeof(FBXVmdPipeline).GetMethod(
+                "CreateRecordingCaptureResolutionPlan",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            string controllerSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "VMDRecordingController.cs"));
+
+            Assert.That(pipelinePlanMethod, Is.Null);
+            Assert.That(controllerSource, Does.Contain("RecordingCaptureResolution.CreatePlan("));
+            Assert.That(controllerSource, Does.Not.Contain("_pipeline.CreateRecordingCaptureResolutionPlan()"));
+        }
+
+        [Test]
         public void Given_RecordingBoundaryValues_When_ResolvingControllerPolicies_Then_ClampsSafely()
         {
             Assert.That(VMDRecordingController.ResolveStartDelay(1f, false), Is.EqualTo(0f));

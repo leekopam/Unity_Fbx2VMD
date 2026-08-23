@@ -46,6 +46,16 @@ namespace Fbx2Vmd.Settings
             }
         }
 
+        public static RecordingCaptureResolutionPlan CreatePlan(
+            RecordingCaptureQualityPreset preset,
+            int customWidth,
+            int customHeight)
+        {
+            return preset == RecordingCaptureQualityPreset.Custom
+                ? CreateCustomPlan(customWidth, customHeight)
+                : CreatePlan(preset);
+        }
+
         public static RecordingCaptureResolutionPlan CreateCustomPlan(int width, int height)
         {
             return new RecordingCaptureResolutionPlan(width, height);
