@@ -103,6 +103,56 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_VmdArtifactPostProcessing_When_CheckingOwnership_Then_ControllerOwnsFileIo()
+        {
+            MethodInfo controllerManifestMethod = typeof(VMDRecordingController).GetMethod(
+                "TryAppendVmdArtifactToComparisonSessionManifest",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo controllerCopyMethod = typeof(VMDRecordingController).GetMethod(
+                "TryCopyVmdToAdditionalFolder",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo controllerPathMethod = typeof(VMDRecordingController).GetMethod(
+                "MakeProjectRelativePath",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string), typeof(string) },
+                modifiers: null);
+            MethodInfo pipelineManifestMethod = typeof(FBXVmdPipeline).GetMethod(
+                "TryAppendVmdArtifactToComparisonSessionManifest",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo pipelineCopyMethod = typeof(FBXVmdPipeline).GetMethod(
+                "TryCopyVmdToAdditionalFolder",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            string controllerSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "VMDRecordingController.cs"));
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+
+            Assert.That(controllerManifestMethod, Is.Not.Null);
+            Assert.That(controllerCopyMethod, Is.Not.Null);
+            Assert.That(controllerPathMethod, Is.Not.Null);
+            Assert.That(controllerSource, Does.Contain("MakeProjectRelativePath(result.FilePath)"));
+            Assert.That(
+                controllerSource,
+                Does.Contain("MotionComparisonProbeSessionManifestPatcher.TryAppendExportedVmdToSessionManifest("));
+            Assert.That(controllerSource, Does.Contain("overwrite: true"));
+            Assert.That(pipelineManifestMethod, Is.Null);
+            Assert.That(pipelineCopyMethod, Is.Null);
+            Assert.That(pipelineSource, Does.Not.Contain("MakeProjectRelativePath("));
+        }
+
+        [Test]
         public void Given_RecordingBoundaryValues_When_ResolvingControllerPolicies_Then_ClampsSafely()
         {
             Assert.That(VMDRecordingController.ResolveStartDelay(1f, false), Is.EqualTo(0f));
