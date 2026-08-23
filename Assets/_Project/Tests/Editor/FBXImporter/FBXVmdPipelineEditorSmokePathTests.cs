@@ -32,13 +32,6 @@ namespace Tests.Editor.FBXImporter
             typeof(string)
         };
 
-        private static readonly Type[] ImportSettingsDecisionParameterTypes =
-        {
-            typeof(string),
-            typeof(string),
-            typeof(string)
-        };
-
         private static readonly Type[] GhostSkeletonFallbackParameterTypes =
         {
             typeof(bool),
@@ -824,15 +817,14 @@ namespace Tests.Editor.FBXImporter
 
         private static bool ShouldConfigureImportSettings(string sourcePath, string targetPath, string dataPath)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
+            MethodInfo method = typeof(FBXImportController).GetMethod(
                 "ShouldConfigureEditorImportSettings",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
-                types: ImportSettingsDecisionParameterTypes,
+                types: new[] { typeof(string), typeof(string), typeof(string) },
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a fakeable import-settings decision helper.");
-
+            Assert.That(method, Is.Not.Null, "FBXImportController must expose a fakeable import-settings decision helper.");
             return (bool)method.Invoke(null, new object[] { sourcePath, targetPath, dataPath });
         }
 

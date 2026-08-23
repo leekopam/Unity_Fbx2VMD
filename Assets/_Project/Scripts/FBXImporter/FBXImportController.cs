@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using System.IO;
 using Fbx2Vmd.FileSystem;
@@ -11,6 +13,8 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     public class FBXImportController
     {
+        internal const string BONE_MAPPING_FILE = "BoneMapping_Data.txt";
+
         private readonly FBXVmdPipeline _pipeline;
         private readonly IFileBrowserService _fileBrowserService;
 
@@ -55,6 +59,283 @@ namespace Fbx2Vmd.FBXImporter
 
             return safeName;
         }
+
+#if UNITY_EDITOR
+        internal void ConfigureEditorImportSettingsIfNeeded(string sourcePath, string targetPath)
+        {
+            if (ShouldConfigureEditorImportSettings(sourcePath, targetPath, Application.dataPath))
+            {
+                ConfigureImportSettings(targetPath);
+                return;
+            }
+
+            Debug.Log($"[FBXImport] 제어된 Import_FBX 가져오기 설정 유지됨. 경로={targetPath}");
+        }
+
+        internal static bool ShouldConfigureEditorImportSettings(string sourcePath, string targetPath, string dataPath)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(sourcePath))
+            {
+                return true;
+            }
+
+            if (!PathsEqual(sourcePath, targetPath))
+            {
+                return true;
+            }
+
+            string targetRelativePath = ToAssetRelativePath(targetPath, dataPath);
+            return !IsControlledImportAssetPath(targetRelativePath);
+        }
+
+        internal static bool IsControlledImportAssetPath(string relativePath)
+        {
+            return !string.IsNullOrEmpty(relativePath)
+                && relativePath.Replace("\\", "/").StartsWith($"Assets/Resources/{FBXVmdPipeline.IMPORT_FBX_FOLDER}/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static string ToAssetRelativePath(string filePath, string dataPath)
+        {
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(dataPath))
+            {
+                return "";
+            }
+
+            string standardizedFilePath = filePath.Replace("\\", "/");
+            string standardizedDataPath = dataPath.Replace("\\", "/");
+
+            if (!standardizedFilePath.StartsWith(standardizedDataPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
+
+            return "Assets" + standardizedFilePath[standardizedDataPath.Length..];
+        }
+
+        private static bool PathsEqual(string left, string right)
+        {
+            try
+            {
+                return string.Equals(
+                    Path.GetFullPath(left),
+                    Path.GetFullPath(right),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        private static void ConfigureImportSettings(string filePath)
+        {
+            string standardizedFilePath = filePath.Replace("\\", "/");
+            string standardizedDataPath = Application.dataPath.Replace("\\", "/");
+
+            if (!standardizedFilePath.StartsWith(standardizedDataPath))
+            {
+                Debug.LogError($"파일 경로가 Assets 폴더 내에 있지 않습니다: {filePath}");
+                return;
+            }
+
+            string relativePath = "Assets" + standardizedFilePath[standardizedDataPath.Length..];
+
+            Debug.Log($"[1단계] FBX Import 시작: {relativePath}");
+            UnityEditor.AssetDatabase.ImportAsset(relativePath, UnityEditor.ImportAssetOptions.ForceUpdate);
+
+            Debug.Log("[2단계] FBX 정보 가져오기");
+            UnityEditor.ModelImporter importer = UnityEditor.AssetImporter.GetAtPath(relativePath) as UnityEditor.ModelImporter;
+            if (importer == null)
+            {
+                Debug.LogError($"[2단계 실패] ModelImporter를 가져올 수 없습니다: {relativePath}");
+                return;
+            }
+
+            Debug.Log("[2단계 완료] ModelImporter 정보:");
+            Debug.Log($"  - 현재 Animation Type: {importer.animationType}");
+            Debug.Log($"  - 현재 Import Animation: {importer.importAnimation}");
+            Debug.Log($"  - 현재 Optimize Bones: {importer.optimizeBones}");
+
+            Debug.Log("[3단계] Rig 설정 적용 중...");
+            importer.importAnimation = true;
+            importer.animationCompression = UnityEditor.ModelImporterAnimationCompression.Off;
+            importer.animationType = UnityEditor.ModelImporterAnimationType.Human;
+            importer.avatarSetup = UnityEditor.ModelImporterAvatarSetup.CreateFromThisModel;
+            importer.optimizeBones = false;
+
+            try
+            {
+                UnityEditor.SerializedObject serializedImporter = new UnityEditor.SerializedObject(importer);
+                serializedImporter.Update();
+
+                string[] propertyNames = { "m_OptimizeBones", "optimizeBones" };
+                bool found = false;
+                foreach (string propertyName in propertyNames)
+                {
+                    UnityEditor.SerializedProperty property = serializedImporter.FindProperty(propertyName);
+                    if (property != null && property.propertyType == UnityEditor.SerializedPropertyType.Boolean)
+                    {
+                        property.boolValue = false;
+                        found = true;
+                        Debug.Log($"[Strip Bones Fix] SerializedObject를 통해 '{propertyName}' 비활성화 성공");
+                    }
+                }
+
+                if (found)
+                {
+                    serializedImporter.ApplyModifiedProperties();
+                }
+                else
+                {
+                    Debug.LogWarning("[Strip Bones Fix] 'optimizeBones' 관련 속성을 찾지 못했습니다.");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Strip Bones Fix] 오류: {e.Message}");
+            }
+
+            importer.animationWrapMode = WrapMode.ClampForever;
+            importer.importBlendShapes = true;
+            importer.importVisibility = true;
+            importer.importCameras = false;
+            importer.importLights = false;
+
+            Debug.Log("[3단계] Bone Mapping 적용 시작");
+            string mappingFilePath = Path.Combine(Application.dataPath, "Resources", BONE_MAPPING_FILE);
+            if (File.Exists(mappingFilePath))
+            {
+                Dictionary<string, string> mapping = ParseBoneMappingFile(mappingFilePath);
+                if (mapping.Count > 0)
+                {
+                    Debug.Log($"[3단계] Bone Mapping 파일 파싱 완료: {mapping.Count}개 매핑");
+
+                    HumanDescription description = importer.humanDescription;
+                    List<HumanBone> humanBones = new List<HumanBone>();
+                    foreach (KeyValuePair<string, string> pair in mapping)
+                    {
+                        HumanBone bone = new HumanBone
+                        {
+                            humanName = HumanoidAvatarBuilder.NormalizeHumanBoneName(pair.Key),
+                            boneName = pair.Value
+                        };
+                        bone.limit.useDefaultValues = true;
+                        humanBones.Add(bone);
+                    }
+
+                    description.human = humanBones.ToArray();
+
+                    List<SkeletonBone> skeletonBones = new List<SkeletonBone>();
+                    IEnumerable<Transform> allTransforms = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(relativePath)
+                        .OfType<Transform>();
+                    foreach (Transform transform in allTransforms)
+                    {
+                        if (transform != null)
+                        {
+                            skeletonBones.Add(new SkeletonBone
+                            {
+                                name = transform.name,
+                                position = transform.localPosition,
+                                rotation = transform.localRotation,
+                                scale = transform.localScale
+                            });
+                        }
+                    }
+
+                    if (skeletonBones.Count > 0)
+                    {
+                        description.skeleton = skeletonBones.ToArray();
+                        Debug.Log($"[3단계] Skeleton 배열 설정: {skeletonBones.Count}개 본");
+                    }
+
+                    importer.humanDescription = description;
+                    Debug.Log($"[3단계] Bone Mapping 적용: {humanBones.Count}개 본");
+                }
+                else
+                {
+                    Debug.LogWarning("[3단계] Bone Mapping 데이터가 비어있습니다.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[3단계] Bone Mapping 파일을 찾을 수 없습니다: {mappingFilePath}");
+            }
+
+            Debug.Log("[3단계] Animation Clip 추출 시작");
+            if (importer.defaultClipAnimations != null && importer.defaultClipAnimations.Length > 0)
+            {
+                importer.clipAnimations = Array.Empty<UnityEditor.ModelImporterClipAnimation>();
+                Debug.Log($"[3단계] Animation Clip 추출: {importer.defaultClipAnimations.Length}개");
+
+                foreach (UnityEditor.ModelImporterClipAnimation clip in importer.defaultClipAnimations)
+                {
+                    Debug.Log($"  - Clip: {clip.name} (Start: {clip.firstFrame}, End: {clip.lastFrame})");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[3단계] defaultClipAnimations가 비어있습니다. 자동 경로에서는 임의 Take 001을 만들지 않습니다.");
+                importer.clipAnimations = Array.Empty<UnityEditor.ModelImporterClipAnimation>();
+            }
+
+            Debug.Log("[3단계 완료] 최종 설정:");
+            Debug.Log("  - Animation Type: Humanoid");
+            Debug.Log($"  - Import Animation: {importer.importAnimation}");
+            Debug.Log($"  - Optimize Game Objects (Strip Bones): {importer.optimizeGameObjects}");
+            Debug.Log("  - Bone Mapping: 적용 완료");
+            Debug.Log($"  - Animation Clips: {(importer.clipAnimations != null ? importer.clipAnimations.Length : 0)}개");
+
+            UnityEditor.AssetDatabase.WriteImportSettingsIfDirty(relativePath);
+            UnityEditor.AssetDatabase.SaveAssets();
+            UnityEditor.AssetDatabase.ImportAsset(relativePath, UnityEditor.ImportAssetOptions.ForceUpdate);
+
+            Debug.Log("[3단계] 최종 Reimport 완료");
+            Debug.Log("===========================================");
+        }
+
+        private static Dictionary<string, string> ParseBoneMappingFile(string path)
+        {
+            Dictionary<string, string> mapping = new Dictionary<string, string>();
+            string[] lines = File.ReadAllLines(path);
+            bool insideBoneTemplate = false;
+
+            foreach (string line in lines)
+            {
+                string trimmedLine = line.Trim();
+                if (trimmedLine.StartsWith("m_BoneTemplate:"))
+                {
+                    insideBoneTemplate = true;
+                    continue;
+                }
+
+                if (insideBoneTemplate)
+                {
+                    if (trimmedLine.StartsWith("m_"))
+                    {
+                        break;
+                    }
+
+                    int colonIndex = trimmedLine.IndexOf(':');
+                    if (colonIndex > 0)
+                    {
+                        string key = trimmedLine[..colonIndex].Trim();
+                        string value = trimmedLine[(colonIndex + 1)..].Trim();
+                        if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
+                        {
+                            mapping[key] = value;
+                        }
+                    }
+                }
+            }
+
+            return mapping;
+        }
+#endif
 
         public void ImportFromDialog()
         {

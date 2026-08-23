@@ -66,5 +66,31 @@ namespace Tests.Editor.FBXImporter
             Assert.That(pipelineDirectoryMethod, Is.Null);
             Assert.That(pipelineSanitizeMethod, Is.Null);
         }
+
+        [Test]
+        public void Given_EditorImportSettings_When_CheckingOwnership_Then_ControllerOwnsConfiguration()
+        {
+            MethodInfo controllerConfigureIfNeededMethod = typeof(FBXImportController).GetMethod(
+                "ConfigureEditorImportSettingsIfNeeded",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo controllerDecisionMethod = typeof(FBXImportController).GetMethod(
+                "ShouldConfigureEditorImportSettings",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo controllerConfigureMethod = typeof(FBXImportController).GetMethod(
+                "ConfigureImportSettings",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo pipelineDecisionMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ShouldConfigureEditorImportSettings",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo pipelineConfigureMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ConfigureImportSettings",
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+            Assert.That(controllerConfigureIfNeededMethod, Is.Not.Null);
+            Assert.That(controllerDecisionMethod, Is.Not.Null);
+            Assert.That(controllerConfigureMethod, Is.Not.Null);
+            Assert.That(pipelineDecisionMethod, Is.Null);
+            Assert.That(pipelineConfigureMethod, Is.Null);
+        }
     }
 }
