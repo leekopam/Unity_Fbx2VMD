@@ -11,6 +11,9 @@ namespace Tests.Editor.FBXImporter
         private static Type LegacyAnimationDriverType =>
             typeof(PoseSpaceRetargeter).Assembly.GetType("Fbx2Vmd.FBXImporter.LegacyAnimationDriver", throwOnError: true);
 
+        private static Type RetargetingPoseSmoothingType =>
+            typeof(PoseSpaceRetargeter).Assembly.GetType("Fbx2Vmd.FBXImporter.RetargetingPoseSmoothing", throwOnError: true);
+
         private static readonly Type[] ManualAdvanceParameterTypes =
         {
             typeof(float),
@@ -70,7 +73,6 @@ namespace Tests.Editor.FBXImporter
             typeof(float),
             typeof(float),
             typeof(float),
-            typeof(int),
             typeof(bool),
             typeof(bool),
             typeof(float)
@@ -269,6 +271,36 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(shouldSmooth, Is.True);
             Assert.That(muscleDeltaOnlySpike, Is.False);
+        }
+
+        [Test]
+        public void Given_VisualPoseSmoothingCalculation_When_CheckingOwnership_Then_UsesDedicatedPureType()
+        {
+            Type smoothingType = typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.RetargetingPoseSmoothing",
+                throwOnError: false);
+            Assert.That(smoothingType, Is.Not.Null,
+                "RetargetingPoseSmoothing should own visual pose spike calculation.");
+
+            string[] extractedMethodNames =
+            {
+                "ShouldSmoothVisualPoseSpike",
+                "CalculateVisualPoseSpikeCurrentWeight",
+                "BlendVisualPoseSpikeMuscle",
+                "ClampForearmStretchVisualSpikeBlend",
+                "IsBodyPoseSpike"
+            };
+            foreach (string methodName in extractedMethodNames)
+            {
+                Assert.That(
+                    smoothingType.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Not.Null,
+                    $"RetargetingPoseSmoothing should expose {methodName}.");
+                Assert.That(
+                    typeof(PoseSpaceRetargeter).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Null,
+                    $"PoseSpaceRetargeter should delegate {methodName} calculation.");
+            }
         }
 
         [Test]
@@ -1157,14 +1189,14 @@ namespace Tests.Editor.FBXImporter
             bool legacyAnimationStepSpikeThisFrame,
             out bool muscleDeltaOnlySpike)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = RetargetingPoseSmoothingType.GetMethod(
                 "ShouldSmoothVisualPoseSpike",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: VisualPoseSpikeParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for visual pose spike smoothing decisions.");
+            Assert.That(method, Is.Not.Null, "RetargetingPoseSmoothing should expose the visual pose spike smoothing decision.");
 
             object[] args =
             {
@@ -1187,14 +1219,14 @@ namespace Tests.Editor.FBXImporter
             float bodyRotationDelta,
             bool legacyAnimationStepSpikeThisFrame)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = RetargetingPoseSmoothingType.GetMethod(
                 "CalculateVisualPoseSpikeCurrentWeight",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: VisualPoseSpikeWeightParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for visual pose spike blend weight.");
+            Assert.That(method, Is.Not.Null, "RetargetingPoseSmoothing should expose the visual pose spike blend weight calculation.");
 
             return (float)method.Invoke(null, new object[]
             {
@@ -1214,25 +1246,43 @@ namespace Tests.Editor.FBXImporter
             bool hasEditorHumanoidMuscleReferenceCurve,
             float forearmStretchClampMaxOffset = 0f)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = RetargetingPoseSmoothingType.GetMethod(
                 "BlendVisualPoseSpikeMuscle",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: VisualPoseSpikeMuscleBlendParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure helper for per-muscle visual spike blending.");
+            Assert.That(method, Is.Not.Null, "RetargetingPoseSmoothing should expose the per-muscle visual spike blend calculation.");
+
+            bool shouldPreserveCurrentValue = useEditorHumanoidMuscleReference &&
+                hasEditorHumanoidMuscleReferenceCurve &&
+                ShouldUseEditorHumanoidMuscleReference(muscleIndex);
+            bool isForearmStretchMuscle = !shouldPreserveCurrentValue &&
+                forearmStretchClampMaxOffset > 0f &&
+                IsForearmStretchMuscle(muscleIndex);
 
             return (float)method.Invoke(null, new object[]
             {
                 previousValue,
                 currentValue,
                 currentWeight,
-                muscleIndex,
-                useEditorHumanoidMuscleReference,
-                hasEditorHumanoidMuscleReferenceCurve,
+                shouldPreserveCurrentValue,
+                isForearmStretchMuscle,
                 forearmStretchClampMaxOffset
             });
+        }
+
+        private static bool IsForearmStretchMuscle(int muscleIndex)
+        {
+            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
+            {
+                return false;
+            }
+
+            string muscleName = HumanTrait.MuscleName[muscleIndex];
+            return muscleName.IndexOf("Forearm", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                muscleName.IndexOf("Stretch", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static bool TryCalculateManualAnimatorBodyPositionXzReference(

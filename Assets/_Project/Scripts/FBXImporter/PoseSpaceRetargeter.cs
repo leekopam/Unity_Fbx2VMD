@@ -16,8 +16,6 @@ namespace Fbx2Vmd.FBXImporter
         private const float LateVisualGroundingPenetrationRecoverySmoothing = 0.55f;
         private const float LateVisualGroundingPenetrationRecoveryMaxStep = 0.1f;
         private const float RecordingStartHipsBaselineFlipWarningThreshold = 0.02f;
-        private const float BodyPositionVisualSpikeThreshold = 0.02f;
-        private const float BodyRotationVisualSpikeThresholdDegrees = 25f;
         private const float FootHipsAlignedResidualYawGateMeters = 0.12f;
         private const float FootHipsAlignedResidualYawSideGapMeters = 0.005f;
         private const float FootHipsAlignedResidualYawProtectedMaxAngle = 20f;
@@ -1709,7 +1707,6 @@ namespace Fbx2Vmd.FBXImporter
         private const float UpperArmTwistOverrangeReferenceSignMagnitudeTolerance = 1.5f;
         private const float UpperArmTwistReferenceSignMaxAbs = 2.25f;
         private const float RightUpperArmTwistReferenceSignMinAbs = 2f;
-        private const float ForearmStretchVisualClampCurrentMax = -0.65f;
         private const float GroundingDirectionReversalStepScale = 0.4f;
         private const float ThumbLocalRotationOvershootRatio = 0.35f;
         private const float ThumbLocalRotationHardOvershootDegrees = 8f;
@@ -2569,7 +2566,7 @@ namespace Fbx2Vmd.FBXImporter
 
             float bodyPositionDelta = Vector3.Distance(_previousVisualPoseBodyPosition, pose.bodyPosition);
             float bodyRotationDelta = Quaternion.Angle(_previousVisualPoseBodyRotation, pose.bodyRotation);
-            bool shouldSmooth = ShouldSmoothVisualPoseSpike(
+            bool shouldSmooth = RetargetingPoseSmoothing.ShouldSmoothVisualPoseSpike(
                 maxMuscleDelta,
                 bodyPositionDelta,
                 bodyRotationDelta,
@@ -2579,7 +2576,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (shouldSmooth)
             {
-                float currentWeight = CalculateVisualPoseSpikeCurrentWeight(
+                float currentWeight = RetargetingPoseSmoothing.CalculateVisualPoseSpikeCurrentWeight(
                     poseVisualSpikeCurrentWeight,
                     bodyPositionDelta,
                     bodyRotationDelta,
@@ -2594,13 +2591,19 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
                     hasEditorHumanoidMuscleReferenceCurve = _editorHumanoidMuscleCurves.ContainsKey(i);
 #endif
-                    pose.muscles[i] = BlendVisualPoseSpikeMuscle(
+                    bool shouldPreserveCurrentValue = ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
+                        i,
+                        useEditorHumanoidMuscleReference,
+                        hasEditorHumanoidMuscleReferenceCurve);
+                    bool isForearmStretchMuscle = !shouldPreserveCurrentValue &&
+                        poseVisualSpikeForearmStretchClampMaxOffset > 0f &&
+                        IsForearmStretchMuscleIndex(i);
+                    pose.muscles[i] = RetargetingPoseSmoothing.BlendVisualPoseSpikeMuscle(
                         _previousVisualPoseMuscles[i],
                         pose.muscles[i],
                         currentWeight,
-                        i,
-                        useEditorHumanoidMuscleReference,
-                        hasEditorHumanoidMuscleReferenceCurve,
+                        shouldPreserveCurrentValue,
+                        isForearmStretchMuscle,
                         poseVisualSpikeForearmStretchClampMaxOffset);
                 }
 
@@ -2615,75 +2618,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             RememberVisualPose(pose);
-        }
-
-        private static float CalculateVisualPoseSpikeCurrentWeight(
-            float configuredWeight,
-            float bodyPositionDelta,
-            float bodyRotationDelta,
-            bool legacyAnimationStepSpikeThisFrame)
-        {
-            float currentWeight = Mathf.Clamp(configuredWeight, 0.1f, 1f);
-            if (IsBodyPoseSpike(bodyPositionDelta, bodyRotationDelta))
-            {
-                return Mathf.Min(currentWeight, 0.1f);
-            }
-
-            return currentWeight;
-        }
-
-        private static float BlendVisualPoseSpikeMuscle(
-            float previousValue,
-            float currentValue,
-            float currentWeight,
-            int muscleIndex,
-            bool useEditorHumanoidMuscleReference,
-            bool hasEditorHumanoidMuscleReferenceCurve,
-            float forearmStretchClampMaxOffset)
-        {
-            if (ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
-                muscleIndex,
-                useEditorHumanoidMuscleReference,
-                hasEditorHumanoidMuscleReferenceCurve))
-            {
-                return currentValue;
-            }
-
-            float blended = Mathf.Lerp(previousValue, currentValue, currentWeight);
-            return ClampForearmStretchVisualSpikeBlend(
-                previousValue,
-                currentValue,
-                blended,
-                muscleIndex,
-                forearmStretchClampMaxOffset);
-        }
-
-        private static float ClampForearmStretchVisualSpikeBlend(
-            float previousValue,
-            float currentValue,
-            float blendedValue,
-            int muscleIndex,
-            float maxOffset)
-        {
-            if (maxOffset <= 0f ||
-                !IsForearmStretchMuscleIndex(muscleIndex) ||
-                !IsFinite(previousValue) ||
-                !IsFinite(currentValue) ||
-                !IsFinite(blendedValue))
-            {
-                return blendedValue;
-            }
-
-            if (currentValue > ForearmStretchVisualClampCurrentMax)
-            {
-                return blendedValue;
-            }
-
-            float safeOffset = Mathf.Clamp01(maxOffset);
-            return Mathf.Clamp(
-                blendedValue,
-                currentValue - safeOffset,
-                currentValue + safeOffset);
         }
 
         private static bool ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
@@ -2709,28 +2643,6 @@ namespace Fbx2Vmd.FBXImporter
 
             string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
             return normalized.Contains("forearm") && normalized.Contains("stretch");
-        }
-
-        private static bool ShouldSmoothVisualPoseSpike(
-            float maxMuscleDelta,
-            float bodyPositionDelta,
-            float bodyRotationDelta,
-            float poseVisualMuscleDeltaThreshold,
-            bool legacyAnimationStepSpikeThisFrame,
-            out bool muscleDeltaOnlySpike)
-        {
-            bool bodyPoseSpike = IsBodyPoseSpike(bodyPositionDelta, bodyRotationDelta);
-            muscleDeltaOnlySpike = maxMuscleDelta > poseVisualMuscleDeltaThreshold &&
-                !legacyAnimationStepSpikeThisFrame &&
-                !bodyPoseSpike;
-
-            return legacyAnimationStepSpikeThisFrame || bodyPoseSpike;
-        }
-
-        private static bool IsBodyPoseSpike(float bodyPositionDelta, float bodyRotationDelta)
-        {
-            return bodyPositionDelta > BodyPositionVisualSpikeThreshold ||
-                bodyRotationDelta > BodyRotationVisualSpikeThresholdDegrees;
         }
 
         private void RememberVisualPose(HumanPose pose)
