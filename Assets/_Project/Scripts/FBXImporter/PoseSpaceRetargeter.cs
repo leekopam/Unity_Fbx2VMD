@@ -3529,42 +3529,6 @@ namespace Fbx2Vmd.FBXImporter
             };
         }
 
-        private struct PostSetHumanPoseEndpointPositionDiagnostics
-        {
-            public Vector3 DesiredFootPosition;
-            public Vector3 DesiredToesPosition;
-            public Vector3 CurrentFootPosition;
-            public Vector3 CurrentToesPosition;
-            public Vector3 EndpointDeltaBeforeClamp;
-            public Vector3 EndpointDeltaAfterClamp;
-            public Vector3 EndpointDeltaAfterPositiveZScale;
-            public Vector3 Correction;
-            public Vector3 NextFootPosition;
-            public float EvaluatorXzReferenceEnabled;
-            public Vector3 EvaluatorXzFirstOffset;
-            public Vector3 EvaluatorXzNormalizedDelta;
-            public Vector3 EvaluatorXzDesiredNormalizedDelta;
-            public float EvaluatorXzTargetMagnitude;
-
-            public static PostSetHumanPoseEndpointPositionDiagnostics Empty => new PostSetHumanPoseEndpointPositionDiagnostics
-            {
-                DesiredFootPosition = BuildNaNVector3(),
-                DesiredToesPosition = BuildNaNVector3(),
-                CurrentFootPosition = BuildNaNVector3(),
-                CurrentToesPosition = BuildNaNVector3(),
-                EndpointDeltaBeforeClamp = BuildNaNVector3(),
-                EndpointDeltaAfterClamp = BuildNaNVector3(),
-                EndpointDeltaAfterPositiveZScale = BuildNaNVector3(),
-                Correction = BuildNaNVector3(),
-                NextFootPosition = BuildNaNVector3(),
-                EvaluatorXzReferenceEnabled = float.NaN,
-                EvaluatorXzFirstOffset = BuildNaNVector3(),
-                EvaluatorXzNormalizedDelta = BuildNaNVector3(),
-                EvaluatorXzDesiredNormalizedDelta = BuildNaNVector3(),
-                EvaluatorXzTargetMagnitude = float.NaN
-            };
-        }
-
         private static Vector3 BuildNaNVector3()
         {
             return new Vector3(float.NaN, float.NaN, float.NaN);
@@ -3598,7 +3562,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private void RecordPostSetHumanPoseRightEndpointPositionDiagnostics(
-            PostSetHumanPoseEndpointPositionDiagnostics diagnostics,
+            RetargetingEndpointDiagnosticSnapshot diagnostics,
             float maxYawAngle,
             float yawCorrectionAngle,
             float upperLegRotationDeltaAngle,
@@ -4568,7 +4532,7 @@ namespace Fbx2Vmd.FBXImporter
                     out desiredToesPosition);
             }
 
-            if (!TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+            if (!RetargetingEndpointDiagnostics.TryCalculateReferencePosition(
                     desiredFootPosition,
                     desiredToesPosition,
                     targetFoot.position,
@@ -4725,11 +4689,11 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             Vector3 nextFootPosition;
-            PostSetHumanPoseEndpointPositionDiagnostics endpointDiagnostics;
+            RetargetingEndpointDiagnosticSnapshot endpointDiagnostics;
             bool calculated;
             if (usePostSetHumanPoseRightFootEvaluatorXzReference)
             {
-                calculated = TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
+                calculated = RetargetingEndpointDiagnostics.TryCalculateEvaluatorXzReferencePosition(
                     referenceFoot.position,
                     targetFoot.position,
                     evaluatorXzFirstOffset,
@@ -4766,7 +4730,7 @@ namespace Fbx2Vmd.FBXImporter
                         out desiredToesPosition);
                 }
 
-                calculated = TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                calculated = RetargetingEndpointDiagnostics.TryCalculateReferencePosition(
                     desiredFootPosition,
                     desiredToesPosition,
                     targetFoot.position,
@@ -4824,121 +4788,6 @@ namespace Fbx2Vmd.FBXImporter
             targetUpperLeg.rotation = nextWorldRotation;
         }
 
-        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
-            Vector3 desiredFootPosition,
-            Vector3 desiredToesPosition,
-            Vector3 currentFootPosition,
-            Vector3 currentToesPosition,
-            float weight,
-            float maxOffset,
-            float positiveZScale,
-            out Vector3 nextFootPosition)
-        {
-            return TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
-                desiredFootPosition,
-                desiredToesPosition,
-                currentFootPosition,
-                currentToesPosition,
-                weight,
-                maxOffset,
-                positiveZScale,
-                toesBlendWeight: 1f,
-                out nextFootPosition);
-        }
-
-        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
-            Vector3 desiredFootPosition,
-            Vector3 desiredToesPosition,
-            Vector3 currentFootPosition,
-            Vector3 currentToesPosition,
-            float weight,
-            float maxOffset,
-            float positiveZScale,
-            float toesBlendWeight,
-            out Vector3 nextFootPosition)
-        {
-            return TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
-                desiredFootPosition,
-                desiredToesPosition,
-                currentFootPosition,
-                currentToesPosition,
-                weight,
-                maxOffset,
-                positiveZScale,
-                toesBlendWeight,
-                out nextFootPosition,
-                out _);
-        }
-
-        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
-            Vector3 desiredFootPosition,
-            Vector3 desiredToesPosition,
-            Vector3 currentFootPosition,
-            Vector3 currentToesPosition,
-            float weight,
-            float maxOffset,
-            float positiveZScale,
-            float toesBlendWeight,
-            out Vector3 nextFootPosition,
-            out PostSetHumanPoseEndpointPositionDiagnostics diagnostics)
-        {
-            nextFootPosition = currentFootPosition;
-            diagnostics = PostSetHumanPoseEndpointPositionDiagnostics.Empty;
-            diagnostics.DesiredFootPosition = desiredFootPosition;
-            diagnostics.DesiredToesPosition = desiredToesPosition;
-            diagnostics.CurrentFootPosition = currentFootPosition;
-            diagnostics.CurrentToesPosition = currentToesPosition;
-
-            if (!IsFinite(desiredFootPosition) ||
-                !IsFinite(currentFootPosition))
-            {
-                return false;
-            }
-
-            Vector3 footDelta = desiredFootPosition - currentFootPosition;
-            footDelta.y = 0f;
-            Vector3 endpointDelta = footDelta;
-            if (IsFinite(desiredToesPosition) && IsFinite(currentToesPosition))
-            {
-                Vector3 toesDelta = desiredToesPosition - currentToesPosition;
-                toesDelta.y = 0f;
-                Vector3 averagedEndpointDelta = (footDelta + toesDelta) * 0.5f;
-                endpointDelta = Vector3.Lerp(footDelta, averagedEndpointDelta, Mathf.Clamp01(toesBlendWeight));
-            }
-            diagnostics.EndpointDeltaBeforeClamp = endpointDelta;
-
-            if (!IsFinite(endpointDelta) || endpointDelta.sqrMagnitude <= 0.00000001f)
-            {
-                return false;
-            }
-
-            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
-            if (clampedMaxOffset > 0f)
-            {
-                endpointDelta = Vector3.ClampMagnitude(endpointDelta, clampedMaxOffset);
-            }
-            diagnostics.EndpointDeltaAfterClamp = endpointDelta;
-
-            if (endpointDelta.z > 0f)
-            {
-                endpointDelta.z *= Mathf.Clamp01(positiveZScale);
-            }
-            diagnostics.EndpointDeltaAfterPositiveZScale = endpointDelta;
-
-            Vector3 correction = endpointDelta * Mathf.Clamp01(weight);
-            correction.y = 0f;
-            diagnostics.Correction = correction;
-            if (!IsFinite(correction) || correction.sqrMagnitude <= 0.00000001f)
-            {
-                return false;
-            }
-
-            nextFootPosition = currentFootPosition + correction;
-            nextFootPosition.y = currentFootPosition.y;
-            diagnostics.NextFootPosition = nextFootPosition;
-            return IsFinite(nextFootPosition);
-        }
-
         private bool TryResolvePostSetHumanPoseRightFootEvaluatorXzFirstOffset(
             Vector3 referenceFootPosition,
             Vector3 currentFootPosition,
@@ -4961,99 +4810,6 @@ namespace Fbx2Vmd.FBXImporter
 
             firstOffset = _postSetHumanPoseRightFootEvaluatorXzFirstOffset;
             return _hasPostSetHumanPoseRightFootEvaluatorXzFirstOffset && IsFinite(firstOffset);
-        }
-
-        private static bool TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
-            Vector3 referenceFootPosition,
-            Vector3 currentFootPosition,
-            Vector3 firstMatchedFootOffset,
-            float targetMagnitude,
-            float weight,
-            float maxOffset,
-            out Vector3 nextFootPosition)
-        {
-            return TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
-                referenceFootPosition,
-                currentFootPosition,
-                firstMatchedFootOffset,
-                targetMagnitude,
-                weight,
-                maxOffset,
-                out nextFootPosition,
-                out _);
-        }
-
-        private static bool TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
-            Vector3 referenceFootPosition,
-            Vector3 currentFootPosition,
-            Vector3 firstMatchedFootOffset,
-            float targetMagnitude,
-            float weight,
-            float maxOffset,
-            out Vector3 nextFootPosition,
-            out PostSetHumanPoseEndpointPositionDiagnostics diagnostics)
-        {
-            nextFootPosition = currentFootPosition;
-            diagnostics = PostSetHumanPoseEndpointPositionDiagnostics.Empty;
-            diagnostics.CurrentFootPosition = currentFootPosition;
-            diagnostics.CurrentToesPosition = BuildNaNVector3();
-            diagnostics.EvaluatorXzReferenceEnabled = 1f;
-            diagnostics.EvaluatorXzFirstOffset = firstMatchedFootOffset;
-            diagnostics.EvaluatorXzTargetMagnitude = Mathf.Max(0f, targetMagnitude);
-
-            if (!IsFinite(referenceFootPosition) ||
-                !IsFinite(currentFootPosition) ||
-                !IsFinite(firstMatchedFootOffset))
-            {
-                return false;
-            }
-
-            Vector3 normalizedDelta = currentFootPosition - referenceFootPosition - firstMatchedFootOffset;
-            normalizedDelta.y = 0f;
-            diagnostics.EvaluatorXzNormalizedDelta = normalizedDelta;
-            diagnostics.DesiredToesPosition = BuildNaNVector3();
-            if (!IsFinite(normalizedDelta) || normalizedDelta.sqrMagnitude <= 0.00000001f)
-            {
-                diagnostics.DesiredFootPosition = currentFootPosition;
-                return false;
-            }
-
-            float magnitude = normalizedDelta.magnitude;
-            float clampedTargetMagnitude = Mathf.Max(0f, targetMagnitude);
-            if (!IsFinite(magnitude) || magnitude <= clampedTargetMagnitude || magnitude <= 0f)
-            {
-                diagnostics.DesiredFootPosition = currentFootPosition;
-                return false;
-            }
-
-            Vector3 desiredNormalizedDelta = normalizedDelta * (clampedTargetMagnitude / magnitude);
-            diagnostics.EvaluatorXzDesiredNormalizedDelta = desiredNormalizedDelta;
-            Vector3 correction = desiredNormalizedDelta - normalizedDelta;
-            correction.y = 0f;
-            diagnostics.EndpointDeltaBeforeClamp = correction;
-
-            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
-            if (clampedMaxOffset > 0f)
-            {
-                correction = Vector3.ClampMagnitude(correction, clampedMaxOffset);
-            }
-            diagnostics.EndpointDeltaAfterClamp = correction;
-            diagnostics.EndpointDeltaAfterPositiveZScale = correction;
-
-            correction *= Mathf.Clamp01(weight);
-            correction.y = 0f;
-            diagnostics.Correction = correction;
-            if (!IsFinite(correction) || correction.sqrMagnitude <= 0.00000001f)
-            {
-                diagnostics.DesiredFootPosition = currentFootPosition;
-                return false;
-            }
-
-            nextFootPosition = currentFootPosition + correction;
-            nextFootPosition.y = currentFootPosition.y;
-            diagnostics.DesiredFootPosition = nextFootPosition;
-            diagnostics.NextFootPosition = nextFootPosition;
-            return IsFinite(nextFootPosition);
         }
 
         private static float CalculateEndpointPositionMaxYawAngle(
