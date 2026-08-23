@@ -45,6 +45,64 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal static HumanoidArmDirectionRetargetGuard ConfigureArmDirectionGuard(
+            GameObject targetObject,
+            Animator targetAnimator,
+            Animator ghostAnimator,
+            bool shouldEnable,
+            float upperArmWeight,
+            float forearmWeight,
+            float upperArmMaxDegrees,
+            float forearmMaxDegrees,
+            float leftSideWeightScale,
+            float rightSideWeightScale,
+            bool shouldLogConfiguration)
+        {
+            if (targetObject == null)
+            {
+                return null;
+            }
+
+            HumanoidArmDirectionRetargetGuard directionGuard =
+                targetObject.GetComponent<HumanoidArmDirectionRetargetGuard>();
+            if (!shouldEnable)
+            {
+                if (directionGuard != null)
+                {
+                    directionGuard.DisableCorrection();
+                    directionGuard.enabled = false;
+                }
+
+                return null;
+            }
+
+            if (directionGuard == null)
+            {
+                directionGuard = targetObject.AddComponent<HumanoidArmDirectionRetargetGuard>();
+            }
+
+            directionGuard.enableDirectionRetarget = true;
+            directionGuard.enabled = true;
+            bool configured = directionGuard.Configure(
+                ghostAnimator,
+                targetAnimator,
+                upperArmWeight,
+                forearmWeight,
+                upperArmMaxDegrees,
+                forearmMaxDegrees,
+                leftSideWeightScale,
+                rightSideWeightScale,
+                shouldLogConfiguration);
+
+            if (!configured)
+            {
+                directionGuard.enabled = false;
+                return null;
+            }
+
+            return directionGuard;
+        }
+
         /// <summary>
         /// 요청을 검증하고 세션 기반 흐름에 위임함.
         /// </summary>
