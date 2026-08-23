@@ -2241,17 +2241,13 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 GameObject targetObject = targetCharacter;
-                if (targetObject == null)
+                if (!FBXConversionCoordinator.TryResolveTargetAnimator(
+                        targetObject,
+                        out Animator targetAnimator,
+                        out string targetErrorMessage))
                 {
-                    FailSession("Target Character가 지정되어 있지 않습니다.");
-                    return FBXConversionResult.Fail("Target Character가 지정되어 있지 않습니다.");
-                }
-
-                Animator targetAnimator = targetObject.GetComponent<Animator>();
-                if (targetAnimator == null || targetAnimator.avatar == null || !targetAnimator.avatar.isValid || !targetAnimator.avatar.isHuman)
-                {
-                    FailSession("Target Character에 유효한 Humanoid Avatar가 없습니다.");
-                    return FBXConversionResult.Fail("Target Character에 유효한 Humanoid Avatar가 없습니다.");
+                    FailSession(targetErrorMessage);
+                    return FBXConversionResult.Fail(targetErrorMessage);
                 }
 
                 Animator ghostAnimator = importedModel.GetComponent<Animator>();

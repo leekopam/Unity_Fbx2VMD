@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -15,6 +16,33 @@ namespace Fbx2Vmd.FBXImporter
         public FBXConversionCoordinator(FBXVmdPipeline pipeline)
         {
             _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+        }
+
+        internal static bool TryResolveTargetAnimator(
+            GameObject targetObject,
+            out Animator targetAnimator,
+            out string errorMessage)
+        {
+            targetAnimator = null;
+            if (targetObject == null)
+            {
+                errorMessage = "Target Character가 지정되어 있지 않습니다.";
+                return false;
+            }
+
+            targetAnimator = targetObject.GetComponent<Animator>();
+            if (targetAnimator == null ||
+                targetAnimator.avatar == null ||
+                !targetAnimator.avatar.isValid ||
+                !targetAnimator.avatar.isHuman)
+            {
+                targetAnimator = null;
+                errorMessage = "Target Character에 유효한 Humanoid Avatar가 없습니다.";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
         }
 
         /// <summary>
