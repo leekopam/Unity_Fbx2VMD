@@ -7289,9 +7289,11 @@ namespace Tests.Editor.FBXImporter
             float positiveZScale,
             out Vector3 nextFootPosition)
         {
-            Type retargeterType = typeof(PoseSpaceRetargeter);
-            MethodInfo method = retargeterType.GetMethod(
-                "TryCalculatePostSetHumanPoseEndpointDesiredFootPosition",
+            Type diagnosticsType = typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics",
+                throwOnError: true);
+            MethodInfo method = diagnosticsType.GetMethod(
+                "TryCalculateReferencePosition",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: new[]
@@ -7336,9 +7338,11 @@ namespace Tests.Editor.FBXImporter
             float toesBlendWeight,
             out Vector3 nextFootPosition)
         {
-            Type retargeterType = typeof(PoseSpaceRetargeter);
-            MethodInfo method = retargeterType.GetMethod(
-                "TryCalculatePostSetHumanPoseEndpointDesiredFootPosition",
+            Type diagnosticsType = typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics",
+                throwOnError: true);
+            MethodInfo method = diagnosticsType.GetMethod(
+                "TryCalculateReferencePosition",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: new[]
@@ -7383,9 +7387,11 @@ namespace Tests.Editor.FBXImporter
             float maxOffset,
             out Vector3 nextFootPosition)
         {
-            Type retargeterType = typeof(PoseSpaceRetargeter);
-            MethodInfo method = retargeterType.GetMethod(
-                "TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition",
+            Type diagnosticsType = typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics",
+                throwOnError: true);
+            MethodInfo method = diagnosticsType.GetMethod(
+                "TryCalculateEvaluatorXzReferencePosition",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: new[]
