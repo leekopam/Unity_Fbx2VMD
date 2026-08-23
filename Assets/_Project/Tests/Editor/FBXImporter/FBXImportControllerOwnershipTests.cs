@@ -36,5 +36,35 @@ namespace Tests.Editor.FBXImporter
             Assert.That(source, Does.Contain("_importController.LoadFromImportFolder();"));
             Assert.That(source, Does.Contain("return _importController.TryImportFromSharedSettings(sourcePath);"));
         }
+
+        [Test]
+        public void Given_ControlledImportStorage_When_CheckingOwnership_Then_ControllerOwnsFileIo()
+        {
+            MethodInfo controllerCopyMethod = typeof(FBXImportController).GetMethod(
+                "CopyToControlledImportFolder",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo controllerDirectoryMethod = typeof(FBXImportController).GetMethod(
+                "GetControlledImportDirectory",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo controllerSanitizeMethod = typeof(FBXImportController).GetMethod(
+                "SanitizeFileName",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo pipelineCopyMethod = typeof(FBXVmdPipeline).GetMethod(
+                "CopyToControlledImportFolder",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo pipelineDirectoryMethod = typeof(FBXVmdPipeline).GetMethod(
+                "GetControlledImportDirectory",
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo pipelineSanitizeMethod = typeof(FBXVmdPipeline).GetMethod(
+                "SanitizeFileName",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+            Assert.That(controllerCopyMethod, Is.Not.Null);
+            Assert.That(controllerDirectoryMethod, Is.Not.Null);
+            Assert.That(controllerSanitizeMethod, Is.Not.Null);
+            Assert.That(pipelineCopyMethod, Is.Null);
+            Assert.That(pipelineDirectoryMethod, Is.Null);
+            Assert.That(pipelineSanitizeMethod, Is.Null);
+        }
     }
 }
