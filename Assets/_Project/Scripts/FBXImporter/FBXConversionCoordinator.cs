@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
 using Fbx2Vmd.Character;
 using UnityEngine;
@@ -14,6 +15,22 @@ namespace Fbx2Vmd.FBXImporter
     public class FBXConversionCoordinator
     {
         private readonly FBXVmdPipeline _pipeline;
+        private readonly List<BooleanFieldSnapshot> _retargetBooleanSnapshots =
+            new List<BooleanFieldSnapshot>();
+
+        private struct BooleanFieldSnapshot
+        {
+            public object Target;
+            public FieldInfo Field;
+            public bool Value;
+
+            public BooleanFieldSnapshot(object target, FieldInfo field, bool value)
+            {
+                Target = target;
+                Field = field;
+                Value = value;
+            }
+        }
 
         public FBXConversionCoordinator(FBXVmdPipeline pipeline)
         {
@@ -106,6 +123,94 @@ namespace Fbx2Vmd.FBXImporter
 
             Debug.Log("[FBXImport] 자동 retarget 경로에서 IKControl을 제거합니다.");
             UnityEngine.Object.Destroy(ikControl);
+        }
+
+        internal void DisableMmdPostPoseCorrectionForRetarget(
+            GameObject targetObject,
+            bool shouldDisable)
+        {
+            if (!shouldDisable || targetObject == null)
+            {
+                return;
+            }
+
+            RestoreMmdPostPoseCorrectionForRetarget();
+
+            int changed = 0;
+            Component[] components = targetObject.GetComponentsInChildren<Component>(true);
+            foreach (Component component in components)
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
+                Type componentType = component.GetType();
+                if (!componentType.Name.Contains("MMD4Mecanim"))
+                {
+                    continue;
+                }
+
+                if (TrySetBooleanField(component, "pphShoulderEnabled", false))
+                {
+                    changed++;
+                }
+            }
+
+            if (changed > 0)
+            {
+                Debug.Log($"[FBXImport] Retarget 중 MMD4Mecanim 어깨 PPH 보정 {changed}개를 일시 비활성화했습니다.");
+            }
+        }
+
+        internal void RestoreMmdPostPoseCorrectionForRetarget()
+        {
+            for (int i = _retargetBooleanSnapshots.Count - 1; i >= 0; i--)
+            {
+                BooleanFieldSnapshot snapshot = _retargetBooleanSnapshots[i];
+                if (snapshot.Target == null || snapshot.Field == null)
+                {
+                    continue;
+                }
+
+                snapshot.Field.SetValue(snapshot.Target, snapshot.Value);
+            }
+
+            _retargetBooleanSnapshots.Clear();
+        }
+
+        private bool TrySetBooleanField(object target, string fieldName, bool value)
+        {
+            FieldInfo field = FindFieldInHierarchy(target.GetType(), fieldName);
+            if (field == null || field.FieldType != typeof(bool))
+            {
+                return false;
+            }
+
+            bool currentValue = (bool)field.GetValue(target);
+            if (currentValue == value)
+            {
+                return false;
+            }
+
+            _retargetBooleanSnapshots.Add(new BooleanFieldSnapshot(target, field, currentValue));
+            field.SetValue(target, value);
+            return true;
+        }
+
+        private static FieldInfo FindFieldInHierarchy(Type type, string fieldName)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            for (Type currentType = type; currentType != null; currentType = currentType.BaseType)
+            {
+                FieldInfo field = currentType.GetField(fieldName, flags);
+                if (field != null)
+                {
+                    return field;
+                }
+            }
+
+            return null;
         }
 
         internal HumanoidArmTwistRiggingGuard ConfigureArmTwistRiggingGuard(
