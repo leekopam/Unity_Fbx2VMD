@@ -1063,14 +1063,14 @@ namespace Tests.Editor.FBXImporter
 
         private static string MakeProjectRelativePath(string path, string projectRoot)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
+            MethodInfo method = typeof(VMDRecordingController).GetMethod(
                 "MakeProjectRelativePath",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: ProjectRelativePathParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a static project-relative path overload for fakeable path tests.");
+            Assert.That(method, Is.Not.Null, "VMDRecordingController must own a fakeable project-relative path policy.");
 
             return (string)method.Invoke(null, new object[] { path, projectRoot });
         }

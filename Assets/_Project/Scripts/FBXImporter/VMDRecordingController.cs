@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 using System.Collections;
 using System.IO;
 using static Fbx2Vmd.FBXImporter.FBXVmdPipeline;
@@ -243,8 +244,8 @@ namespace Fbx2Vmd.FBXImporter
                 ? _activeRecorderController.GetComponent<MotionComparisonProbe>()
                 : null;
             VmdSaveResult effectiveResult = _pipeline.ApplyEditorSmokeThumbRiskFailure(result, probe);
-            FBXVmdPipeline.TryAppendVmdArtifactToComparisonSessionManifest(probe, effectiveResult);
-            _pipeline.TryCopyVmdToAdditionalFolder(effectiveResult);
+            TryAppendVmdArtifactToComparisonSessionManifest(probe, effectiveResult);
+            TryCopyVmdToAdditionalFolder(effectiveResult);
             ClearActiveRecordingSubscription();
             _pipeline.LogRetargetPlaybackStabilitySummary();
 
@@ -270,6 +271,87 @@ namespace Fbx2Vmd.FBXImporter
             _pipeline.ClearEditorSmokeOverride();
 #endif
             _pipeline._isProcessing = false;
+        }
+
+        private static void TryAppendVmdArtifactToComparisonSessionManifest(
+            MotionComparisonProbe probe,
+            VmdSaveResult result)
+        {
+            if (probe == null ||
+                result.Success == false ||
+                string.IsNullOrWhiteSpace(probe.LastSessionManifestPath) ||
+                string.IsNullOrWhiteSpace(result.FilePath))
+            {
+                return;
+            }
+
+            MotionComparisonProbeSessionManifestPatcher.TryAppendExportedVmdToSessionManifest(
+                probe.LastSessionManifestPath,
+                MakeProjectRelativePath(result.FilePath),
+                result.FrameCount,
+                result.FileSizeBytes);
+        }
+
+        private static string MakeProjectRelativePath(string path)
+        {
+            string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+            return MakeProjectRelativePath(path, projectRoot);
+        }
+
+        private static string MakeProjectRelativePath(string path, string projectRoot)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            string fullPath = Path.GetFullPath(path);
+            string fullRoot = Path.GetFullPath(projectRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            bool isProjectPath = string.Equals(fullPath, fullRoot, StringComparison.OrdinalIgnoreCase)
+                || (fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)
+                    && fullPath.Length > fullRoot.Length
+                    && (fullPath[fullRoot.Length] == Path.DirectorySeparatorChar
+                        || fullPath[fullRoot.Length] == Path.AltDirectorySeparatorChar));
+
+            if (!isProjectPath)
+            {
+                return path.Replace("\\", "/");
+            }
+
+            return fullPath.Substring(fullRoot.Length)
+                .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Replace("\\", "/");
+        }
+
+        private void TryCopyVmdToAdditionalFolder(VmdSaveResult result)
+        {
+            if (!result.Success ||
+                string.IsNullOrWhiteSpace(_pipeline.additionalVmdCopyFolder) ||
+                string.IsNullOrWhiteSpace(result.FilePath) ||
+                !File.Exists(result.FilePath))
+            {
+                return;
+            }
+
+            try
+            {
+                string targetFolder = _pipeline.additionalVmdCopyFolder.Trim();
+                if (!Path.IsPathRooted(targetFolder))
+                {
+                    string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+                    targetFolder = Path.Combine(projectRoot, targetFolder);
+                }
+
+                Directory.CreateDirectory(targetFolder);
+                string targetPath = Path.Combine(targetFolder, Path.GetFileName(result.FilePath));
+                File.Copy(result.FilePath, targetPath, overwrite: true);
+                Debug.Log($"[Recording] VMD 추가 복사 완료됨. 경로={targetPath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Recording] VMD 추가 복사 실패함. 오류={ex.Message}");
+            }
         }
 
         internal void ClearActiveRecordingSubscription()
