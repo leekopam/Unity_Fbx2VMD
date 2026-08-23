@@ -2056,16 +2056,10 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-                if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+                if (!FBXImportController.TryValidateSourcePath(sourcePath, out string sourceValidationError))
                 {
-                    FailSession($"FBX 파일을 찾을 수 없습니다: {sourcePath}");
-                    return FBXConversionResult.Fail($"FBX 파일을 찾을 수 없습니다: {sourcePath}");
-                }
-
-                if (!string.Equals(Path.GetExtension(sourcePath), ".fbx", StringComparison.OrdinalIgnoreCase))
-                {
-                    FailSession("FBX 파일만 선택할 수 있습니다.");
-                    return FBXConversionResult.Fail("FBX 파일만 선택할 수 있습니다.");
+                    FailSession(sourceValidationError);
+                    return FBXConversionResult.Fail(sourceValidationError);
                 }
 
                 SetSessionState(FBXSessionState.Selected, $"선택됨: {Path.GetFileName(sourcePath)}", 0.05f);

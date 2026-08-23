@@ -60,6 +60,24 @@ namespace Fbx2Vmd.FBXImporter
             return safeName;
         }
 
+        internal static bool TryValidateSourcePath(string sourcePath, out string errorMessage)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+            {
+                errorMessage = $"FBX 파일을 찾을 수 없습니다: {sourcePath}";
+                return false;
+            }
+
+            if (!string.Equals(Path.GetExtension(sourcePath), ".fbx", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "FBX 파일만 선택할 수 있습니다.";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
+        }
+
         internal static Dictionary<string, string> LoadBoneMappingRuntime()
         {
             Dictionary<string, string> mapping = new Dictionary<string, string>();

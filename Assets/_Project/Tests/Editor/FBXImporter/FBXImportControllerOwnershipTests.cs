@@ -119,6 +119,41 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ImportSourceValidation_When_CheckingOwnership_Then_ControllerOwnsPathRules()
+        {
+            MethodInfo validationMethod = typeof(FBXImportController).GetMethod(
+                "TryValidateSourcePath",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+
+            Assert.That(validationMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("FBXImportController.TryValidateSourcePath(sourcePath"));
+            Assert.That(
+                pipelineSource,
+                Does.Not.Contain("string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath)"));
+            Assert.That(pipelineSource, Does.Not.Contain("Path.GetExtension(sourcePath)"));
+
+            string missingPath = Path.Combine(
+                Path.GetTempPath(),
+                $"missing-{System.Guid.NewGuid():N}.fbx");
+            object[] missingArguments = { missingPath, null };
+            bool missingResult = (bool)validationMethod.Invoke(null, missingArguments);
+            object[] extensionArguments = { typeof(FBXImportController).Assembly.Location, null };
+            bool extensionResult = (bool)validationMethod.Invoke(null, extensionArguments);
+
+            Assert.That(missingResult, Is.False);
+            Assert.That(missingArguments[1], Is.EqualTo($"FBX 파일을 찾을 수 없습니다: {missingPath}"));
+            Assert.That(extensionResult, Is.False);
+            Assert.That(extensionArguments[1], Is.EqualTo("FBX 파일만 선택할 수 있습니다."));
+        }
+
+        [Test]
         public void Given_ValidRuntimeAnimation_When_ExtractingPrimaryClip_Then_ReturnsAssignedClip()
         {
             GameObject root = new GameObject("runtime-import-clip-test");
