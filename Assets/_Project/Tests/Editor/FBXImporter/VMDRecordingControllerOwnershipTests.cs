@@ -34,6 +34,9 @@ namespace Tests.Editor.FBXImporter
             MethodInfo stableSequenceMethod = typeof(FBXVmdPipeline).GetMethod(
                 "StartRecordingSequenceStable",
                 BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo legacySequenceMethod = typeof(FBXVmdPipeline).GetMethod(
+                "StartRecordingSequence",
+                BindingFlags.Instance | BindingFlags.NonPublic);
             MethodInfo prewarmMethod = typeof(FBXVmdPipeline).GetMethod(
                 "PrewarmRetargetStartPose",
                 BindingFlags.Instance | BindingFlags.NonPublic);
@@ -41,6 +44,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(Regex.Matches(source, @"new VMDRecordingController\(").Count, Is.EqualTo(1));
             Assert.That(source, Does.Contain("StartCoroutine(_recordingController.RecordAsync("));
             Assert.That(stableSequenceMethod, Is.Null);
+            Assert.That(legacySequenceMethod, Is.Null);
             Assert.That(prewarmMethod, Is.Null);
         }
 

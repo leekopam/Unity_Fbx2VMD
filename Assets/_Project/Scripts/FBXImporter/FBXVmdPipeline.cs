@@ -3321,48 +3321,6 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private IEnumerator StartRecordingSequence(
-            GameObject ghostModel,
-            Animation ghostAnim,
-            GameObject targetCharacter,
-            AnimationClip clip,
-            PoseSpaceRetargeter retargeter,
-            string outputBaseName = "")
-        {
-            Debug.Log($"[FBXImport]  녹화 시작까지 {startDelay}초 대기 중...");
-
-            // 지연 대기
-            yield return new WaitForSeconds(startDelay);
-
-            // Ghost 애니메이션 재생 시작
-            if (ghostAnim != null && clip != null)
-            {
-                ghostAnim.clip = clip;
-                ghostAnim.Play();
-                Debug.Log($"[FBXImport]  Ghost 애니메이션 재생 시작: {clip.name}");
-            }
-
-            // VMD 녹화 시작
-            var recorderController = targetCharacter.GetComponent<HumanoidSampleCode>();
-            if (recorderController != null)
-            {
-                float clipLen = clip.length;
-                string recordingBaseName = !string.IsNullOrWhiteSpace(outputBaseName) ? outputBaseName : clip.name;
-                recorderController.StartAutoRecording(
-                    clipLen,
-                    recordingBaseName,
-                    null,
-                    0,
-                    comparisonLabel: $"auto_{recordingBaseName}",
-                    overwriteExistingOutput: true);
-                Debug.Log($"[FBXImport]  VMD 녹화 동시 시작! (길이: {clipLen:F2}초)");
-            }
-            else
-            {
-                Debug.LogWarning("[FBXImport]  HumanoidSampleCode 컴포넌트가 Target에 없습니다. 녹화 건너뜀.");
-            }
-        }
-
         /// <summary>
         /// 런타임에서도 BoneMapping_Data.txt를 읽어오는 함수
         /// </summary>
