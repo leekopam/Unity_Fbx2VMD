@@ -1,4 +1,5 @@
 using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Retargeting;
 using NUnit.Framework;
 using System;
 using System.Reflection;
@@ -35,6 +36,38 @@ namespace Tests.Editor.FBXImporter
             typeof(bool),
             typeof(bool)
         };
+
+        [Test]
+        public void Given_RootMotionGuardOwnsRootDelta_When_CheckingPoseSpaceRetargeterContract_Then_DoesNotKeepDuplicateHelpers()
+        {
+            MethodInfo rootDeltaMethod = typeof(RootMotionGuard).GetMethod(
+                "CalculateRetargetRootDelta",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: RootMotionDeltaParameterTypes,
+                modifiers: null);
+            MethodInfo normalizeMethod = typeof(RootMotionGuard).GetMethod(
+                "NormalizeMovementScaleMultiplier",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: MovementScaleMultiplierParameterTypes,
+                modifiers: null);
+
+            Assert.That(rootDeltaMethod, Is.Not.Null);
+            Assert.That(normalizeMethod, Is.Not.Null);
+            Assert.That(typeof(PoseSpaceRetargeter).GetMethod(
+                "CalculateRetargetRootDelta",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: RootMotionDeltaParameterTypes,
+                modifiers: null), Is.Null);
+            Assert.That(typeof(PoseSpaceRetargeter).GetMethod(
+                "NormalizeMovementScaleMultiplier",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: MovementScaleMultiplierParameterTypes,
+                modifiers: null), Is.Null);
+        }
 
         [Test]
         public void Given_FiniteInputsWithoutBodyRootPolicy_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostAndEditorDelta()
@@ -278,17 +311,7 @@ namespace Tests.Editor.FBXImporter
             out bool skippedByNonFinite,
             out bool skippedBySpike)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "CalculateRetargetRootDelta",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RootMotionDeltaParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for retarget root motion delta calculation.");
-
-            object[] args =
-            {
+            return RootMotionGuard.CalculateRetargetRootDelta(
                 ghostDelta,
                 scaleRatio,
                 editorRootTranslationDelta,
@@ -297,30 +320,14 @@ namespace Tests.Editor.FBXImporter
                 useBodyPositionXZRootMotion,
                 clampRootDeltaSpikes,
                 maxRootDeltaPerFrame,
-                float.NaN,
-                false,
-                false
-            };
-
-            Vector3 delta = (Vector3)method.Invoke(null, args);
-            deltaMagnitude = (float)args[8];
-            skippedByNonFinite = (bool)args[9];
-            skippedBySpike = (bool)args[10];
-            return delta;
+                out deltaMagnitude,
+                out skippedByNonFinite,
+                out skippedBySpike);
         }
 
         private static float NormalizeMovementScaleMultiplier(float value)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "NormalizeMovementScaleMultiplier",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: MovementScaleMultiplierParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for root motion scale normalization.");
-
-            return (float)method.Invoke(null, new object[] { value });
+            return RootMotionGuard.NormalizeMovementScaleMultiplier(value);
         }
 
         private static Vector3 SelectBodyPositionRootMotionSource(
