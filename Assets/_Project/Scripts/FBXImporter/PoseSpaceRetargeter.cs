@@ -9631,7 +9631,7 @@ namespace Fbx2Vmd.FBXImporter
 
             // 보정값 계산 (목표 - 현재)
             // 양수면 들어 올리고, 음수면 내림 (양방향)
-            if (!TryCalculateGroundingAdjustment(targetHeight, contactBottomY, out float adjustment))
+            if (!GroundingStabilizer.TryCalculateAdjustment(targetHeight, contactBottomY, out float adjustment))
             {
                 LogPoseWarning("Grounding adjustment became non-finite. Skipping grounding for this frame.");
                 _lastGroundingAdjustment = float.NaN;
@@ -9662,7 +9662,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             bool wasGroundingInitialized = _groundingInitialized;
-            float appliedVerticalStep = CalculateGroundingVerticalStep(
+            float appliedVerticalStep = GroundingStabilizer.CalculateVerticalStep(
                 currentPos.y,
                 adjustment,
                 wasGroundingInitialized,
@@ -9671,6 +9671,7 @@ namespace Fbx2Vmd.FBXImporter
                 maxGroundingVerticalStepPerFrame,
                 groundingDeadZone,
                 _lastGroundingVerticalStep,
+                GroundingDirectionReversalStepScale,
                 out bool skippedByDeadZone,
                 out bool smoothedGrounding,
                 out bool clampedGroundingStep);
@@ -9720,21 +9721,6 @@ namespace Fbx2Vmd.FBXImporter
 
                 ApplyGroundedFootLockXZ(lFoot, rFoot, targetHeight, footRadius);
             }
-        }
-
-        private static bool TryCalculateGroundingAdjustment(
-            float targetHeight,
-            float contactBottomY,
-            out float adjustment)
-        {
-            adjustment = targetHeight - contactBottomY;
-            if (!IsFinite(adjustment))
-            {
-                adjustment = 0f;
-                return false;
-            }
-
-            return true;
         }
 
         private float ResolveEditorFootHeightGroundingReferenceTarget(float baseTargetHeight)
@@ -9821,80 +9807,6 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        private static float CalculateGroundingVerticalStep(
-            float currentY,
-            float adjustment,
-            bool wasGroundingInitialized,
-            bool smoothGrounding,
-            float groundingSmoothing,
-            float maxGroundingVerticalStepPerFrame,
-            float groundingDeadZone,
-            float previousGroundingVerticalStep,
-            out bool skippedByDeadZone,
-            out bool smoothed,
-            out bool clamped)
-        {
-            skippedByDeadZone = false;
-            smoothed = false;
-            clamped = false;
-
-            float deadZone = Mathf.Max(0f, groundingDeadZone);
-            if (wasGroundingInitialized && Mathf.Abs(adjustment) <= deadZone)
-            {
-                skippedByDeadZone = true;
-                return 0f;
-            }
-
-            float effectiveAdjustment = adjustment;
-            if (wasGroundingInitialized && deadZone > 0f)
-            {
-                // Subtracting the dead zone prevents the root from chasing small foot noise.
-                effectiveAdjustment = Mathf.Sign(adjustment) * Mathf.Max(0f, Mathf.Abs(adjustment) - deadZone);
-            }
-
-            float desiredY = currentY + effectiveAdjustment;
-            float nextY = desiredY;
-            if (wasGroundingInitialized && smoothGrounding)
-            {
-                float smoothing = Mathf.Clamp01(groundingSmoothing);
-                if (smoothing < 1f)
-                {
-                    nextY = Mathf.Lerp(currentY, desiredY, smoothing);
-                    smoothed = true;
-                }
-
-                float maxStep = Mathf.Max(0.001f, maxGroundingVerticalStepPerFrame);
-                float verticalStep = nextY - currentY;
-                if (IsGroundingDirectionReversal(verticalStep, previousGroundingVerticalStep))
-                {
-                    maxStep = Mathf.Max(0.001f, maxStep * GroundingDirectionReversalStepScale);
-                }
-
-                if (Mathf.Abs(verticalStep) > maxStep)
-                {
-                    nextY = currentY + Mathf.Sign(verticalStep) * maxStep;
-                    clamped = true;
-                }
-            }
-
-            return nextY - currentY;
-        }
-
-        private bool IsGroundingDirectionReversal(float verticalStep)
-        {
-            return IsGroundingDirectionReversal(verticalStep, _lastGroundingVerticalStep);
-        }
-
-        private static bool IsGroundingDirectionReversal(float verticalStep, float previousGroundingVerticalStep)
-        {
-            if (!IsFinite(previousGroundingVerticalStep) || Mathf.Abs(verticalStep) <= 0.0005f || Mathf.Abs(previousGroundingVerticalStep) <= 0.0005f)
-            {
-                return false;
-            }
-
-            return Mathf.Sign(verticalStep) != Mathf.Sign(previousGroundingVerticalStep);
-        }
-
         public void ApplyLateVisualGroundingCorrection()
         {
             try
@@ -9930,7 +9842,7 @@ namespace Fbx2Vmd.FBXImporter
                 _lastGroundingTargetY = targetGroundY;
                 _lastGroundingLowestFootBottomY = rendererMinY;
 
-                if (!TryCalculateGroundingAdjustment(targetHeight, rendererMinY, out float residual))
+                if (!GroundingStabilizer.TryCalculateAdjustment(targetHeight, rendererMinY, out float residual))
                 {
                     LogPoseWarning("Late visual grounding residual became non-finite. Skipping final grounding for this frame.");
                     return;
