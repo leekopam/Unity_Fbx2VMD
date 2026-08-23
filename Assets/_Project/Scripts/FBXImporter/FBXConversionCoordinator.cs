@@ -46,6 +46,26 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal void ConfigureTargetRetargetGuards(
+            GameObject targetObject,
+            Animator targetAnimator,
+            Animator ghostAnimator)
+        {
+            HumanoidArmTwistRiggingGuard twistRiggingGuard =
+                ConfigureArmTwistRiggingGuard(targetObject, targetAnimator);
+            ConfigureArmDirectionGuard(targetObject, targetAnimator, ghostAnimator);
+            ConfigureArmSwingLimitGuard(targetObject, targetAnimator);
+            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard =
+                ConfigureArmSleeveAnchorGuard(targetObject, targetAnimator);
+            HumanoidArmVisualTwistGuard visualTwistGuard =
+                ConfigureArmVisualTwistGuard(targetObject, targetAnimator);
+            ConfigureArmDeformationGuard(
+                targetObject,
+                twistRiggingGuard,
+                sleeveAnchorGuard,
+                visualTwistGuard);
+        }
+
         internal HumanoidArmTwistRiggingGuard ConfigureArmTwistRiggingGuard(
             GameObject targetObject,
             Animator targetAnimator)
