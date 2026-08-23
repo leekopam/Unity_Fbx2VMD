@@ -88,7 +88,10 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
                 recordingCapturePlan = _pipeline._editorSmokeCaptureResolutionOverrideActive
                     ? RecordingCaptureResolution.CreateCustomPlan(_pipeline._editorSmokeCaptureWidth, _pipeline._editorSmokeCaptureHeight)
-                    : _pipeline.CreateRecordingCaptureResolutionPlan();
+                    : RecordingCaptureResolution.CreatePlan(
+                        _pipeline.recordingCaptureQuality,
+                        _pipeline.customRecordingCaptureWidth,
+                        _pipeline.customRecordingCaptureHeight);
                 diagnosticScreenshotPadding = float.IsNaN(_pipeline._editorSmokeDiagnosticScreenshotPaddingOverride)
                     ? diagnosticScreenshotPadding
                     : _pipeline._editorSmokeDiagnosticScreenshotPaddingOverride;
@@ -96,7 +99,10 @@ namespace Fbx2Vmd.FBXImporter
                     ? diagnosticScreenshotVerticalViewportCenter
                     : _pipeline._editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride;
 #else
-                recordingCapturePlan = _pipeline.CreateRecordingCaptureResolutionPlan();
+                recordingCapturePlan = RecordingCaptureResolution.CreatePlan(
+                    _pipeline.recordingCaptureQuality,
+                    _pipeline.customRecordingCaptureWidth,
+                    _pipeline.customRecordingCaptureHeight);
 #endif
                 _activeRecorderController.SetRecordingDiagnostics(
                     _pipeline.enableRecordingDiagnostics,
