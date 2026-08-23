@@ -1312,6 +1312,7 @@ namespace Fbx2Vmd.FBXImporter
         #region Private 필드
         internal IFileBrowserService _fileBrowserService;
         private AssimpFBXImporter _fbxImporter;
+        private FBXImportController _importController;
         internal bool _isProcessing;
         private GameObject _activeGhostContainer;
         internal HumanoidSampleCode _activeRecorderController;
@@ -2086,11 +2087,16 @@ namespace Fbx2Vmd.FBXImporter
             {
                 throw new InvalidOperationException("FBX 임포트 의존성 초기화에 실패했습니다.");
             }
+
+            if (_importController == null)
+            {
+                _importController = new FBXImportController(this, _fileBrowserService);
+            }
         }
 
         internal void EnsureServicesInitialized()
         {
-            if (_fileBrowserService == null || _fbxImporter == null)
+            if (_fileBrowserService == null || _fbxImporter == null || _importController == null)
             {
                 InitializeServices();
             }
@@ -2102,7 +2108,7 @@ namespace Fbx2Vmd.FBXImporter
         public void OnClickImportButton()
         {
             EnsureServicesInitialized();
-            new FBXImportController(this, _fileBrowserService).ImportFromDialog();
+            _importController.ImportFromDialog();
         }
 
         /// <summary>
@@ -2112,24 +2118,13 @@ namespace Fbx2Vmd.FBXImporter
         public void OnClickLoadFromImportFolder()
         {
             EnsureServicesInitialized();
-            new FBXImportController(this, _fileBrowserService).LoadFromImportFolder();
+            _importController.LoadFromImportFolder();
         }
 
         public bool TryStartFbxImportFromSharedSettings(string sourcePath)
         {
-            if (_isProcessing)
-            {
-                SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(sourcePath))
-            {
-                return false;
-            }
-
-            ProcessFBXAsync(sourcePath.Trim());
-            return true;
+            EnsureServicesInitialized();
+            return _importController.TryImportFromSharedSettings(sourcePath);
         }
 
 
