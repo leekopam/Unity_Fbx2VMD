@@ -2479,24 +2479,10 @@ namespace Fbx2Vmd.FBXImporter
             targetAnimator.applyRootMotion = false;
             targetAnimator.runtimeAnimatorController = null;
             DisableMmdPostPoseCorrectionForRetarget(targetObject);
-            HumanoidArmTwistRiggingGuard twistRiggingGuard =
-                _conversionCoordinator.ConfigureArmTwistRiggingGuard(targetObject, targetAnimator);
-            _conversionCoordinator.ConfigureArmDirectionGuard(
+            _conversionCoordinator.ConfigureTargetRetargetGuards(
                 targetObject,
                 targetAnimator,
                 ghostAnimator);
-            _conversionCoordinator.ConfigureArmSwingLimitGuard(
-                targetObject,
-                targetAnimator);
-            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard =
-                _conversionCoordinator.ConfigureArmSleeveAnchorGuard(targetObject, targetAnimator);
-            HumanoidArmVisualTwistGuard visualTwistGuard =
-                _conversionCoordinator.ConfigureArmVisualTwistGuard(targetObject, targetAnimator);
-            _conversionCoordinator.ConfigureArmDeformationGuard(
-                targetObject,
-                twistRiggingGuard,
-                sleeveAnchorGuard,
-                visualTwistGuard);
 
             // Batch smoke can leave detached thumb helpers visually drifted until the next frame.
             // Restore the captured target idle pose immediately before the next session captures

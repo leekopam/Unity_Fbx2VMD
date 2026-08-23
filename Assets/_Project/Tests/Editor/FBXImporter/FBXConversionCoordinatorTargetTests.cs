@@ -1,5 +1,6 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
+using System.IO;
 using System.Reflection;
 using UnityEngine;
 
@@ -246,6 +247,31 @@ namespace Tests.Editor.FBXImporter
                 Object.DestroyImmediate(targetObject);
                 Object.DestroyImmediate(pipelineObject);
             }
+        }
+
+        [Test]
+        public void Given_TargetRetargetGuards_When_CheckingOwnership_Then_CoordinatorOrchestratesAssembly()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureTargetRetargetGuards",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string pipelinePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs");
+            string pipelineSource = File.ReadAllText(pipelinePath);
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.ConfigureTargetRetargetGuards("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmTwistRiggingGuard("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmDirectionGuard("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmSwingLimitGuard("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmSleeveAnchorGuard("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmVisualTwistGuard("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmDeformationGuard("));
         }
 
         private bool TryResolveTargetAnimator(
