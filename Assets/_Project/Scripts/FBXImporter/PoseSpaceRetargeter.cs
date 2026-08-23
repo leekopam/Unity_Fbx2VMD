@@ -862,9 +862,9 @@ namespace Fbx2Vmd.FBXImporter
         public float RecordingStartHipsReferenceDeltaY => _recordingStartHipsReferenceDeltaY;
         public int RecordingStartHipsReferenceFlipDetected => _recordingStartHipsReferenceFlipDetected ? 1 : 0;
         public string RecordingStartHipsReferenceStage => _recordingStartHipsReferenceStage;
-        public float LastLegacyAnimationStep => _lastLegacyAnimationStep;
-        public float MaxLegacyAnimationStep => _maxLegacyAnimationStep;
-        public int LegacyAnimationStepSpikeCount => _legacyAnimationStepSpikeCount;
+        public float LastLegacyAnimationStep => _legacyAnimationDriver.LastStep;
+        public float MaxLegacyAnimationStep => _legacyAnimationDriver.MaxStep;
+        public int LegacyAnimationStepSpikeCount => _legacyAnimationDriver.StepSpikeCount;
         public int PoseVisualSmoothingCount => _poseVisualSmoothingCount;
         public int PoseVisualMuscleDeltaOnlySkippedCount => _poseVisualMuscleDeltaOnlySkippedCount;
         public float LastPoseVisualMaxMuscleDelta => _lastPoseVisualMaxMuscleDelta;
@@ -1279,14 +1279,9 @@ namespace Fbx2Vmd.FBXImporter
 
         public void ResetPlaybackStabilityMetrics()
         {
-            _hasPreviousLegacyAnimationTime = false;
-            _previousLegacyAnimationTime = 0f;
+            _legacyAnimationDriver.ResetStabilityMetrics();
             ResetEditorHumanoidRootTranslationReferenceState();
             ResetTargetHipsLocalPositionSpikeState();
-            _lastLegacyAnimationStep = float.NaN;
-            _maxLegacyAnimationStep = 0f;
-            _legacyAnimationStepSpikeCount = 0;
-            _legacyAnimationStepSpikeThisFrame = false;
             ResetVisualPoseHistory();
             _poseVisualSmoothingCount = 0;
             _poseVisualMuscleDeltaOnlySkippedCount = 0;
@@ -1305,48 +1300,12 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool PrepareRecordingStartPose(float startTimeSeconds, float playbackSpeed, bool holdPose)
         {
-            bool prepared = TryPrepareRecordingStartPose(_legacyAnim, startTimeSeconds, playbackSpeed, holdPose);
-            if (!prepared)
+            if (!_legacyAnimationDriver.TryPrepareRecordingStartPose(startTimeSeconds, playbackSpeed, holdPose))
             {
                 return false;
             }
 
-            _hasPreviousLegacyAnimationTime = false;
-            _previousLegacyAnimationTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, _legacyAnim[LegacyClipStateName].length));
-            _lastLegacyAnimationStep = 0f;
-            _legacyAnimationStepSpikeThisFrame = false;
             ResetVisualPoseHistory();
-            return true;
-        }
-
-#if UNITY_EDITOR
-        private static bool PrepareRecordingStartPoseForTest(Animation legacyAnim, float startTimeSeconds, float playbackSpeed, bool holdPose)
-        {
-            return TryPrepareRecordingStartPose(legacyAnim, startTimeSeconds, playbackSpeed, holdPose);
-        }
-#endif
-
-        private static bool TryPrepareRecordingStartPose(Animation legacyAnim, float startTimeSeconds, float playbackSpeed, bool holdPose)
-        {
-            if (legacyAnim == null)
-            {
-                return false;
-            }
-
-            AnimationState state = legacyAnim[LegacyClipStateName];
-            if (state == null)
-            {
-                return false;
-            }
-
-            float sampleTime = Mathf.Clamp(startTimeSeconds, 0f, Mathf.Max(0f, state.length));
-            float safePlaybackSpeed = Mathf.Max(0.0001f, playbackSpeed);
-            legacyAnim.Play(LegacyClipStateName);
-            state.enabled = true;
-            state.wrapMode = WrapMode.Once;
-            state.time = sampleTime;
-            state.speed = holdPose ? 0f : safePlaybackSpeed;
-            legacyAnim.Sample();
             return true;
         }
 
@@ -1505,12 +1464,6 @@ namespace Fbx2Vmd.FBXImporter
         private bool _lateVisualGroundingInitialized;
         private bool _hasFrozenGroundingRootY;
         private float _frozenGroundingRootY;
-        private bool _hasPreviousLegacyAnimationTime;
-        private float _previousLegacyAnimationTime;
-        private float _lastLegacyAnimationStep = float.NaN;
-        private float _maxLegacyAnimationStep;
-        private int _legacyAnimationStepSpikeCount;
-        private bool _legacyAnimationStepSpikeThisFrame;
         private bool _hasPreviousVisualPose;
         private float[] _previousVisualPoseMuscles;
         private Vector3 _previousVisualPoseBodyPosition;
@@ -1822,11 +1775,7 @@ namespace Fbx2Vmd.FBXImporter
 
         // --- 초기화 ---
         private bool _isInitialized = false;
-        private const string LegacyClipStateName = "__PoseSpaceRetargeter_GhostClip";
-        private Animation _legacyAnim;
-        private bool _ghostAnimatorWasEnabled;
-        private bool _addedLegacyAnimationComponent;
-        private AnimationClip _ownedLegacyClip;
+        private readonly LegacyAnimationDriver _legacyAnimationDriver = new LegacyAnimationDriver();
 
         public void Initialize(RetargetingContext context, RetargetingSettings settings)
         {
@@ -1834,7 +1783,7 @@ namespace Fbx2Vmd.FBXImporter
             GameObject targetRoot = context.TargetRoot;
             AnimationClip clip = context.Clip;
 
-            CleanupLegacyGhostPlayback();
+            _legacyAnimationDriver.Dispose();
 
             ghostAnimator = ghostRoot.GetComponent<Animator>();
             targetAnimator = targetRoot.GetComponent<Animator>();
@@ -1844,36 +1793,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (clip == null) return;
 
-            // Ghost Animator 끄기 (Legacy 구동용)
-            _ghostAnimatorWasEnabled = ghostAnimator != null && ghostAnimator.enabled;
-            if (ghostAnimator != null) ghostAnimator.enabled = false;
-
-            // Legacy Animation playback
-            _legacyAnim = ghostRoot.GetComponent<Animation>();
-            _addedLegacyAnimationComponent = _legacyAnim == null;
-            if (_legacyAnim == null) _legacyAnim = ghostRoot.AddComponent<Animation>();
-            _legacyAnim.Stop();
-
-            AnimationClip legacyClip = clip;
-            if (legacyClip != null && !legacyClip.legacy)
-            {
-                string legacyClipName = legacyClip.name;
-                _ownedLegacyClip = Instantiate(legacyClip);
-                _ownedLegacyClip.name = legacyClipName;
-                _ownedLegacyClip.legacy = true;
-                legacyClip = _ownedLegacyClip;
-            }
-
-            RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
-            _legacyAnim.AddClip(legacyClip, LegacyClipStateName);
-            _legacyAnim.clip = legacyClip;
-            AnimationState state = _legacyAnim[LegacyClipStateName];
-            if (state != null)
-            {
-                state.wrapMode = WrapMode.Once;
-                state.time = 0f;
-            }
-            _legacyAnim.Play(LegacyClipStateName);
+            _legacyAnimationDriver.Initialize(ghostRoot, ghostAnimator, clip);
 
             // 포즈 핸들러 초기화
             if (!ghostAnimator.avatar || !targetAnimator.avatar) return;
@@ -2103,51 +2023,7 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
             DisposeEditorHumanoidFingerPoseReference();
 #endif
-            CleanupLegacyGhostPlayback();
-        }
-
-        private void CleanupLegacyGhostPlayback()
-        {
-            if (_legacyAnim != null)
-            {
-                _legacyAnim.Stop();
-                RemoveLegacyAnimationClipStateIfPresent(_legacyAnim, LegacyClipStateName);
-            }
-
-            if (_ownedLegacyClip != null)
-            {
-                Destroy(_ownedLegacyClip);
-                _ownedLegacyClip = null;
-            }
-
-            if (_addedLegacyAnimationComponent && _legacyAnim != null)
-            {
-                Destroy(_legacyAnim);
-            }
-
-            if (ghostAnimator != null)
-            {
-                ghostAnimator.enabled = _ghostAnimatorWasEnabled;
-            }
-
-            _legacyAnim = null;
-            _addedLegacyAnimationComponent = false;
-            _ghostAnimatorWasEnabled = false;
-        }
-
-        private static bool HasLegacyAnimationClipState(Animation legacyAnimation, string stateName)
-        {
-            return legacyAnimation != null &&
-                !string.IsNullOrEmpty(stateName) &&
-                legacyAnimation[stateName] != null;
-        }
-
-        private static void RemoveLegacyAnimationClipStateIfPresent(Animation legacyAnimation, string stateName)
-        {
-            if (HasLegacyAnimationClipState(legacyAnimation, stateName))
-            {
-                legacyAnimation.RemoveClip(stateName);
-            }
+            _legacyAnimationDriver.Dispose();
         }
 
 #if UNITY_EDITOR
@@ -2406,7 +2282,14 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (!_isInitialized || ghostAnimator == null || targetAnimator == null || _ghostHandler == null || _targetHandler == null) return;
 
-            UpdateLegacyAnimationVisualStep();
+            if (_legacyAnimationDriver.Tick(
+                Time.deltaTime,
+                Application.isPlaying,
+                clampLegacyAnimationVisualStep,
+                legacyAnimationVisualFrameRate))
+            {
+                ResetVisualPoseHistory();
+            }
 
             // 스케일 비율 계산 (매 프레임 체크하여 안정성 확보)
             // Container가 작동 중이라면 ghostHip.position.y는 ~0.8m 수준이어야 함.
@@ -2443,7 +2326,7 @@ namespace Fbx2Vmd.FBXImporter
             SmoothPoseOnVisualSpike(ref _humanPose);
             CaptureAfterVisualSpikeSmoothingDiagnostics(_humanPose);
             Quaternion poseRootRotation = _humanPose.bodyRotation;
-            if (ShouldPreserveFbxRootRotation && !_hasPoseRootRotationCorrection && IsFinite(poseRootRotation) && _legacyAnim != null && _legacyAnim.isPlaying)
+            if (ShouldPreserveFbxRootRotation && !_hasPoseRootRotationCorrection && IsFinite(poseRootRotation) && _legacyAnimationDriver.IsPlaying)
             {
                 _poseRootRotationCorrection = Quaternion.Inverse(poseRootRotation);
                 _hasPoseRootRotationCorrection = true;
@@ -2702,153 +2585,6 @@ namespace Fbx2Vmd.FBXImporter
             return Mathf.Clamp(value, 0f, 1.5f);
         }
 
-        private void UpdateLegacyAnimationVisualStep()
-        {
-            _legacyAnimationStepSpikeThisFrame = false;
-
-            if (_legacyAnim == null)
-            {
-                return;
-            }
-
-            AnimationState state = _legacyAnim[LegacyClipStateName];
-            if (state == null)
-            {
-                return;
-            }
-
-            float length = Mathf.Max(0f, state.length);
-            float currentTime = Mathf.Clamp(state.time, 0f, length);
-            if (!_hasPreviousLegacyAnimationTime)
-            {
-                _previousLegacyAnimationTime = currentTime;
-                _hasPreviousLegacyAnimationTime = true;
-                _lastLegacyAnimationStep = 0f;
-                return;
-            }
-
-            if (TryCalculateManualLegacyAnimationTime(
-                currentTime,
-                _previousLegacyAnimationTime,
-                length,
-                state.speed,
-                Time.deltaTime,
-                Application.isPlaying,
-                out float manualAnimationTime))
-            {
-                currentTime = manualAnimationTime;
-                state.enabled = true;
-                state.time = currentTime;
-                _legacyAnim.Sample();
-            }
-
-            float maxStep = 1f / Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            if (TryClampLegacyAnimationEndWrap(
-                currentTime,
-                _previousLegacyAnimationTime,
-                length,
-                maxStep,
-                out float clampedEndTime))
-            {
-                currentTime = clampedEndTime;
-                state.enabled = true;
-                state.time = currentTime;
-                state.speed = 0f;
-                _legacyAnim.Sample();
-            }
-
-            if (currentTime + 0.0001f < _previousLegacyAnimationTime)
-            {
-                _previousLegacyAnimationTime = currentTime;
-                _lastLegacyAnimationStep = 0f;
-                ResetVisualPoseHistory();
-                return;
-            }
-
-            float step = currentTime - _previousLegacyAnimationTime;
-            _lastLegacyAnimationStep = step;
-            _maxLegacyAnimationStep = Mathf.Max(_maxLegacyAnimationStep, step);
-            float spikeTolerance = Mathf.Max(0.001f, maxStep * 0.05f);
-            if (step > maxStep + spikeTolerance)
-            {
-                _legacyAnimationStepSpikeThisFrame = true;
-                _legacyAnimationStepSpikeCount++;
-                if (clampLegacyAnimationVisualStep)
-                {
-                    currentTime = Mathf.Min(_previousLegacyAnimationTime + maxStep, length);
-                    state.time = currentTime;
-                    _legacyAnim.Sample();
-                    step = currentTime - _previousLegacyAnimationTime;
-                    _lastLegacyAnimationStep = step;
-                }
-            }
-
-            _previousLegacyAnimationTime = currentTime;
-        }
-
-        private static bool TryCalculateManualLegacyAnimationTime(
-            float currentTime,
-            float previousTime,
-            float length,
-            float playbackSpeed,
-            float deltaTime,
-            bool isPlaying,
-            out float manualAnimationTime)
-        {
-            manualAnimationTime = currentTime;
-
-            if (!isPlaying ||
-                length <= 0f ||
-                currentTime > previousTime + 0.0001f ||
-                currentTime + 0.0001f < previousTime ||
-                previousTime >= length - 0.0001f)
-            {
-                return false;
-            }
-
-            float effectivePlaybackSpeed = Mathf.Approximately(playbackSpeed, 0f)
-                ? 1f
-                : Mathf.Abs(playbackSpeed);
-            float manualStep = Mathf.Max(0f, deltaTime * effectivePlaybackSpeed);
-            if (manualStep <= 0f)
-            {
-                return false;
-            }
-
-            manualAnimationTime = Mathf.Min(previousTime + manualStep, length);
-            return true;
-        }
-
-        private static bool TryClampLegacyAnimationEndWrap(
-            float currentTime,
-            float previousTime,
-            float length,
-            float maxStep,
-            out float clampedTime)
-        {
-            clampedTime = currentTime;
-
-            if (!IsFinite(currentTime) ||
-                !IsFinite(previousTime) ||
-                !IsFinite(length) ||
-                !IsFinite(maxStep) ||
-                length <= 0f ||
-                maxStep <= 0f ||
-                currentTime + 0.0001f >= previousTime)
-            {
-                return false;
-            }
-
-            float endWindow = Mathf.Max(0.01f, maxStep * 2f + 0.005f);
-            if (previousTime < length - endWindow || currentTime > endWindow)
-            {
-                return false;
-            }
-
-            clampedTime = length;
-            return true;
-        }
-
         private void SmoothPoseOnVisualSpike(ref HumanPose pose)
         {
             if (!smoothPoseOnLegacyAnimationStepSpike || pose.muscles == null || pose.muscles.Length == 0)
@@ -2885,7 +2621,7 @@ namespace Fbx2Vmd.FBXImporter
                 bodyPositionDelta,
                 bodyRotationDelta,
                 poseVisualMuscleDeltaThreshold,
-                _legacyAnimationStepSpikeThisFrame,
+                _legacyAnimationDriver.StepSpikeThisFrame,
                 out bool muscleDeltaOnlySpike);
 
             if (shouldSmooth)
@@ -2894,7 +2630,7 @@ namespace Fbx2Vmd.FBXImporter
                     poseVisualSpikeCurrentWeight,
                     bodyPositionDelta,
                     bodyRotationDelta,
-                    _legacyAnimationStepSpikeThisFrame);
+                    _legacyAnimationDriver.StepSpikeThisFrame);
                 bool useEditorHumanoidMuscleReference = false;
 #if UNITY_EDITOR
                 useEditorHumanoidMuscleReference = _useEditorHumanoidMuscleReference;
@@ -3263,7 +2999,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            float time = GetLegacyAnimationTime();
+            float time = _legacyAnimationDriver.CurrentTime;
             foreach (KeyValuePair<int, AnimationCurve> pair in _editorHumanoidMuscleCurves)
             {
                 if (pair.Key < 0 || pair.Key >= pose.muscles.Length || pair.Value == null)
@@ -3350,7 +3086,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (!_editorFingerPoseReferenceLogged)
             {
-                float time = GetLegacyAnimationTime();
+                float time = _legacyAnimationDriver.CurrentTime;
                 string scope = ShouldUseManualAnimatorFullBodyPoseReference ? "full-body muscle" : "finger";
                 string weightSuffix = ShouldUseManualAnimatorFullBodyPoseReference
                     ? $", weight={Mathf.Clamp01(manualAnimatorFullBodyPoseReferenceWeight):F2}"
@@ -3393,7 +3129,7 @@ namespace Fbx2Vmd.FBXImporter
             }
             if (!_editorBodyRotationReferenceLogged)
             {
-                float time = GetLegacyAnimationTime();
+                float time = _legacyAnimationDriver.CurrentTime;
                 Debug.Log($"[PoseSpaceRetargeter] Manual Animator bodyRotation reference applied at t={time:F3}s, weight={weight:F2}.");
                 _editorBodyRotationReferenceLogged = true;
             }
@@ -3406,7 +3142,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            float time = GetLegacyAnimationTime();
+            float time = _legacyAnimationDriver.CurrentTime;
             float normalizedTime = Mathf.Clamp01(time / _editorFingerReferenceClipLength);
             _editorFingerReferenceAnimator.Play(_editorFingerReferenceStateHash, 0, normalizedTime);
             _editorFingerReferenceAnimator.Update(0f);
@@ -4263,7 +3999,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 
@@ -4282,7 +4018,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 
@@ -4301,7 +4037,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 
@@ -4310,7 +4046,7 @@ namespace Fbx2Vmd.FBXImporter
             float start = Mathf.Max(0f, manualAnimatorBodyPositionXzReferenceFrameGateStart);
             float end = Mathf.Max(0f, manualAnimatorBodyPositionXzReferenceFrameGateEnd);
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            float currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            float currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
             return CalculateManualAnimatorBodyPositionXzFrameGateWeight(
                 currentFrame,
                 start,
@@ -6929,7 +6665,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 1f, 240f);
-            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 
@@ -6948,7 +6684,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 1f, 240f);
-            int currentFrame = Mathf.RoundToInt(GetLegacyAnimationTime() * frameRate);
+            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 
@@ -7140,22 +6876,6 @@ namespace Fbx2Vmd.FBXImporter
                    normalized.Contains("forearm");
         }
 
-        private float GetLegacyAnimationTime()
-        {
-            if (_legacyAnim == null)
-            {
-                return 0f;
-            }
-
-            AnimationState state = _legacyAnim[LegacyClipStateName];
-            if (state == null)
-            {
-                return 0f;
-            }
-
-            return Mathf.Clamp(state.time, 0f, Mathf.Max(0f, state.length));
-        }
-
         private void AlignRetargetPoseInputWithEditorHumanoidMuscleReference(ref HumanPose pose)
         {
             if (!_useEditorHumanoidMuscleReference || pose.muscles == null || _editorHumanoidMuscleCurves.Count == 0)
@@ -7163,7 +6883,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            float time = GetLegacyAnimationTime();
+            float time = _legacyAnimationDriver.CurrentTime;
             foreach (KeyValuePair<int, AnimationCurve> pair in _editorHumanoidMuscleCurves)
             {
                 if (pair.Key < 0 || pair.Key >= pose.muscles.Length || pair.Value == null)
@@ -7521,7 +7241,7 @@ namespace Fbx2Vmd.FBXImporter
                 return Vector3.zero;
             }
 
-            float time = GetLegacyAnimationTime();
+            float time = _legacyAnimationDriver.CurrentTime;
             Vector3 current = SampleEditorRootTranslation(time);
             if (!IsFinite(current))
             {
@@ -10012,12 +9732,7 @@ namespace Fbx2Vmd.FBXImporter
             _groundingInitialized = false;
             _hasFrozenGroundingRootY = false;
             _frozenGroundingRootY = 0f;
-            _hasPreviousLegacyAnimationTime = false;
-            _previousLegacyAnimationTime = 0f;
-            _lastLegacyAnimationStep = float.NaN;
-            _maxLegacyAnimationStep = 0f;
-            _legacyAnimationStepSpikeCount = 0;
-            _legacyAnimationStepSpikeThisFrame = false;
+            _legacyAnimationDriver.ResetStabilityMetrics();
             _hasPreviousVisualPose = false;
             _poseVisualSmoothingCount = 0;
             _poseVisualMuscleDeltaOnlySkippedCount = 0;
