@@ -1997,30 +1997,6 @@ namespace Fbx2Vmd.FBXImporter
             return coversFullReferenceDuration && coversFullReferenceFrames;
         }
 
-        internal static float ResolveVmdRecordingPlaybackSpeed(float configuredPlaybackSpeed)
-        {
-            if (configuredPlaybackSpeed <= 0f ||
-                float.IsNaN(configuredPlaybackSpeed) ||
-                float.IsInfinity(configuredPlaybackSpeed))
-            {
-                return 1f;
-            }
-
-            return Mathf.Max(0.0001f, configuredPlaybackSpeed);
-        }
-
-        internal static float ResolveRecordingLengthForPlaybackSpeed(float clipLengthSeconds, float playbackSpeed)
-        {
-            if (clipLengthSeconds <= 0f ||
-                float.IsNaN(clipLengthSeconds) ||
-                float.IsInfinity(clipLengthSeconds))
-            {
-                return 0f;
-            }
-
-            return clipLengthSeconds / ResolveVmdRecordingPlaybackSpeed(playbackSpeed);
-        }
-
         private struct BooleanFieldSnapshot
         {
             public object Target;
