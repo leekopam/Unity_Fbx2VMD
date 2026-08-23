@@ -20,7 +20,6 @@ namespace Fbx2Vmd.FBXImporter
     {
         internal const string IMPORT_FBX_FOLDER = "Import_FBX";
         internal const string FBX_EXTENSION = "fbx";
-        private const string BONE_MAPPING_FILE = "BoneMapping_Data.txt";
         private const float GHOST_CONTAINER_SCALE = 0.01f;
         private const float THUMB_PROXIMAL_SAFE_MAX_LOCAL_ANGLE = 30f;
         private const float DEFAULT_THUMB_STRETCH_OFFSET = -0.1f;
@@ -2100,14 +2099,7 @@ namespace Fbx2Vmd.FBXImporter
                 SetSessionState(FBXSessionState.Copied, $"복제 완료: {Path.GetFileName(targetPath)}", 0.15f);
 
 #if UNITY_EDITOR
-                if (ShouldConfigureEditorImportSettings(sourcePath, targetPath, Application.dataPath))
-                {
-                    ConfigureImportSettings(targetPath);
-                }
-                else
-                {
-                    Debug.Log($"[FBXImport] 제어된 Import_FBX 가져오기 설정 유지됨. 경로={targetPath}");
-                }
+                _importController.ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath);
 #endif
 
                 SetSessionState(FBXSessionState.LoadingFbx, "FBX 로드 중", 0.25f);
@@ -3027,7 +3019,7 @@ namespace Fbx2Vmd.FBXImporter
             var mapping = new Dictionary<string, string>();
 
             // Resources 폴더에서 로드 (확장자 .txt 제외)
-            string loadName = Path.GetFileNameWithoutExtension(BONE_MAPPING_FILE);
+            string loadName = Path.GetFileNameWithoutExtension(FBXImportController.BONE_MAPPING_FILE);
             TextAsset mappingAsset = Resources.Load<TextAsset>(loadName);
 
             if (mappingAsset != null)
@@ -3214,8 +3206,8 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string ResolveEditorHumanoidReferencePath(string importedFilePath, string sourceFilePath)
         {
-            string sourceRelativePath = ToAssetRelativePath(sourceFilePath);
-            string importedRelativePath = ToAssetRelativePath(importedFilePath);
+            string sourceRelativePath = FBXImportController.ToAssetRelativePath(sourceFilePath, Application.dataPath);
+            string importedRelativePath = FBXImportController.ToAssetRelativePath(importedFilePath, Application.dataPath);
             string sourceFileName = string.IsNullOrEmpty(sourceFilePath) ? importedFilePath : sourceFilePath;
             return ResolveEditorHumanoidReferencePath(
                 importedRelativePath,
@@ -3230,7 +3222,7 @@ namespace Fbx2Vmd.FBXImporter
             string sourceFileName,
             Func<string, bool> hasHumanoidAnimationClip)
         {
-            if (!IsControlledImportAssetPath(sourceRelativePath) && hasHumanoidAnimationClip(sourceRelativePath))
+            if (!FBXImportController.IsControlledImportAssetPath(sourceRelativePath) && hasHumanoidAnimationClip(sourceRelativePath))
             {
                 return sourceRelativePath;
             }
@@ -3246,33 +3238,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return hasHumanoidAnimationClip(importedRelativePath) ? importedRelativePath : "";
-        }
-
-        private static bool IsControlledImportAssetPath(string relativePath)
-        {
-            return !string.IsNullOrEmpty(relativePath)
-                && relativePath.Replace("\\", "/").StartsWith($"Assets/Resources/{IMPORT_FBX_FOLDER}/", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool ShouldConfigureEditorImportSettings(string sourcePath, string targetPath, string dataPath)
-        {
-            if (string.IsNullOrWhiteSpace(targetPath))
-            {
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(sourcePath))
-            {
-                return true;
-            }
-
-            if (!PathsEqual(sourcePath, targetPath))
-            {
-                return true;
-            }
-
-            string targetRelativePath = ToAssetRelativePath(targetPath, dataPath);
-            return !IsControlledImportAssetPath(targetRelativePath);
         }
 
         private static bool HasEditorHumanoidAnimationClip(string relativePath)
@@ -3305,350 +3270,6 @@ namespace Fbx2Vmd.FBXImporter
             return null;
         }
 
-        private static string ToAssetRelativePath(string filePath)
-        {
-            return ToAssetRelativePath(filePath, Application.dataPath);
-        }
-
-        private static string ToAssetRelativePath(string filePath, string dataPath)
-        {
-            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(dataPath))
-            {
-                return "";
-            }
-
-            string standardizedFilePath = filePath.Replace("\\", "/");
-            string standardizedDataPath = dataPath.Replace("\\", "/");
-
-            if (!standardizedFilePath.StartsWith(standardizedDataPath, StringComparison.OrdinalIgnoreCase))
-            {
-                return "";
-            }
-
-            return "Assets" + standardizedFilePath[standardizedDataPath.Length..];
-        }
-
-        private static bool PathsEqual(string left, string right)
-        {
-            try
-            {
-                return string.Equals(
-                    Path.GetFullPath(left),
-                    Path.GetFullPath(right),
-                    StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        private void ConfigureImportSettings(string filePath)
-        {
-            // 절대 경로를 "Assets/..." 상대 경로로 변환
-            string standardizedFilePath = filePath.Replace("\\", "/");
-            string standardizedDataPath = Application.dataPath.Replace("\\", "/");
-
-            if (!standardizedFilePath.StartsWith(standardizedDataPath))
-            {
-                Debug.LogError($"파일 경로가 Assets 폴더 내에 있지 않습니다: {filePath}");
-                return;
-            }
-
-            string relativePath = "Assets" + standardizedFilePath[standardizedDataPath.Length..];
-
-            // FBX 파일 Import (기본 설정으로)
-            Debug.Log($"[1단계] FBX Import 시작: {relativePath}");
-            UnityEditor.AssetDatabase.ImportAsset(relativePath, UnityEditor.ImportAssetOptions.ForceUpdate);
-
-            // FBX 정보 가져오기
-            Debug.Log($"[2단계] FBX 정보 가져오기");
-            UnityEditor.ModelImporter importer = UnityEditor.AssetImporter.GetAtPath(relativePath) as UnityEditor.ModelImporter;
-            if (importer == null)
-            {
-                Debug.LogError($"[2단계 실패] ModelImporter를 가져올 수 없습니다: {relativePath}");
-                return;
-            }
-
-            Debug.Log($"[2단계 완료] ModelImporter 정보:");
-            Debug.Log($"  - 현재 Animation Type: {importer.animationType}");
-            Debug.Log($"  - 현재 Import Animation: {importer.importAnimation}");
-            Debug.Log($"  - 현재 Optimize Bones: {importer.optimizeBones}");
-
-            Debug.Log($"[3단계] Rig 설정 적용 중...");
-
-            // Animation Import 활성화
-            importer.importAnimation = true;
-            importer.animationCompression = UnityEditor.ModelImporterAnimationCompression.Off;
-
-            // Animation Type = Humanoid
-            importer.animationType = UnityEditor.ModelImporterAnimationType.Human;
-
-            // Avatar Definition = "Create From This Model"
-            // Avatar를 모델에서 생성하도록 명시적 설정 (AnimationClip 보존을 위해 필수)
-            importer.avatarSetup = UnityEditor.ModelImporterAvatarSetup.CreateFromThisModel;
-
-            // Strip Bones 해제 (Optimize Game Objects 아님)
-            importer.optimizeBones = false;
-            try
-            {
-                // SerializedObject를 사용하여 "optimizeBones" 또는 관련 속성 해제
-                UnityEditor.SerializedObject serializedImporter = new UnityEditor.SerializedObject(importer);
-                serializedImporter.Update();
-
-                // 가능한 내부 속성명들 (m_OptimizeBones 등)
-                string[] propNames = new string[] { "m_OptimizeBones", "optimizeBones" };
-                bool found = false;
-
-                foreach (string name in propNames)
-                {
-                    UnityEditor.SerializedProperty prop = serializedImporter.FindProperty(name);
-                    if (prop != null && prop.propertyType == UnityEditor.SerializedPropertyType.Boolean)
-                    {
-                        prop.boolValue = false;
-                        found = true;
-                        Debug.Log($"[Strip Bones Fix] SerializedObject를 통해 '{name}' 비활성화 성공");
-                    }
-                }
-
-                if (found)
-                {
-                    serializedImporter.ApplyModifiedProperties();
-                }
-                else
-                {
-                    Debug.LogWarning("[Strip Bones Fix] 'optimizeBones' 관련 속성을 찾지 못했습니다.");
-                }
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"[Strip Bones Fix] 오류: {e.Message}");
-            }
-
-            // AnimationCompression 추가 설정
-            importer.animationWrapMode = WrapMode.ClampForever; // Once: 재생 후 초기화, ClampForever: 마지막 프레임 유지
-            importer.importBlendShapes = true;
-            importer.importVisibility = true;
-            importer.importCameras = false;
-            importer.importLights = false;
-
-            // Bone Mapping 적용
-            Debug.Log($"[3단계] Bone Mapping 적용 시작");
-
-            string mappingFilePath = Path.Combine(Application.dataPath, "Resources", BONE_MAPPING_FILE);
-            if (File.Exists(mappingFilePath))
-            {
-                var mappingDict = ParseBoneMappingFile(mappingFilePath);
-                if (mappingDict != null && mappingDict.Count > 0)
-                {
-                    Debug.Log($"[3단계] Bone Mapping 파일 파싱 완료: {mappingDict.Count}개 매핑");
-
-                    HumanDescription description = importer.humanDescription;
-
-                    // Human Bones 설정
-                    List<HumanBone> humanBones = new List<HumanBone>();
-                    foreach (var kvp in mappingDict)
-                    {
-                        HumanBone bone = new HumanBone
-                        {
-                            humanName = HumanoidAvatarBuilder.NormalizeHumanBoneName(kvp.Key),
-                            boneName = kvp.Value
-                        };
-                        bone.limit.useDefaultValues = true;
-                        humanBones.Add(bone);
-                    }
-                    description.human = humanBones.ToArray();
-
-                    // Skeleton 배열도 설정
-                    List<SkeletonBone> skeletonBones = new List<SkeletonBone>();
-                    var allTransformPaths = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(relativePath)
-                        .OfType<UnityEngine.Transform>();
-
-                    foreach (var transform in allTransformPaths)
-                    {
-                        if (transform != null)
-                        {
-                            SkeletonBone skelBone = new SkeletonBone
-                            {
-                                name = transform.name,
-                                position = transform.localPosition,
-                                rotation = transform.localRotation,
-                                scale = transform.localScale
-                            };
-                            skeletonBones.Add(skelBone);
-                        }
-                    }
-
-                    if (skeletonBones.Count > 0)
-                    {
-                        description.skeleton = skeletonBones.ToArray();
-                        Debug.Log($"[3단계] Skeleton 배열 설정: {skeletonBones.Count}개 본");
-                    }
-
-                    importer.humanDescription = description;
-
-                    Debug.Log($"[3단계] Bone Mapping 적용: {humanBones.Count}개 본");
-                }
-                else
-                {
-                    Debug.LogWarning($"[3단계] Bone Mapping 데이터가 비어있습니다.");
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[3단계] Bone Mapping 파일을 찾을 수 없습니다: {mappingFilePath}");
-            }
-
-            // Animation Clip 추출 설정
-            Debug.Log($"[3단계] Animation Clip 추출 시작");
-
-            if (importer.defaultClipAnimations != null && importer.defaultClipAnimations.Length > 0)
-            {
-                // 기본 클립을 custom clipAnimations 없이 사용
-                // custom clipAnimations는 bodyMask를 저장하며 손가락 muscle curve를 0으로 만들 수 있다.
-                // 수동 기준처럼 기본 Humanoid clip을 그대로 쓰기 위해 명시 clip 설정을 비운다.
-                importer.clipAnimations = Array.Empty<UnityEditor.ModelImporterClipAnimation>();
-                Debug.Log($"[3단계] Animation Clip 추출: {importer.defaultClipAnimations.Length}개");
-
-                foreach (var clip in importer.defaultClipAnimations)
-                {
-                    Debug.Log($"  - Clip: {clip.name} (Start: {clip.firstFrame}, End: {clip.lastFrame})");
-                }
-            }
-            else
-            {
-                Debug.LogWarning("[3단계] defaultClipAnimations가 비어있습니다. 자동 경로에서는 임의 Take 001을 만들지 않습니다.");
-                importer.clipAnimations = Array.Empty<UnityEditor.ModelImporterClipAnimation>();
-            }
-
-            Debug.Log($"[3단계 완료] 최종 설정:");
-            Debug.Log($"  - Animation Type: Humanoid");
-            Debug.Log($"  - Import Animation: {importer.importAnimation}");
-            Debug.Log($"  - Optimize Game Objects (Strip Bones): {importer.optimizeGameObjects}");
-            Debug.Log($"  - Bone Mapping: 적용 완료");
-            Debug.Log($"  - Animation Clips: {(importer.clipAnimations != null ? importer.clipAnimations.Length : 0)}개");
-
-            // 최종 저장 및 Reimport (한 번만!)
-            UnityEditor.AssetDatabase.WriteImportSettingsIfDirty(relativePath);
-            UnityEditor.AssetDatabase.SaveAssets();
-            UnityEditor.AssetDatabase.ImportAsset(relativePath, UnityEditor.ImportAssetOptions.ForceUpdate);
-
-            Debug.Log($"[3단계] 최종 Reimport 완료");
-            Debug.Log($"===========================================");
-        }
-
-        #region Editor 전용: Bone Mapping 파싱
-
-        /// <summary>
-        /// BoneMapping_Data.txt 파일을 읽어서 ModelImporter에 HumanDescription으로 적용
-        /// </summary>
-        private void ApplyBoneMapping(UnityEditor.ModelImporter importer)
-        {
-            try
-            {
-                string mappingFilePath = Path.Combine(Application.dataPath, "Resources", BONE_MAPPING_FILE);
-                if (!File.Exists(mappingFilePath))
-                {
-                    Debug.LogWarning($"Bone Mapping 파일을 찾을 수 없습니다: {mappingFilePath}");
-                    return;
-                }
-
-                // 파일 읽기 및 파싱
-                var mappingDict = ParseBoneMappingFile(mappingFilePath);
-                if (mappingDict.Count == 0)
-                {
-                    Debug.LogWarning("Bone Mapping 데이터가 비어있습니다.");
-                    return;
-                }
-
-                Debug.Log($"[Editor Only] Bone Mapping 파일 파싱 완료: {mappingDict.Count}개 매핑 발견");
-
-                // 기존 HumanDescription 가져오기 (새로 생성할 경우 기본값 사용)
-                HumanDescription description = importer.humanDescription;
-
-                // HumanBone 배열 생성
-                List<HumanBone> humanBones = new List<HumanBone>();
-                foreach (var kvp in mappingDict)
-                {
-                    HumanBone bone = new HumanBone
-                    {
-                        humanName = HumanoidAvatarBuilder.NormalizeHumanBoneName(kvp.Key),      // Unity Humanoid bone name (e.g., "Hips")
-                        boneName = kvp.Value      // Actual bone name in FBX (e.g., "Skeleton_Hips")
-                    };
-
-                    // Limit 설정은 기본값 사용
-                    bone.limit.useDefaultValues = true;
-
-                    humanBones.Add(bone);
-                }
-
-                // HumanDescription 업데이트
-                description.human = humanBones.ToArray();
-
-                // Skeleton 설정: 보통은 모든 Transform을 포함하도록 비워두거나,
-                // 필요한 경우 특정 본만 지정할 수 있음 (일단 기본 설정 유지)
-                // description.skeleton = ... (필요시 설정)
-
-                // 새로운 HumanDescription 적용
-                importer.humanDescription = description;
-
-                Debug.Log($"[Editor Only] Bone Mapping 적용 완료: {humanBones.Count}개 본 매핑됨");
-
-                // 매핑된 본 목록 출력 (디버그용)
-                foreach (var bone in humanBones)
-                {
-                    Debug.Log($"  - {bone.humanName} -> {bone.boneName}");
-                }
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"Bone Mapping 적용 중 오류 발생: {e.Message}\n{e.StackTrace}");
-            }
-        }
-
-        /// <summary>
-        /// YAML 형식의 BoneMapping_Data.txt 파싱
-        /// </summary>
-        private Dictionary<string, string> ParseBoneMappingFile(string path)
-        {
-            var mapping = new Dictionary<string, string>();
-            string[] lines = File.ReadAllLines(path);
-            bool insideBoneTemplate = false;
-
-            foreach (string line in lines)
-            {
-                string trimmedLine = line.Trim();
-
-                // m_BoneTemplate 섹션 시작 확인
-                if (trimmedLine.StartsWith("m_BoneTemplate:"))
-                {
-                    insideBoneTemplate = true;
-                    continue;
-                }
-
-                // 섹션이 끝나거나 다른 속성이 나오면 중단
-                if (insideBoneTemplate)
-                {
-                    if (trimmedLine.StartsWith("m_")) break; // 다른 속성 시작
-
-                    // "HumanBoneName: ActualBoneName" 형식 파싱
-                    int colonIndex = trimmedLine.IndexOf(':');
-                    if (colonIndex > 0)
-                    {
-                        string key = trimmedLine[..colonIndex].Trim();
-                        string value = trimmedLine[(colonIndex + 1)..].Trim();
-
-                        // 값이 비어있지 않은 경우에만 추가
-                        if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value))
-                        {
-                            mapping[key] = value;
-                        }
-                    }
-                }
-            }
-            return mapping;
-        }
-        #endregion
 #endif
 
         // 힙 높이 측정
