@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -231,6 +232,60 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return visualTwistGuard;
+        }
+
+        internal void ConfigureArmDeformationGuard(
+            GameObject targetObject,
+            HumanoidArmTwistRiggingGuard twistRiggingGuard,
+            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard,
+            HumanoidArmVisualTwistGuard visualTwistGuard)
+        {
+            if (!_pipeline.attachTargetArmDeformationGuard || targetObject == null)
+            {
+                return;
+            }
+
+            HumanoidArmDeformationGuard guard =
+                targetObject.GetComponent<HumanoidArmDeformationGuard>();
+            if (guard == null)
+            {
+                guard = targetObject.AddComponent<HumanoidArmDeformationGuard>();
+            }
+
+            guard.Configure(new ArmDeformationSettings(
+                clampMusclesToHumanRange: false,
+                enableAnatomicalArmGuard: _pipeline.targetGuardClampAnatomicalArmMuscles,
+                stretchMuscleLimit: _pipeline.ArmStretchMuscleLimit,
+                upperArmTwistMuscleLimit: _pipeline.UpperArmTwistMuscleLimit,
+                lowerArmTwistMuscleLimit: _pipeline.LowerArmTwistMuscleLimit,
+                lockHumanoidBonePositions: _pipeline.ShouldLockTargetHumanoidBonePositions,
+                logCorrections: _pipeline.logArmDeformationGuardCorrections,
+                clampArmStretchMuscles: _pipeline.targetGuardClampArmStretchMuscles,
+                lockLimbChildLocalPositions: _pipeline.lockTargetLimbChildLocalPositions,
+                lockLimbChildLocalRotations: _pipeline.lockTargetLimbChildLocalRotations));
+            guard.SetLimbChildRotationExclusions(BuildLimbChildRotationExclusions(
+                twistRiggingGuard?.ControlledTransforms,
+                sleeveAnchorGuard?.ControlledTransforms,
+                visualTwistGuard?.ControlledTransforms));
+            guard.enabled = true;
+            guard.RecaptureBaseline();
+        }
+
+        private static IEnumerable<Transform> BuildLimbChildRotationExclusions(
+            params IEnumerable<Transform>[] controlledTransformGroups)
+        {
+            foreach (IEnumerable<Transform> controlledTransforms in controlledTransformGroups)
+            {
+                if (controlledTransforms == null)
+                {
+                    continue;
+                }
+
+                foreach (Transform controlledTransform in controlledTransforms)
+                {
+                    yield return controlledTransform;
+                }
+            }
         }
 
         /// <summary>

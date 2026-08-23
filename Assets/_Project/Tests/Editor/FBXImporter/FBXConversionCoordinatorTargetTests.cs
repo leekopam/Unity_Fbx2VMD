@@ -134,6 +134,68 @@ namespace Tests.Editor.FBXImporter
             Assert.That(pipelineMethod, Is.Null);
         }
 
+        [Test]
+        public void Given_ArmDeformationGuardAssembly_When_InspectingOwnership_Then_CoordinatorOwnsIt()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureArmDeformationGuard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineConfigureMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ConfigureTargetArmDeformationGuard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineExclusionMethod = typeof(FBXVmdPipeline).GetMethod(
+                "BuildLimbChildRotationExclusions",
+                BindingFlags.Static | BindingFlags.NonPublic);
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineConfigureMethod, Is.Null);
+            Assert.That(pipelineExclusionMethod, Is.Null);
+        }
+
+        [Test]
+        public void Given_DefaultPipelineSettings_When_ConfiguringArmDeformationGuard_Then_AppliesSettings()
+        {
+            GameObject pipelineObject = new GameObject("Pipeline");
+            GameObject targetObject = new GameObject("TargetWithDeformationGuard");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                var coordinator = new FBXConversionCoordinator(pipeline);
+
+                ConfigureArmDeformationGuard(coordinator, targetObject);
+
+                HumanoidArmDeformationGuard guard =
+                    targetObject.GetComponent<HumanoidArmDeformationGuard>();
+                Assert.That(guard, Is.Not.Null);
+                Assert.That(guard.enabled, Is.True);
+                Assert.That(guard.clampMusclesToHumanRange, Is.False);
+                Assert.That(
+                    guard.enableAnatomicalArmGuard,
+                    Is.EqualTo(pipeline.targetGuardClampAnatomicalArmMuscles));
+                Assert.That(
+                    guard.clampArmStretchMuscles,
+                    Is.EqualTo(pipeline.targetGuardClampArmStretchMuscles));
+                Assert.That(guard.armStretchMuscleLimit, Is.EqualTo(pipeline.ArmStretchMuscleLimit));
+                Assert.That(guard.upperArmTwistMuscleLimit, Is.EqualTo(pipeline.UpperArmTwistMuscleLimit));
+                Assert.That(guard.lowerArmTwistMuscleLimit, Is.EqualTo(pipeline.LowerArmTwistMuscleLimit));
+                Assert.That(
+                    guard.lockHumanoidBonePositions,
+                    Is.EqualTo(pipeline.ShouldLockTargetHumanoidBonePositions));
+                Assert.That(
+                    guard.lockLimbChildLocalPositions,
+                    Is.EqualTo(pipeline.lockTargetLimbChildLocalPositions));
+                Assert.That(
+                    guard.lockLimbChildLocalRotations,
+                    Is.EqualTo(pipeline.lockTargetLimbChildLocalRotations));
+                Assert.That(guard.logCorrections, Is.EqualTo(pipeline.logArmDeformationGuardCorrections));
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,
@@ -169,6 +231,19 @@ namespace Tests.Editor.FBXImporter
                 ghostAnimator
             };
             return (HumanoidArmDirectionRetargetGuard)method.Invoke(coordinator, arguments);
+        }
+
+        private void ConfigureArmDeformationGuard(
+            FBXConversionCoordinator coordinator,
+            GameObject targetObject)
+        {
+            MethodInfo method = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureArmDeformationGuard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+
+            object[] arguments = { targetObject, null, null, null };
+            method.Invoke(coordinator, arguments);
         }
     }
 }
