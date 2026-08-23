@@ -3127,7 +3127,8 @@ namespace Fbx2Vmd.FBXImporter
                 targetAnimator);
             HumanoidArmSleeveAnchorGuard sleeveAnchorGuard =
                 _conversionCoordinator.ConfigureArmSleeveAnchorGuard(targetObject, targetAnimator);
-            HumanoidArmVisualTwistGuard visualTwistGuard = ConfigureTargetArmVisualTwistCorrection(targetObject, targetAnimator);
+            HumanoidArmVisualTwistGuard visualTwistGuard =
+                _conversionCoordinator.ConfigureArmVisualTwistGuard(targetObject, targetAnimator);
             ConfigureTargetArmDeformationGuard(targetObject, BuildLimbChildRotationExclusions(twistRiggingGuard, sleeveAnchorGuard, visualTwistGuard));
 
             // Batch smoke can leave detached thumb helpers visually drifted until the next frame.
@@ -3444,49 +3445,6 @@ namespace Fbx2Vmd.FBXImporter
                     yield return controlledTransform;
                 }
             }
-        }
-
-        private HumanoidArmVisualTwistGuard ConfigureTargetArmVisualTwistCorrection(GameObject targetObject, Animator targetAnimator)
-        {
-            if (targetObject == null)
-            {
-                return null;
-            }
-
-            HumanoidArmVisualTwistGuard visualTwistGuard = targetObject.GetComponent<HumanoidArmVisualTwistGuard>();
-            if (!enableYybArmVisualTwistCorrection)
-            {
-                if (visualTwistGuard != null)
-                {
-                    visualTwistGuard.DisableCorrection();
-                    visualTwistGuard.enabled = false;
-                }
-
-                return null;
-            }
-
-            if (visualTwistGuard == null)
-            {
-                visualTwistGuard = targetObject.AddComponent<HumanoidArmVisualTwistGuard>();
-            }
-
-            visualTwistGuard.enableVisualTwistGuard = true;
-            visualTwistGuard.enabled = true;
-            bool configured = visualTwistGuard.Configure(
-                targetAnimator,
-                YybArmVisualUpperArmInfluence,
-                YybArmVisualForearmInfluence,
-                YybArmVisualUpperArmMaxDegrees,
-                YybArmVisualForearmMaxDegrees,
-                logYybArmVisualTwistCorrection);
-
-            if (!configured)
-            {
-                visualTwistGuard.enabled = false;
-                return null;
-            }
-
-            return visualTwistGuard;
         }
 
         private void DisableMmdPostPoseCorrectionForRetarget(GameObject targetObject)
