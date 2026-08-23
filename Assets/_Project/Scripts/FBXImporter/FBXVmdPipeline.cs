@@ -2477,7 +2477,7 @@ namespace Fbx2Vmd.FBXImporter
 
             FBXConversionCoordinator.RemoveLegacyIkControl(targetObject);
 
-            ConfigureFinalIkFootGroundingExperiment(targetObject);
+            _conversionCoordinator.ConfigureFinalIkFootGroundingExperiment(targetObject);
         }
 
         /// Legacy reflection entry point for FBXVmdPipelineEditorSmokePathTests.
@@ -2485,79 +2485,6 @@ namespace Fbx2Vmd.FBXImporter
         internal static bool ShouldApplyTargetIdlePoseGuardThisFrame(bool isProcessing, bool hasActiveRetargeter)
         {
             return !isProcessing && !hasActiveRetargeter;
-        }
-
-        private void ConfigureFinalIkFootGroundingExperiment(GameObject targetObject)
-        {
-            if (targetObject == null)
-            {
-                return;
-            }
-
-            GrounderBipedIK existingGrounder = targetObject.GetComponent<GrounderBipedIK>();
-            BipedIK existingBipedIk = targetObject.GetComponent<BipedIK>();
-            if (!enableFinalIkFootGroundingExperiment)
-            {
-                if (existingGrounder != null)
-                {
-                    existingGrounder.weight = 0f;
-                    existingGrounder.enabled = false;
-                }
-
-                if (existingBipedIk != null)
-                {
-                    existingBipedIk.fixTransforms = false;
-                    existingBipedIk.enabled = false;
-                }
-
-                return;
-            }
-
-            BipedIK bipedIk = existingBipedIk;
-            if (bipedIk == null)
-            {
-                bipedIk = targetObject.AddComponent<BipedIK>();
-            }
-
-            Animator animator = targetObject.GetComponent<Animator>();
-            if (animator != null && animator.isHuman)
-            {
-                BipedReferences references = bipedIk.references;
-                BipedReferences.AutoDetectReferences(
-                    ref references,
-                    targetObject.transform,
-                    BipedReferences.AutoDetectParams.Default);
-                bipedIk.references = references;
-            }
-
-            bipedIk.SetToDefaults();
-            bipedIk.fixTransforms = true;
-            bipedIk.enabled = true;
-
-            GrounderBipedIK grounder = existingGrounder;
-            if (grounder == null)
-            {
-                grounder = targetObject.AddComponent<GrounderBipedIK>();
-            }
-
-            grounder.ik = bipedIk;
-            grounder.weight = Mathf.Clamp(finalIkFootGroundingWeight, 0f, 0.25f);
-            grounder.spineBend = 0f;
-            grounder.spineSpeed = 0f;
-            grounder.solver.maxStep = Mathf.Clamp(finalIkFootGroundingMaxStep, 0f, 0.08f);
-            grounder.solver.footRadius = Mathf.Clamp(finalIkFootGroundingFootRadius, 0.01f, 0.2f);
-            grounder.solver.prediction = Mathf.Clamp(finalIkFootGroundingPrediction, 0f, 0.2f);
-            grounder.solver.footRotationWeight = Mathf.Clamp01(finalIkFootGroundingFootRotationWeight);
-            grounder.solver.pelvisDamper = Mathf.Clamp01(finalIkFootGroundingPelvisDamper);
-            grounder.enabled = grounder.weight > 0f;
-
-            if (logFinalIkFootGroundingExperiment)
-            {
-                Debug.Log(
-                    $"[FBXImport] Final IK foot grounding experiment configured: " +
-                    $"weight={grounder.weight:F3}, maxStep={grounder.solver.maxStep:F3}, " +
-                    $"footRadius={grounder.solver.footRadius:F3}");
-            }
         }
 
         private void ConfigureTargetThumbDeformationGuard(

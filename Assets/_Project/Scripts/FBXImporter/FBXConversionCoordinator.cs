@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 using Fbx2Vmd.Character;
+using RootMotion;
+using RootMotion.FinalIK;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -211,6 +213,79 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return null;
+        }
+
+        internal void ConfigureFinalIkFootGroundingExperiment(GameObject targetObject)
+        {
+            if (targetObject == null)
+            {
+                return;
+            }
+
+            GrounderBipedIK existingGrounder = targetObject.GetComponent<GrounderBipedIK>();
+            BipedIK existingBipedIk = targetObject.GetComponent<BipedIK>();
+            if (!_pipeline.enableFinalIkFootGroundingExperiment)
+            {
+                if (existingGrounder != null)
+                {
+                    existingGrounder.weight = 0f;
+                    existingGrounder.enabled = false;
+                }
+
+                if (existingBipedIk != null)
+                {
+                    existingBipedIk.fixTransforms = false;
+                    existingBipedIk.enabled = false;
+                }
+
+                return;
+            }
+
+            BipedIK bipedIk = existingBipedIk;
+            if (bipedIk == null)
+            {
+                bipedIk = targetObject.AddComponent<BipedIK>();
+            }
+
+            Animator animator = targetObject.GetComponent<Animator>();
+            if (animator != null && animator.isHuman)
+            {
+                BipedReferences references = bipedIk.references;
+                BipedReferences.AutoDetectReferences(
+                    ref references,
+                    targetObject.transform,
+                    BipedReferences.AutoDetectParams.Default);
+                bipedIk.references = references;
+            }
+
+            bipedIk.SetToDefaults();
+            bipedIk.fixTransforms = true;
+            bipedIk.enabled = true;
+
+            GrounderBipedIK grounder = existingGrounder;
+            if (grounder == null)
+            {
+                grounder = targetObject.AddComponent<GrounderBipedIK>();
+            }
+
+            grounder.ik = bipedIk;
+            grounder.weight = Mathf.Clamp(_pipeline.finalIkFootGroundingWeight, 0f, 0.25f);
+            grounder.spineBend = 0f;
+            grounder.spineSpeed = 0f;
+            grounder.solver.maxStep = Mathf.Clamp(_pipeline.finalIkFootGroundingMaxStep, 0f, 0.08f);
+            grounder.solver.footRadius = Mathf.Clamp(_pipeline.finalIkFootGroundingFootRadius, 0.01f, 0.2f);
+            grounder.solver.prediction = Mathf.Clamp(_pipeline.finalIkFootGroundingPrediction, 0f, 0.2f);
+            grounder.solver.footRotationWeight = Mathf.Clamp01(_pipeline.finalIkFootGroundingFootRotationWeight);
+            grounder.solver.pelvisDamper = Mathf.Clamp01(_pipeline.finalIkFootGroundingPelvisDamper);
+            grounder.enabled = grounder.weight > 0f;
+
+            if (_pipeline.logFinalIkFootGroundingExperiment)
+            {
+                Debug.Log(
+                    $"[FBXImport] Final IK foot grounding experiment configured: " +
+                    $"weight={grounder.weight:F3}, maxStep={grounder.solver.maxStep:F3}, " +
+                    $"footRadius={grounder.solver.footRadius:F3}");
+            }
         }
 
         internal HumanoidArmTwistRiggingGuard ConfigureArmTwistRiggingGuard(
