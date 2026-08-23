@@ -3109,7 +3109,18 @@ namespace Fbx2Vmd.FBXImporter
             targetAnimator.runtimeAnimatorController = null;
             DisableMmdPostPoseCorrectionForRetarget(targetObject);
             HumanoidArmTwistRiggingGuard twistRiggingGuard = ConfigureTargetAnimationRiggingArmTwistCorrection(targetObject, targetAnimator);
-            ConfigureTargetArmDirectionRetargetCorrection(targetObject, targetAnimator, ghostAnimator);
+            FBXConversionCoordinator.ConfigureArmDirectionGuard(
+                targetObject,
+                targetAnimator,
+                ghostAnimator,
+                enableYybArmDirectionRetargetCorrection,
+                YybArmDirectionUpperArmWeight,
+                YybArmDirectionForearmWeight,
+                YybArmDirectionUpperArmMaxDegrees,
+                YybArmDirectionForearmMaxDegrees,
+                YybArmDirectionLeftSideWeightScale,
+                YybArmDirectionRightSideWeightScale,
+                logYybArmDirectionRetargetCorrection);
             ConfigureTargetArmSwingLimitCorrection(targetObject, targetAnimator);
             HumanoidArmSleeveAnchorGuard sleeveAnchorGuard = ConfigureTargetArmSleeveAnchorCorrection(targetObject, targetAnimator);
             HumanoidArmVisualTwistGuard visualTwistGuard = ConfigureTargetArmVisualTwistCorrection(targetObject, targetAnimator);
@@ -3429,52 +3440,6 @@ namespace Fbx2Vmd.FBXImporter
                     yield return controlledTransform;
                 }
             }
-        }
-
-        private HumanoidArmDirectionRetargetGuard ConfigureTargetArmDirectionRetargetCorrection(GameObject targetObject, Animator targetAnimator, Animator ghostAnimator)
-        {
-            if (targetObject == null)
-            {
-                return null;
-            }
-
-            HumanoidArmDirectionRetargetGuard directionGuard = targetObject.GetComponent<HumanoidArmDirectionRetargetGuard>();
-            if (!enableYybArmDirectionRetargetCorrection)
-            {
-                if (directionGuard != null)
-                {
-                    directionGuard.DisableCorrection();
-                    directionGuard.enabled = false;
-                }
-
-                return null;
-            }
-
-            if (directionGuard == null)
-            {
-                directionGuard = targetObject.AddComponent<HumanoidArmDirectionRetargetGuard>();
-            }
-
-            directionGuard.enableDirectionRetarget = true;
-            directionGuard.enabled = true;
-            bool configured = directionGuard.Configure(
-                ghostAnimator,
-                targetAnimator,
-                YybArmDirectionUpperArmWeight,
-                YybArmDirectionForearmWeight,
-                YybArmDirectionUpperArmMaxDegrees,
-                YybArmDirectionForearmMaxDegrees,
-                YybArmDirectionLeftSideWeightScale,
-                YybArmDirectionRightSideWeightScale,
-                logYybArmDirectionRetargetCorrection);
-
-            if (!configured)
-            {
-                directionGuard.enabled = false;
-                return null;
-            }
-
-            return directionGuard;
         }
 
         private HumanoidArmSwingLimitGuard ConfigureTargetArmSwingLimitCorrection(GameObject targetObject, Animator targetAnimator)

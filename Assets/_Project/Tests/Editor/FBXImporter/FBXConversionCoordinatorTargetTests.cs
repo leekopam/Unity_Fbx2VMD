@@ -41,6 +41,33 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_DisabledArmDirectionCorrection_When_ConfiguringTargetGuard_Then_DisablesExistingGuard()
+        {
+            GameObject targetObject = new GameObject("TargetWithDirectionGuard");
+            try
+            {
+                HumanoidArmDirectionRetargetGuard existingGuard =
+                    targetObject.AddComponent<HumanoidArmDirectionRetargetGuard>();
+                existingGuard.enableDirectionRetarget = true;
+                existingGuard.enabled = true;
+
+                HumanoidArmDirectionRetargetGuard configuredGuard = ConfigureArmDirectionGuard(
+                    targetObject,
+                    targetAnimator: null,
+                    ghostAnimator: null,
+                    shouldEnable: false);
+
+                Assert.That(configuredGuard, Is.Null);
+                Assert.That(existingGuard.enableDirectionRetarget, Is.False);
+                Assert.That(existingGuard.enabled, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetObject);
+            }
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,
@@ -56,6 +83,34 @@ namespace Tests.Editor.FBXImporter
             targetAnimator = (Animator)arguments[1];
             errorMessage = (string)arguments[2];
             return resolved;
+        }
+
+        private HumanoidArmDirectionRetargetGuard ConfigureArmDirectionGuard(
+            GameObject targetObject,
+            Animator targetAnimator,
+            Animator ghostAnimator,
+            bool shouldEnable)
+        {
+            MethodInfo method = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureArmDirectionGuard",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+
+            object[] arguments =
+            {
+                targetObject,
+                targetAnimator,
+                ghostAnimator,
+                shouldEnable,
+                0.65f,
+                0.75f,
+                65f,
+                85f,
+                1f,
+                1f,
+                false
+            };
+            return (HumanoidArmDirectionRetargetGuard)method.Invoke(null, arguments);
         }
     }
 }
