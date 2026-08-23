@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Fbx2Vmd.Character;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -64,6 +65,47 @@ namespace Fbx2Vmd.FBXImporter
                 twistRiggingGuard,
                 sleeveAnchorGuard,
                 visualTwistGuard);
+        }
+
+        internal void PrepareTargetPlaybackState(
+            GameObject targetObject,
+            Animator targetAnimator,
+            bool shouldFaceTargetToCamera)
+        {
+            if (targetObject == null || targetAnimator == null)
+            {
+                return;
+            }
+
+            targetObject.transform.position = Vector3.zero;
+            if (shouldFaceTargetToCamera)
+            {
+                CameraFacingController.FaceTargetToCamera(targetObject, Camera.main);
+            }
+            else
+            {
+                targetObject.transform.rotation = Quaternion.identity;
+            }
+
+            targetAnimator.applyRootMotion = false;
+            targetAnimator.runtimeAnimatorController = null;
+        }
+
+        internal static void RemoveLegacyIkControl(GameObject targetObject)
+        {
+            if (targetObject == null)
+            {
+                return;
+            }
+
+            IKControl ikControl = targetObject.GetComponent<IKControl>();
+            if (ikControl == null)
+            {
+                return;
+            }
+
+            Debug.Log("[FBXImport] 자동 retarget 경로에서 IKControl을 제거합니다.");
+            UnityEngine.Object.Destroy(ikControl);
         }
 
         internal HumanoidArmTwistRiggingGuard ConfigureArmTwistRiggingGuard(

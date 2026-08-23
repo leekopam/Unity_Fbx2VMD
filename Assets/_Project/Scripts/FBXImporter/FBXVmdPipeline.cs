@@ -2467,17 +2467,10 @@ namespace Fbx2Vmd.FBXImporter
 
         private void PrepareTargetCharacter(GameObject targetObject, Animator targetAnimator, Animator ghostAnimator)
         {
-            targetObject.transform.position = Vector3.zero;
-            if (_idlePoseGuard != null && _idlePoseGuard.ShouldFaceTargetToCameraOnIdle)
-            {
-                CameraFacingController.FaceTargetToCamera(targetObject, Camera.main);
-            }
-            else
-            {
-                targetObject.transform.rotation = Quaternion.identity;
-            }
-            targetAnimator.applyRootMotion = false;
-            targetAnimator.runtimeAnimatorController = null;
+            _conversionCoordinator.PrepareTargetPlaybackState(
+                targetObject,
+                targetAnimator,
+                _idlePoseGuard != null && _idlePoseGuard.ShouldFaceTargetToCameraOnIdle);
             DisableMmdPostPoseCorrectionForRetarget(targetObject);
             _conversionCoordinator.ConfigureTargetRetargetGuards(
                 targetObject,
@@ -2495,12 +2488,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 #endif
 
-            IKControl ikControl = targetObject.GetComponent<IKControl>();
-            if (ikControl != null)
-            {
-                Debug.Log("[FBXImport] 자동 retarget 경로에서 IKControl을 제거합니다.");
-                Destroy(ikControl);
-            }
+            FBXConversionCoordinator.RemoveLegacyIkControl(targetObject);
 
             ConfigureFinalIkFootGroundingExperiment(targetObject);
         }
