@@ -454,6 +454,16 @@ namespace Tests.Editor.FBXImporter
             Assert.That(resetMethodSource, Does.Not.Contain("targetCharacter.GetComponent<HumanoidThumbDeformationGuard>()"));
         }
 
+        [Test]
+        public void Given_UnusedPipelineHelpers_When_CheckingGodClassSurface_Then_LegacyMethodsAreAbsent()
+        {
+            const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+
+            Assert.That(typeof(FBXVmdPipeline).GetMethod("ValidateBoneMapping", privateInstance), Is.Null);
+            Assert.That(typeof(FBXVmdPipeline).GetMethod("SetupGhostRetargeting", privateInstance), Is.Null);
+            Assert.That(typeof(FBXVmdPipeline).GetMethod("GetHipsHeight", privateInstance), Is.Null);
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,

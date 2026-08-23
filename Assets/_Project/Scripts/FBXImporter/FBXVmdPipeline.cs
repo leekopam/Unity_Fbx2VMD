@@ -11,8 +11,6 @@ using Fbx2Vmd.FileSystem;
 using Fbx2Vmd.Settings;
 using Fbx2Vmd.Recording;
 using Fbx2Vmd.Character;
-using RootMotion;
-using RootMotion.FinalIK;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -2392,50 +2390,6 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private bool ValidateBoneMapping(Dictionary<string, string> boneMapping)
-        {
-            if (boneMapping == null || boneMapping.Count == 0)
-            {
-                Debug.LogError("[FBXImport] BoneMapping_Data.txt가 비어 있습니다.");
-                return false;
-            }
-
-            string[] requiredBones =
-            {
-                "Hips",
-                "Spine",
-                "Chest",
-                "Head",
-                "LeftUpperLeg",
-                "RightUpperLeg"
-            };
-
-            bool valid = true;
-            foreach (string boneName in requiredBones)
-            {
-                if (!boneMapping.ContainsKey(boneName))
-                {
-                    Debug.LogError($"[FBXImport] 필수 본 매핑 누락: {boneName}");
-                    valid = false;
-                }
-            }
-
-            if (boneMapping.TryGetValue("Chest", out string chestBone) && chestBone != "Skeleton_Spine1")
-            {
-                Debug.LogWarning($"[FBXImport] Chest 매핑이 문서 기준과 다릅니다. 현재값: {chestBone}, 기대값: Skeleton_Spine1");
-            }
-
-            if (showBoneMappingLog)
-            {
-                foreach (KeyValuePair<string, string> mapping in boneMapping)
-                {
-                    Debug.Log($"[FBXImport] BoneMapping: {mapping.Key} -> {mapping.Value}");
-                }
-            }
-
-            return valid;
-        }
-
         private void PrepareTargetCharacter(GameObject targetObject, Animator targetAnimator, Animator ghostAnimator)
         {
             _conversionCoordinator.PrepareTargetPlaybackState(
@@ -2754,43 +2708,6 @@ namespace Fbx2Vmd.FBXImporter
             _activeRetargeter = null;
         }
 
-        private void SetupGhostRetargeting(GameObject ghostObject, AnimationClip ghostClip, GameObject targetPrefab)
-        {
-            Debug.Log("[FBXImport] Native AnimatorOverride 설정 중...");
-             Animator targetAnimator = targetPrefab.GetComponent<Animator>();
-            if (targetAnimator == null || targetAnimator.runtimeAnimatorController == null) return;
-
-            AnimatorOverrideController overrideController = new AnimatorOverrideController(targetAnimator.runtimeAnimatorController);
-            var overrides = new List<KeyValuePair<AnimationClip, AnimationClip>>();
-            overrideController.GetOverrides(overrides);
-
-            if (overrides.Count > 0)
-            {
-                overrideController[overrides[0].Key] = ghostClip;
-            }
-
-            targetAnimator.runtimeAnimatorController = overrideController;
-
-            var sampleCode = targetPrefab.GetComponent<HumanoidSampleCode>();
-            if (sampleCode != null)
-            {
-                sampleCode.StartProcessing(ghostClip);
-            }
-            else
-            {
-                targetAnimator.enabled = true;
-                string stateName = overrides.Count > 0 && overrides[0].Key != null
-                    ? overrides[0].Key.name
-                    : (ghostClip != null ? ghostClip.name : "");
-
-                if (!string.IsNullOrEmpty(stateName))
-                {
-                    targetAnimator.Play(stateName, 0, 0f);
-                }
-            }
-
-            if (ghostObject != null) Destroy(ghostObject);
-        }
         #endregion
 
 #if UNITY_EDITOR
@@ -2964,24 +2881,6 @@ namespace Fbx2Vmd.FBXImporter
 
 #endif
 
-        // 힙 높이 측정
-        private float GetHipsHeight(GameObject model)
-        {
-            Animator anim = model.GetComponent<Animator>();
-            if (anim == null) anim = model.AddComponent<Animator>();
-
-            // Hips 찾기 (이름 기반)
-            Transform hips = model.transform.Find("Hips");
-            if (hips == null) hips = model.transform.Find("mixamorig:Hips");
-            if (hips == null)
-            {
-                // 깊이 탐색
-                foreach(var t in model.GetComponentsInChildren<Transform>())
-                    if(t.name.Contains("Hips") || t.name.Contains("Pelvis")) { hips = t; break; }
-            }
-
-            return (hips != null) ? hips.position.y : 0f;
-        }
     }
 
     [DisallowMultipleComponent]
