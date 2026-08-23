@@ -288,6 +288,30 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
+        internal static void RecaptureTargetGuardBaselines(
+            GameObject targetObject,
+            bool shouldRecapture)
+        {
+            if (!shouldRecapture || targetObject == null)
+            {
+                return;
+            }
+
+            HumanoidArmDeformationGuard armGuard =
+                targetObject.GetComponent<HumanoidArmDeformationGuard>();
+            if (armGuard != null && armGuard.enabled)
+            {
+                armGuard.RecaptureBaseline();
+            }
+
+            HumanoidThumbDeformationGuard thumbGuard =
+                targetObject.GetComponent<HumanoidThumbDeformationGuard>();
+            if (thumbGuard != null && thumbGuard.enabled)
+            {
+                thumbGuard.RecaptureBaseline();
+            }
+        }
+
         internal HumanoidArmTwistRiggingGuard ConfigureArmTwistRiggingGuard(
             GameObject targetObject,
             Animator targetAnimator)

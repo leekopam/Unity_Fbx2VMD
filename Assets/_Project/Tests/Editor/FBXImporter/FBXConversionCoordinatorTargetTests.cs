@@ -423,6 +423,37 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_TargetSessionReset_When_CheckingOwnership_Then_CoordinatorOwnsGuardBaselineRecapture()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "RecaptureTargetGuardBaselines",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            string pipelinePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs");
+            string pipelineSource = File.ReadAllText(pipelinePath);
+            int resetMethodStart = pipelineSource.IndexOf(
+                "internal void ResetTargetStateAfterSession(",
+                System.StringComparison.Ordinal);
+            int nextMethodStart = pipelineSource.IndexOf(
+                "private GameObject CreateGhostContainer(",
+                resetMethodStart,
+                System.StringComparison.Ordinal);
+            string resetMethodSource = pipelineSource.Substring(
+                resetMethodStart,
+                nextMethodStart - resetMethodStart);
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(resetMethodSource, Does.Contain("FBXConversionCoordinator.RecaptureTargetGuardBaselines("));
+            Assert.That(resetMethodSource, Does.Not.Contain("targetCharacter.GetComponent<HumanoidArmDeformationGuard>()"));
+            Assert.That(resetMethodSource, Does.Not.Contain("targetCharacter.GetComponent<HumanoidThumbDeformationGuard>()"));
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,

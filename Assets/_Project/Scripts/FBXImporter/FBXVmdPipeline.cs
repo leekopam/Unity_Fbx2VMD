@@ -2318,23 +2318,9 @@ namespace Fbx2Vmd.FBXImporter
         {
             _conversionCoordinator?.RestoreMmdPostPoseCorrectionForRetarget();
             _idlePoseGuard?.Apply();
-
-            if (!recaptureGuardBaselines || targetCharacter == null)
-            {
-                return;
-            }
-
-            HumanoidArmDeformationGuard armGuard = targetCharacter.GetComponent<HumanoidArmDeformationGuard>();
-            if (armGuard != null && armGuard.enabled)
-            {
-                armGuard.RecaptureBaseline();
-            }
-
-            HumanoidThumbDeformationGuard thumbGuard = targetCharacter.GetComponent<HumanoidThumbDeformationGuard>();
-            if (thumbGuard != null && thumbGuard.enabled)
-            {
-                thumbGuard.RecaptureBaseline();
-            }
+            FBXConversionCoordinator.RecaptureTargetGuardBaselines(
+                targetCharacter,
+                recaptureGuardBaselines);
         }
 
         private GameObject CreateGhostContainer(GameObject importedModel)
