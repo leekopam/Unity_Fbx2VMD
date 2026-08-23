@@ -3125,7 +3125,8 @@ namespace Fbx2Vmd.FBXImporter
             _conversionCoordinator.ConfigureArmSwingLimitGuard(
                 targetObject,
                 targetAnimator);
-            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard = ConfigureTargetArmSleeveAnchorCorrection(targetObject, targetAnimator);
+            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard =
+                _conversionCoordinator.ConfigureArmSleeveAnchorGuard(targetObject, targetAnimator);
             HumanoidArmVisualTwistGuard visualTwistGuard = ConfigureTargetArmVisualTwistCorrection(targetObject, targetAnimator);
             ConfigureTargetArmDeformationGuard(targetObject, BuildLimbChildRotationExclusions(twistRiggingGuard, sleeveAnchorGuard, visualTwistGuard));
 
@@ -3443,48 +3444,6 @@ namespace Fbx2Vmd.FBXImporter
                     yield return controlledTransform;
                 }
             }
-        }
-
-        private HumanoidArmSleeveAnchorGuard ConfigureTargetArmSleeveAnchorCorrection(GameObject targetObject, Animator targetAnimator)
-        {
-            if (targetObject == null)
-            {
-                return null;
-            }
-
-            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard = targetObject.GetComponent<HumanoidArmSleeveAnchorGuard>();
-            if (!enableYybArmSleeveAnchorCorrection)
-            {
-                if (sleeveAnchorGuard != null)
-                {
-                    sleeveAnchorGuard.DisableCorrection();
-                    sleeveAnchorGuard.enabled = false;
-                }
-
-                return null;
-            }
-
-            if (sleeveAnchorGuard == null)
-            {
-                sleeveAnchorGuard = targetObject.AddComponent<HumanoidArmSleeveAnchorGuard>();
-            }
-
-            sleeveAnchorGuard.enableSleeveAnchor = true;
-            sleeveAnchorGuard.enabled = true;
-            bool configured = sleeveAnchorGuard.Configure(
-                targetAnimator,
-                YybArmSleeveAnchorInfluence,
-                YybArmShoulderCapAnchorInfluence,
-                YybArmSleeveAnchorMaxDegrees,
-                logYybArmSleeveAnchorCorrection);
-
-            if (!configured)
-            {
-                sleeveAnchorGuard.enabled = false;
-                return null;
-            }
-
-            return sleeveAnchorGuard;
         }
 
         private HumanoidArmVisualTwistGuard ConfigureTargetArmVisualTwistCorrection(GameObject targetObject, Animator targetAnimator)

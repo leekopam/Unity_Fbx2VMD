@@ -142,6 +142,51 @@ namespace Fbx2Vmd.FBXImporter
             return swingLimitGuard;
         }
 
+        internal HumanoidArmSleeveAnchorGuard ConfigureArmSleeveAnchorGuard(
+            GameObject targetObject,
+            Animator targetAnimator)
+        {
+            if (targetObject == null)
+            {
+                return null;
+            }
+
+            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard =
+                targetObject.GetComponent<HumanoidArmSleeveAnchorGuard>();
+            if (!_pipeline.enableYybArmSleeveAnchorCorrection)
+            {
+                if (sleeveAnchorGuard != null)
+                {
+                    sleeveAnchorGuard.DisableCorrection();
+                    sleeveAnchorGuard.enabled = false;
+                }
+
+                return null;
+            }
+
+            if (sleeveAnchorGuard == null)
+            {
+                sleeveAnchorGuard = targetObject.AddComponent<HumanoidArmSleeveAnchorGuard>();
+            }
+
+            sleeveAnchorGuard.enableSleeveAnchor = true;
+            sleeveAnchorGuard.enabled = true;
+            bool configured = sleeveAnchorGuard.Configure(
+                targetAnimator,
+                _pipeline.YybArmSleeveAnchorInfluence,
+                _pipeline.YybArmShoulderCapAnchorInfluence,
+                _pipeline.YybArmSleeveAnchorMaxDegrees,
+                _pipeline.logYybArmSleeveAnchorCorrection);
+
+            if (!configured)
+            {
+                sleeveAnchorGuard.enabled = false;
+                return null;
+            }
+
+            return sleeveAnchorGuard;
+        }
+
         /// <summary>
         /// 요청을 검증하고 세션 기반 흐름에 위임함.
         /// </summary>
