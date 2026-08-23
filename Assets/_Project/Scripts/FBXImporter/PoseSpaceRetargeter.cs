@@ -4,6 +4,7 @@ using UnityEngine.Playables;
 using UnityEngine.Animations;
 using System;
 using System.Collections.Generic;
+using Fbx2Vmd.Retargeting;
 using RootMotion;
 using RootMotion.FinalIK;
 
@@ -1820,7 +1821,7 @@ namespace Fbx2Vmd.FBXImporter
             if (settings != null)
             {
                 groundOffset = settings.HeightOffset;
-                _movementScaleMultiplier = NormalizeMovementScaleMultiplier(settings.MovementScaleMultiplier);
+                _movementScaleMultiplier = RootMotionGuard.NormalizeMovementScaleMultiplier(settings.MovementScaleMultiplier);
                 ShouldPreserveFbxRootRotation = settings.ShouldPreserveFbxRootRotation && !settings.ShouldUseLegacyPoseSpaceFacingCorrection;
                 preserveTargetBodyPosition = settings.ShouldPreserveRetargetBodyPosition;
                 useBodyPositionXZRootMotion = settings.ShouldUseRetargetBodyPositionXZRootMotion;
@@ -2481,7 +2482,7 @@ namespace Fbx2Vmd.FBXImporter
             Vector3 editorRootTranslationDelta = ExtractEditorRootTranslationDelta(ghostDelta);
 
             // 내 캐릭터 크기에 맞춰 이동량 스케일링
-            Vector3 targetDelta = CalculateRetargetRootDelta(
+            Vector3 targetDelta = RootMotionGuard.CalculateRetargetRootDelta(
                 ghostDelta,
                 _scaleRatio,
                 editorRootTranslationDelta,
@@ -2535,54 +2536,6 @@ namespace Fbx2Vmd.FBXImporter
 #endif
             _lastRetargetStageAfterBipedIKEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
             CaptureRetargetEndpointStageAttributionDiagnostics();
-        }
-
-        private static Vector3 CalculateRetargetRootDelta(
-            Vector3 ghostDelta,
-            float scaleRatio,
-            Vector3 editorRootTranslationDelta,
-            Vector3 bodyRootDelta,
-            float movementScaleMultiplier,
-            bool useBodyPositionXZRootMotion,
-            bool clampRootDeltaSpikes,
-            float maxRootDeltaPerFrame,
-            out float deltaMagnitude,
-            out bool skippedByNonFinite,
-            out bool limitedBySpike)
-        {
-            skippedByNonFinite = false;
-            limitedBySpike = false;
-
-            Vector3 targetDelta = useBodyPositionXZRootMotion
-                ? bodyRootDelta * movementScaleMultiplier
-                : (ghostDelta * scaleRatio + editorRootTranslationDelta) * movementScaleMultiplier;
-            if (!IsFinite(targetDelta))
-            {
-                deltaMagnitude = float.NaN;
-                skippedByNonFinite = true;
-                return Vector3.zero;
-            }
-
-            deltaMagnitude = targetDelta.magnitude;
-            if (clampRootDeltaSpikes && deltaMagnitude > maxRootDeltaPerFrame)
-            {
-                limitedBySpike = true;
-                Vector3 limitedDelta = Vector3.ClampMagnitude(targetDelta, Mathf.Max(0f, maxRootDeltaPerFrame));
-                deltaMagnitude = limitedDelta.magnitude;
-                return limitedDelta;
-            }
-
-            return targetDelta;
-        }
-
-        private static float NormalizeMovementScaleMultiplier(float value)
-        {
-            if (!IsFinite(value))
-            {
-                return 1f;
-            }
-
-            return Mathf.Clamp(value, 0f, 1.5f);
         }
 
         private void SmoothPoseOnVisualSpike(ref HumanPose pose)
