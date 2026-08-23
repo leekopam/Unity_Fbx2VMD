@@ -14,6 +14,9 @@ namespace Tests.Editor.FBXImporter
         private static Type RetargetingPoseSmoothingType =>
             typeof(PoseSpaceRetargeter).Assembly.GetType("Fbx2Vmd.FBXImporter.RetargetingPoseSmoothing", throwOnError: true);
 
+        private static Type RetargetingEndpointDiagnosticsType =>
+            typeof(PoseSpaceRetargeter).Assembly.GetType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics", throwOnError: true);
+
         private static readonly Type[] ManualAdvanceParameterTypes =
         {
             typeof(float),
@@ -164,6 +167,13 @@ namespace Tests.Editor.FBXImporter
             typeof(float),
             typeof(float),
             typeof(bool)
+        };
+
+        private static readonly Type[] EndpointPositionMaxYawAngleParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(float)
         };
 
         private static readonly Type[] HipsLocalPositionTargetGapGuardParameterTypes =
@@ -565,6 +575,41 @@ namespace Tests.Editor.FBXImporter
                 "The failing side should be allowed to use the requested correction budget.");
             Assert.That(rightMaxAngle, Is.EqualTo(20f).Within(0.0001f),
                 "The passing opposite side should stay capped so the fix does not move the failure to the other foot.");
+        }
+
+        [Test]
+        public void Given_EndpointOffsetWithinFootRadius_When_CalculatingMaxYawAngle_Then_UsesReachableArc()
+        {
+            float maxYawAngle = CalculateEndpointPositionMaxYawAngle(
+                currentFootPosition: new Vector3(0f, 0f, 1f),
+                pivotPosition: Vector3.zero,
+                maxOffset: 0.5f);
+
+            Assert.That(maxYawAngle, Is.EqualTo(30f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_EndpointYawCalculation_When_CheckingOwnership_Then_UsesEndpointDiagnostics()
+        {
+            const BindingFlags CalculationFlags = BindingFlags.Static | BindingFlags.NonPublic;
+            string[] methodNames =
+            {
+                "TryCalculateEditorFootHipsAlignedResidualYawReference",
+                "ResolveEditorFootHipsAlignedResidualYawSideAwareMaxAngle",
+                "CalculateEndpointPositionMaxYawAngle"
+            };
+
+            foreach (string methodName in methodNames)
+            {
+                Assert.That(
+                    RetargetingEndpointDiagnosticsType.GetMember(methodName, CalculationFlags),
+                    Is.Not.Empty,
+                    $"{methodName} must belong to RetargetingEndpointDiagnostics.");
+                Assert.That(
+                    typeof(PoseSpaceRetargeter).GetMember(methodName, CalculationFlags),
+                    Is.Empty,
+                    $"{methodName} must not remain in PoseSpaceRetargeter.");
+            }
         }
 
         [Test]
@@ -1546,7 +1591,7 @@ namespace Tests.Editor.FBXImporter
             float maxAngleDegrees,
             out Quaternion nextParentWorldRotation)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = RetargetingEndpointDiagnosticsType.GetMethod(
                 "TryCalculateEditorFootHipsAlignedResidualYawReference",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
@@ -1554,12 +1599,12 @@ namespace Tests.Editor.FBXImporter
                 modifiers: null);
             if (method == null)
             {
-                method = typeof(PoseSpaceRetargeter).GetMethod(
+                method = RetargetingEndpointDiagnosticsType.GetMethod(
                     "TryCalculateEditorFootHipsAlignedResidualYawReference",
                     BindingFlags.Static | BindingFlags.NonPublic);
             }
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure helper for the lower-body foot X/Z residual yaw candidate.");
+            Assert.That(method, Is.Not.Null, "RetargetingEndpointDiagnostics should own the pure lower-body foot X/Z residual yaw calculation.");
 
             object[] args =
             {
@@ -1583,7 +1628,7 @@ namespace Tests.Editor.FBXImporter
             float requestedMaxAngle,
             bool isThisFootDominantResidual)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = RetargetingEndpointDiagnosticsType.GetMethod(
                 "ResolveEditorFootHipsAlignedResidualYawSideAwareMaxAngle",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
@@ -1591,7 +1636,7 @@ namespace Tests.Editor.FBXImporter
                 modifiers: null);
 
             Assert.That(method, Is.Not.Null,
-                "PoseSpaceRetargeter should expose a pure helper for side-aware foot residual yaw correction budgets.");
+                "RetargetingEndpointDiagnostics should own the pure side-aware foot residual yaw correction budget.");
 
             return (float)method.Invoke(null, new object[]
             {
@@ -1599,6 +1644,29 @@ namespace Tests.Editor.FBXImporter
                 otherFootResidual,
                 requestedMaxAngle,
                 isThisFootDominantResidual
+            });
+        }
+
+        private static float CalculateEndpointPositionMaxYawAngle(
+            Vector3 currentFootPosition,
+            Vector3 pivotPosition,
+            float maxOffset)
+        {
+            MethodInfo method = RetargetingEndpointDiagnosticsType.GetMethod(
+                "CalculateEndpointPositionMaxYawAngle",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: EndpointPositionMaxYawAngleParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "RetargetingEndpointDiagnostics should own the pure endpoint position max yaw calculation.");
+
+            return (float)method.Invoke(null, new object[]
+            {
+                currentFootPosition,
+                pivotPosition,
+                maxOffset
             });
         }
 
