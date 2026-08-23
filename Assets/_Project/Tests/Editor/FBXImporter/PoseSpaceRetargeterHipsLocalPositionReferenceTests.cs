@@ -256,6 +256,33 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ManualFootIkPositionAccess_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            string[] applierMethodNames =
+            {
+                "TryResolveHipsTransforms",
+                "TryResolveFootIkPositionReference",
+                "TryCalculateFootIkPositionReference"
+            };
+            foreach (string methodName in applierMethodNames)
+            {
+                Assert.That(
+                    ManualPoseReferenceApplierType.GetMember(
+                        methodName,
+                        BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Not.Empty,
+                    $"ManualPoseReferenceApplier should own {methodName}.");
+            }
+
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateEditorFootIkPositionReference",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty,
+                "PoseSpaceRetargeter should delegate foot IK position calculation.");
+        }
+
+        [Test]
         public void Given_ManualFootReference_When_CalculatingFootIkTarget_Then_UsesReferenceHipsRelativePosition()
         {
             Vector3 referenceHips = new Vector3(1f, 1f, 1f);
@@ -263,7 +290,7 @@ namespace Tests.Editor.FBXImporter
             Vector3 targetHips = new Vector3(10f, 2f, -3f);
             Vector3 currentFoot = new Vector3(10.1f, 1.2f, -2.8f);
 
-            bool calculated = TryCalculateEditorFootIkPositionReference(
+            bool calculated = TryCalculateFootIkPositionReference(
                 referenceFoot,
                 referenceHips,
                 currentFoot,
@@ -281,7 +308,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_ManualFootReferenceMaxOffset_When_CalculatingFootIkTarget_Then_ClampsBeforeWeight()
         {
-            bool calculated = TryCalculateEditorFootIkPositionReference(
+            bool calculated = TryCalculateFootIkPositionReference(
                 referenceFootPosition: new Vector3(2f, 0f, 0f),
                 referenceHipsPosition: Vector3.zero,
                 currentFootPosition: Vector3.zero,
@@ -442,7 +469,7 @@ namespace Tests.Editor.FBXImporter
             return calculated;
         }
 
-        private static bool TryCalculateEditorFootIkPositionReference(
+        private static bool TryCalculateFootIkPositionReference(
             Vector3 referenceFootPosition,
             Vector3 referenceHipsPosition,
             Vector3 currentFootPosition,
@@ -451,14 +478,14 @@ namespace Tests.Editor.FBXImporter
             float maxOffset,
             out Vector3 nextPosition)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateEditorFootIkPositionReference",
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateFootIkPositionReference",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: FootIkPositionReferenceParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure foot IK target helper for the BipedIK runtime candidate.");
+            Assert.That(method, Is.Not.Null, "ManualPoseReferenceApplier should expose the pure foot IK target calculation.");
 
             object[] args =
             {
