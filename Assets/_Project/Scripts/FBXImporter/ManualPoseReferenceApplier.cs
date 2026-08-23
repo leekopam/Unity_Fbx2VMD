@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
-    /// 수동 포즈 기준 Animator에서 대상 Transform으로 로컬 회전과 Hips 위치를 적용함.
+    /// 수동 포즈 기준 Animator에서 대상 Transform으로 로컬 회전과 Hips·Foot 위치를 적용함.
     /// </summary>
     internal static class ManualPoseReferenceApplier
     {
@@ -95,6 +95,24 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal static bool TryResolveHipsTransforms(
+            Animator referenceAnimator,
+            Animator targetAnimator,
+            out Transform referenceHips,
+            out Transform targetHips)
+        {
+            referenceHips = null;
+            targetHips = null;
+            if (referenceAnimator == null || targetAnimator == null)
+            {
+                return false;
+            }
+
+            referenceHips = referenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            return referenceHips != null && targetHips != null;
+        }
+
         internal static bool TryResolveHipsLocalPositionReference(
             Animator referenceAnimator,
             Animator targetAnimator,
@@ -105,14 +123,11 @@ namespace Fbx2Vmd.FBXImporter
             targetHips = null;
             referenceCurrentLocalPosition = Vector3.zero;
             currentLocalPosition = Vector3.zero;
-            if (referenceAnimator == null || targetAnimator == null)
-            {
-                return false;
-            }
-
-            Transform referenceHips = referenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
-            targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
-            if (referenceHips == null || targetHips == null)
+            if (!TryResolveHipsTransforms(
+                referenceAnimator,
+                targetAnimator,
+                out Transform referenceHips,
+                out targetHips))
             {
                 return false;
             }
@@ -200,6 +215,81 @@ namespace Fbx2Vmd.FBXImporter
             if (!IsFinite(nextLocalPosition))
             {
                 nextLocalPosition = currentLocalPosition;
+                return false;
+            }
+
+            return true;
+        }
+
+        internal static bool TryResolveFootIkPositionReference(
+            Animator referenceAnimator,
+            Animator targetAnimator,
+            HumanBodyBones footBone,
+            Transform referenceHips,
+            Transform targetHips,
+            float weight,
+            float maxOffset,
+            out Vector3 nextPosition)
+        {
+            nextPosition = Vector3.zero;
+            if (referenceAnimator == null || targetAnimator == null ||
+                referenceHips == null || targetHips == null)
+            {
+                return false;
+            }
+
+            Transform referenceFoot = referenceAnimator.GetBoneTransform(footBone);
+            Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
+            if (referenceFoot == null || targetFoot == null)
+            {
+                return false;
+            }
+
+            return TryCalculateFootIkPositionReference(
+                referenceFoot.position,
+                referenceHips.position,
+                targetFoot.position,
+                targetHips.position,
+                weight,
+                maxOffset,
+                out nextPosition);
+        }
+
+        internal static bool TryCalculateFootIkPositionReference(
+            Vector3 referenceFootPosition,
+            Vector3 referenceHipsPosition,
+            Vector3 currentFootPosition,
+            Vector3 targetHipsPosition,
+            float weight,
+            float maxOffset,
+            out Vector3 nextPosition)
+        {
+            nextPosition = currentFootPosition;
+            if (!IsFinite(referenceFootPosition) ||
+                !IsFinite(referenceHipsPosition) ||
+                !IsFinite(currentFootPosition) ||
+                !IsFinite(targetHipsPosition))
+            {
+                return false;
+            }
+
+            Vector3 desiredPosition = targetHipsPosition + (referenceFootPosition - referenceHipsPosition);
+            Vector3 delta = desiredPosition - currentFootPosition;
+            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                delta = Vector3.ClampMagnitude(delta, clampedMaxOffset);
+            }
+
+            nextPosition = currentFootPosition + delta * Mathf.Clamp01(weight);
+            if (!IsFinite(nextPosition))
+            {
+                nextPosition = currentFootPosition;
                 return false;
             }
 

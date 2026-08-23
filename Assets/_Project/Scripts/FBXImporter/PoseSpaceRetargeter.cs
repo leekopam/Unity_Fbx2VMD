@@ -5130,9 +5130,11 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            Transform referenceHips = _editorFingerReferenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
-            Transform targetHips = targetAnimator.GetBoneTransform(HumanBodyBones.Hips);
-            if (referenceHips == null || targetHips == null)
+            if (!ManualPoseReferenceApplier.TryResolveHipsTransforms(
+                _editorFingerReferenceAnimator,
+                targetAnimator,
+                out Transform referenceHips,
+                out Transform targetHips))
             {
                 return;
             }
@@ -5236,19 +5238,12 @@ namespace Fbx2Vmd.FBXImporter
             Transform referenceHips,
             Transform targetHips)
         {
-            Transform referenceFoot = _editorFingerReferenceAnimator.GetBoneTransform(footBone);
-            Transform targetFoot = targetAnimator.GetBoneTransform(footBone);
-            if (referenceFoot == null || targetFoot == null)
-            {
-                bipedIk.SetIKPositionWeight(goal, 0f);
-                return 0;
-            }
-
-            if (!TryCalculateEditorFootIkPositionReference(
-                    referenceFoot.position,
-                    referenceHips.position,
-                    targetFoot.position,
-                    targetHips.position,
+            if (!ManualPoseReferenceApplier.TryResolveFootIkPositionReference(
+                    _editorFingerReferenceAnimator,
+                    targetAnimator,
+                    footBone,
+                    referenceHips,
+                    targetHips,
                     manualAnimatorBipedIkFootPositionReferenceWeight,
                     manualAnimatorBipedIkFootPositionReferenceMaxOffset,
                     out Vector3 nextPosition))
@@ -5260,47 +5255,6 @@ namespace Fbx2Vmd.FBXImporter
             bipedIk.SetIKPosition(goal, nextPosition);
             bipedIk.SetIKPositionWeight(goal, 1f);
             return 1;
-        }
-
-        private static bool TryCalculateEditorFootIkPositionReference(
-            Vector3 referenceFootPosition,
-            Vector3 referenceHipsPosition,
-            Vector3 currentFootPosition,
-            Vector3 targetHipsPosition,
-            float weight,
-            float maxOffset,
-            out Vector3 nextPosition)
-        {
-            nextPosition = currentFootPosition;
-            if (!IsFinite(referenceFootPosition) ||
-                !IsFinite(referenceHipsPosition) ||
-                !IsFinite(currentFootPosition) ||
-                !IsFinite(targetHipsPosition))
-            {
-                return false;
-            }
-
-            Vector3 desiredPosition = targetHipsPosition + (referenceFootPosition - referenceHipsPosition);
-            Vector3 delta = desiredPosition - currentFootPosition;
-            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
-            {
-                return false;
-            }
-
-            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
-            if (clampedMaxOffset > 0f)
-            {
-                delta = Vector3.ClampMagnitude(delta, clampedMaxOffset);
-            }
-
-            nextPosition = currentFootPosition + delta * Mathf.Clamp01(weight);
-            if (!IsFinite(nextPosition))
-            {
-                nextPosition = currentFootPosition;
-                return false;
-            }
-
-            return true;
         }
 
         private void ApplyEditorHumanoidThumbLocalRotationReference()
