@@ -3129,7 +3129,11 @@ namespace Fbx2Vmd.FBXImporter
                 _conversionCoordinator.ConfigureArmSleeveAnchorGuard(targetObject, targetAnimator);
             HumanoidArmVisualTwistGuard visualTwistGuard =
                 _conversionCoordinator.ConfigureArmVisualTwistGuard(targetObject, targetAnimator);
-            ConfigureTargetArmDeformationGuard(targetObject, BuildLimbChildRotationExclusions(twistRiggingGuard, sleeveAnchorGuard, visualTwistGuard));
+            _conversionCoordinator.ConfigureArmDeformationGuard(
+                targetObject,
+                twistRiggingGuard,
+                sleeveAnchorGuard,
+                visualTwistGuard);
 
             // Batch smoke can leave detached thumb helpers visually drifted until the next frame.
             // Restore the captured target idle pose immediately before the next session captures
@@ -3291,36 +3295,6 @@ namespace Fbx2Vmd.FBXImporter
             rigBuilder.enabled = false;
         }
 
-        private void ConfigureTargetArmDeformationGuard(GameObject targetObject, IEnumerable<Transform> limbChildRotationExclusions)
-        {
-            if (!attachTargetArmDeformationGuard || targetObject == null)
-            {
-                return;
-            }
-
-            HumanoidArmDeformationGuard guard = targetObject.GetComponent<HumanoidArmDeformationGuard>();
-            if (guard == null)
-            {
-                guard = targetObject.AddComponent<HumanoidArmDeformationGuard>();
-            }
-
-            bool clampTargetArmMuscles = targetGuardClampAnatomicalArmMuscles;
-            guard.Configure(new ArmDeformationSettings(
-                clampMusclesToHumanRange: false,
-                enableAnatomicalArmGuard: clampTargetArmMuscles,
-                stretchMuscleLimit: ArmStretchMuscleLimit,
-                upperArmTwistMuscleLimit: UpperArmTwistMuscleLimit,
-                lowerArmTwistMuscleLimit: LowerArmTwistMuscleLimit,
-                lockHumanoidBonePositions: _shouldLockTargetHumanoidBonePositions,
-                logCorrections: logArmDeformationGuardCorrections,
-                clampArmStretchMuscles: targetGuardClampArmStretchMuscles,
-                lockLimbChildLocalPositions: lockTargetLimbChildLocalPositions,
-                lockLimbChildLocalRotations: lockTargetLimbChildLocalRotations));
-            guard.SetLimbChildRotationExclusions(limbChildRotationExclusions);
-            guard.enabled = true;
-            guard.RecaptureBaseline();
-        }
-
         private void ConfigureTargetThumbDeformationGuard(
             GameObject targetObject,
             Animator targetAnimator,
@@ -3414,36 +3388,6 @@ namespace Fbx2Vmd.FBXImporter
                 return syncDetachedThumbBaseHelperPositions &&
                     syncDetachedThumbBaseHelpers &&
                     detachedThumbBaseHelperSyncWeight > 0f;
-            }
-        }
-
-        private static IEnumerable<Transform> BuildLimbChildRotationExclusions(
-            HumanoidArmTwistRiggingGuard twistRiggingGuard,
-            HumanoidArmSleeveAnchorGuard sleeveAnchorGuard,
-            HumanoidArmVisualTwistGuard visualTwistGuard)
-        {
-            if (twistRiggingGuard != null)
-            {
-                foreach (Transform controlledTransform in twistRiggingGuard.ControlledTransforms)
-                {
-                    yield return controlledTransform;
-                }
-            }
-
-            if (sleeveAnchorGuard != null)
-            {
-                foreach (Transform controlledTransform in sleeveAnchorGuard.ControlledTransforms)
-                {
-                    yield return controlledTransform;
-                }
-            }
-
-            if (visualTwistGuard != null)
-            {
-                foreach (Transform controlledTransform in visualTwistGuard.ControlledTransforms)
-                {
-                    yield return controlledTransform;
-                }
             }
         }
 
