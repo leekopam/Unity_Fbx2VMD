@@ -63,6 +63,17 @@ namespace Tests.Editor.FBXImporter
             typeof(Vector3).MakeByRefType()
         };
 
+        private static readonly Type[] HipsAlignedEndpointPositionReferenceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(Transform),
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(Transform),
+            typeof(Vector3).MakeByRefType()
+        };
+
         private static readonly Type[] LowerBodySegmentDirectionReferenceParameterTypes =
         {
             typeof(Vector3),
@@ -324,6 +335,62 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_HipsAlignedEndpointReference_When_TargetRootRotates_Then_MapsOffsetAndKeepsEndpointHeight()
+        {
+            GameObject referenceRootObject = new GameObject("ReferenceRoot");
+            GameObject targetRootObject = new GameObject("TargetRoot");
+            try
+            {
+                targetRootObject.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+
+                bool calculated = TryCalculateHipsAlignedEndpointPositionReference(
+                    referenceEndpointPosition: new Vector3(2f, 0f, 3f),
+                    referenceHipsPosition: new Vector3(1f, 1f, 1f),
+                    referenceRoot: referenceRootObject.transform,
+                    targetHipsPosition: new Vector3(10f, 2f, -3f),
+                    currentTargetEndpointPosition: new Vector3(9f, 0.25f, -2f),
+                    targetRoot: targetRootObject.transform,
+                    out Vector3 desiredEndpointPosition);
+
+                Assert.That(calculated, Is.True);
+                Assert.That(desiredEndpointPosition.x, Is.EqualTo(12f).Within(0.0001f));
+                Assert.That(desiredEndpointPosition.y, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(desiredEndpointPosition.z, Is.EqualTo(-4f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(referenceRootObject);
+                UnityEngine.Object.DestroyImmediate(targetRootObject);
+            }
+        }
+
+        [Test]
+        public void Given_HipsAlignedEndpointAccess_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            string[] applierMethodNames =
+            {
+                "TryResolveHipsAlignedEndpointPositionReference",
+                "TryCalculateHipsAlignedEndpointPositionReference"
+            };
+            foreach (string methodName in applierMethodNames)
+            {
+                Assert.That(
+                    ManualPoseReferenceApplierType.GetMember(
+                        methodName,
+                        BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Not.Empty,
+                    $"ManualPoseReferenceApplier should own {methodName}.");
+            }
+
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateEditorFootHipsAlignedDesiredFootPosition",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Empty,
+                "PoseSpaceRetargeter should delegate hips-aligned endpoint position resolution.");
+        }
+
+        [Test]
         public void Given_LowerBodySegmentDirectionReference_When_CalculatingCorrection_Then_RotatesTowardReferenceDirection()
         {
             bool calculated = TryCalculateEditorLowerBodySegmentDirectionReference(
@@ -500,6 +567,41 @@ namespace Tests.Editor.FBXImporter
 
             bool calculated = (bool)method.Invoke(null, args);
             nextPosition = (Vector3)args[6];
+            return calculated;
+        }
+
+        private static bool TryCalculateHipsAlignedEndpointPositionReference(
+            Vector3 referenceEndpointPosition,
+            Vector3 referenceHipsPosition,
+            Transform referenceRoot,
+            Vector3 targetHipsPosition,
+            Vector3 currentTargetEndpointPosition,
+            Transform targetRoot,
+            out Vector3 desiredEndpointPosition)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateHipsAlignedEndpointPositionReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: HipsAlignedEndpointPositionReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should expose hips-aligned endpoint position calculation.");
+
+            object[] args =
+            {
+                referenceEndpointPosition,
+                referenceHipsPosition,
+                referenceRoot,
+                targetHipsPosition,
+                currentTargetEndpointPosition,
+                targetRoot,
+                currentTargetEndpointPosition
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            desiredEndpointPosition = (Vector3)args[6];
             return calculated;
         }
 

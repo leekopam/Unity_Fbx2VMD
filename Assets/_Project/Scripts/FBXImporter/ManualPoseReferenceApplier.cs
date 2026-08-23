@@ -296,6 +296,71 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal static bool TryResolveHipsAlignedEndpointPositionReference(
+            Animator referenceAnimator,
+            Animator targetAnimator,
+            HumanBodyBones endpointBone,
+            Transform referenceHips,
+            Transform targetHips,
+            Transform targetEndpoint,
+            out Vector3 desiredEndpointPosition)
+        {
+            desiredEndpointPosition = targetEndpoint != null ? targetEndpoint.position : Vector3.zero;
+            if (referenceAnimator == null || targetAnimator == null ||
+                referenceHips == null || targetHips == null || targetEndpoint == null)
+            {
+                return false;
+            }
+
+            Transform referenceEndpoint = referenceAnimator.GetBoneTransform(endpointBone);
+            if (referenceEndpoint == null)
+            {
+                return false;
+            }
+
+            return TryCalculateHipsAlignedEndpointPositionReference(
+                referenceEndpoint.position,
+                referenceHips.position,
+                referenceAnimator.transform,
+                targetHips.position,
+                targetEndpoint.position,
+                targetAnimator.transform,
+                out desiredEndpointPosition);
+        }
+
+        internal static bool TryCalculateHipsAlignedEndpointPositionReference(
+            Vector3 referenceEndpointPosition,
+            Vector3 referenceHipsPosition,
+            Transform referenceRoot,
+            Vector3 targetHipsPosition,
+            Vector3 currentTargetEndpointPosition,
+            Transform targetRoot,
+            out Vector3 desiredEndpointPosition)
+        {
+            desiredEndpointPosition = currentTargetEndpointPosition;
+            if (referenceRoot == null || targetRoot == null)
+            {
+                return false;
+            }
+
+            Vector3 referenceOffset = referenceEndpointPosition - referenceHipsPosition;
+            if (!IsFinite(referenceOffset))
+            {
+                return false;
+            }
+
+            Vector3 referenceRootOffset = referenceRoot.InverseTransformVector(referenceOffset);
+            Vector3 desiredTargetOffset = targetRoot.TransformVector(referenceRootOffset);
+            if (!IsFinite(desiredTargetOffset))
+            {
+                return false;
+            }
+
+            desiredEndpointPosition = targetHipsPosition + desiredTargetOffset;
+            desiredEndpointPosition.y = currentTargetEndpointPosition.y;
+            return IsFinite(desiredEndpointPosition);
+        }
+
         private static bool IsFinite(Quaternion value)
         {
             return !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
