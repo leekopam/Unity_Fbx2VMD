@@ -8,6 +8,11 @@ namespace Tests.Editor.FBXImporter
 {
     public class PoseSpaceRetargeterHipsLocalPositionReferenceTests
     {
+        private static Type ManualPoseReferenceApplierType =>
+            typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.ManualPoseReferenceApplier",
+                throwOnError: true);
+
         private static readonly Type[] HipsLocalPositionReferenceParameterTypes =
         {
             typeof(Vector3),
@@ -184,6 +189,46 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ManualPoseLocalRotationAccess_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            Type applierType = typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.ManualPoseReferenceApplier",
+                throwOnError: false);
+            Assert.That(applierType, Is.Not.Null,
+                "ManualPoseReferenceApplier should own Animator and Transform localRotation access.");
+
+            string[] applierMethodNames =
+            {
+                "ApplyExactLocalRotationReference",
+                "ApplyBlendedLocalRotationReference",
+                "TryCalculateLocalRotationReference"
+            };
+            foreach (string methodName in applierMethodNames)
+            {
+                Assert.That(
+                    applierType.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Not.Null,
+                    $"ManualPoseReferenceApplier should expose {methodName}.");
+            }
+
+            string[] extractedMethodNames =
+            {
+                "ApplyEditorHumanoidHandLocalRotationReferenceBone",
+                "ApplyEditorHumanoidFootLocalRotationReferenceBone",
+                "TryCalculateEditorFootLocalRotationReference"
+            };
+            foreach (string methodName in extractedMethodNames)
+            {
+                Assert.That(
+                    typeof(PoseSpaceRetargeter).GetMethod(
+                        methodName,
+                        BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Null,
+                    $"PoseSpaceRetargeter should delegate {methodName}.");
+            }
+        }
+
+        [Test]
         public void Given_ManualFootReference_When_CalculatingFootIkTarget_Then_UsesReferenceHipsRelativePosition()
         {
             Vector3 referenceHips = new Vector3(1f, 1f, 1f);
@@ -348,14 +393,14 @@ namespace Tests.Editor.FBXImporter
             float weight,
             out Quaternion nextLocalRotation)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateEditorFootLocalRotationReference",
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateLocalRotationReference",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: FootLocalRotationReferenceParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure foot localRotation reference helper for isolated ankle/toe runtime candidates.");
+            Assert.That(method, Is.Not.Null, "ManualPoseReferenceApplier should expose the localRotation reference calculation.");
 
             object[] args =
             {
