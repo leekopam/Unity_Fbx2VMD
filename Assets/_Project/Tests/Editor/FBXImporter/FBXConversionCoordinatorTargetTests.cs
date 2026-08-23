@@ -106,6 +106,20 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_ArmSleeveAnchorGuardAssembly_When_InspectingOwnership_Then_CoordinatorOwnsIt()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureArmSleeveAnchorGuard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ConfigureTargetArmSleeveAnchorCorrection",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineMethod, Is.Null);
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,
