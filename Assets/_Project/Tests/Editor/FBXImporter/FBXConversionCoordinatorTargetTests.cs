@@ -120,6 +120,20 @@ namespace Tests.Editor.FBXImporter
             Assert.That(pipelineMethod, Is.Null);
         }
 
+        [Test]
+        public void Given_ArmVisualTwistGuardAssembly_When_InspectingOwnership_Then_CoordinatorOwnsIt()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureArmVisualTwistGuard",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ConfigureTargetArmVisualTwistCorrection",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineMethod, Is.Null);
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,
