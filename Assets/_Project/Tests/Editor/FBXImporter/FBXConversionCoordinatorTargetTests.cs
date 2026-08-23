@@ -274,6 +274,33 @@ namespace Tests.Editor.FBXImporter
             Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmDeformationGuard("));
         }
 
+        [Test]
+        public void Given_TargetPlaybackPreparation_When_CheckingOwnership_Then_CoordinatorOwnsBaseStateAndLegacyIkCleanup()
+        {
+            MethodInfo prepareMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "PrepareTargetPlaybackState",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo removeIkMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "RemoveLegacyIkControl",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            string pipelinePath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs");
+            string pipelineSource = File.ReadAllText(pipelinePath);
+
+            Assert.That(prepareMethod, Is.Not.Null);
+            Assert.That(removeIkMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.PrepareTargetPlaybackState("));
+            Assert.That(pipelineSource, Does.Contain("FBXConversionCoordinator.RemoveLegacyIkControl("));
+            Assert.That(pipelineSource, Does.Not.Contain("targetAnimator.applyRootMotion = false"));
+            Assert.That(pipelineSource, Does.Not.Contain("targetAnimator.runtimeAnimatorController = null"));
+            Assert.That(pipelineSource, Does.Not.Contain("targetObject.GetComponent<IKControl>()"));
+        }
+
         private bool TryResolveTargetAnimator(
             GameObject targetObject,
             out Animator targetAnimator,
