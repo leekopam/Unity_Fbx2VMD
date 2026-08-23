@@ -1313,6 +1313,7 @@ namespace Fbx2Vmd.FBXImporter
         internal IFileBrowserService _fileBrowserService;
         private AssimpFBXImporter _fbxImporter;
         private FBXImportController _importController;
+        private FBXConversionCoordinator _conversionCoordinator;
         internal bool _isProcessing;
         private GameObject _activeGhostContainer;
         internal HumanoidSampleCode _activeRecorderController;
@@ -2092,11 +2093,19 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _importController = new FBXImportController(this, _fileBrowserService);
             }
+
+            if (_conversionCoordinator == null)
+            {
+                _conversionCoordinator = new FBXConversionCoordinator(this);
+            }
         }
 
         internal void EnsureServicesInitialized()
         {
-            if (_fileBrowserService == null || _fbxImporter == null || _importController == null)
+            if (_fileBrowserService == null ||
+                _fbxImporter == null ||
+                _importController == null ||
+                _conversionCoordinator == null)
             {
                 InitializeServices();
             }
@@ -3109,19 +3118,13 @@ namespace Fbx2Vmd.FBXImporter
             targetAnimator.runtimeAnimatorController = null;
             DisableMmdPostPoseCorrectionForRetarget(targetObject);
             HumanoidArmTwistRiggingGuard twistRiggingGuard = ConfigureTargetAnimationRiggingArmTwistCorrection(targetObject, targetAnimator);
-            FBXConversionCoordinator.ConfigureArmDirectionGuard(
+            _conversionCoordinator.ConfigureArmDirectionGuard(
                 targetObject,
                 targetAnimator,
-                ghostAnimator,
-                enableYybArmDirectionRetargetCorrection,
-                YybArmDirectionUpperArmWeight,
-                YybArmDirectionForearmWeight,
-                YybArmDirectionUpperArmMaxDegrees,
-                YybArmDirectionForearmMaxDegrees,
-                YybArmDirectionLeftSideWeightScale,
-                YybArmDirectionRightSideWeightScale,
-                logYybArmDirectionRetargetCorrection);
-            ConfigureTargetArmSwingLimitCorrection(targetObject, targetAnimator);
+                ghostAnimator);
+            _conversionCoordinator.ConfigureArmSwingLimitGuard(
+                targetObject,
+                targetAnimator);
             HumanoidArmSleeveAnchorGuard sleeveAnchorGuard = ConfigureTargetArmSleeveAnchorCorrection(targetObject, targetAnimator);
             HumanoidArmVisualTwistGuard visualTwistGuard = ConfigureTargetArmVisualTwistCorrection(targetObject, targetAnimator);
             ConfigureTargetArmDeformationGuard(targetObject, BuildLimbChildRotationExclusions(twistRiggingGuard, sleeveAnchorGuard, visualTwistGuard));
@@ -3440,50 +3443,6 @@ namespace Fbx2Vmd.FBXImporter
                     yield return controlledTransform;
                 }
             }
-        }
-
-        private HumanoidArmSwingLimitGuard ConfigureTargetArmSwingLimitCorrection(GameObject targetObject, Animator targetAnimator)
-        {
-            if (targetObject == null)
-            {
-                return null;
-            }
-
-            HumanoidArmSwingLimitGuard swingLimitGuard = targetObject.GetComponent<HumanoidArmSwingLimitGuard>();
-            if (!enableYybArmSwingLimitCorrection)
-            {
-                if (swingLimitGuard != null)
-                {
-                    swingLimitGuard.enableSwingLimit = false;
-                    swingLimitGuard.enabled = false;
-                }
-
-                return null;
-            }
-
-            if (swingLimitGuard == null)
-            {
-                swingLimitGuard = targetObject.AddComponent<HumanoidArmSwingLimitGuard>();
-            }
-
-            swingLimitGuard.Configure(
-                targetAnimator,
-                true,
-                YybArmSwingLimitWeight,
-                YybArmSwingMaxDownDot,
-                YybArmSwingMinHandHorizontalRatio,
-                YybArmSwingMaxHandBelowShoulderRatio,
-                YybArmSwingHorizontalReachLimitWeight,
-                YybArmSwingMaxHandHorizontalReachRatio,
-                YybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
-                YybArmSwingHorizontalReachMinElbowAngleAfterApply,
-                YybArmSwingRaisedPoseHorizontalReachLimitWeight,
-                YybArmSwingRaisedPoseMinUpperArmDownDot,
-                YybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
-                YybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
-                logYybArmSwingLimitCorrection);
-
-            return swingLimitGuard;
         }
 
         private HumanoidArmSleeveAnchorGuard ConfigureTargetArmSleeveAnchorCorrection(GameObject targetObject, Animator targetAnimator)
