@@ -399,6 +399,139 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_GhostPresentation_When_CheckingOwnership_Then_UsesDedicatedPresenter()
+        {
+            Type presenterType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.GhostModelPresenter",
+                throwOnError: false);
+            MethodInfo createContainerMethod = presenterType?.GetMethod(
+                "CreateContainer",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo setVisibilityMethod = presenterType?.GetMethod(
+                "SetVisibility",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+            int createIndex = pipelineSource.IndexOf(
+                "GhostModelPresenter.CreateContainer(",
+                StringComparison.Ordinal);
+            int registerIndex = createIndex < 0
+                ? -1
+                : pipelineSource.IndexOf(
+                    "_activeGhostContainer = ghostContainer;",
+                    createIndex,
+                    StringComparison.Ordinal);
+            int visibilityIndex = registerIndex < 0
+                ? -1
+                : pipelineSource.IndexOf(
+                    "GhostModelPresenter.SetVisibility(",
+                    registerIndex,
+                    StringComparison.Ordinal);
+
+            Assert.That(presenterType, Is.Not.Null);
+            Assert.That(createContainerMethod, Is.Not.Null);
+            Assert.That(setVisibilityMethod, Is.Not.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "CreateGhostContainer",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "SetGhostVisibility",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(createIndex, Is.GreaterThanOrEqualTo(0));
+            Assert.That(registerIndex, Is.GreaterThan(createIndex));
+            Assert.That(visibilityIndex, Is.GreaterThan(registerIndex));
+        }
+
+        [Test]
+        public void Given_ImportedModel_When_PreparingGhostPresentation_Then_PreservesContainerAndVisibility()
+        {
+            Type presenterType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.GhostModelPresenter",
+                throwOnError: false);
+            MethodInfo createContainerMethod = presenterType?.GetMethod(
+                "CreateContainer",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo setVisibilityMethod = presenterType?.GetMethod(
+                "SetVisibility",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            GameObject importedModel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            importedModel.name = "ImportedGhost";
+
+            try
+            {
+                Assert.That(createContainerMethod, Is.Not.Null);
+                Assert.That(setVisibilityMethod, Is.Not.Null);
+
+                var container = (GameObject)createContainerMethod.Invoke(
+                    null,
+                    new object[] { importedModel });
+                setVisibilityMethod.Invoke(
+                    null,
+                    new object[] { importedModel, false, false });
+                Renderer renderer = importedModel.GetComponent<Renderer>();
+
+                Assert.That(container.name, Is.EqualTo("GhostContainer_ImportedGhost"));
+                Assert.That(container.transform.position, Is.EqualTo(Vector3.zero));
+                Assert.That(container.transform.rotation, Is.EqualTo(Quaternion.identity));
+                Assert.That(container.transform.localScale, Is.EqualTo(Vector3.one * 0.01f));
+                Assert.That(importedModel.transform.parent, Is.EqualTo(container.transform));
+                Assert.That(importedModel.transform.localPosition, Is.EqualTo(Vector3.zero));
+                Assert.That(renderer.enabled, Is.False);
+                Assert.That(importedModel.GetComponent<GhostSkeletonDebugRenderer>(), Is.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(
+                    importedModel.transform.parent != null
+                        ? importedModel.transform.parent.gameObject
+                        : importedModel);
+            }
+        }
+
+        [Test]
+        public void Given_VisibleGhostWithRenderer_When_TogglingVisibility_Then_ReusesAndDisablesSkeletonAid()
+        {
+            Type presenterType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.GhostModelPresenter",
+                throwOnError: false);
+            MethodInfo setVisibilityMethod = presenterType?.GetMethod(
+                "SetVisibility",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            GameObject importedModel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+            try
+            {
+                Assert.That(setVisibilityMethod, Is.Not.Null);
+
+                setVisibilityMethod.Invoke(null, new object[] { importedModel, true, true });
+                setVisibilityMethod.Invoke(null, new object[] { importedModel, true, true });
+
+                GhostSkeletonDebugRenderer[] debugRenderers =
+                    importedModel.GetComponents<GhostSkeletonDebugRenderer>();
+                Assert.That(debugRenderers, Has.Length.EqualTo(1));
+                Assert.That(debugRenderers[0].enabled, Is.True);
+                Assert.That(importedModel.GetComponent<Renderer>().enabled, Is.True);
+
+                setVisibilityMethod.Invoke(null, new object[] { importedModel, false, true });
+
+                Assert.That(debugRenderers[0].enabled, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(importedModel);
+            }
+        }
+
+        [Test]
         public void Given_GhostSkeletonDebugRendererInitializedBeforeAnimator_When_AnimatorIsAdded_Then_ReacquiresAnimatorForSceneViewLines()
         {
             GameObject ghost = new GameObject("RendererlessGhostForSceneView");
@@ -999,14 +1132,19 @@ namespace Tests.Editor.FBXImporter
 
         private static bool ShouldAttachGhostSkeletonDebugRenderer(bool visible, int rendererCount)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
+            Type presenterType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.GhostModelPresenter",
+                throwOnError: false);
+            Assert.That(presenterType, Is.Not.Null, "GhostModelPresenter should own Ghost visibility decisions.");
+
+            MethodInfo method = presenterType.GetMethod(
                 "ShouldAttachGhostSkeletonDebugRenderer",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: GhostSkeletonFallbackParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a testable fallback decision for rendererless Ghost visibility.");
+            Assert.That(method, Is.Not.Null, "GhostModelPresenter must expose a testable fallback decision for Ghost visibility.");
 
             return (bool)method.Invoke(null, new object[] { visible, rendererCount });
         }

@@ -543,14 +543,18 @@ namespace Tests.Editor.FBXImporter
                 "internal void ResetTargetStateAfterSession(",
                 System.StringComparison.Ordinal);
             int nextMethodStart = pipelineSource.IndexOf(
-                "private GameObject CreateGhostContainer(",
+                "internal void RestoreIdlePoseBeforeRetargetBaselines()",
                 resetMethodStart,
                 System.StringComparison.Ordinal);
-            string resetMethodSource = pipelineSource.Substring(
-                resetMethodStart,
-                nextMethodStart - resetMethodStart);
+            string resetMethodSource = resetMethodStart >= 0 && nextMethodStart > resetMethodStart
+                ? pipelineSource.Substring(
+                    resetMethodStart,
+                    nextMethodStart - resetMethodStart)
+                : string.Empty;
 
             Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(resetMethodStart, Is.GreaterThanOrEqualTo(0));
+            Assert.That(nextMethodStart, Is.GreaterThan(resetMethodStart));
             Assert.That(resetMethodSource, Does.Contain("FBXConversionCoordinator.RecaptureTargetGuardBaselines("));
             Assert.That(resetMethodSource, Does.Not.Contain("targetCharacter.GetComponent<HumanoidArmDeformationGuard>()"));
             Assert.That(resetMethodSource, Does.Not.Contain("targetCharacter.GetComponent<HumanoidThumbDeformationGuard>()"));
