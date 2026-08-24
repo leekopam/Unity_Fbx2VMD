@@ -33,7 +33,10 @@ namespace Fbx2Vmd.FBXImporter
             string outputBaseName)
         {
 #if UNITY_EDITOR
-            bool earlyEditorSmokeRecordingOverrideActive = _pipeline._editorSmokeRecordingOverrideActive;
+            FBXEditorDiagnosticSession editorDiagnosticSession =
+                _pipeline.EditorDiagnosticSession;
+            bool earlyEditorSmokeRecordingOverrideActive =
+                editorDiagnosticSession.IsRecordingOverrideActive;
 #else
             bool earlyEditorSmokeRecordingOverrideActive = false;
 #endif
@@ -61,8 +64,9 @@ namespace Fbx2Vmd.FBXImporter
             string comparisonLabel = $"auto_{recordingOutputBaseName}";
 
 #if UNITY_EDITOR
-            bool editorSmokeRecordingOverrideActive = _pipeline._editorSmokeRecordingOverrideActive;
-            float[] diagnosticSampleTimesOverride = _pipeline._editorSmokeSampleTimesOverride;
+            bool editorSmokeRecordingOverrideActive =
+                editorDiagnosticSession.IsRecordingOverrideActive;
+            float[] diagnosticSampleTimesOverride = editorDiagnosticSession.SampleTimesOverride;
 #else
             bool editorSmokeRecordingOverrideActive = false;
             float[] diagnosticSampleTimesOverride = null;
@@ -87,18 +91,22 @@ namespace Fbx2Vmd.FBXImporter
                 float diagnosticScreenshotPadding = 1.8f;
                 float diagnosticScreenshotVerticalViewportCenter = 0.28f;
 #if UNITY_EDITOR
-                recordingCapturePlan = _pipeline._editorSmokeCaptureResolutionOverrideActive
-                    ? RecordingCaptureResolution.CreateCustomPlan(_pipeline._editorSmokeCaptureWidth, _pipeline._editorSmokeCaptureHeight)
+                recordingCapturePlan = editorDiagnosticSession.HasCaptureResolutionOverride
+                    ? RecordingCaptureResolution.CreateCustomPlan(
+                        editorDiagnosticSession.CaptureWidth,
+                        editorDiagnosticSession.CaptureHeight)
                     : RecordingCaptureResolution.CreatePlan(
                         _pipeline.recordingCaptureQuality,
                         _pipeline.customRecordingCaptureWidth,
                         _pipeline.customRecordingCaptureHeight);
-                diagnosticScreenshotPadding = float.IsNaN(_pipeline._editorSmokeDiagnosticScreenshotPaddingOverride)
+                diagnosticScreenshotPadding = float.IsNaN(
+                    editorDiagnosticSession.DiagnosticScreenshotPaddingOverride)
                     ? diagnosticScreenshotPadding
-                    : _pipeline._editorSmokeDiagnosticScreenshotPaddingOverride;
-                diagnosticScreenshotVerticalViewportCenter = float.IsNaN(_pipeline._editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride)
+                    : editorDiagnosticSession.DiagnosticScreenshotPaddingOverride;
+                diagnosticScreenshotVerticalViewportCenter = float.IsNaN(
+                    editorDiagnosticSession.DiagnosticScreenshotVerticalViewportCenterOverride)
                     ? diagnosticScreenshotVerticalViewportCenter
-                    : _pipeline._editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride;
+                    : editorDiagnosticSession.DiagnosticScreenshotVerticalViewportCenterOverride;
 #else
                 recordingCapturePlan = RecordingCaptureResolution.CreatePlan(
                     _pipeline.recordingCaptureQuality,
@@ -115,43 +123,46 @@ namespace Fbx2Vmd.FBXImporter
                     diagnosticScreenshotPadding,
                     diagnosticScreenshotVerticalViewportCenter);
 #if UNITY_EDITOR
-                if (_pipeline._editorSmokeRecordingOverrideActive)
+                if (editorDiagnosticSession.IsRecordingOverrideActive)
                 {
-                    float requestedDuration = Mathf.Max(0.1f, _pipeline._editorSmokeDurationSeconds);
+                    float requestedDuration = Mathf.Max(
+                        0.1f,
+                        editorDiagnosticSession.DurationSeconds);
                     bool hasEditorSmokeTimingOverride =
-                        !float.IsNaN(_pipeline._editorSmokeRecordingStartTimeOverrideSeconds) ||
-                        !float.IsNaN(_pipeline._editorSmokeRecordingPlaybackSpeedOverride);
+                        !float.IsNaN(editorDiagnosticSession.RecordingStartTimeOverrideSeconds) ||
+                        !float.IsNaN(editorDiagnosticSession.RecordingPlaybackSpeedOverride);
                     recordingStartTime = FBXEditorDiagnosticPlanner.CalculateStartTime(
                         clip,
                         requestedDuration,
-                        _pipeline._editorSmokeSegment);
-                    if (!float.IsNaN(_pipeline._editorSmokeRecordingStartTimeOverrideSeconds))
+                        editorDiagnosticSession.Segment);
+                    if (!float.IsNaN(editorDiagnosticSession.RecordingStartTimeOverrideSeconds))
                     {
                         recordingStartTime = Mathf.Clamp(
-                            _pipeline._editorSmokeRecordingStartTimeOverrideSeconds,
+                            editorDiagnosticSession.RecordingStartTimeOverrideSeconds,
                             0f,
                             Mathf.Max(0f, clip.length));
                     }
 
-                    if (!float.IsNaN(_pipeline._editorSmokeRecordingPlaybackSpeedOverride))
+                    if (!float.IsNaN(editorDiagnosticSession.RecordingPlaybackSpeedOverride))
                     {
-                        recordingPlaybackSpeed = _pipeline._editorSmokeRecordingPlaybackSpeedOverride;
+                        recordingPlaybackSpeed =
+                            editorDiagnosticSession.RecordingPlaybackSpeedOverride;
                     }
 
                     float safePlaybackSpeed = Mathf.Max(0.0001f, recordingPlaybackSpeed);
                     float remainingLength = Mathf.Max(0.1f, (clip.length - recordingStartTime) / safePlaybackSpeed);
                     recordingLength = Mathf.Min(requestedDuration, remainingLength);
                     recordingTargetFrameCount = Mathf.Min(
-                        Mathf.Max(1, _pipeline._editorSmokeTargetFrameCount),
+                        Mathf.Max(1, editorDiagnosticSession.TargetFrameCount),
                         Mathf.CeilToInt(recordingLength * FBXVmdPipeline.EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
                     recordingOutputBaseName = FBXEditorDiagnosticPlanner.BuildOutputBaseName(
                         outputBaseName,
                         recordingLength,
-                        _pipeline._editorSmokeSegment);
+                        editorDiagnosticSession.Segment);
                     comparisonLabel = $"auto_{recordingOutputBaseName}";
                     Debug.Log(
                         $"[Recording] 에디터 스모크 녹화 제한 적용됨. VMD={recordingOutputBaseName}.vmd, " +
-                        $"segment={FBXEditorDiagnosticPlanner.GetSegmentLabel(_pipeline._editorSmokeSegment)}, " +
+                        $"segment={FBXEditorDiagnosticPlanner.GetSegmentLabel(editorDiagnosticSession.Segment)}, " +
                         $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
                         $"targetFrameCount={recordingTargetFrameCount}");
 
@@ -162,7 +173,7 @@ namespace Fbx2Vmd.FBXImporter
                         recordingLength,
                         recordingTargetFrameCount,
                         FBXVmdPipeline.EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
-                        _pipeline._editorSmokeUseKnownMmdReferenceTiming,
+                        editorDiagnosticSession.UseKnownReferenceTiming,
                         out float referenceRecordingLength,
                         out int referenceTargetFrameCount,
                         out float referencePlaybackSpeed))
