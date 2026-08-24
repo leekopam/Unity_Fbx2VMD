@@ -310,6 +310,35 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ThumbGuardBinding_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidThumbDeformationGuardApplier",
+                throwOnError: false);
+            Type optionsType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidThumbDeformationGuardOptions",
+                throwOnError: false);
+
+            Assert.That(applierType, Is.Not.Null);
+            Assert.That(optionsType, Is.Not.Null);
+            Assert.That(
+                applierType?.GetMethod(
+                    "Apply",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Not.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "ConfigureTargetThumbDeformationGuard",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "CreateThumbDeformationGuardOptions",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Not.Null);
+        }
+
+        [Test]
         public void Given_ControlledSourceAlreadyInImportFolder_When_DecidingImportSettings_Then_PreservesExistingImporter()
         {
             string dataPath = Path.Combine("C:", "Project", "Assets");

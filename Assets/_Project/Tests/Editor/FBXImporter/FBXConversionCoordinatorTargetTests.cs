@@ -688,11 +688,11 @@ namespace Tests.Editor.FBXImporter
                 retargeterBridgeStart,
                 retargeterBridgeEnd - retargeterBridgeStart);
             Assert.That(
-                retargeterBridgeSource.IndexOf("ConfigureTargetThumbDeformationGuard(", System.StringComparison.Ordinal),
+                retargeterBridgeSource.IndexOf("HumanoidThumbDeformationGuardApplier.Apply(", System.StringComparison.Ordinal),
                 Is.GreaterThan(retargeterBridgeSource.IndexOf("_activeRetargeter = retargeter;", System.StringComparison.Ordinal)));
             Assert.That(
                 retargeterBridgeSource.IndexOf("EditorHumanoidReferenceApplier.Apply(", System.StringComparison.Ordinal),
-                Is.GreaterThan(retargeterBridgeSource.IndexOf("ConfigureTargetThumbDeformationGuard(", System.StringComparison.Ordinal)));
+                Is.GreaterThan(retargeterBridgeSource.IndexOf("HumanoidThumbDeformationGuardApplier.Apply(", System.StringComparison.Ordinal)));
             Assert.That(
                 retargeterBridgeSource.IndexOf("EditorHumanoidReferenceApplier.ApplyManualPoseReference(", System.StringComparison.Ordinal),
                 Is.GreaterThan(retargeterBridgeSource.IndexOf("EditorHumanoidReferenceApplier.Apply(", System.StringComparison.Ordinal)));
