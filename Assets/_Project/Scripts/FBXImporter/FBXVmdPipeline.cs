@@ -2123,11 +2123,12 @@ namespace Fbx2Vmd.FBXImporter
                 Animator ghostAnimator = importedModel.GetComponent<Animator>();
                 PrepareTargetCharacter(targetObject, targetAnimator, ghostAnimator);
 
-                PoseSpaceRetargeter retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
+                PoseSpaceRetargeter retargeter = _conversionCoordinator.CreateRetargeter(
+                    importedModel,
+                    targetObject,
+                    boneMapping,
+                    targetClip);
                 _activeRetargeter = retargeter;
-                RetargetingContext context = new RetargetingContext(importedModel, targetObject, boneMapping, targetClip);
-                RetargetingSettings settings = RetargetingSettings.CreateSnapshot(this);
-                retargeter.Initialize(context, settings);
                 ConfigureTargetThumbDeformationGuard(targetObject, targetAnimator, retargeter);
 #if UNITY_EDITOR
                 ConfigureEditorHumanoidMuscleReference(retargeter, targetPath, sourcePath);

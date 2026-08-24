@@ -66,6 +66,23 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal PoseSpaceRetargeter CreateRetargeter(
+            GameObject importedModel,
+            GameObject targetObject,
+            Dictionary<string, string> boneMapping,
+            AnimationClip targetClip)
+        {
+            PoseSpaceRetargeter retargeter = importedModel.AddComponent<PoseSpaceRetargeter>();
+            RetargetingContext context = new RetargetingContext(
+                importedModel,
+                targetObject,
+                boneMapping,
+                targetClip);
+            RetargetingSettings settings = RetargetingSettings.CreateSnapshot(_pipeline);
+            retargeter.Initialize(context, settings);
+            return retargeter;
+        }
+
         internal void ConfigureTargetRetargetGuards(
             GameObject targetObject,
             Animator targetAnimator,
