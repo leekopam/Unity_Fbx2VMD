@@ -2035,7 +2035,8 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            await ProcessFBXSessionAsync(sourcePath);
+            EnsureServicesInitialized();
+            await _conversionCoordinator.ConvertAsync(new FBXConversionRequest(sourcePath));
         }
 
         /// <summary>

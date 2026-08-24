@@ -646,11 +646,7 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-                FBXConversionResult result = await _pipeline.ProcessFBXSessionAsync(request.SourcePath);
-                if (!result.IsSuccess)
-                    return result;
-
-                return result;
+                return await RunSessionAsync(request);
             }
             catch (Exception e)
             {
