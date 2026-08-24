@@ -455,6 +455,28 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RetargeterAssembly_When_CheckingOwnership_Then_CoordinatorCreatesAndInitializesComponent()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "CreateRetargeter",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.CreateRetargeter("));
+            Assert.That(pipelineSource, Does.Not.Contain("importedModel.AddComponent<PoseSpaceRetargeter>()"));
+            Assert.That(pipelineSource, Does.Not.Contain("new RetargetingContext("));
+            Assert.That(pipelineSource, Does.Not.Contain("RetargetingSettings.CreateSnapshot(this)"));
+            Assert.That(pipelineSource, Does.Not.Contain("retargeter.Initialize(context, settings)"));
+        }
+
+        [Test]
         public void Given_UnusedPipelineHelpers_When_CheckingGodClassSurface_Then_LegacyMethodsAreAbsent()
         {
             const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
