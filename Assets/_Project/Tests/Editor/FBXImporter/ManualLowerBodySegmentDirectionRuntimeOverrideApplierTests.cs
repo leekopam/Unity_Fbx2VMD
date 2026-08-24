@@ -9,6 +9,40 @@ namespace Tests.Editor.FBXImporter
     public class ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests
     {
         [Test]
+        public void Given_ChangedDetailSetting_When_CheckingDetails_Then_ReturnsTrue()
+        {
+            Type applierType = FindApplierType();
+            MethodInfo hasDetailsMethod = applierType.GetMethod(
+                "HasDetails",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(hasDetailsMethod, Is.Not.Null);
+
+            bool hasDetails = (bool)hasDetailsMethod.Invoke(
+                null,
+                new object[]
+                {
+                    false,
+                    0f,
+                    false,
+                    0f,
+                    0f,
+                    0f,
+                    1f,
+                    1f,
+                    0.125f,
+                    0.125f,
+                    0f,
+                    0f,
+                    0.5f,
+                    1f,
+                    false,
+                    0f
+                });
+
+            Assert.That(hasDetails, Is.True);
+        }
+
+        [Test]
         public void Given_LowerBodySegmentDirectionSettings_When_Applied_Then_ClampsValues()
         {
             var pipelineObject = new GameObject("lower body segment direction override pipeline");
@@ -62,6 +96,15 @@ namespace Tests.Editor.FBXImporter
             {
                 UnityEngine.Object.DestroyImmediate(pipelineObject);
             }
+        }
+
+        private static Type FindApplierType()
+        {
+            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.ManualLowerBodySegmentDirectionRuntimeOverrideApplier",
+                throwOnError: false);
+            Assert.That(applierType, Is.Not.Null, "모델 중립 하체 방향 override 적용기가 필요합니다.");
+            return applierType;
         }
     }
 }
