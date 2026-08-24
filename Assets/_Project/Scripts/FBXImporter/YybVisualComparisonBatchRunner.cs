@@ -6070,40 +6070,47 @@ namespace Fbx2Vmd.FBXImporter
                 $"activeFinished={_activeJobFinished} advancePending={_advanceAfterPlayStopPending} playing={EditorApplication.isPlaying} " +
                 $"skippedPendingJobs={skippedPendingJobs} skippedResults={skippedResults}");
 
-            if (_advanceAfterPlayStopPending)
+            ResumeRestoredRun();
+        }
+
+        private static void ResumeRestoredRun()
+        {
+            VisualComparisonRunResumeAction action = VisualComparisonRunResumePlanner.Resolve(
+                _advanceAfterPlayStopPending,
+                _playModeEntryPending,
+                _activeJob != null,
+                EditorApplication.isPlaying,
+                _activeJobFinished,
+                PendingJobs.Count > 0);
+
+            switch (action)
             {
-                QueueAdvanceAfterPlayStop("RestoreFromPersistedState");
-            }
-            else if (_playModeEntryPending)
-            {
-                if (_activeJob != null)
-                {
+                case VisualComparisonRunResumeAction.QueueAdvanceAfterPlayStop:
+                    QueueAdvanceAfterPlayStop("RestoreFromPersistedState");
+                    break;
+                case VisualComparisonRunResumeAction.QueuePlayModeEntry:
                     QueuePlayModeEntryForActiveJob("RestoreFromPersistedState");
-                }
-                else
-                {
+                    break;
+                case VisualComparisonRunResumeAction.RecoverMissingActiveJob:
                     RecoverFromMissingActiveJob("RestoreFromPersistedState");
-                }
-            }
-            else if (EditorApplication.isPlaying)
-            {
-                EditorApplication.delayCall += StartCurrentJobInPlayMode;
-            }
-            else if (_activeJob != null && _activeJobFinished)
-            {
-                EditorApplication.delayCall += StartNextJob;
-            }
-            else if (_activeJob != null)
-            {
-                EditorApplication.delayCall += RestoreActiveJobEntry;
-            }
-            else if (PendingJobs.Count > 0)
-            {
-                StartNextJob();
-            }
-            else
-            {
-                FinalizeRun();
+                    break;
+                case VisualComparisonRunResumeAction.DeferActiveJobStartInPlayMode:
+                    EditorApplication.delayCall += StartCurrentJobInPlayMode;
+                    break;
+                case VisualComparisonRunResumeAction.DeferNextJob:
+                    EditorApplication.delayCall += StartNextJob;
+                    break;
+                case VisualComparisonRunResumeAction.DeferActiveJobEntry:
+                    EditorApplication.delayCall += RestoreActiveJobEntry;
+                    break;
+                case VisualComparisonRunResumeAction.StartNextJob:
+                    StartNextJob();
+                    break;
+                case VisualComparisonRunResumeAction.FinalizeRun:
+                    FinalizeRun();
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(action), action, "지원하지 않는 실행 복원 동작입니다.");
             }
         }
 
