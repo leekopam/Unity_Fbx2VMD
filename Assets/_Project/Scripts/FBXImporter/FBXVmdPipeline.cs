@@ -2073,7 +2073,13 @@ namespace Fbx2Vmd.FBXImporter
             _activeRetargeter = retargeter;
             ConfigureTargetThumbDeformationGuard(targetObject, targetAnimator, retargeter);
 #if UNITY_EDITOR
-            ConfigureEditorHumanoidMuscleReference(retargeter, importedFilePath, sourceFilePath);
+            AnimationClip editorHumanoidReferenceClip = EditorHumanoidReferenceApplier.Apply(
+                retargeter,
+                importedFilePath,
+                sourceFilePath,
+                _shouldUseEditorHumanoidClipMuscleReference,
+                _shouldUseEditorHumanoidRootTranslationReference);
+            ConfigureEditorManualFingerPoseReference(retargeter, editorHumanoidReferenceClip);
 #endif
             SetSessionState(FBXSessionState.GhostReady, "Ghost Retarget 준비 완료", 0.6f);
         }
@@ -2547,35 +2553,6 @@ namespace Fbx2Vmd.FBXImporter
         #endregion
 
 #if UNITY_EDITOR
-        private void ConfigureEditorHumanoidMuscleReference(PoseSpaceRetargeter retargeter, string importedFilePath, string sourceFilePath)
-        {
-            if (!_shouldUseEditorHumanoidClipMuscleReference || retargeter == null)
-            {
-                return;
-            }
-
-            string relativePath = ResolveEditorHumanoidReferencePath(importedFilePath, sourceFilePath);
-            if (string.IsNullOrEmpty(relativePath))
-            {
-                return;
-            }
-
-            AnimationClip referenceClip = LoadEditorHumanoidAnimationClip(relativePath);
-            if (referenceClip == null)
-            {
-                Debug.LogWarning($"[FBXImport] Unity Editor Humanoid 기준 클립을 찾지 못했습니다: {relativePath}");
-                return;
-            }
-
-            Debug.Log($"[FBXImport] Editor Humanoid muscle 기준 clip: {relativePath}/{referenceClip.name}");
-            retargeter.ConfigureEditorHumanoidMuscleReference(referenceClip);
-            if (_shouldUseEditorHumanoidRootTranslationReference)
-            {
-                retargeter.ConfigureEditorHumanoidRootTranslationReference(referenceClip);
-            }
-            ConfigureEditorManualFingerPoseReference(retargeter, referenceClip);
-        }
-
         private void ConfigureEditorManualFingerPoseReference(PoseSpaceRetargeter retargeter, AnimationClip referenceClip)
         {
             if ((!_shouldUseManualAnimatorFingerPoseReference &&
@@ -2647,72 +2624,6 @@ namespace Fbx2Vmd.FBXImporter
                 Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateStart);
             retargeter.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
                 Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
-        }
-
-        private static string ResolveEditorHumanoidReferencePath(string importedFilePath, string sourceFilePath)
-        {
-            string sourceRelativePath = FBXImportController.ToAssetRelativePath(sourceFilePath, Application.dataPath);
-            string importedRelativePath = FBXImportController.ToAssetRelativePath(importedFilePath, Application.dataPath);
-            string sourceFileName = string.IsNullOrEmpty(sourceFilePath) ? importedFilePath : sourceFilePath;
-            return ResolveEditorHumanoidReferencePath(
-                importedRelativePath,
-                sourceRelativePath,
-                sourceFileName,
-                HasEditorHumanoidAnimationClip);
-        }
-
-        private static string ResolveEditorHumanoidReferencePath(
-            string importedRelativePath,
-            string sourceRelativePath,
-            string sourceFileName,
-            Func<string, bool> hasHumanoidAnimationClip)
-        {
-            if (!FBXImportController.IsControlledImportAssetPath(sourceRelativePath) && hasHumanoidAnimationClip(sourceRelativePath))
-            {
-                return sourceRelativePath;
-            }
-
-            string fileName = Path.GetFileName(string.IsNullOrEmpty(sourceFileName) ? importedRelativePath : sourceFileName);
-            if (!string.IsNullOrEmpty(fileName))
-            {
-                string manualReferencePath = Path.Combine("Assets", "_Project", "FBX", fileName).Replace("\\", "/");
-                if (hasHumanoidAnimationClip(manualReferencePath))
-                {
-                    return manualReferencePath;
-                }
-            }
-
-            return hasHumanoidAnimationClip(importedRelativePath) ? importedRelativePath : "";
-        }
-
-        private static bool HasEditorHumanoidAnimationClip(string relativePath)
-        {
-            return !string.IsNullOrEmpty(relativePath) && LoadEditorHumanoidAnimationClip(relativePath) != null;
-        }
-
-        private static AnimationClip LoadEditorHumanoidAnimationClip(string relativePath)
-        {
-            if (string.IsNullOrEmpty(relativePath))
-            {
-                return null;
-            }
-
-            UnityEngine.Object[] assets = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(relativePath);
-            foreach (UnityEngine.Object asset in assets)
-            {
-                AnimationClip clip = asset as AnimationClip;
-                if (clip == null || clip.name.StartsWith("__", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (clip.humanMotion)
-                {
-                    return clip;
-                }
-            }
-
-            return null;
         }
 
 #endif

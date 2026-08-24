@@ -226,6 +226,39 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_EditorHumanoidReference_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorHumanoidReferenceApplier",
+                throwOnError: false);
+
+            Assert.That(applierType, Is.Not.Null);
+            Assert.That(
+                applierType?.GetMethod(
+                    "Apply",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Not.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "ConfigureEditorHumanoidMuscleReference",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "ResolveEditorHumanoidReferencePath",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: HumanoidReferenceResolverParameterTypes,
+                    modifiers: null),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "LoadEditorHumanoidAnimationClip",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Null);
+        }
+
+        [Test]
         public void Given_ControlledSourceAlreadyInImportFolder_When_DecidingImportSettings_Then_PreservesExistingImporter()
         {
             string dataPath = Path.Combine("C:", "Project", "Assets");
@@ -933,14 +966,21 @@ namespace Tests.Editor.FBXImporter
             string sourceFileName,
             params string[] humanoidClipPaths)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
+            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorHumanoidReferenceApplier",
+                throwOnError: false);
+            Assert.That(applierType, Is.Not.Null,
+                "EditorHumanoidReferenceApplier should own reference path resolution.");
+
+            MethodInfo method = applierType.GetMethod(
                 "ResolveEditorHumanoidReferencePath",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: HumanoidReferenceResolverParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a static humanoid reference resolver overload for fakeable path tests.");
+            Assert.That(method, Is.Not.Null,
+                "EditorHumanoidReferenceApplier must expose a fakeable reference path resolver.");
 
             var clips = new HashSet<string>(humanoidClipPaths, StringComparer.OrdinalIgnoreCase);
             Func<string, bool> hasHumanoidClip = clips.Contains;
