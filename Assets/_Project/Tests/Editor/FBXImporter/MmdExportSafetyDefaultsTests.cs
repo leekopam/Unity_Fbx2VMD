@@ -7758,9 +7758,13 @@ namespace Tests.Editor.FBXImporter
             FieldInfo field = target.GetType().GetField(
                 fieldName,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must expose {fieldName} for focused runtime diagnostics.");
-            object value = field.GetValue(target);
-            Assert.That(value, Is.TypeOf<float>(), $"{fieldName} must be a float field.");
+
+            object value = field != null
+                ? field.GetValue(target)
+                : target.GetType().GetProperty(
+                    fieldName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(target);
+            Assert.That(value, Is.TypeOf<float>(), $"{target.GetType().Name} must expose float member {fieldName} for focused runtime diagnostics.");
             return (float)value;
         }
 
@@ -7785,9 +7789,13 @@ namespace Tests.Editor.FBXImporter
             FieldInfo field = target.GetType().GetField(
                 fieldName,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must expose {fieldName} for focused runtime diagnostics.");
-            object value = field.GetValue(target);
-            Assert.That(value, Is.TypeOf<bool>(), $"{fieldName} must be a bool field.");
+
+            object value = field != null
+                ? field.GetValue(target)
+                : target.GetType().GetProperty(
+                    fieldName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(target);
+            Assert.That(value, Is.TypeOf<bool>(), $"{target.GetType().Name} must expose bool member {fieldName} for focused runtime diagnostics.");
             return (bool)value;
         }
 
