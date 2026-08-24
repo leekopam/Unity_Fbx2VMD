@@ -3007,32 +3007,12 @@ namespace Fbx2Vmd.FBXImporter
             float recoveryDebtThresholdVmd,
             int recoveryHoldFrames)
         {
-            float normalizedLimit = NormalizeMmdIkDeltaGuardLimitOverride(overrideLimitVmd);
-            if (recorder == null || !HasMmdIkDeltaGuardLimitOverride(normalizedLimit))
-            {
-                return false;
-            }
-
-            recorder.ClampMmdIkExportDeltaSpikes = true;
-            float normalizedRecoveryTrigger = NormalizeMmdIkDeltaGuardLimitOverride(recoveryTriggerVmd);
-            if (HasMmdIkDeltaGuardLimitOverride(normalizedRecoveryTrigger))
-            {
-                recorder.UseMmdIkExportDeltaRecoveryLimit = true;
-                recorder.MmdIkExportDeltaRecoveryLimitPerFrame = normalizedLimit;
-                recorder.MmdIkExportDeltaRecoveryTriggerPerFrame = normalizedRecoveryTrigger;
-                recorder.MmdIkExportDeltaRecoveryDebtThresholdPerFrame =
-                    NormalizeMmdIkDeltaGuardLimitOverride(recoveryDebtThresholdVmd);
-                recorder.MmdIkExportDeltaRecoveryHoldFrames =
-                    NormalizeMmdIkDeltaGuardRecoveryHoldFrames(recoveryHoldFrames);
-                return true;
-            }
-
-            recorder.UseMmdIkExportDeltaRecoveryLimit = false;
-            recorder.MmdIkExportDeltaRecoveryDebtThresholdPerFrame = 0f;
-            recorder.MmdIkExportDeltaRecoveryHoldFrames = 0;
-            recorder.MaxMmdFootIkExportDeltaPerFrame = normalizedLimit;
-            recorder.MaxMmdToeIkExportDeltaPerFrame = normalizedLimit;
-            return true;
+            return VmdIkDeltaGuardRuntimeOverrideApplier.Apply(
+                recorder,
+                overrideLimitVmd,
+                recoveryTriggerVmd,
+                recoveryDebtThresholdVmd,
+                recoveryHoldFrames);
         }
 
         private static bool ApplyFinalIkFootGroundingRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
@@ -4423,12 +4403,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static float NormalizeMmdIkDeltaGuardLimitOverride(float value)
         {
-            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
-            {
-                return NoMmdIkDeltaGuardLimitOverrideVmd;
-            }
-
-            return value;
+            return VmdIkDeltaGuardRuntimeOverrideApplier.NormalizeLimit(value);
         }
 
         private static float NormalizePositiveFloat(float value, float fallbackValue)
@@ -4453,7 +4428,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool HasMmdIkDeltaGuardLimitOverride(float value)
         {
-            return !float.IsNaN(value) && !float.IsInfinity(value) && value > 0f;
+            return VmdIkDeltaGuardRuntimeOverrideApplier.HasLimit(value);
         }
 
         private static bool HasDiagnosticScreenshotFramingOverride(float value)
@@ -4463,7 +4438,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static int NormalizeMmdIkDeltaGuardRecoveryHoldFrames(int value)
         {
-            return value > 0 ? value : 0;
+            return VmdIkDeltaGuardRuntimeOverrideApplier.NormalizeRecoveryHoldFrames(value);
         }
 
         private static int NormalizeDiagnosticCaptureDimensionOverride(int value)
