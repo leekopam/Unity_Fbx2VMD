@@ -3026,27 +3026,11 @@ namespace Fbx2Vmd.FBXImporter
             UnityHumanoidVMDRecorder recorder,
             bool applyIkTargets)
         {
-            if (target == null ||
-                string.IsNullOrWhiteSpace(sourceVmdPath) ||
-                !File.Exists(sourceVmdPath))
-            {
-                return false;
-            }
-
-            VmdPlaybackProbe probe = target.GetComponent<VmdPlaybackProbe>();
-            if (probe == null)
-            {
-                probe = target.AddComponent<VmdPlaybackProbe>();
-            }
-
-            bool useCenterAsParentOfAll = recorder != null && recorder.UseCenterAsParentOfAll;
-            bool routeCenterBoneToGroove = recorder != null && recorder.RouteHumanoidCenterToGroove;
-            probe.ConfigureRuntimePlayback(
+            return VmdPlaybackProbeRuntimeOverrideApplier.Apply(
+                target,
                 sourceVmdPath,
-                useCenterAsParentOfAll,
-                routeCenterBoneToGroove,
+                recorder,
                 applyIkTargets);
-            return probe.PlaybackEnabled && probe.ApplyIkTargets == applyIkTargets;
         }
 
         private static bool ApplyMainSceneRuntimeOverrides(FBXVmdPipeline fileManager)
