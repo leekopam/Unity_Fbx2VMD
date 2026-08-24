@@ -3,9 +3,7 @@ using UnityEngine.Serialization;
 using System;
 using System.IO;
 using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using Fbx2Vmd.FileSystem;
 using Fbx2Vmd.Settings;
 using Fbx2Vmd.Recording;
@@ -2034,22 +2032,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal void LogRetargetPlaybackStabilitySummary()
         {
-            if (_activeRetargeter == null)
-            {
-                return;
-            }
-
-            Debug.Log(
-                $"[FBXImport] Retarget playback stability: " +
-                $"clipTimeClamp={_activeRetargeter.clampLegacyAnimationVisualStep}, " +
-                $"maxClipStep={_activeRetargeter.MaxLegacyAnimationStep:F4}s, " +
-                $"stepSpikes={_activeRetargeter.LegacyAnimationStepSpikeCount}, " +
-                $"poseSmooth={_activeRetargeter.PoseVisualSmoothingCount}, " +
-                $"muscleOnlySmoothSkipped={_activeRetargeter.PoseVisualMuscleDeltaOnlySkippedCount}, " +
-                $"maxPoseMuscleDelta={_activeRetargeter.MaxPoseVisualMaxMuscleDelta:F4}, " +
-                $"hipsLocalClamp={_activeRetargeter.TargetHipsLocalPositionSpikeClampedCount}, " +
-                $"maxHipsLocalDelta={_activeRetargeter.MaxTargetHipsLocalPositionDelta:F4}m, " +
-                $"thumbReference[{BuildActiveRetargeterThumbReferenceSummary()}]");
+            RetargetingDiagnosticReporter.LogPlaybackStability(_activeRetargeter);
         }
 
 #if UNITY_EDITOR
@@ -2060,83 +2043,15 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            HumanoidThumbDeformationGuard thumbGuard = targetCharacter.GetComponent<HumanoidThumbDeformationGuard>();
-            string leftGuard = thumbGuard != null ? thumbGuard.BuildThumbHelperDebugSummary(false) : "thumbGuard=<none>";
-            string rightGuard = thumbGuard != null ? thumbGuard.BuildThumbHelperDebugSummary(true) : "thumbGuard=<none>";
-            string leftRetargeter = _activeRetargeter != null ? _activeRetargeter.BuildThumbHelperRelationshipDebugSummary(true) : "retargeter=<none>";
-            string rightRetargeter = _activeRetargeter != null ? _activeRetargeter.BuildThumbHelperRelationshipDebugSummary(false) : "retargeter=<none>";
-
-            Debug.Log(
-                $"[FBXImport] Editor smoke thumb state ({stage}): " +
-                $"fbx={EditorDiagnosticSession.CurrentFbxFileName ?? "<none>"}, " +
-                $"segment={FBXEditorDiagnosticPlanner.GetSegmentLabel(EditorDiagnosticSession.Segment)}, " +
-                $"projectionMin={EffectiveThumbProjectionMinPalmNormal:F3}, " +
-                $"thumbReference[{BuildActiveRetargeterThumbReferenceSummary()}], " +
-                $"guardLeft[{leftGuard}], guardRight[{rightGuard}], " +
-                $"retargeterLeft[{leftRetargeter}], retargeterRight[{rightRetargeter}]");
+            RetargetingDiagnosticReporter.LogEditorSmokeThumbState(
+                stage,
+                EditorDiagnosticSession.CurrentFbxFileName,
+                EditorDiagnosticSession.Segment,
+                EffectiveThumbProjectionMinPalmNormal,
+                targetCharacter,
+                _activeRetargeter);
         }
 #endif
-
-        private string BuildActiveRetargeterThumbReferenceSummary()
-        {
-            if (_activeRetargeter == null)
-            {
-                return "retargeter=<none>";
-            }
-
-            Animator referenceAnimator = ReadRetargeterPrivateField<Animator>(_activeRetargeter, "_editorFingerReferenceAnimator");
-            bool editorFingerRuntime = ReadRetargeterPrivateField<bool>(_activeRetargeter, "_useEditorFingerPoseReference");
-            return
-                $"retargeter={GetHierarchyPath(_activeRetargeter.transform)}, " +
-                $"targetAnimator={GetHierarchyPath(_activeRetargeter.targetAnimator != null ? _activeRetargeter.targetAnimator.transform : null)}, " +
-                $"thumbLocalRefConfig={_activeRetargeter.useManualAnimatorThumbLocalRotationReference}, " +
-                $"preserveThumbMuscles={_activeRetargeter.preserveManualFingerReferenceThumbMuscles}, " +
-                $"editorFingerRuntime={editorFingerRuntime}, " +
-                $"referenceAnimator={GetHierarchyPath(referenceAnimator != null ? referenceAnimator.transform : null)}, " +
-                $"manualThumbActive={_activeRetargeter.IsManualThumbLocalRotationReferenceActive}, " +
-                $"suppressLeft={_activeRetargeter.ShouldSuppressLeftThumbPoseShapingGuard}, " +
-                $"suppressRight={_activeRetargeter.ShouldSuppressRightThumbPoseShapingGuard}, " +
-                $"leftLocalGuardClamp={_activeRetargeter.LastLeftThumbLocalRotationGuardClampCount}, " +
-                $"rightLocalGuardClamp={_activeRetargeter.LastRightThumbLocalRotationGuardClampCount}, " +
-                $"leftLocalGuardPreserve={_activeRetargeter.LastLeftThumbLocalRotationGuardPreserveCount}, " +
-                $"rightLocalGuardPreserve={_activeRetargeter.LastRightThumbLocalRotationGuardPreserveCount}";
-        }
-
-        private static T ReadRetargeterPrivateField<T>(PoseSpaceRetargeter retargeter, string fieldName)
-        {
-            if (retargeter == null)
-            {
-                return default;
-            }
-
-            FieldInfo field = typeof(PoseSpaceRetargeter).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            if (field == null)
-            {
-                return default;
-            }
-
-            object value = field.GetValue(retargeter);
-            return value is T typedValue ? typedValue : default;
-        }
-
-        private static string GetHierarchyPath(Transform target)
-        {
-            if (target == null)
-            {
-                return "<null>";
-            }
-
-            List<string> parts = new List<string>();
-            Transform current = target;
-            while (current != null)
-            {
-                parts.Add(current.name);
-                current = current.parent;
-            }
-
-            parts.Reverse();
-            return string.Join("/", parts);
-        }
 
         internal void SetSessionState(FBXSessionState state, string message, float progress, bool shouldLog = true)
         {
