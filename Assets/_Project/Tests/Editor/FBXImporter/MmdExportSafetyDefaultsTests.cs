@@ -890,7 +890,7 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(enabledApplied, Is.True);
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(GetField<bool>(manager, "enableFinalIkFootGroundingExperiment"), Is.False);
+                Assert.That(manager.enableFinalIkFootGroundingExperiment, Is.False);
                 Assert.That(grounder.enabled, Is.False, "Explicit OFF runtime comparison must disable prior GrounderBipedIK state.");
                 Assert.That(grounder.weight, Is.EqualTo(0f).Within(0.0001f), "Explicit OFF runtime comparison must zero GrounderBipedIK influence.");
                 Assert.That(bipedIk.enabled, Is.False, "Explicit OFF runtime comparison must disable prior BipedIK state.");
