@@ -1316,7 +1316,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(maxReachField, Is.Not.Null, "YYB arm swing runtime candidate must expose a max horizontal reach ratio.");
 
                 Type runnerType = Type.GetType(
-                    "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                    "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
                 MethodInfo method = runnerType.GetMethod(
@@ -1392,7 +1392,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(gateField, Is.Not.Null, "YYB arm swing runtime candidate must expose a horizontal-reach-only below-shoulder gate.");
 
                 Type runnerType = Type.GetType(
-                    "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                    "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
                 MethodInfo method = runnerType.GetMethod(
@@ -1470,7 +1470,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(elbowGuardField, Is.Not.Null, "YYB arm swing runtime candidate must expose a post-horizontal-reach elbow saturation guard.");
 
                 Type runnerType = Type.GetType(
-                    "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                    "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
                 MethodInfo method = runnerType.GetMethod(
@@ -5433,7 +5433,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_MainRecordingStableCandidate_When_ExportIkSourceDiagnosticsExists_Then_CopiesDiagnosticsBesideStableVmd()
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             Type captureModeType = runnerType.GetNestedType("CaptureMode", BindingFlags.NonPublic);
@@ -5513,7 +5513,7 @@ namespace Tests.Editor.FBXImporter
         public void Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure()
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             Type captureModeType = runnerType.GetNestedType("CaptureMode", BindingFlags.NonPublic);
@@ -5878,7 +5878,7 @@ namespace Tests.Editor.FBXImporter
             params string[] existingAssetPaths)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -5898,7 +5898,7 @@ namespace Tests.Editor.FBXImporter
         private static int ResolveSummaryTargetFrameCount(int referenceTargetFrameCount, int mainAutoFrameCount)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6150,7 +6150,7 @@ namespace Tests.Editor.FBXImporter
             float recordingFrameRate)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6185,7 +6185,7 @@ namespace Tests.Editor.FBXImporter
             string contactSheetPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6234,7 +6234,7 @@ namespace Tests.Editor.FBXImporter
             string candidateFrameIndexPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6286,7 +6286,7 @@ namespace Tests.Editor.FBXImporter
             string candidateFrameIndexPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6411,7 +6411,7 @@ namespace Tests.Editor.FBXImporter
         private static object BuildCandidateArtifactSelection(params MotionComparisonFrameQualitySummary[] summaries)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6446,7 +6446,7 @@ namespace Tests.Editor.FBXImporter
         private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6464,7 +6464,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyMmdIkDeltaGuardRuntimeOverride(UnityHumanoidVMDRecorder recorder, float overrideLimitVmd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6485,7 +6485,7 @@ namespace Tests.Editor.FBXImporter
             float recoveryTriggerVmd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6507,7 +6507,7 @@ namespace Tests.Editor.FBXImporter
             float recoveryDebtThresholdVmd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6530,7 +6530,7 @@ namespace Tests.Editor.FBXImporter
             int recoveryHoldFrames)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6548,7 +6548,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyFinalIkFootGroundingRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6566,7 +6566,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorFootLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6584,7 +6584,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorFullBodyPoseRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6605,7 +6605,7 @@ namespace Tests.Editor.FBXImporter
             float weight)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6623,7 +6623,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorBodyRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6644,7 +6644,7 @@ namespace Tests.Editor.FBXImporter
             float weight)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6666,7 +6666,7 @@ namespace Tests.Editor.FBXImporter
             float forearmStretchClampMaxOffset = 0f)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6687,7 +6687,7 @@ namespace Tests.Editor.FBXImporter
             float stretchLimit)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6711,7 +6711,7 @@ namespace Tests.Editor.FBXImporter
             float maxHandBelowShoulderRatio)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6753,7 +6753,7 @@ namespace Tests.Editor.FBXImporter
             float forearmMaxDegrees)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6797,7 +6797,7 @@ namespace Tests.Editor.FBXImporter
             float rightSideWeightScale)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6852,7 +6852,7 @@ namespace Tests.Editor.FBXImporter
             float maxDegrees)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6892,7 +6892,7 @@ namespace Tests.Editor.FBXImporter
             float forearmMaxDegrees)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6933,7 +6933,7 @@ namespace Tests.Editor.FBXImporter
             float frameGateEnd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6960,7 +6960,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorHandLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6978,7 +6978,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorThumbLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -6999,7 +6999,7 @@ namespace Tests.Editor.FBXImporter
             float weight)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7017,7 +7017,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7039,7 +7039,7 @@ namespace Tests.Editor.FBXImporter
             float maxOffset)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7116,7 +7116,7 @@ namespace Tests.Editor.FBXImporter
             float frameGateEnd)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7171,7 +7171,7 @@ namespace Tests.Editor.FBXImporter
             float evaluatorXzTargetMagnitude)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7201,7 +7201,7 @@ namespace Tests.Editor.FBXImporter
             bool invertBodyPositionZ = false)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7219,7 +7219,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyTargetHumanoidBonePositionLockRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7237,7 +7237,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(FBXVmdPipeline manager, bool enabled)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7264,7 +7264,7 @@ namespace Tests.Editor.FBXImporter
             float axisZScale)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7431,7 +7431,7 @@ namespace Tests.Editor.FBXImporter
             float maxOffset)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7453,7 +7453,7 @@ namespace Tests.Editor.FBXImporter
             float maxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7502,7 +7502,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7561,7 +7561,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7630,7 +7630,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7690,7 +7690,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7742,7 +7742,7 @@ namespace Tests.Editor.FBXImporter
             float footToToesMaxAngle)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7837,7 +7837,7 @@ namespace Tests.Editor.FBXImporter
         private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7855,7 +7855,7 @@ namespace Tests.Editor.FBXImporter
         private static bool IsMainSceneCandidateMode(string jobMode)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7873,7 +7873,7 @@ namespace Tests.Editor.FBXImporter
         private static string ResolveIntegratedVerticalSolveRole(string jobMode)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7891,7 +7891,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ShouldBuildFrameQualityDiagnostic(bool success, string metricsCsvPath, string vmdPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7907,7 +7907,7 @@ namespace Tests.Editor.FBXImporter
         private static string[] BuildFrameQualityFailureMessages(params MotionComparisonFrameQualitySummary[] summaries)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7925,7 +7925,7 @@ namespace Tests.Editor.FBXImporter
             object frameRoleDiagnostics)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
             Assert.That(frameRoleDiagnostics, Is.Not.Null);
 
@@ -7945,7 +7945,7 @@ namespace Tests.Editor.FBXImporter
         private static object BuildReferenceAlignedImportedFbxDiagnostics()
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             Type diagnosticsType = runnerType.GetNestedType(
@@ -7981,7 +7981,7 @@ namespace Tests.Editor.FBXImporter
         private static void ClearYybVisualComparisonRunnerState(string reason)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -7998,7 +7998,7 @@ namespace Tests.Editor.FBXImporter
         private static bool ApplyMainSceneRuntimeOverrides(FBXVmdPipeline manager)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8015,7 +8015,7 @@ namespace Tests.Editor.FBXImporter
         private static void SetYybVisualComparisonRunnerStaticField<T>(string fieldName, T value)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             FieldInfo field = runnerType.GetField(
@@ -8028,7 +8028,7 @@ namespace Tests.Editor.FBXImporter
         private static string[] BuildCaptureJobModes(bool enableVmdPlaybackProbeRuntimeOverride)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8049,7 +8049,7 @@ namespace Tests.Editor.FBXImporter
         private static string ResolveVisualCompareSmokeSegment(string segment)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8072,7 +8072,7 @@ namespace Tests.Editor.FBXImporter
             string segment)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo segmentMethod = runnerType.GetMethod(
@@ -8110,7 +8110,7 @@ namespace Tests.Editor.FBXImporter
             float[] referenceLocalSampleSeconds)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8133,7 +8133,7 @@ namespace Tests.Editor.FBXImporter
             float candidateClipSecondsPerReferenceSecond)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
@@ -8192,7 +8192,7 @@ namespace Tests.Editor.FBXImporter
             string metricsCsvPath)
         {
             Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorTools.YybVisualComparisonBatchRunner, Assembly-CSharp-Editor");
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
             MethodInfo method = runnerType.GetMethod(
