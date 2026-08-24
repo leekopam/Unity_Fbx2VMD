@@ -231,11 +231,20 @@ namespace Tests.Editor.FBXImporter
             Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
                 "Fbx2Vmd.FBXImporter.EditorHumanoidReferenceApplier",
                 throwOnError: false);
+            Type optionsType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorManualPoseReferenceOptions",
+                throwOnError: false);
 
             Assert.That(applierType, Is.Not.Null);
+            Assert.That(optionsType, Is.Not.Null);
             Assert.That(
                 applierType?.GetMethod(
                     "Apply",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Not.Null);
+            Assert.That(
+                applierType?.GetMethod(
+                    "ApplyManualPoseReference",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Not.Null);
             Assert.That(
@@ -256,6 +265,48 @@ namespace Tests.Editor.FBXImporter
                     "LoadEditorHumanoidAnimationClip",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "ConfigureEditorManualFingerPoseReference",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "CreateEditorManualPoseReferenceOptions",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Not.Null);
+        }
+
+        [Test]
+        public void Given_ManualLowerBodyReference_When_SnapshottingEditorOptions_Then_EnablesManualPoseApplication()
+        {
+            var pipelineObject = new GameObject("EditorManualPoseOptionsPipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = true;
+                MethodInfo createOptionsMethod = typeof(FBXVmdPipeline).GetMethod(
+                    "CreateEditorManualPoseReferenceOptions",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(createOptionsMethod, Is.Not.Null);
+                object options = createOptionsMethod.Invoke(pipeline, null);
+                PropertyInfo shouldUseLowerBodyProperty = options.GetType().GetProperty(
+                    "ShouldUseLowerBodySegmentDirectionReference",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                PropertyInfo shouldApplyProperty = options.GetType().GetProperty(
+                    "ShouldApply",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(shouldUseLowerBodyProperty, Is.Not.Null);
+                Assert.That(shouldApplyProperty, Is.Not.Null);
+                Assert.That(shouldUseLowerBodyProperty.GetValue(options), Is.True);
+                Assert.That(shouldApplyProperty.GetValue(options), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
         }
 
         [Test]

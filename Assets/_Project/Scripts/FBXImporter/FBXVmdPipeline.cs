@@ -2079,7 +2079,10 @@ namespace Fbx2Vmd.FBXImporter
                 sourceFilePath,
                 _shouldUseEditorHumanoidClipMuscleReference,
                 _shouldUseEditorHumanoidRootTranslationReference);
-            ConfigureEditorManualFingerPoseReference(retargeter, editorHumanoidReferenceClip);
+            EditorHumanoidReferenceApplier.ApplyManualPoseReference(
+                retargeter,
+                editorHumanoidReferenceClip,
+                CreateEditorManualPoseReferenceOptions());
 #endif
             SetSessionState(FBXSessionState.GhostReady, "Ghost Retarget 준비 완료", 0.6f);
         }
@@ -2553,77 +2556,39 @@ namespace Fbx2Vmd.FBXImporter
         #endregion
 
 #if UNITY_EDITOR
-        private void ConfigureEditorManualFingerPoseReference(PoseSpaceRetargeter retargeter, AnimationClip referenceClip)
+        private EditorManualPoseReferenceOptions CreateEditorManualPoseReferenceOptions()
         {
-            if ((!_shouldUseManualAnimatorFingerPoseReference &&
-                    !_shouldUseManualAnimatorFullBodyPoseReference &&
-                    !_shouldUseManualAnimatorHipsLocalPositionReference &&
-                    !_shouldUseManualAnimatorBodyRotationReference &&
-                    !useManualAnimatorHandLocalRotationReference &&
-                    !_shouldUseManualAnimatorFootLocalRotationReference &&
-                    !_shouldUseManualAnimatorLowerBodySegmentDirectionReference &&
-                    !_shouldUseManualAnimatorFootHipsAlignedResidualYawReference &&
-                    !usePostSetHumanPoseRightEndpointPositionReference &&
-                    !usePostSetHumanPoseRightFootEvaluatorXzReference &&
-                    !usePreSetHumanPoseRightEndpointPositionReference &&
-                    !_shouldUseManualAnimatorBodyPositionXzReference &&
-                    !useYybRightSleeveSilhouetteLocalOffsetReference &&
-                    !useManualAnimatorBipedIkFootPositionReference) ||
-                retargeter == null ||
-                referenceClip == null)
+            return new EditorManualPoseReferenceOptions
             {
-                return;
-            }
-
-            GameObject referencePrefab = manualFingerReferencePrefab;
-            if (referencePrefab == null)
-            {
-                referencePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-                    "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
-            }
-
-            RuntimeAnimatorController referenceController = manualFingerReferenceController;
-            if (referenceController == null)
-            {
-                referenceController = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
-                    "Assets/_ManualReference/SampleAnimation/TestAnimator1_Manual.controller");
-            }
-
-            if (referenceController == null)
-            {
-                referenceController = UnityEditor.AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
-                    "Assets/Plugins/VMDRecorderSample/SampleAnimation/TestAnimator1.controller");
-            }
-
-            if (referencePrefab == null || referenceController == null)
-            {
-                Debug.LogWarning("[FBXImport] 수동 기준 손가락 Reference prefab/controller를 찾지 못해 raw FBX finger curve를 사용합니다.");
-                return;
-            }
-
-            retargeter.ConfigureEditorHumanoidFingerPoseReference(
-                referencePrefab,
-                referenceController,
-                referenceClip,
-                _shouldUseManualAnimatorFingerPoseReference,
-                _shouldUseManualAnimatorFullBodyPoseReference,
-                manualAnimatorFullBodyPoseReferenceWeight,
-                _shouldExcludeManualAnimatorFullBodyLowerMuscles,
-                _shouldApplyManualAnimatorFullBodyLowerMusclesOnly,
-                _shouldApplyManualAnimatorFullBodyLegTwistMusclesOnly,
-                manualAnimatorFullBodyPoseRightArmMusclesOnly,
-                manualAnimatorFullBodyPoseLeftArmMusclesOnly,
-                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly,
-                manualAnimatorFullBodyPoseFrameGateStart,
-                manualAnimatorFullBodyPoseFrameGateEnd);
-            retargeter.useYybRightSleeveSilhouetteLocalOffsetReference =
-                useYybRightSleeveSilhouetteLocalOffsetReference;
-            retargeter.yybRightSleeveSilhouetteLocalOffsetX =
-                Mathf.Clamp(yybRightSleeveSilhouetteLocalOffsetX, -0.2f, 0.2f);
-            retargeter.yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
-                Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateStart);
-            retargeter.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
-                Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
+                ReferencePrefab = manualFingerReferencePrefab,
+                ReferenceController = manualFingerReferenceController,
+                ShouldUseFingerPoseReference = _shouldUseManualAnimatorFingerPoseReference,
+                ShouldUseFullBodyPoseReference = _shouldUseManualAnimatorFullBodyPoseReference,
+                FullBodyPoseReferenceWeight = manualAnimatorFullBodyPoseReferenceWeight,
+                ShouldExcludeFullBodyLowerMuscles = _shouldExcludeManualAnimatorFullBodyLowerMuscles,
+                ShouldApplyFullBodyLowerMusclesOnly = _shouldApplyManualAnimatorFullBodyLowerMusclesOnly,
+                ShouldApplyFullBodyLegTwistMusclesOnly = _shouldApplyManualAnimatorFullBodyLegTwistMusclesOnly,
+                ShouldApplyFullBodyRightArmMusclesOnly = manualAnimatorFullBodyPoseRightArmMusclesOnly,
+                ShouldApplyFullBodyLeftArmMusclesOnly = manualAnimatorFullBodyPoseLeftArmMusclesOnly,
+                ShouldApplyFullBodyRightSleeveChainMusclesOnly = manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly,
+                FullBodyPoseFrameGateStart = manualAnimatorFullBodyPoseFrameGateStart,
+                FullBodyPoseFrameGateEnd = manualAnimatorFullBodyPoseFrameGateEnd,
+                ShouldUseHipsLocalPositionReference = _shouldUseManualAnimatorHipsLocalPositionReference,
+                ShouldUseBodyRotationReference = _shouldUseManualAnimatorBodyRotationReference,
+                ShouldUseHandLocalRotationReference = useManualAnimatorHandLocalRotationReference,
+                ShouldUseFootLocalRotationReference = _shouldUseManualAnimatorFootLocalRotationReference,
+                ShouldUseLowerBodySegmentDirectionReference = _shouldUseManualAnimatorLowerBodySegmentDirectionReference,
+                ShouldUseFootHipsAlignedResidualYawReference = _shouldUseManualAnimatorFootHipsAlignedResidualYawReference,
+                ShouldUsePostSetHumanPoseRightEndpointPositionReference = usePostSetHumanPoseRightEndpointPositionReference,
+                ShouldUsePostSetHumanPoseRightFootEvaluatorXzReference = usePostSetHumanPoseRightFootEvaluatorXzReference,
+                ShouldUsePreSetHumanPoseRightEndpointPositionReference = usePreSetHumanPoseRightEndpointPositionReference,
+                ShouldUseBodyPositionXzReference = _shouldUseManualAnimatorBodyPositionXzReference,
+                ShouldUseRightSleeveSilhouetteOffsetReference = useYybRightSleeveSilhouetteLocalOffsetReference,
+                RightSleeveSilhouetteOffsetX = yybRightSleeveSilhouetteLocalOffsetX,
+                RightSleeveSilhouetteFrameGateStart = yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+                RightSleeveSilhouetteFrameGateEnd = yybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
+                ShouldUseBipedIkFootPositionReference = useManualAnimatorBipedIkFootPositionReference
+            };
         }
 
 #endif
