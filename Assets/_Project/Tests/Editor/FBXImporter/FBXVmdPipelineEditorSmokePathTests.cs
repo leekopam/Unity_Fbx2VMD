@@ -591,6 +591,180 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_EditorSmokePlanning_When_CheckingOwnership_Then_UsesDedicatedPlanner()
+        {
+            Type plannerType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.FBXEditorDiagnosticPlanner",
+                throwOnError: false);
+
+            Assert.That(plannerType, Is.Not.Null);
+            Assert.That(
+                plannerType?.GetMethod(
+                    "TryBuildCaptureResolutionOverride",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Not.Null);
+            Assert.That(
+                plannerType?.GetMethod(
+                    "ResolveFbxPath",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Not.Null);
+            Assert.That(
+                Array.Exists(
+                    plannerType?.GetMethods(BindingFlags.Static | BindingFlags.NonPublic) ??
+                    Array.Empty<MethodInfo>(),
+                    method => method.Name == "TryBuildKnownReferenceRecordingPlan"),
+                Is.True);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "TryBuildEditorSmokeCaptureResolutionOverride",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "ResolveEditorSmokeFbxPath",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetMethod(
+                    "TryBuildKnownMmdReferenceEditorSmokeRecordingPlan",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Null);
+        }
+
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head, "head", "smoke_clip_2s")]
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, "middle", "smoke_middle_clip_2s")]
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail, "tail", "smoke_tail_clip_2s")]
+        public void Given_EditorSmokeSegment_When_BuildingLabels_Then_UsesExistingContract(
+            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment,
+            string expectedLabel,
+            string expectedOutputBaseName)
+        {
+            string label = InvokeEditorDiagnosticPlanner<string>(
+                "GetSegmentLabel",
+                new[] { typeof(FBXVmdPipeline.EditorDiagnosticSmokeSegment) },
+                segment);
+            string outputBaseName = InvokeEditorDiagnosticPlanner<string>(
+                "BuildOutputBaseName",
+                new[]
+                {
+                    typeof(string),
+                    typeof(float),
+                    typeof(FBXVmdPipeline.EditorDiagnosticSmokeSegment)
+                },
+                "clip",
+                1.25f,
+                segment);
+
+            Assert.That(label, Is.EqualTo(expectedLabel));
+            Assert.That(outputBaseName, Is.EqualTo(expectedOutputBaseName));
+        }
+
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head, 2f, 0f)]
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, 2f, 4f)]
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail, 2f, 8f)]
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, 12f, 0f)]
+        public void Given_EditorSmokeSegment_When_CalculatingStartTime_Then_ClampsToClip(
+            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment,
+            float durationSeconds,
+            float expectedStartTime)
+        {
+            var clip = new AnimationClip();
+            clip.SetCurve(
+                string.Empty,
+                typeof(Transform),
+                "localPosition.x",
+                AnimationCurve.Linear(0f, 0f, 10f, 1f));
+
+            try
+            {
+                float startTime = InvokeEditorDiagnosticPlanner<float>(
+                    "CalculateStartTime",
+                    new[]
+                    {
+                        typeof(AnimationClip),
+                        typeof(float),
+                        typeof(FBXVmdPipeline.EditorDiagnosticSmokeSegment)
+                    },
+                    clip,
+                    durationSeconds,
+                    segment);
+
+                Assert.That(startTime, Is.EqualTo(expectedStartTime).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
+        }
+
+        [Test]
+        public void Given_MissingClip_When_CalculatingStartTime_Then_ReturnsZero()
+        {
+            float startTime = InvokeEditorDiagnosticPlanner<float>(
+                "CalculateStartTime",
+                new[]
+                {
+                    typeof(AnimationClip),
+                    typeof(float),
+                    typeof(FBXVmdPipeline.EditorDiagnosticSmokeSegment)
+                },
+                null,
+                2f,
+                FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle);
+
+            Assert.That(startTime, Is.Zero);
+        }
+
+        [Test]
+        public void Given_SampleTimes_When_CloningPlan_Then_ReturnsIndependentCopy()
+        {
+            float[] source = { 0.25f, 0.75f };
+            float[] clone = InvokeEditorDiagnosticPlanner<float[]>(
+                "CloneSampleTimes",
+                new[] { typeof(float[]) },
+                source);
+
+            source[0] = 1f;
+
+            Assert.That(clone, Is.Not.SameAs(source));
+            Assert.That(clone, Is.EqualTo(new[] { 0.25f, 0.75f }));
+            Assert.That(
+                InvokeEditorDiagnosticPlanner<float[]>(
+                    "CloneSampleTimes",
+                    new[] { typeof(float[]) },
+                    Array.Empty<float>()),
+                Is.Null);
+        }
+
+        [Test]
+        public void Given_InvalidEditorSmokeOverrides_When_Normalizing_Then_UsesExistingBounds()
+        {
+            Assert.That(InvokePlannerFloat("NormalizeStartTimeOverride", -1f), Is.NaN);
+            Assert.That(InvokePlannerFloat("NormalizeStartTimeOverride", float.PositiveInfinity), Is.NaN);
+            Assert.That(InvokePlannerFloat("NormalizeStartTimeOverride", 0f), Is.Zero);
+
+            Assert.That(InvokePlannerFloat("NormalizePlaybackSpeedOverride", 0f), Is.NaN);
+            Assert.That(InvokePlannerFloat("NormalizePlaybackSpeedOverride", float.NaN), Is.NaN);
+            Assert.That(InvokePlannerFloat("NormalizePlaybackSpeedOverride", 0.00001f), Is.EqualTo(0.0001f));
+
+            Assert.That(InvokePlannerFloat("NormalizeScreenshotPaddingOverride", 0f), Is.NaN);
+            Assert.That(InvokePlannerFloat("NormalizeScreenshotPaddingOverride", 0.1f), Is.EqualTo(0.25f));
+            Assert.That(InvokePlannerFloat("NormalizeScreenshotPaddingOverride", 3f), Is.EqualTo(2f));
+
+            Assert.That(
+                InvokePlannerFloat(
+                    "NormalizeScreenshotVerticalViewportCenterOverride",
+                    float.NegativeInfinity),
+                Is.NaN);
+            Assert.That(
+                InvokePlannerFloat("NormalizeScreenshotVerticalViewportCenterOverride", -1f),
+                Is.Zero);
+            Assert.That(
+                InvokePlannerFloat("NormalizeScreenshotVerticalViewportCenterOverride", 2f),
+                Is.EqualTo(1f));
+        }
+
+        [Test]
         public void Given_ImportedModel_When_PreparingGhostPresentation_Then_PreservesContainerAndVisibility()
         {
             Type presenterType = typeof(FBXVmdPipeline).Assembly.GetType(
@@ -1045,20 +1219,52 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        private static Type GetEditorDiagnosticPlannerType()
+        {
+            Type plannerType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.FBXEditorDiagnosticPlanner",
+                throwOnError: false);
+            Assert.That(plannerType, Is.Not.Null);
+            return plannerType;
+        }
+
+        private static float InvokePlannerFloat(string methodName, float value)
+        {
+            return InvokeEditorDiagnosticPlanner<float>(
+                methodName,
+                new[] { typeof(float) },
+                value);
+        }
+
+        private static T InvokeEditorDiagnosticPlanner<T>(
+            string methodName,
+            Type[] parameterTypes,
+            params object[] arguments)
+        {
+            MethodInfo method = GetEditorDiagnosticPlannerType().GetMethod(
+                methodName,
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: parameterTypes,
+                modifiers: null);
+            Assert.That(method, Is.Not.Null, $"FBXEditorDiagnosticPlanner must expose {methodName}.");
+            return (T)method.Invoke(null, arguments);
+        }
+
         private static string Resolve(
             string fbxFileName,
             string controlledDirectory,
             string dataPath,
             params string[] existingPaths)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ResolveEditorSmokeFbxPath",
+            MethodInfo method = GetEditorDiagnosticPlannerType().GetMethod(
+                "ResolveFbxPath",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: SmokeResolverParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a static resolver overload for fakeable path tests.");
+            Assert.That(method, Is.Not.Null, "FBXEditorDiagnosticPlanner must expose a fakeable path resolver.");
 
             var existing = new HashSet<string>(existingPaths, StringComparer.OrdinalIgnoreCase);
             Func<string, bool> fileExists = existing.Contains;
@@ -1127,14 +1333,14 @@ namespace Tests.Editor.FBXImporter
             out int width,
             out int height)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "TryBuildEditorSmokeCaptureResolutionOverride",
+            MethodInfo method = GetEditorDiagnosticPlannerType().GetMethod(
+                "TryBuildCaptureResolutionOverride",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: CaptureResolutionOverrideParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a fakeable editor-smoke capture resolution override helper.");
+            Assert.That(method, Is.Not.Null, "FBXEditorDiagnosticPlanner must expose a fakeable capture resolution helper.");
 
             object[] args =
             {
@@ -1374,14 +1580,14 @@ namespace Tests.Editor.FBXImporter
             out int targetFrameCount,
             out float playbackSpeed)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "TryBuildKnownMmdReferenceEditorSmokeRecordingPlan",
+            MethodInfo method = GetEditorDiagnosticPlannerType().GetMethod(
+                "TryBuildKnownReferenceRecordingPlan",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: EditorSmokeReferenceTimingParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a fakeable editor smoke reference timing helper for ref MP4 alignment.");
+            Assert.That(method, Is.Not.Null, "FBXEditorDiagnosticPlanner must expose a fakeable reference timing helper.");
 
             object[] args =
             {
@@ -1413,14 +1619,14 @@ namespace Tests.Editor.FBXImporter
             out int targetFrameCount,
             out float playbackSpeed)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "TryBuildKnownMmdReferenceEditorSmokeRecordingPlan",
+            MethodInfo method = GetEditorDiagnosticPlannerType().GetMethod(
+                "TryBuildKnownReferenceRecordingPlan",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: EditorSmokeReferenceTimingWithOptionParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose an editor smoke reference timing option for scene-independent full smoke policy.");
+            Assert.That(method, Is.Not.Null, "FBXEditorDiagnosticPlanner must expose a reference timing option.");
 
             object[] args =
             {
@@ -1449,14 +1655,14 @@ namespace Tests.Editor.FBXImporter
             float recordingFrameRate,
             bool sceneUseKnownReferenceTiming)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ShouldUseKnownMmdReferenceTimingForEditorSmoke",
+            MethodInfo method = GetEditorDiagnosticPlannerType().GetMethod(
+                "ShouldUseKnownReferenceTiming",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: EditorSmokeReferenceTimingPolicyParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a fakeable editor smoke reference timing policy for full 208s YYB acceptance.");
+            Assert.That(method, Is.Not.Null, "FBXEditorDiagnosticPlanner must expose a fakeable reference timing policy.");
 
             return (bool)method.Invoke(
                 null,
