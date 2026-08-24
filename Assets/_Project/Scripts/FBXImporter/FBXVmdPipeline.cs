@@ -17,7 +17,6 @@ namespace Fbx2Vmd.FBXImporter
     {
         internal const string IMPORT_FBX_FOLDER = "Import_FBX";
         internal const string FBX_EXTENSION = "fbx";
-        private const float GHOST_CONTAINER_SCALE = 0.01f;
         private const float THUMB_PROXIMAL_SAFE_MAX_LOCAL_ANGLE = 30f;
         private const float DEFAULT_THUMB_STRETCH_OFFSET = -0.1f;
         private const float LEGACY_THUMB_PROJECTION_MIN_PALM_NORMAL = 0.36f;
@@ -2056,9 +2055,12 @@ namespace Fbx2Vmd.FBXImporter
 
         internal void PrepareGhostModel(GameObject importedModel)
         {
-            GameObject ghostContainer = CreateGhostContainer(importedModel);
+            GameObject ghostContainer = GhostModelPresenter.CreateContainer(importedModel);
             _activeGhostContainer = ghostContainer;
-            SetGhostVisibility(importedModel, showGhostModel, showGhostSkeletonWhenNoRenderers);
+            GhostModelPresenter.SetVisibility(
+                importedModel,
+                showGhostModel,
+                showGhostSkeletonWhenNoRenderers);
         }
 
         internal void PrepareRetargeterForRecording(
@@ -2240,75 +2242,6 @@ namespace Fbx2Vmd.FBXImporter
             FBXConversionCoordinator.RecaptureTargetGuardBaselines(
                 targetCharacter,
                 recaptureGuardBaselines);
-        }
-
-        private GameObject CreateGhostContainer(GameObject importedModel)
-        {
-            GameObject ghostContainer = new GameObject($"GhostContainer_{importedModel.name}");
-            ghostContainer.transform.position = Vector3.zero;
-            ghostContainer.transform.rotation = Quaternion.identity;
-            ghostContainer.transform.localScale = Vector3.one * GHOST_CONTAINER_SCALE;
-            importedModel.transform.SetParent(ghostContainer.transform, false);
-            importedModel.transform.localPosition = Vector3.zero;
-            return ghostContainer;
-        }
-
-        private static void SetGhostVisibility(GameObject importedModel, bool visible)
-        {
-            SetGhostVisibility(importedModel, visible, useSkeletonFallbackWhenRendererless: true);
-        }
-
-        private static void SetGhostVisibility(GameObject importedModel, bool visible, bool useSkeletonFallbackWhenRendererless)
-        {
-            if (importedModel == null)
-            {
-                return;
-            }
-
-            Renderer[] renderers = importedModel.GetComponentsInChildren<Renderer>(true);
-            int controlledRendererCount = 0;
-            foreach (Renderer renderer in renderers)
-            {
-                if (renderer == null || renderer.GetComponentInParent<GhostSkeletonDebugRenderer>() != null)
-                {
-                    continue;
-                }
-
-                renderer.enabled = visible;
-                controlledRendererCount++;
-            }
-
-            SetGhostSkeletonDebugRenderer(
-                importedModel,
-                visible && useSkeletonFallbackWhenRendererless,
-                controlledRendererCount);
-        }
-
-        private static bool ShouldAttachGhostSkeletonDebugRenderer(bool visible, int rendererCount)
-        {
-            return visible;
-        }
-
-        private static void SetGhostSkeletonDebugRenderer(GameObject importedModel, bool visible, int rendererCount)
-        {
-            GhostSkeletonDebugRenderer debugRenderer = importedModel.GetComponent<GhostSkeletonDebugRenderer>();
-            bool shouldAttach = ShouldAttachGhostSkeletonDebugRenderer(visible, rendererCount);
-
-            if (shouldAttach)
-            {
-                if (debugRenderer == null)
-                {
-                    debugRenderer = importedModel.AddComponent<GhostSkeletonDebugRenderer>();
-                }
-
-                debugRenderer.SetVisible(true);
-                return;
-            }
-
-            if (debugRenderer != null)
-            {
-                debugRenderer.SetVisible(false);
-            }
         }
 
         internal void RestoreIdlePoseBeforeRetargetBaselines()
