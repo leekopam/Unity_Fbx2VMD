@@ -977,14 +977,14 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(enabledApplied, Is.True);
                 Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
                 Assert.That(
-                    GetField<float>(manager, "manualAnimatorFullBodyPoseReferenceWeight"),
+                    manager.manualAnimatorFullBodyPoseReferenceWeight,
                     Is.EqualTo(0.35f).Within(0.0001f));
 
                 bool clampedApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, true, 2f);
 
                 Assert.That(clampedApplied, Is.True);
                 Assert.That(
-                    GetField<float>(manager, "manualAnimatorFullBodyPoseReferenceWeight"),
+                    manager.manualAnimatorFullBodyPoseReferenceWeight,
                     Is.EqualTo(1f).Within(0.0001f));
 
                 bool disabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, false, 0.35f);
@@ -992,7 +992,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(disabledApplied, Is.True);
                 Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
                 Assert.That(
-                    GetField<float>(manager, "manualAnimatorFullBodyPoseReferenceWeight"),
+                    manager.manualAnimatorFullBodyPoseReferenceWeight,
                     Is.EqualTo(0f).Within(0.0001f));
             }
             finally
