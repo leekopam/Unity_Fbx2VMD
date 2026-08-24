@@ -3017,31 +3017,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool ApplyFinalIkFootGroundingRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.enableFinalIkFootGroundingExperiment = enabled;
-
-            if (!enabled && fileManager.targetCharacter != null)
-            {
-                GrounderBipedIK grounder = fileManager.targetCharacter.GetComponent<GrounderBipedIK>();
-                if (grounder != null)
-                {
-                    grounder.weight = 0f;
-                    grounder.enabled = false;
-                }
-
-                BipedIK bipedIk = fileManager.targetCharacter.GetComponent<BipedIK>();
-                if (bipedIk != null)
-                {
-                    bipedIk.fixTransforms = false;
-                    bipedIk.enabled = false;
-                }
-            }
-
-            return true;
+            return FinalIkFootGroundingRuntimeOverrideApplier.Apply(fileManager, enabled);
         }
 
         private static bool ApplyVmdPlaybackProbeRuntimeOverride(
