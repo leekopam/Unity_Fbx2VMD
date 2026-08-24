@@ -2099,8 +2099,13 @@ namespace Fbx2Vmd.FBXImporter
                     return FBXConversionResult.Fail(targetErrorMessage);
                 }
 
-                Animator ghostAnimator = importedModel.GetComponent<Animator>();
-                PrepareTargetCharacter(targetObject, targetAnimator, ghostAnimator);
+                _conversionCoordinator.PrepareRetargetingTarget(
+                    targetObject,
+                    targetAnimator,
+                    importedModel.GetComponent<Animator>(),
+                    _idlePoseGuard != null && _idlePoseGuard.ShouldFaceTargetToCameraOnIdle,
+                    disableMmdShoulderPostPoseDuringRetarget,
+                    RestoreIdlePoseBeforeRetargetBaselines);
 
                 PoseSpaceRetargeter retargeter = _conversionCoordinator.CreateRetargeter(
                     importedModel,
@@ -2352,23 +2357,9 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private void PrepareTargetCharacter(GameObject targetObject, Animator targetAnimator, Animator ghostAnimator)
+        private void RestoreIdlePoseBeforeRetargetBaselines()
         {
-            _conversionCoordinator.PrepareTargetPlaybackState(
-                targetObject,
-                targetAnimator,
-                _idlePoseGuard != null && _idlePoseGuard.ShouldFaceTargetToCameraOnIdle);
-            _conversionCoordinator.DisableMmdPostPoseCorrectionForRetarget(
-                targetObject,
-                disableMmdShoulderPostPoseDuringRetarget);
-            _conversionCoordinator.ConfigureTargetRetargetGuards(
-                targetObject,
-                targetAnimator,
-                ghostAnimator);
-
-            // Batch smoke can leave detached thumb helpers visually drifted until the next frame.
-            // Restore the captured target idle pose immediately before the next session captures
-            // retargeter/thumb-guard baselines so every FBX starts from the same common pose.
+            // 배치 검증 뒤 남을 수 있는 분리형 엄지 helper 위치를 다음 기준 캡처 전에 복원함.
             _idlePoseGuard?.Apply();
 #if UNITY_EDITOR
             if (_editorSmokeRecordingOverrideActive)
@@ -2376,10 +2367,6 @@ namespace Fbx2Vmd.FBXImporter
                 LogEditorSmokeThumbState("prepare-target-after-idle-restore");
             }
 #endif
-
-            FBXConversionCoordinator.RemoveLegacyIkControl(targetObject);
-
-            _conversionCoordinator.ConfigureFinalIkFootGroundingExperiment(targetObject);
         }
 
         /// Legacy reflection entry point for FBXVmdPipelineEditorSmokePathTests.

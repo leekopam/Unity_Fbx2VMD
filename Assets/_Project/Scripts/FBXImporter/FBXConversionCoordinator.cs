@@ -83,6 +83,32 @@ namespace Fbx2Vmd.FBXImporter
             return retargeter;
         }
 
+        internal void PrepareRetargetingTarget(
+            GameObject targetObject,
+            Animator targetAnimator,
+            Animator ghostAnimator,
+            bool shouldFaceTargetToCamera,
+            bool shouldDisableMmdPostPoseCorrection,
+            Action restoreIdlePoseBeforeRetargetBaselines)
+        {
+            PrepareTargetPlaybackState(
+                targetObject,
+                targetAnimator,
+                shouldFaceTargetToCamera);
+            DisableMmdPostPoseCorrectionForRetarget(
+                targetObject,
+                shouldDisableMmdPostPoseCorrection);
+            ConfigureTargetRetargetGuards(
+                targetObject,
+                targetAnimator,
+                ghostAnimator);
+
+            restoreIdlePoseBeforeRetargetBaselines?.Invoke();
+
+            RemoveLegacyIkControl(targetObject);
+            ConfigureFinalIkFootGroundingExperiment(targetObject);
+        }
+
         internal void ConfigureTargetRetargetGuards(
             GameObject targetObject,
             Animator targetAnimator,
