@@ -1876,43 +1876,20 @@ namespace Fbx2Vmd.FBXImporter
                 return result;
             }
 
-            if (probe == null)
+            FBXEditorDiagnosticRiskEvaluator.Evaluation evaluation =
+                FBXEditorDiagnosticRiskEvaluator.Evaluate(
+                    CreateEditorDiagnosticRiskInput(probe));
+            if (evaluation.Outcome == FBXEditorDiagnosticRiskEvaluator.Outcome.Fail)
             {
-                return BuildEditorSmokeFailureResult(
-                    result,
-                    $"Editor smoke 실패: {GetEditorSmokeFbxName()} - MotionComparisonProbe가 없어 엄지 리스크 검증을 수행하지 못했습니다.");
+                return BuildEditorSmokeFailureResult(result, evaluation.Message);
             }
 
-            if (!probe.RiskDiagnosticsEnabled ||
-                probe.RiskEvaluationFrameCount <= 0 ||
-                !probe.HasFullThumbAnatomyCoverage ||
-                !probe.HasResolvedThumbHelperCoverage)
+            if (evaluation.Outcome == FBXEditorDiagnosticRiskEvaluator.Outcome.Warn)
             {
-                return BuildEditorSmokeFailureResult(
-                    result,
-                    BuildEditorSmokeThumbDiagnosticUnavailableMessage(probe));
+                Debug.LogWarning(
+                    $"[FBXImport] Editor smoke diagnostic only: {evaluation.Message}");
             }
 
-            float maxGenericRisk = probe.MaxGenericThumbAnatomyRisk;
-            float maxYybRisk = probe.MaxYybDeformationRisk;
-            bool genericExceeded = IsFiniteDiagnosticRisk(maxGenericRisk) &&
-                                   maxGenericRisk > editorSmokeMaxGenericThumbAnatomyRisk;
-            bool yybExceeded = IsFiniteDiagnosticRisk(maxYybRisk) &&
-                               maxYybRisk > editorSmokeMaxYybDeformationRisk;
-            if (!genericExceeded && !yybExceeded)
-            {
-                return result;
-            }
-
-            string diagnosticMessage = BuildEditorSmokeThumbRiskFailureMessage(probe, genericExceeded, yybExceeded);
-            if (probe.NonBlankScreenshotCount < 8)
-            {
-                return BuildEditorSmokeFailureResult(
-                    result,
-                    $"{diagnosticMessage}; same-frame visual evidence incomplete (nonblankScreenshots={probe.NonBlankScreenshotCount})");
-            }
-
-            Debug.LogWarning($"[FBXImport] Editor smoke diagnostic only: {diagnosticMessage}");
             return result;
 #else
             return result;
@@ -1933,60 +1910,41 @@ namespace Fbx2Vmd.FBXImporter
         }
 
 #if UNITY_EDITOR
-        private string BuildEditorSmokeThumbDiagnosticUnavailableMessage(MotionComparisonProbe probe)
+        private FBXEditorDiagnosticRiskEvaluator.Input CreateEditorDiagnosticRiskInput(
+            MotionComparisonProbe probe)
         {
-            string fbxName = GetEditorSmokeFbxName();
-            return
-                $"Editor smoke 실패: {fbxName} - 엄지 리스크 진단 범위가 부족합니다 " +
-                $"(enabled={probe.RiskDiagnosticsEnabled}, frames={probe.RiskEvaluationFrameCount}, " +
-                $"leftCore={probe.LeftThumbCoreAnatomyObserved}, rightCore={probe.RightThumbCoreAnatomyObserved}, " +
-                $"leftHelperRequired={probe.LeftThumbHelperCoverageRequired}, rightHelperRequired={probe.RightThumbHelperCoverageRequired}, " +
-                $"leftHelperOk={probe.LeftThumbHelperCoverageSatisfied}, rightHelperOk={probe.RightThumbHelperCoverageSatisfied})";
-        }
-
-        private string BuildEditorSmokeThumbRiskFailureMessage(
-            MotionComparisonProbe probe,
-            bool genericExceeded,
-            bool yybExceeded)
-        {
-            List<string> reasons = new List<string>();
-            if (genericExceeded)
+            var input = new FBXEditorDiagnosticRiskEvaluator.Input
             {
-                reasons.Add(
-                    $"thumb anatomy risk {FormatDiagnosticRisk(probe.MaxGenericThumbAnatomyRisk)} > {FormatDiagnosticRisk(editorSmokeMaxGenericThumbAnatomyRisk)} " +
-                    $"(spread={FormatDiagnosticRisk(probe.MaxThumbSpreadRisk)}, projection={FormatDiagnosticRisk(probe.MaxThumbProjectionRisk)}, " +
-                    $"helper={FormatDiagnosticRisk(probe.MaxThumbHelperSeparationRisk)}, webbing={FormatDiagnosticRisk(probe.MaxThumbWebbingRisk)})");
+                FbxName = _editorSmokeCurrentFbxFileName,
+                HasProbe = probe != null,
+                MaxGenericThumbAnatomyRiskThreshold = editorSmokeMaxGenericThumbAnatomyRisk,
+                MaxYybDeformationRiskThreshold = editorSmokeMaxYybDeformationRisk
+            };
+            if (probe == null)
+            {
+                return input;
             }
 
-            if (yybExceeded)
-            {
-                reasons.Add(
-                    $"YYB deformation risk {FormatDiagnosticRisk(probe.MaxYybDeformationRisk)} > {FormatDiagnosticRisk(editorSmokeMaxYybDeformationRisk)}");
-            }
-
-            string fbxName = GetEditorSmokeFbxName();
-            return $"Editor smoke 실패: {fbxName} - {string.Join("; ", reasons)}";
-        }
-
-        private string GetEditorSmokeFbxName()
-        {
-            return string.IsNullOrWhiteSpace(_editorSmokeCurrentFbxFileName)
-                ? "unknown.fbx"
-                : _editorSmokeCurrentFbxFileName;
+            input.RiskDiagnosticsEnabled = probe.RiskDiagnosticsEnabled;
+            input.RiskEvaluationFrameCount = probe.RiskEvaluationFrameCount;
+            input.HasFullThumbAnatomyCoverage = probe.HasFullThumbAnatomyCoverage;
+            input.HasResolvedThumbHelperCoverage = probe.HasResolvedThumbHelperCoverage;
+            input.LeftThumbCoreAnatomyObserved = probe.LeftThumbCoreAnatomyObserved;
+            input.RightThumbCoreAnatomyObserved = probe.RightThumbCoreAnatomyObserved;
+            input.LeftThumbHelperCoverageRequired = probe.LeftThumbHelperCoverageRequired;
+            input.RightThumbHelperCoverageRequired = probe.RightThumbHelperCoverageRequired;
+            input.LeftThumbHelperCoverageSatisfied = probe.LeftThumbHelperCoverageSatisfied;
+            input.RightThumbHelperCoverageSatisfied = probe.RightThumbHelperCoverageSatisfied;
+            input.MaxGenericThumbAnatomyRisk = probe.MaxGenericThumbAnatomyRisk;
+            input.MaxYybDeformationRisk = probe.MaxYybDeformationRisk;
+            input.MaxThumbSpreadRisk = probe.MaxThumbSpreadRisk;
+            input.MaxThumbProjectionRisk = probe.MaxThumbProjectionRisk;
+            input.MaxThumbHelperSeparationRisk = probe.MaxThumbHelperSeparationRisk;
+            input.MaxThumbWebbingRisk = probe.MaxThumbWebbingRisk;
+            input.NonBlankScreenshotCount = probe.NonBlankScreenshotCount;
+            return input;
         }
 #endif
-
-        private static bool IsFiniteDiagnosticRisk(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
-        }
-
-        private static string FormatDiagnosticRisk(float value)
-        {
-            return IsFiniteDiagnosticRisk(value)
-                ? value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
-                : "n/a";
-        }
 
         internal void ResetTargetStateAfterSession(bool recaptureGuardBaselines)
         {
