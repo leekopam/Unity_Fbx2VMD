@@ -2071,8 +2071,20 @@ namespace Fbx2Vmd.FBXImporter
             string sourceFilePath)
         {
             _activeRetargeter = retargeter;
-            ConfigureTargetThumbDeformationGuard(targetObject, targetAnimator, retargeter);
 #if UNITY_EDITOR
+            bool thumbGuardApplied =
+#endif
+                HumanoidThumbDeformationGuardApplier.Apply(
+                    targetObject,
+                    targetAnimator,
+                    retargeter,
+                    CreateThumbDeformationGuardOptions());
+#if UNITY_EDITOR
+            if (thumbGuardApplied && _editorSmokeRecordingOverrideActive)
+            {
+                LogEditorSmokeThumbState("thumb-guard-bound");
+            }
+
             AnimationClip editorHumanoidReferenceClip = EditorHumanoidReferenceApplier.Apply(
                 retargeter,
                 importedFilePath,
@@ -2272,90 +2284,48 @@ namespace Fbx2Vmd.FBXImporter
             return !isProcessing && !hasActiveRetargeter;
         }
 
-        private void ConfigureTargetThumbDeformationGuard(
-            GameObject targetObject,
-            Animator targetAnimator,
-            PoseSpaceRetargeter linkedRetargeter)
+        private HumanoidThumbDeformationGuardOptions CreateThumbDeformationGuardOptions()
         {
-            if (targetObject == null)
+            return new HumanoidThumbDeformationGuardOptions
             {
-                return;
-            }
-
-            // The thumb guard must be bound after the current session retargeter exists.
-            // During batched smokes the previous ghost can survive until end-of-frame, so
-            // resolving by FindObjectsOfType here can accidentally reuse the last session.
-            if (targetAnimator == null)
-            {
-                return;
-            }
-
-            HumanoidThumbDeformationGuard thumbGuard = targetObject.GetComponent<HumanoidThumbDeformationGuard>();
-            bool clampHumanoidThumbRotations = EffectiveThumbLocalRotationGuard;
-            bool syncThumbBaseHelpers = syncDetachedThumbBaseHelpers && detachedThumbBaseHelperSyncWeight > 0f;
-            bool stabilizeThumbBasePalm = stabilizeDetachedThumbBasePalm && detachedThumbBasePalmStabilizeWeight > 0f;
-            bool stabilizeThumbWebbing = stabilizeThumbWebbingCrease && thumbWebbingCreaseStabilizeWeight > 0f;
-            bool preserveManualThumbPose = PreserveManualThumbPoseWithReference;
-            if (!clampHumanoidThumbRotations && !syncThumbBaseHelpers && !stabilizeThumbBasePalm && !stabilizeThumbWebbing)
-            {
-                if (thumbGuard != null)
-                {
-                    thumbGuard.enabled = false;
-                }
-
-                return;
-            }
-
-            if (thumbGuard == null)
-            {
-                thumbGuard = targetObject.AddComponent<HumanoidThumbDeformationGuard>();
-            }
-
-            thumbGuard.Configure(
-                targetAnimator,
-                linkedRetargeter,
-                EffectiveThumbProximalMaxLocalAngle,
-                ThumbIntermediateMaxLocalAngle,
-                ThumbDistalMaxLocalAngle,
-                ThumbRotationOffset,
-                mirrorRightThumbRotationOffset,
-                LeftThumbRotationOffset,
-                RightThumbRotationOffset,
-                logThumbLocalRotationGuardCorrections,
-                clampHumanoidThumbRotations,
-                syncThumbBaseHelpers,
-                EffectiveDetachedThumbBaseHelperPositionSync,
-                detachedThumbBaseHelperSyncWeight,
-                detachedThumbBaseHelperMaxLocalAngle,
-                detachedThumbBaseHelperMaxPositionOffset,
-                LeftDetachedThumbBaseHelperDeltaAxisOffset,
-                RightDetachedThumbBaseHelperDeltaAxisOffset,
-                LeftDetachedThumbBaseHelperTargetRotationOffset,
-                RightDetachedThumbBaseHelperTargetRotationOffset,
-                stabilizeThumbBasePalm,
-                detachedThumbBasePalmStabilizeWeight,
-                detachedThumbBasePalmMaxLocalAngle,
-                enableThumbVisualLengthGuard,
-                EffectiveThumbProjectionMinPalmNormal,
-                ThumbProjectionMaxPalmNormal,
-                ThumbProjectionGuardWeight,
-                ThumbIndexMaxSpreadAngle,
-                ThumbIndexSpreadGuardWeight,
-                ThumbMaxSegmentBendAngle,
-                ThumbSegmentStraightenWeight,
-                preserveManualThumbPose,
-                stabilizeThumbWebbing,
-                thumbWebbingCreaseStabilizeWeight,
-                thumbWebbingCreaseMaxLocalAngle,
-                thumbWebbingCreaseMaxPositionOffset);
-            thumbGuard.enabled = true;
-            thumbGuard.RecaptureBaseline();
-#if UNITY_EDITOR
-            if (_editorSmokeRecordingOverrideActive)
-            {
-                LogEditorSmokeThumbState("thumb-guard-bound");
-            }
-#endif
+                ProximalMaxLocalAngle = EffectiveThumbProximalMaxLocalAngle,
+                IntermediateMaxLocalAngle = ThumbIntermediateMaxLocalAngle,
+                DistalMaxLocalAngle = ThumbDistalMaxLocalAngle,
+                ProximalRotationOffset = ThumbRotationOffset,
+                MirrorRightProximalRotationOffset = mirrorRightThumbRotationOffset,
+                LeftProximalRotationOffset = LeftThumbRotationOffset,
+                RightProximalRotationOffset = RightThumbRotationOffset,
+                LogCorrections = logThumbLocalRotationGuardCorrections,
+                ClampHumanoidThumbRotations = EffectiveThumbLocalRotationGuard,
+                SyncDetachedBaseHelpers =
+                    syncDetachedThumbBaseHelpers && detachedThumbBaseHelperSyncWeight > 0f,
+                SyncDetachedBaseHelperPositions = EffectiveDetachedThumbBaseHelperPositionSync,
+                DetachedBaseHelperSyncWeight = detachedThumbBaseHelperSyncWeight,
+                DetachedBaseHelperMaxLocalAngle = detachedThumbBaseHelperMaxLocalAngle,
+                DetachedBaseHelperMaxPositionOffset = detachedThumbBaseHelperMaxPositionOffset,
+                LeftDetachedBaseHelperDeltaAxisOffset = LeftDetachedThumbBaseHelperDeltaAxisOffset,
+                RightDetachedBaseHelperDeltaAxisOffset = RightDetachedThumbBaseHelperDeltaAxisOffset,
+                LeftDetachedBaseHelperTargetRotationOffset = LeftDetachedThumbBaseHelperTargetRotationOffset,
+                RightDetachedBaseHelperTargetRotationOffset = RightDetachedThumbBaseHelperTargetRotationOffset,
+                StabilizeDetachedBasePalm =
+                    stabilizeDetachedThumbBasePalm && detachedThumbBasePalmStabilizeWeight > 0f,
+                DetachedBasePalmStabilizeWeight = detachedThumbBasePalmStabilizeWeight,
+                DetachedBasePalmMaxLocalAngle = detachedThumbBasePalmMaxLocalAngle,
+                EnableVisualLengthGuard = enableThumbVisualLengthGuard,
+                ProjectionMinPalmNormal = EffectiveThumbProjectionMinPalmNormal,
+                ProjectionMaxPalmNormal = ThumbProjectionMaxPalmNormal,
+                ProjectionGuardWeight = ThumbProjectionGuardWeight,
+                IndexMaxSpreadAngle = ThumbIndexMaxSpreadAngle,
+                IndexSpreadGuardWeight = ThumbIndexSpreadGuardWeight,
+                MaxSegmentBendAngle = ThumbMaxSegmentBendAngle,
+                SegmentStraightenWeight = ThumbSegmentStraightenWeight,
+                SuppressPoseShapingWithManualReference = PreserveManualThumbPoseWithReference,
+                StabilizeWebbingCrease =
+                    stabilizeThumbWebbingCrease && thumbWebbingCreaseStabilizeWeight > 0f,
+                WebbingCreaseStabilizeWeight = thumbWebbingCreaseStabilizeWeight,
+                WebbingCreaseMaxLocalAngle = thumbWebbingCreaseMaxLocalAngle,
+                WebbingCreaseMaxPositionOffset = thumbWebbingCreaseMaxPositionOffset
+            };
         }
 
         private bool EffectiveDetachedThumbBaseHelperPositionSync
