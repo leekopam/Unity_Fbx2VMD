@@ -565,6 +565,32 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_GhostSkeletonRenderer_When_CheckingFileOwnership_Then_UsesDedicatedSourceFile()
+        {
+            string importerDirectory = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter");
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                importerDirectory,
+                "FBXVmdPipeline.cs"));
+            string rendererPath = Path.Combine(
+                importerDirectory,
+                "GhostSkeletonDebugRenderer.cs");
+
+            Assert.That(File.Exists(rendererPath), Is.True);
+            string rendererSource = File.ReadAllText(rendererPath);
+            Assert.That(
+                pipelineSource,
+                Does.Not.Contain("public sealed class GhostSkeletonDebugRenderer"));
+            Assert.That(
+                rendererSource,
+                Does.Contain("public sealed class GhostSkeletonDebugRenderer"));
+        }
+
+        [Test]
         public void Given_ImportedModel_When_PreparingGhostPresentation_Then_PreservesContainerAndVisibility()
         {
             Type presenterType = typeof(FBXVmdPipeline).Assembly.GetType(
