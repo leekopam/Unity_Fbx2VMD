@@ -2546,49 +2546,10 @@ namespace Fbx2Vmd.FBXImporter
             _playModeEntryPending = false;
             _playModeEntryRequestedAt = 0d;
 
-            PendingJobs.Enqueue(new CaptureJob
+            foreach (CaptureJob job in BuildCaptureJobs(_enableVmdPlaybackProbeRuntimeOverride))
             {
-                Mode = CaptureMode.SubManualTestPrefab,
-                ScenePath = SubManualScenePath,
-                SceneName = "Sub_Manual",
-                DisplayName = "Sub_Manual testPrefab 수동 기준",
-                ManualTargetNameToken = ManualTestPrefabNameToken
-            });
-            PendingJobs.Enqueue(new CaptureJob
-            {
-                Mode = CaptureMode.SubManualYyb,
-                ScenePath = SubManualScenePath,
-                SceneName = "Sub_Manual",
-                DisplayName = "Sub_Manual YYB 수동 기준",
-                ManualTargetNameToken = ManualYybNameToken
-            });
-            PendingJobs.Enqueue(new CaptureJob
-            {
-                Mode = CaptureMode.MainRecording,
-                ScenePath = MainRecordingScenePath,
-                SceneName = "Main_Recoding",
-                DisplayName = "Main_Recoding YYB 자동 경로",
-                ManualTargetNameToken = string.Empty
-            });
-            if (_enableVmdPlaybackProbeRuntimeOverride)
-            {
-                PendingJobs.Enqueue(new CaptureJob
-                {
-                    Mode = CaptureMode.MainRecordingVmdPlaybackProbe,
-                    ScenePath = MainRecordingScenePath,
-                    SceneName = "Main_Recoding",
-                    DisplayName = "Main_Recoding YYB VMD replay probe",
-                    ManualTargetNameToken = string.Empty
-                });
+                PendingJobs.Enqueue(job);
             }
-            PendingJobs.Enqueue(new CaptureJob
-            {
-                Mode = CaptureMode.MainAuto,
-                ScenePath = MainAutoScenePath,
-                SceneName = "Main_Auto",
-                DisplayName = "Main_Auto YYB 자동 경로",
-                ManualTargetNameToken = string.Empty
-            });
 
             string rawSummarySessionId =
                 $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-MainAuto_vs_SubManual_who-testprefab-vs-yyb_what-visual-compare_why-runtime-match_how-unity-batch";
@@ -2703,55 +2664,50 @@ namespace Fbx2Vmd.FBXImporter
 
         private static CaptureJob[] BuildCaptureJobs(bool enableVmdPlaybackProbeRuntimeOverride)
         {
-            var jobs = new List<CaptureJob>
+            var profile = new VisualComparisonCaptureProfile(
+                modelDisplayName: "YYB",
+                manualReferenceDisplayName: "testPrefab",
+                manualReferenceTargetNameToken: ManualTestPrefabNameToken,
+                manualTargetNameToken: ManualYybNameToken,
+                manualScene: new VisualComparisonScene(SubManualScenePath, "Sub_Manual"),
+                recordingScene: new VisualComparisonScene(MainRecordingScenePath, "Main_Recoding"),
+                automaticScene: new VisualComparisonScene(MainAutoScenePath, "Main_Auto"));
+
+            return VisualComparisonCaptureJobPlanner
+                .Build(profile, enableVmdPlaybackProbeRuntimeOverride)
+                .Select(MapCaptureJob)
+                .ToArray();
+        }
+
+        private static CaptureJob MapCaptureJob(VisualComparisonCaptureJob job)
+        {
+            return new CaptureJob
             {
-                new CaptureJob
-                {
-                    Mode = CaptureMode.SubManualTestPrefab,
-                    ScenePath = SubManualScenePath,
-                    SceneName = "Sub_Manual",
-                    DisplayName = "Sub_Manual testPrefab manual baseline",
-                    ManualTargetNameToken = ManualTestPrefabNameToken
-                },
-                new CaptureJob
-                {
-                    Mode = CaptureMode.SubManualYyb,
-                    ScenePath = SubManualScenePath,
-                    SceneName = "Sub_Manual",
-                    DisplayName = "Sub_Manual YYB manual baseline",
-                    ManualTargetNameToken = ManualYybNameToken
-                },
-                new CaptureJob
-                {
-                    Mode = CaptureMode.MainRecording,
-                    ScenePath = MainRecordingScenePath,
-                    SceneName = "Main_Recoding",
-                    DisplayName = "Main_Recoding YYB direct FBX baseline",
-                    ManualTargetNameToken = string.Empty
-                }
+                Mode = MapCaptureMode(job.Role),
+                ScenePath = job.ScenePath,
+                SceneName = job.SceneName,
+                DisplayName = job.DisplayName,
+                ManualTargetNameToken = job.TargetNameToken
             };
+        }
 
-            if (enableVmdPlaybackProbeRuntimeOverride)
+        private static CaptureMode MapCaptureMode(VisualComparisonCaptureRole role)
+        {
+            switch (role)
             {
-                jobs.Add(new CaptureJob
-                {
-                    Mode = CaptureMode.MainRecordingVmdPlaybackProbe,
-                    ScenePath = MainRecordingScenePath,
-                    SceneName = "Main_Recoding",
-                    DisplayName = "Main_Recoding YYB VMD replay probe",
-                    ManualTargetNameToken = string.Empty
-                });
+                case VisualComparisonCaptureRole.ManualReference:
+                    return CaptureMode.SubManualTestPrefab;
+                case VisualComparisonCaptureRole.ManualTarget:
+                    return CaptureMode.SubManualYyb;
+                case VisualComparisonCaptureRole.DirectRecording:
+                    return CaptureMode.MainRecording;
+                case VisualComparisonCaptureRole.PlaybackProbe:
+                    return CaptureMode.MainRecordingVmdPlaybackProbe;
+                case VisualComparisonCaptureRole.Automatic:
+                    return CaptureMode.MainAuto;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(role), role, "지원하지 않는 캡처 역할입니다.");
             }
-
-            jobs.Add(new CaptureJob
-            {
-                Mode = CaptureMode.MainAuto,
-                ScenePath = MainAutoScenePath,
-                SceneName = "Main_Auto",
-                DisplayName = "Main_Auto YYB automatic path",
-                ManualTargetNameToken = string.Empty
-            });
-            return jobs.ToArray();
         }
 
         private static void HandlePlayModeStateChanged(PlayModeStateChange state)
