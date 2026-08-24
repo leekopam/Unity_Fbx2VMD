@@ -266,7 +266,7 @@ namespace Tests.Editor.FBXImporter
             string pipelineSource = File.ReadAllText(pipelinePath);
 
             Assert.That(coordinatorMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.ConfigureTargetRetargetGuards("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureTargetRetargetGuards("));
             Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmTwistRiggingGuard("));
             Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmDirectionGuard("));
             Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureArmSwingLimitGuard("));
@@ -295,11 +295,111 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(prepareMethod, Is.Not.Null);
             Assert.That(removeIkMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.PrepareTargetPlaybackState("));
-            Assert.That(pipelineSource, Does.Contain("FBXConversionCoordinator.RemoveLegacyIkControl("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.PrepareTargetPlaybackState("));
+            Assert.That(pipelineSource, Does.Not.Contain("FBXConversionCoordinator.RemoveLegacyIkControl("));
             Assert.That(pipelineSource, Does.Not.Contain("targetAnimator.applyRootMotion = false"));
             Assert.That(pipelineSource, Does.Not.Contain("targetAnimator.runtimeAnimatorController = null"));
             Assert.That(pipelineSource, Does.Not.Contain("targetObject.GetComponent<IKControl>()"));
+        }
+
+        [Test]
+        public void Given_TargetPreparationSequence_When_CheckingOwnership_Then_CoordinatorOwnsOrder()
+        {
+            MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
+                "PrepareRetargetingTarget",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo pipelineMethod = typeof(FBXVmdPipeline).GetMethod(
+                "PrepareTargetCharacter",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string scriptsPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter");
+            string pipelineSource = File.ReadAllText(Path.Combine(scriptsPath, "FBXVmdPipeline.cs"));
+            string coordinatorSource = File.ReadAllText(Path.Combine(scriptsPath, "FBXConversionCoordinator.cs"));
+            int methodStart = coordinatorSource.IndexOf(
+                "internal void PrepareRetargetingTarget(",
+                System.StringComparison.Ordinal);
+            int methodEnd = methodStart < 0
+                ? -1
+                : coordinatorSource.IndexOf(
+                    "internal void ConfigureTargetRetargetGuards(",
+                    methodStart,
+                    System.StringComparison.Ordinal);
+            string methodSource = methodStart >= 0 && methodEnd > methodStart
+                ? coordinatorSource.Substring(methodStart, methodEnd - methodStart)
+                : string.Empty;
+
+            Assert.That(coordinatorMethod, Is.Not.Null);
+            Assert.That(pipelineMethod, Is.Null);
+            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.PrepareRetargetingTarget("));
+            Assert.That(methodSource.IndexOf("PrepareTargetPlaybackState(", System.StringComparison.Ordinal), Is.GreaterThanOrEqualTo(0));
+            Assert.That(methodSource.IndexOf("DisableMmdPostPoseCorrectionForRetarget(", System.StringComparison.Ordinal),
+                Is.GreaterThan(methodSource.IndexOf("PrepareTargetPlaybackState(", System.StringComparison.Ordinal)));
+            Assert.That(methodSource.IndexOf("ConfigureTargetRetargetGuards(", System.StringComparison.Ordinal),
+                Is.GreaterThan(methodSource.IndexOf("DisableMmdPostPoseCorrectionForRetarget(", System.StringComparison.Ordinal)));
+            Assert.That(methodSource.IndexOf("restoreIdlePoseBeforeRetargetBaselines?.Invoke()", System.StringComparison.Ordinal),
+                Is.GreaterThan(methodSource.IndexOf("ConfigureTargetRetargetGuards(", System.StringComparison.Ordinal)));
+            Assert.That(methodSource.IndexOf("RemoveLegacyIkControl(", System.StringComparison.Ordinal),
+                Is.GreaterThan(methodSource.IndexOf("restoreIdlePoseBeforeRetargetBaselines?.Invoke()", System.StringComparison.Ordinal)));
+            Assert.That(methodSource.IndexOf("ConfigureFinalIkFootGroundingExperiment(", System.StringComparison.Ordinal),
+                Is.GreaterThan(methodSource.IndexOf("RemoveLegacyIkControl(", System.StringComparison.Ordinal)));
+        }
+
+        [Test]
+        public void Given_TargetPreparation_When_RestoringIdleBaseline_Then_BaseStateIsAppliedBeforeCallback()
+        {
+            GameObject pipelineObject = new GameObject("Pipeline");
+            GameObject targetObject = new GameObject("Target");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.enableYybArmDirectionRetargetCorrection = false;
+                pipeline.enableYybArmSwingLimitCorrection = false;
+                pipeline.enableYybArmSleeveAnchorCorrection = false;
+                pipeline.enableYybArmVisualTwistCorrection = false;
+                typeof(FBXVmdPipeline).GetField(
+                    "_attachTargetArmDeformationGuard",
+                    BindingFlags.Instance | BindingFlags.NonPublic)?.SetValue(pipeline, false);
+                var coordinator = new FBXConversionCoordinator(pipeline);
+                Animator targetAnimator = targetObject.AddComponent<Animator>();
+                targetObject.transform.position = new Vector3(1f, 2f, 3f);
+                targetAnimator.applyRootMotion = true;
+                int callbackCount = 0;
+                Vector3 callbackPosition = Vector3.one;
+                bool callbackRootMotion = true;
+                System.Action restoreIdlePose = () =>
+                {
+                    callbackCount++;
+                    callbackPosition = targetObject.transform.position;
+                    callbackRootMotion = targetAnimator.applyRootMotion;
+                };
+                MethodInfo prepareMethod = typeof(FBXConversionCoordinator).GetMethod(
+                    "PrepareRetargetingTarget",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+
+                Assert.That(prepareMethod, Is.Not.Null);
+                prepareMethod.Invoke(coordinator, new object[]
+                {
+                    targetObject,
+                    targetAnimator,
+                    null,
+                    false,
+                    false,
+                    restoreIdlePose
+                });
+
+                Assert.That(callbackCount, Is.EqualTo(1));
+                Assert.That(callbackPosition, Is.EqualTo(Vector3.zero));
+                Assert.That(callbackRootMotion, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(pipelineObject);
+            }
         }
 
         [Test]
@@ -322,7 +422,7 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(disableMethod, Is.Not.Null);
             Assert.That(restoreMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.DisableMmdPostPoseCorrectionForRetarget("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.DisableMmdPostPoseCorrectionForRetarget("));
             Assert.That(pipelineSource, Does.Contain("_conversionCoordinator?.RestoreMmdPostPoseCorrectionForRetarget("));
             Assert.That(pipelineSource, Does.Not.Contain("private struct BooleanFieldSnapshot"));
             Assert.That(pipelineSource, Does.Not.Contain("_retargetBooleanSnapshots"));
@@ -383,7 +483,7 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(coordinatorMethod, Is.Not.Null);
             Assert.That(pipelineMethod, Is.Null);
-            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.ConfigureFinalIkFootGroundingExperiment("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.ConfigureFinalIkFootGroundingExperiment("));
             Assert.That(pipelineSource, Does.Not.Contain("targetObject.GetComponent<GrounderBipedIK>()"));
             Assert.That(pipelineSource, Does.Not.Contain("targetObject.GetComponent<BipedIK>()"));
         }
