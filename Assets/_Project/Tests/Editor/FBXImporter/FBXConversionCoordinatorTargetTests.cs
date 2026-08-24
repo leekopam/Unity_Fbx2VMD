@@ -477,6 +477,39 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ConversionEntry_When_CheckingOwnership_Then_PipelineDispatchesThroughCoordinator()
+        {
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+            string coordinatorSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXConversionCoordinator.cs"));
+            int entryStart = pipelineSource.IndexOf(
+                "internal async void ProcessFBXAsync(string sourcePath)",
+                System.StringComparison.Ordinal);
+            int entryEnd = pipelineSource.IndexOf(
+                "internal async Task<FBXConversionResult> ProcessFBXSessionAsync(string sourcePath)",
+                entryStart,
+                System.StringComparison.Ordinal);
+            string entrySource = pipelineSource.Substring(entryStart, entryEnd - entryStart);
+
+            Assert.That(entrySource, Does.Contain("EnsureServicesInitialized();"));
+            Assert.That(entrySource, Does.Contain("await _conversionCoordinator.ConvertAsync("));
+            Assert.That(entrySource, Does.Contain("new FBXConversionRequest(sourcePath)"));
+            Assert.That(entrySource, Does.Not.Contain("await ProcessFBXSessionAsync(sourcePath)"));
+            Assert.That(coordinatorSource, Does.Contain("return await RunSessionAsync(request);"));
+        }
+
+        [Test]
         public void Given_UnusedPipelineHelpers_When_CheckingGodClassSurface_Then_LegacyMethodsAreAbsent()
         {
             const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
