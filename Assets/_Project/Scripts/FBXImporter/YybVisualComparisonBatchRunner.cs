@@ -3877,62 +3877,43 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool HasManualAnimatorLowerBodySegmentDirectionDetailRuntimeOverride()
         {
-            return _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride ||
-                _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle > 0f ||
-                _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride ||
-                _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle > 0f ||
-                _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle > 0f ||
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle > 0f ||
-                Mathf.Abs(
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale -
-                    DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale) > 0.0001f ||
-                Mathf.Abs(
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight -
-                    DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight) > 0.0001f ||
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart > 0f ||
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd > 0f ||
-                Mathf.Abs(
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight -
-                    DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight) > 0.0001f ||
-                _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride ||
-                _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle > 0f;
+            return ManualLowerBodySegmentDirectionRuntimeOverrideApplier.HasDetails(
+                _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
+                _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
+                _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
+                _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
+                _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
+                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
+                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
+                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
+                _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
+                _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
         }
 
         private static bool ApplyManualAnimatorLowerBodySegmentDirectionDetailRuntimeOverride(
             FBXVmdPipeline fileManager)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
-                _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
-            fileManager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle);
-            fileManager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference =
-                _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
-            fileManager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            fileManager.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale =
-                Mathf.Clamp01(_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight =
-                Mathf.Clamp01(_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart =
-                Mathf.Max(0f, _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd =
-                Mathf.Max(0f, _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
-                Mathf.Clamp01(_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
-            fileManager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference =
-                _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
-            fileManager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
-            return true;
+            return ManualLowerBodySegmentDirectionRuntimeOverrideApplier.ApplyDetails(
+                fileManager,
+                _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
+                _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
+                _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
+                _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
+                _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
+                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
+                _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
+                _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
         }
 
         private static bool ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
