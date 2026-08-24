@@ -131,9 +131,17 @@ namespace Tests.Editor.FBXImporter
                 "Scripts",
                 "FBXImporter",
                 "FBXVmdPipeline.cs"));
+            string controllerSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXImportController.cs"));
 
             Assert.That(validationMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("FBXImportController.TryValidateSourcePath(sourcePath"));
+            Assert.That(controllerSource, Does.Contain("TryValidateSourcePath(sourcePath"));
+            Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.TryValidateSourcePath(sourcePath"));
             Assert.That(
                 pipelineSource,
                 Does.Not.Contain("string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath)"));
@@ -151,6 +159,54 @@ namespace Tests.Editor.FBXImporter
             Assert.That(missingArguments[1], Is.EqualTo($"FBX 파일을 찾을 수 없습니다: {missingPath}"));
             Assert.That(extensionResult, Is.False);
             Assert.That(extensionArguments[1], Is.EqualTo("FBX 파일만 선택할 수 있습니다."));
+        }
+
+        [Test]
+        public void Given_RuntimeModelImport_When_CheckingOwnership_Then_ControllerOwnsLoadStage()
+        {
+            MethodInfo importMethod = typeof(FBXImportController).GetMethod(
+                "ImportRuntimeModelAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            System.Type resultType = typeof(FBXImportController).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.FBXModelImportResult");
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+            string controllerSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXImportController.cs"));
+            int validationIndex = controllerSource.IndexOf("if (!TryValidateSourcePath(sourcePath");
+            int selectedStateIndex = controllerSource.IndexOf("FBXSessionState.Selected", validationIndex);
+            int copyIndex = controllerSource.IndexOf("CopyToControlledImportFolder(sourcePath)", selectedStateIndex);
+            int editorSettingsIndex = controllerSource.IndexOf(
+                "ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath)",
+                copyIndex);
+            int loadingStateIndex = controllerSource.IndexOf("FBXSessionState.LoadingFbx", editorSettingsIndex);
+            int importIndex = controllerSource.IndexOf("await _importModelAsync(targetPath)", loadingStateIndex);
+
+            Assert.That(importMethod, Is.Not.Null);
+            Assert.That(resultType, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("await _importController.ImportRuntimeModelAsync("));
+            Assert.That(pipelineSource, Does.Not.Contain("_importController.CopyToControlledImportFolder(sourcePath)"));
+            Assert.That(pipelineSource, Does.Not.Contain("_importController.ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath)"));
+            Assert.That(pipelineSource, Does.Not.Contain("_fbxImporter.ImportAsync(targetPath)"));
+            Assert.That(controllerSource, Does.Contain("TryValidateSourcePath(sourcePath"));
+            Assert.That(controllerSource, Does.Contain("CopyToControlledImportFolder(sourcePath)"));
+            Assert.That(controllerSource, Does.Contain("ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath)"));
+            Assert.That(controllerSource, Does.Contain("await _importModelAsync(targetPath)"));
+            Assert.That(validationIndex, Is.LessThan(selectedStateIndex));
+            Assert.That(selectedStateIndex, Is.LessThan(copyIndex));
+            Assert.That(copyIndex, Is.LessThan(editorSettingsIndex));
+            Assert.That(editorSettingsIndex, Is.LessThan(loadingStateIndex));
+            Assert.That(loadingStateIndex, Is.LessThan(importIndex));
         }
 
         [Test]

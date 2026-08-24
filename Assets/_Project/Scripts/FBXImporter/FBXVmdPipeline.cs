@@ -1971,7 +1971,10 @@ namespace Fbx2Vmd.FBXImporter
 
             if (_importController == null)
             {
-                _importController = new FBXImportController(this, _fileBrowserService);
+                _importController = new FBXImportController(
+                    this,
+                    _fileBrowserService,
+                    _fbxImporter.ImportAsync);
             }
 
             if (_conversionCoordinator == null)
@@ -2057,36 +2060,18 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-                if (!FBXImportController.TryValidateSourcePath(sourcePath, out string sourceValidationError))
+                FBXModelImportResult importResult = await _importController.ImportRuntimeModelAsync(
+                    sourcePath,
+                    _shouldRecordVmdAfterImport);
+                if (!importResult.IsSuccess)
                 {
-                    FailSession(sourceValidationError);
-                    return FBXConversionResult.Fail(sourceValidationError);
+                    FailSession(importResult.ErrorMessage);
+                    return FBXConversionResult.Fail(importResult.ErrorMessage);
                 }
 
-                SetSessionState(FBXSessionState.Selected, $"선택됨: {Path.GetFileName(sourcePath)}", 0.05f);
-                string targetPath = _importController.CopyToControlledImportFolder(sourcePath);
-                string outputBaseName = Path.GetFileNameWithoutExtension(targetPath);
-                if (_shouldRecordVmdAfterImport)
-                {
-                    Debug.Log($"[Recording] 자동 VMD 출력명 고정됨. VMD={outputBaseName}.vmd, 입력 FBX={Path.GetFileName(sourcePath)}");
-                }
-                else
-                {
-                    Debug.Log($"[FBXImport] Unity 촬영 전용 모드 선택됨. 출력={outputBaseName}, VMD 자동 녹화=생략");
-                }
-                SetSessionState(FBXSessionState.Copied, $"복제 완료: {Path.GetFileName(targetPath)}", 0.15f);
-
-#if UNITY_EDITOR
-                _importController.ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath);
-#endif
-
-                SetSessionState(FBXSessionState.LoadingFbx, "FBX 로드 중", 0.25f);
-                GameObject importedModel = await _fbxImporter.ImportAsync(targetPath);
-                if (importedModel == null)
-                {
-                    FailSession("FBX 로드에 실패했습니다.");
-                    return FBXConversionResult.Fail("FBX 로드에 실패했습니다.");
-                }
+                string targetPath = importResult.ControlledImportPath;
+                string outputBaseName = importResult.OutputBaseName;
+                GameObject importedModel = importResult.ImportedModel;
 
                 GameObject ghostContainer = CreateGhostContainer(importedModel);
                 _activeGhostContainer = ghostContainer;
