@@ -2077,23 +2077,16 @@ namespace Fbx2Vmd.FBXImporter
                 _activeGhostContainer = ghostContainer;
                 SetGhostVisibility(importedModel, showGhostModel, showGhostSkeletonWhenNoRenderers);
 
-                if (!FBXImportController.TryPrepareRuntimeAvatar(
+                if (!_importController.TryPrepareRuntimeAnimation(
                         importedModel,
+                        showRuntimeAnimationLog,
                         out Dictionary<string, string> boneMapping,
-                        out string avatarErrorMessage))
+                        out Animation ghostAnim,
+                        out AnimationClip targetClip,
+                        out string animationErrorMessage))
                 {
-                    FailSession(avatarErrorMessage);
-                    return FBXConversionResult.Fail(avatarErrorMessage);
-                }
-
-                SetSessionState(FBXSessionState.AvatarReady, "Humanoid Avatar 준비 완료", 0.45f);
-
-                Animation ghostAnim = importedModel.GetComponent<Animation>();
-                AnimationClip targetClip = FBXImportController.ExtractPrimaryClip(ghostAnim, showRuntimeAnimationLog);
-                if (targetClip == null)
-                {
-                    FailSession("FBX에서 유효한 애니메이션 클립을 찾지 못했습니다.");
-                    return FBXConversionResult.Fail("FBX에서 유효한 애니메이션 클립을 찾지 못했습니다.");
+                    FailSession(animationErrorMessage);
+                    return FBXConversionResult.Fail(animationErrorMessage);
                 }
 
                 GameObject targetObject = targetCharacter;

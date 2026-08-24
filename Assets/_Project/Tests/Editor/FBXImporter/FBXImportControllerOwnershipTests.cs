@@ -224,11 +224,52 @@ namespace Tests.Editor.FBXImporter
                 "FBXVmdPipeline.cs"));
 
             Assert.That(preparationMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("FBXImportController.TryPrepareRuntimeAvatar("));
+            Assert.That(pipelineSource, Does.Contain("_importController.TryPrepareRuntimeAnimation("));
+            Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.TryPrepareRuntimeAvatar("));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.LoadBoneMappingRuntime()"));
             Assert.That(pipelineSource, Does.Not.Contain("HumanoidAvatarBuilder.SetupHumanoid(importedModel"));
             Assert.That(pipelineSource, Does.Not.Contain("HumanoidAvatarBuilder.BuildAutoMapping(importedModel)"));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.ValidateGhostAvatar(importedModel)"));
+        }
+
+        [Test]
+        public void Given_RuntimeAnimationPreparation_When_CheckingOwnership_Then_ControllerPreservesAvatarClipSequence()
+        {
+            MethodInfo preparationMethod = typeof(FBXImportController).GetMethod(
+                "TryPrepareRuntimeAnimation",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+            string controllerSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXImportController.cs"));
+            int avatarIndex = controllerSource.IndexOf("TryPrepareRuntimeAvatar(");
+            int avatarReadyIndex = avatarIndex >= 0
+                ? controllerSource.IndexOf("FBXSessionState.AvatarReady", avatarIndex)
+                : -1;
+            int animationIndex = avatarReadyIndex >= 0
+                ? controllerSource.IndexOf("GetComponent<Animation>()", avatarReadyIndex)
+                : -1;
+            int clipIndex = animationIndex >= 0
+                ? controllerSource.IndexOf("ExtractPrimaryClip(", animationIndex)
+                : -1;
+
+            Assert.That(preparationMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("_importController.TryPrepareRuntimeAnimation("));
+            Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.TryPrepareRuntimeAvatar("));
+            Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.ExtractPrimaryClip("));
+            Assert.That(avatarIndex, Is.LessThan(avatarReadyIndex));
+            Assert.That(avatarReadyIndex, Is.LessThan(animationIndex));
+            Assert.That(animationIndex, Is.LessThan(clipIndex));
         }
 
         [Test]

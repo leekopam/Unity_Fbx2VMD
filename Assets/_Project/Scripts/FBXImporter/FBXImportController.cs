@@ -229,6 +229,38 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal bool TryPrepareRuntimeAnimation(
+            GameObject importedModel,
+            bool shouldLogRuntimeAnimation,
+            out Dictionary<string, string> boneMapping,
+            out Animation ghostAnimation,
+            out AnimationClip targetClip,
+            out string errorMessage)
+        {
+            ghostAnimation = null;
+            targetClip = null;
+            if (!TryPrepareRuntimeAvatar(importedModel, out boneMapping, out errorMessage))
+            {
+                return false;
+            }
+
+            _pipeline.SetSessionState(
+                FBXVmdPipeline.FBXSessionState.AvatarReady,
+                "Humanoid Avatar 준비 완료",
+                0.45f);
+
+            ghostAnimation = importedModel.GetComponent<Animation>();
+            targetClip = ExtractPrimaryClip(ghostAnimation, shouldLogRuntimeAnimation);
+            if (targetClip == null)
+            {
+                errorMessage = "FBX에서 유효한 애니메이션 클립을 찾지 못했습니다.";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
+        }
+
         internal static AnimationClip ExtractPrimaryClip(Animation ghostAnimation, bool shouldLogRuntimeAnimation)
         {
             if (ghostAnimation == null || ghostAnimation.clip == null)
