@@ -154,6 +154,28 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RuntimeAvatarPreparation_When_CheckingOwnership_Then_ControllerOwnsFallbackSequence()
+        {
+            MethodInfo preparationMethod = typeof(FBXImportController).GetMethod(
+                "TryPrepareRuntimeAvatar",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+
+            Assert.That(preparationMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("FBXImportController.TryPrepareRuntimeAvatar("));
+            Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.LoadBoneMappingRuntime()"));
+            Assert.That(pipelineSource, Does.Not.Contain("HumanoidAvatarBuilder.SetupHumanoid(importedModel"));
+            Assert.That(pipelineSource, Does.Not.Contain("HumanoidAvatarBuilder.BuildAutoMapping(importedModel)"));
+            Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.ValidateGhostAvatar(importedModel)"));
+        }
+
+        [Test]
         public void Given_ValidRuntimeAnimation_When_ExtractingPrimaryClip_Then_ReturnsAssignedClip()
         {
             GameObject root = new GameObject("runtime-import-clip-test");

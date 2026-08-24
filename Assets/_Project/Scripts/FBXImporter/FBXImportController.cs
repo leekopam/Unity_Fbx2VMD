@@ -147,6 +147,36 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal static bool TryPrepareRuntimeAvatar(
+            GameObject importedModel,
+            out Dictionary<string, string> boneMapping,
+            out string errorMessage)
+        {
+            boneMapping = LoadBoneMappingRuntime();
+            if (boneMapping == null)
+            {
+                boneMapping = new Dictionary<string, string>();
+            }
+
+            // BoneMapping_Data.txt는 특정 리그에 종속될 수 있으므로, 실패 시 자동 매핑으로 폴백함.
+            HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
+            if (!ValidateGhostAvatar(importedModel))
+            {
+                Debug.LogWarning("[FBXImport] Ghost Humanoid Avatar 생성 실패함. 자동 본 매핑으로 재시도함.");
+                boneMapping = HumanoidAvatarBuilder.BuildAutoMapping(importedModel);
+                HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
+
+                if (!ValidateGhostAvatar(importedModel))
+                {
+                    errorMessage = "Ghost Humanoid Avatar 생성에 실패했습니다.";
+                    return false;
+                }
+            }
+
+            errorMessage = string.Empty;
+            return true;
+        }
+
         internal static AnimationClip ExtractPrimaryClip(Animation ghostAnimation, bool shouldLogRuntimeAnimation)
         {
             if (ghostAnimation == null || ghostAnimation.clip == null)
