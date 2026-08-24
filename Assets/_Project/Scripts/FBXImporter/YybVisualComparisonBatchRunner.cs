@@ -3632,40 +3632,21 @@ namespace Fbx2Vmd.FBXImporter
             float raisedPoseMaxHandBelowShoulderRatio = DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
             float raisedPoseMaxHandHorizontalReachRatio = DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.enableYybArmSwingLimitCorrection = enabled;
-            fileManager.YybArmSwingLimitWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.YybArmSwingMaxDownDot = Mathf.Clamp01(maxDownDot);
-            fileManager.YybArmSwingMinHandHorizontalRatio = Mathf.Clamp(minHandHorizontalRatio, 0f, 1.5f);
-            fileManager.YybArmSwingMaxHandBelowShoulderRatio = Mathf.Clamp(maxHandBelowShoulderRatio, 0f, 1.5f);
-            fileManager.YybArmSwingHorizontalReachLimitWeight = enabled
-                ? Mathf.Clamp01(horizontalReachLimitWeight)
-                : 0f;
-            fileManager.YybArmSwingMaxHandHorizontalReachRatio = enabled
-                ? Mathf.Clamp(maxHandHorizontalReachRatio, 0f, 1.5f)
-                : 0f;
-            fileManager.YybArmSwingHorizontalReachMaxHandBelowShoulderRatio = enabled
-                ? Mathf.Clamp(horizontalReachMaxHandBelowShoulderRatio, 0f, 1.5f)
-                : 0f;
-            fileManager.YybArmSwingHorizontalReachMinElbowAngleAfterApply = enabled
-                ? Mathf.Clamp(horizontalReachMinElbowAngleAfterApply, 0f, 180f)
-                : 0f;
-            fileManager.YybArmSwingRaisedPoseHorizontalReachLimitWeight = enabled
-                ? Mathf.Clamp01(raisedPoseHorizontalReachLimitWeight)
-                : 0f;
-            fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot = Mathf.Clamp01(raisedPoseMinUpperArmDownDot);
-            fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio = Mathf.Clamp(
+            return YybArmRuntimeOverrideApplier.ApplySwingLimit(
+                fileManager,
+                enabled,
+                weight,
+                maxDownDot,
+                minHandHorizontalRatio,
+                maxHandBelowShoulderRatio,
+                horizontalReachLimitWeight,
+                maxHandHorizontalReachRatio,
+                horizontalReachMaxHandBelowShoulderRatio,
+                horizontalReachMinElbowAngleAfterApply,
+                raisedPoseHorizontalReachLimitWeight,
+                raisedPoseMinUpperArmDownDot,
                 raisedPoseMaxHandBelowShoulderRatio,
-                0f,
-                1.5f);
-            fileManager.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio = enabled
-                ? Mathf.Clamp(raisedPoseMaxHandHorizontalReachRatio, 0f, 1.5f)
-                : 0f;
-            return true;
+                raisedPoseMaxHandHorizontalReachRatio);
         }
 
         private static bool ApplyYybArmDirectionRetargetRuntimeOverride(
@@ -3697,19 +3678,15 @@ namespace Fbx2Vmd.FBXImporter
             float leftSideWeightScale,
             float rightSideWeightScale)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.enableYybArmDirectionRetargetCorrection = enabled;
-            fileManager.YybArmDirectionUpperArmWeight = enabled ? Mathf.Clamp01(upperArmWeight) : 0f;
-            fileManager.YybArmDirectionForearmWeight = enabled ? Mathf.Clamp01(forearmWeight) : 0f;
-            fileManager.YybArmDirectionUpperArmMaxDegrees = Mathf.Clamp(upperArmMaxDegrees, 0f, 120f);
-            fileManager.YybArmDirectionForearmMaxDegrees = Mathf.Clamp(forearmMaxDegrees, 0f, 120f);
-            fileManager.YybArmDirectionLeftSideWeightScale = enabled ? Mathf.Clamp01(leftSideWeightScale) : 0f;
-            fileManager.YybArmDirectionRightSideWeightScale = enabled ? Mathf.Clamp01(rightSideWeightScale) : 0f;
-            return true;
+            return YybArmRuntimeOverrideApplier.ApplyDirection(
+                fileManager,
+                enabled,
+                upperArmWeight,
+                forearmWeight,
+                upperArmMaxDegrees,
+                forearmMaxDegrees,
+                leftSideWeightScale,
+                rightSideWeightScale);
         }
 
         private static bool ApplyYybArmSleeveAnchorRuntimeOverride(
@@ -3719,16 +3696,12 @@ namespace Fbx2Vmd.FBXImporter
             float shoulderCapInfluence,
             float maxDegrees)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.enableYybArmSleeveAnchorCorrection = enabled;
-            fileManager.YybArmSleeveAnchorInfluence = enabled ? Mathf.Clamp01(sleeveInfluence) : 0f;
-            fileManager.YybArmShoulderCapAnchorInfluence = enabled ? Mathf.Clamp01(shoulderCapInfluence) : 0f;
-            fileManager.YybArmSleeveAnchorMaxDegrees = Mathf.Clamp(maxDegrees, 0f, 120f);
-            return true;
+            return YybArmRuntimeOverrideApplier.ApplySleeveAnchor(
+                fileManager,
+                enabled,
+                sleeveInfluence,
+                shoulderCapInfluence,
+                maxDegrees);
         }
 
         private static bool ApplyYybArmVisualTwistRuntimeOverride(
@@ -3739,17 +3712,13 @@ namespace Fbx2Vmd.FBXImporter
             float upperArmMaxDegrees,
             float forearmMaxDegrees)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.enableYybArmVisualTwistCorrection = enabled;
-            fileManager.YybArmVisualUpperArmInfluence = enabled ? Mathf.Clamp01(upperArmInfluence) : 0f;
-            fileManager.YybArmVisualForearmInfluence = enabled ? Mathf.Clamp01(forearmInfluence) : 0f;
-            fileManager.YybArmVisualUpperArmMaxDegrees = Mathf.Clamp(upperArmMaxDegrees, 0f, 120f);
-            fileManager.YybArmVisualForearmMaxDegrees = Mathf.Clamp(forearmMaxDegrees, 0f, 120f);
-            return true;
+            return YybArmRuntimeOverrideApplier.ApplyVisualTwist(
+                fileManager,
+                enabled,
+                upperArmInfluence,
+                forearmInfluence,
+                upperArmMaxDegrees,
+                forearmMaxDegrees);
         }
 
         private static bool ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
@@ -4293,18 +4262,12 @@ namespace Fbx2Vmd.FBXImporter
             float frameGateStart,
             float frameGateEnd)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.useYybRightSleeveSilhouetteLocalOffsetReference = enabled;
-            fileManager.yybRightSleeveSilhouetteLocalOffsetX = Mathf.Clamp(localOffsetX, -0.2f, 0.2f);
-            fileManager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
-                Mathf.Clamp(frameGateStart, 0f, 6000f);
-            fileManager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
-                Mathf.Clamp(frameGateEnd, 0f, 6000f);
-            return true;
+            return YybArmRuntimeOverrideApplier.ApplyRightSleeveSilhouetteOffset(
+                fileManager,
+                enabled,
+                localOffsetX,
+                frameGateStart,
+                frameGateEnd);
         }
 
         private static bool ApplyTargetHumanoidBonePositionLockRuntimeOverride(
