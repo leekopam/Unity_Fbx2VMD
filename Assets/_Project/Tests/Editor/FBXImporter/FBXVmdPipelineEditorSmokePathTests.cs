@@ -631,6 +631,41 @@ namespace Tests.Editor.FBXImporter
                 Is.Null);
         }
 
+        [Test]
+        public void Given_EditorSmokeRuntimeState_When_CheckingOwnership_Then_UsesDedicatedSession()
+        {
+            Type sessionType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.FBXEditorDiagnosticSession",
+                throwOnError: false);
+            FieldInfo sessionField = typeof(FBXVmdPipeline).GetField(
+                "_editorDiagnosticSession",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.That(sessionType, Is.Not.Null);
+            Assert.That(sessionField, Is.Not.Null);
+            Assert.That(sessionField?.FieldType, Is.EqualTo(sessionType));
+            Assert.That(
+                typeof(FBXVmdPipeline).GetField(
+                    "_editorSmokeRecordingOverrideActive",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                typeof(FBXVmdPipeline).GetField(
+                    "_editorSmokeSettingsSnapshot",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+
+            string controllerSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "VMDRecordingController.cs"));
+            Assert.That(controllerSource, Does.Contain("EditorDiagnosticSession"));
+            Assert.That(controllerSource, Does.Not.Contain("_editorSmoke"));
+        }
+
         [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head, "head", "smoke_clip_2s")]
         [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, "middle", "smoke_middle_clip_2s")]
         [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail, "tail", "smoke_tail_clip_2s")]
@@ -1087,12 +1122,10 @@ namespace Tests.Editor.FBXImporter
                 fileManager.enableDiagnosticFingerCloseups = true;
                 fileManager.useDeterministicCaptureFramerateForDiagnostics = false;
                 fileManager.startDelay = 1.25f;
-                SetPrivateField(fileManager, "_editorSmokeRecordingOverrideActive", true);
-                SetPrivateField(fileManager, "_editorSmokeTargetFrameCount", 17);
-                SetPrivateField(fileManager, "_editorSmokeDurationSeconds", 2.5f);
-                SetPrivateField(fileManager, "_editorSmokeSampleTimesOverride", new[] { 0.5f });
-                SetPrivateField(fileManager, "_editorSmokeSegment", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle);
-                SetPrivateField(fileManager, "_editorSmokeCurrentFbxFileName", "snapshot.fbx");
+                BeginEditorDiagnosticSession(
+                    fileManager,
+                    "snapshot.fbx",
+                    hasExtendedOverrides: false);
 
                 InvokeInstance(fileManager, "CaptureEditorSmokeSettings");
                 fileManager.enableRecordingDiagnostics = true;
@@ -1177,20 +1210,10 @@ namespace Tests.Editor.FBXImporter
                 fileManager.enableDiagnosticFingerCloseups = false;
                 fileManager.useDeterministicCaptureFramerateForDiagnostics = true;
                 fileManager.startDelay = 4.5f;
-                SetPrivateField(fileManager, "_editorSmokeRecordingOverrideActive", true);
-                SetPrivateField(fileManager, "_editorSmokeTargetFrameCount", 17);
-                SetPrivateField(fileManager, "_editorSmokeDurationSeconds", 2.5f);
-                SetPrivateField(fileManager, "_editorSmokeSampleTimesOverride", new[] { 0.5f });
-                SetPrivateField(fileManager, "_editorSmokeSegment", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle);
-                SetPrivateField(fileManager, "_editorSmokeCurrentFbxFileName", "inactive.fbx");
-                SetPrivateField(fileManager, "_editorSmokeCaptureResolutionOverrideActive", true);
-                SetPrivateField(fileManager, "_editorSmokeCaptureWidth", 1920);
-                SetPrivateField(fileManager, "_editorSmokeCaptureHeight", 1080);
-                SetPrivateField(fileManager, "_editorSmokeDiagnosticScreenshotPaddingOverride", 0.25f);
-                SetPrivateField(fileManager, "_editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride", 0.75f);
-                SetPrivateField(fileManager, "_editorSmokeUseKnownMmdReferenceTiming", true);
-                SetPrivateField(fileManager, "_editorSmokeRecordingStartTimeOverrideSeconds", 1f);
-                SetPrivateField(fileManager, "_editorSmokeRecordingPlaybackSpeedOverride", 0.5f);
+                BeginEditorDiagnosticSession(
+                    fileManager,
+                    "inactive.fbx",
+                    hasExtendedOverrides: true);
 
                 AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
                 InvokeInstance(fileManager, "ClearEditorSmokeOverride");
@@ -1212,6 +1235,44 @@ namespace Tests.Editor.FBXImporter
                 AssertEditorSmokeCoreCleanupState(fileManager);
                 AssertEditorSmokeExtendedCleanupState(fileManager);
                 AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void Given_ActiveEditorDiagnosticSession_When_NotifyingFinished_Then_ForwardsCurrentFbxOnce()
+        {
+            GameObject root = new GameObject("EditorDiagnosticSessionFinishedTest");
+            FBXVmdPipeline fileManager = root.AddComponent<FBXVmdPipeline>();
+            int invocationCount = 0;
+            string notifiedFbxFileName = null;
+            VmdSaveResult notifiedResult = default(VmdSaveResult);
+            fileManager.EditorDiagnosticSmokeFinished += (fbxFileName, result) =>
+            {
+                invocationCount++;
+                notifiedFbxFileName = fbxFileName;
+                notifiedResult = result;
+            };
+
+            try
+            {
+                BeginEditorDiagnosticSession(
+                    fileManager,
+                    "finished.fbx",
+                    hasExtendedOverrides: false);
+                VmdSaveResult result = VmdSaveResult.Ok("output.vmd", 30, 1024);
+
+                InvokeInstance(fileManager, "NotifyEditorSmokeFinished", result);
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+                InvokeInstance(fileManager, "NotifyEditorSmokeFinished", result);
+
+                Assert.That(invocationCount, Is.EqualTo(1));
+                Assert.That(notifiedFbxFileName, Is.EqualTo("finished.fbx"));
+                Assert.That(notifiedResult.FilePath, Is.EqualTo("output.vmd"));
+                Assert.That(notifiedResult.FrameCount, Is.EqualTo(30));
             }
             finally
             {
@@ -1512,54 +1573,119 @@ namespace Tests.Editor.FBXImporter
             return (T)field.GetValue(target);
         }
 
-        private static void SetPrivateField<T>(object target, string fieldName, T value)
-        {
-            FieldInfo field = target.GetType().GetField(
-                fieldName,
-                BindingFlags.Instance | BindingFlags.NonPublic);
-
-            Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must keep a private {fieldName} field for this editor smoke settings snapshot test.");
-            field.SetValue(target, value);
-        }
-
         private static void AssertEditorSmokeCoreCleanupState(FBXVmdPipeline fileManager)
         {
-            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeRecordingOverrideActive"), Is.False);
-            Assert.That(ReadInstanceField<int>(fileManager, "_editorSmokeTargetFrameCount"), Is.EqualTo(0));
-            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeDurationSeconds"), Is.EqualTo(0f));
-            Assert.That(ReadInstanceField<float[]>(fileManager, "_editorSmokeSampleTimesOverride"), Is.Null);
-            Assert.That(ReadInstanceField<FBXVmdPipeline.EditorDiagnosticSmokeSegment>(fileManager, "_editorSmokeSegment"),
+            Assert.That(ReadEditorDiagnosticSessionProperty<bool>(fileManager, "IsRecordingOverrideActive"), Is.False);
+            Assert.That(ReadEditorDiagnosticSessionProperty<int>(fileManager, "TargetFrameCount"), Is.EqualTo(0));
+            Assert.That(ReadEditorDiagnosticSessionProperty<float>(fileManager, "DurationSeconds"), Is.EqualTo(0f));
+            Assert.That(ReadEditorDiagnosticSessionProperty<float[]>(fileManager, "SampleTimesOverride"), Is.Null);
+            Assert.That(ReadEditorDiagnosticSessionProperty<FBXVmdPipeline.EditorDiagnosticSmokeSegment>(fileManager, "Segment"),
                 Is.EqualTo(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head));
-            Assert.That(ReadInstanceField<string>(fileManager, "_editorSmokeCurrentFbxFileName"), Is.Null);
+            Assert.That(ReadEditorDiagnosticSessionProperty<string>(fileManager, "CurrentFbxFileName"), Is.Null);
         }
 
         private static void AssertEditorSmokeExtendedCleanupState(FBXVmdPipeline fileManager)
         {
-            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeCaptureResolutionOverrideActive"), Is.False);
-            Assert.That(ReadInstanceField<int>(fileManager, "_editorSmokeCaptureWidth"), Is.EqualTo(0));
-            Assert.That(ReadInstanceField<int>(fileManager, "_editorSmokeCaptureHeight"), Is.EqualTo(0));
-            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeDiagnosticScreenshotPaddingOverride"), Is.NaN);
-            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride"), Is.NaN);
-            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeUseKnownMmdReferenceTiming"), Is.False);
-            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeRecordingStartTimeOverrideSeconds"), Is.NaN);
-            Assert.That(ReadInstanceField<float>(fileManager, "_editorSmokeRecordingPlaybackSpeedOverride"), Is.NaN);
+            Assert.That(ReadEditorDiagnosticSessionProperty<bool>(fileManager, "HasCaptureResolutionOverride"), Is.False);
+            Assert.That(ReadEditorDiagnosticSessionProperty<int>(fileManager, "CaptureWidth"), Is.EqualTo(0));
+            Assert.That(ReadEditorDiagnosticSessionProperty<int>(fileManager, "CaptureHeight"), Is.EqualTo(0));
+            Assert.That(ReadEditorDiagnosticSessionProperty<float>(fileManager, "DiagnosticScreenshotPaddingOverride"), Is.NaN);
+            Assert.That(ReadEditorDiagnosticSessionProperty<float>(fileManager, "DiagnosticScreenshotVerticalViewportCenterOverride"), Is.NaN);
+            Assert.That(ReadEditorDiagnosticSessionProperty<bool>(fileManager, "UseKnownReferenceTiming"), Is.False);
+            Assert.That(ReadEditorDiagnosticSessionProperty<float>(fileManager, "RecordingStartTimeOverrideSeconds"), Is.NaN);
+            Assert.That(ReadEditorDiagnosticSessionProperty<float>(fileManager, "RecordingPlaybackSpeedOverride"), Is.NaN);
         }
 
         private static void AssertEditorSmokeSettingsSnapshotIsDefault(FBXVmdPipeline fileManager)
         {
-            FieldInfo snapshotField = fileManager.GetType().GetField(
-                "_editorSmokeSettingsSnapshot",
+            object session = GetEditorDiagnosticSession(fileManager);
+            FieldInfo snapshotField = session.GetType().GetField(
+                "_settingsSnapshot",
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
-            Assert.That(snapshotField, Is.Not.Null, "FBXVmdPipeline must keep the private editor smoke settings snapshot backing field.");
-            Assert.That(ReadInstanceField<bool>(fileManager, "_editorSmokeSettingsSnapshotActive"), Is.False);
+            Assert.That(snapshotField, Is.Not.Null, "FBXEditorDiagnosticSession must keep the settings snapshot backing field.");
+            Assert.That(ReadEditorDiagnosticSessionProperty<bool>(fileManager, "HasSettingsSnapshot"), Is.False);
 
-            object snapshot = ReadInstanceField<object>(fileManager, "_editorSmokeSettingsSnapshot");
+            object snapshot = snapshotField.GetValue(session);
             object defaultSnapshot = Activator.CreateInstance(snapshotField.FieldType);
             Assert.That(snapshot, Is.EqualTo(defaultSnapshot));
         }
 
-        private static void InvokeInstance(object target, string methodName)
+        private static void BeginEditorDiagnosticSession(
+            FBXVmdPipeline fileManager,
+            string currentFbxFileName,
+            bool hasExtendedOverrides)
+        {
+            object session = GetEditorDiagnosticSession(fileManager);
+            Type planType = session.GetType().GetNestedType(
+                "Plan",
+                BindingFlags.NonPublic);
+            Assert.That(planType, Is.Not.Null);
+            object plan = Activator.CreateInstance(planType, nonPublic: true);
+            SetProperty(plan, "TargetFrameCount", 17);
+            SetProperty(plan, "DurationSeconds", 2.5f);
+            SetProperty(plan, "SampleTimesOverride", new[] { 0.5f });
+            SetProperty(
+                plan,
+                "Segment",
+                FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle);
+            SetProperty(plan, "CurrentFbxFileName", currentFbxFileName);
+            if (hasExtendedOverrides)
+            {
+                SetProperty(plan, "HasCaptureResolutionOverride", true);
+                SetProperty(plan, "CaptureWidth", 1920);
+                SetProperty(plan, "CaptureHeight", 1080);
+                SetProperty(plan, "DiagnosticScreenshotPaddingOverride", 0.25f);
+                SetProperty(
+                    plan,
+                    "DiagnosticScreenshotVerticalViewportCenterOverride",
+                    0.75f);
+                SetProperty(plan, "UseKnownReferenceTiming", true);
+                SetProperty(plan, "RecordingStartTimeOverrideSeconds", 1f);
+                SetProperty(plan, "RecordingPlaybackSpeedOverride", 0.5f);
+            }
+
+            MethodInfo beginMethod = session.GetType().GetMethod(
+                "Begin",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginMethod, Is.Not.Null);
+            beginMethod.Invoke(session, new[] { plan });
+        }
+
+        private static T ReadEditorDiagnosticSessionProperty<T>(
+            FBXVmdPipeline fileManager,
+            string propertyName)
+        {
+            object session = GetEditorDiagnosticSession(fileManager);
+            PropertyInfo property = session.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(property, Is.Not.Null, propertyName);
+            return (T)property.GetValue(session);
+        }
+
+        private static object GetEditorDiagnosticSession(FBXVmdPipeline fileManager)
+        {
+            PropertyInfo property = typeof(FBXVmdPipeline).GetProperty(
+                "EditorDiagnosticSession",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(property, Is.Not.Null);
+            return property.GetValue(fileManager);
+        }
+
+        private static void SetProperty(object target, string propertyName, object value)
+        {
+            PropertyInfo property = target.GetType().GetProperty(
+                propertyName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(property, Is.Not.Null, propertyName);
+            property.SetValue(target, value);
+        }
+
+        private static void InvokeInstance(
+            object target,
+            string methodName,
+            params object[] arguments)
         {
             MethodInfo method = target.GetType().GetMethod(
                 methodName,
@@ -1567,7 +1693,7 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(method, Is.Not.Null, $"{target.GetType().Name} must keep a private {methodName} method for this visibility regression test.");
 
-            method.Invoke(target, Array.Empty<object>());
+            method.Invoke(target, arguments);
         }
 
         private static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
