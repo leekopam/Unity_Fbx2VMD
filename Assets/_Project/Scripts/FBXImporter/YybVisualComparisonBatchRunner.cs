@@ -3393,14 +3393,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool ApplyManualAnimatorFootLocalRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseManualAnimatorFootLocalRotationReference = enabled;
-            fileManager.manualAnimatorFootLocalRotationReferenceWeight = enabled ? 1f : 0f;
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyFootLocalRotation(fileManager, enabled);
         }
 
         private static bool ApplyManualAnimatorFullBodyPoseRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
@@ -3437,23 +3430,18 @@ namespace Fbx2Vmd.FBXImporter
             float frameGateStart = DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart,
             float frameGateEnd = DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseManualAnimatorFullBodyPoseReference = enabled;
-            fileManager.manualAnimatorFullBodyPoseReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles = enabled && excludeLowerBodyMuscles;
-            fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly = enabled && lowerBodyMusclesOnly;
-            fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = enabled && legTwistMusclesOnly;
-            fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly = enabled && rightArmMusclesOnly;
-            fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly = enabled && leftArmMusclesOnly;
-            fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly =
-                enabled && rightSleeveChainMusclesOnly;
-            fileManager.manualAnimatorFullBodyPoseFrameGateStart = enabled ? Mathf.Max(0f, frameGateStart) : 0f;
-            fileManager.manualAnimatorFullBodyPoseFrameGateEnd = enabled ? Mathf.Max(0f, frameGateEnd) : 0f;
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyFullBodyPose(
+                fileManager,
+                enabled,
+                weight,
+                excludeLowerBodyMuscles,
+                lowerBodyMusclesOnly,
+                legTwistMusclesOnly,
+                rightArmMusclesOnly,
+                leftArmMusclesOnly,
+                rightSleeveChainMusclesOnly,
+                frameGateStart,
+                frameGateEnd);
         }
 
         private static bool ApplySetHumanPoseRightLegTwistOutputRuntimeOverride(
@@ -3462,15 +3450,11 @@ namespace Fbx2Vmd.FBXImporter
             float weight,
             float maxDelta)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference = enabled;
-            fileManager.setHumanPoseRightLegTwistOutputReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta = Mathf.Max(0f, maxDelta);
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyRightLegTwistOutput(
+                fileManager,
+                enabled,
+                weight,
+                maxDelta);
         }
 
         private static bool ApplyManualAnimatorBodyRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
@@ -3486,36 +3470,17 @@ namespace Fbx2Vmd.FBXImporter
             bool enabled,
             float weight)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseManualAnimatorBodyRotationReference = enabled;
-            fileManager.manualAnimatorBodyRotationReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyBodyRotation(fileManager, enabled, weight);
         }
 
         private static bool ApplyManualAnimatorHandLocalRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.useManualAnimatorHandLocalRotationReference = enabled;
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyHandLocalRotation(fileManager, enabled);
         }
 
         private static bool ApplyManualAnimatorThumbLocalRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.useManualAnimatorThumbLocalRotationReference = enabled;
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyThumbLocalRotation(fileManager, enabled);
         }
 
         private static bool ApplyManualAnimatorHandPalmFrameRuntimeOverride(
@@ -3523,14 +3488,7 @@ namespace Fbx2Vmd.FBXImporter
             bool enabled,
             float weight)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.useManualAnimatorHandPalmFrameReference = enabled;
-            fileManager.manualAnimatorHandPalmFrameWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyHandPalmFrame(fileManager, enabled, weight);
         }
 
         private static bool ApplyRetargetPoseVisualSpikeSmoothingRuntimeOverride(
