@@ -1310,11 +1310,6 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                FieldInfo reachWeightField = typeof(FBXVmdPipeline).GetField("YybArmSwingHorizontalReachLimitWeight");
-                FieldInfo maxReachField = typeof(FBXVmdPipeline).GetField("YybArmSwingMaxHandHorizontalReachRatio");
-                Assert.That(reachWeightField, Is.Not.Null, "YYB arm swing runtime candidate must expose horizontal reach limit weight.");
-                Assert.That(maxReachField, Is.Not.Null, "YYB arm swing runtime candidate must expose a max horizontal reach ratio.");
-
                 Type runnerType = Type.GetType(
                     "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
@@ -1353,8 +1348,8 @@ namespace Tests.Editor.FBXImporter
                     });
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That((float)reachWeightField.GetValue(manager), Is.EqualTo(1f).Within(0.0001f));
-                Assert.That((float)maxReachField.GetValue(manager), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0f).Within(0.0001f));
 
                 bool disabledApplied = (bool)method.Invoke(
                     null,
@@ -1371,8 +1366,8 @@ namespace Tests.Editor.FBXImporter
                     });
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That((float)reachWeightField.GetValue(manager), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That((float)maxReachField.GetValue(manager), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
             {
@@ -1387,10 +1382,6 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                FieldInfo gateField = typeof(FBXVmdPipeline).GetField(
-                    "YybArmSwingHorizontalReachMaxHandBelowShoulderRatio");
-                Assert.That(gateField, Is.Not.Null, "YYB arm swing runtime candidate must expose a horizontal-reach-only below-shoulder gate.");
-
                 Type runnerType = Type.GetType(
                     "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
@@ -1432,7 +1423,7 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(enabledApplied, Is.True);
                 Assert.That(manager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(1.5f).Within(0.0001f));
-                Assert.That((float)gateField.GetValue(manager), Is.EqualTo(0.95f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingHorizontalReachMaxHandBelowShoulderRatio, Is.EqualTo(0.95f).Within(0.0001f));
 
                 bool disabledApplied = (bool)method.Invoke(
                     null,
@@ -1450,7 +1441,7 @@ namespace Tests.Editor.FBXImporter
                     });
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That((float)gateField.GetValue(manager), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingHorizontalReachMaxHandBelowShoulderRatio, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
             {
@@ -1465,10 +1456,6 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                FieldInfo elbowGuardField = typeof(FBXVmdPipeline).GetField(
-                    "YybArmSwingHorizontalReachMinElbowAngleAfterApply");
-                Assert.That(elbowGuardField, Is.Not.Null, "YYB arm swing runtime candidate must expose a post-horizontal-reach elbow saturation guard.");
-
                 Type runnerType = Type.GetType(
                     "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
                 Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
@@ -1511,7 +1498,7 @@ namespace Tests.Editor.FBXImporter
                     });
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That((float)elbowGuardField.GetValue(manager), Is.EqualTo(180f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingHorizontalReachMinElbowAngleAfterApply, Is.EqualTo(180f).Within(0.0001f));
 
                 bool disabledApplied = (bool)method.Invoke(
                     null,
@@ -1530,7 +1517,7 @@ namespace Tests.Editor.FBXImporter
                     });
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That((float)elbowGuardField.GetValue(manager), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmSwingHorizontalReachMinElbowAngleAfterApply, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
             {
@@ -1628,8 +1615,8 @@ namespace Tests.Editor.FBXImporter
                     rightSideWeightScale: 1.25f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(ReadFBXVmdPipelineFloat(manager, "YybArmDirectionLeftSideWeightScale"), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(ReadFBXVmdPipelineFloat(manager, "YybArmDirectionRightSideWeightScale"), Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(manager.YybArmDirectionLeftSideWeightScale, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmDirectionRightSideWeightScale, Is.EqualTo(1f).Within(0.0001f));
 
                 bool disabledApplied = ApplyYybArmDirectionRetargetRuntimeOverride(
                     manager,
@@ -1642,8 +1629,8 @@ namespace Tests.Editor.FBXImporter
                     rightSideWeightScale: 0.8f);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(ReadFBXVmdPipelineFloat(manager, "YybArmDirectionLeftSideWeightScale"), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(ReadFBXVmdPipelineFloat(manager, "YybArmDirectionRightSideWeightScale"), Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmDirectionLeftSideWeightScale, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.YybArmDirectionRightSideWeightScale, Is.EqualTo(0f).Within(0.0001f));
             }
             finally
             {
@@ -2447,10 +2434,10 @@ namespace Tests.Editor.FBXImporter
                     frameGateEnd: 90f);
 
                 Assert.That(enabledApplied, Is.True);
-                Assert.That(ReadBoolField(manager, "useYybRightSleeveSilhouetteLocalOffsetReference"), Is.True);
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetX"), Is.EqualTo(-0.055f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateStart"), Is.EqualTo(90f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateEnd"), Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(manager.useYybRightSleeveSilhouetteLocalOffsetReference, Is.True);
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(-0.055f).Within(0.0001f));
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
                 Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
                 Assert.That(manager.ShouldUseManualAnimatorBodyPositionXzReference, Is.False);
                 Assert.That(manager.enableYybArmSleeveAnchorCorrection, Is.True);
@@ -2463,9 +2450,9 @@ namespace Tests.Editor.FBXImporter
                     frameGateEnd: 7000f);
 
                 Assert.That(clampedApplied, Is.True);
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetX"), Is.EqualTo(0.2f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateStart"), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateEnd"), Is.EqualTo(6000f).Within(0.0001f));
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(0.2f).Within(0.0001f));
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(6000f).Within(0.0001f));
 
                 bool disabledApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
                     manager,
@@ -2475,10 +2462,10 @@ namespace Tests.Editor.FBXImporter
                     frameGateEnd: 90f);
 
                 Assert.That(disabledApplied, Is.True);
-                Assert.That(ReadBoolField(manager, "useYybRightSleeveSilhouetteLocalOffsetReference"), Is.False);
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetX"), Is.EqualTo(-0.055f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateStart"), Is.EqualTo(90f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "yybRightSleeveSilhouetteLocalOffsetFrameGateEnd"), Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(manager.useYybRightSleeveSilhouetteLocalOffsetReference, Is.False);
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(-0.055f).Within(0.0001f));
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
             }
             finally
             {
