@@ -1508,7 +1508,11 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            string sourcePath = ResolveEditorSmokeFbxPath(fbxFileName);
+            string sourcePath = FBXEditorDiagnosticPlanner.ResolveFbxPath(
+                fbxFileName,
+                FBXImportController.GetControlledImportDirectory(),
+                Application.dataPath,
+                File.Exists);
             if (!File.Exists(sourcePath))
             {
                 Debug.LogError($"[FBXImport] smoke 진단 FBX를 찾을 수 없습니다: {sourcePath}");
@@ -1529,34 +1533,40 @@ namespace Fbx2Vmd.FBXImporter
             _editorSmokeRecordingOverrideActive = true;
             _editorSmokeDurationSeconds = safeDuration;
             _editorSmokeTargetFrameCount = safeTargetFrameCount;
-            _editorSmokeSampleTimesOverride = CloneEditorSmokeSampleTimes(sampleTimesOverride);
+            _editorSmokeSampleTimesOverride =
+                FBXEditorDiagnosticPlanner.CloneSampleTimes(sampleTimesOverride);
             _editorSmokeSegment = segment;
             _editorSmokeCurrentFbxFileName = Path.GetFileName(sourcePath);
-            _editorSmokeCaptureResolutionOverrideActive = TryBuildEditorSmokeCaptureResolutionOverride(
+            _editorSmokeCaptureResolutionOverrideActive =
+                FBXEditorDiagnosticPlanner.TryBuildCaptureResolutionOverride(
                 captureWidthOverride,
                 captureHeightOverride,
                 out _editorSmokeCaptureWidth,
                 out _editorSmokeCaptureHeight);
             _editorSmokeDiagnosticScreenshotPaddingOverride =
-                NormalizeEditorSmokeDiagnosticScreenshotPaddingOverride(diagnosticScreenshotPaddingOverride);
+                FBXEditorDiagnosticPlanner.NormalizeScreenshotPaddingOverride(
+                    diagnosticScreenshotPaddingOverride);
             _editorSmokeDiagnosticScreenshotVerticalViewportCenterOverride =
-                NormalizeEditorSmokeDiagnosticScreenshotVerticalViewportCenterOverride(
+                FBXEditorDiagnosticPlanner.NormalizeScreenshotVerticalViewportCenterOverride(
                     diagnosticScreenshotVerticalViewportCenterOverride);
-            _editorSmokeUseKnownMmdReferenceTiming = ShouldUseKnownMmdReferenceTimingForEditorSmoke(
+            _editorSmokeUseKnownMmdReferenceTiming =
+                FBXEditorDiagnosticPlanner.ShouldUseKnownReferenceTiming(
                 Path.GetFileNameWithoutExtension(sourcePath),
                 safeDuration,
                 safeTargetFrameCount,
                 EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE,
                 useKnownMmdReferenceTiming);
             _editorSmokeRecordingStartTimeOverrideSeconds =
-                NormalizeEditorSmokeStartTimeOverride(recordingStartTimeOverrideSeconds);
+                FBXEditorDiagnosticPlanner.NormalizeStartTimeOverride(
+                    recordingStartTimeOverrideSeconds);
             _editorSmokeRecordingPlaybackSpeedOverride =
-                NormalizeEditorSmokePlaybackSpeedOverride(recordingPlaybackSpeedOverride);
+                FBXEditorDiagnosticPlanner.NormalizePlaybackSpeedOverride(
+                    recordingPlaybackSpeedOverride);
 
             Debug.Log(
                 $"[FBXImport] Editor smoke 진단 시작: FBX={Path.GetFileName(sourcePath)}, " +
                 $"duration={safeDuration:F2}s, targetFrameCount={safeTargetFrameCount}, " +
-                $"segment={GetEditorSmokeSegmentLabel(segment)}, diagnostics={enableDiagnostics}");
+                $"segment={FBXEditorDiagnosticPlanner.GetSegmentLabel(segment)}, diagnostics={enableDiagnostics}");
             LogEditorSmokeThumbState("smoke-start-before-process");
             if (_editorSmokeCaptureResolutionOverrideActive)
             {
@@ -1565,125 +1575,6 @@ namespace Fbx2Vmd.FBXImporter
 
             ProcessFBXAsync(sourcePath);
             return true;
-        }
-
-        internal static bool TryBuildEditorSmokeCaptureResolutionOverride(
-            int requestedWidth,
-            int requestedHeight,
-            out int width,
-            out int height)
-        {
-            width = 0;
-            height = 0;
-            if (requestedWidth <= 0 || requestedHeight <= 0)
-            {
-                return false;
-            }
-
-            RecordingCaptureResolutionPlan plan = RecordingCaptureResolution.CreateCustomPlan(
-                requestedWidth,
-                requestedHeight);
-            width = plan.Width;
-            height = plan.Height;
-            return true;
-        }
-
-        private string ResolveEditorSmokeFbxPath(string fbxFileName)
-        {
-            return ResolveEditorSmokeFbxPath(
-                fbxFileName,
-                FBXImportController.GetControlledImportDirectory(),
-                Application.dataPath,
-                File.Exists);
-        }
-
-        private static string ResolveEditorSmokeFbxPath(
-            string fbxFileName,
-            string controlledImportDirectory,
-            string dataPath,
-            Func<string, bool> fileExists)
-        {
-            string normalizedFileName = Path.GetFileName(fbxFileName.Trim().Replace("\\", "/"));
-            if (!string.Equals(Path.GetExtension(normalizedFileName), ".fbx", StringComparison.OrdinalIgnoreCase))
-            {
-                normalizedFileName += ".fbx";
-            }
-
-            string controlledPath = Path.Combine(controlledImportDirectory, normalizedFileName);
-            if (fileExists(controlledPath))
-            {
-                return controlledPath;
-            }
-
-            string projectFallbackPath = Path.Combine(dataPath, "_Project", "FBX", normalizedFileName);
-            if (fileExists(projectFallbackPath))
-            {
-                return projectFallbackPath;
-            }
-
-            return controlledPath;
-        }
-
-        internal static string BuildEditorSmokeOutputBaseName(string outputBaseName, float durationSeconds, EditorDiagnosticSmokeSegment segment)
-        {
-            string cleanBaseName = FBXImportController.SanitizeFileName(
-                string.IsNullOrWhiteSpace(outputBaseName) ? VMDOutputNamePolicy.DefaultOutputBaseName : outputBaseName);
-            int roundedSeconds = Mathf.Max(1, Mathf.CeilToInt(durationSeconds));
-            string prefix;
-            switch (segment)
-            {
-                case EditorDiagnosticSmokeSegment.Middle:
-                    prefix = "smoke_middle";
-                    break;
-                case EditorDiagnosticSmokeSegment.Tail:
-                    prefix = "smoke_tail";
-                    break;
-                default:
-                    prefix = "smoke";
-                    break;
-            }
-
-            return $"{prefix}_{cleanBaseName}_{roundedSeconds}s";
-        }
-
-        internal static float CalculateEditorSmokeStartTime(AnimationClip clip, float requestedDuration, EditorDiagnosticSmokeSegment segment)
-        {
-            if (clip == null)
-            {
-                return 0f;
-            }
-
-            float clipLength = Mathf.Max(0f, clip.length);
-            float safeDuration = Mathf.Max(0.1f, requestedDuration);
-            switch (segment)
-            {
-                case EditorDiagnosticSmokeSegment.Middle:
-                    return Mathf.Max(0f, (clipLength - safeDuration) * 0.5f);
-                case EditorDiagnosticSmokeSegment.Tail:
-                    return Mathf.Max(0f, clipLength - safeDuration);
-                default:
-                    return 0f;
-            }
-        }
-
-        internal static string GetEditorSmokeSegmentLabel(EditorDiagnosticSmokeSegment segment)
-        {
-            switch (segment)
-            {
-                case EditorDiagnosticSmokeSegment.Middle:
-                    return "middle";
-                case EditorDiagnosticSmokeSegment.Tail:
-                    return "tail";
-                default:
-                    return "head";
-            }
-        }
-
-        private static float[] CloneEditorSmokeSampleTimes(float[] sampleTimesOverride)
-        {
-            return sampleTimesOverride != null && sampleTimesOverride.Length > 0
-                ? (float[])sampleTimesOverride.Clone()
-                : null;
         }
 
         private void CaptureEditorSmokeSettings()
@@ -1724,46 +1615,6 @@ namespace Fbx2Vmd.FBXImporter
             _editorSmokeRecordingPlaybackSpeedOverride = float.NaN;
             _editorSmokeSettingsSnapshot = default(EditorSmokeSettingsSnapshot);
             _editorSmokeSettingsSnapshotActive = false;
-        }
-
-        private static float NormalizeEditorSmokeStartTimeOverride(float value)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f)
-            {
-                return float.NaN;
-            }
-
-            return value;
-        }
-
-        private static float NormalizeEditorSmokePlaybackSpeedOverride(float value)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
-            {
-                return float.NaN;
-            }
-
-            return Mathf.Max(0.0001f, value);
-        }
-
-        private static float NormalizeEditorSmokeDiagnosticScreenshotPaddingOverride(float value)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
-            {
-                return float.NaN;
-            }
-
-            return Mathf.Clamp(value, 0.25f, 2f);
-        }
-
-        private static float NormalizeEditorSmokeDiagnosticScreenshotVerticalViewportCenterOverride(float value)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-            {
-                return float.NaN;
-            }
-
-            return Mathf.Clamp01(value);
         }
 
         public void ScheduleEditorDiagnosticBatchAdvance(Action continuation)
@@ -1808,125 +1659,6 @@ namespace Fbx2Vmd.FBXImporter
             EditorDiagnosticSmokeFinished?.Invoke(_editorSmokeCurrentFbxFileName, result);
         }
 #endif
-
-        internal static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
-            string outputBaseName,
-            float clipLengthSeconds,
-            float requestedDurationSeconds,
-            int requestedTargetFrameCount,
-            float recordingFrameRate,
-            out float recordingLengthSeconds,
-            out int targetFrameCount,
-            out float playbackSpeed)
-        {
-            return TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
-                outputBaseName,
-                clipLengthSeconds,
-                requestedDurationSeconds,
-                requestedTargetFrameCount,
-                recordingFrameRate,
-                useKnownReferenceTiming: true,
-                out recordingLengthSeconds,
-                out targetFrameCount,
-                out playbackSpeed);
-        }
-
-        internal static bool TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
-            string outputBaseName,
-            float clipLengthSeconds,
-            float requestedDurationSeconds,
-            int requestedTargetFrameCount,
-            float recordingFrameRate,
-            bool useKnownReferenceTiming,
-            out float recordingLengthSeconds,
-            out int targetFrameCount,
-            out float playbackSpeed)
-        {
-            recordingLengthSeconds = requestedDurationSeconds;
-            targetFrameCount = requestedTargetFrameCount;
-            playbackSpeed = 1f;
-
-            if (!useKnownReferenceTiming)
-            {
-                return false;
-            }
-
-            if (requestedDurationSeconds <= 0f ||
-                float.IsNaN(requestedDurationSeconds) ||
-                float.IsInfinity(requestedDurationSeconds) ||
-                requestedTargetFrameCount <= 0 ||
-                recordingFrameRate <= 0f ||
-                float.IsNaN(recordingFrameRate) ||
-                float.IsInfinity(recordingFrameRate))
-            {
-                return false;
-            }
-
-            if (!VMDRecordingController.TryBuildKnownMmdReferenceRecordingPlan(
-                outputBaseName,
-                clipLengthSeconds,
-                recordingFrameRate,
-                out float referenceRecordingLengthSeconds,
-                out int referenceTargetFrameCount,
-                out float referencePlaybackSpeed))
-            {
-                return false;
-            }
-
-            float frameToleranceSeconds = 0.5f / recordingFrameRate;
-            bool coversFullReferenceDuration =
-                requestedDurationSeconds + frameToleranceSeconds >= referenceRecordingLengthSeconds;
-            bool coversFullReferenceFrames = requestedTargetFrameCount >= referenceTargetFrameCount;
-
-            if (!coversFullReferenceDuration || !coversFullReferenceFrames)
-            {
-                return false;
-            }
-
-            recordingLengthSeconds = referenceRecordingLengthSeconds;
-            targetFrameCount = referenceTargetFrameCount;
-            playbackSpeed = referencePlaybackSpeed;
-            return true;
-        }
-
-        private static bool ShouldUseKnownMmdReferenceTimingForEditorSmoke(
-            string outputBaseName,
-            float requestedDurationSeconds,
-            int requestedTargetFrameCount,
-            float recordingFrameRate,
-            bool sceneUseKnownReferenceTiming)
-        {
-            if (sceneUseKnownReferenceTiming)
-            {
-                return true;
-            }
-
-            if (requestedDurationSeconds <= 0f ||
-                float.IsNaN(requestedDurationSeconds) ||
-                float.IsInfinity(requestedDurationSeconds) ||
-                requestedTargetFrameCount <= 0 ||
-                recordingFrameRate <= 0f ||
-                float.IsNaN(recordingFrameRate) ||
-                float.IsInfinity(recordingFrameRate))
-            {
-                return false;
-            }
-
-            string cleanBaseName = Path.GetFileNameWithoutExtension(outputBaseName ?? string.Empty);
-            if (!string.Equals(cleanBaseName, VMDOutputNamePolicy.SatisfactionReferenceBaseName, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            int referenceFrameCount = VMDOutputNamePolicy.SatisfactionReferenceMaxMmdFrame + 1;
-            float referenceDurationSeconds = referenceFrameCount / recordingFrameRate;
-            float frameToleranceSeconds = 0.5f / recordingFrameRate;
-            bool coversFullReferenceDuration =
-                requestedDurationSeconds + frameToleranceSeconds >= referenceDurationSeconds;
-            bool coversFullReferenceFrames = requestedTargetFrameCount >= referenceFrameCount;
-
-            return coversFullReferenceDuration && coversFullReferenceFrames;
-        }
 
         #region Unity 생명주기
         private void Awake()
@@ -2391,7 +2123,7 @@ namespace Fbx2Vmd.FBXImporter
             Debug.Log(
                 $"[FBXImport] Editor smoke thumb state ({stage}): " +
                 $"fbx={_editorSmokeCurrentFbxFileName ?? "<none>"}, " +
-                $"segment={GetEditorSmokeSegmentLabel(_editorSmokeSegment)}, " +
+                $"segment={FBXEditorDiagnosticPlanner.GetSegmentLabel(_editorSmokeSegment)}, " +
                 $"projectionMin={EffectiveThumbProjectionMinPalmNormal:F3}, " +
                 $"thumbReference[{BuildActiveRetargeterThumbReferenceSummary()}], " +
                 $"guardLeft[{leftGuard}], guardRight[{rightGuard}], " +

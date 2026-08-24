@@ -121,7 +121,10 @@ namespace Fbx2Vmd.FBXImporter
                     bool hasEditorSmokeTimingOverride =
                         !float.IsNaN(_pipeline._editorSmokeRecordingStartTimeOverrideSeconds) ||
                         !float.IsNaN(_pipeline._editorSmokeRecordingPlaybackSpeedOverride);
-                    recordingStartTime = FBXVmdPipeline.CalculateEditorSmokeStartTime(clip, requestedDuration, _pipeline._editorSmokeSegment);
+                    recordingStartTime = FBXEditorDiagnosticPlanner.CalculateStartTime(
+                        clip,
+                        requestedDuration,
+                        _pipeline._editorSmokeSegment);
                     if (!float.IsNaN(_pipeline._editorSmokeRecordingStartTimeOverrideSeconds))
                     {
                         recordingStartTime = Mathf.Clamp(
@@ -141,16 +144,19 @@ namespace Fbx2Vmd.FBXImporter
                     recordingTargetFrameCount = Mathf.Min(
                         Mathf.Max(1, _pipeline._editorSmokeTargetFrameCount),
                         Mathf.CeilToInt(recordingLength * FBXVmdPipeline.EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
-                    recordingOutputBaseName = FBXVmdPipeline.BuildEditorSmokeOutputBaseName(outputBaseName, recordingLength, _pipeline._editorSmokeSegment);
+                    recordingOutputBaseName = FBXEditorDiagnosticPlanner.BuildOutputBaseName(
+                        outputBaseName,
+                        recordingLength,
+                        _pipeline._editorSmokeSegment);
                     comparisonLabel = $"auto_{recordingOutputBaseName}";
                     Debug.Log(
                         $"[Recording] 에디터 스모크 녹화 제한 적용됨. VMD={recordingOutputBaseName}.vmd, " +
-                        $"segment={FBXVmdPipeline.GetEditorSmokeSegmentLabel(_pipeline._editorSmokeSegment)}, " +
+                        $"segment={FBXEditorDiagnosticPlanner.GetSegmentLabel(_pipeline._editorSmokeSegment)}, " +
                         $"start={recordingStartTime:F2}s, duration={recordingLength:F2}s, " +
                         $"targetFrameCount={recordingTargetFrameCount}");
 
                     if (!hasEditorSmokeTimingOverride &&
-                        FBXVmdPipeline.TryBuildKnownMmdReferenceEditorSmokeRecordingPlan(
+                        FBXEditorDiagnosticPlanner.TryBuildKnownReferenceRecordingPlan(
                         outputBaseName,
                         clip.length,
                         recordingLength,
