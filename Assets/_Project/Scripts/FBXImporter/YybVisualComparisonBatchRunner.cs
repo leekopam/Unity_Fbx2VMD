@@ -4117,24 +4117,18 @@ namespace Fbx2Vmd.FBXImporter
             bool evaluatorXzReferenceEnabled,
             float evaluatorXzTargetMagnitude)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.usePostSetHumanPoseRightEndpointPositionReference = enabled;
-            fileManager.postSetHumanPoseRightEndpointPositionReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.postSetHumanPoseRightEndpointPositionReferenceMaxOffset = Mathf.Max(0f, maxOffset);
-            fileManager.postSetHumanPoseRightEndpointPositionReferencePositiveZScale = Mathf.Clamp01(positiveZScale);
-            fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(toesBlendWeight);
-            fileManager.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = Mathf.Max(0f, frameGateStart);
-            fileManager.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(0f, frameGateEnd);
-            fileManager.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = enabled && useLeftSide;
-            fileManager.usePostSetHumanPoseRightFootEvaluatorXzReference =
-                enabled && evaluatorXzReferenceEnabled;
-            fileManager.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
-                Mathf.Max(0f, evaluatorXzTargetMagnitude);
-            return true;
+            return HumanPoseEndpointRuntimeOverrideApplier.ApplyPostSetReference(
+                fileManager,
+                enabled,
+                weight,
+                maxOffset,
+                positiveZScale,
+                toesBlendWeight,
+                frameGateStart,
+                frameGateEnd,
+                useLeftSide,
+                evaluatorXzReferenceEnabled,
+                evaluatorXzTargetMagnitude);
         }
 
         private static bool ApplyPreSetHumanPoseEndpointPositionRuntimeOverride(
@@ -4151,23 +4145,19 @@ namespace Fbx2Vmd.FBXImporter
             bool invertBodyPositionX,
             bool invertBodyPositionZ)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.usePreSetHumanPoseRightEndpointPositionReference = enabled;
-            fileManager.preSetHumanPoseRightEndpointPositionReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.preSetHumanPoseRightEndpointPositionReferenceMaxOffset = Mathf.Max(0f, maxOffset);
-            fileManager.preSetHumanPoseRightEndpointPositionReferencePositiveZScale = Mathf.Clamp01(positiveZScale);
-            fileManager.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(toesBlendWeight);
-            fileManager.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = Mathf.Max(0f, frameGateStart);
-            fileManager.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(0f, frameGateEnd);
-            fileManager.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = enabled && useLeftSide;
-            fileManager.preSetHumanPoseEndpointPositionUseGhostCurrentBasis = enabled && useGhostCurrentBasis;
-            fileManager.ShouldInvertPreSetHumanPoseEndpointPositionBodyX = enabled && invertBodyPositionX;
-            fileManager.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = enabled && invertBodyPositionZ;
-            return true;
+            return HumanPoseEndpointRuntimeOverrideApplier.ApplyPreSetReference(
+                fileManager,
+                enabled,
+                weight,
+                maxOffset,
+                positiveZScale,
+                toesBlendWeight,
+                frameGateStart,
+                frameGateEnd,
+                useLeftSide,
+                useGhostCurrentBasis,
+                invertBodyPositionX,
+                invertBodyPositionZ);
         }
 
         private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(
