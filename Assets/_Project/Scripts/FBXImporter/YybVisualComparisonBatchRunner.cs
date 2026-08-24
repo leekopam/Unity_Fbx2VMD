@@ -3497,16 +3497,11 @@ namespace Fbx2Vmd.FBXImporter
             float currentWeight,
             float forearmStretchClampMaxOffset)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.smoothRetargetPoseOnVisualStepSpike = enabled;
-            fileManager.RetargetPoseVisualSpikeCurrentWeight = Mathf.Clamp(currentWeight, 0.1f, 1f);
-            fileManager.RetargetPoseVisualSpikeForearmStretchClampMaxOffset =
-                Mathf.Clamp01(forearmStretchClampMaxOffset);
-            return true;
+            return RetargetingRuntimeOverrideApplier.ApplyPoseVisualSpikeSmoothing(
+                fileManager,
+                enabled,
+                currentWeight,
+                forearmStretchClampMaxOffset);
         }
 
         private static bool ApplyRetargetArmStretchClampRuntimeOverride(
@@ -3514,19 +3509,11 @@ namespace Fbx2Vmd.FBXImporter
             bool enabled,
             float stretchLimit)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            SetSerializedBoolean(fileManager, "_shouldEnableAnatomicalArmGuard", true);
-            fileManager.clampRetargetArmStretchMuscles = enabled;
-            fileManager.targetGuardClampAnatomicalArmMuscles = enabled;
-            fileManager.targetGuardClampArmStretchMuscles = enabled;
-            fileManager.ArmStretchMuscleLimit = enabled
-                ? Mathf.Clamp(stretchLimit, 0f, DefaultRetargetArmStretchMuscleLimit)
-                : 0f;
-            return true;
+            return RetargetingRuntimeOverrideApplier.ApplyArmStretchClamp(
+                fileManager,
+                enabled,
+                stretchLimit,
+                DefaultRetargetArmStretchMuscleLimit);
         }
 
         private static bool ApplyYybArmSwingLimitRuntimeOverride(
@@ -4324,39 +4311,14 @@ namespace Fbx2Vmd.FBXImporter
             FBXVmdPipeline fileManager,
             bool enabled)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            SetSerializedBoolean(fileManager, "_shouldLockTargetHumanoidBonePositions", enabled);
-            return true;
-        }
-
-        private static void SetSerializedBoolean(FBXVmdPipeline fileManager, string propertyName, bool value)
-        {
-            var serializedObject = new SerializedObject(fileManager);
-            SerializedProperty property = serializedObject.FindProperty(propertyName);
-            if (property == null)
-            {
-                throw new InvalidOperationException($"FBXVmdPipeline 직렬화 bool 필드를 찾을 수 없습니다: {propertyName}");
-            }
-
-            property.boolValue = value;
-            serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            return RetargetingRuntimeOverrideApplier.ApplyTargetHumanoidBonePositionLock(fileManager, enabled);
         }
 
         private static bool ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(
             FBXVmdPipeline fileManager,
             bool enabled)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseRetargetBodyPositionXZRootMotion = enabled;
-            return true;
+            return RetargetingRuntimeOverrideApplier.ApplyBodyPositionXzRootMotion(fileManager, enabled);
         }
 
         private static float NormalizeMmdIkDeltaGuardLimitOverride(float value)
