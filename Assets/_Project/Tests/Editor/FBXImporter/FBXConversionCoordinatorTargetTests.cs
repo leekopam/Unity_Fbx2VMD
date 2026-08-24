@@ -694,11 +694,11 @@ namespace Tests.Editor.FBXImporter
                 retargeterBridgeSource.IndexOf("EditorHumanoidReferenceApplier.Apply(", System.StringComparison.Ordinal),
                 Is.GreaterThan(retargeterBridgeSource.IndexOf("ConfigureTargetThumbDeformationGuard(", System.StringComparison.Ordinal)));
             Assert.That(
-                retargeterBridgeSource.IndexOf("ConfigureEditorManualFingerPoseReference(", System.StringComparison.Ordinal),
+                retargeterBridgeSource.IndexOf("EditorHumanoidReferenceApplier.ApplyManualPoseReference(", System.StringComparison.Ordinal),
                 Is.GreaterThan(retargeterBridgeSource.IndexOf("EditorHumanoidReferenceApplier.Apply(", System.StringComparison.Ordinal)));
             Assert.That(
                 retargeterBridgeSource.IndexOf("SetSessionState(FBXSessionState.GhostReady", System.StringComparison.Ordinal),
-                Is.GreaterThan(retargeterBridgeSource.IndexOf("ConfigureEditorManualFingerPoseReference(", System.StringComparison.Ordinal)));
+                Is.GreaterThan(retargeterBridgeSource.IndexOf("EditorHumanoidReferenceApplier.ApplyManualPoseReference(", System.StringComparison.Ordinal)));
 
             int dispatchEnd = pipelineSource.IndexOf(
                 "internal static bool PrepareRetargeterRecordingStartPose(",

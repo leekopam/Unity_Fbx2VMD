@@ -7816,15 +7816,22 @@ namespace Tests.Editor.FBXImporter
             PoseSpaceRetargeter retargeter,
             AnimationClip referenceClip)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
-                "ConfigureEditorManualFingerPoseReference",
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(PoseSpaceRetargeter), typeof(AnimationClip) },
-                modifiers: null);
+            MethodInfo createOptionsMethod = typeof(FBXVmdPipeline).GetMethod(
+                "CreateEditorManualPoseReferenceOptions",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorHumanoidReferenceApplier",
+                throwOnError: false);
+            MethodInfo applyMethod = applierType?.GetMethod(
+                "ApplyManualPoseReference",
+                BindingFlags.Static | BindingFlags.NonPublic);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must prepare the manual reference Animator for all manual lower-body A/B candidates.");
-            method.Invoke(manager, new object[] { retargeter, referenceClip });
+            Assert.That(createOptionsMethod, Is.Not.Null);
+            Assert.That(applyMethod, Is.Not.Null,
+                "EditorHumanoidReferenceApplier must prepare all manual pose reference candidates.");
+
+            object options = createOptionsMethod.Invoke(manager, null);
+            applyMethod.Invoke(null, new[] { retargeter, referenceClip, options });
         }
 
         private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
