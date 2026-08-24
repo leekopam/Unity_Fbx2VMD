@@ -3895,39 +3895,24 @@ namespace Fbx2Vmd.FBXImporter
             bool disableFootToToes,
             float footToToesMaxAngle)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = enabled;
-            fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = Mathf.Max(0f, maxAngle);
-            fileManager.ShouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference =
-                enabled && disableUpperLegToLowerLeg;
-            fileManager.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, upperLegToLowerLegMaxAngle);
-            fileManager.ShouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference =
-                enabled && disableLowerLegToFoot;
-            fileManager.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, lowerLegToFootMaxAngle);
-            fileManager.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, leftLowerLegToFootMaxAngle);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                Mathf.Max(0f, rightLowerLegToFootMaxAngle);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale =
-                Mathf.Clamp01(rightLowerLegToFootAxisXzScale);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight =
-                Mathf.Clamp01(rightLowerLegToFootBlendWeight);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart =
-                Mathf.Max(0f, rightLowerLegToFootFrameGateStart);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd =
-                Mathf.Max(0f, rightLowerLegToFootFrameGateEnd);
-            fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
-                Mathf.Clamp01(rightLowerLegToFootEndpointBlendWeight);
-            fileManager.ShouldDisableManualAnimatorFootToToesSegmentDirectionReference = enabled && disableFootToToes;
-            fileManager.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = Mathf.Max(0f, footToToesMaxAngle);
-            return true;
+            return ManualLowerBodySegmentDirectionRuntimeOverrideApplier.Apply(
+                fileManager,
+                enabled,
+                weight,
+                maxAngle,
+                disableUpperLegToLowerLeg,
+                upperLegToLowerLegMaxAngle,
+                disableLowerLegToFoot,
+                lowerLegToFootMaxAngle,
+                leftLowerLegToFootMaxAngle,
+                rightLowerLegToFootMaxAngle,
+                rightLowerLegToFootAxisXzScale,
+                rightLowerLegToFootBlendWeight,
+                rightLowerLegToFootFrameGateStart,
+                rightLowerLegToFootFrameGateEnd,
+                rightLowerLegToFootEndpointBlendWeight,
+                disableFootToToes,
+                footToToesMaxAngle);
         }
 
         private static bool HasManualAnimatorLowerBodySegmentDirectionDetailRuntimeOverride()
