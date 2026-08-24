@@ -2042,6 +2042,15 @@ namespace Fbx2Vmd.FBXImporter
             await _conversionCoordinator.ConvertAsync(new FBXConversionRequest(sourcePath));
         }
 
+        internal void BeginConversionSession()
+        {
+            EnsureServicesInitialized();
+            _idlePoseGuard?.Apply();
+            _isProcessing = true;
+            _recordingController.ClearActiveRecordingSubscription();
+            CleanupActiveGhost();
+        }
+
         /// <summary>
         /// 지연 후 애니메이션 재생 및 VMD 녹화를 동기화하는 코루틴
         /// </summary>
@@ -2052,11 +2061,7 @@ namespace Fbx2Vmd.FBXImporter
         /// <param name="retargeter">Pose Space Retargeter 컴포넌트</param>
         internal async Task<FBXConversionResult> ProcessFBXSessionAsync(string sourcePath)
         {
-            EnsureServicesInitialized();
-            _idlePoseGuard?.Apply();
-            _isProcessing = true;
-            _recordingController.ClearActiveRecordingSubscription();
-            CleanupActiveGhost();
+            BeginConversionSession();
 
             try
             {
@@ -2119,18 +2124,12 @@ namespace Fbx2Vmd.FBXImporter
 #endif
                 SetSessionState(FBXSessionState.GhostReady, "Ghost Retarget 준비 완료", 0.6f);
 
-                if (ghostAnim != null)
-                {
-                    ghostAnim.Stop();
-                }
-
-                StartCoroutine(_recordingController.RecordAsync(
+                DispatchRecording(
                     ghostAnim,
                     retargeter,
                     targetObject,
                     targetClip,
-                    outputBaseName
-                ));
+                    outputBaseName);
 
                 return FBXConversionResult.Succeed(outputBaseName);
             }
@@ -2140,6 +2139,26 @@ namespace Fbx2Vmd.FBXImporter
                 FailSession(errorMessage, e);
                 return FBXConversionResult.Fail(errorMessage);
             }
+        }
+
+        internal void DispatchRecording(
+            Animation ghostAnimation,
+            PoseSpaceRetargeter retargeter,
+            GameObject targetObject,
+            AnimationClip targetClip,
+            string outputBaseName)
+        {
+            if (ghostAnimation != null)
+            {
+                ghostAnimation.Stop();
+            }
+
+            StartCoroutine(_recordingController.RecordAsync(
+                ghostAnimation,
+                retargeter,
+                targetObject,
+                targetClip,
+                outputBaseName));
         }
 
         internal static bool PrepareRetargeterRecordingStartPose(PoseSpaceRetargeter retargeter, float sampleTime, float playbackSpeed, bool holdPose)
