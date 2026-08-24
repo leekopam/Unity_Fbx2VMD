@@ -610,6 +610,45 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_SessionLifecycle_When_CheckingOwnership_Then_PipelineUsesBeginAndRecordingDispatchBoundaries()
+        {
+            MethodInfo beginMethod = typeof(FBXVmdPipeline).GetMethod(
+                "BeginConversionSession",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo dispatchMethod = typeof(FBXVmdPipeline).GetMethod(
+                "DispatchRecording",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string pipelineSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXVmdPipeline.cs"));
+            int sessionStart = pipelineSource.IndexOf(
+                "internal async Task<FBXConversionResult> ProcessFBXSessionAsync(string sourcePath)",
+                System.StringComparison.Ordinal);
+            int sessionEnd = sessionStart < 0
+                ? -1
+                : pipelineSource.IndexOf(
+                    "internal void DispatchRecording(",
+                    sessionStart,
+                    System.StringComparison.Ordinal);
+            string sessionSource = sessionStart >= 0 && sessionEnd > sessionStart
+                ? pipelineSource.Substring(sessionStart, sessionEnd - sessionStart)
+                : string.Empty;
+
+            Assert.That(beginMethod, Is.Not.Null);
+            Assert.That(dispatchMethod, Is.Not.Null);
+            Assert.That(sessionSource, Does.Contain("BeginConversionSession();"));
+            Assert.That(sessionSource, Does.Contain("DispatchRecording("));
+            Assert.That(sessionSource, Does.Not.Contain("_idlePoseGuard?.Apply();"));
+            Assert.That(sessionSource, Does.Not.Contain("_recordingController.ClearActiveRecordingSubscription();"));
+            Assert.That(sessionSource, Does.Not.Contain("StartCoroutine(_recordingController.RecordAsync("));
+            Assert.That(sessionSource, Does.Not.Contain("ghostAnim.Stop();"));
+        }
+
+        [Test]
         public void Given_UnusedPipelineHelpers_When_CheckingGodClassSurface_Then_LegacyMethodsAreAbsent()
         {
             const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
