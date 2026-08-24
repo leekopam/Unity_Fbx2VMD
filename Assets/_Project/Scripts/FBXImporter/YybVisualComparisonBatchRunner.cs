@@ -4769,80 +4769,11 @@ namespace Fbx2Vmd.FBXImporter
                 return result;
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(copyPath) ?? _summaryDirectory);
-            File.Copy(result.FilePath, copyPath, overwrite: true);
-            string exportRotationDiagnosticsCsvPath = CopyStableCandidateSiblingArtifact(
-                result.FilePath,
-                result.ExportRotationDiagnosticsCsvPath,
-                copyPath);
-            string exportIkSourceDiagnosticsCsvPath = CopyStableCandidateSiblingArtifact(
-                result.FilePath,
-                result.ExportIkSourceDiagnosticsCsvPath,
-                copyPath);
-            return new VmdSaveResult
-            {
-                Success = result.Success,
-                FilePath = copyPath,
-                ErrorMessage = result.ErrorMessage ?? string.Empty,
-                FrameCount = result.FrameCount,
-                FileSizeBytes = new FileInfo(copyPath).Length,
-                ExportRotationDiagnosticsCsvPath = exportRotationDiagnosticsCsvPath,
-                ExportIkSourceDiagnosticsCsvPath = exportIkSourceDiagnosticsCsvPath
-            };
-        }
-
-        private static string CopyStableCandidateSiblingArtifact(
-            string sourceVmdPath,
-            string sourceArtifactPath,
-            string candidateVmdPath)
-        {
-            if (string.IsNullOrWhiteSpace(sourceArtifactPath) ||
-                !File.Exists(sourceArtifactPath) ||
-                string.IsNullOrWhiteSpace(candidateVmdPath))
-            {
-                return string.Empty;
-            }
-
-            string destinationPath = BuildStableCandidateSiblingArtifactPath(
-                sourceVmdPath,
-                sourceArtifactPath,
-                candidateVmdPath);
-            if (string.IsNullOrWhiteSpace(destinationPath))
-            {
-                return string.Empty;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath) ?? _summaryDirectory);
-            File.Copy(sourceArtifactPath, destinationPath, overwrite: true);
-            return destinationPath;
-        }
-
-        private static string BuildStableCandidateSiblingArtifactPath(
-            string sourceVmdPath,
-            string sourceArtifactPath,
-            string candidateVmdPath)
-        {
-            string artifactFileName = Path.GetFileName(sourceArtifactPath);
-            string candidateDirectory = Path.GetDirectoryName(candidateVmdPath) ?? _summaryDirectory;
-            string candidateBaseName = Path.GetFileNameWithoutExtension(candidateVmdPath);
-            if (string.IsNullOrWhiteSpace(artifactFileName) ||
-                string.IsNullOrWhiteSpace(candidateDirectory) ||
-                string.IsNullOrWhiteSpace(candidateBaseName))
-            {
-                return string.Empty;
-            }
-
-            string sourceBaseName = Path.GetFileNameWithoutExtension(sourceVmdPath);
-            string suffix = !string.IsNullOrWhiteSpace(sourceBaseName) &&
-                artifactFileName.StartsWith(sourceBaseName, StringComparison.OrdinalIgnoreCase)
-                    ? artifactFileName.Substring(sourceBaseName.Length)
-                    : $".{SanitizeFileName(Path.GetFileNameWithoutExtension(sourceArtifactPath))}{Path.GetExtension(sourceArtifactPath)}";
-            if (string.IsNullOrWhiteSpace(suffix))
-            {
-                suffix = Path.GetExtension(sourceArtifactPath);
-            }
-
-            return Path.Combine(candidateDirectory, $"{candidateBaseName}{suffix}");
+            return VisualComparisonCandidateArtifactStore.Copy(
+                result,
+                copyPath,
+                _summaryDirectory,
+                SanitizeFileName);
         }
 
         private static string BuildCandidateVmdEvidencePath(CaptureJob job, string sourceVmdPath)
