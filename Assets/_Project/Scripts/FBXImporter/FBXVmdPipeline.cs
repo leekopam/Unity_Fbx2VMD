@@ -2091,25 +2091,13 @@ namespace Fbx2Vmd.FBXImporter
                 _activeGhostContainer = ghostContainer;
                 SetGhostVisibility(importedModel, showGhostModel, showGhostSkeletonWhenNoRenderers);
 
-                Dictionary<string, string> boneMapping = FBXImportController.LoadBoneMappingRuntime();
-                if (boneMapping == null)
+                if (!FBXImportController.TryPrepareRuntimeAvatar(
+                        importedModel,
+                        out Dictionary<string, string> boneMapping,
+                        out string avatarErrorMessage))
                 {
-                    boneMapping = new Dictionary<string, string>();
-                }
-
-                // BoneMapping_Data.txt는 특정 리그에 종속될 수 있으므로, 실패 시 자동 매핑으로 폴백합니다.
-                HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
-                if (!FBXImportController.ValidateGhostAvatar(importedModel))
-                {
-                    Debug.LogWarning("[FBXImport] Ghost Humanoid Avatar 생성 실패함. 자동 본 매핑으로 재시도함.");
-                    boneMapping = HumanoidAvatarBuilder.BuildAutoMapping(importedModel);
-                    HumanoidAvatarBuilder.SetupHumanoid(importedModel, boneMapping);
-
-                    if (!FBXImportController.ValidateGhostAvatar(importedModel))
-                    {
-                        FailSession("Ghost Humanoid Avatar 생성에 실패했습니다.");
-                        return FBXConversionResult.Fail("Ghost Humanoid Avatar 생성에 실패했습니다.");
-                    }
+                    FailSession(avatarErrorMessage);
+                    return FBXConversionResult.Fail(avatarErrorMessage);
                 }
 
                 SetSessionState(FBXSessionState.AvatarReady, "Humanoid Avatar 준비 완료", 0.45f);
