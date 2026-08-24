@@ -110,5 +110,83 @@ namespace Fbx2Vmd.FBXImporter
             pipeline.manualAnimatorHandPalmFrameWeight = enabled ? Mathf.Clamp01(weight) : 0f;
             return true;
         }
+
+        internal static bool ApplyFootHipsAlignedResidualYaw(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float weight,
+            float maxAngle)
+        {
+            if (pipeline == null)
+            {
+                return false;
+            }
+
+            pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = enabled;
+            pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
+            pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = Mathf.Max(0f, maxAngle);
+            return true;
+        }
+
+        internal static bool ApplyBipedIkFootPosition(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float weight,
+            float maxOffset)
+        {
+            if (pipeline == null)
+            {
+                return false;
+            }
+
+            pipeline.useManualAnimatorBipedIkFootPositionReference = enabled;
+            pipeline.manualAnimatorBipedIkFootPositionReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
+            pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset = Mathf.Max(0f, maxOffset);
+            return true;
+        }
+
+        internal static bool ApplyHipsLocalPosition(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float weight,
+            float maxOffset)
+        {
+            if (pipeline == null)
+            {
+                return false;
+            }
+
+            pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = enabled;
+            pipeline.manualAnimatorHipsLocalPositionWeight = enabled ? Mathf.Clamp01(weight) : 0f;
+            pipeline.manualAnimatorHipsLocalPositionMaxOffset = Mathf.Max(0f, maxOffset);
+            return true;
+        }
+
+        internal static bool ApplyBodyPositionXz(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float weight,
+            float maxOffset,
+            float frameGateStart,
+            float frameGateEnd,
+            float frameGateBlendFrames,
+            float axisXScale,
+            float axisZScale)
+        {
+            if (pipeline == null)
+            {
+                return false;
+            }
+
+            pipeline.ShouldUseManualAnimatorBodyPositionXzReference = enabled;
+            pipeline.manualAnimatorBodyPositionXzReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
+            pipeline.manualAnimatorBodyPositionXzReferenceMaxOffset = Mathf.Max(0f, maxOffset);
+            pipeline.manualAnimatorBodyPositionXzReferenceFrameGateStart = Mathf.Max(0f, frameGateStart);
+            pipeline.manualAnimatorBodyPositionXzReferenceFrameGateEnd = Mathf.Max(0f, frameGateEnd);
+            pipeline.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = Mathf.Max(0f, frameGateBlendFrames);
+            pipeline.manualAnimatorBodyPositionXzReferenceAxisXScale = Mathf.Clamp01(axisXScale);
+            pipeline.manualAnimatorBodyPositionXzReferenceAxisZScale = Mathf.Clamp01(axisZScale);
+            return true;
+        }
     }
 }

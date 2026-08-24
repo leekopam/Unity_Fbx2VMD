@@ -3981,15 +3981,11 @@ namespace Fbx2Vmd.FBXImporter
             float weight,
             float maxAngle)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = enabled;
-            fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = Mathf.Max(0f, maxAngle);
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyFootHipsAlignedResidualYaw(
+                fileManager,
+                enabled,
+                weight,
+                maxAngle);
         }
 
         private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
@@ -4166,15 +4162,11 @@ namespace Fbx2Vmd.FBXImporter
             float weight,
             float maxOffset)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.useManualAnimatorBipedIkFootPositionReference = enabled;
-            fileManager.manualAnimatorBipedIkFootPositionReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.manualAnimatorBipedIkFootPositionReferenceMaxOffset = Mathf.Max(0f, maxOffset);
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyBipedIkFootPosition(
+                fileManager,
+                enabled,
+                weight,
+                maxOffset);
         }
 
         private static bool ApplyManualAnimatorHipsLocalPositionRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
@@ -4192,15 +4184,11 @@ namespace Fbx2Vmd.FBXImporter
             float weight,
             float maxOffset)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseManualAnimatorHipsLocalPositionReference = enabled;
-            fileManager.manualAnimatorHipsLocalPositionWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.manualAnimatorHipsLocalPositionMaxOffset = Mathf.Max(0f, maxOffset);
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyHipsLocalPosition(
+                fileManager,
+                enabled,
+                weight,
+                maxOffset);
         }
 
         private static bool ApplyManualAnimatorBodyPositionXzRuntimeOverride(
@@ -4214,20 +4202,16 @@ namespace Fbx2Vmd.FBXImporter
             float axisXScale,
             float axisZScale)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            fileManager.ShouldUseManualAnimatorBodyPositionXzReference = enabled;
-            fileManager.manualAnimatorBodyPositionXzReferenceWeight = enabled ? Mathf.Clamp01(weight) : 0f;
-            fileManager.manualAnimatorBodyPositionXzReferenceMaxOffset = Mathf.Max(0f, maxOffset);
-            fileManager.manualAnimatorBodyPositionXzReferenceFrameGateStart = Mathf.Max(0f, frameGateStart);
-            fileManager.manualAnimatorBodyPositionXzReferenceFrameGateEnd = Mathf.Max(0f, frameGateEnd);
-            fileManager.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = Mathf.Max(0f, frameGateBlendFrames);
-            fileManager.manualAnimatorBodyPositionXzReferenceAxisXScale = Mathf.Clamp01(axisXScale);
-            fileManager.manualAnimatorBodyPositionXzReferenceAxisZScale = Mathf.Clamp01(axisZScale);
-            return true;
+            return ManualPoseReferenceRuntimeOverrideApplier.ApplyBodyPositionXz(
+                fileManager,
+                enabled,
+                weight,
+                maxOffset,
+                frameGateStart,
+                frameGateEnd,
+                frameGateBlendFrames,
+                axisXScale,
+                axisZScale);
         }
 
         private static bool ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
