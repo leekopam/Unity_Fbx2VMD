@@ -2712,14 +2712,19 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void HandlePlayModeStateChanged(PlayModeStateChange state)
         {
-            if (!_isRunning)
-            {
-                return;
-            }
+            VisualComparisonPlayModeTransitionAction action =
+                VisualComparisonPlayModeTransitionPlanner.Resolve(
+                    MapPlayModePhase(state),
+                    _isRunning,
+                    _activeJob != null,
+                    _activeJobFinished,
+                    _advanceAfterPlayStopPending);
 
-            switch (state)
+            switch (action)
             {
-                case PlayModeStateChange.EnteredPlayMode:
+                case VisualComparisonPlayModeTransitionAction.Ignore:
+                    return;
+                case VisualComparisonPlayModeTransitionAction.StartActiveJob:
                     _playModeEntryPending = false;
                     _playModeEntryRequestedAt = 0d;
                     SavePersistedState();
@@ -2727,25 +2732,43 @@ namespace Fbx2Vmd.FBXImporter
                     AppendRunnerTrace($"playModeState={state} active={_activeJob?.DisplayName ?? "<none>"}");
                     EditorApplication.delayCall += StartCurrentJobInPlayMode;
                     break;
-                case PlayModeStateChange.EnteredEditMode:
+                case VisualComparisonPlayModeTransitionAction.CleanupOnly:
+                case VisualComparisonPlayModeTransitionAction.QueueAdvanceAfterPlayStop:
+                case VisualComparisonPlayModeTransitionAction.QueuePlayModeEntry:
                     AppendRunnerTrace($"playModeState={state} active={_activeJob?.DisplayName ?? "<none>"} finished={_activeJobFinished} pending={_advanceAfterPlayStopPending}");
                     CleanupActiveSubscriptions();
-                    if (_advanceAfterPlayStopPending)
+                    if (action == VisualComparisonPlayModeTransitionAction.QueueAdvanceAfterPlayStop)
                     {
                         QueueAdvanceAfterPlayStop("EnteredEditMode");
                     }
-                    else if (_activeJob != null && !_activeJobFinished)
+                    else if (action == VisualComparisonPlayModeTransitionAction.QueuePlayModeEntry)
                     {
                         QueuePlayModeEntryForActiveJob("EnteredEditModeWithoutCompletion");
                     }
                     break;
-                case PlayModeStateChange.ExitingPlayMode:
+                case VisualComparisonPlayModeTransitionAction.ObservePlayModeExit:
+                case VisualComparisonPlayModeTransitionAction.ReportPrematureExit:
                     AppendRunnerTrace($"playModeState={state} active={_activeJob?.DisplayName ?? "<none>"} finished={_activeJobFinished} pending={_advanceAfterPlayStopPending}");
-                    if (_activeJob != null && !_activeJobFinished)
+                    if (action == VisualComparisonPlayModeTransitionAction.ReportPrematureExit)
                     {
                         RecordFailure($"Play Mode가 작업 완료 전에 종료되었습니다: {_activeJob.DisplayName}");
                     }
                     break;
+            }
+        }
+
+        private static VisualComparisonPlayModePhase MapPlayModePhase(PlayModeStateChange state)
+        {
+            switch (state)
+            {
+                case PlayModeStateChange.EnteredPlayMode:
+                    return VisualComparisonPlayModePhase.EnteredPlayMode;
+                case PlayModeStateChange.EnteredEditMode:
+                    return VisualComparisonPlayModePhase.EnteredEditMode;
+                case PlayModeStateChange.ExitingPlayMode:
+                    return VisualComparisonPlayModePhase.ExitingPlayMode;
+                default:
+                    return VisualComparisonPlayModePhase.Other;
             }
         }
 
