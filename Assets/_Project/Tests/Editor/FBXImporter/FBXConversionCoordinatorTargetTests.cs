@@ -3,7 +3,9 @@ using NUnit.Framework;
 using RootMotion.FinalIK;
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -334,7 +336,7 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(coordinatorMethod, Is.Not.Null);
             Assert.That(pipelineMethod, Is.Null);
-            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.PrepareRetargetingTarget("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.PrepareRetargetingTarget("));
             Assert.That(methodSource.IndexOf("PrepareTargetPlaybackState(", System.StringComparison.Ordinal), Is.GreaterThanOrEqualTo(0));
             Assert.That(methodSource.IndexOf("DisableMmdPostPoseCorrectionForRetarget(", System.StringComparison.Ordinal),
                 Is.GreaterThan(methodSource.IndexOf("PrepareTargetPlaybackState(", System.StringComparison.Ordinal)));
@@ -569,7 +571,7 @@ namespace Tests.Editor.FBXImporter
                 "FBXVmdPipeline.cs"));
 
             Assert.That(coordinatorMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("_conversionCoordinator.CreateRetargeter("));
+            Assert.That(pipelineSource, Does.Not.Contain("_conversionCoordinator.CreateRetargeter("));
             Assert.That(pipelineSource, Does.Not.Contain("importedModel.AddComponent<PoseSpaceRetargeter>()"));
             Assert.That(pipelineSource, Does.Not.Contain("new RetargetingContext("));
             Assert.That(pipelineSource, Does.Not.Contain("RetargetingSettings.CreateSnapshot(this)"));
@@ -597,7 +599,7 @@ namespace Tests.Editor.FBXImporter
                 "internal async void ProcessFBXAsync(string sourcePath)",
                 System.StringComparison.Ordinal);
             int entryEnd = pipelineSource.IndexOf(
-                "internal async Task<FBXConversionResult> ProcessFBXSessionAsync(string sourcePath)",
+                "internal void BeginConversionSession()",
                 entryStart,
                 System.StringComparison.Ordinal);
             string entrySource = pipelineSource.Substring(entryStart, entryEnd - entryStart);
@@ -610,14 +612,18 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_SessionLifecycle_When_CheckingOwnership_Then_PipelineUsesBeginAndRecordingDispatchBoundaries()
+        public void Given_SessionUseCase_When_CheckingOwnership_Then_CoordinatorOwnsOrderedFlow()
         {
-            MethodInfo beginMethod = typeof(FBXVmdPipeline).GetMethod(
-                "BeginConversionSession",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            MethodInfo dispatchMethod = typeof(FBXVmdPipeline).GetMethod(
-                "DispatchRecording",
-                BindingFlags.Instance | BindingFlags.NonPublic);
+            const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+            MethodInfo sessionMethod = typeof(FBXVmdPipeline).GetMethod(
+                "ProcessFBXSessionAsync",
+                privateInstance);
+            MethodInfo prepareGhostMethod = typeof(FBXVmdPipeline).GetMethod(
+                "PrepareGhostModel",
+                privateInstance);
+            MethodInfo prepareRetargeterMethod = typeof(FBXVmdPipeline).GetMethod(
+                "PrepareRetargeterForRecording",
+                privateInstance);
             string pipelineSource = File.ReadAllText(Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "Assets",
@@ -625,27 +631,130 @@ namespace Tests.Editor.FBXImporter
                 "Scripts",
                 "FBXImporter",
                 "FBXVmdPipeline.cs"));
-            int sessionStart = pipelineSource.IndexOf(
-                "internal async Task<FBXConversionResult> ProcessFBXSessionAsync(string sourcePath)",
+            string coordinatorSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXConversionCoordinator.cs"));
+            int sessionStart = coordinatorSource.IndexOf(
+                "public async Task<FBXConversionResult> RunSessionAsync(FBXConversionRequest request)",
                 System.StringComparison.Ordinal);
-            int sessionEnd = sessionStart < 0
-                ? -1
-                : pipelineSource.IndexOf(
-                    "internal void DispatchRecording(",
-                    sessionStart,
-                    System.StringComparison.Ordinal);
-            string sessionSource = sessionStart >= 0 && sessionEnd > sessionStart
-                ? pipelineSource.Substring(sessionStart, sessionEnd - sessionStart)
+            string sessionSource = sessionStart >= 0
+                ? coordinatorSource.Substring(sessionStart)
                 : string.Empty;
 
-            Assert.That(beginMethod, Is.Not.Null);
-            Assert.That(dispatchMethod, Is.Not.Null);
-            Assert.That(sessionSource, Does.Contain("BeginConversionSession();"));
-            Assert.That(sessionSource, Does.Contain("DispatchRecording("));
-            Assert.That(sessionSource, Does.Not.Contain("_idlePoseGuard?.Apply();"));
-            Assert.That(sessionSource, Does.Not.Contain("_recordingController.ClearActiveRecordingSubscription();"));
-            Assert.That(sessionSource, Does.Not.Contain("StartCoroutine(_recordingController.RecordAsync("));
-            Assert.That(sessionSource, Does.Not.Contain("ghostAnim.Stop();"));
+            Assert.That(sessionMethod, Is.Null);
+            Assert.That(prepareGhostMethod, Is.Not.Null);
+            Assert.That(prepareRetargeterMethod, Is.Not.Null);
+            Assert.That(pipelineSource, Does.Contain("new FBXConversionCoordinator(this, _importController)"));
+            Assert.That(coordinatorSource, Does.Not.Contain("_pipeline.ProcessFBXSessionAsync("));
+
+            string[] orderedCalls =
+            {
+                "_pipeline.BeginConversionSession();",
+                "ImportRuntimeModelAsync(",
+                "_pipeline.PrepareGhostModel(",
+                "TryPrepareRuntimeAnimation(",
+                "TryResolveTargetAnimator(",
+                "PrepareRetargetingTarget(",
+                "CreateRetargeter(",
+                "_pipeline.PrepareRetargeterForRecording(",
+                "_pipeline.DispatchRecording("
+            };
+            int previousCallIndex = -1;
+            foreach (string orderedCall in orderedCalls)
+            {
+                int currentCallIndex = sessionSource.IndexOf(
+                    orderedCall,
+                    System.StringComparison.Ordinal);
+                Assert.That(currentCallIndex, Is.GreaterThan(previousCallIndex), orderedCall);
+                previousCallIndex = currentCallIndex;
+            }
+
+            int retargeterBridgeStart = pipelineSource.IndexOf(
+                "internal void PrepareRetargeterForRecording(",
+                System.StringComparison.Ordinal);
+            int retargeterBridgeEnd = pipelineSource.IndexOf(
+                "internal void DispatchRecording(",
+                retargeterBridgeStart,
+                System.StringComparison.Ordinal);
+            string retargeterBridgeSource = pipelineSource.Substring(
+                retargeterBridgeStart,
+                retargeterBridgeEnd - retargeterBridgeStart);
+            Assert.That(
+                retargeterBridgeSource.IndexOf("ConfigureTargetThumbDeformationGuard(", System.StringComparison.Ordinal),
+                Is.GreaterThan(retargeterBridgeSource.IndexOf("_activeRetargeter = retargeter;", System.StringComparison.Ordinal)));
+            Assert.That(
+                retargeterBridgeSource.IndexOf("ConfigureEditorHumanoidMuscleReference(", System.StringComparison.Ordinal),
+                Is.GreaterThan(retargeterBridgeSource.IndexOf("ConfigureTargetThumbDeformationGuard(", System.StringComparison.Ordinal)));
+            Assert.That(
+                retargeterBridgeSource.IndexOf("SetSessionState(FBXSessionState.GhostReady", System.StringComparison.Ordinal),
+                Is.GreaterThan(retargeterBridgeSource.IndexOf("ConfigureEditorHumanoidMuscleReference(", System.StringComparison.Ordinal)));
+
+            int dispatchEnd = pipelineSource.IndexOf(
+                "internal static bool PrepareRetargeterRecordingStartPose(",
+                retargeterBridgeEnd,
+                System.StringComparison.Ordinal);
+            string dispatchSource = pipelineSource.Substring(
+                retargeterBridgeEnd,
+                dispatchEnd - retargeterBridgeEnd);
+            Assert.That(
+                dispatchSource.IndexOf("StartCoroutine(_recordingController.RecordAsync(", System.StringComparison.Ordinal),
+                Is.GreaterThan(dispatchSource.IndexOf("ghostAnimation.Stop();", System.StringComparison.Ordinal)));
+        }
+
+        [Test]
+        public async Task Given_StandaloneCoordinator_When_RunningMissingFileSession_Then_DelegatesToPipelineOwner()
+        {
+            GameObject pipelineObject = new GameObject("Pipeline");
+            string missingPath = Path.Combine(
+                Path.GetTempPath(),
+                $"missing-{System.Guid.NewGuid():N}.fbx");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                MethodInfo ensureServicesMethod = typeof(FBXVmdPipeline).GetMethod(
+                    "EnsureServicesInitialized",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo coordinatorField = typeof(FBXVmdPipeline).GetField(
+                    "_conversionCoordinator",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                string coordinatorSource = File.ReadAllText(Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    "Assets",
+                    "_Project",
+                    "Scripts",
+                    "FBXImporter",
+                    "FBXConversionCoordinator.cs"));
+
+                Assert.That(ensureServicesMethod, Is.Not.Null);
+                Assert.That(coordinatorField, Is.Not.Null);
+                ensureServicesMethod.Invoke(pipeline, null);
+                var pipelineCoordinator = (FBXConversionCoordinator)coordinatorField.GetValue(pipeline);
+                var standaloneCoordinator = new FBXConversionCoordinator(pipeline);
+
+                Assert.That(pipelineCoordinator, Is.Not.Null);
+                Assert.That(standaloneCoordinator, Is.Not.SameAs(pipelineCoordinator));
+                Assert.That(coordinatorSource, Does.Contain("!ReferenceEquals(registeredCoordinator, this)"));
+
+                string errorMessage = $"FBX 파일을 찾을 수 없습니다: {missingPath}";
+                LogAssert.Expect(
+                    LogType.Error,
+                    $"[FBXImport] FBX 처리 실패함. 메시지={errorMessage}");
+
+                FBXConversionResult result = await standaloneCoordinator.RunSessionAsync(
+                    new FBXConversionRequest(missingPath));
+
+                Assert.That(result.IsSuccess, Is.False);
+                Assert.That(result.ErrorMessage, Is.EqualTo(errorMessage));
+                Assert.That(pipeline.IsProcessing, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(pipelineObject);
+            }
         }
 
         [Test]

@@ -11,12 +11,13 @@ namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
     /// FBX에서 VMD로 변환하는 흐름을 조정하기 위해 추출함.
-    /// ConvertAsync는 ProcessFBXAsync를 대체하고 RunSessionAsync는 ProcessFBXSessionAsync를 감쌈.
+    /// ConvertAsync는 요청을 검증하고 RunSessionAsync는 변환 use case 순서를 소유함.
     /// B-6d 리팩터링으로 분리함.
     /// </summary>
     public class FBXConversionCoordinator
     {
         private readonly FBXVmdPipeline _pipeline;
+        private readonly FBXImportController _importController;
         private readonly List<BooleanFieldSnapshot> _retargetBooleanSnapshots =
             new List<BooleanFieldSnapshot>();
 
@@ -35,8 +36,16 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         public FBXConversionCoordinator(FBXVmdPipeline pipeline)
+            : this(pipeline, null)
+        {
+        }
+
+        internal FBXConversionCoordinator(
+            FBXVmdPipeline pipeline,
+            FBXImportController importController)
         {
             _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+            _importController = importController;
         }
 
         internal static bool TryResolveTargetAnimator(
@@ -681,11 +690,94 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         /// <summary>
-        /// 파이프라인 내부 세션 흐름에 위임하는 얇은 래퍼임.
+        /// import부터 녹화 시작까지의 변환 use case 순서를 조정함.
         /// </summary>
-        public Task<FBXConversionResult> RunSessionAsync(FBXConversionRequest request)
+        public async Task<FBXConversionResult> RunSessionAsync(FBXConversionRequest request)
         {
-            return _pipeline.ProcessFBXSessionAsync(request.SourcePath);
+            _pipeline.EnsureServicesInitialized();
+            FBXConversionCoordinator registeredCoordinator = _pipeline.ConversionCoordinator;
+            if (registeredCoordinator != null && !ReferenceEquals(registeredCoordinator, this))
+            {
+                return await registeredCoordinator.RunSessionAsync(request);
+            }
+
+            _pipeline.BeginConversionSession();
+            FBXImportController importController = _importController ?? _pipeline.ImportController;
+
+            try
+            {
+                FBXModelImportResult importResult = await importController.ImportRuntimeModelAsync(
+                    request.SourcePath,
+                    _pipeline.ShouldRecordVmdAfterImport);
+                if (!importResult.IsSuccess)
+                {
+                    _pipeline.FailSession(importResult.ErrorMessage);
+                    return FBXConversionResult.Fail(importResult.ErrorMessage);
+                }
+
+                string targetPath = importResult.ControlledImportPath;
+                string outputBaseName = importResult.OutputBaseName;
+                GameObject importedModel = importResult.ImportedModel;
+
+                _pipeline.PrepareGhostModel(importedModel);
+
+                if (!importController.TryPrepareRuntimeAnimation(
+                        importedModel,
+                        _pipeline.showRuntimeAnimationLog,
+                        out Dictionary<string, string> boneMapping,
+                        out Animation ghostAnimation,
+                        out AnimationClip targetClip,
+                        out string animationErrorMessage))
+                {
+                    _pipeline.FailSession(animationErrorMessage);
+                    return FBXConversionResult.Fail(animationErrorMessage);
+                }
+
+                GameObject targetObject = _pipeline.targetCharacter;
+                if (!TryResolveTargetAnimator(
+                        targetObject,
+                        out Animator targetAnimator,
+                        out string targetErrorMessage))
+                {
+                    _pipeline.FailSession(targetErrorMessage);
+                    return FBXConversionResult.Fail(targetErrorMessage);
+                }
+
+                PrepareRetargetingTarget(
+                    targetObject,
+                    targetAnimator,
+                    importedModel.GetComponent<Animator>(),
+                    _pipeline.ShouldFaceTargetToCameraOnIdle,
+                    _pipeline.disableMmdShoulderPostPoseDuringRetarget,
+                    _pipeline.RestoreIdlePoseBeforeRetargetBaselines);
+
+                PoseSpaceRetargeter retargeter = CreateRetargeter(
+                    importedModel,
+                    targetObject,
+                    boneMapping,
+                    targetClip);
+                _pipeline.PrepareRetargeterForRecording(
+                    retargeter,
+                    targetObject,
+                    targetAnimator,
+                    targetPath,
+                    request.SourcePath);
+
+                _pipeline.DispatchRecording(
+                    ghostAnimation,
+                    retargeter,
+                    targetObject,
+                    targetClip,
+                    outputBaseName);
+
+                return FBXConversionResult.Succeed(outputBaseName);
+            }
+            catch (Exception e)
+            {
+                string errorMessage = $"FBX 처리 실패: {e.Message}";
+                _pipeline.FailSession(errorMessage, e);
+                return FBXConversionResult.Fail(errorMessage);
+            }
         }
     }
 }

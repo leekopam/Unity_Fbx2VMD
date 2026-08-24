@@ -176,6 +176,13 @@ namespace Tests.Editor.FBXImporter
                 "Scripts",
                 "FBXImporter",
                 "FBXVmdPipeline.cs"));
+            string coordinatorSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXConversionCoordinator.cs"));
             string controllerSource = File.ReadAllText(Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "Assets",
@@ -194,7 +201,8 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(importMethod, Is.Not.Null);
             Assert.That(resultType, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("await _importController.ImportRuntimeModelAsync("));
+            Assert.That(coordinatorSource, Does.Contain("await importController.ImportRuntimeModelAsync("));
+            Assert.That(pipelineSource, Does.Not.Contain("_importController.ImportRuntimeModelAsync("));
             Assert.That(pipelineSource, Does.Not.Contain("_importController.CopyToControlledImportFolder(sourcePath)"));
             Assert.That(pipelineSource, Does.Not.Contain("_importController.ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath)"));
             Assert.That(pipelineSource, Does.Not.Contain("_fbxImporter.ImportAsync(targetPath)"));
@@ -222,9 +230,17 @@ namespace Tests.Editor.FBXImporter
                 "Scripts",
                 "FBXImporter",
                 "FBXVmdPipeline.cs"));
+            string coordinatorSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXConversionCoordinator.cs"));
 
             Assert.That(preparationMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("_importController.TryPrepareRuntimeAnimation("));
+            Assert.That(coordinatorSource, Does.Contain("importController.TryPrepareRuntimeAnimation("));
+            Assert.That(pipelineSource, Does.Not.Contain("_importController.TryPrepareRuntimeAnimation("));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.TryPrepareRuntimeAvatar("));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.LoadBoneMappingRuntime()"));
             Assert.That(pipelineSource, Does.Not.Contain("HumanoidAvatarBuilder.SetupHumanoid(importedModel"));
@@ -245,6 +261,13 @@ namespace Tests.Editor.FBXImporter
                 "Scripts",
                 "FBXImporter",
                 "FBXVmdPipeline.cs"));
+            string coordinatorSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXConversionCoordinator.cs"));
             string controllerSource = File.ReadAllText(Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "Assets",
@@ -264,7 +287,8 @@ namespace Tests.Editor.FBXImporter
                 : -1;
 
             Assert.That(preparationMethod, Is.Not.Null);
-            Assert.That(pipelineSource, Does.Contain("_importController.TryPrepareRuntimeAnimation("));
+            Assert.That(coordinatorSource, Does.Contain("importController.TryPrepareRuntimeAnimation("));
+            Assert.That(pipelineSource, Does.Not.Contain("_importController.TryPrepareRuntimeAnimation("));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.TryPrepareRuntimeAvatar("));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.ExtractPrimaryClip("));
             Assert.That(avatarIndex, Is.LessThan(avatarReadyIndex));

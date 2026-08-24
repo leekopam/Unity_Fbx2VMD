@@ -6,7 +6,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using Fbx2Vmd.FileSystem;
 using Fbx2Vmd.Settings;
 using Fbx2Vmd.Recording;
@@ -1413,6 +1412,10 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool ShouldSaveToImportFolder => _shouldSaveToImportFolder;
         public bool ShouldRecordVmdAfterImport => _shouldRecordVmdAfterImport;
+        internal FBXImportController ImportController => _importController;
+        internal FBXConversionCoordinator ConversionCoordinator => _conversionCoordinator;
+        internal bool ShouldFaceTargetToCameraOnIdle =>
+            _idlePoseGuard != null && _idlePoseGuard.ShouldFaceTargetToCameraOnIdle;
         public bool ShouldUseLegacyPoseSpaceFacingCorrection => _shouldUseLegacyPoseSpaceFacingCorrection;
         public bool ShouldPreserveFbxRootRotation => _shouldPreserveFbxRootRotation;
         public bool ShouldPreserveRetargetBodyPosition => _shouldPreserveRetargetBodyPosition;
@@ -1979,7 +1982,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (_conversionCoordinator == null)
             {
-                _conversionCoordinator = new FBXConversionCoordinator(this);
+                _conversionCoordinator = new FBXConversionCoordinator(this, _importController);
             }
 
             if (_recordingController == null)
@@ -2051,94 +2054,26 @@ namespace Fbx2Vmd.FBXImporter
             CleanupActiveGhost();
         }
 
-        /// <summary>
-        /// 지연 후 애니메이션 재생 및 VMD 녹화를 동기화하는 코루틴
-        /// </summary>
-        /// <param name="ghostModel">임포트된 Ghost 모델</param>
-        /// <param name="ghostAnim">Ghost의 Animation 컴포넌트</param>
-        /// <param name="targetCharacter">리타겟 대상 캐릭터</param>
-        /// <param name="clip">재생할 AnimationClip</param>
-        /// <param name="retargeter">Pose Space Retargeter 컴포넌트</param>
-        internal async Task<FBXConversionResult> ProcessFBXSessionAsync(string sourcePath)
+        internal void PrepareGhostModel(GameObject importedModel)
         {
-            BeginConversionSession();
+            GameObject ghostContainer = CreateGhostContainer(importedModel);
+            _activeGhostContainer = ghostContainer;
+            SetGhostVisibility(importedModel, showGhostModel, showGhostSkeletonWhenNoRenderers);
+        }
 
-            try
-            {
-                FBXModelImportResult importResult = await _importController.ImportRuntimeModelAsync(
-                    sourcePath,
-                    _shouldRecordVmdAfterImport);
-                if (!importResult.IsSuccess)
-                {
-                    FailSession(importResult.ErrorMessage);
-                    return FBXConversionResult.Fail(importResult.ErrorMessage);
-                }
-
-                string targetPath = importResult.ControlledImportPath;
-                string outputBaseName = importResult.OutputBaseName;
-                GameObject importedModel = importResult.ImportedModel;
-
-                GameObject ghostContainer = CreateGhostContainer(importedModel);
-                _activeGhostContainer = ghostContainer;
-                SetGhostVisibility(importedModel, showGhostModel, showGhostSkeletonWhenNoRenderers);
-
-                if (!_importController.TryPrepareRuntimeAnimation(
-                        importedModel,
-                        showRuntimeAnimationLog,
-                        out Dictionary<string, string> boneMapping,
-                        out Animation ghostAnim,
-                        out AnimationClip targetClip,
-                        out string animationErrorMessage))
-                {
-                    FailSession(animationErrorMessage);
-                    return FBXConversionResult.Fail(animationErrorMessage);
-                }
-
-                GameObject targetObject = targetCharacter;
-                if (!FBXConversionCoordinator.TryResolveTargetAnimator(
-                        targetObject,
-                        out Animator targetAnimator,
-                        out string targetErrorMessage))
-                {
-                    FailSession(targetErrorMessage);
-                    return FBXConversionResult.Fail(targetErrorMessage);
-                }
-
-                _conversionCoordinator.PrepareRetargetingTarget(
-                    targetObject,
-                    targetAnimator,
-                    importedModel.GetComponent<Animator>(),
-                    _idlePoseGuard != null && _idlePoseGuard.ShouldFaceTargetToCameraOnIdle,
-                    disableMmdShoulderPostPoseDuringRetarget,
-                    RestoreIdlePoseBeforeRetargetBaselines);
-
-                PoseSpaceRetargeter retargeter = _conversionCoordinator.CreateRetargeter(
-                    importedModel,
-                    targetObject,
-                    boneMapping,
-                    targetClip);
-                _activeRetargeter = retargeter;
-                ConfigureTargetThumbDeformationGuard(targetObject, targetAnimator, retargeter);
+        internal void PrepareRetargeterForRecording(
+            PoseSpaceRetargeter retargeter,
+            GameObject targetObject,
+            Animator targetAnimator,
+            string importedFilePath,
+            string sourceFilePath)
+        {
+            _activeRetargeter = retargeter;
+            ConfigureTargetThumbDeformationGuard(targetObject, targetAnimator, retargeter);
 #if UNITY_EDITOR
-                ConfigureEditorHumanoidMuscleReference(retargeter, targetPath, sourcePath);
+            ConfigureEditorHumanoidMuscleReference(retargeter, importedFilePath, sourceFilePath);
 #endif
-                SetSessionState(FBXSessionState.GhostReady, "Ghost Retarget 준비 완료", 0.6f);
-
-                DispatchRecording(
-                    ghostAnim,
-                    retargeter,
-                    targetObject,
-                    targetClip,
-                    outputBaseName);
-
-                return FBXConversionResult.Succeed(outputBaseName);
-            }
-            catch (Exception e)
-            {
-                string errorMessage = $"FBX 처리 실패: {e.Message}";
-                FailSession(errorMessage, e);
-                return FBXConversionResult.Fail(errorMessage);
-            }
+            SetSessionState(FBXSessionState.GhostReady, "Ghost Retarget 준비 완료", 0.6f);
         }
 
         internal void DispatchRecording(
@@ -2376,7 +2311,7 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private void RestoreIdlePoseBeforeRetargetBaselines()
+        internal void RestoreIdlePoseBeforeRetargetBaselines()
         {
             // 배치 검증 뒤 남을 수 있는 분리형 엄지 helper 위치를 다음 기준 캡처 전에 복원함.
             _idlePoseGuard?.Apply();
