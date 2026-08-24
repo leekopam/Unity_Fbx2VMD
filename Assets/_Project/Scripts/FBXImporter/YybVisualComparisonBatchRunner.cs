@@ -6512,8 +6512,7 @@ namespace Fbx2Vmd.FBXImporter
                 failures = Failures.ToArray()
             };
 
-            string json = JsonUtility.ToJson(summary, true);
-            File.WriteAllText(path, json, Encoding.UTF8);
+            VisualComparisonSummaryFileStore.WriteJson(path, summary);
         }
 
         private static void WriteSummaryMarkdown(
@@ -6833,7 +6832,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
 
-            File.WriteAllText(path, builder.ToString(), Encoding.UTF8);
+            VisualComparisonSummaryFileStore.WriteText(path, builder.ToString());
         }
 
         private static MotionComparisonFrameQualitySummary[] BuildFrameQualitySummaries()
@@ -8791,19 +8790,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void CopyLatestSummary(string sourcePath, string relativeTargetPath)
         {
-            if (string.IsNullOrEmpty(sourcePath))
-            {
-                return;
-            }
-
-            string targetPath = Path.Combine(_projectRoot, relativeTargetPath);
-            string targetDirectory = Path.GetDirectoryName(targetPath);
-            if (!string.IsNullOrEmpty(targetDirectory))
-            {
-                Directory.CreateDirectory(targetDirectory);
-            }
-
-            File.Copy(sourcePath, targetPath, overwrite: true);
+            VisualComparisonSummaryFileStore.CopyLatest(sourcePath, _projectRoot, relativeTargetPath);
         }
 
         private static AnimationClip LoadFirstAnimationClip(string assetPath)
