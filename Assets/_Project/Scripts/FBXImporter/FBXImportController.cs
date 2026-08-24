@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 using System.IO;
 using Fbx2Vmd.FileSystem;
@@ -17,11 +18,16 @@ namespace Fbx2Vmd.FBXImporter
 
         private readonly FBXVmdPipeline _pipeline;
         private readonly IFileBrowserService _fileBrowserService;
+        private readonly Func<string, Task<GameObject>> _importModelAsync;
 
-        public FBXImportController(FBXVmdPipeline pipeline, IFileBrowserService fileBrowserService)
+        public FBXImportController(
+            FBXVmdPipeline pipeline,
+            IFileBrowserService fileBrowserService,
+            Func<string, Task<GameObject>> importModelAsync)
         {
             _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
             _fileBrowserService = fileBrowserService ?? throw new ArgumentNullException(nameof(fileBrowserService));
+            _importModelAsync = importModelAsync ?? throw new ArgumentNullException(nameof(importModelAsync));
         }
 
         internal string CopyToControlledImportFolder(string sourcePath)
@@ -76,6 +82,52 @@ namespace Fbx2Vmd.FBXImporter
 
             errorMessage = string.Empty;
             return true;
+        }
+
+        internal async Task<FBXModelImportResult> ImportRuntimeModelAsync(
+            string sourcePath,
+            bool shouldRecordVmdAfterImport)
+        {
+            if (!TryValidateSourcePath(sourcePath, out string sourceValidationError))
+            {
+                return FBXModelImportResult.Fail(sourceValidationError);
+            }
+
+            _pipeline.SetSessionState(
+                FBXVmdPipeline.FBXSessionState.Selected,
+                $"선택됨: {Path.GetFileName(sourcePath)}",
+                0.05f);
+            string targetPath = CopyToControlledImportFolder(sourcePath);
+            string outputBaseName = Path.GetFileNameWithoutExtension(targetPath);
+            if (shouldRecordVmdAfterImport)
+            {
+                Debug.Log($"[Recording] 자동 VMD 출력명 고정됨. VMD={outputBaseName}.vmd, 입력 FBX={Path.GetFileName(sourcePath)}");
+            }
+            else
+            {
+                Debug.Log($"[FBXImport] Unity 촬영 전용 모드 선택됨. 출력={outputBaseName}, VMD 자동 녹화=생략");
+            }
+
+            _pipeline.SetSessionState(
+                FBXVmdPipeline.FBXSessionState.Copied,
+                $"복제 완료: {Path.GetFileName(targetPath)}",
+                0.15f);
+
+#if UNITY_EDITOR
+            ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath);
+#endif
+
+            _pipeline.SetSessionState(
+                FBXVmdPipeline.FBXSessionState.LoadingFbx,
+                "FBX 로드 중",
+                0.25f);
+            GameObject importedModel = await _importModelAsync(targetPath);
+            if (importedModel == null)
+            {
+                return FBXModelImportResult.Fail("FBX 로드에 실패했습니다.");
+            }
+
+            return FBXModelImportResult.Succeed(importedModel, targetPath, outputBaseName);
         }
 
         internal static Dictionary<string, string> LoadBoneMappingRuntime()
