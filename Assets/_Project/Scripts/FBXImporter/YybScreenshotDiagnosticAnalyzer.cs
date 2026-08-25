@@ -1170,38 +1170,25 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 Color32[] pixels = texture.GetPixels32();
-                int minX = width;
-                int minY = height;
-                int maxX = -1;
-                int maxY = -1;
-                int brightPixelCount = 0;
-                for (int y = 0; y < height; y++)
-                {
-                    int rowOffset = y * width;
-                    for (int x = 0; x < width; x++)
-                    {
-                        Color32 pixel = pixels[rowOffset + x];
-                        if (!IsCandidateBrightPixel(pixel))
-                        {
-                            continue;
-                        }
-
-                        brightPixelCount++;
-                        minX = Mathf.Min(minX, x);
-                        maxX = Mathf.Max(maxX, x);
-                        minY = Mathf.Min(minY, y);
-                        maxY = Mathf.Max(maxY, y);
-                    }
-                }
+                VisualComparisonPixelBoundsCalculator.TryCalculate(
+                    pixels,
+                    width,
+                    height,
+                    IsCandidateBrightPixel,
+                    out VisualComparisonPixelBounds brightPixelBounds);
 
                 int totalPixels = Mathf.Max(1, width * height);
-                metric.BrightAreaRatio = brightPixelCount / (float)totalPixels;
-                metric.HasBrightPixels = brightPixelCount > 0;
+                metric.BrightAreaRatio = brightPixelBounds.MatchedPixelCount / (float)totalPixels;
+                metric.HasBrightPixels = brightPixelBounds.HasMatches;
                 if (!metric.HasBrightPixels)
                 {
                     return true;
                 }
 
+                int minX = brightPixelBounds.MinX;
+                int minY = brightPixelBounds.MinY;
+                int maxX = brightPixelBounds.MaxX;
+                int maxY = brightPixelBounds.MaxY;
                 metric.BBoxHeightRatio = (maxY - minY + 1) / (float)height;
                 metric.BBoxWidthRatio = (maxX - minX + 1) / (float)width;
                 metric.CenterX = ((minX + maxX + 1) * 0.5f) / width;
@@ -1278,32 +1265,21 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            int minX = width;
-            int minY = height;
-            int maxX = -1;
-            int maxY = -1;
-            for (int y = 0; y < height; y++)
-            {
-                int rowOffset = y * width;
-                for (int x = 0; x < width; x++)
-                {
-                    if (!pixelPredicate(pixels[rowOffset + x]))
-                    {
-                        continue;
-                    }
-
-                    minX = Mathf.Min(minX, x);
-                    maxX = Mathf.Max(maxX, x);
-                    minY = Mathf.Min(minY, y);
-                    maxY = Mathf.Max(maxY, y);
-                }
-            }
-
-            if (maxX < minX || maxY < minY)
+            if (!VisualComparisonPixelBoundsCalculator.TryCalculate(
+                    pixels,
+                    width,
+                    height,
+                    pixelPredicate,
+                    out VisualComparisonPixelBounds bounds) ||
+                !bounds.HasMatches)
             {
                 return false;
             }
 
+            int minX = bounds.MinX;
+            int minY = bounds.MinY;
+            int maxX = bounds.MaxX;
+            int maxY = bounds.MaxY;
             bboxHeightRatio = (maxY - minY + 1) / (float)height;
             bboxWidthRatio = (maxX - minX + 1) / (float)width;
             centerX = ((minX + maxX + 1) * 0.5f) / width;
