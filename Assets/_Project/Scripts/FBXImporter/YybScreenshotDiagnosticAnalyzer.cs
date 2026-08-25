@@ -258,8 +258,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             var seconds = new List<float>();
-            var timedSamples = new List<CandidateScreenshotFrameSample>();
-            foreach (CandidateScreenshotFrameSample sample in metrics.Samples)
+            var timedSamples = new List<VisualComparisonCandidateFrameSample>();
+            foreach (VisualComparisonCandidateFrameSample sample in metrics.Samples)
             {
                 if (sample == null || sample.RecorderFrame < 0)
                 {
@@ -330,7 +330,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void AttachCandidateScreenshotTimeMatchedFramingDiagnostics(
             VisualComparisonFrameRoleDiagnosticsData diagnostics,
-            List<CandidateScreenshotFrameSample> candidateSamples)
+            List<VisualComparisonCandidateFrameSample> candidateSamples)
         {
             if (diagnostics == null ||
                 candidateSamples == null ||
@@ -408,61 +408,27 @@ namespace Fbx2Vmd.FBXImporter
             float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateY = float.NaN;
             float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceX = float.NaN;
             float maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceY = float.NaN;
-            float referenceClipStartSeconds = Mathf.Max(
-                0f,
-                diagnostics.reference_mp4_current_clip_start_seconds);
-            float referenceClipDurationSeconds = Mathf.Max(
-                0f,
-                diagnostics.reference_mp4_current_clip_duration_seconds);
-            foreach (Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow referenceRow in diagnostics.referenceMp4CurrentClipRows)
+            VisualComparisonTimeMatchedFramePair[] timeMatchedPairs =
+                VisualComparisonTimeMatchedFramePairBuilder.Build(
+                    diagnostics.referenceMp4CurrentClipRows,
+                    candidateSamples,
+                    diagnostics.reference_mp4_current_clip_start_seconds,
+                    diagnostics.reference_mp4_current_clip_duration_seconds);
+            foreach (VisualComparisonTimeMatchedFramePair pair in timeMatchedPairs)
             {
-                if (referenceRow == null || float.IsNaN(referenceRow.seconds))
-                {
-                    continue;
-                }
-
-                float referenceLocalSeconds = Mathf.Clamp(
-                    referenceRow.seconds - referenceClipStartSeconds,
-                    0f,
-                    referenceClipDurationSeconds);
-                CandidateScreenshotFrameSample nearestSample = null;
-                float nearestGap = float.PositiveInfinity;
-                foreach (CandidateScreenshotFrameSample candidateSample in candidateSamples)
-                {
-                    if (candidateSample == null ||
-                        candidateSample.Metric == null ||
-                        !candidateSample.Metric.HasBrightPixels ||
-                        float.IsNaN(candidateSample.Seconds))
-                    {
-                        continue;
-                    }
-
-                    float gap = Mathf.Abs(candidateSample.Seconds - referenceLocalSeconds);
-                    if (gap < nearestGap)
-                    {
-                        nearestGap = gap;
-                        nearestSample = candidateSample;
-                    }
-                }
-
-                if (nearestSample == null || float.IsInfinity(nearestGap))
-                {
-                    continue;
-                }
-
-                CandidateScreenshotFrameMetric candidateMetric = nearestSample.Metric;
+                ReferenceMp4FrameMetricRow referenceRow = pair.ReferenceRow;
+                VisualComparisonCandidateFrameSample nearestSample = pair.CandidateSample;
+                float nearestGap = pair.SecondsGap;
+                VisualComparisonCandidateFrameMetric candidateMetric = nearestSample.Metric;
                 float bboxHeightDelta = Mathf.Abs(candidateMetric.BBoxHeightRatio - referenceRow.bboxHeightRatio);
                 float bboxWidthDelta = Mathf.Abs(candidateMetric.BBoxWidthRatio - referenceRow.bboxWidthRatio);
                 float centerXDelta = Mathf.Abs(candidateMetric.CenterX - referenceRow.centerXRatio);
                 float bottomGapDelta = Mathf.Abs(candidateMetric.BottomGapRatio - referenceRow.bottomGapRatio);
                 float brightAreaDelta = Mathf.Abs(candidateMetric.BrightAreaRatio - referenceRow.brightAreaRatio);
-                float referenceTopGapRatio = ResolveFrameTopGapRatio(
-                    referenceRow.bottomGapRatio,
-                    referenceRow.bboxHeightRatio);
-                bool referenceTouchesFrameEdge = IsFrameEdgeTouched(referenceRow.bottomGapRatio, referenceTopGapRatio);
-                bool candidateTouchesFrameEdge =
-                    IsFrameEdgeTouched(candidateMetric.BottomGapRatio, candidateMetric.TopGapRatio);
-                bool cropSafeSample = !referenceTouchesFrameEdge && !candidateTouchesFrameEdge;
+                float referenceTopGapRatio = pair.ReferenceTopGapRatio;
+                bool referenceTouchesFrameEdge = pair.ReferenceTouchesFrameEdge;
+                bool candidateTouchesFrameEdge = pair.CandidateTouchesFrameEdge;
+                bool cropSafeSample = pair.IsCropSafe;
                 if (cropSafeSample)
                 {
                     cropSafeSampleCount++;
@@ -1051,7 +1017,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 string screenshotPath = ResolveProjectRelativePath(cells[pathIndex], projectRoot);
-                if (!TryAnalyzeCandidateScreenshotFrame(screenshotPath, out CandidateScreenshotFrameMetric frameMetric, out string error))
+                if (!TryAnalyzeCandidateScreenshotFrame(screenshotPath, out VisualComparisonCandidateFrameMetric frameMetric, out string error))
                 {
                     if (!string.IsNullOrWhiteSpace(error))
                     {
@@ -1070,7 +1036,7 @@ namespace Fbx2Vmd.FBXImporter
                     parsedRecorderFrame = recorderFrame;
                     metrics.RecorderFrames.Add(parsedRecorderFrame);
                 }
-                metrics.Samples.Add(new CandidateScreenshotFrameSample(parsedRecorderFrame, frameMetric));
+                metrics.Samples.Add(new VisualComparisonCandidateFrameSample(parsedRecorderFrame, frameMetric));
 
                 sumHeight += frameMetric.BBoxHeightRatio;
                 sumWidth += frameMetric.BBoxWidthRatio;
@@ -1117,10 +1083,10 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static bool TryAnalyzeCandidateScreenshotFrame(
             string screenshotPath,
-            out CandidateScreenshotFrameMetric metric,
+            out VisualComparisonCandidateFrameMetric metric,
             out string error)
         {
-            metric = new CandidateScreenshotFrameMetric
+            metric = new VisualComparisonCandidateFrameMetric
             {
                 CenterX = float.NaN,
                 BottomGapRatio = 1f,
@@ -1321,46 +1287,9 @@ namespace Fbx2Vmd.FBXImporter
             public float MaxTopGapRatio = float.NaN;
             public float AvgBrightAreaRatio = float.NaN;
             public readonly List<int> RecorderFrames = new List<int>();
-            public readonly List<CandidateScreenshotFrameSample> Samples =
-                new List<CandidateScreenshotFrameSample>();
+            public readonly List<VisualComparisonCandidateFrameSample> Samples =
+                new List<VisualComparisonCandidateFrameSample>();
             public string Error = string.Empty;
-        }
-
-        private sealed class CandidateScreenshotFrameSample
-        {
-            public CandidateScreenshotFrameSample(int recorderFrame, CandidateScreenshotFrameMetric metric)
-            {
-                RecorderFrame = recorderFrame;
-                Metric = metric;
-                Seconds = float.NaN;
-            }
-
-            public int RecorderFrame;
-            public CandidateScreenshotFrameMetric Metric;
-            public float Seconds;
-        }
-
-        internal sealed class CandidateScreenshotFrameMetric
-        {
-            public bool HasBrightPixels;
-            public float BBoxHeightRatio;
-            public float BBoxWidthRatio;
-            public float UpperLimbSpanRatio = float.NaN;
-            public float LowerLimbSpanRatio = float.NaN;
-            public float[] SilhouetteSpanProfile = Array.Empty<float>();
-            public float[] SilhouetteEndpointProfile = Array.Empty<float>();
-            public float[] ImageSpaceKeypointProfile = Array.Empty<float>();
-            public bool HasNonHairBrightPixels;
-            public float NonHairBBoxHeightRatio = float.NaN;
-            public float NonHairBBoxWidthRatio = float.NaN;
-            public float NonHairCenterX = float.NaN;
-            public float NonHairBottomGapRatio = float.NaN;
-            public float NonHairTopGapRatio = float.NaN;
-            public float[] NonHairImageSpaceKeypointProfile = Array.Empty<float>();
-            public float CenterX = float.NaN;
-            public float BottomGapRatio = 1f;
-            public float TopGapRatio = 1f;
-            public float BrightAreaRatio;
         }
 
     }
