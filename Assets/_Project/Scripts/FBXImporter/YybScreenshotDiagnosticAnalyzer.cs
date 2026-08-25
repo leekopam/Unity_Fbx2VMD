@@ -485,24 +485,30 @@ namespace Fbx2Vmd.FBXImporter
                     sumLowerLimbSpanDelta += lowerLimbSpanDelta;
                     maxLowerLimbSpanDelta = Mathf.Max(maxLowerLimbSpanDelta, lowerLimbSpanDelta);
                 }
-                if (TryComputeSilhouetteProfileDelta(
+                if (VisualComparisonProfileDeltaCalculator.TryCalculate(
                     candidateMetric.SilhouetteSpanProfile,
                     referenceRow.silhouetteSpanProfile,
-                    out int matchedBandCount,
-                    out float silhouetteProfileL1Delta,
-                    out float silhouetteProfileBandDelta))
+                    out VisualComparisonProfileDelta silhouetteProfileDelta))
                 {
-                    silhouetteProfileBandCount = Mathf.Max(silhouetteProfileBandCount, matchedBandCount);
+                    silhouetteProfileBandCount = Mathf.Max(
+                        silhouetteProfileBandCount,
+                        silhouetteProfileDelta.ComparedValueCount);
                     silhouetteProfileCount++;
-                    sumSilhouetteProfileL1Delta += silhouetteProfileL1Delta;
-                    maxSilhouetteProfileL1Delta = Mathf.Max(maxSilhouetteProfileL1Delta, silhouetteProfileL1Delta);
-                    maxSilhouetteProfileBandDelta = Mathf.Max(maxSilhouetteProfileBandDelta, silhouetteProfileBandDelta);
+                    sumSilhouetteProfileL1Delta += silhouetteProfileDelta.MeanAbsoluteDelta;
+                    maxSilhouetteProfileL1Delta = Mathf.Max(
+                        maxSilhouetteProfileL1Delta,
+                        silhouetteProfileDelta.MeanAbsoluteDelta);
+                    maxSilhouetteProfileBandDelta = Mathf.Max(
+                        maxSilhouetteProfileBandDelta,
+                        silhouetteProfileDelta.MaxAbsoluteDelta);
                     if (cropSafeSample)
                     {
                         cropSafeSilhouetteProfileCount++;
-                        sumCropSafeSilhouetteProfileL1Delta += silhouetteProfileL1Delta;
+                        sumCropSafeSilhouetteProfileL1Delta += silhouetteProfileDelta.MeanAbsoluteDelta;
                         maxCropSafeSilhouetteProfileL1Delta =
-                            Mathf.Max(maxCropSafeSilhouetteProfileL1Delta, silhouetteProfileL1Delta);
+                            Mathf.Max(
+                                maxCropSafeSilhouetteProfileL1Delta,
+                                silhouetteProfileDelta.MeanAbsoluteDelta);
                     }
                 }
                 if (TryComputeSilhouetteEndpointDelta(
@@ -1397,56 +1403,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return profile;
-        }
-
-        private static bool TryComputeSilhouetteProfileDelta(
-            float[] candidateProfile,
-            float[] referenceProfile,
-            out int bandCount,
-            out float l1Delta,
-            out float maxBandDelta)
-        {
-            bandCount = 0;
-            l1Delta = float.NaN;
-            maxBandDelta = float.NaN;
-            if (candidateProfile == null || referenceProfile == null)
-            {
-                return false;
-            }
-
-            int length = Mathf.Min(candidateProfile.Length, referenceProfile.Length);
-            if (length <= 0)
-            {
-                return false;
-            }
-
-            float sumDelta = 0f;
-            float maxDelta = 0f;
-            int finiteCount = 0;
-            for (int i = 0; i < length; i++)
-            {
-                float candidate = candidateProfile[i];
-                float reference = referenceProfile[i];
-                if (!IsFiniteMetric(candidate) || !IsFiniteMetric(reference))
-                {
-                    continue;
-                }
-
-                float delta = Mathf.Abs(candidate - reference);
-                sumDelta += delta;
-                maxDelta = Mathf.Max(maxDelta, delta);
-                finiteCount++;
-            }
-
-            if (finiteCount <= 0)
-            {
-                return false;
-            }
-
-            bandCount = finiteCount;
-            l1Delta = sumDelta / finiteCount;
-            maxBandDelta = maxDelta;
-            return true;
         }
 
         private static float[] BuildSilhouetteEndpointProfile(
