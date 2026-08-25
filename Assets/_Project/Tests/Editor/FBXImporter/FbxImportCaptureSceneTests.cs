@@ -92,6 +92,14 @@ namespace Tests.Editor.FBXImporter
             Assert.That(ReadRecordVmdAfterImport(fileManager), Is.False,
                 "Main_recoding must keep FBX import capture separate from automatic VMD conversion.");
             Assert.That(fileManager.targetCharacter, Is.Not.Null, "Main_recoding scene must keep a recording target character.");
+            Assert.That(fileManager.targetCharacter.activeInHierarchy, Is.True,
+                "Main_recoding recording target must be active so import, preview, and recording use the visible model.");
+
+            Animator targetAnimator = fileManager.targetCharacter.GetComponent<Animator>();
+            Assert.That(targetAnimator, Is.Not.Null, "Main_recoding recording target must keep an Animator.");
+            Assert.That(targetAnimator.avatar, Is.Not.Null, "Main_recoding recording target must keep a Humanoid Avatar.");
+            Assert.That(targetAnimator.avatar.isValid && targetAnimator.avatar.isHuman, Is.True,
+                "Main_recoding recording target must use a valid Humanoid Avatar.");
 
             var sampleCode = fileManager.targetCharacter.GetComponent<HumanoidSampleCode>();
             Assert.That(sampleCode, Is.Not.Null, "Main_recoding target must keep HumanoidSampleCode for manual MMD-style recording.");
