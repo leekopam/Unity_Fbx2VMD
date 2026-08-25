@@ -8723,28 +8723,17 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string ResolveReferenceClipAssetPath(string fbxFileName, Func<string, bool> hasReferenceClip)
         {
-            string normalizedFileName = NormalizeFbxFileName(fbxFileName);
-            string projectCandidate = Path.Combine(ProjectFbxDirectory, normalizedFileName).Replace('\\', '/');
-            if (hasReferenceClip(projectCandidate))
-            {
-                return projectCandidate;
-            }
-
-            string importCandidate = Path.Combine(ImportFbxDirectory, normalizedFileName).Replace('\\', '/');
-            if (hasReferenceClip(importCandidate))
-            {
-                return importCandidate;
-            }
-
-            return importCandidate;
+            return FbxReferenceClipPathResolver.Resolve(
+                fbxFileName,
+                DefaultFbxFileName,
+                ProjectFbxDirectory,
+                ImportFbxDirectory,
+                hasReferenceClip);
         }
 
         private static string NormalizeFbxFileName(string fbxFileName)
         {
-            string name = string.IsNullOrWhiteSpace(fbxFileName) ? DefaultFbxFileName : fbxFileName.Trim();
-            return string.Equals(Path.GetExtension(name), ".fbx", StringComparison.OrdinalIgnoreCase)
-                ? Path.GetFileName(name)
-                : Path.GetFileNameWithoutExtension(name) + ".fbx";
+            return FbxReferenceClipPathResolver.NormalizeFileName(fbxFileName, DefaultFbxFileName);
         }
 
         private static string GetCommandLineValue(string name, string fallbackValue)
