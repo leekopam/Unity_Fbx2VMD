@@ -8650,13 +8650,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string SanitizeFileName(string fileName)
         {
-            string safeName = string.IsNullOrWhiteSpace(fileName) ? "yyb_visual_compare" : fileName.Trim();
-            foreach (char invalidChar in Path.GetInvalidFileNameChars())
-            {
-                safeName = safeName.Replace(invalidChar, '_');
-            }
-
-            return safeName.Replace(' ', '_');
+            return VisualComparisonArtifactNamePolicy.SanitizeFileName(
+                fileName,
+                "yyb_visual_compare");
         }
 
         private static string BuildCandidateVmdEvidenceFileName(CaptureMode mode, string extension)
@@ -8674,39 +8670,17 @@ namespace Fbx2Vmd.FBXImporter
                     : string.Equals(mode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal)
                         ? "auto"
                         : SanitizeFileName(mode);
-            return $"vmd-{shortMode}{safeExtension}";
+            return VisualComparisonArtifactNamePolicy.BuildEvidenceFileName(
+                "vmd",
+                shortMode,
+                safeExtension,
+                ".vmd",
+                "yyb_visual_compare");
         }
 
         private static string ShortenFileNameToLength(string value, int maxLength)
         {
-            if (string.IsNullOrEmpty(value))
-            {
-                return value;
-            }
-
-            int safeMaxLength = Mathf.Max(10, maxLength);
-            if (value.Length <= safeMaxLength)
-            {
-                return value;
-            }
-
-            const int hashLength = 8;
-            int prefixLength = Mathf.Max(1, safeMaxLength - hashLength - 1);
-            return $"{value.Substring(0, prefixLength)}_{CalculateStableHash(value):x8}";
-        }
-
-        private static uint CalculateStableHash(string value)
-        {
-            const uint offsetBasis = 2166136261;
-            const uint prime = 16777619;
-            uint hash = offsetBasis;
-            foreach (char character in value)
-            {
-                hash ^= character;
-                hash *= prime;
-            }
-
-            return hash;
+            return VisualComparisonArtifactNamePolicy.ShortenToLength(value, maxLength);
         }
 
         [Serializable]
