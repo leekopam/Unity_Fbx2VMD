@@ -57,8 +57,6 @@ namespace Fbx2Vmd.FBXImporter
         private readonly Dictionary<Transform, Quaternion> _lastCorrectedLocalRotations = new Dictionary<Transform, Quaternion>();
         private readonly Dictionary<Transform, bool> _cachedThumbSides = new Dictionary<Transform, bool>();
         private bool _warningLogged;
-        private const float LocalRotationOvershootRatio = 0.35f;
-        private const float LocalRotationHardOvershootDegrees = 8f;
         private const float ThumbWebbingSpreadFullRiskAngle = 72f;
         private const float ThumbWebbingProjectionFullRiskDistance = 1f;
         private const float ThumbWebbingHelperDistanceWarning = 0.003f;
@@ -119,33 +117,18 @@ namespace Fbx2Vmd.FBXImporter
                     }
 
                     Quaternion offsetRotation = GetThumbRotationOffset(thumbBone);
-                    Quaternion baselineRotation = ApplyLimitSpaceOffset(initialRotation, offsetRotation);
-                    Quaternion currentRotation = ApplyLimitSpaceOffset(rawRotation, offsetRotation);
-                    if (limit <= 0f)
+                    if (!ThumbLocalRotationCalculator.TryCalculateCorrection(
+                            initialRotation,
+                            rawRotation,
+                            thumbTransform.localRotation,
+                            offsetRotation,
+                            limit,
+                            out Quaternion correctedRotation))
                     {
-                        if (Quaternion.Angle(initialRotation, rawRotation) > 0.001f)
-                        {
-                            SetCorrectedLocalRotation(thumbTransform, rawRotation, initialRotation);
-                            changed++;
-                        }
-
                         continue;
                     }
 
-                    float angle = Quaternion.Angle(baselineRotation, currentRotation);
-                    if (angle <= limit)
-                    {
-                        if (Quaternion.Angle(thumbTransform.localRotation, rawRotation) > 0.001f)
-                        {
-                            SetCorrectedLocalRotation(thumbTransform, rawRotation, rawRotation);
-                            changed++;
-                        }
-
-                        continue;
-                    }
-
-                    Quaternion limitedRotation = LimitLocalRotation(baselineRotation, currentRotation, limit);
-                    SetCorrectedLocalRotation(thumbTransform, rawRotation, RemoveLimitSpaceOffset(limitedRotation, offsetRotation));
+                    SetCorrectedLocalRotation(thumbTransform, rawRotation, correctedRotation);
                     changed++;
                 }
 
@@ -562,34 +545,19 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 Quaternion offsetRotation = GetProximalRotationOffsetRotation(thumbTransform);
-                Quaternion baselineRotation = ApplyLimitSpaceOffset(initialRotation, offsetRotation);
-                Quaternion currentRotation = ApplyLimitSpaceOffset(rawRotation, offsetRotation);
                 float limit = proximalMaxLocalAngle;
-                if (limit <= 0f)
+                if (!ThumbLocalRotationCalculator.TryCalculateCorrection(
+                        initialRotation,
+                        rawRotation,
+                        thumbTransform.localRotation,
+                        offsetRotation,
+                        limit,
+                        out Quaternion correctedRotation))
                 {
-                    if (Quaternion.Angle(initialRotation, rawRotation) > 0.001f)
-                    {
-                        SetCorrectedLocalRotation(thumbTransform, rawRotation, initialRotation);
-                        changed++;
-                    }
-
                     continue;
                 }
 
-                float angle = Quaternion.Angle(baselineRotation, currentRotation);
-                if (angle <= limit)
-                {
-                    if (Quaternion.Angle(thumbTransform.localRotation, rawRotation) > 0.001f)
-                    {
-                        SetCorrectedLocalRotation(thumbTransform, rawRotation, rawRotation);
-                        changed++;
-                    }
-
-                    continue;
-                }
-
-                Quaternion limitedRotation = LimitLocalRotation(baselineRotation, currentRotation, limit);
-                SetCorrectedLocalRotation(thumbTransform, rawRotation, RemoveLimitSpaceOffset(limitedRotation, offsetRotation));
+                SetCorrectedLocalRotation(thumbTransform, rawRotation, correctedRotation);
                 changed++;
             }
 
@@ -1710,16 +1678,6 @@ namespace Fbx2Vmd.FBXImporter
             return Quaternion.Euler(offset);
         }
 
-        private static Quaternion ApplyLimitSpaceOffset(Quaternion localRotation, Quaternion offsetRotation)
-        {
-            return localRotation * offsetRotation;
-        }
-
-        private static Quaternion RemoveLimitSpaceOffset(Quaternion localRotation, Quaternion offsetRotation)
-        {
-            return localRotation * Quaternion.Inverse(offsetRotation);
-        }
-
         private Vector3 GetProximalRotationOffset(bool isRightThumb)
         {
             Vector3 offset = proximalLocalRotationOffset;
@@ -1762,14 +1720,6 @@ namespace Fbx2Vmd.FBXImporter
             _lastRawLocalRotations[targetTransform] = rawRotation;
             _lastCorrectedLocalRotations[targetTransform] = correctedRotation;
             targetTransform.localRotation = correctedRotation;
-        }
-
-        private static Quaternion LimitLocalRotation(Quaternion initialRotation, Quaternion currentRotation, float softLimit)
-        {
-            float angle = Quaternion.Angle(initialRotation, currentRotation);
-            float hardLimit = softLimit + LocalRotationHardOvershootDegrees;
-            float targetAngle = Mathf.Min(hardLimit, softLimit + (angle - softLimit) * LocalRotationOvershootRatio);
-            return Quaternion.RotateTowards(initialRotation, currentRotation, targetAngle);
         }
 
         private static bool TryNormalize(Vector3 value, out Vector3 normalized)
