@@ -208,156 +208,8 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         [Serializable]
-        private sealed class PersistedState
+        private sealed class PersistedState : YybVisualComparisonRunStateData
         {
-            public string fbxFileName;
-            public float durationSeconds;
-            public int targetFrameCount;
-            public bool enableFingerCloseups;
-            public bool enableRecorderParentFrameIkOffsetsWhenCenterParented;
-            public float mmdIkDeltaGuardLimitOverrideVmd;
-            public float mmdIkDeltaGuardRecoveryTriggerVmd;
-            public float mmdIkDeltaGuardRecoveryDebtThresholdVmd;
-            public int mmdIkDeltaGuardRecoveryHoldFrames;
-            public bool enableFinalIkFootGroundingRuntimeOverride;
-            public bool enableManualAnimatorFootLocalRotationRuntimeOverride;
-            public bool disableManualAnimatorFootLocalRotationRuntimeOverride;
-            public bool enableManualAnimatorFullBodyPoseRuntimeOverride;
-            public bool disableManualAnimatorFullBodyPoseRuntimeOverride;
-            public float manualAnimatorFullBodyPoseReferenceWeight;
-            public bool manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
-            public bool manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
-            public bool manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
-            public bool manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
-            public bool manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
-            public bool manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
-            public float manualAnimatorFullBodyPoseReferenceFrameGateStart;
-            public float manualAnimatorFullBodyPoseReferenceFrameGateEnd;
-            public bool enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
-            public float setHumanPoseRightLegTwistOutputReferenceWeight;
-            public float setHumanPoseRightLegTwistOutputReferenceMaxDelta;
-            public bool enableManualAnimatorBodyRotationRuntimeOverride;
-            public bool disableManualAnimatorBodyRotationRuntimeOverride;
-            public float manualAnimatorBodyRotationReferenceWeight;
-            public bool enableManualAnimatorHandLocalRotationRuntimeOverride;
-            public bool enableManualAnimatorThumbLocalRotationRuntimeOverride;
-            public bool enableManualAnimatorHandPalmFrameRuntimeOverride;
-            public float manualAnimatorHandPalmFrameWeight;
-            public bool overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings;
-            public bool enableRetargetPoseVisualSpikeSmoothingRuntimeOverride;
-            public float retargetPoseVisualSpikeCurrentWeight;
-            public float retargetPoseVisualSpikeForearmStretchClampMaxOffset;
-            public bool enableRetargetArmStretchClampRuntimeOverride;
-            public float retargetArmStretchMuscleLimit;
-            public bool enableYybArmSwingLimitRuntimeOverride;
-            public float yybArmSwingLimitWeight;
-            public float yybArmSwingMaxDownDot;
-            public float yybArmSwingMinHandHorizontalRatio;
-            public float yybArmSwingMaxHandBelowShoulderRatio;
-            public float yybArmSwingHorizontalReachLimitWeight;
-            public float yybArmSwingMaxHandHorizontalReachRatio;
-            public float yybArmSwingHorizontalReachMaxHandBelowShoulderRatio;
-            public float yybArmSwingHorizontalReachMinElbowAngleAfterApply;
-            public float yybArmSwingRaisedPoseHorizontalReachLimitWeight;
-            public float yybArmSwingRaisedPoseMinUpperArmDownDot;
-            public float yybArmSwingRaisedPoseMaxHandBelowShoulderRatio;
-            public float yybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
-            public bool enableYybArmDirectionRetargetRuntimeOverride;
-            public float yybArmDirectionUpperArmWeight;
-            public float yybArmDirectionForearmWeight;
-            public float yybArmDirectionUpperArmMaxDegrees;
-            public float yybArmDirectionForearmMaxDegrees;
-            public float yybArmDirectionLeftSideWeightScale;
-            public float yybArmDirectionRightSideWeightScale;
-            public bool overrideYybArmSleeveAnchorRuntimeSettings;
-            public bool enableYybArmSleeveAnchorRuntimeOverride;
-            public float yybArmSleeveAnchorInfluence;
-            public float yybArmShoulderCapAnchorInfluence;
-            public float yybArmSleeveAnchorMaxDegrees;
-            public bool overrideYybArmVisualTwistRuntimeSettings;
-            public bool enableYybArmVisualTwistRuntimeOverride;
-            public float yybArmVisualUpperArmInfluence;
-            public float yybArmVisualForearmInfluence;
-            public float yybArmVisualUpperArmMaxDegrees;
-            public float yybArmVisualForearmMaxDegrees;
-            public bool enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-            public bool enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            public bool disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-            public bool disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            public bool disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
-            public bool disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
-            public bool disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
-            public bool enablePostSetHumanPoseRightEndpointPositionRuntimeOverride;
-            public bool enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
-            public bool enableManualAnimatorBipedIkFootPositionRuntimeOverride;
-            public bool enableManualAnimatorHipsLocalPositionRuntimeOverride;
-            public bool enableManualAnimatorBodyPositionXzRuntimeOverride;
-            public bool enableRetargetBodyPositionXzRootMotionRuntimeOverride;
-            public bool disableTargetHumanoidBonePositionLockRuntimeOverride;
-            public float manualAnimatorLowerBodySegmentDirectionReferenceWeight;
-            public float manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-            public float manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-            public float manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            public float manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale;
-            public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight;
-            public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
-            public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
-            public float manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-            public float manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-            public float manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
-            public float manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
-            public float postSetHumanPoseRightEndpointPositionReferenceWeight;
-            public float postSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-            public float postSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-            public float postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-            public float postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-            public float postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
-            public float preSetHumanPoseRightEndpointPositionReferenceWeight;
-            public float preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-            public float preSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-            public float preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-            public float preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-            public float preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            public bool ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
-            public bool preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
-            public bool ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
-            public bool usePostSetHumanPoseRightFootEvaluatorXzReference;
-            public float postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-            public float manualAnimatorBipedIkFootPositionReferenceWeight;
-            public float manualAnimatorBipedIkFootPositionReferenceMaxOffset;
-            public float manualAnimatorHipsLocalPositionReferenceWeight;
-            public float manualAnimatorHipsLocalPositionReferenceMaxOffset;
-            public float manualAnimatorBodyPositionXzReferenceWeight;
-            public float manualAnimatorBodyPositionXzReferenceMaxOffset;
-            public float manualAnimatorBodyPositionXzReferenceFrameGateStart;
-            public float manualAnimatorBodyPositionXzReferenceFrameGateEnd;
-            public float manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames;
-            public float manualAnimatorBodyPositionXzReferenceAxisXScale;
-            public float manualAnimatorBodyPositionXzReferenceAxisZScale;
-            public bool enableVmdPlaybackProbeRuntimeOverride;
-            public bool applyVmdPlaybackProbeIkTargetsRuntimeOverride;
-            public string vmdPlaybackProbeSourceVmdPath;
-            public string editorDiagnosticSmokeSegment;
-            public bool enableReferenceMmdTimingRuntimeOverride;
-            public int diagnosticCaptureWidthOverride;
-            public int diagnosticCaptureHeightOverride;
-            public float diagnosticScreenshotPaddingOverride;
-            public float diagnosticScreenshotVerticalViewportCenterOverride;
-            public bool isRunning;
-            public bool activeJobFinished;
-            public bool advanceAfterPlayStopPending;
-            public bool playModeEntryPending;
-            public string summarySessionId;
-            public string summaryDirectory;
-            public string projectRoot;
-            public PersistedCaptureJob activeJob;
-            public PersistedCaptureJob[] pendingJobs;
-            public PersistedCaptureResult[] results;
-            public string[] failures;
         }
 
         private static readonly Queue<CaptureJob> PendingJobs = new Queue<CaptureJob>();
@@ -5300,7 +5152,7 @@ namespace Fbx2Vmd.FBXImporter
             int skippedPendingJobs = 0;
             if (state.pendingJobs != null)
             {
-                foreach (PersistedCaptureJob job in state.pendingJobs)
+                foreach (VisualComparisonCaptureJobStateData job in state.pendingJobs)
                 {
                     CaptureJob restoredJob = FromPersistedJob(job);
                     if (restoredJob == null)
@@ -5317,7 +5169,7 @@ namespace Fbx2Vmd.FBXImporter
             int skippedResults = 0;
             if (state.results != null)
             {
-                foreach (PersistedCaptureResult result in state.results)
+                foreach (YybVisualComparisonCaptureResultData result in state.results)
                 {
                     CaptureResult restoredResult = FromPersistedResult(result);
                     if (restoredResult == null)
@@ -5497,7 +5349,7 @@ namespace Fbx2Vmd.FBXImporter
             };
         }
 
-        private static CaptureJob FromPersistedJob(PersistedCaptureJob job)
+        private static CaptureJob FromPersistedJob(VisualComparisonCaptureJobStateData job)
         {
             if (job == null)
             {
@@ -5534,7 +5386,7 @@ namespace Fbx2Vmd.FBXImporter
             return persistedResult;
         }
 
-        private static CaptureResult FromPersistedResult(PersistedCaptureResult result)
+        private static CaptureResult FromPersistedResult(YybVisualComparisonCaptureResultData result)
         {
             if (result == null)
             {
