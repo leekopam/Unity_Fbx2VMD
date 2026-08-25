@@ -10,6 +10,7 @@ using RootMotion.FinalIK;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using static Fbx2Vmd.FBXImporter.YybVisualComparisonRunProfile;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -20,7 +21,6 @@ namespace Fbx2Vmd.FBXImporter
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
-        private const string DefaultFbxFileName = "satisfaction_2.fbx";
         private const string SatisfactionReferenceOutputBaseName = "satisfaction_2";
         private const int SatisfactionReferenceMaxMmdFrame = 6000;
         private const string ManualControllerPath = "Assets/_ManualReference/SampleAnimation/TestAnimator1_Manual.controller";
@@ -44,28 +44,6 @@ namespace Fbx2Vmd.FBXImporter
         private const int ImageSpaceSilhouetteProfileBandCount = 4;
         private const float ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta = 0.30f;
         private const int EvidenceSafeMaxFullPathLength = 240;
-        private const float DefaultManualAnimatorBodyRotationReferenceWeight = 1f;
-        private const float DefaultManualAnimatorFullBodyPoseReferenceWeight = 1f;
-        private const float DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart = 0f;
-        private const float DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd = 0f;
-        private const float DefaultSetHumanPoseRightLegTwistOutputReferenceWeight = 1f;
-        private const float DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta = 0.02f;
-        private const float DefaultManualAnimatorHandPalmFrameWeight = 1f;
-        private const float DefaultRetargetPoseVisualSpikeCurrentWeight = 0.65f;
-        private const float DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset = 0f;
-        private const float DefaultRetargetArmStretchMuscleLimit = 0.5f;
-        private const float DefaultManualAnimatorHipsLocalPositionReferenceWeight = 0.25f;
-        private const float DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset = 0.04f;
-        private const float DefaultManualAnimatorBodyPositionXzReferenceWeight = 0.45f;
-        private const float DefaultManualAnimatorBodyPositionXzReferenceMaxOffset = 0.025f;
-        private const float DefaultManualAnimatorBodyPositionXzReferenceFrameGateStart = 0f;
-        private const float DefaultManualAnimatorBodyPositionXzReferenceFrameGateEnd = 0f;
-        private const float DefaultManualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = 0f;
-        private const float DefaultManualAnimatorBodyPositionXzReferenceAxisXScale = 1f;
-        private const float DefaultManualAnimatorBodyPositionXzReferenceAxisZScale = 1f;
-        private const float DefaultYybRightSleeveSilhouetteLocalOffsetX = 0f;
-        private const float DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart = 0f;
-        private const float DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd = 0f;
         private static readonly float[] ReferenceMp4ProbeDefaultLocalSampleTimes =
         {
             0f,
@@ -88,67 +66,8 @@ namespace Fbx2Vmd.FBXImporter
             "Assets/_Project/Scripts/FBXImporter/Editor/YybVisualComparisonBatchRunner.cs",
             "Assets/_Project/Scripts/FBXImporter/Editor/YybVisualComparisonRequestWatcher.cs"
         };
-        private const float DefaultDurationSeconds = 31f;
         private const float DefaultFrameRate = 30f;
         private const float DefaultStartDelaySeconds = 0.2f;
-        private const float DefaultManualAnimatorBipedIkFootPositionReferenceWeight = 0.65f;
-        private const float DefaultManualAnimatorBipedIkFootPositionReferenceMaxOffset = 0.12f;
-        private const float DefaultPostSetHumanPoseRightEndpointPositionReferenceWeight = 1f;
-        private const float DefaultPostSetHumanPoseRightEndpointPositionReferenceMaxOffset = 0.04f;
-        private const float DefaultPostSetHumanPoseRightEndpointPositionReferencePositiveZScale = 1f;
-        private const float DefaultPostSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = 1f;
-        private const float DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart = 0f;
-        private const float DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
-        private const float DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = 0.049f;
-        private const float DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight = 1f;
-        private const float DefaultPreSetHumanPoseRightEndpointPositionReferenceMaxOffset = 0.025f;
-        private const float DefaultPreSetHumanPoseRightEndpointPositionReferencePositiveZScale = 1f;
-        private const float DefaultPreSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = 1f;
-        private const float DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart = 0f;
-        private const float DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = 0f;
-        private const float DefaultManualAnimatorFootHipsAlignedResidualYawReferenceWeight = 1f;
-        private const float DefaultManualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = 15f;
-        private const float DefaultManualAnimatorLowerBodySegmentDirectionReferenceWeight = 1f;
-        private const float DefaultManualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = 6.2f;
-        private const float DefaultManualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = 0f;
-        private const float DefaultManualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
-        private const float DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = 0f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = 1f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = 0.125f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = 0f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = 0f;
-        private const float DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = 1f;
-        private const float DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = 0f;
-        private const float DefaultYybArmSwingLimitWeight = 0.85f;
-        private const float DefaultYybArmSwingMaxDownDot = 0.68f;
-        private const float DefaultYybArmSwingMinHandHorizontalRatio = 0.05f;
-        private const float DefaultYybArmSwingMaxHandBelowShoulderRatio = 0.75f;
-        private const float DefaultYybArmSwingHorizontalReachLimitWeight = 0f;
-        private const float DefaultYybArmSwingMaxHandHorizontalReachRatio = 0f;
-        private const float DefaultYybArmSwingHorizontalReachMaxHandBelowShoulderRatio = 0f;
-        private const float DefaultYybArmSwingHorizontalReachMinElbowAngleAfterApply = 0f;
-        private const float DefaultYybArmSwingRaisedPoseHorizontalReachLimitWeight = 0.2f;
-        private const float DefaultYybArmSwingRaisedPoseMinUpperArmDownDot = 0.55f;
-        private const float DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio = 0.05f;
-        private const float DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio = 0.55f;
-        private const float DefaultYybArmDirectionUpperArmWeight = 0.65f;
-        private const float DefaultYybArmDirectionForearmWeight = 0.75f;
-        private const float DefaultYybArmDirectionUpperArmMaxDegrees = 65f;
-        private const float DefaultYybArmDirectionForearmMaxDegrees = 85f;
-        private const float DefaultYybArmDirectionLeftSideWeightScale = 1f;
-        private const float DefaultYybArmDirectionRightSideWeightScale = 1f;
-        private const float DefaultYybArmSleeveAnchorInfluence = 0.825f;
-        private const float DefaultYybArmShoulderCapAnchorInfluence = 0f;
-        private const float DefaultYybArmSleeveAnchorMaxDegrees = 85f;
-        private const float DefaultYybArmVisualUpperArmInfluence = 0.35f;
-        private const float DefaultYybArmVisualForearmInfluence = 0.75f;
-        private const float DefaultYybArmVisualUpperArmMaxDegrees = 45f;
-        private const float DefaultYybArmVisualForearmMaxDegrees = 75f;
-        private const float NoMmdIkDeltaGuardLimitOverrideVmd = float.NaN;
-        private const int NoMmdIkDeltaGuardRecoveryHoldFrames = -1;
-        private const int NoDiagnosticCaptureDimensionOverride = 0;
-        private const float NoDiagnosticScreenshotFramingOverride = float.NaN;
         private const double PlayModeEntryTimeoutSeconds = 15d;
         private const string RunnerStateSessionKey = "Fbx2Vmd.YybVisualComparison.RunnerStateJson";
         private const string ManualTestPrefabNameToken = "testPrefab";
@@ -199,7 +118,7 @@ namespace Fbx2Vmd.FBXImporter
         private static readonly List<string> Failures = new List<string>();
 
         private static CaptureJob _activeJob;
-        private static YybVisualComparisonRunOptions _currentRunOptions = CreateDefaultRunOptions();
+        private static YybVisualComparisonRunOptions _currentRunOptions = CreateDefaultOptions();
         private static FBXVmdPipeline _activeFBXVmdPipeline;
         private static HumanoidSampleCode _activeRecorder;
         private static AnimationClip _referenceClip;
@@ -316,7 +235,7 @@ namespace Fbx2Vmd.FBXImporter
             _activeJobStartedInPlayMode = false;
             YybVisualComparisonRunOptionsResetter.ResetTransientSettings(
                 _currentRunOptions,
-                CreateDefaultRunOptions());
+                CreateDefaultOptions());
             _editorDiagnosticSmokeSegment = FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head;
             _isRunning = false;
             ClearPersistedState();
@@ -325,157 +244,11 @@ namespace Fbx2Vmd.FBXImporter
 
         public static void RunBatch()
         {
-            YybVisualComparisonRunOptions options = CreateDefaultRunOptions();
+            YybVisualComparisonRunOptions options = CreateDefaultOptions();
             YybVisualComparisonCommandLineOptionsReader.Apply(
                 Environment.GetCommandLineArgs(),
                 options);
             StartRun(options);
-        }
-
-        private static YybVisualComparisonRunOptions CreateDefaultRunOptions()
-        {
-            return new YybVisualComparisonRunOptions
-            {
-                fbxFileName = DefaultFbxFileName,
-                durationSeconds = DefaultDurationSeconds,
-                enableFingerCloseups = false,
-                enableRecorderParentFrameIkOffsetsWhenCenterParented = true,
-                mmdIkDeltaGuardLimitOverrideVmd = NoMmdIkDeltaGuardLimitOverrideVmd,
-                mmdIkDeltaGuardRecoveryTriggerVmd = NoMmdIkDeltaGuardLimitOverrideVmd,
-                mmdIkDeltaGuardRecoveryDebtThresholdVmd = NoMmdIkDeltaGuardLimitOverrideVmd,
-                mmdIkDeltaGuardRecoveryHoldFrames = NoMmdIkDeltaGuardRecoveryHoldFrames,
-                enableFinalIkFootGroundingRuntimeOverride = false,
-                enableManualAnimatorFootLocalRotationRuntimeOverride = false,
-                disableManualAnimatorFootLocalRotationRuntimeOverride = false,
-                enableManualAnimatorFullBodyPoseRuntimeOverride = false,
-                disableManualAnimatorFullBodyPoseRuntimeOverride = false,
-                manualAnimatorFullBodyPoseReferenceWeight = DefaultManualAnimatorFullBodyPoseReferenceWeight,
-                manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = false,
-                manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = false,
-                manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = false,
-                manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = false,
-                manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = false,
-                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = false,
-                manualAnimatorFullBodyPoseReferenceFrameGateStart = DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart,
-                manualAnimatorFullBodyPoseReferenceFrameGateEnd = DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd,
-                enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = false,
-                setHumanPoseRightLegTwistOutputReferenceWeight = DefaultSetHumanPoseRightLegTwistOutputReferenceWeight,
-                setHumanPoseRightLegTwistOutputReferenceMaxDelta = DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta,
-                enableManualAnimatorBodyRotationRuntimeOverride = false,
-                disableManualAnimatorBodyRotationRuntimeOverride = false,
-                manualAnimatorBodyRotationReferenceWeight = DefaultManualAnimatorBodyRotationReferenceWeight,
-                enableManualAnimatorHandLocalRotationRuntimeOverride = false,
-                enableManualAnimatorThumbLocalRotationRuntimeOverride = false,
-                enableManualAnimatorHandPalmFrameRuntimeOverride = false,
-                manualAnimatorHandPalmFrameWeight = DefaultManualAnimatorHandPalmFrameWeight,
-                overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings = false,
-                enableRetargetPoseVisualSpikeSmoothingRuntimeOverride = true,
-                retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight,
-                retargetPoseVisualSpikeForearmStretchClampMaxOffset = DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset,
-                enableRetargetArmStretchClampRuntimeOverride = false,
-                retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit,
-                enableYybArmSwingLimitRuntimeOverride = false,
-                yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight,
-                yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot,
-                yybArmSwingMinHandHorizontalRatio = DefaultYybArmSwingMinHandHorizontalRatio,
-                yybArmSwingMaxHandBelowShoulderRatio = DefaultYybArmSwingMaxHandBelowShoulderRatio,
-                yybArmSwingHorizontalReachLimitWeight = DefaultYybArmSwingHorizontalReachLimitWeight,
-                yybArmSwingMaxHandHorizontalReachRatio = DefaultYybArmSwingMaxHandHorizontalReachRatio,
-                yybArmSwingHorizontalReachMaxHandBelowShoulderRatio = DefaultYybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
-                yybArmSwingHorizontalReachMinElbowAngleAfterApply = DefaultYybArmSwingHorizontalReachMinElbowAngleAfterApply,
-                yybArmSwingRaisedPoseHorizontalReachLimitWeight = DefaultYybArmSwingRaisedPoseHorizontalReachLimitWeight,
-                yybArmSwingRaisedPoseMinUpperArmDownDot = DefaultYybArmSwingRaisedPoseMinUpperArmDownDot,
-                yybArmSwingRaisedPoseMaxHandBelowShoulderRatio = DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
-                yybArmSwingRaisedPoseMaxHandHorizontalReachRatio = DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
-                enableYybArmDirectionRetargetRuntimeOverride = false,
-                yybArmDirectionUpperArmWeight = DefaultYybArmDirectionUpperArmWeight,
-                yybArmDirectionForearmWeight = DefaultYybArmDirectionForearmWeight,
-                yybArmDirectionUpperArmMaxDegrees = DefaultYybArmDirectionUpperArmMaxDegrees,
-                yybArmDirectionForearmMaxDegrees = DefaultYybArmDirectionForearmMaxDegrees,
-                yybArmDirectionLeftSideWeightScale = DefaultYybArmDirectionLeftSideWeightScale,
-                yybArmDirectionRightSideWeightScale = DefaultYybArmDirectionRightSideWeightScale,
-                overrideYybArmSleeveAnchorRuntimeSettings = false,
-                enableYybArmSleeveAnchorRuntimeOverride = true,
-                yybArmSleeveAnchorInfluence = DefaultYybArmSleeveAnchorInfluence,
-                yybArmShoulderCapAnchorInfluence = DefaultYybArmShoulderCapAnchorInfluence,
-                yybArmSleeveAnchorMaxDegrees = DefaultYybArmSleeveAnchorMaxDegrees,
-                overrideYybArmVisualTwistRuntimeSettings = false,
-                enableYybArmVisualTwistRuntimeOverride = true,
-                yybArmVisualUpperArmInfluence = DefaultYybArmVisualUpperArmInfluence,
-                yybArmVisualForearmInfluence = DefaultYybArmVisualForearmInfluence,
-                yybArmVisualUpperArmMaxDegrees = DefaultYybArmVisualUpperArmMaxDegrees,
-                yybArmVisualForearmMaxDegrees = DefaultYybArmVisualForearmMaxDegrees,
-                enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = false,
-                disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = false,
-                manualAnimatorLowerBodySegmentDirectionReferenceWeight = DefaultManualAnimatorLowerBodySegmentDirectionReferenceWeight,
-                manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = DefaultManualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride = false,
-                manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = DefaultManualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride = false,
-                manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = DefaultManualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride = false,
-                manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle,
-                enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = false,
-                disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = false,
-                manualAnimatorFootHipsAlignedResidualYawReferenceWeight = DefaultManualAnimatorFootHipsAlignedResidualYawReferenceWeight,
-                manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = DefaultManualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle,
-                enablePostSetHumanPoseRightEndpointPositionRuntimeOverride = false,
-                postSetHumanPoseRightEndpointPositionReferenceWeight = DefaultPostSetHumanPoseRightEndpointPositionReferenceWeight,
-                postSetHumanPoseRightEndpointPositionReferenceMaxOffset = DefaultPostSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                postSetHumanPoseRightEndpointPositionReferencePositiveZScale = DefaultPostSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = DefaultPostSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = false,
-                enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = false,
-                preSetHumanPoseRightEndpointPositionReferenceWeight = DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight,
-                preSetHumanPoseRightEndpointPositionReferenceMaxOffset = DefaultPreSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                preSetHumanPoseRightEndpointPositionReferencePositiveZScale = DefaultPreSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = DefaultPreSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = false,
-                preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false,
-                ShouldInvertPreSetHumanPoseEndpointPositionBodyX = false,
-                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = false,
-                usePostSetHumanPoseRightFootEvaluatorXzReference = false,
-                postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
-                enableManualAnimatorBipedIkFootPositionRuntimeOverride = false,
-                manualAnimatorBipedIkFootPositionReferenceWeight = DefaultManualAnimatorBipedIkFootPositionReferenceWeight,
-                manualAnimatorBipedIkFootPositionReferenceMaxOffset = DefaultManualAnimatorBipedIkFootPositionReferenceMaxOffset,
-                enableManualAnimatorHipsLocalPositionRuntimeOverride = false,
-                manualAnimatorHipsLocalPositionReferenceWeight = DefaultManualAnimatorHipsLocalPositionReferenceWeight,
-                manualAnimatorHipsLocalPositionReferenceMaxOffset = DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset,
-                enableManualAnimatorBodyPositionXzRuntimeOverride = false,
-                manualAnimatorBodyPositionXzReferenceWeight = DefaultManualAnimatorBodyPositionXzReferenceWeight,
-                manualAnimatorBodyPositionXzReferenceMaxOffset = DefaultManualAnimatorBodyPositionXzReferenceMaxOffset,
-                manualAnimatorBodyPositionXzReferenceFrameGateStart = DefaultManualAnimatorBodyPositionXzReferenceFrameGateStart,
-                manualAnimatorBodyPositionXzReferenceFrameGateEnd = DefaultManualAnimatorBodyPositionXzReferenceFrameGateEnd,
-                manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = DefaultManualAnimatorBodyPositionXzReferenceFrameGateBlendFrames,
-                manualAnimatorBodyPositionXzReferenceAxisXScale = DefaultManualAnimatorBodyPositionXzReferenceAxisXScale,
-                manualAnimatorBodyPositionXzReferenceAxisZScale = DefaultManualAnimatorBodyPositionXzReferenceAxisZScale,
-                enableYybRightSleeveSilhouetteOffsetRuntimeOverride = false,
-                yybRightSleeveSilhouetteLocalOffsetX = DefaultYybRightSleeveSilhouetteLocalOffsetX,
-                yybRightSleeveSilhouetteLocalOffsetFrameGateStart = DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart,
-                yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
-                disableTargetHumanoidBonePositionLockRuntimeOverride = false,
-                enableRetargetBodyPositionXzRootMotionRuntimeOverride = false,
-                enableVmdPlaybackProbeRuntimeOverride = false,
-                applyVmdPlaybackProbeIkTargetsRuntimeOverride = false,
-                editorDiagnosticSmokeSegment = "head",
-                enableReferenceMmdTimingRuntimeOverride = false,
-                diagnosticCaptureWidthOverride = NoDiagnosticCaptureDimensionOverride,
-                diagnosticCaptureHeightOverride = NoDiagnosticCaptureDimensionOverride,
-                diagnosticScreenshotPaddingOverride = NoDiagnosticScreenshotFramingOverride,
-                diagnosticScreenshotVerticalViewportCenterOverride = NoDiagnosticScreenshotFramingOverride
-            };
         }
 
         public static void RunWithOptions(string fbxFileName, float durationSeconds, bool enableFingerCloseups)
@@ -942,7 +715,7 @@ namespace Fbx2Vmd.FBXImporter
             _projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
             YybVisualComparisonRunOptionsNormalizer.Normalize(
                 runOptions,
-                CreateDefaultRunOptions(),
+                CreateDefaultOptions(),
                 DefaultFrameRate);
             ApplyRunOptions(runOptions);
             try
@@ -2093,7 +1866,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             YybVisualComparisonPersistedRunStateNormalizer.Normalize(
                 state,
-                CreateDefaultRunOptions());
+                CreateDefaultOptions());
             ApplyRunOptions(state);
             _summarySessionId = state.summarySessionId ?? string.Empty;
             _summaryDirectory = state.summaryDirectory ?? string.Empty;
