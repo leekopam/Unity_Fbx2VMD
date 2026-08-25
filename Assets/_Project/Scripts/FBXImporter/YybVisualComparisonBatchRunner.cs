@@ -430,9 +430,8 @@ namespace Fbx2Vmd.FBXImporter
         private static string _summarySessionId = string.Empty;
         private static string _summaryDirectory = string.Empty;
         private static string _projectRoot = string.Empty;
-        private static bool _enterPlayModeOptionsCaptured;
-        private static bool _previousEnterPlayModeOptionsEnabled;
-        private static EnterPlayModeOptions _previousEnterPlayModeOptions;
+        private static readonly VisualComparisonEnterPlayModeOptionsController EnterPlayModeOptionsController =
+            new VisualComparisonEnterPlayModeOptionsController();
 
         public sealed class RunCompletionInfo
         {
@@ -4173,29 +4172,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void ApplyTemporaryEnterPlayModeOptions()
         {
-            if (Application.isBatchMode || _enterPlayModeOptionsCaptured)
-            {
-                return;
-            }
-
-            _previousEnterPlayModeOptionsEnabled = EditorSettings.enterPlayModeOptionsEnabled;
-            _previousEnterPlayModeOptions = EditorSettings.enterPlayModeOptions;
-            _enterPlayModeOptionsCaptured = true;
-
-            EditorSettings.enterPlayModeOptionsEnabled = true;
-            EditorSettings.enterPlayModeOptions = _previousEnterPlayModeOptions | EnterPlayModeOptions.DisableDomainReload;
+            EnterPlayModeOptionsController.Apply(Application.isBatchMode);
         }
 
         private static void RestoreEnterPlayModeOptions()
         {
-            if (!_enterPlayModeOptionsCaptured)
-            {
-                return;
-            }
-
-            EditorSettings.enterPlayModeOptions = _previousEnterPlayModeOptions;
-            EditorSettings.enterPlayModeOptionsEnabled = _previousEnterPlayModeOptionsEnabled;
-            _enterPlayModeOptionsCaptured = false;
+            EnterPlayModeOptionsController.Restore();
         }
 
         private static void SavePersistedState()
