@@ -718,7 +718,16 @@ namespace Fbx2Vmd.FBXImporter
 
         public static void RunBatch()
         {
-            YybVisualComparisonRunOptions options = new YybVisualComparisonRunOptions
+            YybVisualComparisonRunOptions options = CreateDefaultRunOptions();
+            YybVisualComparisonCommandLineOptionsReader.Apply(
+                Environment.GetCommandLineArgs(),
+                options);
+            StartRun(options);
+        }
+
+        private static YybVisualComparisonRunOptions CreateDefaultRunOptions()
+        {
+            return new YybVisualComparisonRunOptions
             {
                 fbxFileName = DefaultFbxFileName,
                 durationSeconds = DefaultDurationSeconds,
@@ -860,10 +869,6 @@ namespace Fbx2Vmd.FBXImporter
                 diagnosticScreenshotPaddingOverride = NoDiagnosticScreenshotFramingOverride,
                 diagnosticScreenshotVerticalViewportCenterOverride = NoDiagnosticScreenshotFramingOverride
             };
-            YybVisualComparisonCommandLineOptionsReader.Apply(
-                Environment.GetCommandLineArgs(),
-                options);
-            StartRun(options);
         }
 
         public static void RunWithOptions(string fbxFileName, float durationSeconds, bool enableFingerCloseups)
@@ -3901,403 +3906,150 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void RestoreFromPersistedState(PersistedState state)
         {
-            _fbxFileName = string.IsNullOrWhiteSpace(state.fbxFileName) ? DefaultFbxFileName : state.fbxFileName;
-            _durationSeconds = Mathf.Max(0.1f, state.durationSeconds);
-            _targetFrameCount = Mathf.Max(1, state.targetFrameCount);
+            YybVisualComparisonPersistedRunStateNormalizer.Normalize(
+                state,
+                CreateDefaultRunOptions());
+            _fbxFileName = state.fbxFileName;
+            _durationSeconds = state.durationSeconds;
+            _targetFrameCount = state.targetFrameCount;
             _enableFingerCloseups = state.enableFingerCloseups;
             _enableRecorderParentFrameIkOffsetsWhenCenterParented = state.enableRecorderParentFrameIkOffsetsWhenCenterParented;
-            _mmdIkDeltaGuardLimitOverrideVmd = NormalizeMmdIkDeltaGuardLimitOverride(state.mmdIkDeltaGuardLimitOverrideVmd);
-            _mmdIkDeltaGuardRecoveryTriggerVmd = NormalizeMmdIkDeltaGuardLimitOverride(state.mmdIkDeltaGuardRecoveryTriggerVmd);
-            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NormalizeMmdIkDeltaGuardLimitOverride(state.mmdIkDeltaGuardRecoveryDebtThresholdVmd);
-            _mmdIkDeltaGuardRecoveryHoldFrames = NormalizeMmdIkDeltaGuardRecoveryHoldFrames(state.mmdIkDeltaGuardRecoveryHoldFrames);
+            _mmdIkDeltaGuardLimitOverrideVmd = state.mmdIkDeltaGuardLimitOverrideVmd;
+            _mmdIkDeltaGuardRecoveryTriggerVmd = state.mmdIkDeltaGuardRecoveryTriggerVmd;
+            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = state.mmdIkDeltaGuardRecoveryDebtThresholdVmd;
+            _mmdIkDeltaGuardRecoveryHoldFrames = state.mmdIkDeltaGuardRecoveryHoldFrames;
             _enableFinalIkFootGroundingRuntimeOverride = state.enableFinalIkFootGroundingRuntimeOverride;
             _enableManualAnimatorFootLocalRotationRuntimeOverride = state.enableManualAnimatorFootLocalRotationRuntimeOverride;
             _disableManualAnimatorFootLocalRotationRuntimeOverride = state.disableManualAnimatorFootLocalRotationRuntimeOverride;
             _enableManualAnimatorFullBodyPoseRuntimeOverride = state.enableManualAnimatorFullBodyPoseRuntimeOverride;
             _disableManualAnimatorFullBodyPoseRuntimeOverride = state.disableManualAnimatorFullBodyPoseRuntimeOverride;
-            _manualAnimatorFullBodyPoseReferenceWeight = float.IsNaN(state.manualAnimatorFullBodyPoseReferenceWeight) ||
-                float.IsInfinity(state.manualAnimatorFullBodyPoseReferenceWeight)
-                    ? DefaultManualAnimatorFullBodyPoseReferenceWeight
-                    : Mathf.Clamp01(state.manualAnimatorFullBodyPoseReferenceWeight);
-            _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride =
-                state.manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
-            _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride =
-                state.manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride =
-                state.manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride =
-                state.manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride =
-                state.manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride =
-                state.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseReferenceFrameGateStart = Mathf.Max(
-                0f,
-                NormalizeFiniteFloat(
-                    state.manualAnimatorFullBodyPoseReferenceFrameGateStart,
-                    DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart));
-            _manualAnimatorFullBodyPoseReferenceFrameGateEnd = Mathf.Max(
-                0f,
-                NormalizeFiniteFloat(
-                    state.manualAnimatorFullBodyPoseReferenceFrameGateEnd,
-                    DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd));
-            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride =
-                state.enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
-            _setHumanPoseRightLegTwistOutputReferenceWeight = Mathf.Clamp01(NormalizeFiniteFloat(
-                state.setHumanPoseRightLegTwistOutputReferenceWeight,
-                DefaultSetHumanPoseRightLegTwistOutputReferenceWeight));
-            _setHumanPoseRightLegTwistOutputReferenceMaxDelta = Mathf.Max(0f, NormalizeFiniteFloat(
-                state.setHumanPoseRightLegTwistOutputReferenceMaxDelta,
-                DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta));
+            _manualAnimatorFullBodyPoseReferenceWeight = state.manualAnimatorFullBodyPoseReferenceWeight;
+            _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = state.manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
+            _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = state.manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = state.manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = state.manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = state.manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = state.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseReferenceFrameGateStart = state.manualAnimatorFullBodyPoseReferenceFrameGateStart;
+            _manualAnimatorFullBodyPoseReferenceFrameGateEnd = state.manualAnimatorFullBodyPoseReferenceFrameGateEnd;
+            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = state.enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
+            _setHumanPoseRightLegTwistOutputReferenceWeight = state.setHumanPoseRightLegTwistOutputReferenceWeight;
+            _setHumanPoseRightLegTwistOutputReferenceMaxDelta = state.setHumanPoseRightLegTwistOutputReferenceMaxDelta;
             _enableManualAnimatorBodyRotationRuntimeOverride = state.enableManualAnimatorBodyRotationRuntimeOverride;
             _disableManualAnimatorBodyRotationRuntimeOverride = state.disableManualAnimatorBodyRotationRuntimeOverride;
-            _manualAnimatorBodyRotationReferenceWeight = float.IsNaN(state.manualAnimatorBodyRotationReferenceWeight) ||
-                float.IsInfinity(state.manualAnimatorBodyRotationReferenceWeight)
-                    ? DefaultManualAnimatorBodyRotationReferenceWeight
-                    : Mathf.Clamp01(state.manualAnimatorBodyRotationReferenceWeight);
+            _manualAnimatorBodyRotationReferenceWeight = state.manualAnimatorBodyRotationReferenceWeight;
             _enableManualAnimatorHandLocalRotationRuntimeOverride = state.enableManualAnimatorHandLocalRotationRuntimeOverride;
             _enableManualAnimatorThumbLocalRotationRuntimeOverride = state.enableManualAnimatorThumbLocalRotationRuntimeOverride;
             _enableManualAnimatorHandPalmFrameRuntimeOverride = state.enableManualAnimatorHandPalmFrameRuntimeOverride;
-            _manualAnimatorHandPalmFrameWeight = Mathf.Clamp01(NormalizePositiveFloat(
-                state.manualAnimatorHandPalmFrameWeight,
-                DefaultManualAnimatorHandPalmFrameWeight));
-            _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings =
-                state.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings;
-            _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride =
-                state.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride;
-            _retargetPoseVisualSpikeCurrentWeight = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.retargetPoseVisualSpikeCurrentWeight,
-                    DefaultRetargetPoseVisualSpikeCurrentWeight),
-                0.1f,
-                1f);
-            _retargetPoseVisualSpikeForearmStretchClampMaxOffset = Mathf.Clamp01(
-                NormalizePositiveFloat(
-                    state.retargetPoseVisualSpikeForearmStretchClampMaxOffset,
-                    DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset));
-            _enableRetargetArmStretchClampRuntimeOverride =
-                state.enableRetargetArmStretchClampRuntimeOverride;
-            _retargetArmStretchMuscleLimit = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.retargetArmStretchMuscleLimit,
-                    DefaultRetargetArmStretchMuscleLimit),
-                0f,
-                DefaultRetargetArmStretchMuscleLimit);
+            _manualAnimatorHandPalmFrameWeight = state.manualAnimatorHandPalmFrameWeight;
+            _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings = state.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings;
+            _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride = state.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride;
+            _retargetPoseVisualSpikeCurrentWeight = state.retargetPoseVisualSpikeCurrentWeight;
+            _retargetPoseVisualSpikeForearmStretchClampMaxOffset = state.retargetPoseVisualSpikeForearmStretchClampMaxOffset;
+            _enableRetargetArmStretchClampRuntimeOverride = state.enableRetargetArmStretchClampRuntimeOverride;
+            _retargetArmStretchMuscleLimit = state.retargetArmStretchMuscleLimit;
             _enableYybArmSwingLimitRuntimeOverride = state.enableYybArmSwingLimitRuntimeOverride;
-            _yybArmSwingLimitWeight = Mathf.Clamp01(NormalizePositiveFloat(
-                state.yybArmSwingLimitWeight,
-                DefaultYybArmSwingLimitWeight));
-            _yybArmSwingMaxDownDot = Mathf.Clamp01(NormalizePositiveFloat(
-                state.yybArmSwingMaxDownDot,
-                DefaultYybArmSwingMaxDownDot));
-            _yybArmSwingMinHandHorizontalRatio = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmSwingMinHandHorizontalRatio,
-                    DefaultYybArmSwingMinHandHorizontalRatio),
-                0f,
-                1.5f);
-            _yybArmSwingMaxHandBelowShoulderRatio = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmSwingMaxHandBelowShoulderRatio,
-                    DefaultYybArmSwingMaxHandBelowShoulderRatio),
-                0f,
-                1.5f);
-            _yybArmSwingHorizontalReachLimitWeight = Mathf.Clamp01(NormalizePositiveFloat(
-                state.yybArmSwingHorizontalReachLimitWeight,
-                DefaultYybArmSwingHorizontalReachLimitWeight));
-            _yybArmSwingMaxHandHorizontalReachRatio = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmSwingMaxHandHorizontalReachRatio,
-                    DefaultYybArmSwingMaxHandHorizontalReachRatio),
-                0f,
-                1.5f);
-            _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
-                    DefaultYybArmSwingHorizontalReachMaxHandBelowShoulderRatio),
-                0f,
-                1.5f);
-            _yybArmSwingHorizontalReachMinElbowAngleAfterApply = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmSwingHorizontalReachMinElbowAngleAfterApply,
-                    DefaultYybArmSwingHorizontalReachMinElbowAngleAfterApply),
-                0f,
-                180f);
-            _yybArmSwingRaisedPoseHorizontalReachLimitWeight = Mathf.Clamp01(NormalizePositiveFloat(
-                state.yybArmSwingRaisedPoseHorizontalReachLimitWeight,
-                DefaultYybArmSwingRaisedPoseHorizontalReachLimitWeight));
-            _yybArmSwingRaisedPoseMinUpperArmDownDot = Mathf.Clamp01(NormalizePositiveFloat(
-                state.yybArmSwingRaisedPoseMinUpperArmDownDot,
-                DefaultYybArmSwingRaisedPoseMinUpperArmDownDot));
-            _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
-                    DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio),
-                0f,
-                1.5f);
-            _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
-                    DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio),
-                0f,
-                1.5f);
+            _yybArmSwingLimitWeight = state.yybArmSwingLimitWeight;
+            _yybArmSwingMaxDownDot = state.yybArmSwingMaxDownDot;
+            _yybArmSwingMinHandHorizontalRatio = state.yybArmSwingMinHandHorizontalRatio;
+            _yybArmSwingMaxHandBelowShoulderRatio = state.yybArmSwingMaxHandBelowShoulderRatio;
+            _yybArmSwingHorizontalReachLimitWeight = state.yybArmSwingHorizontalReachLimitWeight;
+            _yybArmSwingMaxHandHorizontalReachRatio = state.yybArmSwingMaxHandHorizontalReachRatio;
+            _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio = state.yybArmSwingHorizontalReachMaxHandBelowShoulderRatio;
+            _yybArmSwingHorizontalReachMinElbowAngleAfterApply = state.yybArmSwingHorizontalReachMinElbowAngleAfterApply;
+            _yybArmSwingRaisedPoseHorizontalReachLimitWeight = state.yybArmSwingRaisedPoseHorizontalReachLimitWeight;
+            _yybArmSwingRaisedPoseMinUpperArmDownDot = state.yybArmSwingRaisedPoseMinUpperArmDownDot;
+            _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio = state.yybArmSwingRaisedPoseMaxHandBelowShoulderRatio;
+            _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio = state.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
             _enableYybArmDirectionRetargetRuntimeOverride = state.enableYybArmDirectionRetargetRuntimeOverride;
-            _yybArmDirectionUpperArmWeight = Mathf.Clamp01(NormalizePositiveFloat(
-                state.yybArmDirectionUpperArmWeight,
-                DefaultYybArmDirectionUpperArmWeight));
-            _yybArmDirectionForearmWeight = Mathf.Clamp01(NormalizePositiveFloat(
-                state.yybArmDirectionForearmWeight,
-                DefaultYybArmDirectionForearmWeight));
-            _yybArmDirectionUpperArmMaxDegrees = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmDirectionUpperArmMaxDegrees,
-                    DefaultYybArmDirectionUpperArmMaxDegrees),
-                0f,
-                120f);
-            _yybArmDirectionForearmMaxDegrees = Mathf.Clamp(
-                NormalizePositiveFloat(
-                    state.yybArmDirectionForearmMaxDegrees,
-                    DefaultYybArmDirectionForearmMaxDegrees),
-                0f,
-                120f);
-            _yybArmDirectionLeftSideWeightScale = Mathf.Clamp01(NormalizeFiniteFloat(
-                state.yybArmDirectionLeftSideWeightScale,
-                DefaultYybArmDirectionLeftSideWeightScale));
-            _yybArmDirectionRightSideWeightScale = Mathf.Clamp01(NormalizeFiniteFloat(
-                state.yybArmDirectionRightSideWeightScale,
-                DefaultYybArmDirectionRightSideWeightScale));
+            _yybArmDirectionUpperArmWeight = state.yybArmDirectionUpperArmWeight;
+            _yybArmDirectionForearmWeight = state.yybArmDirectionForearmWeight;
+            _yybArmDirectionUpperArmMaxDegrees = state.yybArmDirectionUpperArmMaxDegrees;
+            _yybArmDirectionForearmMaxDegrees = state.yybArmDirectionForearmMaxDegrees;
+            _yybArmDirectionLeftSideWeightScale = state.yybArmDirectionLeftSideWeightScale;
+            _yybArmDirectionRightSideWeightScale = state.yybArmDirectionRightSideWeightScale;
             _overrideYybArmSleeveAnchorRuntimeSettings = state.overrideYybArmSleeveAnchorRuntimeSettings;
             _enableYybArmSleeveAnchorRuntimeOverride = state.enableYybArmSleeveAnchorRuntimeOverride;
-            _yybArmSleeveAnchorInfluence = Mathf.Clamp01(NormalizeFiniteFloat(
-                state.yybArmSleeveAnchorInfluence,
-                DefaultYybArmSleeveAnchorInfluence));
-            _yybArmShoulderCapAnchorInfluence = Mathf.Clamp01(NormalizeFiniteFloat(
-                state.yybArmShoulderCapAnchorInfluence,
-                DefaultYybArmShoulderCapAnchorInfluence));
-            _yybArmSleeveAnchorMaxDegrees = Mathf.Clamp(
-                NormalizeFiniteFloat(
-                    state.yybArmSleeveAnchorMaxDegrees,
-                    DefaultYybArmSleeveAnchorMaxDegrees),
-                0f,
-                120f);
+            _yybArmSleeveAnchorInfluence = state.yybArmSleeveAnchorInfluence;
+            _yybArmShoulderCapAnchorInfluence = state.yybArmShoulderCapAnchorInfluence;
+            _yybArmSleeveAnchorMaxDegrees = state.yybArmSleeveAnchorMaxDegrees;
             _overrideYybArmVisualTwistRuntimeSettings = state.overrideYybArmVisualTwistRuntimeSettings;
             _enableYybArmVisualTwistRuntimeOverride = state.enableYybArmVisualTwistRuntimeOverride;
-            _yybArmVisualUpperArmInfluence = Mathf.Clamp01(NormalizeFiniteFloat(
-                state.yybArmVisualUpperArmInfluence,
-                DefaultYybArmVisualUpperArmInfluence));
-            _yybArmVisualForearmInfluence = Mathf.Clamp01(NormalizeFiniteFloat(
-                state.yybArmVisualForearmInfluence,
-                DefaultYybArmVisualForearmInfluence));
-            _yybArmVisualUpperArmMaxDegrees = Mathf.Clamp(
-                NormalizeFiniteFloat(
-                    state.yybArmVisualUpperArmMaxDegrees,
-                    DefaultYybArmVisualUpperArmMaxDegrees),
-                0f,
-                120f);
-            _yybArmVisualForearmMaxDegrees = Mathf.Clamp(
-                NormalizeFiniteFloat(
-                    state.yybArmVisualForearmMaxDegrees,
-                    DefaultYybArmVisualForearmMaxDegrees),
-                0f,
-                120f);
-            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride =
-                state.enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
-            _yybRightSleeveSilhouetteLocalOffsetX = Mathf.Clamp(
-                NormalizeFiniteFloat(
-                    state.yybRightSleeveSilhouetteLocalOffsetX,
-                    DefaultYybRightSleeveSilhouetteLocalOffsetX),
-                -0.2f,
-                0.2f);
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart = Mathf.Clamp(
-                NormalizeFiniteFloat(
-                    state.yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
-                    DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart),
-                0f,
-                6000f);
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = Mathf.Clamp(
-                NormalizeFiniteFloat(
-                    state.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
-                    DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd),
-                0f,
-                6000f);
+            _yybArmVisualUpperArmInfluence = state.yybArmVisualUpperArmInfluence;
+            _yybArmVisualForearmInfluence = state.yybArmVisualForearmInfluence;
+            _yybArmVisualUpperArmMaxDegrees = state.yybArmVisualUpperArmMaxDegrees;
+            _yybArmVisualForearmMaxDegrees = state.yybArmVisualForearmMaxDegrees;
+            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride = state.enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
+            _yybRightSleeveSilhouetteLocalOffsetX = state.yybRightSleeveSilhouetteLocalOffsetX;
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart = state.yybRightSleeveSilhouetteLocalOffsetFrameGateStart;
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = state.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
             _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = state.enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
             _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = state.enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride =
-                state.disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-            _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride =
-                state.disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride =
-                state.disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
-            _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride =
-                state.disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
-            _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride =
-                state.disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
-            _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride =
-                state.enablePostSetHumanPoseRightEndpointPositionRuntimeOverride;
-            _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride =
-                state.enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
+            _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = state.disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
+            _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = state.disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
+            _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride = state.disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
+            _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride = state.disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
+            _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride = state.disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
+            _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride = state.enablePostSetHumanPoseRightEndpointPositionRuntimeOverride;
+            _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = state.enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
             _enableManualAnimatorBipedIkFootPositionRuntimeOverride = state.enableManualAnimatorBipedIkFootPositionRuntimeOverride;
             _enableManualAnimatorHipsLocalPositionRuntimeOverride = state.enableManualAnimatorHipsLocalPositionRuntimeOverride;
-            _enableManualAnimatorBodyPositionXzRuntimeOverride =
-                state.enableManualAnimatorBodyPositionXzRuntimeOverride;
-            _enableRetargetBodyPositionXzRootMotionRuntimeOverride =
-                state.enableRetargetBodyPositionXzRootMotionRuntimeOverride;
-            _disableTargetHumanoidBonePositionLockRuntimeOverride =
-                state.disableTargetHumanoidBonePositionLockRuntimeOverride;
-            _manualAnimatorLowerBodySegmentDirectionReferenceWeight = NormalizePositiveFloat(
-                state.manualAnimatorLowerBodySegmentDirectionReferenceWeight,
-                DefaultManualAnimatorLowerBodySegmentDirectionReferenceWeight);
-            _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = NormalizePositiveFloat(
-                state.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                DefaultManualAnimatorLowerBodySegmentDirectionReferenceMaxAngle);
-            _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = NormalizePositiveFloat(
-                state.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                DefaultManualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = NormalizePositiveFloat(
-                state.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                DefaultManualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = NormalizePositiveFloat(
-                state.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = NormalizePositiveFloat(
-                state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                    DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale));
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                    DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight));
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = NormalizePositiveFloat(
-                state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = NormalizePositiveFloat(
-                state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                    DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight));
-            _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = NormalizePositiveFloat(
-                state.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle,
-                DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorFootHipsAlignedResidualYawReferenceWeight = NormalizePositiveFloat(
-                state.manualAnimatorFootHipsAlignedResidualYawReferenceWeight,
-                DefaultManualAnimatorFootHipsAlignedResidualYawReferenceWeight);
-            _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = NormalizePositiveFloat(
-                state.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle,
-                DefaultManualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle);
-            _postSetHumanPoseRightEndpointPositionReferenceWeight = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.postSetHumanPoseRightEndpointPositionReferenceWeight,
-                    DefaultPostSetHumanPoseRightEndpointPositionReferenceWeight));
-            _postSetHumanPoseRightEndpointPositionReferenceMaxOffset = NormalizePositiveFloat(
-                state.postSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                DefaultPostSetHumanPoseRightEndpointPositionReferenceMaxOffset);
-            _postSetHumanPoseRightEndpointPositionReferencePositiveZScale = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.postSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                    DefaultPostSetHumanPoseRightEndpointPositionReferencePositiveZScale));
-            _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                    DefaultPostSetHumanPoseRightEndpointPositionReferenceToesBlendWeight));
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = NormalizePositiveFloat(
-                state.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = NormalizePositiveFloat(
-                state.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            _postSetHumanPoseEndpointPositionUseLeftSide =
-                state.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
-            _preSetHumanPoseRightEndpointPositionReferenceWeight = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.preSetHumanPoseRightEndpointPositionReferenceWeight,
-                    DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight));
-            _preSetHumanPoseRightEndpointPositionReferenceMaxOffset = NormalizePositiveFloat(
-                state.preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                DefaultPreSetHumanPoseRightEndpointPositionReferenceMaxOffset);
-            _preSetHumanPoseRightEndpointPositionReferencePositiveZScale = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.preSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                    DefaultPreSetHumanPoseRightEndpointPositionReferencePositiveZScale));
-            _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                    DefaultPreSetHumanPoseRightEndpointPositionReferenceToesBlendWeight));
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = NormalizePositiveFloat(
-                state.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = NormalizePositiveFloat(
-                state.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            _preSetHumanPoseEndpointPositionUseLeftSide =
-                state.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
-            _preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
-                state.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionX =
-                state.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionZ =
-                state.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
-            _usePostSetHumanPoseRightFootEvaluatorXzReference =
-                state.usePostSetHumanPoseRightFootEvaluatorXzReference;
-            _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = NormalizePositiveFloat(
-                state.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
-                DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude);
-            _manualAnimatorBipedIkFootPositionReferenceWeight = NormalizePositiveFloat(
-                state.manualAnimatorBipedIkFootPositionReferenceWeight,
-                DefaultManualAnimatorBipedIkFootPositionReferenceWeight);
-            _manualAnimatorBipedIkFootPositionReferenceMaxOffset = NormalizePositiveFloat(
-                state.manualAnimatorBipedIkFootPositionReferenceMaxOffset,
-                DefaultManualAnimatorBipedIkFootPositionReferenceMaxOffset);
-            _manualAnimatorHipsLocalPositionReferenceWeight = NormalizePositiveFloat(
-                state.manualAnimatorHipsLocalPositionReferenceWeight,
-                DefaultManualAnimatorHipsLocalPositionReferenceWeight);
-            _manualAnimatorHipsLocalPositionReferenceMaxOffset = NormalizePositiveFloat(
-                state.manualAnimatorHipsLocalPositionReferenceMaxOffset,
-                DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset);
-            _manualAnimatorBodyPositionXzReferenceWeight = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.manualAnimatorBodyPositionXzReferenceWeight,
-                    DefaultManualAnimatorBodyPositionXzReferenceWeight));
-            _manualAnimatorBodyPositionXzReferenceMaxOffset = NormalizePositiveFloat(
-                state.manualAnimatorBodyPositionXzReferenceMaxOffset,
-                DefaultManualAnimatorBodyPositionXzReferenceMaxOffset);
-            _manualAnimatorBodyPositionXzReferenceFrameGateStart = NormalizePositiveFloat(
-                state.manualAnimatorBodyPositionXzReferenceFrameGateStart,
-                DefaultManualAnimatorBodyPositionXzReferenceFrameGateStart);
-            _manualAnimatorBodyPositionXzReferenceFrameGateEnd = NormalizePositiveFloat(
-                state.manualAnimatorBodyPositionXzReferenceFrameGateEnd,
-                DefaultManualAnimatorBodyPositionXzReferenceFrameGateEnd);
-            _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = NormalizePositiveFloat(
-                state.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames,
-                DefaultManualAnimatorBodyPositionXzReferenceFrameGateBlendFrames);
-            _manualAnimatorBodyPositionXzReferenceAxisXScale = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.manualAnimatorBodyPositionXzReferenceAxisXScale,
-                    DefaultManualAnimatorBodyPositionXzReferenceAxisXScale));
-            _manualAnimatorBodyPositionXzReferenceAxisZScale = Mathf.Clamp01(
-                NormalizeFiniteFloat(
-                    state.manualAnimatorBodyPositionXzReferenceAxisZScale,
-                    DefaultManualAnimatorBodyPositionXzReferenceAxisZScale));
+            _enableManualAnimatorBodyPositionXzRuntimeOverride = state.enableManualAnimatorBodyPositionXzRuntimeOverride;
+            _enableRetargetBodyPositionXzRootMotionRuntimeOverride = state.enableRetargetBodyPositionXzRootMotionRuntimeOverride;
+            _disableTargetHumanoidBonePositionLockRuntimeOverride = state.disableTargetHumanoidBonePositionLockRuntimeOverride;
+            _manualAnimatorLowerBodySegmentDirectionReferenceWeight = state.manualAnimatorLowerBodySegmentDirectionReferenceWeight;
+            _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = state.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
+            _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = state.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = state.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = state.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = state.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
+            _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = state.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorFootHipsAlignedResidualYawReferenceWeight = state.manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
+            _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = state.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
+            _postSetHumanPoseRightEndpointPositionReferenceWeight = state.postSetHumanPoseRightEndpointPositionReferenceWeight;
+            _postSetHumanPoseRightEndpointPositionReferenceMaxOffset = state.postSetHumanPoseRightEndpointPositionReferenceMaxOffset;
+            _postSetHumanPoseRightEndpointPositionReferencePositiveZScale = state.postSetHumanPoseRightEndpointPositionReferencePositiveZScale;
+            _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = state.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
+            _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = state.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
+            _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = state.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
+            _postSetHumanPoseEndpointPositionUseLeftSide = state.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
+            _preSetHumanPoseRightEndpointPositionReferenceWeight = state.preSetHumanPoseRightEndpointPositionReferenceWeight;
+            _preSetHumanPoseRightEndpointPositionReferenceMaxOffset = state.preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
+            _preSetHumanPoseRightEndpointPositionReferencePositiveZScale = state.preSetHumanPoseRightEndpointPositionReferencePositiveZScale;
+            _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = state.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
+            _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = state.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
+            _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = state.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
+            _preSetHumanPoseEndpointPositionUseLeftSide = state.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
+            _preSetHumanPoseEndpointPositionUseGhostCurrentBasis = state.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
+            _preSetHumanPoseEndpointPositionInvertBodyPositionX = state.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
+            _preSetHumanPoseEndpointPositionInvertBodyPositionZ = state.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
+            _usePostSetHumanPoseRightFootEvaluatorXzReference = state.usePostSetHumanPoseRightFootEvaluatorXzReference;
+            _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = state.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
+            _manualAnimatorBipedIkFootPositionReferenceWeight = state.manualAnimatorBipedIkFootPositionReferenceWeight;
+            _manualAnimatorBipedIkFootPositionReferenceMaxOffset = state.manualAnimatorBipedIkFootPositionReferenceMaxOffset;
+            _manualAnimatorHipsLocalPositionReferenceWeight = state.manualAnimatorHipsLocalPositionReferenceWeight;
+            _manualAnimatorHipsLocalPositionReferenceMaxOffset = state.manualAnimatorHipsLocalPositionReferenceMaxOffset;
+            _manualAnimatorBodyPositionXzReferenceWeight = state.manualAnimatorBodyPositionXzReferenceWeight;
+            _manualAnimatorBodyPositionXzReferenceMaxOffset = state.manualAnimatorBodyPositionXzReferenceMaxOffset;
+            _manualAnimatorBodyPositionXzReferenceFrameGateStart = state.manualAnimatorBodyPositionXzReferenceFrameGateStart;
+            _manualAnimatorBodyPositionXzReferenceFrameGateEnd = state.manualAnimatorBodyPositionXzReferenceFrameGateEnd;
+            _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = state.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames;
+            _manualAnimatorBodyPositionXzReferenceAxisXScale = state.manualAnimatorBodyPositionXzReferenceAxisXScale;
+            _manualAnimatorBodyPositionXzReferenceAxisZScale = state.manualAnimatorBodyPositionXzReferenceAxisZScale;
             _enableVmdPlaybackProbeRuntimeOverride = state.enableVmdPlaybackProbeRuntimeOverride;
-            _applyVmdPlaybackProbeIkTargetsRuntimeOverride =
-                state.enableVmdPlaybackProbeRuntimeOverride &&
-                state.applyVmdPlaybackProbeIkTargetsRuntimeOverride;
-            _vmdPlaybackProbeSourceVmdPath = state.vmdPlaybackProbeSourceVmdPath ?? string.Empty;
+            _applyVmdPlaybackProbeIkTargetsRuntimeOverride = state.applyVmdPlaybackProbeIkTargetsRuntimeOverride;
+            _vmdPlaybackProbeSourceVmdPath = state.vmdPlaybackProbeSourceVmdPath;
             _enableReferenceMmdTimingRuntimeOverride = state.enableReferenceMmdTimingRuntimeOverride;
             _editorDiagnosticSmokeSegment = ResolveEditorDiagnosticSmokeSegment(state.editorDiagnosticSmokeSegment);
-            _diagnosticCaptureWidthOverride =
-                NormalizeDiagnosticCaptureDimensionOverride(state.diagnosticCaptureWidthOverride);
-            _diagnosticCaptureHeightOverride =
-                NormalizeDiagnosticCaptureDimensionOverride(state.diagnosticCaptureHeightOverride);
-            _diagnosticScreenshotPaddingOverride =
-                NormalizeDiagnosticScreenshotPaddingOverride(state.diagnosticScreenshotPaddingOverride);
-            _diagnosticScreenshotVerticalViewportCenterOverride =
-                NormalizeDiagnosticScreenshotVerticalViewportCenterOverride(
-                    state.diagnosticScreenshotVerticalViewportCenterOverride);
+            _diagnosticCaptureWidthOverride = state.diagnosticCaptureWidthOverride;
+            _diagnosticCaptureHeightOverride = state.diagnosticCaptureHeightOverride;
+            _diagnosticScreenshotPaddingOverride = state.diagnosticScreenshotPaddingOverride;
+            _diagnosticScreenshotVerticalViewportCenterOverride = state.diagnosticScreenshotVerticalViewportCenterOverride;
             _summarySessionId = state.summarySessionId ?? string.Empty;
             _summaryDirectory = state.summaryDirectory ?? string.Empty;
             _projectRoot = state.projectRoot ?? (Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath);
