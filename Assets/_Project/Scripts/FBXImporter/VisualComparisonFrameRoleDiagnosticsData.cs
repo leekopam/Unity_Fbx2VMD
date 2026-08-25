@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
 
 namespace Fbx2Vmd.FBXImporter
 {
     [Serializable]
     internal class VisualComparisonFrameRoleDiagnosticsData
     {
+        [NonSerialized]
+        public readonly List<ReferenceMp4FrameMetricRow> referenceMp4CurrentClipRows =
+            new List<ReferenceMp4FrameMetricRow>();
+
         public int reference_target_frame_count;
         public int baseline_recorded_frame_count;
         public int candidate_recorded_frame_count;
