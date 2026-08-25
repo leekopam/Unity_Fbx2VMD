@@ -65,7 +65,7 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ExtractedCalculator_When_CheckingAnalyzer_Then_UsesItForPixelBounds()
+        public void Given_ExtractedSilhouetteCalculator_When_CheckingPixelBoundsOwnership_Then_UsesSharedCalculator()
         {
             string analyzerPath = Path.Combine(
                 Directory.GetCurrentDirectory(),
@@ -74,12 +74,23 @@ namespace Tests.Editor.FBXImporter
                 "Scripts",
                 "FBXImporter",
                 "YybScreenshotDiagnosticAnalyzer.cs");
-            string source = File.ReadAllText(analyzerPath);
+            string calculatorPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "VisualComparisonSilhouetteMetricCalculator.cs");
+            string analyzerSource = File.ReadAllText(analyzerPath);
+            string calculatorSource = File.ReadAllText(calculatorPath);
 
             Assert.That(
-                Count(source, "VisualComparisonPixelBoundsCalculator.TryCalculate("),
-                Is.EqualTo(2));
-            Assert.That(source, Does.Not.Contain("brightPixelCount++;"));
+                Count(analyzerSource, "VisualComparisonPixelBoundsCalculator.TryCalculate("),
+                Is.Zero);
+            Assert.That(
+                Count(calculatorSource, "VisualComparisonPixelBoundsCalculator.TryCalculate("),
+                Is.EqualTo(1));
+            Assert.That(analyzerSource, Does.Not.Contain("brightPixelCount++;"));
         }
 
         private static bool TryCalculate(

@@ -1152,69 +1152,59 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 Color32[] pixels = texture.GetPixels32();
-                VisualComparisonPixelBoundsCalculator.TryCalculate(
+                VisualComparisonSilhouetteMetricCalculator.TryCalculateGeometry(
                     pixels,
                     width,
                     height,
+                    ImageSpaceSilhouetteProfileBandCount,
                     IsCandidateBrightPixel,
-                    out VisualComparisonPixelBounds brightPixelBounds);
+                    out VisualComparisonSilhouetteGeometry brightGeometry);
 
                 int totalPixels = Mathf.Max(1, width * height);
-                metric.BrightAreaRatio = brightPixelBounds.MatchedPixelCount / (float)totalPixels;
-                metric.HasBrightPixels = brightPixelBounds.HasMatches;
+                metric.BrightAreaRatio = brightGeometry.Bounds.MatchedPixelCount / (float)totalPixels;
+                metric.HasBrightPixels = brightGeometry.Bounds.HasMatches;
                 if (!metric.HasBrightPixels)
                 {
                     return true;
                 }
 
-                int minX = brightPixelBounds.MinX;
-                int minY = brightPixelBounds.MinY;
-                int maxX = brightPixelBounds.MaxX;
-                int maxY = brightPixelBounds.MaxY;
-                metric.BBoxHeightRatio = (maxY - minY + 1) / (float)height;
-                metric.BBoxWidthRatio = (maxX - minX + 1) / (float)width;
-                metric.CenterX = ((minX + maxX + 1) * 0.5f) / width;
-                metric.BottomGapRatio = minY / (float)height;
-                metric.TopGapRatio = (height - maxY - 1) / (float)height;
-                FillBandedImageSpaceLimbSpanMetrics(pixels, width, height, minY, maxY, metric);
-                metric.SilhouetteSpanProfile = BuildSilhouetteSpanProfile(
-                    pixels,
-                    width,
-                    minY,
-                    maxY,
-                    ImageSpaceSilhouetteProfileBandCount);
-                metric.SilhouetteEndpointProfile = BuildSilhouetteEndpointProfile(
-                    pixels,
-                    width,
-                    minY,
-                    maxY,
-                    ImageSpaceSilhouetteProfileBandCount);
-                metric.ImageSpaceKeypointProfile = BuildImageSpaceSilhouetteKeypointProfile(
+                metric.BBoxHeightRatio = brightGeometry.BBoxHeightRatio;
+                metric.BBoxWidthRatio = brightGeometry.BBoxWidthRatio;
+                metric.CenterX = brightGeometry.CenterX;
+                metric.BottomGapRatio = brightGeometry.BottomGapRatio;
+                metric.TopGapRatio = brightGeometry.TopGapRatio;
+                metric.ImageSpaceKeypointProfile = brightGeometry.KeypointProfile;
+                if (VisualComparisonSilhouetteMetricCalculator.TryCalculateBandMetrics(
                     pixels,
                     width,
                     height,
-                    minY,
-                    maxY,
-                    ImageSpaceSilhouetteProfileBandCount);
-                if (TryAnalyzeImageSpaceSilhouette(
+                    brightGeometry.Bounds,
+                    ImageSpaceSilhouetteProfileBandCount,
+                    IsCandidateBrightPixel,
+                    out VisualComparisonSilhouetteBandMetrics brightBandMetrics))
+                {
+                    metric.UpperLimbSpanRatio = brightBandMetrics.UpperSpanRatio;
+                    metric.LowerLimbSpanRatio = brightBandMetrics.LowerSpanRatio;
+                    metric.SilhouetteSpanProfile = brightBandMetrics.SpanProfile;
+                    metric.SilhouetteEndpointProfile = brightBandMetrics.EndpointProfile;
+                }
+
+                if (VisualComparisonSilhouetteMetricCalculator.TryCalculateGeometry(
                     pixels,
                     width,
                     height,
+                    ImageSpaceSilhouetteProfileBandCount,
                     IsCandidateNonHairBrightPixel,
-                    out float nonHairBBoxHeightRatio,
-                    out float nonHairBBoxWidthRatio,
-                    out float nonHairCenterX,
-                    out float nonHairBottomGapRatio,
-                    out float nonHairTopGapRatio,
-                    out float[] nonHairImageSpaceKeypointProfile))
+                    out VisualComparisonSilhouetteGeometry nonHairGeometry) &&
+                    nonHairGeometry.Bounds.HasMatches)
                 {
                     metric.HasNonHairBrightPixels = true;
-                    metric.NonHairBBoxHeightRatio = nonHairBBoxHeightRatio;
-                    metric.NonHairBBoxWidthRatio = nonHairBBoxWidthRatio;
-                    metric.NonHairCenterX = nonHairCenterX;
-                    metric.NonHairBottomGapRatio = nonHairBottomGapRatio;
-                    metric.NonHairTopGapRatio = nonHairTopGapRatio;
-                    metric.NonHairImageSpaceKeypointProfile = nonHairImageSpaceKeypointProfile;
+                    metric.NonHairBBoxHeightRatio = nonHairGeometry.BBoxHeightRatio;
+                    metric.NonHairBBoxWidthRatio = nonHairGeometry.BBoxWidthRatio;
+                    metric.NonHairCenterX = nonHairGeometry.CenterX;
+                    metric.NonHairBottomGapRatio = nonHairGeometry.BottomGapRatio;
+                    metric.NonHairTopGapRatio = nonHairGeometry.TopGapRatio;
+                    metric.NonHairImageSpaceKeypointProfile = nonHairGeometry.KeypointProfile;
                 }
                 return true;
             }
@@ -1222,371 +1212,6 @@ namespace Fbx2Vmd.FBXImporter
             {
                 UnityEngine.Object.DestroyImmediate(texture);
             }
-        }
-
-        private static bool TryAnalyzeImageSpaceSilhouette(
-            Color32[] pixels,
-            int width,
-            int height,
-            Func<Color32, bool> pixelPredicate,
-            out float bboxHeightRatio,
-            out float bboxWidthRatio,
-            out float centerX,
-            out float bottomGapRatio,
-            out float topGapRatio,
-            out float[] imageSpaceKeypointProfile)
-        {
-            bboxHeightRatio = float.NaN;
-            bboxWidthRatio = float.NaN;
-            centerX = float.NaN;
-            bottomGapRatio = float.NaN;
-            topGapRatio = float.NaN;
-            imageSpaceKeypointProfile = Array.Empty<float>();
-            if (pixels == null || width <= 0 || height <= 0 || pixelPredicate == null)
-            {
-                return false;
-            }
-
-            if (!VisualComparisonPixelBoundsCalculator.TryCalculate(
-                    pixels,
-                    width,
-                    height,
-                    pixelPredicate,
-                    out VisualComparisonPixelBounds bounds) ||
-                !bounds.HasMatches)
-            {
-                return false;
-            }
-
-            int minX = bounds.MinX;
-            int minY = bounds.MinY;
-            int maxX = bounds.MaxX;
-            int maxY = bounds.MaxY;
-            bboxHeightRatio = (maxY - minY + 1) / (float)height;
-            bboxWidthRatio = (maxX - minX + 1) / (float)width;
-            centerX = ((minX + maxX + 1) * 0.5f) / width;
-            bottomGapRatio = minY / (float)height;
-            topGapRatio = (height - maxY - 1) / (float)height;
-            imageSpaceKeypointProfile = BuildImageSpaceSilhouetteKeypointProfile(
-                pixels,
-                width,
-                height,
-                minY,
-                maxY,
-                ImageSpaceSilhouetteProfileBandCount,
-                pixelPredicate);
-            return true;
-        }
-
-        private static void FillBandedImageSpaceLimbSpanMetrics(
-            Color32[] pixels,
-            int width,
-            int height,
-            int minY,
-            int maxY,
-            CandidateScreenshotFrameMetric metric)
-        {
-            if (pixels == null || metric == null || width <= 0 || height <= 0 || maxY < minY)
-            {
-                return;
-            }
-
-            int bboxHeight = maxY - minY + 1;
-            int upperStartY = minY + Mathf.CeilToInt(bboxHeight * 0.5f);
-            int lowerMinX = width;
-            int lowerMaxX = -1;
-            int upperMinX = width;
-            int upperMaxX = -1;
-            for (int y = minY; y <= maxY; y++)
-            {
-                int rowOffset = y * width;
-                bool upperBand = y >= upperStartY;
-                for (int x = 0; x < width; x++)
-                {
-                    Color32 pixel = pixels[rowOffset + x];
-                    if (!IsCandidateBrightPixel(pixel))
-                    {
-                        continue;
-                    }
-
-                    if (upperBand)
-                    {
-                        upperMinX = Mathf.Min(upperMinX, x);
-                        upperMaxX = Mathf.Max(upperMaxX, x);
-                    }
-                    else
-                    {
-                        lowerMinX = Mathf.Min(lowerMinX, x);
-                        lowerMaxX = Mathf.Max(lowerMaxX, x);
-                    }
-                }
-            }
-
-            if (upperMaxX >= upperMinX)
-            {
-                metric.UpperLimbSpanRatio = (upperMaxX - upperMinX + 1) / (float)width;
-            }
-
-            if (lowerMaxX >= lowerMinX)
-            {
-                metric.LowerLimbSpanRatio = (lowerMaxX - lowerMinX + 1) / (float)width;
-            }
-        }
-
-        private static float[] BuildSilhouetteSpanProfile(
-            Color32[] pixels,
-            int width,
-            int minY,
-            int maxY,
-            int bandCount)
-        {
-            if (pixels == null || width <= 0 || maxY < minY || bandCount <= 0)
-            {
-                return Array.Empty<float>();
-            }
-
-            int bboxHeight = maxY - minY + 1;
-            var minXByBand = new int[bandCount];
-            var maxXByBand = new int[bandCount];
-            for (int i = 0; i < bandCount; i++)
-            {
-                minXByBand[i] = width;
-                maxXByBand[i] = -1;
-            }
-
-            for (int y = minY; y <= maxY; y++)
-            {
-                int bandIndex = Mathf.Clamp(((y - minY) * bandCount) / bboxHeight, 0, bandCount - 1);
-                int rowOffset = y * width;
-                for (int x = 0; x < width; x++)
-                {
-                    if (!IsCandidateBrightPixel(pixels[rowOffset + x]))
-                    {
-                        continue;
-                    }
-
-                    minXByBand[bandIndex] = Mathf.Min(minXByBand[bandIndex], x);
-                    maxXByBand[bandIndex] = Mathf.Max(maxXByBand[bandIndex], x);
-                }
-            }
-
-            var profile = new float[bandCount];
-            for (int i = 0; i < bandCount; i++)
-            {
-                profile[i] = maxXByBand[i] >= minXByBand[i]
-                    ? (maxXByBand[i] - minXByBand[i] + 1) / (float)width
-                    : 0f;
-            }
-
-            return profile;
-        }
-
-        private static float[] BuildSilhouetteEndpointProfile(
-            Color32[] pixels,
-            int width,
-            int minY,
-            int maxY,
-            int bandCount)
-        {
-            if (pixels == null || width <= 0 || maxY < minY || bandCount <= 0)
-            {
-                return Array.Empty<float>();
-            }
-
-            int bboxHeight = maxY - minY + 1;
-            var minXByBand = new int[bandCount];
-            var maxXByBand = new int[bandCount];
-            for (int i = 0; i < bandCount; i++)
-            {
-                minXByBand[i] = width;
-                maxXByBand[i] = -1;
-            }
-
-            for (int y = minY; y <= maxY; y++)
-            {
-                int bandIndex = Mathf.Clamp(((y - minY) * bandCount) / bboxHeight, 0, bandCount - 1);
-                int rowOffset = y * width;
-                for (int x = 0; x < width; x++)
-                {
-                    if (!IsCandidateBrightPixel(pixels[rowOffset + x]))
-                    {
-                        continue;
-                    }
-
-                    minXByBand[bandIndex] = Mathf.Min(minXByBand[bandIndex], x);
-                    maxXByBand[bandIndex] = Mathf.Max(maxXByBand[bandIndex], x);
-                }
-            }
-
-            var endpoints = new float[bandCount * 2];
-            for (int i = 0; i < bandCount; i++)
-            {
-                int leftIndex = i * 2;
-                int rightIndex = leftIndex + 1;
-                if (maxXByBand[i] >= minXByBand[i])
-                {
-                    endpoints[leftIndex] = minXByBand[i] / (float)width;
-                    endpoints[rightIndex] = (maxXByBand[i] + 1) / (float)width;
-                }
-                else
-                {
-                    endpoints[leftIndex] = float.NaN;
-                    endpoints[rightIndex] = float.NaN;
-                }
-            }
-
-            return endpoints;
-        }
-
-        private static float[] BuildImageSpaceSilhouetteKeypointProfile(
-            Color32[] pixels,
-            int width,
-            int height,
-            int minY,
-            int maxY,
-            int bandCount)
-        {
-            return BuildImageSpaceSilhouetteKeypointProfile(
-                pixels,
-                width,
-                height,
-                minY,
-                maxY,
-                bandCount,
-                IsCandidateBrightPixel);
-        }
-
-        private static float[] BuildImageSpaceSilhouetteKeypointProfile(
-            Color32[] pixels,
-            int width,
-            int height,
-            int minY,
-            int maxY,
-            int bandCount,
-            Func<Color32, bool> pixelPredicate)
-        {
-            if (pixels == null || width <= 0 || height <= 0 || maxY < minY || bandCount <= 0)
-            {
-                return Array.Empty<float>();
-            }
-
-            var keypoints = new List<float>((2 + (bandCount * 2)) * 2);
-            AppendBBoxCenterlineEndpointKeypoint(
-                pixels,
-                width,
-                height,
-                minY,
-                maxY,
-                useBottomEndpoint: true,
-                keypoints,
-                pixelPredicate);
-            AppendBBoxCenterlineEndpointKeypoint(
-                pixels,
-                width,
-                height,
-                minY,
-                maxY,
-                useBottomEndpoint: false,
-                keypoints,
-                pixelPredicate);
-
-            int bboxHeight = maxY - minY + 1;
-            var minXByBand = new int[bandCount];
-            var maxXByBand = new int[bandCount];
-            var minYByBand = new int[bandCount];
-            var maxYByBand = new int[bandCount];
-            for (int i = 0; i < bandCount; i++)
-            {
-                minXByBand[i] = width;
-                maxXByBand[i] = -1;
-                minYByBand[i] = height;
-                maxYByBand[i] = -1;
-            }
-
-            for (int y = minY; y <= maxY; y++)
-            {
-                int bandIndex = Mathf.Clamp(((y - minY) * bandCount) / bboxHeight, 0, bandCount - 1);
-                int rowOffset = y * width;
-                for (int x = 0; x < width; x++)
-                {
-                    if (!pixelPredicate(pixels[rowOffset + x]))
-                    {
-                        continue;
-                    }
-
-                    minXByBand[bandIndex] = Mathf.Min(minXByBand[bandIndex], x);
-                    maxXByBand[bandIndex] = Mathf.Max(maxXByBand[bandIndex], x);
-                    minYByBand[bandIndex] = Mathf.Min(minYByBand[bandIndex], y);
-                    maxYByBand[bandIndex] = Mathf.Max(maxYByBand[bandIndex], y);
-                }
-            }
-
-            for (int i = 0; i < bandCount; i++)
-            {
-                if (maxXByBand[i] >= minXByBand[i])
-                {
-                    float y = ((minYByBand[i] + maxYByBand[i] + 1) * 0.5f) / height;
-                    AppendKeypoint(keypoints, minXByBand[i] / (float)width, y);
-                    AppendKeypoint(keypoints, (maxXByBand[i] + 1) / (float)width, y);
-                }
-                else
-                {
-                    AppendMissingKeypoint(keypoints);
-                    AppendMissingKeypoint(keypoints);
-                }
-            }
-
-            return keypoints.ToArray();
-        }
-
-        private static void AppendBBoxCenterlineEndpointKeypoint(
-            Color32[] pixels,
-            int width,
-            int height,
-            int minY,
-            int maxY,
-            bool useBottomEndpoint,
-            List<float> keypoints,
-            Func<Color32, bool> pixelPredicate)
-        {
-            int minX = width;
-            int maxX = -1;
-            for (int y = minY; y <= maxY; y++)
-            {
-                int rowOffset = y * width;
-                for (int x = 0; x < width; x++)
-                {
-                    if (!pixelPredicate(pixels[rowOffset + x]))
-                    {
-                        continue;
-                    }
-
-                    minX = Mathf.Min(minX, x);
-                    maxX = Mathf.Max(maxX, x);
-                }
-            }
-
-            if (maxX >= minX)
-            {
-                float endpointY = (useBottomEndpoint ? minY : maxY) / (float)height;
-                AppendKeypoint(keypoints, ((minX + maxX + 1) * 0.5f) / width, endpointY);
-            }
-            else
-            {
-                AppendMissingKeypoint(keypoints);
-            }
-        }
-
-        private static void AppendKeypoint(List<float> keypoints, float x, float y)
-        {
-            keypoints.Add(x);
-            keypoints.Add(y);
-        }
-
-        private static void AppendMissingKeypoint(List<float> keypoints)
-        {
-            keypoints.Add(float.NaN);
-            keypoints.Add(float.NaN);
         }
 
         private static string ResolveImageSpaceKeypointLabel(int keypointIndex)
