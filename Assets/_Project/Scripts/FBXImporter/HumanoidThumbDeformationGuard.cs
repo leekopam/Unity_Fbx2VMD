@@ -1047,18 +1047,11 @@ namespace Fbx2Vmd.FBXImporter
                 out _,
                 out float maxOffset);
 
-            if (weight > 0f)
-            {
-                targetPosition = Vector3.Lerp(targetPosition, initialPosition, weight);
-            }
-
-            maxOffset = Mathf.Clamp(maxOffset, 0f, 0.02f);
-            if (maxOffset <= 0.000001f)
-            {
-                return initialPosition;
-            }
-
-            return initialPosition + Vector3.ClampMagnitude(targetPosition - initialPosition, maxOffset);
+            return ThumbWebbingCorrectionCalculator.ConstrainPosition(
+                initialPosition,
+                targetPosition,
+                weight,
+                maxOffset);
         }
 
         private void GetEffectiveThumbWebbingCorrectiveSettings(
@@ -1070,35 +1063,23 @@ namespace Fbx2Vmd.FBXImporter
             out float maxLocalAngle,
             out float maxPositionOffset)
         {
-            float configuredWeight = Mathf.Clamp01(thumbWebbingCreaseStabilizeWeight);
-            float configuredMaxLocalAngle = Mathf.Clamp(thumbWebbingCreaseMaxLocalAngle, 0f, 45f);
-            float configuredMaxPositionOffset = Mathf.Clamp(thumbWebbingCreaseMaxPositionOffset, 0f, 0.02f);
-            weight = 0f;
-            maxLocalAngle = Mathf.Clamp(detachedThumbBaseHelperMaxLocalAngle, 0f, 45f);
-            maxPositionOffset = Mathf.Clamp(detachedThumbBaseHelperMaxPositionOffset, 0f, 0.02f);
-
             float poseRisk = CalculateThumbWebbingPoseRisk(
                 helperTransform,
                 sourceTransform,
                 targetLocalRotation,
                 targetLocalPosition);
-            if (!IsFinite(poseRisk) || poseRisk <= 0f)
-            {
-                return;
-            }
-
-            // Webbing correction should activate only when the pose actually enters a risky shape.
-            // Otherwise YYB Thumb0 helpers get pinned to the initial palm silhouette and the
-            // thumb-index gap stays wider than the reference even though helper/source separation is clean.
-            weight = Mathf.Lerp(0f, configuredWeight, poseRisk);
-            maxLocalAngle = Mathf.Lerp(
-                maxLocalAngle,
-                Mathf.Min(configuredMaxLocalAngle, ThumbWebbingDynamicMinLocalAngle),
-                poseRisk);
-            maxPositionOffset = Mathf.Lerp(
-                maxPositionOffset,
-                Mathf.Min(configuredMaxPositionOffset, ThumbWebbingDynamicMinPositionOffset),
-                poseRisk);
+            ThumbWebbingCorrectionCalculator.CalculateEffectiveSettings(
+                thumbWebbingCreaseStabilizeWeight,
+                thumbWebbingCreaseMaxLocalAngle,
+                thumbWebbingCreaseMaxPositionOffset,
+                detachedThumbBaseHelperMaxLocalAngle,
+                detachedThumbBaseHelperMaxPositionOffset,
+                poseRisk,
+                ThumbWebbingDynamicMinLocalAngle,
+                ThumbWebbingDynamicMinPositionOffset,
+                out weight,
+                out maxLocalAngle,
+                out maxPositionOffset);
         }
 
         private float CalculateThumbWebbingPoseRisk(
