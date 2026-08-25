@@ -4507,7 +4507,13 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void SavePersistedState()
         {
-            PersistedState state = new PersistedState
+            PersistedState state = BuildCurrentPersistedState();
+            VisualComparisonRunStateStore.SaveJson(RunnerStateSessionKey, JsonUtility.ToJson(state));
+        }
+
+        private static PersistedState BuildCurrentPersistedState()
+        {
+            return new PersistedState
             {
                 fbxFileName = _fbxFileName,
                 durationSeconds = _durationSeconds,
@@ -4723,7 +4729,6 @@ namespace Fbx2Vmd.FBXImporter
                 failures = Failures.ToArray()
             };
 
-            VisualComparisonRunStateStore.SaveJson(RunnerStateSessionKey, JsonUtility.ToJson(state));
         }
 
         private static void ClearPersistedState()
@@ -5405,222 +5410,22 @@ namespace Fbx2Vmd.FBXImporter
         {
             frameRoleDiagnostics = frameRoleDiagnostics ?? BuildCurrentSummaryFrameRoleDiagnostics();
             frameQualitySummaries = frameQualitySummaries ?? BuildFrameQualitySummaries(frameRoleDiagnostics);
-            int summaryTargetFrameCount = ResolveSummaryTargetFrameCount();
-            SummaryContainer summary = new SummaryContainer
-            {
-                session_id = _summarySessionId,
-                generated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
-                fbx_file = _fbxFileName,
-                duration_seconds = _durationSeconds,
-                target_frame_count = summaryTargetFrameCount,
-                segment = _editorDiagnosticSmokeSegment.ToString(),
-                finger_closeups = _enableFingerCloseups,
-                recorder_parent_ik_offsets_when_center_parented = _enableRecorderParentFrameIkOffsetsWhenCenterParented,
-                mmd_ik_delta_guard_limit_override_vmd = _mmdIkDeltaGuardLimitOverrideVmd,
-                mmd_ik_delta_guard_recovery_trigger_vmd = _mmdIkDeltaGuardRecoveryTriggerVmd,
-                mmd_ik_delta_guard_recovery_debt_vmd = _mmdIkDeltaGuardRecoveryDebtThresholdVmd,
-                mmd_ik_delta_guard_recovery_hold_frames = _mmdIkDeltaGuardRecoveryHoldFrames,
-                final_ik_foot_grounding_enabled = _enableFinalIkFootGroundingRuntimeOverride,
-                manual_animator_foot_local_rotation_enabled = _enableManualAnimatorFootLocalRotationRuntimeOverride,
-                manual_animator_foot_local_rotation_disabled = _disableManualAnimatorFootLocalRotationRuntimeOverride,
-                manual_animator_full_body_pose_enabled = _enableManualAnimatorFullBodyPoseRuntimeOverride,
-                manual_animator_full_body_pose_disabled = _disableManualAnimatorFullBodyPoseRuntimeOverride,
-                manual_animator_full_body_pose_weight = _manualAnimatorFullBodyPoseReferenceWeight,
-                manual_animator_full_body_pose_exclude_lower_body_muscles =
-                    _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride,
-                manual_animator_full_body_pose_lower_body_muscles_only =
-                    _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
-                manual_animator_full_body_pose_leg_twist_muscles_only =
-                    _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
-                manual_animator_full_body_pose_right_arm_muscles_only =
-                    _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
-                manual_animator_full_body_pose_left_arm_muscles_only =
-                    _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
-                manual_animator_full_body_pose_right_sleeve_chain_muscles_only =
-                    _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
-                manual_animator_full_body_pose_frame_gate_start =
-                    _manualAnimatorFullBodyPoseReferenceFrameGateStart,
-                manual_animator_full_body_pose_frame_gate_end =
-                    _manualAnimatorFullBodyPoseReferenceFrameGateEnd,
-                set_human_pose_right_leg_twist_output_enabled =
-                    _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride,
-                set_human_pose_right_leg_twist_output_weight =
-                    _setHumanPoseRightLegTwistOutputReferenceWeight,
-                set_human_pose_right_leg_twist_output_max_delta =
-                    _setHumanPoseRightLegTwistOutputReferenceMaxDelta,
-                manual_animator_body_rotation_enabled = _enableManualAnimatorBodyRotationRuntimeOverride,
-                manual_animator_body_rotation_disabled = _disableManualAnimatorBodyRotationRuntimeOverride,
-                manual_animator_body_rotation_weight = _manualAnimatorBodyRotationReferenceWeight,
-                manual_animator_hand_local_rotation_enabled = _enableManualAnimatorHandLocalRotationRuntimeOverride,
-                manual_animator_thumb_local_rotation_enabled = _enableManualAnimatorThumbLocalRotationRuntimeOverride,
-                manual_animator_hand_palm_frame_enabled = _enableManualAnimatorHandPalmFrameRuntimeOverride,
-                manual_animator_hand_palm_frame_weight = _manualAnimatorHandPalmFrameWeight,
-                retarget_pose_visual_spike_smoothing_override =
-                    _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings,
-                retarget_pose_visual_spike_smoothing_enabled =
-                    _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride,
-                retarget_pose_visual_spike_current_weight = _retargetPoseVisualSpikeCurrentWeight,
-                retarget_pose_visual_spike_forearm_stretch_clamp_max_offset =
-                    _retargetPoseVisualSpikeForearmStretchClampMaxOffset,
-                retarget_arm_stretch_clamp_enabled =
-                    _enableRetargetArmStretchClampRuntimeOverride,
-                retarget_arm_stretch_muscle_limit = _retargetArmStretchMuscleLimit,
-                yyb_arm_swing_limit_enabled = _enableYybArmSwingLimitRuntimeOverride,
-                yyb_arm_swing_limit_weight = _yybArmSwingLimitWeight,
-                yyb_arm_swing_max_down_dot = _yybArmSwingMaxDownDot,
-                yyb_arm_swing_min_hand_horizontal_ratio = _yybArmSwingMinHandHorizontalRatio,
-                yyb_arm_swing_max_hand_below_shoulder_ratio = _yybArmSwingMaxHandBelowShoulderRatio,
-                yyb_arm_swing_horizontal_reach_limit_weight = _yybArmSwingHorizontalReachLimitWeight,
-                yyb_arm_swing_max_hand_horizontal_reach_ratio = _yybArmSwingMaxHandHorizontalReachRatio,
-                yyb_arm_swing_horizontal_reach_max_hand_below_shoulder_ratio =
-                    _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
-                yyb_arm_swing_horizontal_reach_min_elbow_angle_after_apply =
-                    _yybArmSwingHorizontalReachMinElbowAngleAfterApply,
-                yyb_arm_swing_raised_pose_horizontal_reach_limit_weight =
-                    _yybArmSwingRaisedPoseHorizontalReachLimitWeight,
-                yyb_arm_swing_raised_pose_min_upper_arm_down_dot =
-                    _yybArmSwingRaisedPoseMinUpperArmDownDot,
-                yyb_arm_swing_raised_pose_max_hand_below_shoulder_ratio =
-                    _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
-                yyb_arm_swing_raised_pose_max_hand_horizontal_reach_ratio =
-                    _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
-                yyb_arm_direction_retarget_enabled = _enableYybArmDirectionRetargetRuntimeOverride,
-                yyb_arm_direction_upper_arm_weight = _yybArmDirectionUpperArmWeight,
-                yyb_arm_direction_forearm_weight = _yybArmDirectionForearmWeight,
-                yyb_arm_direction_upper_arm_max_degrees = _yybArmDirectionUpperArmMaxDegrees,
-                yyb_arm_direction_forearm_max_degrees = _yybArmDirectionForearmMaxDegrees,
-                yyb_arm_direction_left_side_weight_scale = _yybArmDirectionLeftSideWeightScale,
-                yyb_arm_direction_right_side_weight_scale = _yybArmDirectionRightSideWeightScale,
-                yyb_arm_sleeve_anchor_override = _overrideYybArmSleeveAnchorRuntimeSettings,
-                yyb_arm_sleeve_anchor_enabled = _enableYybArmSleeveAnchorRuntimeOverride,
-                yyb_arm_sleeve_anchor_influence = _yybArmSleeveAnchorInfluence,
-                yyb_arm_shoulder_cap_anchor_influence = _yybArmShoulderCapAnchorInfluence,
-                yyb_arm_sleeve_anchor_max_degrees = _yybArmSleeveAnchorMaxDegrees,
-                yyb_arm_visual_twist_override = _overrideYybArmVisualTwistRuntimeSettings,
-                yyb_arm_visual_twist_enabled = _enableYybArmVisualTwistRuntimeOverride,
-                yyb_arm_visual_upper_arm_influence = _yybArmVisualUpperArmInfluence,
-                yyb_arm_visual_forearm_influence = _yybArmVisualForearmInfluence,
-                yyb_arm_visual_upper_arm_max_degrees = _yybArmVisualUpperArmMaxDegrees,
-                yyb_arm_visual_forearm_max_degrees = _yybArmVisualForearmMaxDegrees,
-                manual_animator_lower_body_segment_direction_enabled = _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride,
-                manual_animator_lower_body_segment_direction_disabled =
-                    _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride,
-                manual_animator_lower_body_segment_direction_weight = _manualAnimatorLowerBodySegmentDirectionReferenceWeight,
-                manual_animator_lower_body_segment_direction_max_angle = _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                manual_animator_upper_leg_to_lower_leg_segment_direction_disabled =
-                    _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
-                manual_animator_upper_leg_to_lower_leg_segment_direction_max_angle =
-                    _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                manual_animator_lower_leg_to_foot_segment_direction_disabled =
-                    _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
-                manual_animator_lower_leg_to_foot_segment_direction_max_angle =
-                    _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manual_animator_left_lower_leg_to_foot_segment_direction_max_angle =
-                    _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manual_animator_right_lower_leg_to_foot_segment_direction_max_angle =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manual_animator_right_lower_leg_to_foot_segment_direction_axis_xz_scale =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                manual_animator_right_lower_leg_to_foot_segment_direction_blend_weight =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                manual_animator_right_lower_leg_to_foot_segment_direction_frame_gate_start =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                manual_animator_right_lower_leg_to_foot_segment_direction_frame_gate_end =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                manual_animator_right_lower_leg_to_foot_segment_direction_endpoint_blend_weight =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                manual_animator_foot_to_toes_segment_direction_disabled =
-                    _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
-                manual_animator_foot_to_toes_segment_direction_max_angle =
-                    _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle,
-                manual_animator_foot_hips_aligned_residual_yaw_enabled = _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride,
-                manual_animator_foot_hips_aligned_residual_yaw_disabled =
-                    _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride,
-                manual_animator_foot_hips_aligned_residual_yaw_weight = _manualAnimatorFootHipsAlignedResidualYawReferenceWeight,
-                manual_animator_foot_hips_aligned_residual_yaw_max_angle = _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle,
-                post_set_human_pose_right_endpoint_position_enabled =
-                    _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride,
-                post_set_human_pose_right_endpoint_position_weight =
-                    _postSetHumanPoseRightEndpointPositionReferenceWeight,
-                post_set_human_pose_right_endpoint_position_max_offset =
-                    _postSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                post_set_human_pose_right_endpoint_position_positive_z_scale =
-                    _postSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                post_set_human_pose_right_endpoint_position_toes_blend_weight =
-                    _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                post_set_human_pose_right_endpoint_position_frame_gate_start =
-                    _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                post_set_human_pose_right_endpoint_position_frame_gate_end =
-                    _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                post_set_human_pose_endpoint_position_use_left_side =
-                    _postSetHumanPoseEndpointPositionUseLeftSide,
-                pre_set_human_pose_right_endpoint_position_enabled =
-                    _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride,
-                pre_set_human_pose_right_endpoint_position_weight =
-                    _preSetHumanPoseRightEndpointPositionReferenceWeight,
-                pre_set_human_pose_right_endpoint_position_max_offset =
-                    _preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                pre_set_human_pose_right_endpoint_position_positive_z_scale =
-                    _preSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                pre_set_human_pose_right_endpoint_position_toes_blend_weight =
-                    _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                pre_set_human_pose_right_endpoint_position_frame_gate_start =
-                    _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                pre_set_human_pose_right_endpoint_position_frame_gate_end =
-                    _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                pre_set_human_pose_endpoint_position_use_left_side =
-                    _preSetHumanPoseEndpointPositionUseLeftSide,
-                pre_set_human_pose_endpoint_position_use_ghost_current_basis =
-                    _preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                pre_set_human_pose_endpoint_position_invert_body_position_x =
-                    _preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                pre_set_human_pose_endpoint_position_invert_body_position_z =
-                    _preSetHumanPoseEndpointPositionInvertBodyPositionZ,
-                post_set_human_pose_right_foot_evaluator_xz_reference_enabled =
-                    _usePostSetHumanPoseRightFootEvaluatorXzReference,
-                post_set_human_pose_right_foot_evaluator_xz_reference_target_magnitude =
-                    _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
-                manual_animator_biped_ik_foot_position_enabled = _enableManualAnimatorBipedIkFootPositionRuntimeOverride,
-                manual_animator_biped_ik_foot_position_weight = _manualAnimatorBipedIkFootPositionReferenceWeight,
-                manual_animator_biped_ik_foot_position_max_offset = _manualAnimatorBipedIkFootPositionReferenceMaxOffset,
-                manual_animator_hips_local_position_enabled = _enableManualAnimatorHipsLocalPositionRuntimeOverride,
-                manual_animator_hips_local_position_weight = _manualAnimatorHipsLocalPositionReferenceWeight,
-                manual_animator_hips_local_position_max_offset = _manualAnimatorHipsLocalPositionReferenceMaxOffset,
-                manual_animator_body_position_xz_enabled = _enableManualAnimatorBodyPositionXzRuntimeOverride,
-                manual_animator_body_position_xz_weight = _manualAnimatorBodyPositionXzReferenceWeight,
-                manual_animator_body_position_xz_max_offset = _manualAnimatorBodyPositionXzReferenceMaxOffset,
-                manual_animator_body_position_xz_frame_gate_start =
-                    _manualAnimatorBodyPositionXzReferenceFrameGateStart,
-                manual_animator_body_position_xz_frame_gate_end =
-                    _manualAnimatorBodyPositionXzReferenceFrameGateEnd,
-                manual_animator_body_position_xz_frame_gate_blend_frames =
-                    _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames,
-                manual_animator_body_position_xz_axis_x_scale =
-                    _manualAnimatorBodyPositionXzReferenceAxisXScale,
-                manual_animator_body_position_xz_axis_z_scale =
-                    _manualAnimatorBodyPositionXzReferenceAxisZScale,
-                retarget_body_position_xz_root_motion_enabled =
-                    _enableRetargetBodyPositionXzRootMotionRuntimeOverride,
-                target_humanoid_bone_position_lock_disabled =
-                    _disableTargetHumanoidBonePositionLockRuntimeOverride,
-                vmd_playback_probe_enabled = _enableVmdPlaybackProbeRuntimeOverride,
-                vmd_playback_probe_apply_ik_targets = _applyVmdPlaybackProbeIkTargetsRuntimeOverride,
-                vmd_playback_probe_source_vmd_path = MakeProjectRelativePath(_vmdPlaybackProbeSourceVmdPath),
-                reference_mmd_timing_enabled = _enableReferenceMmdTimingRuntimeOverride,
-                diagnostic_capture_width_override = _diagnosticCaptureWidthOverride,
-                diagnostic_capture_height_override = _diagnosticCaptureHeightOverride,
-                diagnostic_screenshot_padding_override = _diagnosticScreenshotPaddingOverride,
-                diagnostic_screenshot_vertical_viewport_center_override =
-                    _diagnosticScreenshotVerticalViewportCenterOverride,
-                reference_clip_name = _referenceClip != null ? _referenceClip.name : string.Empty,
-                reference_clip_asset_path = _referenceClipAssetPath,
-                results = Results.ToArray(),
-                frame_count_roles = frameRoleDiagnostics,
-                sample_ordering_diagnostics = BuildSampleOrderingDiagnostics(),
-                selected_candidate_artifact = BuildCandidateArtifactSelection(frameQualitySummaries),
-                frame_quality_summaries = frameQualitySummaries,
-                failures = Failures.ToArray()
-            };
+            PersistedState state = BuildCurrentPersistedState();
+            SummaryContainer summary = new SummaryContainer();
+            YybVisualComparisonSummarySettingsSnapshotter.Capture(
+                summary,
+                state,
+                ResolveSummaryTargetFrameCount(),
+                MakeProjectRelativePath(state.vmdPlaybackProbeSourceVmdPath));
+            summary.generated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+            summary.reference_clip_name = _referenceClip != null ? _referenceClip.name : string.Empty;
+            summary.reference_clip_asset_path = _referenceClipAssetPath;
+            summary.results = Results.ToArray();
+            summary.frame_count_roles = frameRoleDiagnostics;
+            summary.sample_ordering_diagnostics = BuildSampleOrderingDiagnostics();
+            summary.selected_candidate_artifact = BuildCandidateArtifactSelection(frameQualitySummaries);
+            summary.frame_quality_summaries = frameQualitySummaries;
+            summary.failures = Failures.ToArray();
 
             return summary;
         }
