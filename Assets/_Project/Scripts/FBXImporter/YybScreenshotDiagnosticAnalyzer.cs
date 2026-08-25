@@ -526,24 +526,26 @@ namespace Fbx2Vmd.FBXImporter
                             maxSilhouetteLandmarkEndpointDelta,
                             silhouetteEndpointDelta.MaxAbsoluteDelta);
                 }
-                if (TryComputeImageSpaceKeypointDelta(
+                if (VisualComparisonKeypointDeltaCalculator.TryCalculate(
                     candidateMetric.ImageSpaceKeypointProfile,
                     referenceRow.imageSpaceKeypointProfile,
-                    out int matchedKeypointCount,
-                    out float keypointL1Delta,
-                    out float keypointMaxL1Delta))
+                    out VisualComparisonKeypointDelta keypointDelta))
                 {
-                    imageSpaceKeypointCount = Mathf.Max(imageSpaceKeypointCount, matchedKeypointCount);
+                    imageSpaceKeypointCount = Mathf.Max(
+                        imageSpaceKeypointCount,
+                        keypointDelta.ComparedKeypointCount);
                     imageSpaceKeypointSampleCount++;
-                    sumImageSpaceKeypointL1Delta += keypointL1Delta;
+                    sumImageSpaceKeypointL1Delta += keypointDelta.MeanL1Delta;
                     maxImageSpaceKeypointL1Delta =
-                        Mathf.Max(maxImageSpaceKeypointL1Delta, keypointMaxL1Delta);
+                        Mathf.Max(maxImageSpaceKeypointL1Delta, keypointDelta.MaxL1Delta);
                     if (cropSafeSample)
                     {
                         cropSafeImageSpaceKeypointSampleCount++;
-                        sumCropSafeImageSpaceKeypointL1Delta += keypointL1Delta;
+                        sumCropSafeImageSpaceKeypointL1Delta += keypointDelta.MeanL1Delta;
                         maxCropSafeImageSpaceKeypointL1Delta =
-                            Mathf.Max(maxCropSafeImageSpaceKeypointL1Delta, keypointMaxL1Delta);
+                            Mathf.Max(
+                                maxCropSafeImageSpaceKeypointL1Delta,
+                                keypointDelta.MaxL1Delta);
                     }
                 }
                 if (TryComputeBBoxNormalizedImageSpaceKeypointDelta(
@@ -1636,61 +1638,6 @@ namespace Fbx2Vmd.FBXImporter
             int bandIndex = bandEndpointIndex / 2;
             string side = bandEndpointIndex % 2 == 0 ? "left" : "right";
             return $"band_{bandIndex}_{side}";
-        }
-
-        private static bool TryComputeImageSpaceKeypointDelta(
-            float[] candidateKeypoints,
-            float[] referenceKeypoints,
-            out int keypointCount,
-            out float l1Delta,
-            out float maxL1Delta)
-        {
-            keypointCount = 0;
-            l1Delta = float.NaN;
-            maxL1Delta = float.NaN;
-            if (candidateKeypoints == null || referenceKeypoints == null)
-            {
-                return false;
-            }
-
-            int length = Mathf.Min(candidateKeypoints.Length, referenceKeypoints.Length);
-            if (length <= 1)
-            {
-                return false;
-            }
-
-            float sumDelta = 0f;
-            float maxDelta = 0f;
-            int finiteKeypointCount = 0;
-            for (int i = 0; i + 1 < length; i += 2)
-            {
-                float candidateX = candidateKeypoints[i];
-                float candidateY = candidateKeypoints[i + 1];
-                float referenceX = referenceKeypoints[i];
-                float referenceY = referenceKeypoints[i + 1];
-                if (!IsFiniteMetric(candidateX) ||
-                    !IsFiniteMetric(candidateY) ||
-                    !IsFiniteMetric(referenceX) ||
-                    !IsFiniteMetric(referenceY))
-                {
-                    continue;
-                }
-
-                float delta = Mathf.Abs(candidateX - referenceX) + Mathf.Abs(candidateY - referenceY);
-                sumDelta += delta;
-                maxDelta = Mathf.Max(maxDelta, delta);
-                finiteKeypointCount++;
-            }
-
-            if (finiteKeypointCount <= 0)
-            {
-                return false;
-            }
-
-            keypointCount = finiteKeypointCount;
-            l1Delta = sumDelta / finiteKeypointCount;
-            maxL1Delta = maxDelta;
-            return true;
         }
 
         private static bool TryComputeBBoxNormalizedImageSpaceKeypointDelta(
