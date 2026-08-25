@@ -24,6 +24,21 @@ namespace Fbx2Vmd.FBXImporter
 
     internal static class VisualComparisonProfileDeltaCalculator
     {
+        internal static bool TryCalculatePaired(
+            float[] candidateProfile,
+            float[] referenceProfile,
+            out VisualComparisonProfileDelta delta)
+        {
+            if (candidateProfile == null || referenceProfile == null ||
+                Math.Min(candidateProfile.Length, referenceProfile.Length) <= 1)
+            {
+                delta = default;
+                return false;
+            }
+
+            return TryCalculate(candidateProfile, referenceProfile, out delta);
+        }
+
         internal static bool TryCalculate(
             float[] candidateProfile,
             float[] referenceProfile,

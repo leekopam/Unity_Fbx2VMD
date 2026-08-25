@@ -42,6 +42,28 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_SingleValue_When_CalculatingPaired_Then_ReturnsFalse()
+        {
+            bool success = TryCalculatePaired(new[] { 0.1f }, new[] { 0.2f }, out _);
+
+            Assert.That(success, Is.False);
+        }
+
+        [Test]
+        public void Given_OneFiniteValueInPair_When_CalculatingPaired_Then_PreservesFiniteCount()
+        {
+            bool success = TryCalculatePaired(
+                new[] { 0.1f, float.NaN },
+                new[] { 0.4f, 0.7f },
+                out object delta);
+
+            Assert.That(success, Is.True);
+            Assert.That(ReadProperty<int>(delta, "ComparedValueCount"), Is.EqualTo(1));
+            Assert.That(ReadProperty<float>(delta, "MeanAbsoluteDelta"), Is.EqualTo(0.3f).Within(0.000001f));
+            Assert.That(ReadProperty<float>(delta, "MaxAbsoluteDelta"), Is.EqualTo(0.3f).Within(0.000001f));
+        }
+
+        [Test]
         public void Given_ExtractedCalculator_When_CheckingAnalyzer_Then_ProfileDeltaImplementationIsRemoved()
         {
             Type analyzerType = typeof(FBXVmdPipeline).Assembly.GetType(
@@ -49,6 +71,9 @@ namespace Tests.Editor.FBXImporter
                 throwOnError: true);
             MethodInfo legacyMethod = analyzerType.GetMethod(
                 "TryComputeSilhouetteProfileDelta",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo legacyEndpointMethod = analyzerType.GetMethod(
+                "TryComputeSilhouetteEndpointDelta",
                 BindingFlags.Static | BindingFlags.NonPublic);
             string analyzerPath = Path.Combine(
                 Directory.GetCurrentDirectory(),
@@ -60,12 +85,30 @@ namespace Tests.Editor.FBXImporter
             string source = File.ReadAllText(analyzerPath);
 
             Assert.That(legacyMethod, Is.Null);
+            Assert.That(legacyEndpointMethod, Is.Null);
             Assert.That(
                 Count(source, "VisualComparisonProfileDeltaCalculator.TryCalculate("),
+                Is.EqualTo(1));
+            Assert.That(
+                Count(source, "VisualComparisonProfileDeltaCalculator.TryCalculatePaired("),
                 Is.EqualTo(1));
         }
 
         private static bool TryCalculate(float[] candidate, float[] reference, out object delta)
+        {
+            return TryInvoke("TryCalculate", candidate, reference, out delta);
+        }
+
+        private static bool TryCalculatePaired(float[] candidate, float[] reference, out object delta)
+        {
+            return TryInvoke("TryCalculatePaired", candidate, reference, out delta);
+        }
+
+        private static bool TryInvoke(
+            string methodName,
+            float[] candidate,
+            float[] reference,
+            out object delta)
         {
             Type calculatorType = typeof(FBXVmdPipeline).Assembly.GetType(
                 "Fbx2Vmd.FBXImporter.VisualComparisonProfileDeltaCalculator",
@@ -73,9 +116,9 @@ namespace Tests.Editor.FBXImporter
             Assert.That(calculatorType, Is.Not.Null, "모델 중립 profile delta 계산 타입이 필요합니다.");
 
             MethodInfo method = calculatorType.GetMethod(
-                "TryCalculate",
+                methodName,
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(method, Is.Not.Null);
+            Assert.That(method, Is.Not.Null, $"{methodName} 메서드가 필요합니다.");
 
             object[] arguments = { candidate, reference, null };
             bool success = (bool)method.Invoke(null, arguments);

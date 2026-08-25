@@ -511,18 +511,20 @@ namespace Fbx2Vmd.FBXImporter
                                 silhouetteProfileDelta.MeanAbsoluteDelta);
                     }
                 }
-                if (TryComputeSilhouetteEndpointDelta(
+                if (VisualComparisonProfileDeltaCalculator.TryCalculatePaired(
                     candidateMetric.SilhouetteEndpointProfile,
                     referenceRow.silhouetteEndpointProfile,
-                    out int matchedEndpointBandCount,
-                    out float silhouetteEndpointDelta,
-                    out float silhouetteEndpointMaxDelta))
+                    out VisualComparisonProfileDelta silhouetteEndpointDelta))
                 {
-                    silhouetteLandmarkBandCount = Mathf.Max(silhouetteLandmarkBandCount, matchedEndpointBandCount);
+                    silhouetteLandmarkBandCount = Mathf.Max(
+                        silhouetteLandmarkBandCount,
+                        silhouetteEndpointDelta.ComparedValueCount / 2);
                     silhouetteLandmarkCount++;
-                    sumSilhouetteLandmarkEndpointDelta += silhouetteEndpointDelta;
+                    sumSilhouetteLandmarkEndpointDelta += silhouetteEndpointDelta.MeanAbsoluteDelta;
                     maxSilhouetteLandmarkEndpointDelta =
-                        Mathf.Max(maxSilhouetteLandmarkEndpointDelta, silhouetteEndpointMaxDelta);
+                        Mathf.Max(
+                            maxSilhouetteLandmarkEndpointDelta,
+                            silhouetteEndpointDelta.MaxAbsoluteDelta);
                 }
                 if (TryComputeImageSpaceKeypointDelta(
                     candidateMetric.ImageSpaceKeypointProfile,
@@ -1460,56 +1462,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return endpoints;
-        }
-
-        private static bool TryComputeSilhouetteEndpointDelta(
-            float[] candidateEndpoints,
-            float[] referenceEndpoints,
-            out int bandCount,
-            out float endpointDelta,
-            out float maxEndpointDelta)
-        {
-            bandCount = 0;
-            endpointDelta = float.NaN;
-            maxEndpointDelta = float.NaN;
-            if (candidateEndpoints == null || referenceEndpoints == null)
-            {
-                return false;
-            }
-
-            int length = Mathf.Min(candidateEndpoints.Length, referenceEndpoints.Length);
-            if (length <= 1)
-            {
-                return false;
-            }
-
-            float sumDelta = 0f;
-            float maxDelta = 0f;
-            int finiteEndpointCount = 0;
-            for (int i = 0; i < length; i++)
-            {
-                float candidate = candidateEndpoints[i];
-                float reference = referenceEndpoints[i];
-                if (!IsFiniteMetric(candidate) || !IsFiniteMetric(reference))
-                {
-                    continue;
-                }
-
-                float delta = Mathf.Abs(candidate - reference);
-                sumDelta += delta;
-                maxDelta = Mathf.Max(maxDelta, delta);
-                finiteEndpointCount++;
-            }
-
-            if (finiteEndpointCount <= 0)
-            {
-                return false;
-            }
-
-            bandCount = finiteEndpointCount / 2;
-            endpointDelta = sumDelta / finiteEndpointCount;
-            maxEndpointDelta = maxDelta;
-            return true;
         }
 
         private static float[] BuildImageSpaceSilhouetteKeypointProfile(
