@@ -2804,8 +2804,8 @@ namespace Fbx2Vmd.FBXImporter
             {
                 ReferenceMp4FrameMetrics metrics = JsonUtility.FromJson<ReferenceMp4FrameMetrics>(
                     File.ReadAllText(frameMetricsPath, Encoding.UTF8));
-                return ExtractReferenceMp4CurrentClipLocalSampleSeconds(
-                    metrics,
+                return ReferenceVideoSampleTimeExtractor.ExtractLocalSeconds(
+                    metrics != null ? metrics.rows : null,
                     referenceClipStartSeconds,
                     requestedDurationSeconds);
             }
@@ -2818,38 +2818,6 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private static float[] ExtractReferenceMp4CurrentClipLocalSampleSeconds(
-            ReferenceMp4FrameMetrics metrics,
-            float referenceClipStartSeconds,
-            float requestedDurationSeconds)
-        {
-            if (metrics == null || metrics.rows == null)
-            {
-                return Array.Empty<float>();
-            }
-
-            float safeStart = Mathf.Max(0f, referenceClipStartSeconds);
-            float safeDuration = Mathf.Max(0.1f, requestedDurationSeconds);
-            float endSeconds = safeStart + safeDuration;
-            const float epsilonSeconds = 0.0001f;
-            var localSampleSeconds = new List<float>();
-            foreach (ReferenceMp4FrameMetricRow row in metrics.rows)
-            {
-                if (row == null ||
-                    float.IsNaN(row.seconds) ||
-                    float.IsInfinity(row.seconds) ||
-                    row.seconds < safeStart - epsilonSeconds ||
-                    row.seconds > endSeconds + epsilonSeconds)
-                {
-                    continue;
-                }
-
-                localSampleSeconds.Add(Mathf.Clamp(row.seconds - safeStart, 0f, safeDuration));
-            }
-
-            localSampleSeconds.Sort();
-            return localSampleSeconds.ToArray();
-        }
 
         private static string FormatProbeSampleTimes(float[] sampleTimes)
         {
