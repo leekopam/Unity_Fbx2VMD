@@ -192,15 +192,6 @@ namespace Fbx2Vmd.FBXImporter
             public string ManualTargetNameToken;
         }
 
-        private sealed class ManualAnimatorCapturePlan
-        {
-            public float StartTimeSeconds;
-            public float DurationSeconds;
-            public int TargetFrameCount;
-            public string OutputBaseName;
-            public string ComparisonLabel;
-        }
-
         [Serializable]
         private sealed class CaptureResult
         {
@@ -4237,46 +4228,23 @@ namespace Fbx2Vmd.FBXImporter
 
         private static FBXVmdPipeline.EditorDiagnosticSmokeSegment ResolveEditorDiagnosticSmokeSegment(string value)
         {
-            if (string.Equals(value, "middle", StringComparison.OrdinalIgnoreCase))
-            {
-                return FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle;
-            }
-
-            if (string.Equals(value, "tail", StringComparison.OrdinalIgnoreCase))
-            {
-                return FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail;
-            }
-
-            return FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head;
+            return VisualComparisonCaptureSegmentPlanner.ResolveSegment(value);
         }
 
-        private static ManualAnimatorCapturePlan BuildManualAnimatorCapturePlan(
+        private static VisualComparisonManualCapturePlan BuildManualAnimatorCapturePlan(
             string labelSuffix,
             string fbxFileName,
             float referenceClipLengthSeconds,
             float requestedDurationSeconds,
             FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
         {
-            float clipLength = Mathf.Max(0.1f, referenceClipLengthSeconds);
-            float requestedDuration = Mathf.Max(0.1f, requestedDurationSeconds);
-            float startTime = CalculateEditorDiagnosticSmokeStartTime(clipLength, requestedDuration, segment);
-            float remainingLength = Mathf.Max(0.1f, clipLength - startTime);
-            float captureDuration = Mathf.Min(requestedDuration, remainingLength);
-            int targetFrameCount = Mathf.Max(1, Mathf.CeilToInt(captureDuration * DefaultFrameRate));
-            string segmentToken = segment == FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head
-                ? string.Empty
-                : $"_{GetEditorDiagnosticSmokeSegmentLabel(segment)}";
-            string outputBaseName =
-                $"{labelSuffix}_{Path.GetFileNameWithoutExtension(fbxFileName)}{segmentToken}_{Mathf.CeilToInt(captureDuration)}s_animtime";
-
-            return new ManualAnimatorCapturePlan
-            {
-                StartTimeSeconds = startTime,
-                DurationSeconds = captureDuration,
-                TargetFrameCount = targetFrameCount,
-                OutputBaseName = outputBaseName,
-                ComparisonLabel = $"manual_{outputBaseName}"
-            };
+            return VisualComparisonCaptureSegmentPlanner.BuildManualCapturePlan(
+                labelSuffix,
+                fbxFileName,
+                referenceClipLengthSeconds,
+                requestedDurationSeconds,
+                DefaultFrameRate,
+                segment);
         }
 
         private static float CalculateEditorDiagnosticSmokeStartTime(
@@ -4284,30 +4252,15 @@ namespace Fbx2Vmd.FBXImporter
             float requestedDurationSeconds,
             FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
         {
-            float clipLength = Mathf.Max(0.1f, referenceClipLengthSeconds);
-            float safeDuration = Mathf.Max(0.1f, requestedDurationSeconds);
-            switch (segment)
-            {
-                case FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle:
-                    return Mathf.Max(0f, (clipLength - safeDuration) * 0.5f);
-                case FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail:
-                    return Mathf.Max(0f, clipLength - safeDuration);
-                default:
-                    return 0f;
-            }
+            return VisualComparisonCaptureSegmentPlanner.CalculateStartTime(
+                referenceClipLengthSeconds,
+                requestedDurationSeconds,
+                segment);
         }
 
         private static string GetEditorDiagnosticSmokeSegmentLabel(FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
         {
-            switch (segment)
-            {
-                case FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle:
-                    return "middle";
-                case FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail:
-                    return "tail";
-                default:
-                    return "head";
-            }
+            return VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(segment);
         }
 
         private static string FormatRuntimeOverride(float value)
@@ -4352,7 +4305,7 @@ namespace Fbx2Vmd.FBXImporter
             string labelSuffix = _activeJob.Mode == CaptureMode.SubManualTestPrefab
                 ? ManualTestPrefabLabelSuffix
                 : ManualYybLabelSuffix;
-            ManualAnimatorCapturePlan capturePlan = BuildManualAnimatorCapturePlan(
+            VisualComparisonManualCapturePlan capturePlan = BuildManualAnimatorCapturePlan(
                 labelSuffix,
                 _fbxFileName,
                 _referenceClip.length,
