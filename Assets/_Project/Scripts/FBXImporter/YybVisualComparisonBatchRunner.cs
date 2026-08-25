@@ -808,7 +808,7 @@ namespace Fbx2Vmd.FBXImporter
         public static bool IsRunning => _isRunning;
         public static bool HasPersistedRunState()
         {
-            string json = SessionState.GetString(RunnerStateSessionKey, string.Empty);
+            string json = VisualComparisonRunStateStore.ReadJson(RunnerStateSessionKey);
             if (string.IsNullOrWhiteSpace(json))
             {
                 return false;
@@ -5288,12 +5288,12 @@ namespace Fbx2Vmd.FBXImporter
                 failures = Failures.ToArray()
             };
 
-            SessionState.SetString(RunnerStateSessionKey, JsonUtility.ToJson(state));
+            VisualComparisonRunStateStore.SaveJson(RunnerStateSessionKey, JsonUtility.ToJson(state));
         }
 
         private static void ClearPersistedState()
         {
-            SessionState.EraseString(RunnerStateSessionKey);
+            VisualComparisonRunStateStore.Clear(RunnerStateSessionKey);
         }
 
         private static void TryResumeRunAfterDomainReload()
@@ -5308,7 +5308,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            string json = SessionState.GetString(RunnerStateSessionKey, string.Empty);
+            string json = VisualComparisonRunStateStore.ReadJson(RunnerStateSessionKey);
             PersistedState state = JsonUtility.FromJson<PersistedState>(json);
             try
             {
