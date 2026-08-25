@@ -8554,24 +8554,26 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string FormatQualityFloat(float value)
         {
-            return float.IsNaN(value) || float.IsInfinity(value)
-                ? "n/a"
-                : value.ToString("0.######", CultureInfo.InvariantCulture);
+            return VisualComparisonSummaryValueFormatter.FormatFloat(value);
         }
 
         private static string FormatEnabledWeight(bool enabled, float weight)
         {
-            return $"{enabled}/{FormatQualityFloat(weight)}";
+            return VisualComparisonSummaryValueFormatter.FormatEnabledWeight(enabled, weight);
         }
 
         private static string FormatEnabledWeightCap(bool enabled, float weight, float cap)
         {
-            return $"{enabled}/{FormatQualityFloat(weight)}/{FormatQualityFloat(cap)}";
+            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCap(enabled, weight, cap);
         }
 
         private static string FormatEnabledWeightCapScale(bool enabled, float weight, float cap, float scale)
         {
-            return $"{enabled}/{FormatQualityFloat(weight)}/{FormatQualityFloat(cap)}/{FormatQualityFloat(scale)}";
+            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCapScale(
+                enabled,
+                weight,
+                cap,
+                scale);
         }
 
         private static string FormatEnabledWeightCapScaleGate(
@@ -8582,7 +8584,13 @@ namespace Fbx2Vmd.FBXImporter
             float frameGateStart,
             float frameGateEnd)
         {
-            return $"{FormatEnabledWeightCapScale(enabled, weight, cap, scale)}/{FormatQualityFloat(frameGateStart)}-{FormatQualityFloat(frameGateEnd)}";
+            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCapScaleGate(
+                enabled,
+                weight,
+                cap,
+                scale,
+                frameGateStart,
+                frameGateEnd);
         }
 
         private static string FormatEnabledWeightCapScaleBlendGate(
@@ -8594,7 +8602,14 @@ namespace Fbx2Vmd.FBXImporter
             float frameGateStart,
             float frameGateEnd)
         {
-            return $"{FormatEnabledWeightCapScale(enabled, weight, cap, scale)}/blend:{FormatQualityFloat(blend)}/{FormatQualityFloat(frameGateStart)}-{FormatQualityFloat(frameGateEnd)}";
+            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCapScaleBlendGate(
+                enabled,
+                weight,
+                cap,
+                scale,
+                blend,
+                frameGateStart,
+                frameGateEnd);
         }
 
         private static string FormatEvaluatorXzReferenceSettings(CaptureResult result)
