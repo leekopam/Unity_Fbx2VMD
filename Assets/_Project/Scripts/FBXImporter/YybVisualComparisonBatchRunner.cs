@@ -2000,11 +2000,6 @@ namespace Fbx2Vmd.FBXImporter
                 recoveryHoldFrames);
         }
 
-        private static bool ApplyFinalIkFootGroundingRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
-        {
-            return FinalIkFootGroundingRuntimeOverrideApplier.Apply(fileManager, enabled);
-        }
-
         private static bool ApplyVmdPlaybackProbeRuntimeOverride(
             GameObject target,
             string sourceVmdPath,
@@ -2027,11 +2022,6 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
-        }
-
-        private static bool ApplyManualAnimatorFootLocalRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
-        {
-            return ManualPoseReferenceRuntimeOverrideApplier.ApplyFootLocalRotation(fileManager, enabled);
         }
 
         private static bool ApplyManualAnimatorFullBodyPoseRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
@@ -2082,19 +2072,6 @@ namespace Fbx2Vmd.FBXImporter
                 frameGateEnd);
         }
 
-        private static bool ApplySetHumanPoseRightLegTwistOutputRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float weight,
-            float maxDelta)
-        {
-            return ManualPoseReferenceRuntimeOverrideApplier.ApplyRightLegTwistOutput(
-                fileManager,
-                enabled,
-                weight,
-                maxDelta);
-        }
-
         private static bool ApplyManualAnimatorBodyRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
         {
             return ApplyManualAnimatorBodyRotationRuntimeOverride(
@@ -2109,49 +2086,6 @@ namespace Fbx2Vmd.FBXImporter
             float weight)
         {
             return ManualPoseReferenceRuntimeOverrideApplier.ApplyBodyRotation(fileManager, enabled, weight);
-        }
-
-        private static bool ApplyManualAnimatorHandLocalRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
-        {
-            return ManualPoseReferenceRuntimeOverrideApplier.ApplyHandLocalRotation(fileManager, enabled);
-        }
-
-        private static bool ApplyManualAnimatorThumbLocalRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
-        {
-            return ManualPoseReferenceRuntimeOverrideApplier.ApplyThumbLocalRotation(fileManager, enabled);
-        }
-
-        private static bool ApplyManualAnimatorHandPalmFrameRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float weight)
-        {
-            return ManualPoseReferenceRuntimeOverrideApplier.ApplyHandPalmFrame(fileManager, enabled, weight);
-        }
-
-        private static bool ApplyRetargetPoseVisualSpikeSmoothingRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float currentWeight,
-            float forearmStretchClampMaxOffset)
-        {
-            return RetargetingRuntimeOverrideApplier.ApplyPoseVisualSpikeSmoothing(
-                fileManager,
-                enabled,
-                currentWeight,
-                forearmStretchClampMaxOffset);
-        }
-
-        private static bool ApplyRetargetArmStretchClampRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float stretchLimit)
-        {
-            return RetargetingRuntimeOverrideApplier.ApplyArmStretchClamp(
-                fileManager,
-                enabled,
-                stretchLimit,
-                DefaultRetargetArmStretchMuscleLimit);
         }
 
         private static bool ApplyYybArmSwingLimitRuntimeOverride(
@@ -2325,38 +2259,6 @@ namespace Fbx2Vmd.FBXImporter
                 forearmMaxDegrees,
                 leftSideWeightScale,
                 rightSideWeightScale);
-        }
-
-        private static bool ApplyYybArmSleeveAnchorRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float sleeveInfluence,
-            float shoulderCapInfluence,
-            float maxDegrees)
-        {
-            return YybArmRuntimeOverrideApplier.ApplySleeveAnchor(
-                fileManager,
-                enabled,
-                sleeveInfluence,
-                shoulderCapInfluence,
-                maxDegrees);
-        }
-
-        private static bool ApplyYybArmVisualTwistRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float upperArmInfluence,
-            float forearmInfluence,
-            float upperArmMaxDegrees,
-            float forearmMaxDegrees)
-        {
-            return YybArmRuntimeOverrideApplier.ApplyVisualTwist(
-                fileManager,
-                enabled,
-                upperArmInfluence,
-                forearmInfluence,
-                upperArmMaxDegrees,
-                forearmMaxDegrees);
         }
 
         private static bool ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
@@ -2553,60 +2455,6 @@ namespace Fbx2Vmd.FBXImporter
                 footToToesMaxAngle);
         }
 
-        private static bool HasManualAnimatorLowerBodySegmentDirectionDetailRuntimeOverride()
-        {
-            return ManualLowerBodySegmentDirectionRuntimeOverrideApplier.HasDetails(
-                _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
-                _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
-                _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
-                _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
-        }
-
-        private static bool ApplyManualAnimatorLowerBodySegmentDirectionDetailRuntimeOverride(
-            FBXVmdPipeline fileManager)
-        {
-            return ManualLowerBodySegmentDirectionRuntimeOverrideApplier.ApplyDetails(
-                fileManager,
-                _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
-                _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
-                _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
-                _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
-        }
-
-        private static bool ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float weight,
-            float maxAngle)
-        {
-            return ManualPoseReferenceRuntimeOverrideApplier.ApplyFootHipsAlignedResidualYaw(
-                fileManager,
-                enabled,
-                weight,
-                maxAngle);
-        }
-
         private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
         {
             return ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(
@@ -2746,35 +2594,6 @@ namespace Fbx2Vmd.FBXImporter
                 evaluatorXzTargetMagnitude);
         }
 
-        private static bool ApplyPreSetHumanPoseEndpointPositionRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float weight,
-            float maxOffset,
-            float positiveZScale,
-            float toesBlendWeight,
-            float frameGateStart,
-            float frameGateEnd,
-            bool useLeftSide,
-            bool useGhostCurrentBasis,
-            bool invertBodyPositionX,
-            bool invertBodyPositionZ)
-        {
-            return HumanPoseEndpointRuntimeOverrideApplier.ApplyPreSetReference(
-                fileManager,
-                enabled,
-                weight,
-                maxOffset,
-                positiveZScale,
-                toesBlendWeight,
-                frameGateStart,
-                frameGateEnd,
-                useLeftSide,
-                useGhostCurrentBasis,
-                invertBodyPositionX,
-                invertBodyPositionZ);
-        }
-
         private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(
             FBXVmdPipeline fileManager,
             bool enabled,
@@ -2810,73 +2629,6 @@ namespace Fbx2Vmd.FBXImporter
                 maxOffset);
         }
 
-        private static bool ApplyManualAnimatorBodyPositionXzRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float weight,
-            float maxOffset,
-            float frameGateStart,
-            float frameGateEnd,
-            float frameGateBlendFrames,
-            float axisXScale,
-            float axisZScale)
-        {
-            return ManualPoseReferenceRuntimeOverrideApplier.ApplyBodyPositionXz(
-                fileManager,
-                enabled,
-                weight,
-                maxOffset,
-                frameGateStart,
-                frameGateEnd,
-                frameGateBlendFrames,
-                axisXScale,
-                axisZScale);
-        }
-
-        private static bool ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled,
-            float localOffsetX,
-            float frameGateStart,
-            float frameGateEnd)
-        {
-            return YybArmRuntimeOverrideApplier.ApplyRightSleeveSilhouetteOffset(
-                fileManager,
-                enabled,
-                localOffsetX,
-                frameGateStart,
-                frameGateEnd);
-        }
-
-        private static bool ApplyTargetHumanoidBonePositionLockRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled)
-        {
-            return RetargetingRuntimeOverrideApplier.ApplyTargetHumanoidBonePositionLock(fileManager, enabled);
-        }
-
-        private static bool ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(
-            FBXVmdPipeline fileManager,
-            bool enabled)
-        {
-            return RetargetingRuntimeOverrideApplier.ApplyBodyPositionXzRootMotion(fileManager, enabled);
-        }
-
-        private static float NormalizeMmdIkDeltaGuardLimitOverride(float value)
-        {
-            return VmdIkDeltaGuardRuntimeOverrideApplier.NormalizeLimit(value);
-        }
-
-        private static float NormalizePositiveFloat(float value, float fallbackValue)
-        {
-            return VisualComparisonRuntimeValueNormalizer.NormalizePositive(value, fallbackValue);
-        }
-
-        private static float NormalizeFiniteFloat(float value, float fallbackValue)
-        {
-            return VisualComparisonRuntimeValueNormalizer.NormalizeFinite(value, fallbackValue);
-        }
-
         private static bool HasMmdIkDeltaGuardLimitOverride(float value)
         {
             return VmdIkDeltaGuardRuntimeOverrideApplier.HasLimit(value);
@@ -2885,32 +2637,6 @@ namespace Fbx2Vmd.FBXImporter
         private static bool HasDiagnosticScreenshotFramingOverride(float value)
         {
             return VisualComparisonScreenshotOverridePolicy.HasFiniteFramingOverride(value);
-        }
-
-        private static int NormalizeMmdIkDeltaGuardRecoveryHoldFrames(int value)
-        {
-            return VmdIkDeltaGuardRuntimeOverrideApplier.NormalizeRecoveryHoldFrames(value);
-        }
-
-        private static int NormalizeDiagnosticCaptureDimensionOverride(int value)
-        {
-            return VisualComparisonScreenshotOverridePolicy.NormalizeCaptureDimension(
-                value,
-                NoDiagnosticCaptureDimensionOverride);
-        }
-
-        private static float NormalizeDiagnosticScreenshotPaddingOverride(float value)
-        {
-            return VisualComparisonScreenshotOverridePolicy.NormalizePadding(
-                value,
-                NoDiagnosticScreenshotFramingOverride);
-        }
-
-        private static float NormalizeDiagnosticScreenshotVerticalViewportCenterOverride(float value)
-        {
-            return VisualComparisonScreenshotOverridePolicy.NormalizeVerticalViewportCenter(
-                value,
-                NoDiagnosticScreenshotFramingOverride);
         }
 
         private static FBXVmdPipeline.EditorDiagnosticSmokeSegment ResolveEditorDiagnosticSmokeSegment(string value)
@@ -3068,26 +2794,6 @@ namespace Fbx2Vmd.FBXImporter
                 : 0f;
             animator.Play(0, 0, normalizedStartTime);
             animator.Update(0f);
-        }
-
-        private static HumanoidSampleCode FindManualRecorder(string targetNameToken)
-        {
-            HumanoidSampleCode[] recorders = UnityEngine.Object.FindObjectsOfType<HumanoidSampleCode>(true);
-            foreach (HumanoidSampleCode recorder in recorders)
-            {
-                if (recorder == null)
-                {
-                    continue;
-                }
-
-                string hierarchyPath = GetHierarchyPath(recorder.transform);
-                if (hierarchyPath.IndexOf(targetNameToken, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    return recorder;
-                }
-            }
-
-            return null;
         }
 
         private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
@@ -4209,25 +3915,6 @@ namespace Fbx2Vmd.FBXImporter
                 SatisfactionReferenceMaxMmdFrame);
         }
 
-        private static bool TryResolveKnownMmdReferenceTargetFrameCount(
-            string fbxFileName,
-            float requestedDurationSeconds,
-            int configuredTargetFrameCount,
-            float referenceClipLengthSeconds,
-            float recordingFrameRate,
-            out int referenceTargetFrameCount)
-        {
-            return ReferenceFrameCountResolver.TryResolveKnownReference(
-                fbxFileName,
-                requestedDurationSeconds,
-                configuredTargetFrameCount,
-                referenceClipLengthSeconds,
-                recordingFrameRate,
-                SatisfactionReferenceOutputBaseName,
-                SatisfactionReferenceMaxMmdFrame,
-                out referenceTargetFrameCount);
-        }
-
         private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
@@ -4935,45 +4622,9 @@ namespace Fbx2Vmd.FBXImporter
                 maxStep);
         }
 
-        private static bool IsGroundingVerticalStepAtMax(float stepToMaxRatio)
-        {
-            return VisualComparisonMetricCalculator.IsGroundingStepAtMax(stepToMaxRatio);
-        }
-
-        private static int CalculateMetricIntSpan(int first, int finish)
-        {
-            return VisualComparisonMetricCalculator.CalculateIntSpan(first, finish);
-        }
-
-        private static float CalculateMetricFloatSpan(float first, float finish)
-        {
-            return VisualComparisonMetricCalculator.CalculateFloatSpan(first, finish);
-        }
-
         internal static string[] SplitSimpleCsvLine(string line)
         {
             return VisualComparisonCsvMetricReader.SplitLine(line);
-        }
-
-        private static Dictionary<string, int> BuildCsvIndexMap(string[] headers)
-        {
-            return VisualComparisonCsvMetricReader.BuildIndexMap(headers);
-        }
-
-        private static string GetCsvString(
-            string[] row,
-            Dictionary<string, int> indices,
-            string column)
-        {
-            return VisualComparisonCsvMetricReader.ReadString(row, indices, column);
-        }
-
-        private static int GetCsvInt(
-            string[] row,
-            Dictionary<string, int> indices,
-            string column)
-        {
-            return VisualComparisonCsvMetricReader.ReadInt(row, indices, column);
         }
 
         private static float GetCsvFloat(
@@ -5026,11 +4677,6 @@ namespace Fbx2Vmd.FBXImporter
                 hasReferenceClip);
         }
 
-        private static string NormalizeFbxFileName(string fbxFileName)
-        {
-            return FbxReferenceClipPathResolver.NormalizeFileName(fbxFileName, DefaultFbxFileName);
-        }
-
         private static string GetHierarchyPath(Transform transform)
         {
             if (transform == null)
@@ -5052,20 +4698,6 @@ namespace Fbx2Vmd.FBXImporter
         private static string MakeProjectRelativePath(string absolutePath)
         {
             return VisualComparisonArtifactPathResolver.MakeProjectRelative(absolutePath, _projectRoot);
-        }
-
-        private static string EscapeJson(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return string.Empty;
-            }
-
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("\r", "\\r")
-                .Replace("\n", "\\n");
         }
 
         private static string BuildSafeSummarySessionId(string sessionId)
