@@ -19,7 +19,7 @@ namespace Fbx2Vmd.FBXImporter
         private const float ReferenceAlignedVisualEvidenceEndpointPixelTolerance = 0.001f;
 
         internal static void AttachCandidateScreenshotFrameDiagnostics(
-            YybVisualComparisonBatchRunner.SummaryFrameRoleDiagnostics diagnostics,
+            VisualComparisonFrameRoleDiagnosticsData diagnostics,
             string candidateFrameIndexPath,
             string projectRoot)
         {
@@ -237,7 +237,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static void AttachCandidateScreenshotTimingDiagnostics(
-            YybVisualComparisonBatchRunner.SummaryFrameRoleDiagnostics diagnostics,
+            VisualComparisonFrameRoleDiagnosticsData diagnostics,
             CandidateScreenshotFrameMetrics metrics)
         {
             if (diagnostics == null || metrics == null || metrics.Samples.Count <= 0)
@@ -329,7 +329,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static void AttachCandidateScreenshotTimeMatchedFramingDiagnostics(
-            YybVisualComparisonBatchRunner.SummaryFrameRoleDiagnostics diagnostics,
+            VisualComparisonFrameRoleDiagnosticsData diagnostics,
             List<CandidateScreenshotFrameSample> candidateSamples)
         {
             if (diagnostics == null ||

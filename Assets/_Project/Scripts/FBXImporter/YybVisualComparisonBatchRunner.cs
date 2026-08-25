@@ -1954,7 +1954,7 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(summaryJsonPath) ?? _summaryDirectory);
-                SummaryFrameRoleDiagnostics frameRoleDiagnostics = BuildCurrentSummaryFrameRoleDiagnostics();
+                VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics = BuildCurrentSummaryFrameRoleDiagnostics();
                 MotionComparisonFrameQualitySummary[] frameQualitySummaries =
                     BuildFrameQualitySummaries(frameRoleDiagnostics);
                 PromoteFrameQualityFailuresToRunFailures(frameQualitySummaries, frameRoleDiagnostics);
@@ -2365,7 +2365,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static SummaryContainer BuildSummaryContainer(
             MotionComparisonFrameQualitySummary[] frameQualitySummaries = null,
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics = null)
+            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics = null)
         {
             frameRoleDiagnostics = frameRoleDiagnostics ?? BuildCurrentSummaryFrameRoleDiagnostics();
             frameQualitySummaries = frameQualitySummaries ?? BuildFrameQualitySummaries(frameRoleDiagnostics);
@@ -2414,7 +2414,7 @@ namespace Fbx2Vmd.FBXImporter
             return BuildFrameQualitySummaries(BuildCurrentSummaryFrameRoleDiagnostics());
         }
 
-        private static SummaryFrameRoleDiagnostics BuildCurrentSummaryFrameRoleDiagnostics()
+        private static VisualComparisonFrameRoleDiagnosticsData BuildCurrentSummaryFrameRoleDiagnostics()
         {
             return BuildSummaryFrameRoleDiagnostics(
                 ResolveSummaryTargetFrameCount(),
@@ -2423,7 +2423,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static MotionComparisonFrameQualitySummary[] BuildFrameQualitySummaries(
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics)
+            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics)
         {
             CaptureResult baseline = Results.FirstOrDefault(result =>
                 string.Equals(result.jobMode, CaptureMode.SubManualTestPrefab.ToString(), StringComparison.Ordinal));
@@ -2453,7 +2453,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void PromoteFrameQualityFailuresToRunFailures(
             MotionComparisonFrameQualitySummary[] frameQualitySummaries,
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics = null)
+            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics = null)
         {
             foreach (string failure in BuildFrameQualityFailureMessages(frameQualitySummaries, frameRoleDiagnostics))
             {
@@ -2472,7 +2472,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string[] BuildFrameQualityFailureMessages(
             MotionComparisonFrameQualitySummary[] frameQualitySummaries,
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics)
+            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics)
         {
             if (frameRoleDiagnostics != null)
             {
@@ -2499,7 +2499,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void ApplyImportedFbxVisualEvidenceFrameQualityPolicy(
             MotionComparisonFrameQualitySummary[] frameQualitySummaries,
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics)
+            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics)
         {
             YybVisualComparisonReferenceAlignmentPolicy.Apply(
                 frameQualitySummaries,
@@ -2507,7 +2507,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static bool HasReferenceAlignedImportedFbxVisualEvidence(
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics)
+            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics)
         {
             if (frameRoleDiagnostics == null)
             {
@@ -2720,7 +2720,7 @@ namespace Fbx2Vmd.FBXImporter
                 SatisfactionReferenceMaxMmdFrame);
         }
 
-        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
             int candidateRecordedFrameCount)
@@ -2828,7 +2828,7 @@ namespace Fbx2Vmd.FBXImporter
                 sampleTimes.Select(sampleTime => sampleTime.ToString("0.###", CultureInfo.InvariantCulture)));
         }
 
-        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
             int candidateRecordedFrameCount,
@@ -2842,7 +2842,7 @@ namespace Fbx2Vmd.FBXImporter
                 0f);
         }
 
-        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
             int candidateRecordedFrameCount,
@@ -2861,7 +2861,7 @@ namespace Fbx2Vmd.FBXImporter
                 ReferenceMp4ContactSheetRelativePath);
         }
 
-        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
             int candidateRecordedFrameCount,
@@ -2883,7 +2883,7 @@ namespace Fbx2Vmd.FBXImporter
                 referenceMp4ContactSheetPath);
         }
 
-        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
             int candidateRecordedFrameCount,
@@ -2907,7 +2907,7 @@ namespace Fbx2Vmd.FBXImporter
                 ResolveCandidateFrameIndexPathForDiagnostics());
         }
 
-        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
             int candidateRecordedFrameCount,
@@ -2931,7 +2931,7 @@ namespace Fbx2Vmd.FBXImporter
                 candidateFrameIndexPath);
         }
 
-        private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
+        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
             int candidateRecordedFrameCount,
@@ -2943,7 +2943,7 @@ namespace Fbx2Vmd.FBXImporter
             string referenceMp4ContactSheetPath,
             string candidateFrameIndexPath)
         {
-            SummaryFrameRoleDiagnostics diagnostics = new SummaryFrameRoleDiagnostics
+            VisualComparisonFrameRoleDiagnosticsData diagnostics = new VisualComparisonFrameRoleDiagnosticsData
             {
                 reference_target_frame_count = Mathf.Max(0, referenceTargetFrameCount),
                 baseline_recorded_frame_count = Mathf.Max(0, baselineRecordedFrameCount),
@@ -2976,7 +2976,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static void AttachReferenceMp4Diagnostics(
-            SummaryFrameRoleDiagnostics diagnostics,
+            VisualComparisonFrameRoleDiagnosticsData diagnostics,
             float requestedDurationSeconds,
             float referenceClipStartSeconds,
             string referenceMp4ProvenanceEvidencePath,
@@ -3025,7 +3025,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static void AttachReferenceMp4CurrentClipCoverage(
-            SummaryFrameRoleDiagnostics diagnostics,
+            VisualComparisonFrameRoleDiagnosticsData diagnostics,
             ReferenceVideoClipCoverageData coverage)
         {
             if (diagnostics == null ||
@@ -3349,15 +3349,6 @@ namespace Fbx2Vmd.FBXImporter
         [Serializable]
         private sealed class SummaryContainer : YybVisualComparisonSummaryData
         {
-        }
-
-        [Serializable]
-        internal sealed class SummaryFrameRoleDiagnostics : VisualComparisonFrameRoleDiagnosticsData
-        {
-            [NonSerialized]
-            public readonly List<Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow>
-                referenceMp4CurrentClipRows =
-                    new List<Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow>();
         }
 
         [Serializable]

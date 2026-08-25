@@ -10,7 +10,7 @@ namespace Tests.Editor.FBXImporter
     public class VisualComparisonFrameRoleDiagnosticsDataTests
     {
         [Test]
-        public void Given_RunnerDiagnostics_When_Serializing_Then_PreservesMetricsAndExcludesRuntimeRows()
+        public void Given_CommonDiagnostics_When_Serializing_Then_PreservesMetricsAndExcludesRuntimeRows()
         {
             Assembly runtimeAssembly = typeof(FBXVmdPipeline).Assembly;
             Type dataType = runtimeAssembly.GetType(
@@ -21,16 +21,18 @@ namespace Tests.Editor.FBXImporter
             Type runnerType = runtimeAssembly.GetType(
                 "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner",
                 throwOnError: true);
-            Type diagnosticsType = runnerType.GetNestedType(
+            Type runnerOwnedDiagnosticsType = runnerType.GetNestedType(
                 "SummaryFrameRoleDiagnostics",
                 BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(diagnosticsType, Is.Not.Null);
-            Assert.That(diagnosticsType.BaseType, Is.EqualTo(dataType));
+            Assert.That(
+                runnerOwnedDiagnosticsType,
+                Is.Null,
+                "모델 중립 진단 데이터가 YYB Runner 내부 타입에 종속되면 안 됩니다.");
 
-            object diagnostics = Activator.CreateInstance(diagnosticsType, nonPublic: true);
-            diagnosticsType.GetField("reference_target_frame_count").SetValue(diagnostics, 120);
-            diagnosticsType.GetField("candidate_recorded_frame_count").SetValue(diagnostics, 118);
-            IList runtimeRows = (IList)diagnosticsType.GetField("referenceMp4CurrentClipRows").GetValue(diagnostics);
+            object diagnostics = Activator.CreateInstance(dataType, nonPublic: true);
+            dataType.GetField("reference_target_frame_count").SetValue(diagnostics, 120);
+            dataType.GetField("candidate_recorded_frame_count").SetValue(diagnostics, 118);
+            IList runtimeRows = (IList)dataType.GetField("referenceMp4CurrentClipRows").GetValue(diagnostics);
             Assert.That(runtimeRows, Is.Empty);
 
             string json = JsonUtility.ToJson(diagnostics);
