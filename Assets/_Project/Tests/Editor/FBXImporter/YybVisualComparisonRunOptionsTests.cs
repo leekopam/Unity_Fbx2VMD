@@ -71,5 +71,22 @@ namespace Tests.Editor.FBXImporter
                 yybType.GetField("enableYybArmSwingLimitRuntimeOverride", declaredFields),
                 Is.Not.Null);
         }
+
+        [Test]
+        public void Given_NormalizedOptions_When_CheckingRunner_Then_UsesSingleApplyBoundary()
+        {
+            Type optionsType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonRunOptions",
+                throwOnError: true);
+            MethodInfo applyMethod = typeof(YybVisualComparisonBatchRunner).GetMethod(
+                "ApplyRunOptions",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(applyMethod, Is.Not.Null, "정규화된 실행 옵션 적용 경계가 필요합니다.");
+
+            ParameterInfo[] parameters = applyMethod.GetParameters();
+
+            Assert.That(parameters, Has.Length.EqualTo(1));
+            Assert.That(parameters[0].ParameterType, Is.EqualTo(optionsType));
+        }
     }
 }
