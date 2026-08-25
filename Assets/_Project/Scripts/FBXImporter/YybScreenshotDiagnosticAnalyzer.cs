@@ -414,7 +414,7 @@ namespace Fbx2Vmd.FBXImporter
             float referenceClipDurationSeconds = Mathf.Max(
                 0f,
                 diagnostics.reference_mp4_current_clip_duration_seconds);
-            foreach (YybVisualComparisonBatchRunner.ReferenceMp4FrameMetricRow referenceRow in diagnostics.referenceMp4CurrentClipRows)
+            foreach (Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow referenceRow in diagnostics.referenceMp4CurrentClipRows)
             {
                 if (referenceRow == null || float.IsNaN(referenceRow.seconds))
                 {

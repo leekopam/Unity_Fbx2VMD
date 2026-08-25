@@ -2992,113 +2992,58 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            diagnostics.reference_mp4_provenance_evidence_path = referenceMp4ProvenanceEvidencePath ?? string.Empty;
-            diagnostics.reference_mp4_analysis_result_path = referenceMp4AnalysisResultPath ?? string.Empty;
-            diagnostics.reference_mp4_frame_metrics_path = referenceMp4FrameMetricsPath ?? string.Empty;
-            diagnostics.reference_mp4_contact_sheet_path = referenceMp4ContactSheetPath ?? string.Empty;
+            ReferenceVideoDiagnosticsMapper.Initialize(
+                diagnostics,
+                referenceClipStartSeconds,
+                requestedDurationSeconds,
+                referenceMp4ProvenanceEvidencePath,
+                referenceMp4AnalysisResultPath,
+                referenceMp4FrameMetricsPath,
+                referenceMp4ContactSheetPath);
             diagnostics.reference_mp4_canonical_context =
                 "Ref MP4 is a manually postprocessed MMD render from Sub_Manual testPrefab + satisfaction_2; it anchors visual framing/provenance while Unity pose gates compare Sub_Manual metrics to main candidates.";
             diagnostics.reference_mp4_analysis_metric_basis =
                 "MP4 analysis supplies visual bbox/framing context; frame-quality gates remain same-recorderFrame Unity metrics and VMD export checks.";
-            diagnostics.reference_mp4_current_clip_start_seconds = Mathf.Max(0f, referenceClipStartSeconds);
-            diagnostics.reference_mp4_current_clip_duration_seconds = Mathf.Max(0f, requestedDurationSeconds);
-            diagnostics.reference_mp4_current_clip_end_seconds =
-                diagnostics.reference_mp4_current_clip_start_seconds +
-                diagnostics.reference_mp4_current_clip_duration_seconds;
-            diagnostics.reference_mp4_current_clip_first_sample_seconds = float.NaN;
-            diagnostics.reference_mp4_current_clip_last_sample_seconds = float.NaN;
-            diagnostics.reference_mp4_current_clip_sample_gap_seconds =
-                diagnostics.reference_mp4_current_clip_duration_seconds;
-            diagnostics.reference_mp4_current_clip_sample_basis =
-                "Counts reference MP4 frame-metrics rows whose seconds are within the active clip start and requested duration for this visual compare run; stored sample seconds are local to the clip start.";
-            diagnostics.reference_mp4_current_clip_framing_metric_basis =
-                "Aggregates ref MP4 bbox/framing rows within the active clip start and requested duration, so head/middle/tail candidate screenshot deltas are aligned to the matching reference video window.";
-            diagnostics.reference_mp4_current_clip_avg_bbox_height_ratio = float.NaN;
-            diagnostics.reference_mp4_current_clip_avg_bbox_width_ratio = float.NaN;
-            diagnostics.reference_mp4_current_clip_center_x_range_ratio = float.NaN;
-            diagnostics.reference_mp4_current_clip_max_bottom_gap_ratio = float.NaN;
-            diagnostics.reference_mp4_current_clip_avg_bright_area_ratio = float.NaN;
-            diagnostics.reference_mp4_current_clip_avg_upper_limb_span_ratio = float.NaN;
-            diagnostics.reference_mp4_current_clip_avg_lower_limb_span_ratio = float.NaN;
-            diagnostics.reference_mp4_current_clip_sample_seconds = Array.Empty<float>();
 
             string resultPath = ResolveProjectRelativePath(diagnostics.reference_mp4_analysis_result_path);
             string frameMetricsPath = ResolveProjectRelativePath(diagnostics.reference_mp4_frame_metrics_path);
             string contactSheetPath = ResolveProjectRelativePath(diagnostics.reference_mp4_contact_sheet_path);
-            diagnostics.reference_mp4_provenance_evidence_exists =
+            bool provenanceEvidenceExists =
                 File.Exists(ResolveProjectRelativePath(diagnostics.reference_mp4_provenance_evidence_path));
-            diagnostics.reference_mp4_contact_sheet_exists = File.Exists(contactSheetPath);
-
+            bool contactSheetExists = File.Exists(contactSheetPath);
             ReferenceVideoDiagnosticsData referenceVideo =
                 ReferenceVideoDiagnosticsReader.Read(resultPath, frameMetricsPath);
-            diagnostics.reference_mp4_analysis_result_exists = referenceVideo.AnalysisFileExists;
-            diagnostics.reference_mp4_analysis_error = referenceVideo.AnalysisError;
-            diagnostics.reference_mp4_analysis_schema = referenceVideo.AnalysisSchema;
-            diagnostics.reference_mp4_extracted_frame_count = referenceVideo.ExtractedFrameCount;
-            diagnostics.reference_mp4_width = referenceVideo.VideoWidth;
-            diagnostics.reference_mp4_height = referenceVideo.VideoHeight;
-            diagnostics.reference_mp4_avg_frame_rate = referenceVideo.AverageFrameRate;
-            diagnostics.reference_mp4_stream_duration_seconds = referenceVideo.StreamDurationSeconds;
-            diagnostics.reference_mp4_total_video_frames = referenceVideo.TotalVideoFrames;
-            diagnostics.reference_mp4_frame_metrics_exists = referenceVideo.FrameMetricsFileExists;
-            diagnostics.reference_mp4_frame_metrics_error = referenceVideo.FrameMetricsError;
-            diagnostics.reference_mp4_frame_metrics_schema = referenceVideo.FrameMetricsSchema;
-            diagnostics.reference_mp4_frame_metrics_sample_count = referenceVideo.FrameMetricsSampleCount;
-            diagnostics.reference_mp4_frame_metrics_extracted_frame_count =
-                referenceVideo.FrameMetricsExtractedFrameCount;
-            diagnostics.reference_mp4_avg_bbox_height_ratio = referenceVideo.AverageBBoxHeightRatio;
-            diagnostics.reference_mp4_avg_bbox_width_ratio = referenceVideo.AverageBBoxWidthRatio;
-            diagnostics.reference_mp4_center_x_range_ratio = referenceVideo.CenterXRangeRatio;
-            diagnostics.reference_mp4_max_bottom_gap_ratio = referenceVideo.MaxBottomGapRatio;
-            diagnostics.reference_mp4_avg_bright_area_ratio = referenceVideo.AverageBrightAreaRatio;
-            AttachReferenceMp4CurrentClipCoverage(
+            ReferenceVideoClipCoverageData coverage =
+                ReferenceVideoClipCoverageCalculator.Calculate(
+                    referenceVideo.FrameMetricRows,
+                    diagnostics.reference_mp4_current_clip_start_seconds,
+                    diagnostics.reference_mp4_current_clip_duration_seconds);
+            ReferenceVideoDiagnosticsMapper.Apply(
                 diagnostics,
-                referenceVideo.FrameMetricRows);
+                referenceVideo,
+                coverage,
+                provenanceEvidenceExists,
+                contactSheetExists);
+            AttachReferenceMp4CurrentClipCoverage(diagnostics, coverage);
         }
 
         private static void AttachReferenceMp4CurrentClipCoverage(
             SummaryFrameRoleDiagnostics diagnostics,
-            Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow[] rows)
+            ReferenceVideoClipCoverageData coverage)
         {
-            if (diagnostics == null || rows == null)
-            {
-                return;
-            }
-
-            float startSeconds = Mathf.Max(0f, diagnostics.reference_mp4_current_clip_start_seconds);
-            float durationSeconds = Mathf.Max(0f, diagnostics.reference_mp4_current_clip_duration_seconds);
-            ReferenceVideoClipCoverageData coverage =
-                ReferenceVideoClipCoverageCalculator.Calculate(
-                    rows,
-                    startSeconds,
-                    durationSeconds);
-            diagnostics.reference_mp4_current_clip_end_seconds = coverage.EndSeconds;
-            diagnostics.reference_mp4_current_clip_sample_gap_seconds = coverage.SampleGapSeconds;
-            if (durationSeconds <= 0f)
+            if (diagnostics == null ||
+                coverage == null ||
+                diagnostics.reference_mp4_current_clip_duration_seconds <= 0f)
             {
                 return;
             }
 
             diagnostics.referenceMp4CurrentClipRows.Clear();
             diagnostics.referenceMp4CurrentClipRows.AddRange(coverage.Rows);
-            diagnostics.reference_mp4_current_clip_sample_count = coverage.SampleCount;
-            diagnostics.reference_mp4_current_clip_sample_seconds = coverage.SampleSeconds;
             if (coverage.SampleCount <= 0)
             {
                 return;
             }
-
-            diagnostics.reference_mp4_current_clip_first_sample_seconds = coverage.FirstSampleSeconds;
-            diagnostics.reference_mp4_current_clip_last_sample_seconds = coverage.LastSampleSeconds;
-            diagnostics.reference_mp4_current_clip_sample_coverage_ratio = coverage.SampleCoverageRatio;
-            diagnostics.reference_mp4_current_clip_avg_bbox_height_ratio =
-                coverage.AverageBBoxHeightRatio;
-            diagnostics.reference_mp4_current_clip_avg_bbox_width_ratio =
-                coverage.AverageBBoxWidthRatio;
-            diagnostics.reference_mp4_current_clip_center_x_range_ratio = coverage.CenterXRangeRatio;
-            diagnostics.reference_mp4_current_clip_max_bottom_gap_ratio = coverage.MaxBottomGapRatio;
-            diagnostics.reference_mp4_current_clip_avg_bright_area_ratio =
-                coverage.AverageBrightAreaRatio;
 
             float sumUpperLimbSpan = 0f;
             float sumLowerLimbSpan = 0f;
