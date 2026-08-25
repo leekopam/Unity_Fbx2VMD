@@ -217,211 +217,14 @@ namespace Fbx2Vmd.FBXImporter
         private static readonly List<string> Failures = new List<string>();
 
         private static CaptureJob _activeJob;
-        private static YybVisualComparisonRunOptions _currentRunOptions;
+        private static YybVisualComparisonRunOptions _currentRunOptions = CreateDefaultRunOptions();
         private static FBXVmdPipeline _activeFBXVmdPipeline;
         private static HumanoidSampleCode _activeRecorder;
         private static AnimationClip _referenceClip;
         private static string _referenceClipAssetPath = string.Empty;
         private static RuntimeAnimatorController _fallbackController;
-        private static string _fbxFileName = DefaultFbxFileName;
-        private static float _durationSeconds = DefaultDurationSeconds;
-        private static int _targetFrameCount = Mathf.CeilToInt(DefaultDurationSeconds * DefaultFrameRate);
-        private static bool _enableFingerCloseups;
-        private static bool _enableRecorderParentFrameIkOffsetsWhenCenterParented = true;
-        private static float _mmdIkDeltaGuardLimitOverrideVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
-        private static float _mmdIkDeltaGuardRecoveryTriggerVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
-        private static float _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
-        private static int _mmdIkDeltaGuardRecoveryHoldFrames = NoMmdIkDeltaGuardRecoveryHoldFrames;
-        private static bool _enableFinalIkFootGroundingRuntimeOverride;
-        private static bool _enableManualAnimatorFootLocalRotationRuntimeOverride;
-        private static bool _disableManualAnimatorFootLocalRotationRuntimeOverride;
-        private static bool _enableManualAnimatorFullBodyPoseRuntimeOverride;
-        private static bool _disableManualAnimatorFullBodyPoseRuntimeOverride;
-        private static float _manualAnimatorFullBodyPoseReferenceWeight =
-            DefaultManualAnimatorFullBodyPoseReferenceWeight;
-        private static bool _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
-        private static bool _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
-        private static bool _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
-        private static bool _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
-        private static bool _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
-        private static bool _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
-        private static float _manualAnimatorFullBodyPoseReferenceFrameGateStart =
-            DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart;
-        private static float _manualAnimatorFullBodyPoseReferenceFrameGateEnd =
-            DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd;
-        private static bool _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
-        private static float _setHumanPoseRightLegTwistOutputReferenceWeight =
-            DefaultSetHumanPoseRightLegTwistOutputReferenceWeight;
-        private static float _setHumanPoseRightLegTwistOutputReferenceMaxDelta =
-            DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta;
-        private static bool _enableManualAnimatorBodyRotationRuntimeOverride;
-        private static bool _disableManualAnimatorBodyRotationRuntimeOverride;
-        private static float _manualAnimatorBodyRotationReferenceWeight =
-            DefaultManualAnimatorBodyRotationReferenceWeight;
-        private static bool _enableManualAnimatorHandLocalRotationRuntimeOverride;
-        private static bool _enableManualAnimatorThumbLocalRotationRuntimeOverride;
-        private static bool _enableManualAnimatorHandPalmFrameRuntimeOverride;
-        private static float _manualAnimatorHandPalmFrameWeight = DefaultManualAnimatorHandPalmFrameWeight;
-        private static bool _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings;
-        private static bool _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride = true;
-        private static float _retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight;
-        private static float _retargetPoseVisualSpikeForearmStretchClampMaxOffset =
-            DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset;
-        private static bool _enableRetargetArmStretchClampRuntimeOverride;
-        private static float _retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit;
-        private static bool _enableYybArmSwingLimitRuntimeOverride;
-        private static float _yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight;
-        private static float _yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot;
-        private static float _yybArmSwingMinHandHorizontalRatio = DefaultYybArmSwingMinHandHorizontalRatio;
-        private static float _yybArmSwingMaxHandBelowShoulderRatio =
-            DefaultYybArmSwingMaxHandBelowShoulderRatio;
-        private static float _yybArmSwingHorizontalReachLimitWeight =
-            DefaultYybArmSwingHorizontalReachLimitWeight;
-        private static float _yybArmSwingMaxHandHorizontalReachRatio =
-            DefaultYybArmSwingMaxHandHorizontalReachRatio;
-        private static float _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio =
-            DefaultYybArmSwingHorizontalReachMaxHandBelowShoulderRatio;
-        private static float _yybArmSwingHorizontalReachMinElbowAngleAfterApply =
-            DefaultYybArmSwingHorizontalReachMinElbowAngleAfterApply;
-        private static float _yybArmSwingRaisedPoseHorizontalReachLimitWeight =
-            DefaultYybArmSwingRaisedPoseHorizontalReachLimitWeight;
-        private static float _yybArmSwingRaisedPoseMinUpperArmDownDot =
-            DefaultYybArmSwingRaisedPoseMinUpperArmDownDot;
-        private static float _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio =
-            DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio;
-        private static float _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio =
-            DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
-        private static bool _enableYybArmDirectionRetargetRuntimeOverride;
-        private static float _yybArmDirectionUpperArmWeight = DefaultYybArmDirectionUpperArmWeight;
-        private static float _yybArmDirectionForearmWeight = DefaultYybArmDirectionForearmWeight;
-        private static float _yybArmDirectionUpperArmMaxDegrees = DefaultYybArmDirectionUpperArmMaxDegrees;
-        private static float _yybArmDirectionForearmMaxDegrees = DefaultYybArmDirectionForearmMaxDegrees;
-        private static float _yybArmDirectionLeftSideWeightScale = DefaultYybArmDirectionLeftSideWeightScale;
-        private static float _yybArmDirectionRightSideWeightScale = DefaultYybArmDirectionRightSideWeightScale;
-        private static bool _overrideYybArmSleeveAnchorRuntimeSettings;
-        private static bool _enableYybArmSleeveAnchorRuntimeOverride = true;
-        private static float _yybArmSleeveAnchorInfluence = DefaultYybArmSleeveAnchorInfluence;
-        private static float _yybArmShoulderCapAnchorInfluence = DefaultYybArmShoulderCapAnchorInfluence;
-        private static float _yybArmSleeveAnchorMaxDegrees = DefaultYybArmSleeveAnchorMaxDegrees;
-        private static bool _overrideYybArmVisualTwistRuntimeSettings;
-        private static bool _enableYybArmVisualTwistRuntimeOverride = true;
-        private static float _yybArmVisualUpperArmInfluence = DefaultYybArmVisualUpperArmInfluence;
-        private static float _yybArmVisualForearmInfluence = DefaultYybArmVisualForearmInfluence;
-        private static float _yybArmVisualUpperArmMaxDegrees = DefaultYybArmVisualUpperArmMaxDegrees;
-        private static float _yybArmVisualForearmMaxDegrees = DefaultYybArmVisualForearmMaxDegrees;
-        private static bool _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-        private static bool _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-        private static bool _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-        private static bool _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-        private static bool _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
-        private static bool _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
-        private static bool _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
-        private static bool _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride;
-        private static bool _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
-        private static bool _enableManualAnimatorBipedIkFootPositionRuntimeOverride;
-        private static bool _enableManualAnimatorHipsLocalPositionRuntimeOverride;
-        private static bool _enableManualAnimatorBodyPositionXzRuntimeOverride;
-        private static bool _enableRetargetBodyPositionXzRootMotionRuntimeOverride;
-        private static bool _disableTargetHumanoidBonePositionLockRuntimeOverride;
-        private static float _manualAnimatorLowerBodySegmentDirectionReferenceWeight =
-            DefaultManualAnimatorLowerBodySegmentDirectionReferenceWeight;
-        private static float _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle =
-            DefaultManualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-        private static float _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
-            DefaultManualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-        private static float _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
-            DefaultManualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
-        private static float _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
-            DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
-        private static float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle =
-            DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
-        private static float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale =
-            DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale;
-        private static float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight =
-            DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight;
-        private static float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart =
-            DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
-        private static float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd =
-            DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
-        private static float _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
-            DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-        private static float _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
-            DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-        private static float _manualAnimatorFootHipsAlignedResidualYawReferenceWeight =
-            DefaultManualAnimatorFootHipsAlignedResidualYawReferenceWeight;
-        private static float _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle =
-            DefaultManualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
-        private static float _postSetHumanPoseRightEndpointPositionReferenceWeight =
-            DefaultPostSetHumanPoseRightEndpointPositionReferenceWeight;
-        private static float _postSetHumanPoseRightEndpointPositionReferenceMaxOffset =
-            DefaultPostSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-        private static float _postSetHumanPoseRightEndpointPositionReferencePositiveZScale =
-            DefaultPostSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-        private static float _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
-            DefaultPostSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-        private static float _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
-            DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-        private static float _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
-            DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-        private static bool _postSetHumanPoseEndpointPositionUseLeftSide;
-        private static float _preSetHumanPoseRightEndpointPositionReferenceWeight =
-            DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight;
-        private static float _preSetHumanPoseRightEndpointPositionReferenceMaxOffset =
-            DefaultPreSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-        private static float _preSetHumanPoseRightEndpointPositionReferencePositiveZScale =
-            DefaultPreSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-        private static float _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
-            DefaultPreSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-        private static float _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
-            DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-        private static float _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
-            DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-        private static bool _preSetHumanPoseEndpointPositionUseLeftSide;
-        private static bool _preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-        private static bool _preSetHumanPoseEndpointPositionInvertBodyPositionX;
-        private static bool _preSetHumanPoseEndpointPositionInvertBodyPositionZ;
-        private static bool _usePostSetHumanPoseRightFootEvaluatorXzReference;
-        private static float _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
-            DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-        private static float _manualAnimatorBipedIkFootPositionReferenceWeight =
-            DefaultManualAnimatorBipedIkFootPositionReferenceWeight;
-        private static float _manualAnimatorBipedIkFootPositionReferenceMaxOffset =
-            DefaultManualAnimatorBipedIkFootPositionReferenceMaxOffset;
-        private static float _manualAnimatorHipsLocalPositionReferenceWeight =
-            DefaultManualAnimatorHipsLocalPositionReferenceWeight;
-        private static float _manualAnimatorHipsLocalPositionReferenceMaxOffset =
-            DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset;
-        private static float _manualAnimatorBodyPositionXzReferenceWeight =
-            DefaultManualAnimatorBodyPositionXzReferenceWeight;
-        private static float _manualAnimatorBodyPositionXzReferenceMaxOffset =
-            DefaultManualAnimatorBodyPositionXzReferenceMaxOffset;
-        private static float _manualAnimatorBodyPositionXzReferenceFrameGateStart =
-            DefaultManualAnimatorBodyPositionXzReferenceFrameGateStart;
-        private static float _manualAnimatorBodyPositionXzReferenceFrameGateEnd =
-            DefaultManualAnimatorBodyPositionXzReferenceFrameGateEnd;
-        private static float _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames =
-            DefaultManualAnimatorBodyPositionXzReferenceFrameGateBlendFrames;
-        private static float _manualAnimatorBodyPositionXzReferenceAxisXScale =
-            DefaultManualAnimatorBodyPositionXzReferenceAxisXScale;
-        private static float _manualAnimatorBodyPositionXzReferenceAxisZScale =
-            DefaultManualAnimatorBodyPositionXzReferenceAxisZScale;
-        private static bool _enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
-        private static float _yybRightSleeveSilhouetteLocalOffsetX =
-            DefaultYybRightSleeveSilhouetteLocalOffsetX;
-        private static float _yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
-            DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart;
-        private static float _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
-            DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
-        private static bool _enableVmdPlaybackProbeRuntimeOverride;
-        private static bool _applyVmdPlaybackProbeIkTargetsRuntimeOverride;
-        private static string _vmdPlaybackProbeSourceVmdPath = string.Empty;
-        private static bool _enableReferenceMmdTimingRuntimeOverride;
         private static FBXVmdPipeline.EditorDiagnosticSmokeSegment _editorDiagnosticSmokeSegment =
             FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head;
-        private static int _diagnosticCaptureWidthOverride = NoDiagnosticCaptureDimensionOverride;
-        private static int _diagnosticCaptureHeightOverride = NoDiagnosticCaptureDimensionOverride;
-        private static float _diagnosticScreenshotPaddingOverride = NoDiagnosticScreenshotFramingOverride;
-        private static float _diagnosticScreenshotVerticalViewportCenterOverride = NoDiagnosticScreenshotFramingOverride;
         private static bool _isRunning;
         private static bool _activeJobFinished;
         private static bool _activeJobStartedInPlayMode;
@@ -529,188 +332,188 @@ namespace Fbx2Vmd.FBXImporter
             _playModeEntryPending = false;
             _playModeEntryRequestedAt = 0d;
             _activeJobStartedInPlayMode = false;
-            _mmdIkDeltaGuardLimitOverrideVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
-            _mmdIkDeltaGuardRecoveryTriggerVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
-            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
-            _mmdIkDeltaGuardRecoveryHoldFrames = NoMmdIkDeltaGuardRecoveryHoldFrames;
-            _enableFinalIkFootGroundingRuntimeOverride = false;
-            _enableManualAnimatorFootLocalRotationRuntimeOverride = false;
-            _disableManualAnimatorFootLocalRotationRuntimeOverride = false;
-            _enableManualAnimatorFullBodyPoseRuntimeOverride = false;
-            _disableManualAnimatorFullBodyPoseRuntimeOverride = false;
-            _manualAnimatorFullBodyPoseReferenceWeight = DefaultManualAnimatorFullBodyPoseReferenceWeight;
-            _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = false;
-            _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = false;
-            _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = false;
-            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = false;
-            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = false;
-            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = false;
-            _manualAnimatorFullBodyPoseReferenceFrameGateStart =
+            _currentRunOptions.mmdIkDeltaGuardLimitOverrideVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+            _currentRunOptions.mmdIkDeltaGuardRecoveryTriggerVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+            _currentRunOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd = NoMmdIkDeltaGuardLimitOverrideVmd;
+            _currentRunOptions.mmdIkDeltaGuardRecoveryHoldFrames = NoMmdIkDeltaGuardRecoveryHoldFrames;
+            _currentRunOptions.enableFinalIkFootGroundingRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorFootLocalRotationRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorFootLocalRotationRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorFullBodyPoseRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorFullBodyPoseRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorFullBodyPoseReferenceWeight = DefaultManualAnimatorFullBodyPoseReferenceWeight;
+            _currentRunOptions.manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorFullBodyPoseReferenceFrameGateStart =
                 DefaultManualAnimatorFullBodyPoseReferenceFrameGateStart;
-            _manualAnimatorFullBodyPoseReferenceFrameGateEnd =
+            _currentRunOptions.manualAnimatorFullBodyPoseReferenceFrameGateEnd =
                 DefaultManualAnimatorFullBodyPoseReferenceFrameGateEnd;
-            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = false;
-            _setHumanPoseRightLegTwistOutputReferenceWeight =
+            _currentRunOptions.enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = false;
+            _currentRunOptions.setHumanPoseRightLegTwistOutputReferenceWeight =
                 DefaultSetHumanPoseRightLegTwistOutputReferenceWeight;
-            _setHumanPoseRightLegTwistOutputReferenceMaxDelta =
+            _currentRunOptions.setHumanPoseRightLegTwistOutputReferenceMaxDelta =
                 DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta;
-            _enableManualAnimatorBodyRotationRuntimeOverride = false;
-            _disableManualAnimatorBodyRotationRuntimeOverride = false;
-            _manualAnimatorBodyRotationReferenceWeight = DefaultManualAnimatorBodyRotationReferenceWeight;
-            _enableManualAnimatorHandLocalRotationRuntimeOverride = false;
-            _enableManualAnimatorThumbLocalRotationRuntimeOverride = false;
-            _enableManualAnimatorHandPalmFrameRuntimeOverride = false;
-            _manualAnimatorHandPalmFrameWeight = DefaultManualAnimatorHandPalmFrameWeight;
-            _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings = false;
-            _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride = true;
-            _retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight;
-            _retargetPoseVisualSpikeForearmStretchClampMaxOffset =
+            _currentRunOptions.enableManualAnimatorBodyRotationRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorBodyRotationRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorBodyRotationReferenceWeight = DefaultManualAnimatorBodyRotationReferenceWeight;
+            _currentRunOptions.enableManualAnimatorHandLocalRotationRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorThumbLocalRotationRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorHandPalmFrameRuntimeOverride = false;
+            _currentRunOptions.manualAnimatorHandPalmFrameWeight = DefaultManualAnimatorHandPalmFrameWeight;
+            _currentRunOptions.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings = false;
+            _currentRunOptions.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride = true;
+            _currentRunOptions.retargetPoseVisualSpikeCurrentWeight = DefaultRetargetPoseVisualSpikeCurrentWeight;
+            _currentRunOptions.retargetPoseVisualSpikeForearmStretchClampMaxOffset =
                 DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset;
-            _enableRetargetArmStretchClampRuntimeOverride = false;
-            _retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit;
-            _enableYybArmSwingLimitRuntimeOverride = false;
-            _yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight;
-            _yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot;
-            _yybArmSwingMinHandHorizontalRatio = DefaultYybArmSwingMinHandHorizontalRatio;
-            _yybArmSwingMaxHandBelowShoulderRatio = DefaultYybArmSwingMaxHandBelowShoulderRatio;
-            _yybArmSwingHorizontalReachLimitWeight = DefaultYybArmSwingHorizontalReachLimitWeight;
-            _yybArmSwingMaxHandHorizontalReachRatio = DefaultYybArmSwingMaxHandHorizontalReachRatio;
-            _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio =
+            _currentRunOptions.enableRetargetArmStretchClampRuntimeOverride = false;
+            _currentRunOptions.retargetArmStretchMuscleLimit = DefaultRetargetArmStretchMuscleLimit;
+            _currentRunOptions.enableYybArmSwingLimitRuntimeOverride = false;
+            _currentRunOptions.yybArmSwingLimitWeight = DefaultYybArmSwingLimitWeight;
+            _currentRunOptions.yybArmSwingMaxDownDot = DefaultYybArmSwingMaxDownDot;
+            _currentRunOptions.yybArmSwingMinHandHorizontalRatio = DefaultYybArmSwingMinHandHorizontalRatio;
+            _currentRunOptions.yybArmSwingMaxHandBelowShoulderRatio = DefaultYybArmSwingMaxHandBelowShoulderRatio;
+            _currentRunOptions.yybArmSwingHorizontalReachLimitWeight = DefaultYybArmSwingHorizontalReachLimitWeight;
+            _currentRunOptions.yybArmSwingMaxHandHorizontalReachRatio = DefaultYybArmSwingMaxHandHorizontalReachRatio;
+            _currentRunOptions.yybArmSwingHorizontalReachMaxHandBelowShoulderRatio =
                 DefaultYybArmSwingHorizontalReachMaxHandBelowShoulderRatio;
-            _yybArmSwingHorizontalReachMinElbowAngleAfterApply =
+            _currentRunOptions.yybArmSwingHorizontalReachMinElbowAngleAfterApply =
                 DefaultYybArmSwingHorizontalReachMinElbowAngleAfterApply;
-            _yybArmSwingRaisedPoseHorizontalReachLimitWeight =
+            _currentRunOptions.yybArmSwingRaisedPoseHorizontalReachLimitWeight =
                 DefaultYybArmSwingRaisedPoseHorizontalReachLimitWeight;
-            _yybArmSwingRaisedPoseMinUpperArmDownDot = DefaultYybArmSwingRaisedPoseMinUpperArmDownDot;
-            _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio =
+            _currentRunOptions.yybArmSwingRaisedPoseMinUpperArmDownDot = DefaultYybArmSwingRaisedPoseMinUpperArmDownDot;
+            _currentRunOptions.yybArmSwingRaisedPoseMaxHandBelowShoulderRatio =
                 DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio;
-            _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio =
+            _currentRunOptions.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio =
                 DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
-            _enableYybArmDirectionRetargetRuntimeOverride = false;
-            _yybArmDirectionUpperArmWeight = DefaultYybArmDirectionUpperArmWeight;
-            _yybArmDirectionForearmWeight = DefaultYybArmDirectionForearmWeight;
-            _yybArmDirectionUpperArmMaxDegrees = DefaultYybArmDirectionUpperArmMaxDegrees;
-            _yybArmDirectionForearmMaxDegrees = DefaultYybArmDirectionForearmMaxDegrees;
-            _yybArmDirectionLeftSideWeightScale = DefaultYybArmDirectionLeftSideWeightScale;
-            _yybArmDirectionRightSideWeightScale = DefaultYybArmDirectionRightSideWeightScale;
-            _overrideYybArmSleeveAnchorRuntimeSettings = false;
-            _enableYybArmSleeveAnchorRuntimeOverride = true;
-            _yybArmSleeveAnchorInfluence = DefaultYybArmSleeveAnchorInfluence;
-            _yybArmShoulderCapAnchorInfluence = DefaultYybArmShoulderCapAnchorInfluence;
-            _yybArmSleeveAnchorMaxDegrees = DefaultYybArmSleeveAnchorMaxDegrees;
-            _overrideYybArmVisualTwistRuntimeSettings = false;
-            _enableYybArmVisualTwistRuntimeOverride = true;
-            _yybArmVisualUpperArmInfluence = DefaultYybArmVisualUpperArmInfluence;
-            _yybArmVisualForearmInfluence = DefaultYybArmVisualForearmInfluence;
-            _yybArmVisualUpperArmMaxDegrees = DefaultYybArmVisualUpperArmMaxDegrees;
-            _yybArmVisualForearmMaxDegrees = DefaultYybArmVisualForearmMaxDegrees;
-            _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = false;
-            _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = false;
-            _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = false;
-            _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = false;
-            _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride = false;
-            _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride = false;
-            _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride = false;
-            _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride = false;
-            _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = false;
-            _enableManualAnimatorBipedIkFootPositionRuntimeOverride = false;
-            _enableManualAnimatorHipsLocalPositionRuntimeOverride = false;
-            _enableManualAnimatorBodyPositionXzRuntimeOverride = false;
-            _enableRetargetBodyPositionXzRootMotionRuntimeOverride = false;
-            _disableTargetHumanoidBonePositionLockRuntimeOverride = false;
-            _enableVmdPlaybackProbeRuntimeOverride = false;
-            _applyVmdPlaybackProbeIkTargetsRuntimeOverride = false;
-            _vmdPlaybackProbeSourceVmdPath = string.Empty;
-            _enableReferenceMmdTimingRuntimeOverride = false;
+            _currentRunOptions.enableYybArmDirectionRetargetRuntimeOverride = false;
+            _currentRunOptions.yybArmDirectionUpperArmWeight = DefaultYybArmDirectionUpperArmWeight;
+            _currentRunOptions.yybArmDirectionForearmWeight = DefaultYybArmDirectionForearmWeight;
+            _currentRunOptions.yybArmDirectionUpperArmMaxDegrees = DefaultYybArmDirectionUpperArmMaxDegrees;
+            _currentRunOptions.yybArmDirectionForearmMaxDegrees = DefaultYybArmDirectionForearmMaxDegrees;
+            _currentRunOptions.yybArmDirectionLeftSideWeightScale = DefaultYybArmDirectionLeftSideWeightScale;
+            _currentRunOptions.yybArmDirectionRightSideWeightScale = DefaultYybArmDirectionRightSideWeightScale;
+            _currentRunOptions.overrideYybArmSleeveAnchorRuntimeSettings = false;
+            _currentRunOptions.enableYybArmSleeveAnchorRuntimeOverride = true;
+            _currentRunOptions.yybArmSleeveAnchorInfluence = DefaultYybArmSleeveAnchorInfluence;
+            _currentRunOptions.yybArmShoulderCapAnchorInfluence = DefaultYybArmShoulderCapAnchorInfluence;
+            _currentRunOptions.yybArmSleeveAnchorMaxDegrees = DefaultYybArmSleeveAnchorMaxDegrees;
+            _currentRunOptions.overrideYybArmVisualTwistRuntimeSettings = false;
+            _currentRunOptions.enableYybArmVisualTwistRuntimeOverride = true;
+            _currentRunOptions.yybArmVisualUpperArmInfluence = DefaultYybArmVisualUpperArmInfluence;
+            _currentRunOptions.yybArmVisualForearmInfluence = DefaultYybArmVisualForearmInfluence;
+            _currentRunOptions.yybArmVisualUpperArmMaxDegrees = DefaultYybArmVisualUpperArmMaxDegrees;
+            _currentRunOptions.yybArmVisualForearmMaxDegrees = DefaultYybArmVisualForearmMaxDegrees;
+            _currentRunOptions.enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride = false;
+            _currentRunOptions.disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride = false;
+            _currentRunOptions.enablePostSetHumanPoseRightEndpointPositionRuntimeOverride = false;
+            _currentRunOptions.enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorBipedIkFootPositionRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorHipsLocalPositionRuntimeOverride = false;
+            _currentRunOptions.enableManualAnimatorBodyPositionXzRuntimeOverride = false;
+            _currentRunOptions.enableRetargetBodyPositionXzRootMotionRuntimeOverride = false;
+            _currentRunOptions.disableTargetHumanoidBonePositionLockRuntimeOverride = false;
+            _currentRunOptions.enableVmdPlaybackProbeRuntimeOverride = false;
+            _currentRunOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride = false;
+            _currentRunOptions.vmdPlaybackProbeSourceVmdPath = string.Empty;
+            _currentRunOptions.enableReferenceMmdTimingRuntimeOverride = false;
             _editorDiagnosticSmokeSegment = FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head;
-            _manualAnimatorLowerBodySegmentDirectionReferenceWeight =
+            _currentRunOptions.manualAnimatorLowerBodySegmentDirectionReferenceWeight =
                 DefaultManualAnimatorLowerBodySegmentDirectionReferenceWeight;
-            _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle =
+            _currentRunOptions.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle =
                 DefaultManualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-            _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
+            _currentRunOptions.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
                 DefaultManualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
+            _currentRunOptions.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
                 DefaultManualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
+            _currentRunOptions.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
                 DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle =
+            _currentRunOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle =
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale =
+            _currentRunOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale =
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight =
+            _currentRunOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight =
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart =
+            _currentRunOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart =
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd =
+            _currentRunOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd =
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
+            _currentRunOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-            _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
+            _currentRunOptions.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
                 DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorFootHipsAlignedResidualYawReferenceWeight =
+            _currentRunOptions.manualAnimatorFootHipsAlignedResidualYawReferenceWeight =
                 DefaultManualAnimatorFootHipsAlignedResidualYawReferenceWeight;
-            _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle =
+            _currentRunOptions.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle =
                 DefaultManualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
-            _postSetHumanPoseRightEndpointPositionReferenceWeight =
+            _currentRunOptions.postSetHumanPoseRightEndpointPositionReferenceWeight =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceWeight;
-            _postSetHumanPoseRightEndpointPositionReferenceMaxOffset =
+            _currentRunOptions.postSetHumanPoseRightEndpointPositionReferenceMaxOffset =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-            _postSetHumanPoseRightEndpointPositionReferencePositiveZScale =
+            _currentRunOptions.postSetHumanPoseRightEndpointPositionReferencePositiveZScale =
                 DefaultPostSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-            _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
+            _currentRunOptions.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
+            _currentRunOptions.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
+            _currentRunOptions.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            _postSetHumanPoseEndpointPositionUseLeftSide = false;
-            _preSetHumanPoseRightEndpointPositionReferenceWeight =
+            _currentRunOptions.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = false;
+            _currentRunOptions.preSetHumanPoseRightEndpointPositionReferenceWeight =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight;
-            _preSetHumanPoseRightEndpointPositionReferenceMaxOffset =
+            _currentRunOptions.preSetHumanPoseRightEndpointPositionReferenceMaxOffset =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-            _preSetHumanPoseRightEndpointPositionReferencePositiveZScale =
+            _currentRunOptions.preSetHumanPoseRightEndpointPositionReferencePositiveZScale =
                 DefaultPreSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-            _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
+            _currentRunOptions.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
+            _currentRunOptions.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
+            _currentRunOptions.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
                 DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            _preSetHumanPoseEndpointPositionUseLeftSide = false;
-            _preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionX = false;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionZ = false;
-            _usePostSetHumanPoseRightFootEvaluatorXzReference = false;
-            _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
+            _currentRunOptions.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition = false;
+            _currentRunOptions.preSetHumanPoseEndpointPositionUseGhostCurrentBasis = false;
+            _currentRunOptions.ShouldInvertPreSetHumanPoseEndpointPositionBodyX = false;
+            _currentRunOptions.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ = false;
+            _currentRunOptions.usePostSetHumanPoseRightFootEvaluatorXzReference = false;
+            _currentRunOptions.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
                 DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-            _manualAnimatorBipedIkFootPositionReferenceWeight =
+            _currentRunOptions.manualAnimatorBipedIkFootPositionReferenceWeight =
                 DefaultManualAnimatorBipedIkFootPositionReferenceWeight;
-            _manualAnimatorBipedIkFootPositionReferenceMaxOffset =
+            _currentRunOptions.manualAnimatorBipedIkFootPositionReferenceMaxOffset =
                 DefaultManualAnimatorBipedIkFootPositionReferenceMaxOffset;
-            _manualAnimatorHipsLocalPositionReferenceWeight =
+            _currentRunOptions.manualAnimatorHipsLocalPositionReferenceWeight =
                 DefaultManualAnimatorHipsLocalPositionReferenceWeight;
-            _manualAnimatorHipsLocalPositionReferenceMaxOffset =
+            _currentRunOptions.manualAnimatorHipsLocalPositionReferenceMaxOffset =
                 DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset;
-            _manualAnimatorBodyPositionXzReferenceWeight =
+            _currentRunOptions.manualAnimatorBodyPositionXzReferenceWeight =
                 DefaultManualAnimatorBodyPositionXzReferenceWeight;
-            _manualAnimatorBodyPositionXzReferenceMaxOffset =
+            _currentRunOptions.manualAnimatorBodyPositionXzReferenceMaxOffset =
                 DefaultManualAnimatorBodyPositionXzReferenceMaxOffset;
-            _manualAnimatorBodyPositionXzReferenceFrameGateStart =
+            _currentRunOptions.manualAnimatorBodyPositionXzReferenceFrameGateStart =
                 DefaultManualAnimatorBodyPositionXzReferenceFrameGateStart;
-            _manualAnimatorBodyPositionXzReferenceFrameGateEnd =
+            _currentRunOptions.manualAnimatorBodyPositionXzReferenceFrameGateEnd =
                 DefaultManualAnimatorBodyPositionXzReferenceFrameGateEnd;
-            _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames =
+            _currentRunOptions.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames =
                 DefaultManualAnimatorBodyPositionXzReferenceFrameGateBlendFrames;
-            _manualAnimatorBodyPositionXzReferenceAxisXScale =
+            _currentRunOptions.manualAnimatorBodyPositionXzReferenceAxisXScale =
                 DefaultManualAnimatorBodyPositionXzReferenceAxisXScale;
-            _manualAnimatorBodyPositionXzReferenceAxisZScale =
+            _currentRunOptions.manualAnimatorBodyPositionXzReferenceAxisZScale =
                 DefaultManualAnimatorBodyPositionXzReferenceAxisZScale;
-            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride = false;
-            _yybRightSleeveSilhouetteLocalOffsetX =
+            _currentRunOptions.enableYybRightSleeveSilhouetteOffsetRuntimeOverride = false;
+            _currentRunOptions.yybRightSleeveSilhouetteLocalOffsetX =
                 DefaultYybRightSleeveSilhouetteLocalOffsetX;
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+            _currentRunOptions.yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
                 DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart;
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+            _currentRunOptions.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
                 DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
             _isRunning = false;
             ClearPersistedState();
@@ -1342,12 +1145,12 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 _referenceClipAssetPath = ResolveReferenceClipAssetPath(
-                    _fbxFileName,
+                    _currentRunOptions.fbxFileName,
                     assetPath => LoadFirstAnimationClip(assetPath) != null);
                 _referenceClip = LoadFirstAnimationClip(_referenceClipAssetPath);
                 if (_referenceClip == null)
                 {
-                    throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_fbxFileName}");
+                    throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_currentRunOptions.fbxFileName}");
                 }
 
                 _fallbackController =
@@ -1385,7 +1188,7 @@ namespace Fbx2Vmd.FBXImporter
             _playModeEntryPending = false;
             _playModeEntryRequestedAt = 0d;
 
-            foreach (CaptureJob job in BuildCaptureJobs(_enableVmdPlaybackProbeRuntimeOverride))
+            foreach (CaptureJob job in BuildCaptureJobs(_currentRunOptions.enableVmdPlaybackProbeRuntimeOverride))
             {
                 PendingJobs.Enqueue(job);
             }
@@ -1403,63 +1206,63 @@ namespace Fbx2Vmd.FBXImporter
             SavePersistedState();
 
             Debug.Log(
-                $"[YybVisualComparisonBatchRunner] 시작: fbx={_fbxFileName}, duration={_durationSeconds:F2}s, " +
-                $"targetFrames={_targetFrameCount}, fingerCloseups={_enableFingerCloseups}, " +
-                $"recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented}, " +
-                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_mmdIkDeltaGuardLimitOverrideVmd)}, " +
-                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryTriggerVmd)}, " +
-                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryDebtThresholdVmd)}, " +
-                $"mmdIkDeltaGuardRecoveryHoldFrames={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryHoldFrames)}, " +
-                $"finalIkFootGrounding={_enableFinalIkFootGroundingRuntimeOverride}, " +
-                $"manualFootLocalRotation={_enableManualAnimatorFootLocalRotationRuntimeOverride}, " +
-                $"manualFullBodyPose={_enableManualAnimatorFullBodyPoseRuntimeOverride}/{_manualAnimatorFullBodyPoseReferenceWeight:F2}, " +
-                $"manualBodyRotation={_enableManualAnimatorBodyRotationRuntimeOverride}/{_manualAnimatorBodyRotationReferenceWeight:F2}, " +
-                $"manualHandLocalRotation={_enableManualAnimatorHandLocalRotationRuntimeOverride}, " +
-                $"manualThumbLocalRotation={_enableManualAnimatorThumbLocalRotationRuntimeOverride}, " +
-                $"manualHandPalmFrame={_enableManualAnimatorHandPalmFrameRuntimeOverride}/{_manualAnimatorHandPalmFrameWeight:F2}, " +
-                $"retargetPoseVisualSpikeSmoothing={_overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings}/{_enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}/{_retargetPoseVisualSpikeCurrentWeight:F2}/{_retargetPoseVisualSpikeForearmStretchClampMaxOffset:F2}, " +
-                $"yybArmSwingLimit={_enableYybArmSwingLimitRuntimeOverride}/{_yybArmSwingLimitWeight:F2}, " +
-                $"yybArmDirection={_enableYybArmDirectionRetargetRuntimeOverride}/{_yybArmDirectionUpperArmWeight:F2}/{_yybArmDirectionForearmWeight:F2}, " +
-                $"yybArmSleeveAnchor={_overrideYybArmSleeveAnchorRuntimeSettings}/{_enableYybArmSleeveAnchorRuntimeOverride}/{_yybArmSleeveAnchorInfluence:F2}/{_yybArmShoulderCapAnchorInfluence:F2}/{_yybArmSleeveAnchorMaxDegrees:F1}, " +
-                $"yybArmVisualTwist={_overrideYybArmVisualTwistRuntimeSettings}/{_enableYybArmVisualTwistRuntimeOverride}/{_yybArmVisualUpperArmInfluence:F2}/{_yybArmVisualForearmInfluence:F2}/{_yybArmVisualUpperArmMaxDegrees:F1}/{_yybArmVisualForearmMaxDegrees:F1}, " +
-                $"manualHipsLocalPosition={_enableManualAnimatorHipsLocalPositionRuntimeOverride}/{_manualAnimatorHipsLocalPositionReferenceWeight:F2}/{_manualAnimatorHipsLocalPositionReferenceMaxOffset:F3}, " +
-                $"retargetBodyPositionXzRootMotion={_enableRetargetBodyPositionXzRootMotionRuntimeOverride}, " +
-                $"targetBoneLockDisabled={_disableTargetHumanoidBonePositionLockRuntimeOverride}, " +
-                $"vmdPlaybackProbe={_enableVmdPlaybackProbeRuntimeOverride}, " +
-                $"vmdPlaybackProbeApplyIkTargets={_applyVmdPlaybackProbeIkTargetsRuntimeOverride}, " +
-                $"referenceMmdTiming={_enableReferenceMmdTimingRuntimeOverride}, " +
+                $"[YybVisualComparisonBatchRunner] 시작: fbx={_currentRunOptions.fbxFileName}, duration={_currentRunOptions.durationSeconds:F2}s, " +
+                $"targetFrames={_currentRunOptions.targetFrameCount}, fingerCloseups={_currentRunOptions.enableFingerCloseups}, " +
+                $"recorderParentIkOffsets={_currentRunOptions.enableRecorderParentFrameIkOffsetsWhenCenterParented}, " +
+                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardLimitOverrideVmd)}, " +
+                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryTriggerVmd)}, " +
+                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd)}, " +
+                $"mmdIkDeltaGuardRecoveryHoldFrames={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryHoldFrames)}, " +
+                $"finalIkFootGrounding={_currentRunOptions.enableFinalIkFootGroundingRuntimeOverride}, " +
+                $"manualFootLocalRotation={_currentRunOptions.enableManualAnimatorFootLocalRotationRuntimeOverride}, " +
+                $"manualFullBodyPose={_currentRunOptions.enableManualAnimatorFullBodyPoseRuntimeOverride}/{_currentRunOptions.manualAnimatorFullBodyPoseReferenceWeight:F2}, " +
+                $"manualBodyRotation={_currentRunOptions.enableManualAnimatorBodyRotationRuntimeOverride}/{_currentRunOptions.manualAnimatorBodyRotationReferenceWeight:F2}, " +
+                $"manualHandLocalRotation={_currentRunOptions.enableManualAnimatorHandLocalRotationRuntimeOverride}, " +
+                $"manualThumbLocalRotation={_currentRunOptions.enableManualAnimatorThumbLocalRotationRuntimeOverride}, " +
+                $"manualHandPalmFrame={_currentRunOptions.enableManualAnimatorHandPalmFrameRuntimeOverride}/{_currentRunOptions.manualAnimatorHandPalmFrameWeight:F2}, " +
+                $"retargetPoseVisualSpikeSmoothing={_currentRunOptions.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings}/{_currentRunOptions.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}/{_currentRunOptions.retargetPoseVisualSpikeCurrentWeight:F2}/{_currentRunOptions.retargetPoseVisualSpikeForearmStretchClampMaxOffset:F2}, " +
+                $"yybArmSwingLimit={_currentRunOptions.enableYybArmSwingLimitRuntimeOverride}/{_currentRunOptions.yybArmSwingLimitWeight:F2}, " +
+                $"yybArmDirection={_currentRunOptions.enableYybArmDirectionRetargetRuntimeOverride}/{_currentRunOptions.yybArmDirectionUpperArmWeight:F2}/{_currentRunOptions.yybArmDirectionForearmWeight:F2}, " +
+                $"yybArmSleeveAnchor={_currentRunOptions.overrideYybArmSleeveAnchorRuntimeSettings}/{_currentRunOptions.enableYybArmSleeveAnchorRuntimeOverride}/{_currentRunOptions.yybArmSleeveAnchorInfluence:F2}/{_currentRunOptions.yybArmShoulderCapAnchorInfluence:F2}/{_currentRunOptions.yybArmSleeveAnchorMaxDegrees:F1}, " +
+                $"yybArmVisualTwist={_currentRunOptions.overrideYybArmVisualTwistRuntimeSettings}/{_currentRunOptions.enableYybArmVisualTwistRuntimeOverride}/{_currentRunOptions.yybArmVisualUpperArmInfluence:F2}/{_currentRunOptions.yybArmVisualForearmInfluence:F2}/{_currentRunOptions.yybArmVisualUpperArmMaxDegrees:F1}/{_currentRunOptions.yybArmVisualForearmMaxDegrees:F1}, " +
+                $"manualHipsLocalPosition={_currentRunOptions.enableManualAnimatorHipsLocalPositionRuntimeOverride}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceWeight:F2}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceMaxOffset:F3}, " +
+                $"retargetBodyPositionXzRootMotion={_currentRunOptions.enableRetargetBodyPositionXzRootMotionRuntimeOverride}, " +
+                $"targetBoneLockDisabled={_currentRunOptions.disableTargetHumanoidBonePositionLockRuntimeOverride}, " +
+                $"vmdPlaybackProbe={_currentRunOptions.enableVmdPlaybackProbeRuntimeOverride}, " +
+                $"vmdPlaybackProbeApplyIkTargets={_currentRunOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride}, " +
+                $"referenceMmdTiming={_currentRunOptions.enableReferenceMmdTimingRuntimeOverride}, " +
                 $"segment={_editorDiagnosticSmokeSegment}, " +
-                $"diagnosticCapture={FormatRuntimeOverride(_diagnosticCaptureWidthOverride)}x{FormatRuntimeOverride(_diagnosticCaptureHeightOverride)}, " +
-                $"diagnosticFraming={FormatDiagnosticScreenshotFramingOverride(_diagnosticScreenshotPaddingOverride)}/{FormatDiagnosticScreenshotFramingOverride(_diagnosticScreenshotVerticalViewportCenterOverride)}, " +
+                $"diagnosticCapture={FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureWidthOverride)}x{FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureHeightOverride)}, " +
+                $"diagnosticFraming={FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotPaddingOverride)}/{FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotVerticalViewportCenterOverride)}, " +
                 $"batchMode={Application.isBatchMode}");
             AppendRunnerTrace(
-                $"run started fbx={_fbxFileName} duration={_durationSeconds:F2}s " +
-                $"fingerCloseups={_enableFingerCloseups} recorderParentIkOffsets={_enableRecorderParentFrameIkOffsetsWhenCenterParented} " +
-                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_mmdIkDeltaGuardLimitOverrideVmd)} " +
-                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryTriggerVmd)} " +
-                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryDebtThresholdVmd)} " +
-                $"mmdIkDeltaGuardRecoveryHoldFrames={FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryHoldFrames)} " +
-                $"finalIkFootGrounding={_enableFinalIkFootGroundingRuntimeOverride} " +
-                $"manualFootLocalRotation={_enableManualAnimatorFootLocalRotationRuntimeOverride} " +
-                $"manualFullBodyPose={_enableManualAnimatorFullBodyPoseRuntimeOverride}/{_manualAnimatorFullBodyPoseReferenceWeight:F2} " +
-                $"manualBodyRotation={_enableManualAnimatorBodyRotationRuntimeOverride}/{_manualAnimatorBodyRotationReferenceWeight:F2} " +
-                $"manualHandLocalRotation={_enableManualAnimatorHandLocalRotationRuntimeOverride} " +
-                $"manualThumbLocalRotation={_enableManualAnimatorThumbLocalRotationRuntimeOverride} " +
-                $"manualHandPalmFrame={_enableManualAnimatorHandPalmFrameRuntimeOverride}/{_manualAnimatorHandPalmFrameWeight:F2} " +
-                $"retargetPoseVisualSpikeSmoothing={_overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings}/{_enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}/{_retargetPoseVisualSpikeCurrentWeight:F2}/{_retargetPoseVisualSpikeForearmStretchClampMaxOffset:F2} " +
-                $"yybArmSwingLimit={_enableYybArmSwingLimitRuntimeOverride}/{_yybArmSwingLimitWeight:F2} " +
-                $"yybArmDirection={_enableYybArmDirectionRetargetRuntimeOverride}/{_yybArmDirectionUpperArmWeight:F2}/{_yybArmDirectionForearmWeight:F2} " +
-                $"yybArmSleeveAnchor={_overrideYybArmSleeveAnchorRuntimeSettings}/{_enableYybArmSleeveAnchorRuntimeOverride}/{_yybArmSleeveAnchorInfluence:F2}/{_yybArmShoulderCapAnchorInfluence:F2}/{_yybArmSleeveAnchorMaxDegrees:F1} " +
-                $"yybArmVisualTwist={_overrideYybArmVisualTwistRuntimeSettings}/{_enableYybArmVisualTwistRuntimeOverride}/{_yybArmVisualUpperArmInfluence:F2}/{_yybArmVisualForearmInfluence:F2}/{_yybArmVisualUpperArmMaxDegrees:F1}/{_yybArmVisualForearmMaxDegrees:F1} " +
-                $"manualHipsLocalPosition={_enableManualAnimatorHipsLocalPositionRuntimeOverride}/{_manualAnimatorHipsLocalPositionReferenceWeight:F2}/{_manualAnimatorHipsLocalPositionReferenceMaxOffset:F3} " +
-                $"retargetBodyPositionXzRootMotion={_enableRetargetBodyPositionXzRootMotionRuntimeOverride} " +
-                $"targetBoneLockDisabled={_disableTargetHumanoidBonePositionLockRuntimeOverride} " +
-                $"vmdPlaybackProbe={_enableVmdPlaybackProbeRuntimeOverride} " +
-                $"vmdPlaybackProbeApplyIkTargets={_applyVmdPlaybackProbeIkTargetsRuntimeOverride} " +
-                $"referenceMmdTiming={_enableReferenceMmdTimingRuntimeOverride} " +
+                $"run started fbx={_currentRunOptions.fbxFileName} duration={_currentRunOptions.durationSeconds:F2}s " +
+                $"fingerCloseups={_currentRunOptions.enableFingerCloseups} recorderParentIkOffsets={_currentRunOptions.enableRecorderParentFrameIkOffsetsWhenCenterParented} " +
+                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardLimitOverrideVmd)} " +
+                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryTriggerVmd)} " +
+                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd)} " +
+                $"mmdIkDeltaGuardRecoveryHoldFrames={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryHoldFrames)} " +
+                $"finalIkFootGrounding={_currentRunOptions.enableFinalIkFootGroundingRuntimeOverride} " +
+                $"manualFootLocalRotation={_currentRunOptions.enableManualAnimatorFootLocalRotationRuntimeOverride} " +
+                $"manualFullBodyPose={_currentRunOptions.enableManualAnimatorFullBodyPoseRuntimeOverride}/{_currentRunOptions.manualAnimatorFullBodyPoseReferenceWeight:F2} " +
+                $"manualBodyRotation={_currentRunOptions.enableManualAnimatorBodyRotationRuntimeOverride}/{_currentRunOptions.manualAnimatorBodyRotationReferenceWeight:F2} " +
+                $"manualHandLocalRotation={_currentRunOptions.enableManualAnimatorHandLocalRotationRuntimeOverride} " +
+                $"manualThumbLocalRotation={_currentRunOptions.enableManualAnimatorThumbLocalRotationRuntimeOverride} " +
+                $"manualHandPalmFrame={_currentRunOptions.enableManualAnimatorHandPalmFrameRuntimeOverride}/{_currentRunOptions.manualAnimatorHandPalmFrameWeight:F2} " +
+                $"retargetPoseVisualSpikeSmoothing={_currentRunOptions.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings}/{_currentRunOptions.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}/{_currentRunOptions.retargetPoseVisualSpikeCurrentWeight:F2}/{_currentRunOptions.retargetPoseVisualSpikeForearmStretchClampMaxOffset:F2} " +
+                $"yybArmSwingLimit={_currentRunOptions.enableYybArmSwingLimitRuntimeOverride}/{_currentRunOptions.yybArmSwingLimitWeight:F2} " +
+                $"yybArmDirection={_currentRunOptions.enableYybArmDirectionRetargetRuntimeOverride}/{_currentRunOptions.yybArmDirectionUpperArmWeight:F2}/{_currentRunOptions.yybArmDirectionForearmWeight:F2} " +
+                $"yybArmSleeveAnchor={_currentRunOptions.overrideYybArmSleeveAnchorRuntimeSettings}/{_currentRunOptions.enableYybArmSleeveAnchorRuntimeOverride}/{_currentRunOptions.yybArmSleeveAnchorInfluence:F2}/{_currentRunOptions.yybArmShoulderCapAnchorInfluence:F2}/{_currentRunOptions.yybArmSleeveAnchorMaxDegrees:F1} " +
+                $"yybArmVisualTwist={_currentRunOptions.overrideYybArmVisualTwistRuntimeSettings}/{_currentRunOptions.enableYybArmVisualTwistRuntimeOverride}/{_currentRunOptions.yybArmVisualUpperArmInfluence:F2}/{_currentRunOptions.yybArmVisualForearmInfluence:F2}/{_currentRunOptions.yybArmVisualUpperArmMaxDegrees:F1}/{_currentRunOptions.yybArmVisualForearmMaxDegrees:F1} " +
+                $"manualHipsLocalPosition={_currentRunOptions.enableManualAnimatorHipsLocalPositionRuntimeOverride}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceWeight:F2}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceMaxOffset:F3} " +
+                $"retargetBodyPositionXzRootMotion={_currentRunOptions.enableRetargetBodyPositionXzRootMotionRuntimeOverride} " +
+                $"targetBoneLockDisabled={_currentRunOptions.disableTargetHumanoidBonePositionLockRuntimeOverride} " +
+                $"vmdPlaybackProbe={_currentRunOptions.enableVmdPlaybackProbeRuntimeOverride} " +
+                $"vmdPlaybackProbeApplyIkTargets={_currentRunOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride} " +
+                $"referenceMmdTiming={_currentRunOptions.enableReferenceMmdTimingRuntimeOverride} " +
                 $"segment={_editorDiagnosticSmokeSegment} " +
-                $"diagnosticCapture={FormatRuntimeOverride(_diagnosticCaptureWidthOverride)}x{FormatRuntimeOverride(_diagnosticCaptureHeightOverride)} " +
-                $"diagnosticFraming={FormatDiagnosticScreenshotFramingOverride(_diagnosticScreenshotPaddingOverride)}/{FormatDiagnosticScreenshotFramingOverride(_diagnosticScreenshotVerticalViewportCenterOverride)}");
+                $"diagnosticCapture={FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureWidthOverride)}x{FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureHeightOverride)} " +
+                $"diagnosticFraming={FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotPaddingOverride)}/{FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotVerticalViewportCenterOverride)}");
 
             if (!Application.isBatchMode && RequestRuntimeDiagnosticScriptRefresh())
             {
@@ -1479,148 +1282,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void ApplyRunOptions(YybVisualComparisonRunOptions options)
         {
-            _currentRunOptions = options;
-            _fbxFileName = options.fbxFileName;
-            _durationSeconds = options.durationSeconds;
-            _targetFrameCount = options.targetFrameCount;
-            _enableFingerCloseups = options.enableFingerCloseups;
-            _enableRecorderParentFrameIkOffsetsWhenCenterParented = options.enableRecorderParentFrameIkOffsetsWhenCenterParented;
-            _mmdIkDeltaGuardLimitOverrideVmd = options.mmdIkDeltaGuardLimitOverrideVmd;
-            _mmdIkDeltaGuardRecoveryTriggerVmd = options.mmdIkDeltaGuardRecoveryTriggerVmd;
-            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = options.mmdIkDeltaGuardRecoveryDebtThresholdVmd;
-            _mmdIkDeltaGuardRecoveryHoldFrames = options.mmdIkDeltaGuardRecoveryHoldFrames;
-            _enableFinalIkFootGroundingRuntimeOverride = options.enableFinalIkFootGroundingRuntimeOverride;
-            _enableManualAnimatorFootLocalRotationRuntimeOverride = options.enableManualAnimatorFootLocalRotationRuntimeOverride;
-            _disableManualAnimatorFootLocalRotationRuntimeOverride = options.disableManualAnimatorFootLocalRotationRuntimeOverride;
-            _enableManualAnimatorFullBodyPoseRuntimeOverride = options.enableManualAnimatorFullBodyPoseRuntimeOverride;
-            _disableManualAnimatorFullBodyPoseRuntimeOverride = options.disableManualAnimatorFullBodyPoseRuntimeOverride;
-            _manualAnimatorFullBodyPoseReferenceWeight = options.manualAnimatorFullBodyPoseReferenceWeight;
-            _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = options.manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
-            _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = options.manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = options.manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = options.manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = options.manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = options.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseReferenceFrameGateStart = options.manualAnimatorFullBodyPoseReferenceFrameGateStart;
-            _manualAnimatorFullBodyPoseReferenceFrameGateEnd = options.manualAnimatorFullBodyPoseReferenceFrameGateEnd;
-            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = options.enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
-            _setHumanPoseRightLegTwistOutputReferenceWeight = options.setHumanPoseRightLegTwistOutputReferenceWeight;
-            _setHumanPoseRightLegTwistOutputReferenceMaxDelta = options.setHumanPoseRightLegTwistOutputReferenceMaxDelta;
-            _enableManualAnimatorBodyRotationRuntimeOverride = options.enableManualAnimatorBodyRotationRuntimeOverride;
-            _disableManualAnimatorBodyRotationRuntimeOverride = options.disableManualAnimatorBodyRotationRuntimeOverride;
-            _manualAnimatorBodyRotationReferenceWeight = options.manualAnimatorBodyRotationReferenceWeight;
-            _enableManualAnimatorHandLocalRotationRuntimeOverride = options.enableManualAnimatorHandLocalRotationRuntimeOverride;
-            _enableManualAnimatorThumbLocalRotationRuntimeOverride = options.enableManualAnimatorThumbLocalRotationRuntimeOverride;
-            _enableManualAnimatorHandPalmFrameRuntimeOverride = options.enableManualAnimatorHandPalmFrameRuntimeOverride;
-            _manualAnimatorHandPalmFrameWeight = options.manualAnimatorHandPalmFrameWeight;
-            _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings = options.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings;
-            _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride = options.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride;
-            _retargetPoseVisualSpikeCurrentWeight = options.retargetPoseVisualSpikeCurrentWeight;
-            _retargetPoseVisualSpikeForearmStretchClampMaxOffset = options.retargetPoseVisualSpikeForearmStretchClampMaxOffset;
-            _enableRetargetArmStretchClampRuntimeOverride = options.enableRetargetArmStretchClampRuntimeOverride;
-            _retargetArmStretchMuscleLimit = options.retargetArmStretchMuscleLimit;
-            _enableYybArmSwingLimitRuntimeOverride = options.enableYybArmSwingLimitRuntimeOverride;
-            _yybArmSwingLimitWeight = options.yybArmSwingLimitWeight;
-            _yybArmSwingMaxDownDot = options.yybArmSwingMaxDownDot;
-            _yybArmSwingMinHandHorizontalRatio = options.yybArmSwingMinHandHorizontalRatio;
-            _yybArmSwingMaxHandBelowShoulderRatio = options.yybArmSwingMaxHandBelowShoulderRatio;
-            _yybArmSwingHorizontalReachLimitWeight = options.yybArmSwingHorizontalReachLimitWeight;
-            _yybArmSwingMaxHandHorizontalReachRatio = options.yybArmSwingMaxHandHorizontalReachRatio;
-            _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio = options.yybArmSwingHorizontalReachMaxHandBelowShoulderRatio;
-            _yybArmSwingHorizontalReachMinElbowAngleAfterApply = options.yybArmSwingHorizontalReachMinElbowAngleAfterApply;
-            _yybArmSwingRaisedPoseHorizontalReachLimitWeight = options.yybArmSwingRaisedPoseHorizontalReachLimitWeight;
-            _yybArmSwingRaisedPoseMinUpperArmDownDot = options.yybArmSwingRaisedPoseMinUpperArmDownDot;
-            _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio = options.yybArmSwingRaisedPoseMaxHandBelowShoulderRatio;
-            _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio = options.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
-            _enableYybArmDirectionRetargetRuntimeOverride = options.enableYybArmDirectionRetargetRuntimeOverride;
-            _yybArmDirectionUpperArmWeight = options.yybArmDirectionUpperArmWeight;
-            _yybArmDirectionForearmWeight = options.yybArmDirectionForearmWeight;
-            _yybArmDirectionUpperArmMaxDegrees = options.yybArmDirectionUpperArmMaxDegrees;
-            _yybArmDirectionForearmMaxDegrees = options.yybArmDirectionForearmMaxDegrees;
-            _yybArmDirectionLeftSideWeightScale = options.yybArmDirectionLeftSideWeightScale;
-            _yybArmDirectionRightSideWeightScale = options.yybArmDirectionRightSideWeightScale;
-            _overrideYybArmSleeveAnchorRuntimeSettings = options.overrideYybArmSleeveAnchorRuntimeSettings;
-            _enableYybArmSleeveAnchorRuntimeOverride = options.enableYybArmSleeveAnchorRuntimeOverride;
-            _yybArmSleeveAnchorInfluence = options.yybArmSleeveAnchorInfluence;
-            _yybArmShoulderCapAnchorInfluence = options.yybArmShoulderCapAnchorInfluence;
-            _yybArmSleeveAnchorMaxDegrees = options.yybArmSleeveAnchorMaxDegrees;
-            _overrideYybArmVisualTwistRuntimeSettings = options.overrideYybArmVisualTwistRuntimeSettings;
-            _enableYybArmVisualTwistRuntimeOverride = options.enableYybArmVisualTwistRuntimeOverride;
-            _yybArmVisualUpperArmInfluence = options.yybArmVisualUpperArmInfluence;
-            _yybArmVisualForearmInfluence = options.yybArmVisualForearmInfluence;
-            _yybArmVisualUpperArmMaxDegrees = options.yybArmVisualUpperArmMaxDegrees;
-            _yybArmVisualForearmMaxDegrees = options.yybArmVisualForearmMaxDegrees;
-            _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = options.enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-            _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = options.disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-            _manualAnimatorLowerBodySegmentDirectionReferenceWeight = options.manualAnimatorLowerBodySegmentDirectionReferenceWeight;
-            _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = options.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
-            _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride = options.disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
-            _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = options.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
-            _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride = options.disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
-            _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = options.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = options.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = options.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = options.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = options.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = options.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = options.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = options.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
-            _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride = options.disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
-            _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = options.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
-            _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = options.enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = options.disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            _manualAnimatorFootHipsAlignedResidualYawReferenceWeight = options.manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
-            _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = options.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
-            _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride = options.enablePostSetHumanPoseRightEndpointPositionRuntimeOverride;
-            _postSetHumanPoseRightEndpointPositionReferenceWeight = options.postSetHumanPoseRightEndpointPositionReferenceWeight;
-            _postSetHumanPoseRightEndpointPositionReferenceMaxOffset = options.postSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-            _postSetHumanPoseRightEndpointPositionReferencePositiveZScale = options.postSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-            _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = options.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = options.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = options.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            _postSetHumanPoseEndpointPositionUseLeftSide = options.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
-            _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = options.enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
-            _preSetHumanPoseRightEndpointPositionReferenceWeight = options.preSetHumanPoseRightEndpointPositionReferenceWeight;
-            _preSetHumanPoseRightEndpointPositionReferenceMaxOffset = options.preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
-            _preSetHumanPoseRightEndpointPositionReferencePositiveZScale = options.preSetHumanPoseRightEndpointPositionReferencePositiveZScale;
-            _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = options.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = options.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = options.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
-            _preSetHumanPoseEndpointPositionUseLeftSide = options.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
-            _preSetHumanPoseEndpointPositionUseGhostCurrentBasis = options.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionX = options.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionZ = options.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
-            _usePostSetHumanPoseRightFootEvaluatorXzReference = options.usePostSetHumanPoseRightFootEvaluatorXzReference;
-            _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = options.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
-            _enableManualAnimatorBipedIkFootPositionRuntimeOverride = options.enableManualAnimatorBipedIkFootPositionRuntimeOverride;
-            _manualAnimatorBipedIkFootPositionReferenceWeight = options.manualAnimatorBipedIkFootPositionReferenceWeight;
-            _manualAnimatorBipedIkFootPositionReferenceMaxOffset = options.manualAnimatorBipedIkFootPositionReferenceMaxOffset;
-            _enableManualAnimatorHipsLocalPositionRuntimeOverride = options.enableManualAnimatorHipsLocalPositionRuntimeOverride;
-            _manualAnimatorHipsLocalPositionReferenceWeight = options.manualAnimatorHipsLocalPositionReferenceWeight;
-            _manualAnimatorHipsLocalPositionReferenceMaxOffset = options.manualAnimatorHipsLocalPositionReferenceMaxOffset;
-            _enableManualAnimatorBodyPositionXzRuntimeOverride = options.enableManualAnimatorBodyPositionXzRuntimeOverride;
-            _manualAnimatorBodyPositionXzReferenceWeight = options.manualAnimatorBodyPositionXzReferenceWeight;
-            _manualAnimatorBodyPositionXzReferenceMaxOffset = options.manualAnimatorBodyPositionXzReferenceMaxOffset;
-            _manualAnimatorBodyPositionXzReferenceFrameGateStart = options.manualAnimatorBodyPositionXzReferenceFrameGateStart;
-            _manualAnimatorBodyPositionXzReferenceFrameGateEnd = options.manualAnimatorBodyPositionXzReferenceFrameGateEnd;
-            _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = options.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames;
-            _manualAnimatorBodyPositionXzReferenceAxisXScale = options.manualAnimatorBodyPositionXzReferenceAxisXScale;
-            _manualAnimatorBodyPositionXzReferenceAxisZScale = options.manualAnimatorBodyPositionXzReferenceAxisZScale;
-            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride = options.enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
-            _yybRightSleeveSilhouetteLocalOffsetX = options.yybRightSleeveSilhouetteLocalOffsetX;
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart = options.yybRightSleeveSilhouetteLocalOffsetFrameGateStart;
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = options.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
-            _enableRetargetBodyPositionXzRootMotionRuntimeOverride = options.enableRetargetBodyPositionXzRootMotionRuntimeOverride;
-            _disableTargetHumanoidBonePositionLockRuntimeOverride = options.disableTargetHumanoidBonePositionLockRuntimeOverride;
-            _enableVmdPlaybackProbeRuntimeOverride = options.enableVmdPlaybackProbeRuntimeOverride;
-            _applyVmdPlaybackProbeIkTargetsRuntimeOverride = options.applyVmdPlaybackProbeIkTargetsRuntimeOverride;
-            _vmdPlaybackProbeSourceVmdPath = options.vmdPlaybackProbeSourceVmdPath;
-            _enableReferenceMmdTimingRuntimeOverride = options.enableReferenceMmdTimingRuntimeOverride;
-            _editorDiagnosticSmokeSegment = ResolveEditorDiagnosticSmokeSegment(options.editorDiagnosticSmokeSegment);
-            _diagnosticCaptureWidthOverride = options.diagnosticCaptureWidthOverride;
-            _diagnosticCaptureHeightOverride = options.diagnosticCaptureHeightOverride;
-            _diagnosticScreenshotPaddingOverride = options.diagnosticScreenshotPaddingOverride;
-            _diagnosticScreenshotVerticalViewportCenterOverride = options.diagnosticScreenshotVerticalViewportCenterOverride;
+            _currentRunOptions = options ?? throw new ArgumentNullException(nameof(options));
+            _editorDiagnosticSmokeSegment =
+                ResolveEditorDiagnosticSmokeSegment(options.editorDiagnosticSmokeSegment);
         }
 
         private static void ContinueStartRunAfterRefresh()
@@ -1874,23 +1538,23 @@ namespace Fbx2Vmd.FBXImporter
                 if (vmdRecorder != null)
                 {
                     vmdRecorder.EnableParentFrameIkOffsetCompensationWhenCenterParented =
-                        _enableRecorderParentFrameIkOffsetsWhenCenterParented;
+                        _currentRunOptions.enableRecorderParentFrameIkOffsetsWhenCenterParented;
                     VmdIkDeltaGuardRuntimeOverrideApplier.Apply(
                         vmdRecorder,
-                        _mmdIkDeltaGuardLimitOverrideVmd,
-                        _mmdIkDeltaGuardRecoveryTriggerVmd,
-                        _mmdIkDeltaGuardRecoveryDebtThresholdVmd,
-                        _mmdIkDeltaGuardRecoveryHoldFrames);
+                        _currentRunOptions.mmdIkDeltaGuardLimitOverrideVmd,
+                        _currentRunOptions.mmdIkDeltaGuardRecoveryTriggerVmd,
+                        _currentRunOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd,
+                        _currentRunOptions.mmdIkDeltaGuardRecoveryHoldFrames);
                     vmdRecorder.IgnoreInitialPosition = true;
                     if (_activeJob.Mode == CaptureMode.MainRecordingVmdPlaybackProbe &&
                         !VmdPlaybackProbeRuntimeOverrideApplier.Apply(
                             _activeRecorder.gameObject,
-                            _vmdPlaybackProbeSourceVmdPath,
+                            _currentRunOptions.vmdPlaybackProbeSourceVmdPath,
                             vmdRecorder,
-                            _applyVmdPlaybackProbeIkTargetsRuntimeOverride))
+                            _currentRunOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride))
                     {
                         throw new InvalidOperationException(
-                            $"VMD playback probe source is not ready: {_vmdPlaybackProbeSourceVmdPath}");
+                            $"VMD playback probe source is not ready: {_currentRunOptions.vmdPlaybackProbeSourceVmdPath}");
                     }
                 }
             }
@@ -1901,32 +1565,32 @@ namespace Fbx2Vmd.FBXImporter
 
             ReferenceMmdTimingPlan timingPlan = BuildReferenceMmdTimingPlan(
                 _referenceClip != null ? _referenceClip.length : 0f,
-                _durationSeconds,
+                _currentRunOptions.durationSeconds,
                 _editorDiagnosticSmokeSegment,
-                _enableReferenceMmdTimingRuntimeOverride);
+                _currentRunOptions.enableReferenceMmdTimingRuntimeOverride);
             float referenceClipStartSeconds = timingPlan.ReferenceMp4StartSeconds;
             float[] referenceLocalSampleSeconds = LoadReferenceMp4CurrentClipLocalSampleSeconds(
                 referenceClipStartSeconds,
-                _durationSeconds);
+                _currentRunOptions.durationSeconds);
             float[] probeSampleTimes = BuildReferenceMp4AlignedProbeSampleTimes(
                 timingPlan.CandidateClipStartSeconds,
-                _durationSeconds,
+                _currentRunOptions.durationSeconds,
                 referenceLocalSampleSeconds,
                 timingPlan.CandidateClipSecondsPerReferenceSecond);
             bool started = _activeFBXVmdPipeline.StartEditorDiagnosticSmoke(
-                _fbxFileName,
-                _durationSeconds,
-                _targetFrameCount,
+                _currentRunOptions.fbxFileName,
+                _currentRunOptions.durationSeconds,
+                _currentRunOptions.targetFrameCount,
                 enableDiagnostics: true,
-                enableFingerCloseups: _enableFingerCloseups,
+                enableFingerCloseups: _currentRunOptions.enableFingerCloseups,
                 useDeterministicCaptureFramerate: true,
                 diagnosticStartDelay: DefaultStartDelaySeconds,
                 segment: _editorDiagnosticSmokeSegment,
                 sampleTimesOverride: probeSampleTimes,
-                captureWidthOverride: _diagnosticCaptureWidthOverride,
-                captureHeightOverride: _diagnosticCaptureHeightOverride,
-                diagnosticScreenshotPaddingOverride: _diagnosticScreenshotPaddingOverride,
-                diagnosticScreenshotVerticalViewportCenterOverride: _diagnosticScreenshotVerticalViewportCenterOverride,
+                captureWidthOverride: _currentRunOptions.diagnosticCaptureWidthOverride,
+                captureHeightOverride: _currentRunOptions.diagnosticCaptureHeightOverride,
+                diagnosticScreenshotPaddingOverride: _currentRunOptions.diagnosticScreenshotPaddingOverride,
+                diagnosticScreenshotVerticalViewportCenterOverride: _currentRunOptions.diagnosticScreenshotVerticalViewportCenterOverride,
                 recordingStartTimeOverrideSeconds: timingPlan.HasCandidateTimingOverride
                     ? timingPlan.CandidateClipStartSeconds
                     : float.NaN,
@@ -2050,9 +1714,9 @@ namespace Fbx2Vmd.FBXImporter
                 : ManualYybLabelSuffix;
             VisualComparisonManualCapturePlan capturePlan = BuildManualAnimatorCapturePlan(
                 labelSuffix,
-                _fbxFileName,
+                _currentRunOptions.fbxFileName,
                 _referenceClip.length,
-                _durationSeconds,
+                _currentRunOptions.durationSeconds,
                 _editorDiagnosticSmokeSegment);
             PrepareManualAnimator(animator, _referenceClip, capturePlan.StartTimeSeconds);
             UnityHumanoidVMDRecorder vmdRecorder = _activeRecorder.GetComponent<UnityHumanoidVMDRecorder>();
@@ -2065,7 +1729,7 @@ namespace Fbx2Vmd.FBXImporter
                 capturePlan.DurationSeconds);
             _activeRecorder.SetRecordingDiagnostics(
                 enableProbe: true,
-                enableFingerCloseups: _enableFingerCloseups,
+                enableFingerCloseups: _currentRunOptions.enableFingerCloseups,
                 useCaptureFramerateForRegression: true,
                 sampleTimesOverride: probeSampleTimes);
             _activeRecorder.SetReady($"{_activeJob.DisplayName} 준비");
@@ -2182,7 +1846,6 @@ namespace Fbx2Vmd.FBXImporter
                 !string.IsNullOrWhiteSpace(stableResult.FilePath) &&
                 File.Exists(stableResult.FilePath))
             {
-                _vmdPlaybackProbeSourceVmdPath = stableResult.FilePath;
                 _currentRunOptions.vmdPlaybackProbeSourceVmdPath = stableResult.FilePath;
             }
 
@@ -2585,7 +2248,7 @@ namespace Fbx2Vmd.FBXImporter
             };
             YybVisualComparisonRunOptionsCopier.Copy(_currentRunOptions, state);
             state.editorDiagnosticSmokeSegment = _editorDiagnosticSmokeSegment.ToString();
-            state.vmdPlaybackProbeSourceVmdPath = _vmdPlaybackProbeSourceVmdPath;
+            state.vmdPlaybackProbeSourceVmdPath = _currentRunOptions.vmdPlaybackProbeSourceVmdPath;
             return state;
         }
         private static void ClearPersistedState()
@@ -2805,12 +2468,12 @@ namespace Fbx2Vmd.FBXImporter
         private static void LoadRunAssetsForResume()
         {
             _referenceClipAssetPath = ResolveReferenceClipAssetPath(
-                _fbxFileName,
+                _currentRunOptions.fbxFileName,
                 assetPath => LoadFirstAnimationClip(assetPath) != null);
             _referenceClip = LoadFirstAnimationClip(_referenceClipAssetPath);
             if (_referenceClip == null)
             {
-                throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_fbxFileName}");
+                throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_currentRunOptions.fbxFileName}");
             }
 
             _fallbackController =
@@ -3213,9 +2876,9 @@ namespace Fbx2Vmd.FBXImporter
         {
             return ResolveSummaryTargetFrameCount(
                 ResolveReferenceMmdTargetFrameCount(
-                    _fbxFileName,
-                    _durationSeconds,
-                    _targetFrameCount,
+                    _currentRunOptions.fbxFileName,
+                    _currentRunOptions.durationSeconds,
+                    _currentRunOptions.targetFrameCount,
                     _referenceClip != null ? _referenceClip.length : 0f,
                     DefaultFrameRate),
                 ResolveMainAutoFrameCount());
@@ -3254,7 +2917,7 @@ namespace Fbx2Vmd.FBXImporter
                 referenceTargetFrameCount,
                 baselineRecordedFrameCount,
                 candidateRecordedFrameCount,
-                _durationSeconds,
+                _currentRunOptions.durationSeconds,
                 ResolveReferenceMp4CurrentClipStartSeconds());
         }
 
@@ -3263,9 +2926,9 @@ namespace Fbx2Vmd.FBXImporter
             float referenceClipLengthSeconds = _referenceClip != null ? _referenceClip.length : 0f;
             ReferenceMmdTimingPlan timingPlan = BuildReferenceMmdTimingPlan(
                 referenceClipLengthSeconds,
-                _durationSeconds,
+                _currentRunOptions.durationSeconds,
                 _editorDiagnosticSmokeSegment,
-                _enableReferenceMmdTimingRuntimeOverride);
+                _currentRunOptions.enableReferenceMmdTimingRuntimeOverride);
             return timingPlan.ReferenceMp4StartSeconds;
         }
 

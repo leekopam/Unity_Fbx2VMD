@@ -88,5 +88,32 @@ namespace Tests.Editor.FBXImporter
             Assert.That(parameters, Has.Length.EqualTo(1));
             Assert.That(parameters[0].ParameterType, Is.EqualTo(optionsType));
         }
+
+        [Test]
+        public void Given_RunOptions_When_CheckingRunnerState_Then_DoesNotMirrorOptionFieldsAsStatics()
+        {
+            Type optionsType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonRunOptions",
+                throwOnError: true);
+            string[] mirroredFieldNames = optionsType
+                .GetFields(BindingFlags.Public | BindingFlags.Instance)
+                .Select(field => field.Name)
+                .Where(fieldName => fieldName != "editorDiagnosticSmokeSegment")
+                .Select(fieldName => "_" + fieldName)
+                .Concat(new[]
+                {
+                    "_postSetHumanPoseEndpointPositionUseLeftSide",
+                    "_preSetHumanPoseEndpointPositionUseLeftSide",
+                    "_preSetHumanPoseEndpointPositionInvertBodyPositionX",
+                    "_preSetHumanPoseEndpointPositionInvertBodyPositionZ"
+                })
+                .ToArray();
+            string[] runnerStaticFields = typeof(YybVisualComparisonBatchRunner)
+                .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
+                .Select(field => field.Name)
+                .ToArray();
+
+            Assert.That(runnerStaticFields.Intersect(mirroredFieldNames), Is.Empty);
+        }
     }
 }
