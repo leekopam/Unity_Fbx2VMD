@@ -7258,8 +7258,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private static int ResolveSummaryTargetFrameCount(int referenceTargetFrameCount, int mainAutoFrameCount)
         {
-            _ = mainAutoFrameCount;
-            return Mathf.Max(0, referenceTargetFrameCount);
+            return ReferenceFrameCountResolver.ResolveSummaryTarget(
+                referenceTargetFrameCount,
+                mainAutoFrameCount);
         }
 
         private static int ResolveReferenceMmdTargetFrameCount(
@@ -7269,18 +7270,14 @@ namespace Fbx2Vmd.FBXImporter
             float referenceClipLengthSeconds,
             float recordingFrameRate)
         {
-            if (TryResolveKnownMmdReferenceTargetFrameCount(
-                    fbxFileName,
-                    requestedDurationSeconds,
-                    configuredTargetFrameCount,
-                    referenceClipLengthSeconds,
-                    recordingFrameRate,
-                    out int referenceTargetFrameCount))
-            {
-                return referenceTargetFrameCount;
-            }
-
-            return Mathf.Max(0, configuredTargetFrameCount);
+            return ReferenceFrameCountResolver.Resolve(
+                fbxFileName,
+                requestedDurationSeconds,
+                configuredTargetFrameCount,
+                referenceClipLengthSeconds,
+                recordingFrameRate,
+                SatisfactionReferenceOutputBaseName,
+                SatisfactionReferenceMaxMmdFrame);
         }
 
         private static bool TryResolveKnownMmdReferenceTargetFrameCount(
@@ -7291,40 +7288,15 @@ namespace Fbx2Vmd.FBXImporter
             float recordingFrameRate,
             out int referenceTargetFrameCount)
         {
-            referenceTargetFrameCount = 0;
-            if (recordingFrameRate <= 0f ||
-                float.IsNaN(recordingFrameRate) ||
-                float.IsInfinity(recordingFrameRate) ||
-                requestedDurationSeconds <= 0f ||
-                float.IsNaN(requestedDurationSeconds) ||
-                float.IsInfinity(requestedDurationSeconds) ||
-                configuredTargetFrameCount <= 0 ||
-                referenceClipLengthSeconds <= 0f ||
-                float.IsNaN(referenceClipLengthSeconds) ||
-                float.IsInfinity(referenceClipLengthSeconds))
-            {
-                return false;
-            }
-
-            string cleanBaseName = Path.GetFileNameWithoutExtension(fbxFileName ?? string.Empty);
-            if (!string.Equals(cleanBaseName, SatisfactionReferenceOutputBaseName, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            int knownReferenceFrameCount = SatisfactionReferenceMaxMmdFrame + 1;
-            float knownReferenceDurationSeconds = knownReferenceFrameCount / recordingFrameRate;
-            float frameToleranceSeconds = 0.5f / recordingFrameRate;
-            bool clipCoversReference = referenceClipLengthSeconds + frameToleranceSeconds >= knownReferenceDurationSeconds;
-            bool requestCoversReference = requestedDurationSeconds + frameToleranceSeconds >= knownReferenceDurationSeconds;
-            bool configuredFramesCoverReference = configuredTargetFrameCount >= knownReferenceFrameCount;
-            if (!clipCoversReference || !requestCoversReference || !configuredFramesCoverReference)
-            {
-                return false;
-            }
-
-            referenceTargetFrameCount = knownReferenceFrameCount;
-            return true;
+            return ReferenceFrameCountResolver.TryResolveKnownReference(
+                fbxFileName,
+                requestedDurationSeconds,
+                configuredTargetFrameCount,
+                referenceClipLengthSeconds,
+                recordingFrameRate,
+                SatisfactionReferenceOutputBaseName,
+                SatisfactionReferenceMaxMmdFrame,
+                out referenceTargetFrameCount);
         }
 
         private static SummaryFrameRoleDiagnostics BuildSummaryFrameRoleDiagnostics(
