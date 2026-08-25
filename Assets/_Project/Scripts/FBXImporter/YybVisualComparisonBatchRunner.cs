@@ -781,64 +781,13 @@ namespace Fbx2Vmd.FBXImporter
             EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
             SavePersistedState();
 
-            Debug.Log(
-                $"[YybVisualComparisonBatchRunner] 시작: fbx={_currentRunOptions.fbxFileName}, duration={_currentRunOptions.durationSeconds:F2}s, " +
-                $"targetFrames={_currentRunOptions.targetFrameCount}, fingerCloseups={_currentRunOptions.enableFingerCloseups}, " +
-                $"recorderParentIkOffsets={_currentRunOptions.enableRecorderParentFrameIkOffsetsWhenCenterParented}, " +
-                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardLimitOverrideVmd)}, " +
-                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryTriggerVmd)}, " +
-                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd)}, " +
-                $"mmdIkDeltaGuardRecoveryHoldFrames={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryHoldFrames)}, " +
-                $"finalIkFootGrounding={_currentRunOptions.enableFinalIkFootGroundingRuntimeOverride}, " +
-                $"manualFootLocalRotation={_currentRunOptions.enableManualAnimatorFootLocalRotationRuntimeOverride}, " +
-                $"manualFullBodyPose={_currentRunOptions.enableManualAnimatorFullBodyPoseRuntimeOverride}/{_currentRunOptions.manualAnimatorFullBodyPoseReferenceWeight:F2}, " +
-                $"manualBodyRotation={_currentRunOptions.enableManualAnimatorBodyRotationRuntimeOverride}/{_currentRunOptions.manualAnimatorBodyRotationReferenceWeight:F2}, " +
-                $"manualHandLocalRotation={_currentRunOptions.enableManualAnimatorHandLocalRotationRuntimeOverride}, " +
-                $"manualThumbLocalRotation={_currentRunOptions.enableManualAnimatorThumbLocalRotationRuntimeOverride}, " +
-                $"manualHandPalmFrame={_currentRunOptions.enableManualAnimatorHandPalmFrameRuntimeOverride}/{_currentRunOptions.manualAnimatorHandPalmFrameWeight:F2}, " +
-                $"retargetPoseVisualSpikeSmoothing={_currentRunOptions.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings}/{_currentRunOptions.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}/{_currentRunOptions.retargetPoseVisualSpikeCurrentWeight:F2}/{_currentRunOptions.retargetPoseVisualSpikeForearmStretchClampMaxOffset:F2}, " +
-                $"yybArmSwingLimit={_currentRunOptions.enableYybArmSwingLimitRuntimeOverride}/{_currentRunOptions.yybArmSwingLimitWeight:F2}, " +
-                $"yybArmDirection={_currentRunOptions.enableYybArmDirectionRetargetRuntimeOverride}/{_currentRunOptions.yybArmDirectionUpperArmWeight:F2}/{_currentRunOptions.yybArmDirectionForearmWeight:F2}, " +
-                $"yybArmSleeveAnchor={_currentRunOptions.overrideYybArmSleeveAnchorRuntimeSettings}/{_currentRunOptions.enableYybArmSleeveAnchorRuntimeOverride}/{_currentRunOptions.yybArmSleeveAnchorInfluence:F2}/{_currentRunOptions.yybArmShoulderCapAnchorInfluence:F2}/{_currentRunOptions.yybArmSleeveAnchorMaxDegrees:F1}, " +
-                $"yybArmVisualTwist={_currentRunOptions.overrideYybArmVisualTwistRuntimeSettings}/{_currentRunOptions.enableYybArmVisualTwistRuntimeOverride}/{_currentRunOptions.yybArmVisualUpperArmInfluence:F2}/{_currentRunOptions.yybArmVisualForearmInfluence:F2}/{_currentRunOptions.yybArmVisualUpperArmMaxDegrees:F1}/{_currentRunOptions.yybArmVisualForearmMaxDegrees:F1}, " +
-                $"manualHipsLocalPosition={_currentRunOptions.enableManualAnimatorHipsLocalPositionRuntimeOverride}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceWeight:F2}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceMaxOffset:F3}, " +
-                $"retargetBodyPositionXzRootMotion={_currentRunOptions.enableRetargetBodyPositionXzRootMotionRuntimeOverride}, " +
-                $"targetBoneLockDisabled={_currentRunOptions.disableTargetHumanoidBonePositionLockRuntimeOverride}, " +
-                $"vmdPlaybackProbe={_currentRunOptions.enableVmdPlaybackProbeRuntimeOverride}, " +
-                $"vmdPlaybackProbeApplyIkTargets={_currentRunOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride}, " +
-                $"referenceMmdTiming={_currentRunOptions.enableReferenceMmdTimingRuntimeOverride}, " +
-                $"segment={_editorDiagnosticSmokeSegment}, " +
-                $"diagnosticCapture={FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureWidthOverride)}x{FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureHeightOverride)}, " +
-                $"diagnosticFraming={FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotPaddingOverride)}/{FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotVerticalViewportCenterOverride)}, " +
-                $"batchMode={Application.isBatchMode}");
-            AppendRunnerTrace(
-                $"run started fbx={_currentRunOptions.fbxFileName} duration={_currentRunOptions.durationSeconds:F2}s " +
-                $"fingerCloseups={_currentRunOptions.enableFingerCloseups} recorderParentIkOffsets={_currentRunOptions.enableRecorderParentFrameIkOffsetsWhenCenterParented} " +
-                $"mmdIkDeltaGuardLimitOverrideVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardLimitOverrideVmd)} " +
-                $"mmdIkDeltaGuardRecoveryTriggerVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryTriggerVmd)} " +
-                $"mmdIkDeltaGuardRecoveryDebtThresholdVmd={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd)} " +
-                $"mmdIkDeltaGuardRecoveryHoldFrames={FormatRuntimeOverride(_currentRunOptions.mmdIkDeltaGuardRecoveryHoldFrames)} " +
-                $"finalIkFootGrounding={_currentRunOptions.enableFinalIkFootGroundingRuntimeOverride} " +
-                $"manualFootLocalRotation={_currentRunOptions.enableManualAnimatorFootLocalRotationRuntimeOverride} " +
-                $"manualFullBodyPose={_currentRunOptions.enableManualAnimatorFullBodyPoseRuntimeOverride}/{_currentRunOptions.manualAnimatorFullBodyPoseReferenceWeight:F2} " +
-                $"manualBodyRotation={_currentRunOptions.enableManualAnimatorBodyRotationRuntimeOverride}/{_currentRunOptions.manualAnimatorBodyRotationReferenceWeight:F2} " +
-                $"manualHandLocalRotation={_currentRunOptions.enableManualAnimatorHandLocalRotationRuntimeOverride} " +
-                $"manualThumbLocalRotation={_currentRunOptions.enableManualAnimatorThumbLocalRotationRuntimeOverride} " +
-                $"manualHandPalmFrame={_currentRunOptions.enableManualAnimatorHandPalmFrameRuntimeOverride}/{_currentRunOptions.manualAnimatorHandPalmFrameWeight:F2} " +
-                $"retargetPoseVisualSpikeSmoothing={_currentRunOptions.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings}/{_currentRunOptions.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}/{_currentRunOptions.retargetPoseVisualSpikeCurrentWeight:F2}/{_currentRunOptions.retargetPoseVisualSpikeForearmStretchClampMaxOffset:F2} " +
-                $"yybArmSwingLimit={_currentRunOptions.enableYybArmSwingLimitRuntimeOverride}/{_currentRunOptions.yybArmSwingLimitWeight:F2} " +
-                $"yybArmDirection={_currentRunOptions.enableYybArmDirectionRetargetRuntimeOverride}/{_currentRunOptions.yybArmDirectionUpperArmWeight:F2}/{_currentRunOptions.yybArmDirectionForearmWeight:F2} " +
-                $"yybArmSleeveAnchor={_currentRunOptions.overrideYybArmSleeveAnchorRuntimeSettings}/{_currentRunOptions.enableYybArmSleeveAnchorRuntimeOverride}/{_currentRunOptions.yybArmSleeveAnchorInfluence:F2}/{_currentRunOptions.yybArmShoulderCapAnchorInfluence:F2}/{_currentRunOptions.yybArmSleeveAnchorMaxDegrees:F1} " +
-                $"yybArmVisualTwist={_currentRunOptions.overrideYybArmVisualTwistRuntimeSettings}/{_currentRunOptions.enableYybArmVisualTwistRuntimeOverride}/{_currentRunOptions.yybArmVisualUpperArmInfluence:F2}/{_currentRunOptions.yybArmVisualForearmInfluence:F2}/{_currentRunOptions.yybArmVisualUpperArmMaxDegrees:F1}/{_currentRunOptions.yybArmVisualForearmMaxDegrees:F1} " +
-                $"manualHipsLocalPosition={_currentRunOptions.enableManualAnimatorHipsLocalPositionRuntimeOverride}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceWeight:F2}/{_currentRunOptions.manualAnimatorHipsLocalPositionReferenceMaxOffset:F3} " +
-                $"retargetBodyPositionXzRootMotion={_currentRunOptions.enableRetargetBodyPositionXzRootMotionRuntimeOverride} " +
-                $"targetBoneLockDisabled={_currentRunOptions.disableTargetHumanoidBonePositionLockRuntimeOverride} " +
-                $"vmdPlaybackProbe={_currentRunOptions.enableVmdPlaybackProbeRuntimeOverride} " +
-                $"vmdPlaybackProbeApplyIkTargets={_currentRunOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride} " +
-                $"referenceMmdTiming={_currentRunOptions.enableReferenceMmdTimingRuntimeOverride} " +
-                $"segment={_editorDiagnosticSmokeSegment} " +
-                $"diagnosticCapture={FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureWidthOverride)}x{FormatRuntimeOverride(_currentRunOptions.diagnosticCaptureHeightOverride)} " +
-                $"diagnosticFraming={FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotPaddingOverride)}/{FormatDiagnosticScreenshotFramingOverride(_currentRunOptions.diagnosticScreenshotVerticalViewportCenterOverride)}");
+            Debug.Log(YybVisualComparisonRunLogFormatter.BuildStartMessage(
+                _currentRunOptions,
+                _editorDiagnosticSmokeSegment.ToString(),
+                Application.isBatchMode));
+            AppendRunnerTrace(YybVisualComparisonRunLogFormatter.BuildTraceMessage(
+                _currentRunOptions,
+                _editorDiagnosticSmokeSegment.ToString()));
 
             if (!Application.isBatchMode && RequestRuntimeDiagnosticScriptRefresh())
             {
@@ -1200,16 +1149,6 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
         }
-        private static bool HasMmdIkDeltaGuardLimitOverride(float value)
-        {
-            return VmdIkDeltaGuardRuntimeOverrideApplier.HasLimit(value);
-        }
-
-        private static bool HasDiagnosticScreenshotFramingOverride(float value)
-        {
-            return VisualComparisonScreenshotOverridePolicy.HasFiniteFramingOverride(value);
-        }
-
         private static FBXVmdPipeline.EditorDiagnosticSmokeSegment ResolveEditorDiagnosticSmokeSegment(string value)
         {
             return VisualComparisonCaptureSegmentPlanner.ResolveSegment(value);
@@ -1245,27 +1184,6 @@ namespace Fbx2Vmd.FBXImporter
         private static string GetEditorDiagnosticSmokeSegmentLabel(FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
         {
             return VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(segment);
-        }
-
-        private static string FormatRuntimeOverride(float value)
-        {
-            return HasMmdIkDeltaGuardLimitOverride(value)
-                ? value.ToString("0.###", CultureInfo.InvariantCulture)
-                : "none";
-        }
-
-        private static string FormatRuntimeOverride(int value)
-        {
-            return value > 0
-                ? value.ToString(CultureInfo.InvariantCulture)
-                : "none";
-        }
-
-        private static string FormatDiagnosticScreenshotFramingOverride(float value)
-        {
-            return HasDiagnosticScreenshotFramingOverride(value)
-                ? value.ToString("0.###", CultureInfo.InvariantCulture)
-                : "none";
         }
 
         private static void StartSubManualJob(string targetNameToken)
