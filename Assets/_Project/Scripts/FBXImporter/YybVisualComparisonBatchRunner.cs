@@ -8738,52 +8738,34 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string GetCommandLineValue(string name, string fallbackValue)
         {
-            string[] args = Environment.GetCommandLineArgs();
-            for (int index = 0; index < args.Length - 1; index++)
-            {
-                if (string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase))
-                {
-                    return args[index + 1];
-                }
-            }
-
-            return fallbackValue;
+            return CommandLineOptionReader.ReadValue(
+                Environment.GetCommandLineArgs(),
+                name,
+                fallbackValue);
         }
 
         private static float GetCommandLineFloat(string name, float fallbackValue)
         {
-            string value = GetCommandLineValue(name, string.Empty);
-            return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)
-                ? parsed
-                : fallbackValue;
+            return CommandLineOptionReader.ReadFloat(
+                Environment.GetCommandLineArgs(),
+                name,
+                fallbackValue);
         }
 
         private static int GetCommandLineInt(string name, int fallbackValue)
         {
-            string value = GetCommandLineValue(name, string.Empty);
-            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
-                ? parsed
-                : fallbackValue;
+            return CommandLineOptionReader.ReadInt(
+                Environment.GetCommandLineArgs(),
+                name,
+                fallbackValue);
         }
 
         private static bool GetCommandLineBool(string name, bool fallbackValue)
         {
-            string value = GetCommandLineValue(name, string.Empty);
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return fallbackValue;
-            }
-
-            if (bool.TryParse(value, out bool parsedBool))
-            {
-                return parsedBool;
-            }
-
-            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
-                ? true
-                : string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)
-                    ? false
-                    : fallbackValue;
+            return CommandLineOptionReader.ReadBool(
+                Environment.GetCommandLineArgs(),
+                name,
+                fallbackValue);
         }
 
         private static string GetHierarchyPath(Transform transform)
