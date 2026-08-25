@@ -675,8 +675,6 @@ namespace Fbx2Vmd.FBXImporter
                 return 0;
             }
 
-            Vector3 targetDirection = direction;
-            float correctionWeight = 0f;
             float indexSpreadGuardWeight = GetEffectiveThumbIndexSpreadGuardWeight(isRightThumb);
             float projectionGuardWeight = GetEffectiveThumbProjectionGuardWeight(isRightThumb);
             if (useHighRiskManualOverride)
@@ -690,94 +688,19 @@ namespace Fbx2Vmd.FBXImporter
                 index != null &&
                 TryNormalize(index.position - hand.position, out indexDirection);
 
-            // 엄지가 검지에서 과하게 벌어지면 검지 방향 쪽으로만 필요한 만큼 당깁니다.
-            bool ApplySpreadConstraint(ref Vector3 candidateDirection)
-            {
-                if (!hasIndexDirection ||
-                    indexSpreadGuardWeight <= 0f ||
-                    maxSpreadAngle >= 89.999f)
-                {
-                    return false;
-                }
-
-                float spreadAngle = Vector3.Angle(candidateDirection, indexDirection);
-                if (spreadAngle <= maxSpreadAngle + 0.001f)
-                {
-                    return false;
-                }
-
-                Vector3 spreadCorrectedDirection = Vector3.RotateTowards(
-                    candidateDirection,
+            if (!ThumbPoseDirectionCalculator.TryCalculateCorrectedDirection(
+                    direction,
                     indexDirection,
-                    (spreadAngle - maxSpreadAngle) * Mathf.Deg2Rad,
-                    0f);
-                if (!TryNormalize(spreadCorrectedDirection, out spreadCorrectedDirection))
-                {
-                    return false;
-                }
-
-                candidateDirection = spreadCorrectedDirection;
-                correctionWeight = Mathf.Max(correctionWeight, Mathf.Clamp01(indexSpreadGuardWeight));
-                return true;
-            }
-
-            // 엄지 방향을 손바닥 좌표계로 분해한 뒤 palmNormal 성분만 허용 범위 안에 넣습니다.
-            bool ApplyProjectionConstraint(ref Vector3 candidateDirection)
-            {
-                if (projectionGuardWeight <= 0f)
-                {
-                    return false;
-                }
-
-                float side = Vector3.Dot(candidateDirection, sideAxis);
-                float normal = Vector3.Dot(candidateDirection, palmNormal);
-                float forward = Vector3.Dot(candidateDirection, forwardAxis);
-                float clampedNormal = Mathf.Clamp(normal, minNormal, maxNormal);
-                if (Mathf.Abs(clampedNormal - normal) <= 0.001f)
-                {
-                    return false;
-                }
-
-                Vector3 projectionCorrectedDirection =
-                    sideAxis * side +
-                    palmNormal * clampedNormal +
-                    forwardAxis * forward;
-                if (!TryNormalize(projectionCorrectedDirection, out projectionCorrectedDirection))
-                {
-                    return false;
-                }
-
-                candidateDirection = projectionCorrectedDirection;
-                correctionWeight = Mathf.Max(correctionWeight, Mathf.Clamp01(projectionGuardWeight));
-                return true;
-            }
-
-            // 벌어짐 제한과 손바닥 투영 제한은 서로 다시 깨뜨릴 수 있어 짧게 반복해 둘 다 만족시키려 합니다.
-            for (int pass = 0; pass < 3; pass++)
-            {
-                bool changed = false;
-                changed |= ApplySpreadConstraint(ref targetDirection);
-                changed |= ApplyProjectionConstraint(ref targetDirection);
-                changed |= ApplySpreadConstraint(ref targetDirection);
-                if (!TryNormalize(targetDirection, out targetDirection))
-                {
-                    return 0;
-                }
-
-                if (!changed)
-                {
-                    break;
-                }
-            }
-
-            if (correctionWeight <= 0f)
-            {
-                return 0;
-            }
-
-            targetDirection = Vector3.Slerp(direction, targetDirection, correctionWeight);
-            if (!TryNormalize(targetDirection, out targetDirection) ||
-                Vector3.Angle(direction, targetDirection) <= 0.1f)
+                    hasIndexDirection,
+                    sideAxis,
+                    palmNormal,
+                    forwardAxis,
+                    minNormal,
+                    maxNormal,
+                    maxSpreadAngle,
+                    indexSpreadGuardWeight,
+                    projectionGuardWeight,
+                    out Vector3 targetDirection))
             {
                 return 0;
             }
