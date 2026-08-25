@@ -843,7 +843,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   recordingFBXVmdPipeline: {fileID: 721950035}
   manualRecordButton: {fileID: 2101000002}
-  recordingController: {fileID: 421532801}
+  recordingController: {fileID: 1877614755}
   enableRecordingDiagnostics: 0
   useDeterministicCaptureFramerateForDiagnostics: 0
   enableDiagnosticFingerCloseups: 1
@@ -2939,7 +2939,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &721950034
 Transform:
   m_ObjectHideFlags: 0
@@ -2969,7 +2969,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _shouldSaveToImportFolder: 0
   _shouldRecordVmdAfterImport: 0
-  _targetCharacter: {fileID: 0}
+  _targetCharacter: {fileID: 1442554601}
   _shouldUseLegacyPoseSpaceFacingCorrection: 0
   _shouldPreserveFbxRootRotation: 0
   _shouldPreserveRetargetBodyPosition: 0
