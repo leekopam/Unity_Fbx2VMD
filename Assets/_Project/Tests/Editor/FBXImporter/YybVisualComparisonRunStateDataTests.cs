@@ -40,6 +40,8 @@ namespace Tests.Editor.FBXImporter
 
             stateDataType.GetField("fbxFileName").SetValue(state, "motion.fbx");
             stateDataType.GetField("enableYybArmSwingLimitRuntimeOverride").SetValue(state, true);
+            stateDataType.GetField("enableYybRightSleeveSilhouetteOffsetRuntimeOverride").SetValue(state, true);
+            stateDataType.GetField("yybRightSleeveSilhouetteLocalOffsetX").SetValue(state, 0.1f);
             stateDataType.GetField("activeJob").SetValue(state, job);
             stateDataType.GetField("results").SetValue(state, CreateArray(resultDataType, result));
 
@@ -48,6 +50,12 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(stateDataType.GetField("fbxFileName").GetValue(restored), Is.EqualTo("motion.fbx"));
             Assert.That(stateDataType.GetField("enableYybArmSwingLimitRuntimeOverride").GetValue(restored), Is.True);
+            Assert.That(
+                stateDataType.GetField("enableYybRightSleeveSilhouetteOffsetRuntimeOverride").GetValue(restored),
+                Is.True);
+            Assert.That(
+                stateDataType.GetField("yybRightSleeveSilhouetteLocalOffsetX").GetValue(restored),
+                Is.EqualTo(0.1f));
             Assert.That(stateDataType.GetField("activeJob").GetValue(restored), Is.Not.Null);
             Array restoredResults = (Array)stateDataType.GetField("results").GetValue(restored);
             Assert.That(restoredResults, Has.Length.EqualTo(1));
