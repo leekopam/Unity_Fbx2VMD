@@ -4302,67 +4302,40 @@ namespace Fbx2Vmd.FBXImporter
             string contactSheetPath = ResolveProjectRelativePath(diagnostics.reference_mp4_contact_sheet_path);
             diagnostics.reference_mp4_provenance_evidence_exists =
                 File.Exists(ResolveProjectRelativePath(diagnostics.reference_mp4_provenance_evidence_path));
-            diagnostics.reference_mp4_analysis_result_exists = File.Exists(resultPath);
-            diagnostics.reference_mp4_frame_metrics_exists = File.Exists(frameMetricsPath);
             diagnostics.reference_mp4_contact_sheet_exists = File.Exists(contactSheetPath);
 
-            if (diagnostics.reference_mp4_analysis_result_exists)
-            {
-                try
-                {
-                    ReferenceMp4AnalysisResult analysis = JsonUtility.FromJson<ReferenceMp4AnalysisResult>(
-                        File.ReadAllText(resultPath, Encoding.UTF8));
-                    if (analysis != null)
-                    {
-                        diagnostics.reference_mp4_analysis_schema = analysis.schema ?? string.Empty;
-                        diagnostics.reference_mp4_extracted_frame_count = Mathf.Max(0, analysis.extractedFrameCount);
-                        if (analysis.video != null)
-                        {
-                            diagnostics.reference_mp4_width = Mathf.Max(0, analysis.video.width);
-                            diagnostics.reference_mp4_height = Mathf.Max(0, analysis.video.height);
-                            diagnostics.reference_mp4_avg_frame_rate = analysis.video.avg_frame_rate ?? string.Empty;
-                            diagnostics.reference_mp4_stream_duration_seconds = ParseInvariantFloat(analysis.video.stream_duration);
-                            diagnostics.reference_mp4_total_video_frames = ParseInvariantInt(analysis.video.nb_frames);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    diagnostics.reference_mp4_analysis_error = ex.GetType().Name + ": " + ex.Message;
-                }
-            }
-
-            if (diagnostics.reference_mp4_frame_metrics_exists)
-            {
-                try
-                {
-                    ReferenceMp4FrameMetrics metrics = JsonUtility.FromJson<ReferenceMp4FrameMetrics>(
-                        File.ReadAllText(frameMetricsPath, Encoding.UTF8));
-                    if (metrics != null)
-                    {
-                        diagnostics.reference_mp4_frame_metrics_schema = metrics.schema ?? string.Empty;
-                        diagnostics.reference_mp4_frame_metrics_sample_count = Mathf.Max(0, metrics.sampleCount);
-                        diagnostics.reference_mp4_frame_metrics_extracted_frame_count = Mathf.Max(0, metrics.extractedFrameCount);
-                        diagnostics.reference_mp4_avg_bbox_height_ratio = metrics.avgBBoxHeightRatio;
-                        diagnostics.reference_mp4_avg_bbox_width_ratio = metrics.avgBBoxWidthRatio;
-                        diagnostics.reference_mp4_center_x_range_ratio = metrics.centerXRangeRatio;
-                        diagnostics.reference_mp4_max_bottom_gap_ratio = metrics.maxBottomGapRatio;
-                        diagnostics.reference_mp4_avg_bright_area_ratio = metrics.avgBrightAreaRatio;
-                        AttachReferenceMp4CurrentClipCoverage(diagnostics, metrics);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    diagnostics.reference_mp4_frame_metrics_error = ex.GetType().Name + ": " + ex.Message;
-                }
-            }
+            ReferenceVideoDiagnosticsData referenceVideo =
+                ReferenceVideoDiagnosticsReader.Read(resultPath, frameMetricsPath);
+            diagnostics.reference_mp4_analysis_result_exists = referenceVideo.AnalysisFileExists;
+            diagnostics.reference_mp4_analysis_error = referenceVideo.AnalysisError;
+            diagnostics.reference_mp4_analysis_schema = referenceVideo.AnalysisSchema;
+            diagnostics.reference_mp4_extracted_frame_count = referenceVideo.ExtractedFrameCount;
+            diagnostics.reference_mp4_width = referenceVideo.VideoWidth;
+            diagnostics.reference_mp4_height = referenceVideo.VideoHeight;
+            diagnostics.reference_mp4_avg_frame_rate = referenceVideo.AverageFrameRate;
+            diagnostics.reference_mp4_stream_duration_seconds = referenceVideo.StreamDurationSeconds;
+            diagnostics.reference_mp4_total_video_frames = referenceVideo.TotalVideoFrames;
+            diagnostics.reference_mp4_frame_metrics_exists = referenceVideo.FrameMetricsFileExists;
+            diagnostics.reference_mp4_frame_metrics_error = referenceVideo.FrameMetricsError;
+            diagnostics.reference_mp4_frame_metrics_schema = referenceVideo.FrameMetricsSchema;
+            diagnostics.reference_mp4_frame_metrics_sample_count = referenceVideo.FrameMetricsSampleCount;
+            diagnostics.reference_mp4_frame_metrics_extracted_frame_count =
+                referenceVideo.FrameMetricsExtractedFrameCount;
+            diagnostics.reference_mp4_avg_bbox_height_ratio = referenceVideo.AverageBBoxHeightRatio;
+            diagnostics.reference_mp4_avg_bbox_width_ratio = referenceVideo.AverageBBoxWidthRatio;
+            diagnostics.reference_mp4_center_x_range_ratio = referenceVideo.CenterXRangeRatio;
+            diagnostics.reference_mp4_max_bottom_gap_ratio = referenceVideo.MaxBottomGapRatio;
+            diagnostics.reference_mp4_avg_bright_area_ratio = referenceVideo.AverageBrightAreaRatio;
+            AttachReferenceMp4CurrentClipCoverage(
+                diagnostics,
+                referenceVideo.FrameMetricRows);
         }
 
         private static void AttachReferenceMp4CurrentClipCoverage(
             SummaryFrameRoleDiagnostics diagnostics,
-            ReferenceMp4FrameMetrics metrics)
+            Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow[] rows)
         {
-            if (diagnostics == null || metrics == null || metrics.rows == null)
+            if (diagnostics == null || rows == null)
             {
                 return;
             }
@@ -4392,7 +4365,7 @@ namespace Fbx2Vmd.FBXImporter
             float maxCenterX = float.NegativeInfinity;
             var sampleSeconds = new List<float>();
             diagnostics.referenceMp4CurrentClipRows.Clear();
-            foreach (ReferenceMp4FrameMetricRow row in metrics.rows)
+            foreach (Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow row in rows)
             {
                 if (row == null)
                 {
@@ -4560,20 +4533,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return projectRoot.FullName;
-        }
-
-        private static int ParseInvariantInt(string value)
-        {
-            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
-                ? parsed
-                : 0;
-        }
-
-        private static float ParseInvariantFloat(string value)
-        {
-            return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed)
-                ? parsed
-                : float.NaN;
         }
 
         private static VisualComparisonCandidateArtifactSelectionData BuildCandidateArtifactSelection(
@@ -4759,26 +4718,9 @@ namespace Fbx2Vmd.FBXImporter
         internal sealed class SummaryFrameRoleDiagnostics : VisualComparisonFrameRoleDiagnosticsData
         {
             [NonSerialized]
-            public readonly List<ReferenceMp4FrameMetricRow> referenceMp4CurrentClipRows =
-                new List<ReferenceMp4FrameMetricRow>();
-        }
-
-        [Serializable]
-        private sealed class ReferenceMp4AnalysisResult
-        {
-            public string schema = string.Empty;
-            public int extractedFrameCount = 0;
-            public ReferenceMp4Video video = null;
-        }
-
-        [Serializable]
-        private sealed class ReferenceMp4Video
-        {
-            public int width = 0;
-            public int height = 0;
-            public string avg_frame_rate = string.Empty;
-            public string stream_duration = string.Empty;
-            public string nb_frames = string.Empty;
+            public readonly List<Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow>
+                referenceMp4CurrentClipRows =
+                    new List<Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow>();
         }
 
         [Serializable]
