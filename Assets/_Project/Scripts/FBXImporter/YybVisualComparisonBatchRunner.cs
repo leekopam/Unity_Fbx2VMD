@@ -164,16 +164,6 @@ namespace Fbx2Vmd.FBXImporter
         private const string ManualTestPrefabLabelSuffix = "testPrefab";
         private const string ManualYybLabelSuffix = "yyb";
 
-        private struct ReferenceMmdTimingPlan
-        {
-            public bool Enabled;
-            public bool HasCandidateTimingOverride;
-            public float ReferenceMp4StartSeconds;
-            public float CandidateClipStartSeconds;
-            public float CandidateClipSecondsPerReferenceSecond;
-            public float ReferenceDurationSeconds;
-        }
-
         private enum CaptureMode
         {
             MainAuto,
@@ -1384,12 +1374,13 @@ namespace Fbx2Vmd.FBXImporter
             _activeFBXVmdPipeline.EditorDiagnosticSmokeFinished += HandleMainSceneFinished;
             SavePersistedState();
 
-            ReferenceMmdTimingPlan timingPlan = BuildReferenceMmdTimingPlan(
+            ReferenceVideoTimingPlan timingPlan = ReferenceVideoTimingPlanner.Build(
                 _referenceClip != null ? _referenceClip.length : 0f,
                 _currentRunOptions.durationSeconds,
                 _editorDiagnosticSmokeSegment,
-                _currentRunOptions.enableReferenceMmdTimingRuntimeOverride);
-            float referenceClipStartSeconds = timingPlan.ReferenceMp4StartSeconds;
+                _currentRunOptions.enableReferenceMmdTimingRuntimeOverride,
+                ResolveKnownReferenceMmdDurationSeconds());
+            float referenceClipStartSeconds = timingPlan.ReferenceVideoStartSeconds;
             float[] referenceLocalSampleSeconds = LoadReferenceMp4CurrentClipLocalSampleSeconds(
                 referenceClipStartSeconds,
                 _currentRunOptions.durationSeconds);
@@ -2745,12 +2736,13 @@ namespace Fbx2Vmd.FBXImporter
         private static float ResolveReferenceMp4CurrentClipStartSeconds()
         {
             float referenceClipLengthSeconds = _referenceClip != null ? _referenceClip.length : 0f;
-            ReferenceMmdTimingPlan timingPlan = BuildReferenceMmdTimingPlan(
+            ReferenceVideoTimingPlan timingPlan = ReferenceVideoTimingPlanner.Build(
                 referenceClipLengthSeconds,
                 _currentRunOptions.durationSeconds,
                 _editorDiagnosticSmokeSegment,
-                _currentRunOptions.enableReferenceMmdTimingRuntimeOverride);
-            return timingPlan.ReferenceMp4StartSeconds;
+                _currentRunOptions.enableReferenceMmdTimingRuntimeOverride,
+                ResolveKnownReferenceMmdDurationSeconds());
+            return timingPlan.ReferenceVideoStartSeconds;
         }
 
         private static float ResolveKnownReferenceMmdDurationSeconds()
@@ -2758,55 +2750,6 @@ namespace Fbx2Vmd.FBXImporter
             return (SatisfactionReferenceMaxMmdFrame + 1) / DefaultFrameRate;
         }
 
-        private static ReferenceMmdTimingPlan BuildReferenceMmdTimingPlan(
-            float referenceClipLengthSeconds,
-            float requestedDurationSeconds,
-            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment,
-            bool enabled)
-        {
-            float safeClipLength = Mathf.Max(0f, referenceClipLengthSeconds);
-            float safeDuration = Mathf.Max(0.1f, requestedDurationSeconds);
-            float defaultStart = CalculateEditorDiagnosticSmokeStartTime(
-                safeClipLength,
-                safeDuration,
-                segment);
-
-            ReferenceMmdTimingPlan plan = new ReferenceMmdTimingPlan
-            {
-                Enabled = false,
-                HasCandidateTimingOverride = false,
-                ReferenceMp4StartSeconds = defaultStart,
-                CandidateClipStartSeconds = defaultStart,
-                CandidateClipSecondsPerReferenceSecond = 1f,
-                ReferenceDurationSeconds = safeClipLength
-            };
-
-            float knownReferenceDuration = ResolveKnownReferenceMmdDurationSeconds();
-            if (!enabled ||
-                safeClipLength <= 0f ||
-                knownReferenceDuration <= 0f ||
-                float.IsNaN(knownReferenceDuration) ||
-                float.IsInfinity(knownReferenceDuration))
-            {
-                return plan;
-            }
-
-            float referenceStart = CalculateEditorDiagnosticSmokeStartTime(
-                knownReferenceDuration,
-                safeDuration,
-                segment);
-            float candidateScale = Mathf.Max(0.0001f, safeClipLength / knownReferenceDuration);
-            float candidateStart = referenceStart * candidateScale;
-            float maxCandidateStart = Mathf.Max(0f, safeClipLength - (safeDuration * candidateScale));
-
-            plan.Enabled = true;
-            plan.HasCandidateTimingOverride = true;
-            plan.ReferenceMp4StartSeconds = referenceStart;
-            plan.CandidateClipStartSeconds = Mathf.Clamp(candidateStart, 0f, maxCandidateStart);
-            plan.CandidateClipSecondsPerReferenceSecond = candidateScale;
-            plan.ReferenceDurationSeconds = knownReferenceDuration;
-            return plan;
-        }
 
         private static float[] BuildReferenceMp4AlignedProbeSampleTimes(
             float referenceClipStartSeconds,
