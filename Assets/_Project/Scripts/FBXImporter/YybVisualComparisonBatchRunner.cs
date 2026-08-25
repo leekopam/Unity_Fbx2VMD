@@ -2800,24 +2800,21 @@ namespace Fbx2Vmd.FBXImporter
                 return Array.Empty<float>();
             }
 
-            try
-            {
-                ReferenceMp4FrameMetrics metrics = JsonUtility.FromJson<ReferenceMp4FrameMetrics>(
-                    File.ReadAllText(frameMetricsPath, Encoding.UTF8));
-                return ReferenceVideoSampleTimeExtractor.ExtractLocalSeconds(
-                    metrics != null ? metrics.rows : null,
-                    referenceClipStartSeconds,
-                    requestedDurationSeconds);
-            }
-            catch (Exception ex)
+            ReferenceVideoDiagnosticsData referenceVideo =
+                ReferenceVideoDiagnosticsReader.Read(string.Empty, frameMetricsPath);
+            if (!string.IsNullOrWhiteSpace(referenceVideo.FrameMetricsError))
             {
                 AppendRunnerTrace(
                     $"reference mp4 sample load failed path={ReferenceMp4FrameMetricsRelativePath} " +
-                    $"error={ex.GetType().Name}: {ex.Message}");
+                    $"error={referenceVideo.FrameMetricsError}");
                 return Array.Empty<float>();
             }
-        }
 
+            return ReferenceVideoSampleTimeExtractor.ExtractLocalSeconds(
+                referenceVideo.FrameMetricRows,
+                referenceClipStartSeconds,
+                requestedDurationSeconds);
+        }
 
         private static string FormatProbeSampleTimes(float[] sampleTimes)
         {
@@ -3361,25 +3358,6 @@ namespace Fbx2Vmd.FBXImporter
             public readonly List<Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow>
                 referenceMp4CurrentClipRows =
                     new List<Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow>();
-        }
-
-        [Serializable]
-        private sealed class ReferenceMp4FrameMetrics
-        {
-            public string schema = string.Empty;
-            public int sampleCount = 0;
-            public int extractedFrameCount = 0;
-            public float avgBBoxHeightRatio = 0f;
-            public float avgBBoxWidthRatio = 0f;
-            public float centerXRangeRatio = 0f;
-            public float maxBottomGapRatio = 0f;
-            public float avgBrightAreaRatio = 0f;
-            public ReferenceMp4FrameMetricRow[] rows = null;
-        }
-
-        [Serializable]
-        internal sealed class ReferenceMp4FrameMetricRow : Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow
-        {
         }
 
         [Serializable]
