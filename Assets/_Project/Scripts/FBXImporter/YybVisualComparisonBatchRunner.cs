@@ -7336,101 +7336,13 @@ namespace Fbx2Vmd.FBXImporter
             string sceneName,
             string metricsCsvPath)
         {
-            SummarySampleOrderingDiagnostic diagnostic = new SummarySampleOrderingDiagnostic
-            {
-                job_mode = jobMode ?? string.Empty,
-                scene_name = sceneName ?? string.Empty,
-                metrics_csv = metricsCsvPath ?? string.Empty
-            };
-
-            string absolutePath = ToAbsoluteProjectPath(metricsCsvPath);
-            if (string.IsNullOrWhiteSpace(absolutePath) || !File.Exists(absolutePath))
-            {
-                return diagnostic;
-            }
-
-            string[] lines = File.ReadAllLines(absolutePath, Encoding.UTF8);
-            if (lines.Length <= 1)
-            {
-                return diagnostic;
-            }
-
-            string[] headers = SplitSimpleCsvLine(lines[0]);
-            Dictionary<string, int> indices = BuildCsvIndexMap(headers);
-            List<string[]> rows = new List<string[]>();
-            for (int lineIndex = 1; lineIndex < lines.Length; lineIndex++)
-            {
-                if (string.IsNullOrWhiteSpace(lines[lineIndex]))
-                {
-                    continue;
-                }
-
-                rows.Add(SplitSimpleCsvLine(lines[lineIndex]));
-            }
-
-            diagnostic.metric_row_count = rows.Count;
-            if (rows.Count == 0)
-            {
-                return diagnostic;
-            }
-
-            string[] first = rows[0];
-            string[] finish = rows.LastOrDefault(row =>
-                string.Equals(GetCsvString(row, indices, "reason"), "finish", StringComparison.OrdinalIgnoreCase))
-                ?? rows[rows.Count - 1];
-
-            diagnostic.first_metric_reason = GetCsvString(first, indices, "reason");
-            diagnostic.first_metric_recorder_frame = GetCsvInt(first, indices, "recorderFrame");
-            diagnostic.first_metric_engine_frame_count = GetCsvInt(first, indices, "frameCount");
-            diagnostic.first_metric_time_since_level_load = GetCsvFloat(first, indices, "timeSinceLevelLoad");
-            diagnostic.first_metric_animation_clip_time = GetCsvFloat(first, indices, "animationClipTime");
-            diagnostic.first_metric_grounding_vertical_step_last = GetCsvFloat(first, indices, "retargetGroundingVerticalStepLast");
-            diagnostic.first_metric_grounding_initial_vertical_step = GetCsvFloat(first, indices, "retargetGroundingInitialVerticalStep");
-            diagnostic.first_metric_grounding_step_clamp_count = GetCsvInt(first, indices, "retargetGroundingStepClampCount");
-            diagnostic.first_metric_grounding_smoothed_count = GetCsvInt(first, indices, "retargetGroundingSmoothedCount");
-            diagnostic.first_metric_grounding_max_step_per_frame = GetCsvFloat(first, indices, "retargetGroundingMaxStepPerFrame");
-            diagnostic.first_metric_grounding_vertical_step_to_max_ratio = ResolveGroundingStepToMaxRatio(
-                first,
-                indices,
-                diagnostic.first_metric_grounding_vertical_step_last,
-                diagnostic.first_metric_grounding_max_step_per_frame);
-            diagnostic.first_metric_grounding_vertical_step_at_max_step =
-                IsGroundingVerticalStepAtMax(diagnostic.first_metric_grounding_vertical_step_to_max_ratio);
-            diagnostic.finish_metric_reason = GetCsvString(finish, indices, "reason");
-            diagnostic.finish_metric_recorder_frame = GetCsvInt(finish, indices, "recorderFrame");
-            diagnostic.finish_metric_engine_frame_count = GetCsvInt(finish, indices, "frameCount");
-            diagnostic.finish_metric_time_since_level_load = GetCsvFloat(finish, indices, "timeSinceLevelLoad");
-            diagnostic.finish_metric_animation_clip_time = GetCsvFloat(finish, indices, "animationClipTime");
-            diagnostic.finish_metric_grounding_vertical_step_last = GetCsvFloat(finish, indices, "retargetGroundingVerticalStepLast");
-            diagnostic.finish_metric_grounding_step_clamp_count = GetCsvInt(finish, indices, "retargetGroundingStepClampCount");
-            diagnostic.finish_metric_grounding_smoothed_count = GetCsvInt(finish, indices, "retargetGroundingSmoothedCount");
-            diagnostic.finish_metric_grounding_max_step_per_frame = GetCsvFloat(finish, indices, "retargetGroundingMaxStepPerFrame");
-            diagnostic.finish_metric_grounding_vertical_step_to_max_ratio = ResolveGroundingStepToMaxRatio(
-                finish,
-                indices,
-                diagnostic.finish_metric_grounding_vertical_step_last,
-                diagnostic.finish_metric_grounding_max_step_per_frame);
-            diagnostic.finish_metric_grounding_vertical_step_at_max_step =
-                IsGroundingVerticalStepAtMax(diagnostic.finish_metric_grounding_vertical_step_to_max_ratio);
-            diagnostic.recording_metric_recorder_frame_span = CalculateMetricIntSpan(
-                diagnostic.first_metric_recorder_frame,
-                diagnostic.finish_metric_recorder_frame);
-            diagnostic.recording_metric_engine_frame_span = CalculateMetricIntSpan(
-                diagnostic.first_metric_engine_frame_count,
-                diagnostic.finish_metric_engine_frame_count);
-            diagnostic.recording_metric_time_since_level_load_span = CalculateMetricFloatSpan(
-                diagnostic.first_metric_time_since_level_load,
-                diagnostic.finish_metric_time_since_level_load);
-            diagnostic.recording_grounding_step_clamp_delta = CalculateMetricIntSpan(
-                diagnostic.first_metric_grounding_step_clamp_count,
-                diagnostic.finish_metric_grounding_step_clamp_count);
-            diagnostic.recording_grounding_smoothed_delta = CalculateMetricIntSpan(
-                diagnostic.first_metric_grounding_smoothed_count,
-                diagnostic.finish_metric_grounding_smoothed_count);
-            diagnostic.recording_phase_span_role =
-                "finish-first recording phase metrics; absolute first engine frame includes scene load/import/prewarm startup offset and can vary between Unity batch runs";
-            diagnostic.grounding_step_limit_role =
-                "prewarm residual is identified by the first recorder-frame grounding step reaching its configured max; recording clamp/smoothed deltas are finish-first counters inside the captured phase";
+            SummarySampleOrderingDiagnostic diagnostic = new SummarySampleOrderingDiagnostic();
+            VisualComparisonSampleOrderingDiagnosticBuilder.Populate(
+                diagnostic,
+                jobMode,
+                sceneName,
+                metricsCsvPath,
+                _projectRoot);
             return diagnostic;
         }
 
