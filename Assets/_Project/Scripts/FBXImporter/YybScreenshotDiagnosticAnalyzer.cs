@@ -548,7 +548,7 @@ namespace Fbx2Vmd.FBXImporter
                                 keypointDelta.MaxL1Delta);
                     }
                 }
-                if (TryComputeBBoxNormalizedImageSpaceKeypointDelta(
+                if (VisualComparisonKeypointDeltaCalculator.TryCalculateBBoxNormalized(
                     candidateMetric.ImageSpaceKeypointProfile,
                     candidateMetric.CenterX,
                     candidateMetric.BBoxWidthRatio,
@@ -559,27 +559,23 @@ namespace Fbx2Vmd.FBXImporter
                     referenceRow.bboxWidthRatio,
                     referenceRow.bottomGapRatio,
                     referenceRow.bboxHeightRatio,
-                    out int matchedBBoxNormalizedKeypointCount,
-                    out float bboxNormalizedKeypointL1Delta,
-                    out float bboxNormalizedKeypointMaxL1Delta,
-                    out int bboxNormalizedKeypointMaxIndex,
-                    out float bboxNormalizedKeypointMaxXDelta,
-                    out float bboxNormalizedKeypointMaxYDelta,
-                    out float bboxNormalizedKeypointMaxCandidateX,
-                    out float bboxNormalizedKeypointMaxCandidateY,
-                    out float bboxNormalizedKeypointMaxReferenceX,
-                    out float bboxNormalizedKeypointMaxReferenceY))
+                    out VisualComparisonBBoxNormalizedKeypointDelta bboxNormalizedKeypointDelta))
                 {
                     bboxNormalizedImageSpaceKeypointCount =
-                        Mathf.Max(bboxNormalizedImageSpaceKeypointCount, matchedBBoxNormalizedKeypointCount);
+                        Mathf.Max(
+                            bboxNormalizedImageSpaceKeypointCount,
+                            bboxNormalizedKeypointDelta.ComparedKeypointCount);
                     bboxNormalizedImageSpaceKeypointSampleCount++;
-                    sumBBoxNormalizedImageSpaceKeypointL1Delta += bboxNormalizedKeypointL1Delta;
+                    sumBBoxNormalizedImageSpaceKeypointL1Delta += bboxNormalizedKeypointDelta.MeanL1Delta;
                     if (cropSafeSample)
                     {
                         cropSafeBBoxNormalizedImageSpaceKeypointSampleCount++;
-                        sumCropSafeBBoxNormalizedImageSpaceKeypointL1Delta += bboxNormalizedKeypointL1Delta;
+                        sumCropSafeBBoxNormalizedImageSpaceKeypointL1Delta +=
+                            bboxNormalizedKeypointDelta.MeanL1Delta;
                         maxCropSafeBBoxNormalizedImageSpaceKeypointL1Delta =
-                            Mathf.Max(maxCropSafeBBoxNormalizedImageSpaceKeypointL1Delta, bboxNormalizedKeypointMaxL1Delta);
+                            Mathf.Max(
+                                maxCropSafeBBoxNormalizedImageSpaceKeypointL1Delta,
+                                bboxNormalizedKeypointDelta.MaxL1Delta);
                     }
                     if (TryComputeKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointDelta(
                         candidateMetric.ImageSpaceKeypointProfile,
@@ -625,12 +621,12 @@ namespace Fbx2Vmd.FBXImporter
                         }
                     }
 
-                    if (bboxNormalizedKeypointMaxL1Delta > maxBBoxNormalizedImageSpaceKeypointL1Delta)
+                    if (bboxNormalizedKeypointDelta.MaxL1Delta > maxBBoxNormalizedImageSpaceKeypointL1Delta)
                     {
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_index =
-                            bboxNormalizedKeypointMaxIndex;
+                            bboxNormalizedKeypointDelta.MaxKeypointIndex;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_label =
-                            ResolveImageSpaceKeypointLabel(bboxNormalizedKeypointMaxIndex);
+                            ResolveImageSpaceKeypointLabel(bboxNormalizedKeypointDelta.MaxKeypointIndex);
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_reference_seconds =
                             referenceRow.seconds;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_candidate_seconds =
@@ -638,17 +634,17 @@ namespace Fbx2Vmd.FBXImporter
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_recorder_frame =
                             nearestSample.RecorderFrame;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_x_delta =
-                            bboxNormalizedKeypointMaxXDelta;
+                            bboxNormalizedKeypointDelta.MaxXDelta;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_y_delta =
-                            bboxNormalizedKeypointMaxYDelta;
+                            bboxNormalizedKeypointDelta.MaxYDelta;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_candidate_x =
-                            bboxNormalizedKeypointMaxCandidateX;
+                            bboxNormalizedKeypointDelta.MaxCandidateX;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_candidate_y =
-                            bboxNormalizedKeypointMaxCandidateY;
+                            bboxNormalizedKeypointDelta.MaxCandidateY;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_reference_x =
-                            bboxNormalizedKeypointMaxReferenceX;
+                            bboxNormalizedKeypointDelta.MaxReferenceX;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_reference_y =
-                            bboxNormalizedKeypointMaxReferenceY;
+                            bboxNormalizedKeypointDelta.MaxReferenceY;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_bottom_gap =
                             referenceRow.bottomGapRatio;
                         diagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_top_gap =
@@ -663,12 +659,14 @@ namespace Fbx2Vmd.FBXImporter
                             candidateTouchesFrameEdge;
                     }
                     maxBBoxNormalizedImageSpaceKeypointL1Delta =
-                        Mathf.Max(maxBBoxNormalizedImageSpaceKeypointL1Delta, bboxNormalizedKeypointMaxL1Delta);
+                        Mathf.Max(
+                            maxBBoxNormalizedImageSpaceKeypointL1Delta,
+                            bboxNormalizedKeypointDelta.MaxL1Delta);
                 }
 
                 if (candidateMetric.HasNonHairBrightPixels &&
                     referenceRow.hasNonHairBrightPixels &&
-                    TryComputeBBoxNormalizedImageSpaceKeypointDelta(
+                    VisualComparisonKeypointDeltaCalculator.TryCalculateBBoxNormalized(
                         candidateMetric.NonHairImageSpaceKeypointProfile,
                         candidateMetric.NonHairCenterX,
                         candidateMetric.NonHairBBoxWidthRatio,
@@ -679,32 +677,24 @@ namespace Fbx2Vmd.FBXImporter
                         referenceRow.nonHairBBoxWidthRatio,
                         referenceRow.nonHairBottomGapRatio,
                         referenceRow.nonHairBBoxHeightRatio,
-                        out int matchedNonHairBBoxNormalizedKeypointCount,
-                        out float nonHairBBoxNormalizedKeypointL1Delta,
-                        out float nonHairBBoxNormalizedKeypointMaxL1Delta,
-                        out int nonHairBBoxNormalizedKeypointMaxIndex,
-                        out float nonHairBBoxNormalizedKeypointMaxXDelta,
-                        out float nonHairBBoxNormalizedKeypointMaxYDelta,
-                        out float nonHairBBoxNormalizedKeypointMaxCandidateX,
-                        out float nonHairBBoxNormalizedKeypointMaxCandidateY,
-                        out float nonHairBBoxNormalizedKeypointMaxReferenceX,
-                        out float nonHairBBoxNormalizedKeypointMaxReferenceY))
+                        out VisualComparisonBBoxNormalizedKeypointDelta nonHairBBoxNormalizedKeypointDelta))
                 {
                     nonHairBBoxNormalizedImageSpaceKeypointCount =
                         Mathf.Max(
                             nonHairBBoxNormalizedImageSpaceKeypointCount,
-                            matchedNonHairBBoxNormalizedKeypointCount);
+                            nonHairBBoxNormalizedKeypointDelta.ComparedKeypointCount);
                     nonHairBBoxNormalizedImageSpaceKeypointSampleCount++;
-                    sumNonHairBBoxNormalizedImageSpaceKeypointL1Delta += nonHairBBoxNormalizedKeypointL1Delta;
-                    if (nonHairBBoxNormalizedKeypointMaxL1Delta >
+                    sumNonHairBBoxNormalizedImageSpaceKeypointL1Delta +=
+                        nonHairBBoxNormalizedKeypointDelta.MeanL1Delta;
+                    if (nonHairBBoxNormalizedKeypointDelta.MaxL1Delta >
                         maxNonHairBBoxNormalizedImageSpaceKeypointL1Delta)
                     {
                         maxNonHairBBoxNormalizedImageSpaceKeypointL1Delta =
-                            nonHairBBoxNormalizedKeypointMaxL1Delta;
+                            nonHairBBoxNormalizedKeypointDelta.MaxL1Delta;
                         maxNonHairBBoxNormalizedImageSpaceKeypointIndex =
-                            nonHairBBoxNormalizedKeypointMaxIndex;
+                            nonHairBBoxNormalizedKeypointDelta.MaxKeypointIndex;
                         maxNonHairBBoxNormalizedImageSpaceKeypointLabel =
-                            ResolveImageSpaceKeypointLabel(nonHairBBoxNormalizedKeypointMaxIndex);
+                            ResolveImageSpaceKeypointLabel(nonHairBBoxNormalizedKeypointDelta.MaxKeypointIndex);
 
                         float referenceNonHairTopGapRatio = ResolveFrameTopGapRatio(
                             referenceRow.nonHairBottomGapRatio,
@@ -720,17 +710,17 @@ namespace Fbx2Vmd.FBXImporter
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_recorder_frame =
                             nearestSample.RecorderFrame;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_x_delta =
-                            nonHairBBoxNormalizedKeypointMaxXDelta;
+                            nonHairBBoxNormalizedKeypointDelta.MaxXDelta;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_y_delta =
-                            nonHairBBoxNormalizedKeypointMaxYDelta;
+                            nonHairBBoxNormalizedKeypointDelta.MaxYDelta;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_x =
-                            nonHairBBoxNormalizedKeypointMaxCandidateX;
+                            nonHairBBoxNormalizedKeypointDelta.MaxCandidateX;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_y =
-                            nonHairBBoxNormalizedKeypointMaxCandidateY;
+                            nonHairBBoxNormalizedKeypointDelta.MaxCandidateY;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_x =
-                            nonHairBBoxNormalizedKeypointMaxReferenceX;
+                            nonHairBBoxNormalizedKeypointDelta.MaxReferenceX;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_y =
-                            nonHairBBoxNormalizedKeypointMaxReferenceY;
+                            nonHairBBoxNormalizedKeypointDelta.MaxReferenceY;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_bottom_gap =
                             referenceRow.nonHairBottomGapRatio;
                         diagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_top_gap =
@@ -1638,152 +1628,6 @@ namespace Fbx2Vmd.FBXImporter
             int bandIndex = bandEndpointIndex / 2;
             string side = bandEndpointIndex % 2 == 0 ? "left" : "right";
             return $"band_{bandIndex}_{side}";
-        }
-
-        private static bool TryComputeBBoxNormalizedImageSpaceKeypointDelta(
-            float[] candidateKeypoints,
-            float candidateCenterX,
-            float candidateBBoxWidth,
-            float candidateBottomGap,
-            float candidateBBoxHeight,
-            float[] referenceKeypoints,
-            float referenceCenterX,
-            float referenceBBoxWidth,
-            float referenceBottomGap,
-            float referenceBBoxHeight,
-            out int keypointCount,
-            out float l1Delta,
-            out float maxL1Delta)
-        {
-            return TryComputeBBoxNormalizedImageSpaceKeypointDelta(
-                candidateKeypoints,
-                candidateCenterX,
-                candidateBBoxWidth,
-                candidateBottomGap,
-                candidateBBoxHeight,
-                referenceKeypoints,
-                referenceCenterX,
-                referenceBBoxWidth,
-                referenceBottomGap,
-                referenceBBoxHeight,
-                out keypointCount,
-                out l1Delta,
-                out maxL1Delta,
-                out _,
-                out _,
-                out _,
-                out _,
-                out _,
-                out _,
-                out _);
-        }
-
-        private static bool TryComputeBBoxNormalizedImageSpaceKeypointDelta(
-            float[] candidateKeypoints,
-            float candidateCenterX,
-            float candidateBBoxWidth,
-            float candidateBottomGap,
-            float candidateBBoxHeight,
-            float[] referenceKeypoints,
-            float referenceCenterX,
-            float referenceBBoxWidth,
-            float referenceBottomGap,
-            float referenceBBoxHeight,
-            out int keypointCount,
-            out float l1Delta,
-            out float maxL1Delta,
-            out int maxKeypointIndex,
-            out float maxXDelta,
-            out float maxYDelta,
-            out float maxCandidateX,
-            out float maxCandidateY,
-            out float maxReferenceX,
-            out float maxReferenceY)
-        {
-            keypointCount = 0;
-            l1Delta = float.NaN;
-            maxL1Delta = float.NaN;
-            maxKeypointIndex = -1;
-            maxXDelta = float.NaN;
-            maxYDelta = float.NaN;
-            maxCandidateX = float.NaN;
-            maxCandidateY = float.NaN;
-            maxReferenceX = float.NaN;
-            maxReferenceY = float.NaN;
-            if (candidateKeypoints == null ||
-                referenceKeypoints == null ||
-                !IsFiniteMetric(candidateCenterX) ||
-                !IsFiniteMetric(candidateBBoxWidth) ||
-                !IsFiniteMetric(candidateBottomGap) ||
-                !IsFiniteMetric(candidateBBoxHeight) ||
-                !IsFiniteMetric(referenceCenterX) ||
-                !IsFiniteMetric(referenceBBoxWidth) ||
-                !IsFiniteMetric(referenceBottomGap) ||
-                !IsFiniteMetric(referenceBBoxHeight) ||
-                candidateBBoxWidth <= 0f ||
-                candidateBBoxHeight <= 0f ||
-                referenceBBoxWidth <= 0f ||
-                referenceBBoxHeight <= 0f)
-            {
-                return false;
-            }
-
-            int length = Mathf.Min(candidateKeypoints.Length, referenceKeypoints.Length);
-            if (length <= 1)
-            {
-                return false;
-            }
-
-            float candidateLeft = candidateCenterX - (candidateBBoxWidth * 0.5f);
-            float referenceLeft = referenceCenterX - (referenceBBoxWidth * 0.5f);
-            float sumDelta = 0f;
-            float maxDelta = 0f;
-            int finiteKeypointCount = 0;
-            for (int i = 0; i + 1 < length; i += 2)
-            {
-                float candidateX = candidateKeypoints[i];
-                float candidateY = candidateKeypoints[i + 1];
-                float referenceX = referenceKeypoints[i];
-                float referenceY = referenceKeypoints[i + 1];
-                if (!IsFiniteMetric(candidateX) ||
-                    !IsFiniteMetric(candidateY) ||
-                    !IsFiniteMetric(referenceX) ||
-                    !IsFiniteMetric(referenceY))
-                {
-                    continue;
-                }
-
-                float candidateNormalizedX = (candidateX - candidateLeft) / candidateBBoxWidth;
-                float candidateNormalizedY = (candidateY - candidateBottomGap) / candidateBBoxHeight;
-                float referenceNormalizedX = (referenceX - referenceLeft) / referenceBBoxWidth;
-                float referenceNormalizedY = (referenceY - referenceBottomGap) / referenceBBoxHeight;
-                float delta =
-                    Mathf.Abs(candidateNormalizedX - referenceNormalizedX) +
-                    Mathf.Abs(candidateNormalizedY - referenceNormalizedY);
-                sumDelta += delta;
-                if (delta > maxDelta)
-                {
-                    maxDelta = delta;
-                    maxKeypointIndex = i / 2;
-                    maxXDelta = Mathf.Abs(candidateNormalizedX - referenceNormalizedX);
-                    maxYDelta = Mathf.Abs(candidateNormalizedY - referenceNormalizedY);
-                    maxCandidateX = candidateNormalizedX;
-                    maxCandidateY = candidateNormalizedY;
-                    maxReferenceX = referenceNormalizedX;
-                    maxReferenceY = referenceNormalizedY;
-                }
-                finiteKeypointCount++;
-            }
-
-            if (finiteKeypointCount <= 0)
-            {
-                return false;
-            }
-
-            keypointCount = finiteKeypointCount;
-            l1Delta = sumDelta / finiteKeypointCount;
-            maxL1Delta = maxDelta;
-            return true;
         }
 
         private static bool TryComputeKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointDelta(
