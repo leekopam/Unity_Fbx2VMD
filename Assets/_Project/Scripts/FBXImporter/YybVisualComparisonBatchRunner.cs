@@ -722,8 +722,8 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _referenceClipAssetPath = ResolveReferenceClipAssetPath(
                     _currentRunOptions.fbxFileName,
-                    assetPath => LoadFirstAnimationClip(assetPath) != null);
-                _referenceClip = LoadFirstAnimationClip(_referenceClipAssetPath);
+                    assetPath => EditorAnimationClipAssetLoader.LoadFirst(assetPath) != null);
+                _referenceClip = EditorAnimationClipAssetLoader.LoadFirst(_referenceClipAssetPath);
                 if (_referenceClip == null)
                 {
                     throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_currentRunOptions.fbxFileName}");
@@ -1964,8 +1964,8 @@ namespace Fbx2Vmd.FBXImporter
         {
             _referenceClipAssetPath = ResolveReferenceClipAssetPath(
                 _currentRunOptions.fbxFileName,
-                assetPath => LoadFirstAnimationClip(assetPath) != null);
-            _referenceClip = LoadFirstAnimationClip(_referenceClipAssetPath);
+                assetPath => EditorAnimationClipAssetLoader.LoadFirst(assetPath) != null);
+            _referenceClip = EditorAnimationClipAssetLoader.LoadFirst(_referenceClipAssetPath);
             if (_referenceClip == null)
             {
                 throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_currentRunOptions.fbxFileName}");
@@ -2836,28 +2836,6 @@ namespace Fbx2Vmd.FBXImporter
         private static void CopyLatestSummary(string sourcePath, string relativeTargetPath)
         {
             VisualComparisonSummaryFileStore.CopyLatest(sourcePath, _projectRoot, relativeTargetPath);
-        }
-
-        private static AnimationClip LoadFirstAnimationClip(string assetPath)
-        {
-            UnityEngine.Object[] assets = AssetDatabase.LoadAllAssetRepresentationsAtPath(assetPath);
-            foreach (UnityEngine.Object asset in assets)
-            {
-                if (asset is AnimationClip clip && clip.humanMotion)
-                {
-                    return clip;
-                }
-            }
-
-            foreach (UnityEngine.Object asset in assets)
-            {
-                if (asset is AnimationClip clip)
-                {
-                    return clip;
-                }
-            }
-
-            return AssetDatabase.LoadAssetAtPath<AnimationClip>(assetPath);
         }
 
         private static string ResolveReferenceClipAssetPath(string fbxFileName, Func<string, bool> hasReferenceClip)
