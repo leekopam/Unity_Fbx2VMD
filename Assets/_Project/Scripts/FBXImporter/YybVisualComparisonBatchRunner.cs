@@ -729,9 +729,9 @@ namespace Fbx2Vmd.FBXImporter
                     throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_currentRunOptions.fbxFileName}");
                 }
 
-                _fallbackController =
-                    AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(ManualControllerPath) ??
-                    AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(FallbackControllerPath);
+                _fallbackController = EditorAnimatorControllerAssetLoader.LoadFirst(
+                    ManualControllerPath,
+                    FallbackControllerPath);
                 if (_fallbackController == null)
                 {
                     throw new InvalidOperationException("수동 비교용 Animator Controller를 찾지 못했습니다.");
@@ -1978,9 +1978,9 @@ namespace Fbx2Vmd.FBXImporter
                 throw new InvalidOperationException($"비교 기준 AnimationClip을 찾지 못했습니다: {_currentRunOptions.fbxFileName}");
             }
 
-            _fallbackController =
-                AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(ManualControllerPath) ??
-                AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(FallbackControllerPath);
+            _fallbackController = EditorAnimatorControllerAssetLoader.LoadFirst(
+                ManualControllerPath,
+                FallbackControllerPath);
             if (_fallbackController == null)
             {
                 throw new InvalidOperationException("수동 비교용 Animator Controller를 찾지 못했습니다.");
