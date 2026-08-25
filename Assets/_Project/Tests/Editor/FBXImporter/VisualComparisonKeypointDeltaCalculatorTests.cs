@@ -39,6 +39,76 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_BoundsAndKeypoints_When_CalculatingBBoxNormalized_Then_RecordsMaxAttribution()
+        {
+            bool success = TryCalculateBBoxNormalized(
+                new[] { 0.3f, 0.1f, 0.7f, 0.9f },
+                0.5f,
+                0.4f,
+                0.1f,
+                0.8f,
+                new[] { 0.3f, 0.1f, 0.5f, 0.5f },
+                0.5f,
+                0.4f,
+                0.1f,
+                0.8f,
+                out object delta);
+
+            Assert.That(success, Is.True);
+            Assert.That(ReadProperty<int>(delta, "ComparedKeypointCount"), Is.EqualTo(2));
+            Assert.That(ReadProperty<float>(delta, "MeanL1Delta"), Is.EqualTo(0.5f).Within(0.000001f));
+            Assert.That(ReadProperty<float>(delta, "MaxL1Delta"), Is.EqualTo(1f).Within(0.000001f));
+            Assert.That(ReadProperty<int>(delta, "MaxKeypointIndex"), Is.EqualTo(1));
+            Assert.That(ReadProperty<float>(delta, "MaxXDelta"), Is.EqualTo(0.5f).Within(0.000001f));
+            Assert.That(ReadProperty<float>(delta, "MaxYDelta"), Is.EqualTo(0.5f).Within(0.000001f));
+            Assert.That(ReadProperty<float>(delta, "MaxCandidateX"), Is.EqualTo(1f).Within(0.000001f));
+            Assert.That(ReadProperty<float>(delta, "MaxCandidateY"), Is.EqualTo(1f).Within(0.000001f));
+            Assert.That(ReadProperty<float>(delta, "MaxReferenceX"), Is.EqualTo(0.5f).Within(0.000001f));
+            Assert.That(ReadProperty<float>(delta, "MaxReferenceY"), Is.EqualTo(0.5f).Within(0.000001f));
+        }
+
+        [Test]
+        public void Given_InvalidBBoxWidth_When_CalculatingBBoxNormalized_Then_ReturnsFalse()
+        {
+            bool success = TryCalculateBBoxNormalized(
+                new[] { 0.3f, 0.1f },
+                0.5f,
+                0f,
+                0.1f,
+                0.8f,
+                new[] { 0.3f, 0.1f },
+                0.5f,
+                0.4f,
+                0.1f,
+                0.8f,
+                out _);
+
+            Assert.That(success, Is.False);
+        }
+
+        [Test]
+        public void Given_IdenticalNormalizedKeypoint_When_Calculating_Then_MaxAttributionRemainsUnset()
+        {
+            bool success = TryCalculateBBoxNormalized(
+                new[] { 0.3f, 0.1f },
+                0.5f,
+                0.4f,
+                0.1f,
+                0.8f,
+                new[] { 0.3f, 0.1f },
+                0.5f,
+                0.4f,
+                0.1f,
+                0.8f,
+                out object delta);
+
+            Assert.That(success, Is.True);
+            Assert.That(ReadProperty<float>(delta, "MaxL1Delta"), Is.Zero);
+            Assert.That(ReadProperty<int>(delta, "MaxKeypointIndex"), Is.EqualTo(-1));
+            Assert.That(ReadProperty<float>(delta, "MaxXDelta"), Is.NaN);
+        }
+
+        [Test]
         public void Given_ExtractedCalculator_When_CheckingAnalyzer_Then_KeypointDeltaImplementationIsRemoved()
         {
             Type analyzerType = typeof(FBXVmdPipeline).Assembly.GetType(
@@ -47,6 +117,9 @@ namespace Tests.Editor.FBXImporter
             MethodInfo legacyMethod = analyzerType.GetMethod(
                 "TryComputeImageSpaceKeypointDelta",
                 BindingFlags.Static | BindingFlags.NonPublic);
+            bool hasLegacyNormalizedMethod = Array.Exists(
+                analyzerType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic),
+                method => method.Name == "TryComputeBBoxNormalizedImageSpaceKeypointDelta");
             string analyzerPath = Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "Assets",
@@ -57,9 +130,13 @@ namespace Tests.Editor.FBXImporter
             string source = File.ReadAllText(analyzerPath);
 
             Assert.That(legacyMethod, Is.Null);
+            Assert.That(hasLegacyNormalizedMethod, Is.False);
             Assert.That(
                 Count(source, "VisualComparisonKeypointDeltaCalculator.TryCalculate("),
                 Is.EqualTo(1));
+            Assert.That(
+                Count(source, "VisualComparisonKeypointDeltaCalculator.TryCalculateBBoxNormalized("),
+                Is.EqualTo(2));
         }
 
         private static bool TryCalculate(float[] candidate, float[] reference, out object delta)
@@ -77,6 +154,46 @@ namespace Tests.Editor.FBXImporter
             object[] arguments = { candidate, reference, null };
             bool success = (bool)method.Invoke(null, arguments);
             delta = arguments[2];
+            return success;
+        }
+
+        private static bool TryCalculateBBoxNormalized(
+            float[] candidate,
+            float candidateCenterX,
+            float candidateBBoxWidth,
+            float candidateBottomGap,
+            float candidateBBoxHeight,
+            float[] reference,
+            float referenceCenterX,
+            float referenceBBoxWidth,
+            float referenceBottomGap,
+            float referenceBBoxHeight,
+            out object delta)
+        {
+            Type calculatorType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.VisualComparisonKeypointDeltaCalculator",
+                throwOnError: true);
+            MethodInfo method = calculatorType.GetMethod(
+                "TryCalculateBBoxNormalized",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, "bbox-normalized keypoint delta 계산 메서드가 필요합니다.");
+
+            object[] arguments =
+            {
+                candidate,
+                candidateCenterX,
+                candidateBBoxWidth,
+                candidateBottomGap,
+                candidateBBoxHeight,
+                reference,
+                referenceCenterX,
+                referenceBBoxWidth,
+                referenceBottomGap,
+                referenceBBoxHeight,
+                null,
+            };
+            bool success = (bool)method.Invoke(null, arguments);
+            delta = arguments[10];
             return success;
         }
 
