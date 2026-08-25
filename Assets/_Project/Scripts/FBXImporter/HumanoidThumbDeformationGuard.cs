@@ -818,7 +818,11 @@ namespace Fbx2Vmd.FBXImporter
         {
             float minValue = Mathf.Clamp01(minNormal);
             float maxValue = Mathf.Clamp(Mathf.Max(maxNormal, minValue), 0f, 1f);
-            float risk = RiskOutsideRange(currentProjection, minValue, maxValue, 1f);
+            float risk = ThumbPoseRiskCalculator.CalculateOutsideRange(
+                currentProjection,
+                minValue,
+                maxValue,
+                1f);
             return IsFinite(risk) && risk > ManualThumbProjectionPreserveSmokeRiskLimit;
         }
 
@@ -1252,14 +1256,14 @@ namespace Fbx2Vmd.FBXImporter
             if (TryResolveThumbSide(thumbSideReference, out bool isRightThumb) &&
                 TryCalculateThumbAndIndexDirections(isRightThumb, out Vector3 thumbDirection, out Vector3 indexDirection))
             {
-                spreadRisk = RiskAbove(
+                spreadRisk = ThumbPoseRiskCalculator.CalculateAboveThreshold(
                     Vector3.Angle(thumbDirection, indexDirection),
                     Mathf.Clamp(thumbIndexMaxSpreadAngle, 0f, 90f),
                     ThumbWebbingSpreadFullRiskAngle);
 
                 if (TryBuildPalmFrame(isRightThumb, out _, out Vector3 palmNormal, out _))
                 {
-                    projectionRisk = RiskOutsideRange(
+                    projectionRisk = ThumbPoseRiskCalculator.CalculateOutsideRange(
                         Vector3.Dot(thumbDirection, palmNormal),
                         Mathf.Clamp01(thumbProjectionMinPalmNormal),
                         Mathf.Clamp(Mathf.Max(thumbProjectionMaxPalmNormal, thumbProjectionMinPalmNormal), 0f, 1f),
@@ -1267,7 +1271,11 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
 
-            return MaxFinite(spreadRisk, projectionRisk, helperDistanceRisk, helperRotationRisk);
+            return ThumbPoseRiskCalculator.FindMaximumFinite(
+                spreadRisk,
+                projectionRisk,
+                helperDistanceRisk,
+                helperRotationRisk);
         }
 
         private float CalculateThumbWebbingHelperDistanceRisk(
@@ -1286,7 +1294,7 @@ namespace Fbx2Vmd.FBXImporter
                 ? helperTransform.parent.TransformPoint(targetLocalPosition)
                 : targetLocalPosition;
             float distanceDelta = Mathf.Abs(Vector3.Distance(helperWorldPosition, sourceTransform.position) - initialDistance);
-            return RiskAbove(
+            return ThumbPoseRiskCalculator.CalculateAboveThreshold(
                 distanceDelta,
                 ThumbWebbingHelperDistanceWarning,
                 ThumbWebbingHelperDistanceFullRisk);
@@ -1309,7 +1317,7 @@ namespace Fbx2Vmd.FBXImporter
                 : targetLocalRotation;
             Quaternion currentRelativeRotation = Quaternion.Inverse(sourceTransform.rotation) * helperWorldRotation;
             float rotationDelta = Quaternion.Angle(initialRelativeRotation, currentRelativeRotation);
-            return RiskAbove(
+            return ThumbPoseRiskCalculator.CalculateAboveThreshold(
                 rotationDelta,
                 ThumbWebbingHelperRotationWarning,
                 ThumbWebbingHelperRotationFullRisk);
@@ -1846,70 +1854,6 @@ namespace Fbx2Vmd.FBXImporter
             float hardLimit = softLimit + LocalRotationHardOvershootDegrees;
             float targetAngle = Mathf.Min(hardLimit, softLimit + (angle - softLimit) * LocalRotationOvershootRatio);
             return Quaternion.RotateTowards(initialRotation, currentRotation, targetAngle);
-        }
-
-        private static float MaxFinite(params float[] values)
-        {
-            if (values == null || values.Length == 0)
-            {
-                return float.NaN;
-            }
-
-            float maxValue = float.NaN;
-            foreach (float value in values)
-            {
-                if (!IsFinite(value))
-                {
-                    continue;
-                }
-
-                if (!IsFinite(maxValue) || value > maxValue)
-                {
-                    maxValue = value;
-                }
-            }
-
-            return maxValue;
-        }
-
-        private static float RiskAbove(float value, float warningValue, float fullRiskValue)
-        {
-            if (!IsFinite(value) || !IsFinite(warningValue) || !IsFinite(fullRiskValue))
-            {
-                return float.NaN;
-            }
-
-            if (fullRiskValue <= warningValue)
-            {
-                return value > warningValue ? 1f : 0f;
-            }
-
-            if (value <= warningValue)
-            {
-                return 0f;
-            }
-
-            return Mathf.Clamp01((value - warningValue) / (fullRiskValue - warningValue));
-        }
-
-        private static float RiskOutsideRange(float value, float minValue, float maxValue, float fullRiskDistance)
-        {
-            if (!IsFinite(value) || !IsFinite(minValue) || !IsFinite(maxValue) || !IsFinite(fullRiskDistance))
-            {
-                return float.NaN;
-            }
-
-            if (value < minValue)
-            {
-                return RiskAbove(minValue - value, 0f, fullRiskDistance);
-            }
-
-            if (value > maxValue)
-            {
-                return RiskAbove(value - maxValue, 0f, fullRiskDistance);
-            }
-
-            return 0f;
         }
 
         private static bool TryNormalize(Vector3 value, out Vector3 normalized)
