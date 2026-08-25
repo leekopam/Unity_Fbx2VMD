@@ -771,7 +771,14 @@ namespace Fbx2Vmd.FBXImporter
 
             string rawSummarySessionId =
                 $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-MainAuto_vs_SubManual_who-testprefab-vs-yyb_what-visual-compare_why-runtime-match_how-unity-batch";
-            _summarySessionId = BuildSafeSummarySessionId(rawSummarySessionId);
+            _summarySessionId = VisualComparisonArtifactPathResolver.BuildSafeSessionId(
+                rawSummarySessionId,
+                "yyb_visual_compare",
+                _projectRoot,
+                OutputRootDirectory,
+                EvidenceSafeMaxFullPathLength,
+                SummaryJsonFileName,
+                SummaryMarkdownFileName);
             string summaryRoot = Path.Combine(_projectRoot, OutputRootDirectory);
             _summaryDirectory = Path.Combine(summaryRoot, _summarySessionId);
             Directory.CreateDirectory(_summaryDirectory);
@@ -2871,21 +2878,6 @@ namespace Fbx2Vmd.FBXImporter
             return VisualComparisonArtifactPathResolver.MakeProjectRelative(absolutePath, _projectRoot);
         }
 
-        private static string BuildSafeSummarySessionId(string sessionId)
-        {
-            string safeSessionId = SanitizeFileName(sessionId);
-            string rootFolder = Path.Combine(_projectRoot, OutputRootDirectory)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            int leafFileNameLength = Mathf.Max(SummaryJsonFileName.Length, SummaryMarkdownFileName.Length);
-            int maxSessionIdLength = EvidenceSafeMaxFullPathLength
-                                     - rootFolder.Length
-                                     - 1
-                                     - 1
-                                     - leafFileNameLength;
-            maxSessionIdLength = Mathf.Max(16, maxSessionIdLength);
-            return ShortenFileNameToLength(safeSessionId, maxSessionIdLength);
-        }
-
         private static string SanitizeFileName(string fileName)
         {
             return VisualComparisonArtifactNamePolicy.SanitizeFileName(
@@ -2914,11 +2906,6 @@ namespace Fbx2Vmd.FBXImporter
                 safeExtension,
                 ".vmd",
                 "yyb_visual_compare");
-        }
-
-        private static string ShortenFileNameToLength(string value, int maxLength)
-        {
-            return VisualComparisonArtifactNamePolicy.ShortenToLength(value, maxLength);
         }
 
         [Serializable]

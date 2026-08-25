@@ -74,6 +74,40 @@ namespace Fbx2Vmd.FBXImporter
             return normalizedAbsolute;
         }
 
+        internal static string BuildSafeSessionId(
+            string sessionId,
+            string fallbackSessionId,
+            string projectRoot,
+            string outputDirectory,
+            int maxFullPathLength,
+            params string[] leafFileNames)
+        {
+            string safeSessionId = VisualComparisonArtifactNamePolicy.SanitizeFileName(
+                sessionId,
+                fallbackSessionId);
+            string rootFolder = Path.Combine(
+                    projectRoot ?? string.Empty,
+                    outputDirectory ?? string.Empty)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            int leafFileNameLength = 0;
+            if (leafFileNames != null)
+            {
+                foreach (string leafFileName in leafFileNames)
+                {
+                    leafFileNameLength = Math.Max(
+                        leafFileNameLength,
+                        string.IsNullOrEmpty(leafFileName) ? 0 : leafFileName.Length);
+                }
+            }
+
+            int maxSessionIdLength = Math.Max(
+                16,
+                maxFullPathLength - rootFolder.Length - 2 - leafFileNameLength);
+            return VisualComparisonArtifactNamePolicy.ShortenToLength(
+                safeSessionId,
+                maxSessionIdLength);
+        }
+
         internal static bool ReferToSameFile(string leftPath, string rightPath)
         {
             try
