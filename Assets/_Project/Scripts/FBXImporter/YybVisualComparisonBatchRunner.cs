@@ -4410,8 +4410,9 @@ namespace Fbx2Vmd.FBXImporter
                 MotionComparisonFrameQualitySummary[] frameQualitySummaries =
                     BuildFrameQualitySummaries(frameRoleDiagnostics);
                 PromoteFrameQualityFailuresToRunFailures(frameQualitySummaries, frameRoleDiagnostics);
-                WriteSummaryJson(summaryJsonPath, frameQualitySummaries, frameRoleDiagnostics);
-                WriteSummaryMarkdown(summaryMarkdownPath, frameQualitySummaries, frameRoleDiagnostics);
+                SummaryContainer summary = BuildSummaryContainer(frameQualitySummaries, frameRoleDiagnostics);
+                WriteSummaryJson(summaryJsonPath, summary);
+                WriteSummaryMarkdown(summaryMarkdownPath, summary, frameQualitySummaries, frameRoleDiagnostics);
                 CopyLatestSummary(summaryJsonPath, LatestSummaryJsonRelativePath);
                 CopyLatestSummary(summaryMarkdownPath, LatestSummaryMarkdownRelativePath);
             }
@@ -5398,8 +5399,7 @@ namespace Fbx2Vmd.FBXImporter
             return captureResult;
         }
 
-        private static void WriteSummaryJson(
-            string path,
+        private static SummaryContainer BuildSummaryContainer(
             MotionComparisonFrameQualitySummary[] frameQualitySummaries = null,
             SummaryFrameRoleDiagnostics frameRoleDiagnostics = null)
         {
@@ -5622,155 +5622,29 @@ namespace Fbx2Vmd.FBXImporter
                 failures = Failures.ToArray()
             };
 
+            return summary;
+        }
+
+        private static void WriteSummaryJson(string path, SummaryContainer summary)
+        {
             VisualComparisonSummaryFileStore.WriteJson(path, summary);
         }
 
         private static void WriteSummaryMarkdown(
             string path,
-            MotionComparisonFrameQualitySummary[] frameQualitySummaries = null,
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics = null)
+            SummaryContainer summaryData,
+            MotionComparisonFrameQualitySummary[] frameQualitySummaries,
+            SummaryFrameRoleDiagnostics frameRoleDiagnostics)
         {
+            if (summaryData == null)
+            {
+                throw new ArgumentNullException(nameof(summaryData));
+            }
+
             frameRoleDiagnostics = frameRoleDiagnostics ?? BuildCurrentSummaryFrameRoleDiagnostics();
             frameQualitySummaries = frameQualitySummaries ?? BuildFrameQualitySummaries(frameRoleDiagnostics);
             StringBuilder builder = new StringBuilder();
-            builder.AppendLine("# YYB Visual Comparison Batch");
-            builder.AppendLine();
-            builder.AppendLine($"- session id: `{_summarySessionId}`");
-            builder.AppendLine($"- generated at: `{DateTime.Now:yyyy-MM-dd HH:mm:ss}`");
-            builder.AppendLine($"- fbx file: `{_fbxFileName}`");
-            builder.AppendLine($"- duration seconds: `{_durationSeconds:F2}`");
-            builder.AppendLine($"- target frames: `{ResolveSummaryTargetFrameCount()}`");
-            builder.AppendLine($"- segment: `{_editorDiagnosticSmokeSegment}`");
-            builder.AppendLine($"- finger closeups: `{_enableFingerCloseups}`");
-            builder.AppendLine($"- recorder parent IK offsets (center-parented): `{_enableRecorderParentFrameIkOffsetsWhenCenterParented}`");
-            builder.AppendLine($"- MMD IK delta guard runtime override VMD: `{FormatRuntimeOverride(_mmdIkDeltaGuardLimitOverrideVmd)}`");
-            builder.AppendLine($"- MMD IK delta guard recovery trigger VMD: `{FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryTriggerVmd)}`");
-            builder.AppendLine($"- MMD IK delta guard recovery debt VMD: `{FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryDebtThresholdVmd)}`");
-            builder.AppendLine($"- MMD IK delta guard recovery hold frames: `{FormatRuntimeOverride(_mmdIkDeltaGuardRecoveryHoldFrames)}`");
-            builder.AppendLine($"- Final IK foot grounding runtime override: `{_enableFinalIkFootGroundingRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator lower-body localRotation runtime override: `{_enableManualAnimatorFootLocalRotationRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator lower-body localRotation runtime disable: `{_disableManualAnimatorFootLocalRotationRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose runtime override: `{_enableManualAnimatorFullBodyPoseRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose runtime disable: `{_disableManualAnimatorFullBodyPoseRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose weight: `{_manualAnimatorFullBodyPoseReferenceWeight:F3}`");
-            builder.AppendLine($"- Manual Animator full-body pose exclude lower-body muscles: `{_manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose lower-body muscles only: `{_manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose leg twist muscles only: `{_manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose right arm muscles only: `{_manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose left arm muscles only: `{_manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose right sleeve chain muscles only: `{_manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator full-body pose frame gate: `{_manualAnimatorFullBodyPoseReferenceFrameGateStart:F1}-{_manualAnimatorFullBodyPoseReferenceFrameGateEnd:F1}`");
-            builder.AppendLine($"- SetHumanPose right leg twist output reference: `{_enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride}`");
-            builder.AppendLine($"- SetHumanPose right leg twist output reference weight: `{_setHumanPoseRightLegTwistOutputReferenceWeight:F3}`");
-            builder.AppendLine($"- SetHumanPose right leg twist output reference max delta: `{_setHumanPoseRightLegTwistOutputReferenceMaxDelta:F3}`");
-            builder.AppendLine($"- Manual Animator body rotation runtime override: `{_enableManualAnimatorBodyRotationRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator body rotation runtime disable: `{_disableManualAnimatorBodyRotationRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator body rotation weight: `{_manualAnimatorBodyRotationReferenceWeight:F3}`");
-            builder.AppendLine($"- Manual Animator hand local rotation runtime override: `{_enableManualAnimatorHandLocalRotationRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator thumb local rotation runtime override: `{_enableManualAnimatorThumbLocalRotationRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator hand palm-frame runtime override: `{_enableManualAnimatorHandPalmFrameRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator hand palm-frame weight: `{_manualAnimatorHandPalmFrameWeight:F3}`");
-            builder.AppendLine($"- Retarget pose visual spike smoothing runtime settings override: `{_overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings}`");
-            builder.AppendLine($"- Retarget pose visual spike smoothing enabled: `{_enableRetargetPoseVisualSpikeSmoothingRuntimeOverride}`");
-            builder.AppendLine($"- Retarget pose visual spike current weight: `{_retargetPoseVisualSpikeCurrentWeight:F3}`");
-            builder.AppendLine($"- Retarget pose visual spike forearm stretch clamp max offset: `{_retargetPoseVisualSpikeForearmStretchClampMaxOffset:F3}`");
-            builder.AppendLine($"- Retarget arm stretch clamp runtime override: `{_enableRetargetArmStretchClampRuntimeOverride}`");
-            builder.AppendLine($"- Retarget arm stretch muscle limit: `{_retargetArmStretchMuscleLimit:F3}`");
-            builder.AppendLine($"- YYB arm swing limit runtime override: `{_enableYybArmSwingLimitRuntimeOverride}`");
-            builder.AppendLine($"- YYB arm swing limit weight: `{_yybArmSwingLimitWeight:F3}`");
-            builder.AppendLine($"- YYB arm swing max down dot: `{_yybArmSwingMaxDownDot:F3}`");
-            builder.AppendLine($"- YYB arm swing min hand horizontal ratio: `{_yybArmSwingMinHandHorizontalRatio:F3}`");
-            builder.AppendLine($"- YYB arm swing max hand below shoulder ratio: `{_yybArmSwingMaxHandBelowShoulderRatio:F3}`");
-            builder.AppendLine($"- YYB arm swing horizontal reach limit weight: `{_yybArmSwingHorizontalReachLimitWeight:F3}`");
-            builder.AppendLine($"- YYB arm swing max hand horizontal reach ratio: `{_yybArmSwingMaxHandHorizontalReachRatio:F3}`");
-            builder.AppendLine($"- YYB arm swing horizontal reach max hand below shoulder ratio: `{_yybArmSwingHorizontalReachMaxHandBelowShoulderRatio:F3}`");
-            builder.AppendLine($"- YYB arm swing horizontal reach min elbow angle after apply: `{_yybArmSwingHorizontalReachMinElbowAngleAfterApply:F3}`");
-            builder.AppendLine($"- YYB arm swing raised-pose horizontal reach limit weight: `{_yybArmSwingRaisedPoseHorizontalReachLimitWeight:F3}`");
-            builder.AppendLine($"- YYB arm swing raised-pose min upper-arm down dot: `{_yybArmSwingRaisedPoseMinUpperArmDownDot:F3}`");
-            builder.AppendLine($"- YYB arm swing raised-pose max hand below shoulder ratio: `{_yybArmSwingRaisedPoseMaxHandBelowShoulderRatio:F3}`");
-            builder.AppendLine($"- YYB arm swing raised-pose max hand horizontal reach ratio: `{_yybArmSwingRaisedPoseMaxHandHorizontalReachRatio:F3}`");
-            builder.AppendLine($"- YYB arm direction retarget runtime override: `{_enableYybArmDirectionRetargetRuntimeOverride}`");
-            builder.AppendLine($"- YYB arm direction upper-arm weight: `{_yybArmDirectionUpperArmWeight:F3}`");
-            builder.AppendLine($"- YYB arm direction forearm weight: `{_yybArmDirectionForearmWeight:F3}`");
-            builder.AppendLine($"- YYB arm direction upper-arm max degrees: `{_yybArmDirectionUpperArmMaxDegrees:F3}`");
-            builder.AppendLine($"- YYB arm direction forearm max degrees: `{_yybArmDirectionForearmMaxDegrees:F3}`");
-            builder.AppendLine($"- YYB arm direction left-side weight scale: `{_yybArmDirectionLeftSideWeightScale:F3}`");
-            builder.AppendLine($"- YYB arm direction right-side weight scale: `{_yybArmDirectionRightSideWeightScale:F3}`");
-            builder.AppendLine($"- YYB arm sleeve anchor runtime settings override: `{_overrideYybArmSleeveAnchorRuntimeSettings}`");
-            builder.AppendLine($"- YYB arm sleeve anchor runtime enabled: `{_enableYybArmSleeveAnchorRuntimeOverride}`");
-            builder.AppendLine($"- YYB arm sleeve anchor influence: `{_yybArmSleeveAnchorInfluence:F3}`");
-            builder.AppendLine($"- YYB arm shoulder cap anchor influence: `{_yybArmShoulderCapAnchorInfluence:F3}`");
-            builder.AppendLine($"- YYB arm sleeve anchor max degrees: `{_yybArmSleeveAnchorMaxDegrees:F3}`");
-            builder.AppendLine($"- YYB arm visual twist runtime settings override: `{_overrideYybArmVisualTwistRuntimeSettings}`");
-            builder.AppendLine($"- YYB arm visual twist runtime enabled: `{_enableYybArmVisualTwistRuntimeOverride}`");
-            builder.AppendLine($"- YYB arm visual upper-arm influence: `{_yybArmVisualUpperArmInfluence:F3}`");
-            builder.AppendLine($"- YYB arm visual forearm influence: `{_yybArmVisualForearmInfluence:F3}`");
-            builder.AppendLine($"- YYB arm visual upper-arm max degrees: `{_yybArmVisualUpperArmMaxDegrees:F3}`");
-            builder.AppendLine($"- YYB arm visual forearm max degrees: `{_yybArmVisualForearmMaxDegrees:F3}`");
-            builder.AppendLine($"- Manual Animator lower-body segment direction runtime override: `{_enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator lower-body segment direction runtime disable: `{_disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator lower-body segment direction weight: `{_manualAnimatorLowerBodySegmentDirectionReferenceWeight:F3}`");
-            builder.AppendLine($"- Manual Animator lower-body segment direction max angle: `{_manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle:F3}`");
-            builder.AppendLine($"- Manual Animator UpperLegToLowerLeg segment direction runtime disable: `{_disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator UpperLegToLowerLeg segment direction max angle override: `{_manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle:F3}`");
-            builder.AppendLine($"- Manual Animator LowerLegToFoot segment direction runtime disable: `{_disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator LowerLegToFoot segment direction max angle override: `{_manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle:F3}`");
-            builder.AppendLine($"- Manual Animator Left LowerLegToFoot segment direction max angle override: `{_manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle:F3}`");
-            builder.AppendLine($"- Manual Animator Right LowerLegToFoot segment direction max angle override: `{_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle:F3}`");
-            builder.AppendLine($"- Manual Animator Right LowerLegToFoot segment direction axis X/Z scale: `{_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale:F3}`");
-            builder.AppendLine($"- Manual Animator Right LowerLegToFoot segment direction blend weight: `{_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight:F3}`");
-            builder.AppendLine($"- Manual Animator Right LowerLegToFoot segment direction frame gate: `{_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart:F0}-{_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd:F0}`");
-            builder.AppendLine($"- Manual Animator Right LowerLegToFoot segment direction endpoint blend weight: `{_manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight:F3}`");
-            builder.AppendLine($"- Manual Animator FootToToes segment direction runtime disable: `{_disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator FootToToes segment direction max angle override: `{_manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle:F3}`");
-            builder.AppendLine($"- Manual Animator foot hips-aligned residual yaw runtime override: `{_enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator foot hips-aligned residual yaw runtime disable: `{_disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator foot hips-aligned residual yaw weight: `{_manualAnimatorFootHipsAlignedResidualYawReferenceWeight:F3}`");
-            builder.AppendLine($"- Manual Animator foot hips-aligned residual yaw max angle: `{_manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle:F3}`");
-            builder.AppendLine($"- Post-SetHumanPose right endpoint position runtime override: `{_enablePostSetHumanPoseRightEndpointPositionRuntimeOverride}`");
-            builder.AppendLine($"- Post-SetHumanPose right endpoint position weight: `{_postSetHumanPoseRightEndpointPositionReferenceWeight:F3}`");
-            builder.AppendLine($"- Post-SetHumanPose right endpoint position max offset: `{_postSetHumanPoseRightEndpointPositionReferenceMaxOffset:F3}`");
-            builder.AppendLine($"- Post-SetHumanPose right endpoint position positive-Z scale: `{_postSetHumanPoseRightEndpointPositionReferencePositiveZScale:F3}`");
-            builder.AppendLine($"- Post-SetHumanPose right endpoint position toes blend weight: `{_postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight:F3}`");
-            builder.AppendLine($"- Post-SetHumanPose right endpoint position frame gate: `{_postSetHumanPoseRightEndpointPositionReferenceFrameGateStart:F0}-{_postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd:F0}`");
-            builder.AppendLine($"- Post-SetHumanPose endpoint position use left side: `{_postSetHumanPoseEndpointPositionUseLeftSide}`");
-            builder.AppendLine($"- Pre-SetHumanPose right endpoint position runtime override: `{_enablePreSetHumanPoseRightEndpointPositionRuntimeOverride}`");
-            builder.AppendLine($"- Pre-SetHumanPose right endpoint position weight: `{_preSetHumanPoseRightEndpointPositionReferenceWeight:F3}`");
-            builder.AppendLine($"- Pre-SetHumanPose right endpoint position max offset: `{_preSetHumanPoseRightEndpointPositionReferenceMaxOffset:F3}`");
-            builder.AppendLine($"- Pre-SetHumanPose right endpoint position positive-Z scale: `{_preSetHumanPoseRightEndpointPositionReferencePositiveZScale:F3}`");
-            builder.AppendLine($"- Pre-SetHumanPose right endpoint position toes blend weight: `{_preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight:F3}`");
-            builder.AppendLine($"- Pre-SetHumanPose right endpoint position frame gate: `{_preSetHumanPoseRightEndpointPositionReferenceFrameGateStart:F0}-{_preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd:F0}`");
-            builder.AppendLine($"- Pre-SetHumanPose endpoint position use left side: `{_preSetHumanPoseEndpointPositionUseLeftSide}`");
-            builder.AppendLine($"- Pre-SetHumanPose endpoint position use ghost/current basis: `{_preSetHumanPoseEndpointPositionUseGhostCurrentBasis}`");
-            builder.AppendLine($"- Pre-SetHumanPose endpoint bodyPosition invert X/Z: `{_preSetHumanPoseEndpointPositionInvertBodyPositionX}/{_preSetHumanPoseEndpointPositionInvertBodyPositionZ}`");
-            builder.AppendLine($"- Post-SetHumanPose right foot evaluator X/Z reference: `{_usePostSetHumanPoseRightFootEvaluatorXzReference}`");
-            builder.AppendLine($"- Post-SetHumanPose right foot evaluator X/Z target magnitude: `{_postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude:F3}`");
-            builder.AppendLine($"- Manual Animator BipedIK foot position runtime override: `{_enableManualAnimatorBipedIkFootPositionRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator BipedIK foot position weight: `{_manualAnimatorBipedIkFootPositionReferenceWeight:F3}`");
-            builder.AppendLine($"- Manual Animator BipedIK foot position max offset: `{_manualAnimatorBipedIkFootPositionReferenceMaxOffset:F3}`");
-            builder.AppendLine($"- Manual Animator Hips local-position runtime override: `{_enableManualAnimatorHipsLocalPositionRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator Hips local-position weight: `{_manualAnimatorHipsLocalPositionReferenceWeight:F3}`");
-            builder.AppendLine($"- Manual Animator Hips local-position max offset: `{_manualAnimatorHipsLocalPositionReferenceMaxOffset:F3}`");
-            builder.AppendLine($"- Manual Animator bodyPosition X/Z runtime override: `{_enableManualAnimatorBodyPositionXzRuntimeOverride}`");
-            builder.AppendLine($"- Manual Animator bodyPosition X/Z weight: `{_manualAnimatorBodyPositionXzReferenceWeight:F3}`");
-            builder.AppendLine($"- Manual Animator bodyPosition X/Z max offset: `{_manualAnimatorBodyPositionXzReferenceMaxOffset:F3}`");
-            builder.AppendLine($"- Manual Animator bodyPosition X/Z frame gate: `{_manualAnimatorBodyPositionXzReferenceFrameGateStart:F0}-{_manualAnimatorBodyPositionXzReferenceFrameGateEnd:F0}`");
-            builder.AppendLine($"- Manual Animator bodyPosition X/Z frame gate blend frames: `{_manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames:F0}`");
-            builder.AppendLine($"- Manual Animator bodyPosition X/Z axis scale: `{_manualAnimatorBodyPositionXzReferenceAxisXScale:F3}/{_manualAnimatorBodyPositionXzReferenceAxisZScale:F3}`");
-            builder.AppendLine($"- Retarget bodyPosition X/Z root motion runtime override: `{_enableRetargetBodyPositionXzRootMotionRuntimeOverride}`");
-            builder.AppendLine($"- Target humanoid bone position lock disabled runtime override: `{_disableTargetHumanoidBonePositionLockRuntimeOverride}`");
-            builder.AppendLine($"- VMD playback probe runtime override: `{_enableVmdPlaybackProbeRuntimeOverride}`");
-            builder.AppendLine($"- VMD playback probe apply IK targets: `{_applyVmdPlaybackProbeIkTargetsRuntimeOverride}`");
-            builder.AppendLine($"- VMD playback probe source VMD: `{EscapeMarkdown(MakeProjectRelativePath(_vmdPlaybackProbeSourceVmdPath))}`");
-            builder.AppendLine($"- reference MMD timing runtime override: `{_enableReferenceMmdTimingRuntimeOverride}`");
-            builder.AppendLine($"- diagnostic capture width override: `{FormatRuntimeOverride(_diagnosticCaptureWidthOverride)}`");
-            builder.AppendLine($"- diagnostic capture height override: `{FormatRuntimeOverride(_diagnosticCaptureHeightOverride)}`");
-            builder.AppendLine($"- diagnostic screenshot padding override: `{FormatDiagnosticScreenshotFramingOverride(_diagnosticScreenshotPaddingOverride)}`");
-            builder.AppendLine($"- diagnostic screenshot viewport center override: `{FormatDiagnosticScreenshotFramingOverride(_diagnosticScreenshotVerticalViewportCenterOverride)}`");
-            builder.AppendLine($"- reference clip: `{(_referenceClip != null ? _referenceClip.name : "")}`");
-            builder.AppendLine($"- reference clip asset: `{EscapeMarkdown(_referenceClipAssetPath)}`");
-            builder.AppendLine();
-
+            builder.Append(YybVisualComparisonSummaryMarkdownRenderer.RenderHeader(summaryData));
             builder.AppendLine("## Frame Count Roles");
             builder.AppendLine();
             builder.AppendLine($"- ref target: `{frameRoleDiagnostics.reference_target_frame_count}` ({EscapeMarkdown(frameRoleDiagnostics.target_frame_count_role)})");
