@@ -4206,7 +4206,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool HasDiagnosticScreenshotFramingOverride(float value)
         {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
+            return VisualComparisonScreenshotOverridePolicy.HasFiniteFramingOverride(value);
         }
 
         private static int NormalizeMmdIkDeltaGuardRecoveryHoldFrames(int value)
@@ -4216,27 +4216,23 @@ namespace Fbx2Vmd.FBXImporter
 
         private static int NormalizeDiagnosticCaptureDimensionOverride(int value)
         {
-            return value > 0 ? value : NoDiagnosticCaptureDimensionOverride;
+            return VisualComparisonScreenshotOverridePolicy.NormalizeCaptureDimension(
+                value,
+                NoDiagnosticCaptureDimensionOverride);
         }
 
         private static float NormalizeDiagnosticScreenshotPaddingOverride(float value)
         {
-            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
-            {
-                return NoDiagnosticScreenshotFramingOverride;
-            }
-
-            return Mathf.Clamp(value, 0.25f, 2f);
+            return VisualComparisonScreenshotOverridePolicy.NormalizePadding(
+                value,
+                NoDiagnosticScreenshotFramingOverride);
         }
 
         private static float NormalizeDiagnosticScreenshotVerticalViewportCenterOverride(float value)
         {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-            {
-                return NoDiagnosticScreenshotFramingOverride;
-            }
-
-            return Mathf.Clamp01(value);
+            return VisualComparisonScreenshotOverridePolicy.NormalizeVerticalViewportCenter(
+                value,
+                NoDiagnosticScreenshotFramingOverride);
         }
 
         private static FBXVmdPipeline.EditorDiagnosticSmokeSegment ResolveEditorDiagnosticSmokeSegment(string value)
