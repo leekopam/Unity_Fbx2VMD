@@ -38,6 +38,10 @@ namespace Fbx2Vmd.FBXImporter
         private const string ReferenceMp4AnalysisResultRelativePath = "Docs/Workflow/Local/ReferenceAnalysis/when-20260608-204850_where-ref-mp4_who-yyb_what-detailed-mp4-analysis_why-main-recoding-problem-list_how-ffmpeg-24-samples/result.json";
         private const string ReferenceMp4FrameMetricsRelativePath = "Docs/Workflow/Local/ReferenceAnalysis/when-20260608-204850_where-ref-mp4_who-yyb_what-detailed-mp4-analysis_why-main-recoding-problem-list_how-ffmpeg-24-samples/frame-metrics.json";
         private const string ReferenceMp4ContactSheetRelativePath = "Docs/Workflow/Local/ReferenceAnalysis/when-20260608-204850_where-ref-mp4_who-yyb_what-detailed-mp4-analysis_why-main-recoding-problem-list_how-ffmpeg-24-samples/contact-sheet.png";
+        private const string ReferenceMp4CanonicalContext =
+            "Ref MP4 is a manually postprocessed MMD render from Sub_Manual testPrefab + satisfaction_2; it anchors visual framing/provenance while Unity pose gates compare Sub_Manual metrics to main candidates.";
+        private const string ReferenceMp4AnalysisMetricBasis =
+            "MP4 analysis supplies visual bbox/framing context; frame-quality gates remain same-recorderFrame Unity metrics and VMD export checks.";
         private const string CandidateScreenshotFramingView = "front";
         private const float CandidateScreenshotBrightLuminanceThreshold = 0.08f;
         private const byte CandidateScreenshotOpaqueAlphaThreshold = 8;
@@ -2639,38 +2643,17 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            ReferenceVideoDiagnosticsMapper.Initialize(
+            ReferenceVideoClipCoverageData coverage = ReferenceVideoFrameRoleDiagnosticsAttacher.Attach(
                 diagnostics,
-                referenceClipStartSeconds,
                 requestedDurationSeconds,
+                referenceClipStartSeconds,
                 referenceMp4ProvenanceEvidencePath,
                 referenceMp4AnalysisResultPath,
                 referenceMp4FrameMetricsPath,
-                referenceMp4ContactSheetPath);
-            diagnostics.reference_mp4_canonical_context =
-                "Ref MP4 is a manually postprocessed MMD render from Sub_Manual testPrefab + satisfaction_2; it anchors visual framing/provenance while Unity pose gates compare Sub_Manual metrics to main candidates.";
-            diagnostics.reference_mp4_analysis_metric_basis =
-                "MP4 analysis supplies visual bbox/framing context; frame-quality gates remain same-recorderFrame Unity metrics and VMD export checks.";
-
-            string resultPath = ResolveProjectRelativePath(diagnostics.reference_mp4_analysis_result_path);
-            string frameMetricsPath = ResolveProjectRelativePath(diagnostics.reference_mp4_frame_metrics_path);
-            string contactSheetPath = ResolveProjectRelativePath(diagnostics.reference_mp4_contact_sheet_path);
-            bool provenanceEvidenceExists =
-                File.Exists(ResolveProjectRelativePath(diagnostics.reference_mp4_provenance_evidence_path));
-            bool contactSheetExists = File.Exists(contactSheetPath);
-            ReferenceVideoDiagnosticsData referenceVideo =
-                ReferenceVideoDiagnosticsReader.Read(resultPath, frameMetricsPath);
-            ReferenceVideoClipCoverageData coverage =
-                ReferenceVideoClipCoverageCalculator.Calculate(
-                    referenceVideo.FrameMetricRows,
-                    diagnostics.reference_mp4_current_clip_start_seconds,
-                    diagnostics.reference_mp4_current_clip_duration_seconds);
-            ReferenceVideoDiagnosticsMapper.Apply(
-                diagnostics,
-                referenceVideo,
-                coverage,
-                provenanceEvidenceExists,
-                contactSheetExists);
+                referenceMp4ContactSheetPath,
+                ResolveProjectRootForDiagnostics(),
+                ReferenceMp4CanonicalContext,
+                ReferenceMp4AnalysisMetricBasis);
             AttachReferenceMp4CurrentClipCoverage(diagnostics, coverage);
         }
 
