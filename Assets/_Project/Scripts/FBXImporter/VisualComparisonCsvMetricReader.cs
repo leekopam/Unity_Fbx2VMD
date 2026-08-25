@@ -25,6 +25,24 @@ namespace Fbx2Vmd.FBXImporter
             return indices;
         }
 
+        internal static int FindHeaderIndex(string[] headers, string headerName)
+        {
+            if (headers == null)
+            {
+                return -1;
+            }
+
+            for (int index = 0; index < headers.Length; index++)
+            {
+                if (string.Equals(headers[index], headerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
         internal static string ReadString(
             string[] row,
             Dictionary<string, int> indices,

@@ -27,6 +27,20 @@ namespace Tests.Editor.FBXImporter
             Assert.That(indices["reason"], Is.EqualTo(1));
         }
 
+        [TestCase("PATH", 2)]
+        [TestCase("missing", -1)]
+        public void Given_Headers_When_FindingIndex_Then_IgnoresCaseAndReportsMissing(
+            string headerName,
+            int expected)
+        {
+            int result = (int)Invoke(
+                "FindHeaderIndex",
+                new[] { "view", "frame", "path" },
+                headerName);
+
+            Assert.That(result, Is.EqualTo(expected));
+        }
+
         [Test]
         public void Given_CsvRow_When_ReadingValues_Then_UsesInvariantParsingAndExistingFallbacks()
         {

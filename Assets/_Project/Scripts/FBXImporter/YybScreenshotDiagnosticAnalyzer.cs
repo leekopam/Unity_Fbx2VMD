@@ -5,7 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using UnityEngine;
-using static Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner;
+using static Fbx2Vmd.FBXImporter.VisualComparisonFrameGeometryCalculator;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -1027,10 +1027,10 @@ namespace Fbx2Vmd.FBXImporter
                 return metrics;
             }
 
-            string[] headers = SplitSimpleCsvLine(lines[0]);
-            int viewIndex = IndexOfHeader(headers, "view");
-            int pathIndex = IndexOfHeader(headers, "path");
-            int recorderFrameIndex = IndexOfHeader(headers, "recorderFrame");
+            string[] headers = VisualComparisonCsvMetricReader.SplitLine(lines[0]);
+            int viewIndex = VisualComparisonCsvMetricReader.FindHeaderIndex(headers, "view");
+            int pathIndex = VisualComparisonCsvMetricReader.FindHeaderIndex(headers, "path");
+            int recorderFrameIndex = VisualComparisonCsvMetricReader.FindHeaderIndex(headers, "recorderFrame");
             if (pathIndex < 0)
             {
                 return metrics;
@@ -1055,7 +1055,7 @@ namespace Fbx2Vmd.FBXImporter
                     continue;
                 }
 
-                string[] cells = SplitSimpleCsvLine(lines[i]);
+                string[] cells = VisualComparisonCsvMetricReader.SplitLine(lines[i]);
                 if (pathIndex >= cells.Length)
                 {
                     continue;

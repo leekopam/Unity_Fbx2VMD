@@ -43,7 +43,6 @@ namespace Fbx2Vmd.FBXImporter
         private const byte CandidateScreenshotOpaqueAlphaThreshold = 8;
         private const int ImageSpaceSilhouetteProfileBandCount = 4;
         private const float ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta = 0.30f;
-        internal const float ReferenceAlignedVisualEvidenceEndpointPixelTolerance = 0.001f;
         private const int EvidenceSafeMaxFullPathLength = 240;
         private const float DefaultManualAnimatorBodyRotationReferenceWeight = 1f;
         private const float DefaultManualAnimatorFullBodyPoseReferenceWeight = 1f;
@@ -3005,8 +3004,8 @@ namespace Fbx2Vmd.FBXImporter
                         framePath,
                         out var imageMetric,
                         out _) &&
-                    IsFiniteMetric(imageMetric.UpperLimbSpanRatio) &&
-                    IsFiniteMetric(imageMetric.LowerLimbSpanRatio))
+                    VisualComparisonFrameGeometryCalculator.IsFiniteMetric(imageMetric.UpperLimbSpanRatio) &&
+                    VisualComparisonFrameGeometryCalculator.IsFiniteMetric(imageMetric.LowerLimbSpanRatio))
                 {
                     row.upperLimbSpanRatio = imageMetric.UpperLimbSpanRatio;
                     row.lowerLimbSpanRatio = imageMetric.LowerLimbSpanRatio;
@@ -3051,47 +3050,6 @@ namespace Fbx2Vmd.FBXImporter
             return fallback != null
                 ? fallback.comparisonFrameIndexPath
                 : string.Empty;
-        }
-
-        internal static bool IsFiniteMetric(float value)
-        {
-            return !float.IsNaN(value) && !float.IsInfinity(value);
-        }
-
-        internal static float ResolveFrameTopGapRatio(float bottomGapRatio, float bboxHeightRatio)
-        {
-            if (!IsFiniteMetric(bottomGapRatio) || !IsFiniteMetric(bboxHeightRatio))
-            {
-                return float.NaN;
-            }
-
-            return Mathf.Max(0f, 1f - bottomGapRatio - bboxHeightRatio);
-        }
-
-        internal static bool IsFrameEdgeTouched(float bottomGapRatio, float topGapRatio)
-        {
-            return (IsFiniteMetric(bottomGapRatio) &&
-                    bottomGapRatio <= ReferenceAlignedVisualEvidenceEndpointPixelTolerance) ||
-                   (IsFiniteMetric(topGapRatio) &&
-                    topGapRatio <= ReferenceAlignedVisualEvidenceEndpointPixelTolerance);
-        }
-
-        internal static int IndexOfHeader(string[] headers, string headerName)
-        {
-            if (headers == null)
-            {
-                return -1;
-            }
-
-            for (int i = 0; i < headers.Length; i++)
-            {
-                if (string.Equals(headers[i], headerName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return i;
-                }
-            }
-
-            return -1;
         }
 
         private static string ResolveProjectRelativePath(string relativePath)
@@ -3169,11 +3127,6 @@ namespace Fbx2Vmd.FBXImporter
                 reportedRatio,
                 step,
                 maxStep);
-        }
-
-        internal static string[] SplitSimpleCsvLine(string line)
-        {
-            return VisualComparisonCsvMetricReader.SplitLine(line);
         }
 
         private static float GetCsvFloat(
