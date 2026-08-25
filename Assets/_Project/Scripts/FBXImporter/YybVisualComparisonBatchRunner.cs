@@ -4191,22 +4191,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static float NormalizePositiveFloat(float value, float fallbackValue)
         {
-            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
-            {
-                return fallbackValue;
-            }
-
-            return value;
+            return VisualComparisonRuntimeValueNormalizer.NormalizePositive(value, fallbackValue);
         }
 
         private static float NormalizeFiniteFloat(float value, float fallbackValue)
         {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-            {
-                return fallbackValue;
-            }
-
-            return value;
+            return VisualComparisonRuntimeValueNormalizer.NormalizeFinite(value, fallbackValue);
         }
 
         private static bool HasMmdIkDeltaGuardLimitOverride(float value)
