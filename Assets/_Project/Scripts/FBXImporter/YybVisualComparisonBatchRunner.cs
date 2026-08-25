@@ -8484,51 +8484,25 @@ namespace Fbx2Vmd.FBXImporter
             float maxStep)
         {
             float reportedRatio = GetCsvFloat(row, indices, "retargetGroundingLastStepToMaxStepRatio");
-            if (!float.IsNaN(reportedRatio) && !float.IsInfinity(reportedRatio))
-            {
-                return reportedRatio;
-            }
-
-            if (float.IsNaN(step) ||
-                float.IsInfinity(step) ||
-                float.IsNaN(maxStep) ||
-                float.IsInfinity(maxStep) ||
-                maxStep <= 0f)
-            {
-                return float.NaN;
-            }
-
-            return Mathf.Abs(step) / maxStep;
+            return VisualComparisonMetricCalculator.ResolveGroundingStepToMaxRatio(
+                reportedRatio,
+                step,
+                maxStep);
         }
 
         private static bool IsGroundingVerticalStepAtMax(float stepToMaxRatio)
         {
-            return !float.IsNaN(stepToMaxRatio) &&
-                !float.IsInfinity(stepToMaxRatio) &&
-                stepToMaxRatio >= 0.95f;
+            return VisualComparisonMetricCalculator.IsGroundingStepAtMax(stepToMaxRatio);
         }
 
         private static int CalculateMetricIntSpan(int first, int finish)
         {
-            if (first < 0 || finish < 0)
-            {
-                return -1;
-            }
-
-            return finish - first;
+            return VisualComparisonMetricCalculator.CalculateIntSpan(first, finish);
         }
 
         private static float CalculateMetricFloatSpan(float first, float finish)
         {
-            if (float.IsNaN(first) ||
-                float.IsNaN(finish) ||
-                float.IsInfinity(first) ||
-                float.IsInfinity(finish))
-            {
-                return float.NaN;
-            }
-
-            return finish - first;
+            return VisualComparisonMetricCalculator.CalculateFloatSpan(first, finish);
         }
 
         internal static string[] SplitSimpleCsvLine(string line)
