@@ -42,13 +42,6 @@ namespace Fbx2Vmd.FBXImporter
         private const float CandidateScreenshotBrightLuminanceThreshold = 0.08f;
         private const byte CandidateScreenshotOpaqueAlphaThreshold = 8;
         private const int ImageSpaceSilhouetteProfileBandCount = 4;
-        private const int ReferenceAlignedVisualEvidenceMinMatchedSamples = 5;
-        private const float ReferenceAlignedVisualEvidenceMaxSecondsGap = 0.1f;
-        private const float ReferenceAlignedVisualEvidenceMaxBboxHeightDelta = 0.05f;
-        private const float ReferenceAlignedVisualEvidenceMaxBottomGapDelta = 0.02f;
-        private const float ReferenceAlignedVisualEvidenceMaxSilhouetteProfileL1Delta = 0.15f;
-        private const float ReferenceAlignedVisualEvidenceMaxSilhouetteProfileBandDelta = 0.25f;
-        private const float ReferenceAlignedVisualEvidenceMaxSilhouetteLandmarkEndpointDelta = 0.30f;
         private const float ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta = 0.30f;
         internal const float ReferenceAlignedVisualEvidenceEndpointPixelTolerance = 0.001f;
         private const int EvidenceSafeMaxFullPathLength = 240;
@@ -2503,47 +2496,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             YybVisualComparisonReferenceAlignmentPolicy.Apply(
                 frameQualitySummaries,
-                HasReferenceAlignedImportedFbxVisualEvidence(frameRoleDiagnostics));
-        }
-
-        private static bool HasReferenceAlignedImportedFbxVisualEvidence(
-            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics)
-        {
-            if (frameRoleDiagnostics == null)
-            {
-                return false;
-            }
-
-            return string.IsNullOrWhiteSpace(frameRoleDiagnostics.candidate_screenshot_frame_metrics_error) &&
-                string.IsNullOrWhiteSpace(frameRoleDiagnostics.reference_mp4_analysis_error) &&
-                string.IsNullOrWhiteSpace(frameRoleDiagnostics.reference_mp4_frame_metrics_error) &&
-                frameRoleDiagnostics.reference_mp4_current_clip_sample_count >= ReferenceAlignedVisualEvidenceMinMatchedSamples &&
-                frameRoleDiagnostics.candidate_vs_reference_time_matched_sample_count >= ReferenceAlignedVisualEvidenceMinMatchedSamples &&
-                frameRoleDiagnostics.candidate_screenshot_nonblank_frame_count >=
-                    frameRoleDiagnostics.candidate_vs_reference_time_matched_sample_count &&
-                IsFiniteMetric(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_seconds_gap) &&
-                frameRoleDiagnostics.candidate_vs_reference_time_matched_max_seconds_gap <= ReferenceAlignedVisualEvidenceMaxSecondsGap &&
-                IsFiniteMetric(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_height_ratio_abs_delta) &&
-                frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_height_ratio_abs_delta <=
-                    ReferenceAlignedVisualEvidenceMaxBboxHeightDelta &&
-                IsFiniteMetric(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bottom_gap_ratio_abs_delta) &&
-                frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bottom_gap_ratio_abs_delta <=
-                    ReferenceAlignedVisualEvidenceMaxBottomGapDelta &&
-                IsFiniteMetric(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_profile_l1_abs_delta) &&
-                frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_profile_l1_abs_delta <=
-                    ReferenceAlignedVisualEvidenceMaxSilhouetteProfileL1Delta &&
-                IsFiniteMetric(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_profile_band_abs_delta) &&
-                frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_profile_band_abs_delta <=
-                    ReferenceAlignedVisualEvidenceMaxSilhouetteProfileBandDelta &&
-                IsFiniteMetric(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_landmark_endpoint_abs_delta) &&
-                IsWithinEndpointPixelTolerance(
-                    frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_landmark_endpoint_abs_delta,
-                    ReferenceAlignedVisualEvidenceMaxSilhouetteLandmarkEndpointDelta);
-        }
-
-        private static bool IsWithinEndpointPixelTolerance(float value, float threshold)
-        {
-            return value <= threshold + ReferenceAlignedVisualEvidenceEndpointPixelTolerance;
+                VisualComparisonReferenceAlignmentEvaluator.HasAlignedEvidence(frameRoleDiagnostics));
         }
 
         private static IEnumerable<CaptureResult> EnumerateMainSceneCandidates()
