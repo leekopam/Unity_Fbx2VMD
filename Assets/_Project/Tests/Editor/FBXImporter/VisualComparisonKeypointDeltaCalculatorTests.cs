@@ -109,6 +109,67 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_BottomFrameEdgeTouch_When_CalculatingCropSafe_Then_ExcludesBottomAffectedKeypoints()
+        {
+            float[] reference =
+            {
+                0.5f, 0f,
+                0.5f, 1f,
+                0f, 0.25f,
+                1f, 0.25f,
+                0f, 0.75f,
+                1f, 0.75f,
+            };
+            float[] candidate = (float[])reference.Clone();
+            candidate[8] = 0.2f;
+
+            bool success = TryCalculateCropSafeBBoxNormalized(
+                candidate,
+                0.5f,
+                1f,
+                0f,
+                1f,
+                0.1f,
+                reference,
+                0.5f,
+                1f,
+                0f,
+                1f,
+                0.1f,
+                0.001f,
+                out object delta);
+
+            Assert.That(success, Is.True);
+            Assert.That(ReadProperty<int>(delta, "ComparedKeypointCount"), Is.EqualTo(3));
+            Assert.That(ReadProperty<int>(delta, "ExcludedKeypointCount"), Is.EqualTo(3));
+            Assert.That(ReadProperty<int>(delta, "MaxKeypointIndex"), Is.EqualTo(4));
+            Assert.That(ReadProperty<float>(delta, "MaxL1Delta"), Is.EqualTo(0.2f).Within(0.000001f));
+        }
+
+        [Test]
+        public void Given_AllKeypointsTouchFrameEdges_When_CalculatingCropSafe_Then_ReturnsFalseWithExcludedCount()
+        {
+            bool success = TryCalculateCropSafeBBoxNormalized(
+                new[] { 0.5f, 0f, 0.5f, 1f },
+                0.5f,
+                1f,
+                0f,
+                1f,
+                0f,
+                new[] { 0.5f, 0f, 0.5f, 1f },
+                0.5f,
+                1f,
+                0f,
+                1f,
+                0f,
+                0.001f,
+                out object delta);
+
+            Assert.That(success, Is.False);
+            Assert.That(ReadProperty<int>(delta, "ExcludedKeypointCount"), Is.EqualTo(2));
+        }
+
+        [Test]
         public void Given_ExtractedCalculator_When_CheckingAnalyzer_Then_KeypointDeltaImplementationIsRemoved()
         {
             Type analyzerType = typeof(FBXVmdPipeline).Assembly.GetType(
@@ -120,6 +181,12 @@ namespace Tests.Editor.FBXImporter
             bool hasLegacyNormalizedMethod = Array.Exists(
                 analyzerType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic),
                 method => method.Name == "TryComputeBBoxNormalizedImageSpaceKeypointDelta");
+            MethodInfo legacyCropSafeMethod = analyzerType.GetMethod(
+                "TryComputeKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointDelta",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo legacyFrameEdgeMethod = analyzerType.GetMethod(
+                "IsKeypointAffectedByVerticalFrameEdge",
+                BindingFlags.Static | BindingFlags.NonPublic);
             string analyzerPath = Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "Assets",
@@ -131,11 +198,16 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(legacyMethod, Is.Null);
             Assert.That(hasLegacyNormalizedMethod, Is.False);
+            Assert.That(legacyCropSafeMethod, Is.Null);
+            Assert.That(legacyFrameEdgeMethod, Is.Null);
             Assert.That(
                 Count(source, "VisualComparisonKeypointDeltaCalculator.TryCalculate("),
                 Is.EqualTo(1));
             Assert.That(
                 Count(source, "VisualComparisonKeypointDeltaCalculator.TryCalculateBBoxNormalized("),
+                Is.EqualTo(2));
+            Assert.That(
+                Count(source, "VisualComparisonKeypointDeltaCalculator.TryCalculateCropSafeBBoxNormalized("),
                 Is.EqualTo(2));
         }
 
@@ -194,6 +266,52 @@ namespace Tests.Editor.FBXImporter
             };
             bool success = (bool)method.Invoke(null, arguments);
             delta = arguments[10];
+            return success;
+        }
+
+        private static bool TryCalculateCropSafeBBoxNormalized(
+            float[] candidate,
+            float candidateCenterX,
+            float candidateBBoxWidth,
+            float candidateBottomGap,
+            float candidateBBoxHeight,
+            float candidateTopGap,
+            float[] reference,
+            float referenceCenterX,
+            float referenceBBoxWidth,
+            float referenceBottomGap,
+            float referenceBBoxHeight,
+            float referenceTopGap,
+            float endpointPixelTolerance,
+            out object delta)
+        {
+            Type calculatorType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.VisualComparisonKeypointDeltaCalculator",
+                throwOnError: true);
+            MethodInfo method = calculatorType.GetMethod(
+                "TryCalculateCropSafeBBoxNormalized",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, "crop-safe bbox-normalized 계산 메서드가 필요합니다.");
+
+            object[] arguments =
+            {
+                candidate,
+                candidateCenterX,
+                candidateBBoxWidth,
+                candidateBottomGap,
+                candidateBBoxHeight,
+                candidateTopGap,
+                reference,
+                referenceCenterX,
+                referenceBBoxWidth,
+                referenceBottomGap,
+                referenceBBoxHeight,
+                referenceTopGap,
+                endpointPixelTolerance,
+                null,
+            };
+            bool success = (bool)method.Invoke(null, arguments);
+            delta = arguments[13];
             return success;
         }
 

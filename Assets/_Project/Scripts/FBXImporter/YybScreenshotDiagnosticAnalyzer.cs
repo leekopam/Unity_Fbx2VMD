@@ -577,7 +577,7 @@ namespace Fbx2Vmd.FBXImporter
                                 maxCropSafeBBoxNormalizedImageSpaceKeypointL1Delta,
                                 bboxNormalizedKeypointDelta.MaxL1Delta);
                     }
-                    if (TryComputeKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointDelta(
+                    if (VisualComparisonKeypointDeltaCalculator.TryCalculateCropSafeBBoxNormalized(
                         candidateMetric.ImageSpaceKeypointProfile,
                         candidateMetric.CenterX,
                         candidateMetric.BBoxWidthRatio,
@@ -590,34 +590,25 @@ namespace Fbx2Vmd.FBXImporter
                         referenceRow.bottomGapRatio,
                         referenceRow.bboxHeightRatio,
                         referenceTopGapRatio,
-                        out int matchedKeypointLocalCropSafeKeypointCount,
-                        out int excludedKeypointLocalCropSafeKeypointCount,
-                        out float keypointLocalCropSafeKeypointL1Delta,
-                        out float keypointLocalCropSafeKeypointMaxL1Delta,
-                        out int keypointLocalCropSafeKeypointMaxIndex,
-                        out _,
-                        out _,
-                        out _,
-                        out _,
-                        out _,
-                        out _))
+                        ReferenceAlignedVisualEvidenceEndpointPixelTolerance,
+                        out VisualComparisonBBoxNormalizedKeypointDelta keypointLocalCropSafeDelta))
                     {
                         keypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount =
                             Mathf.Max(
                                 keypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount,
-                                matchedKeypointLocalCropSafeKeypointCount);
+                                keypointLocalCropSafeDelta.ComparedKeypointCount);
                         keypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount++;
                         keypointLocalCropSafeBBoxNormalizedImageSpaceKeypointExcludedCount +=
-                            excludedKeypointLocalCropSafeKeypointCount;
+                            keypointLocalCropSafeDelta.ExcludedKeypointCount;
                         sumKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta +=
-                            keypointLocalCropSafeKeypointL1Delta;
-                        if (keypointLocalCropSafeKeypointMaxL1Delta >
+                            keypointLocalCropSafeDelta.MeanL1Delta;
+                        if (keypointLocalCropSafeDelta.MaxL1Delta >
                             maxKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta)
                         {
                             maxKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta =
-                                keypointLocalCropSafeKeypointMaxL1Delta;
+                                keypointLocalCropSafeDelta.MaxL1Delta;
                             maxKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointLabel =
-                                ResolveImageSpaceKeypointLabel(keypointLocalCropSafeKeypointMaxIndex);
+                                ResolveImageSpaceKeypointLabel(keypointLocalCropSafeDelta.MaxKeypointIndex);
                         }
                     }
 
@@ -735,7 +726,7 @@ namespace Fbx2Vmd.FBXImporter
                             IsFrameEdgeTouched(candidateMetric.NonHairBottomGapRatio, candidateNonHairTopGapRatio);
                     }
 
-                    if (TryComputeKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointDelta(
+                    if (VisualComparisonKeypointDeltaCalculator.TryCalculateCropSafeBBoxNormalized(
                         candidateMetric.NonHairImageSpaceKeypointProfile,
                         candidateMetric.NonHairCenterX,
                         candidateMetric.NonHairBBoxWidthRatio,
@@ -752,48 +743,39 @@ namespace Fbx2Vmd.FBXImporter
                         ResolveFrameTopGapRatio(
                             referenceRow.nonHairBottomGapRatio,
                             referenceRow.nonHairBBoxHeightRatio),
-                        out int matchedNonHairKeypointLocalCropSafeKeypointCount,
-                        out int excludedNonHairKeypointLocalCropSafeKeypointCount,
-                        out float nonHairKeypointLocalCropSafeKeypointL1Delta,
-                        out float nonHairKeypointLocalCropSafeKeypointMaxL1Delta,
-                        out int nonHairKeypointLocalCropSafeKeypointMaxIndex,
-                        out float nonHairKeypointLocalCropSafeKeypointMaxXDelta,
-                        out float nonHairKeypointLocalCropSafeKeypointMaxYDelta,
-                        out float nonHairKeypointLocalCropSafeKeypointMaxCandidateX,
-                        out float nonHairKeypointLocalCropSafeKeypointMaxCandidateY,
-                        out float nonHairKeypointLocalCropSafeKeypointMaxReferenceX,
-                        out float nonHairKeypointLocalCropSafeKeypointMaxReferenceY))
+                        ReferenceAlignedVisualEvidenceEndpointPixelTolerance,
+                        out VisualComparisonBBoxNormalizedKeypointDelta nonHairKeypointLocalCropSafeDelta))
                     {
                         nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount =
                             Mathf.Max(
                                 nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCount,
-                                matchedNonHairKeypointLocalCropSafeKeypointCount);
+                                nonHairKeypointLocalCropSafeDelta.ComparedKeypointCount);
                         nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointSampleCount++;
                         nonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointExcludedCount +=
-                            excludedNonHairKeypointLocalCropSafeKeypointCount;
+                            nonHairKeypointLocalCropSafeDelta.ExcludedKeypointCount;
                         sumNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta +=
-                            nonHairKeypointLocalCropSafeKeypointL1Delta;
-                        if (nonHairKeypointLocalCropSafeKeypointMaxL1Delta >
+                            nonHairKeypointLocalCropSafeDelta.MeanL1Delta;
+                        if (nonHairKeypointLocalCropSafeDelta.MaxL1Delta >
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta)
                         {
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointL1Delta =
-                                nonHairKeypointLocalCropSafeKeypointMaxL1Delta;
+                                nonHairKeypointLocalCropSafeDelta.MaxL1Delta;
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointLabel =
-                                ResolveImageSpaceKeypointLabel(nonHairKeypointLocalCropSafeKeypointMaxIndex);
+                                ResolveImageSpaceKeypointLabel(nonHairKeypointLocalCropSafeDelta.MaxKeypointIndex);
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointIndex =
-                                nonHairKeypointLocalCropSafeKeypointMaxIndex;
+                                nonHairKeypointLocalCropSafeDelta.MaxKeypointIndex;
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointXDelta =
-                                nonHairKeypointLocalCropSafeKeypointMaxXDelta;
+                                nonHairKeypointLocalCropSafeDelta.MaxXDelta;
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointYDelta =
-                                nonHairKeypointLocalCropSafeKeypointMaxYDelta;
+                                nonHairKeypointLocalCropSafeDelta.MaxYDelta;
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateX =
-                                nonHairKeypointLocalCropSafeKeypointMaxCandidateX;
+                                nonHairKeypointLocalCropSafeDelta.MaxCandidateX;
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointCandidateY =
-                                nonHairKeypointLocalCropSafeKeypointMaxCandidateY;
+                                nonHairKeypointLocalCropSafeDelta.MaxCandidateY;
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceX =
-                                nonHairKeypointLocalCropSafeKeypointMaxReferenceX;
+                                nonHairKeypointLocalCropSafeDelta.MaxReferenceX;
                             maxNonHairKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointReferenceY =
-                                nonHairKeypointLocalCropSafeKeypointMaxReferenceY;
+                                nonHairKeypointLocalCropSafeDelta.MaxReferenceY;
                         }
                     }
                 }
@@ -1628,177 +1610,6 @@ namespace Fbx2Vmd.FBXImporter
             int bandIndex = bandEndpointIndex / 2;
             string side = bandEndpointIndex % 2 == 0 ? "left" : "right";
             return $"band_{bandIndex}_{side}";
-        }
-
-        private static bool TryComputeKeypointLocalCropSafeBBoxNormalizedImageSpaceKeypointDelta(
-            float[] candidateKeypoints,
-            float candidateCenterX,
-            float candidateBBoxWidth,
-            float candidateBottomGap,
-            float candidateBBoxHeight,
-            float candidateTopGap,
-            float[] referenceKeypoints,
-            float referenceCenterX,
-            float referenceBBoxWidth,
-            float referenceBottomGap,
-            float referenceBBoxHeight,
-            float referenceTopGap,
-            out int keypointCount,
-            out int excludedKeypointCount,
-            out float l1Delta,
-            out float maxL1Delta,
-            out int maxKeypointIndex,
-            out float maxXDelta,
-            out float maxYDelta,
-            out float maxCandidateX,
-            out float maxCandidateY,
-            out float maxReferenceX,
-            out float maxReferenceY)
-        {
-            keypointCount = 0;
-            excludedKeypointCount = 0;
-            l1Delta = float.NaN;
-            maxL1Delta = float.NaN;
-            maxKeypointIndex = -1;
-            maxXDelta = float.NaN;
-            maxYDelta = float.NaN;
-            maxCandidateX = float.NaN;
-            maxCandidateY = float.NaN;
-            maxReferenceX = float.NaN;
-            maxReferenceY = float.NaN;
-            if (candidateKeypoints == null ||
-                referenceKeypoints == null ||
-                !IsFiniteMetric(candidateCenterX) ||
-                !IsFiniteMetric(candidateBBoxWidth) ||
-                !IsFiniteMetric(candidateBottomGap) ||
-                !IsFiniteMetric(candidateBBoxHeight) ||
-                !IsFiniteMetric(candidateTopGap) ||
-                !IsFiniteMetric(referenceCenterX) ||
-                !IsFiniteMetric(referenceBBoxWidth) ||
-                !IsFiniteMetric(referenceBottomGap) ||
-                !IsFiniteMetric(referenceBBoxHeight) ||
-                !IsFiniteMetric(referenceTopGap) ||
-                candidateBBoxWidth <= 0f ||
-                candidateBBoxHeight <= 0f ||
-                referenceBBoxWidth <= 0f ||
-                referenceBBoxHeight <= 0f)
-            {
-                return false;
-            }
-
-            int length = Mathf.Min(candidateKeypoints.Length, referenceKeypoints.Length);
-            if (length <= 1)
-            {
-                return false;
-            }
-
-            int totalKeypointCount = length / 2;
-            int bandCount = Mathf.Max(0, (totalKeypointCount - 2) / 2);
-            float candidateLeft = candidateCenterX - (candidateBBoxWidth * 0.5f);
-            float referenceLeft = referenceCenterX - (referenceBBoxWidth * 0.5f);
-            float sumDelta = 0f;
-            float maxDelta = 0f;
-            int finiteKeypointCount = 0;
-            int excludedCount = 0;
-            for (int i = 0; i + 1 < length; i += 2)
-            {
-                int keypointIndex = i / 2;
-                float candidateX = candidateKeypoints[i];
-                float candidateY = candidateKeypoints[i + 1];
-                float referenceX = referenceKeypoints[i];
-                float referenceY = referenceKeypoints[i + 1];
-                if (!IsFiniteMetric(candidateX) ||
-                    !IsFiniteMetric(candidateY) ||
-                    !IsFiniteMetric(referenceX) ||
-                    !IsFiniteMetric(referenceY))
-                {
-                    continue;
-                }
-
-                if (IsKeypointAffectedByVerticalFrameEdge(
-                        keypointIndex,
-                        bandCount,
-                        referenceBottomGap,
-                        referenceTopGap) ||
-                    IsKeypointAffectedByVerticalFrameEdge(
-                        keypointIndex,
-                        bandCount,
-                        candidateBottomGap,
-                        candidateTopGap))
-                {
-                    excludedCount++;
-                    continue;
-                }
-
-                float candidateNormalizedX = (candidateX - candidateLeft) / candidateBBoxWidth;
-                float candidateNormalizedY = (candidateY - candidateBottomGap) / candidateBBoxHeight;
-                float referenceNormalizedX = (referenceX - referenceLeft) / referenceBBoxWidth;
-                float referenceNormalizedY = (referenceY - referenceBottomGap) / referenceBBoxHeight;
-                float delta =
-                    Mathf.Abs(candidateNormalizedX - referenceNormalizedX) +
-                    Mathf.Abs(candidateNormalizedY - referenceNormalizedY);
-                sumDelta += delta;
-                if (delta > maxDelta)
-                {
-                    maxDelta = delta;
-                    maxKeypointIndex = keypointIndex;
-                    maxXDelta = Mathf.Abs(candidateNormalizedX - referenceNormalizedX);
-                    maxYDelta = Mathf.Abs(candidateNormalizedY - referenceNormalizedY);
-                    maxCandidateX = candidateNormalizedX;
-                    maxCandidateY = candidateNormalizedY;
-                    maxReferenceX = referenceNormalizedX;
-                    maxReferenceY = referenceNormalizedY;
-                }
-                finiteKeypointCount++;
-            }
-
-            if (finiteKeypointCount <= 0)
-            {
-                excludedKeypointCount = excludedCount;
-                return false;
-            }
-
-            keypointCount = finiteKeypointCount;
-            excludedKeypointCount = excludedCount;
-            l1Delta = sumDelta / finiteKeypointCount;
-            maxL1Delta = maxDelta;
-            return true;
-        }
-
-        private static bool IsKeypointAffectedByVerticalFrameEdge(
-            int keypointIndex,
-            int bandCount,
-            float bottomGapRatio,
-            float topGapRatio)
-        {
-            bool bottomTouched = IsFiniteMetric(bottomGapRatio) &&
-                                 bottomGapRatio <= ReferenceAlignedVisualEvidenceEndpointPixelTolerance;
-            bool topTouched = IsFiniteMetric(topGapRatio) &&
-                              topGapRatio <= ReferenceAlignedVisualEvidenceEndpointPixelTolerance;
-            if (!bottomTouched && !topTouched)
-            {
-                return false;
-            }
-
-            if (keypointIndex == 0)
-            {
-                return bottomTouched;
-            }
-
-            if (keypointIndex == 1)
-            {
-                return topTouched;
-            }
-
-            int bandEndpointIndex = keypointIndex - 2;
-            if (bandEndpointIndex < 0 || bandCount <= 0)
-            {
-                return bottomTouched || topTouched;
-            }
-
-            int bandIndex = bandEndpointIndex / 2;
-            return (bottomTouched && bandIndex == 0) ||
-                   (topTouched && bandIndex >= bandCount - 1);
         }
 
         private static bool IsCandidateBrightPixel(Color32 pixel)
