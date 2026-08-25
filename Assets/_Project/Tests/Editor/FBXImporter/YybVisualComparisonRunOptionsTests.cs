@@ -47,5 +47,29 @@ namespace Tests.Editor.FBXImporter
             Assert.That(parameters, Has.Length.EqualTo(1));
             Assert.That(parameters[0].ParameterType, Is.EqualTo(runtimeType));
         }
+
+        [Test]
+        public void Given_YybRunOptions_When_CheckingOwnership_Then_GenericFieldsBelongToBaseOptions()
+        {
+            Type assemblyMarker = typeof(FBXVmdPipeline);
+            Type genericType = assemblyMarker.Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.VisualComparisonRunOptions",
+                throwOnError: false);
+            Type yybType = assemblyMarker.Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonRunOptions",
+                throwOnError: true);
+            Assert.That(genericType, Is.Not.Null, "모델 중립 비교 실행 옵션 경계가 필요합니다.");
+            Assert.That(yybType.BaseType, Is.EqualTo(genericType));
+
+            BindingFlags declaredFields =
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly;
+            Assert.That(genericType.GetField("fbxFileName", declaredFields), Is.Not.Null);
+            Assert.That(
+                genericType.GetField("enableYybArmSwingLimitRuntimeOverride", declaredFields),
+                Is.Null);
+            Assert.That(
+                yybType.GetField("enableYybArmSwingLimitRuntimeOverride", declaredFields),
+                Is.Not.Null);
+        }
     }
 }
