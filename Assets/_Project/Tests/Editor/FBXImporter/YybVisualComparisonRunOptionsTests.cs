@@ -1,6 +1,8 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
@@ -28,6 +30,22 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(json, Does.Contain("\"fbxFileName\":\"future-model-motion.fbx\""));
             Assert.That(json, Does.Contain("\"enableYybArmSwingLimitRuntimeOverride\":true"));
+        }
+
+        [Test]
+        public void Given_StartRun_When_CheckingSignature_Then_AcceptsSingleRunOptionsObject()
+        {
+            Type runtimeType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonRunOptions",
+                throwOnError: true);
+            MethodInfo startRun = typeof(YybVisualComparisonBatchRunner)
+                .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+                .Single(method => method.Name == "StartRun");
+
+            ParameterInfo[] parameters = startRun.GetParameters();
+
+            Assert.That(parameters, Has.Length.EqualTo(1));
+            Assert.That(parameters[0].ParameterType, Is.EqualTo(runtimeType));
         }
     }
 }
