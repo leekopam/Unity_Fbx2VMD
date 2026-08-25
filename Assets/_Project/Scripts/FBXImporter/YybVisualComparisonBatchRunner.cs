@@ -7726,10 +7726,9 @@ namespace Fbx2Vmd.FBXImporter
                 return relativePath ?? string.Empty;
             }
 
-            string projectRoot = ResolveProjectRootForDiagnostics();
-            return string.IsNullOrWhiteSpace(projectRoot)
-                ? relativePath
-                : Path.Combine(projectRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            return VisualComparisonArtifactPathResolver.ResolveProjectRelative(
+                relativePath,
+                ResolveProjectRootForDiagnostics());
         }
 
         private static string ResolveProjectRootForDiagnostics()
@@ -8083,40 +8082,15 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string ResolveSelectionArtifactPath(string path, string baseDirectory)
         {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return string.Empty;
-            }
-
-            string normalized = path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
-            if (Path.IsPathRooted(normalized))
-            {
-                return normalized;
-            }
-
-            if (!string.IsNullOrWhiteSpace(_projectRoot))
-            {
-                return ToAbsoluteProjectPath(normalized);
-            }
-
-            return string.IsNullOrWhiteSpace(baseDirectory)
-                ? normalized
-                : Path.Combine(baseDirectory, normalized);
+            return VisualComparisonArtifactPathResolver.ResolveArtifactPath(
+                path,
+                _projectRoot,
+                baseDirectory);
         }
 
         private static bool PathsReferToSameFile(string leftPath, string rightPath)
         {
-            try
-            {
-                return string.Equals(
-                    Path.GetFullPath(leftPath),
-                    Path.GetFullPath(rightPath),
-                    StringComparison.OrdinalIgnoreCase);
-            }
-            catch (Exception)
-            {
-                return string.Equals(leftPath, rightPath, StringComparison.OrdinalIgnoreCase);
-            }
+            return VisualComparisonArtifactPathResolver.ReferToSameFile(leftPath, rightPath);
         }
 
         private static bool FilesDiffer(string leftPath, string rightPath)
@@ -8353,15 +8327,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string ToAbsoluteProjectPath(string path)
         {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return string.Empty;
-            }
-
-            string normalized = path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
-            return Path.IsPathRooted(normalized)
-                ? normalized
-                : Path.Combine(_projectRoot, normalized);
+            return VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(path, _projectRoot);
         }
 
         private static string FormatQualityFloat(float value)
@@ -8548,19 +8514,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string MakeProjectRelativePath(string absolutePath)
         {
-            if (string.IsNullOrWhiteSpace(absolutePath))
-            {
-                return string.Empty;
-            }
-
-            string normalizedProjectRoot = _projectRoot.Replace('\\', '/').TrimEnd('/');
-            string normalizedAbsolute = absolutePath.Replace('\\', '/');
-            if (normalizedAbsolute.StartsWith(normalizedProjectRoot + "/", StringComparison.OrdinalIgnoreCase))
-            {
-                return normalizedAbsolute.Substring(normalizedProjectRoot.Length + 1);
-            }
-
-            return normalizedAbsolute;
+            return VisualComparisonArtifactPathResolver.MakeProjectRelative(absolutePath, _projectRoot);
         }
 
         private static string EscapeMarkdown(string value)
