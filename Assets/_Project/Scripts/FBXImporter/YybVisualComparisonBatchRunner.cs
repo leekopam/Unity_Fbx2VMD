@@ -1333,271 +1333,151 @@ namespace Fbx2Vmd.FBXImporter
             ApplyTemporaryEnterPlayModeOptions();
 
             _projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
-            _fbxFileName = NormalizeFbxFileName(runOptions.fbxFileName);
-            _durationSeconds = Mathf.Max(0.1f, runOptions.durationSeconds);
-            _targetFrameCount = Mathf.Max(1, Mathf.CeilToInt(_durationSeconds * DefaultFrameRate));
+            YybVisualComparisonRunOptionsNormalizer.Normalize(
+                runOptions,
+                CreateDefaultRunOptions(),
+                DefaultFrameRate);
+            _fbxFileName = runOptions.fbxFileName;
+            _durationSeconds = runOptions.durationSeconds;
+            _targetFrameCount = runOptions.targetFrameCount;
             _enableFingerCloseups = runOptions.enableFingerCloseups;
             _enableRecorderParentFrameIkOffsetsWhenCenterParented = runOptions.enableRecorderParentFrameIkOffsetsWhenCenterParented;
-            _mmdIkDeltaGuardLimitOverrideVmd = NormalizeMmdIkDeltaGuardLimitOverride(runOptions.mmdIkDeltaGuardLimitOverrideVmd);
-            _mmdIkDeltaGuardRecoveryTriggerVmd = NormalizeMmdIkDeltaGuardLimitOverride(runOptions.mmdIkDeltaGuardRecoveryTriggerVmd);
-            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = NormalizeMmdIkDeltaGuardLimitOverride(runOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd);
-            _mmdIkDeltaGuardRecoveryHoldFrames = NormalizeMmdIkDeltaGuardRecoveryHoldFrames(runOptions.mmdIkDeltaGuardRecoveryHoldFrames);
+            _mmdIkDeltaGuardLimitOverrideVmd = runOptions.mmdIkDeltaGuardLimitOverrideVmd;
+            _mmdIkDeltaGuardRecoveryTriggerVmd = runOptions.mmdIkDeltaGuardRecoveryTriggerVmd;
+            _mmdIkDeltaGuardRecoveryDebtThresholdVmd = runOptions.mmdIkDeltaGuardRecoveryDebtThresholdVmd;
+            _mmdIkDeltaGuardRecoveryHoldFrames = runOptions.mmdIkDeltaGuardRecoveryHoldFrames;
             _enableFinalIkFootGroundingRuntimeOverride = runOptions.enableFinalIkFootGroundingRuntimeOverride;
             _enableManualAnimatorFootLocalRotationRuntimeOverride = runOptions.enableManualAnimatorFootLocalRotationRuntimeOverride;
             _disableManualAnimatorFootLocalRotationRuntimeOverride = runOptions.disableManualAnimatorFootLocalRotationRuntimeOverride;
             _enableManualAnimatorFullBodyPoseRuntimeOverride = runOptions.enableManualAnimatorFullBodyPoseRuntimeOverride;
             _disableManualAnimatorFullBodyPoseRuntimeOverride = runOptions.disableManualAnimatorFullBodyPoseRuntimeOverride;
-            _manualAnimatorFullBodyPoseReferenceWeight = Mathf.Clamp01(runOptions.manualAnimatorFullBodyPoseReferenceWeight);
-            _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride =
-                runOptions.manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
-            _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride =
-                runOptions.manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride =
-                runOptions.manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride =
-                runOptions.manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride =
-                runOptions.manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride =
-                runOptions.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
-            _manualAnimatorFullBodyPoseReferenceFrameGateStart =
-                Mathf.Max(0f, runOptions.manualAnimatorFullBodyPoseReferenceFrameGateStart);
-            _manualAnimatorFullBodyPoseReferenceFrameGateEnd =
-                Mathf.Max(0f, runOptions.manualAnimatorFullBodyPoseReferenceFrameGateEnd);
-            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride =
-                runOptions.enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
-            _setHumanPoseRightLegTwistOutputReferenceWeight = Mathf.Clamp01(
-                runOptions.setHumanPoseRightLegTwistOutputReferenceWeight);
-            _setHumanPoseRightLegTwistOutputReferenceMaxDelta =
-                Mathf.Max(0f, runOptions.setHumanPoseRightLegTwistOutputReferenceMaxDelta);
+            _manualAnimatorFullBodyPoseReferenceWeight = runOptions.manualAnimatorFullBodyPoseReferenceWeight;
+            _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride = runOptions.manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride;
+            _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride = runOptions.manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride = runOptions.manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride = runOptions.manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride = runOptions.manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride = runOptions.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride;
+            _manualAnimatorFullBodyPoseReferenceFrameGateStart = runOptions.manualAnimatorFullBodyPoseReferenceFrameGateStart;
+            _manualAnimatorFullBodyPoseReferenceFrameGateEnd = runOptions.manualAnimatorFullBodyPoseReferenceFrameGateEnd;
+            _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride = runOptions.enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride;
+            _setHumanPoseRightLegTwistOutputReferenceWeight = runOptions.setHumanPoseRightLegTwistOutputReferenceWeight;
+            _setHumanPoseRightLegTwistOutputReferenceMaxDelta = runOptions.setHumanPoseRightLegTwistOutputReferenceMaxDelta;
             _enableManualAnimatorBodyRotationRuntimeOverride = runOptions.enableManualAnimatorBodyRotationRuntimeOverride;
             _disableManualAnimatorBodyRotationRuntimeOverride = runOptions.disableManualAnimatorBodyRotationRuntimeOverride;
-            _manualAnimatorBodyRotationReferenceWeight = Mathf.Clamp01(runOptions.manualAnimatorBodyRotationReferenceWeight);
+            _manualAnimatorBodyRotationReferenceWeight = runOptions.manualAnimatorBodyRotationReferenceWeight;
             _enableManualAnimatorHandLocalRotationRuntimeOverride = runOptions.enableManualAnimatorHandLocalRotationRuntimeOverride;
             _enableManualAnimatorThumbLocalRotationRuntimeOverride = runOptions.enableManualAnimatorThumbLocalRotationRuntimeOverride;
             _enableManualAnimatorHandPalmFrameRuntimeOverride = runOptions.enableManualAnimatorHandPalmFrameRuntimeOverride;
-            _manualAnimatorHandPalmFrameWeight = Mathf.Clamp01(runOptions.manualAnimatorHandPalmFrameWeight);
-            _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings =
-                runOptions.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings;
-            _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride =
-                runOptions.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride;
-            _retargetPoseVisualSpikeCurrentWeight = Mathf.Clamp(
-                runOptions.retargetPoseVisualSpikeCurrentWeight,
-                0.1f,
-                1f);
-            _retargetPoseVisualSpikeForearmStretchClampMaxOffset =
-                Mathf.Clamp01(runOptions.retargetPoseVisualSpikeForearmStretchClampMaxOffset);
+            _manualAnimatorHandPalmFrameWeight = runOptions.manualAnimatorHandPalmFrameWeight;
+            _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings = runOptions.overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings;
+            _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride = runOptions.enableRetargetPoseVisualSpikeSmoothingRuntimeOverride;
+            _retargetPoseVisualSpikeCurrentWeight = runOptions.retargetPoseVisualSpikeCurrentWeight;
+            _retargetPoseVisualSpikeForearmStretchClampMaxOffset = runOptions.retargetPoseVisualSpikeForearmStretchClampMaxOffset;
             _enableRetargetArmStretchClampRuntimeOverride = runOptions.enableRetargetArmStretchClampRuntimeOverride;
-            _retargetArmStretchMuscleLimit = Mathf.Clamp(
-                runOptions.retargetArmStretchMuscleLimit,
-                0f,
-                DefaultRetargetArmStretchMuscleLimit);
+            _retargetArmStretchMuscleLimit = runOptions.retargetArmStretchMuscleLimit;
             _enableYybArmSwingLimitRuntimeOverride = runOptions.enableYybArmSwingLimitRuntimeOverride;
-            _yybArmSwingLimitWeight = Mathf.Clamp01(runOptions.yybArmSwingLimitWeight);
-            _yybArmSwingMaxDownDot = Mathf.Clamp01(runOptions.yybArmSwingMaxDownDot);
-            _yybArmSwingMinHandHorizontalRatio = Mathf.Clamp(runOptions.yybArmSwingMinHandHorizontalRatio, 0f, 1.5f);
-            _yybArmSwingMaxHandBelowShoulderRatio = Mathf.Clamp(
-                runOptions.yybArmSwingMaxHandBelowShoulderRatio,
-                0f,
-                1.5f);
-            _yybArmSwingHorizontalReachLimitWeight = Mathf.Clamp01(runOptions.yybArmSwingHorizontalReachLimitWeight);
-            _yybArmSwingMaxHandHorizontalReachRatio = Mathf.Clamp(
-                runOptions.yybArmSwingMaxHandHorizontalReachRatio,
-                0f,
-                1.5f);
-            _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio = Mathf.Clamp(
-                runOptions.yybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
-                0f,
-                1.5f);
-            _yybArmSwingHorizontalReachMinElbowAngleAfterApply = Mathf.Clamp(
-                runOptions.yybArmSwingHorizontalReachMinElbowAngleAfterApply,
-                0f,
-                180f);
-            _yybArmSwingRaisedPoseHorizontalReachLimitWeight = Mathf.Clamp01(
-                runOptions.yybArmSwingRaisedPoseHorizontalReachLimitWeight);
-            _yybArmSwingRaisedPoseMinUpperArmDownDot = Mathf.Clamp01(
-                runOptions.yybArmSwingRaisedPoseMinUpperArmDownDot);
-            _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio = Mathf.Clamp(
-                runOptions.yybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
-                0f,
-                1.5f);
-            _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio = Mathf.Clamp(
-                runOptions.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
-                0f,
-                1.5f);
+            _yybArmSwingLimitWeight = runOptions.yybArmSwingLimitWeight;
+            _yybArmSwingMaxDownDot = runOptions.yybArmSwingMaxDownDot;
+            _yybArmSwingMinHandHorizontalRatio = runOptions.yybArmSwingMinHandHorizontalRatio;
+            _yybArmSwingMaxHandBelowShoulderRatio = runOptions.yybArmSwingMaxHandBelowShoulderRatio;
+            _yybArmSwingHorizontalReachLimitWeight = runOptions.yybArmSwingHorizontalReachLimitWeight;
+            _yybArmSwingMaxHandHorizontalReachRatio = runOptions.yybArmSwingMaxHandHorizontalReachRatio;
+            _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio = runOptions.yybArmSwingHorizontalReachMaxHandBelowShoulderRatio;
+            _yybArmSwingHorizontalReachMinElbowAngleAfterApply = runOptions.yybArmSwingHorizontalReachMinElbowAngleAfterApply;
+            _yybArmSwingRaisedPoseHorizontalReachLimitWeight = runOptions.yybArmSwingRaisedPoseHorizontalReachLimitWeight;
+            _yybArmSwingRaisedPoseMinUpperArmDownDot = runOptions.yybArmSwingRaisedPoseMinUpperArmDownDot;
+            _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio = runOptions.yybArmSwingRaisedPoseMaxHandBelowShoulderRatio;
+            _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio = runOptions.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio;
             _enableYybArmDirectionRetargetRuntimeOverride = runOptions.enableYybArmDirectionRetargetRuntimeOverride;
-            _yybArmDirectionUpperArmWeight = Mathf.Clamp01(runOptions.yybArmDirectionUpperArmWeight);
-            _yybArmDirectionForearmWeight = Mathf.Clamp01(runOptions.yybArmDirectionForearmWeight);
-            _yybArmDirectionUpperArmMaxDegrees = Mathf.Clamp(runOptions.yybArmDirectionUpperArmMaxDegrees, 0f, 120f);
-            _yybArmDirectionForearmMaxDegrees = Mathf.Clamp(runOptions.yybArmDirectionForearmMaxDegrees, 0f, 120f);
-            _yybArmDirectionLeftSideWeightScale = Mathf.Clamp01(runOptions.yybArmDirectionLeftSideWeightScale);
-            _yybArmDirectionRightSideWeightScale = Mathf.Clamp01(runOptions.yybArmDirectionRightSideWeightScale);
+            _yybArmDirectionUpperArmWeight = runOptions.yybArmDirectionUpperArmWeight;
+            _yybArmDirectionForearmWeight = runOptions.yybArmDirectionForearmWeight;
+            _yybArmDirectionUpperArmMaxDegrees = runOptions.yybArmDirectionUpperArmMaxDegrees;
+            _yybArmDirectionForearmMaxDegrees = runOptions.yybArmDirectionForearmMaxDegrees;
+            _yybArmDirectionLeftSideWeightScale = runOptions.yybArmDirectionLeftSideWeightScale;
+            _yybArmDirectionRightSideWeightScale = runOptions.yybArmDirectionRightSideWeightScale;
             _overrideYybArmSleeveAnchorRuntimeSettings = runOptions.overrideYybArmSleeveAnchorRuntimeSettings;
             _enableYybArmSleeveAnchorRuntimeOverride = runOptions.enableYybArmSleeveAnchorRuntimeOverride;
-            _yybArmSleeveAnchorInfluence = Mathf.Clamp01(runOptions.yybArmSleeveAnchorInfluence);
-            _yybArmShoulderCapAnchorInfluence = Mathf.Clamp01(runOptions.yybArmShoulderCapAnchorInfluence);
-            _yybArmSleeveAnchorMaxDegrees = Mathf.Clamp(runOptions.yybArmSleeveAnchorMaxDegrees, 0f, 120f);
+            _yybArmSleeveAnchorInfluence = runOptions.yybArmSleeveAnchorInfluence;
+            _yybArmShoulderCapAnchorInfluence = runOptions.yybArmShoulderCapAnchorInfluence;
+            _yybArmSleeveAnchorMaxDegrees = runOptions.yybArmSleeveAnchorMaxDegrees;
             _overrideYybArmVisualTwistRuntimeSettings = runOptions.overrideYybArmVisualTwistRuntimeSettings;
             _enableYybArmVisualTwistRuntimeOverride = runOptions.enableYybArmVisualTwistRuntimeOverride;
-            _yybArmVisualUpperArmInfluence = Mathf.Clamp01(runOptions.yybArmVisualUpperArmInfluence);
-            _yybArmVisualForearmInfluence = Mathf.Clamp01(runOptions.yybArmVisualForearmInfluence);
-            _yybArmVisualUpperArmMaxDegrees = Mathf.Clamp(runOptions.yybArmVisualUpperArmMaxDegrees, 0f, 120f);
-            _yybArmVisualForearmMaxDegrees = Mathf.Clamp(runOptions.yybArmVisualForearmMaxDegrees, 0f, 120f);
+            _yybArmVisualUpperArmInfluence = runOptions.yybArmVisualUpperArmInfluence;
+            _yybArmVisualForearmInfluence = runOptions.yybArmVisualForearmInfluence;
+            _yybArmVisualUpperArmMaxDegrees = runOptions.yybArmVisualUpperArmMaxDegrees;
+            _yybArmVisualForearmMaxDegrees = runOptions.yybArmVisualForearmMaxDegrees;
             _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = runOptions.enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-            _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride =
-                runOptions.disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
-            _manualAnimatorLowerBodySegmentDirectionReferenceWeight = Mathf.Clamp01(
-                runOptions.manualAnimatorLowerBodySegmentDirectionReferenceWeight);
-            _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle);
-            _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride =
-                runOptions.disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
-            _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle);
-            _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride =
-                runOptions.disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
-            _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = Mathf.Clamp01(
-                runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = Mathf.Clamp01(
-                runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
-            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = Mathf.Clamp01(
-                runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
-            _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride =
-                runOptions.disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
-            _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
-            _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride =
-                runOptions.enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride =
-                runOptions.disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
-            _manualAnimatorFootHipsAlignedResidualYawReferenceWeight = Mathf.Clamp01(
-                runOptions.manualAnimatorFootHipsAlignedResidualYawReferenceWeight);
-            _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle);
-            _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride =
-                runOptions.enablePostSetHumanPoseRightEndpointPositionRuntimeOverride;
-            _postSetHumanPoseRightEndpointPositionReferenceWeight = Mathf.Clamp01(
-                runOptions.postSetHumanPoseRightEndpointPositionReferenceWeight);
-            _postSetHumanPoseRightEndpointPositionReferenceMaxOffset = Mathf.Max(
-                0f,
-                runOptions.postSetHumanPoseRightEndpointPositionReferenceMaxOffset);
-            _postSetHumanPoseRightEndpointPositionReferencePositiveZScale = Mathf.Clamp01(
-                runOptions.postSetHumanPoseRightEndpointPositionReferencePositiveZScale);
-            _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(
-                runOptions.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight);
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = Mathf.Max(
-                0f,
-                runOptions.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
-            _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(
-                0f,
-                runOptions.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
+            _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = runOptions.disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
+            _manualAnimatorLowerBodySegmentDirectionReferenceWeight = runOptions.manualAnimatorLowerBodySegmentDirectionReferenceWeight;
+            _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = runOptions.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle;
+            _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride = runOptions.disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride;
+            _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle = runOptions.manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle;
+            _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride = runOptions.disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride;
+            _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle = runOptions.manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle = runOptions.manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle = runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale = runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight = runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart = runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd = runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd;
+            _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight = runOptions.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight;
+            _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride = runOptions.disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride;
+            _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle = runOptions.manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle;
+            _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = runOptions.enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
+            _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = runOptions.disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
+            _manualAnimatorFootHipsAlignedResidualYawReferenceWeight = runOptions.manualAnimatorFootHipsAlignedResidualYawReferenceWeight;
+            _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = runOptions.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle;
+            _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride = runOptions.enablePostSetHumanPoseRightEndpointPositionRuntimeOverride;
+            _postSetHumanPoseRightEndpointPositionReferenceWeight = runOptions.postSetHumanPoseRightEndpointPositionReferenceWeight;
+            _postSetHumanPoseRightEndpointPositionReferenceMaxOffset = runOptions.postSetHumanPoseRightEndpointPositionReferenceMaxOffset;
+            _postSetHumanPoseRightEndpointPositionReferencePositiveZScale = runOptions.postSetHumanPoseRightEndpointPositionReferencePositiveZScale;
+            _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = runOptions.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
+            _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart = runOptions.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
+            _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = runOptions.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
             _postSetHumanPoseEndpointPositionUseLeftSide = runOptions.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition;
-            _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride =
-                runOptions.enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
-            _preSetHumanPoseRightEndpointPositionReferenceWeight = Mathf.Clamp01(
-                runOptions.preSetHumanPoseRightEndpointPositionReferenceWeight);
-            _preSetHumanPoseRightEndpointPositionReferenceMaxOffset = Mathf.Max(
-                0f,
-                runOptions.preSetHumanPoseRightEndpointPositionReferenceMaxOffset);
-            _preSetHumanPoseRightEndpointPositionReferencePositiveZScale = Mathf.Clamp01(
-                runOptions.preSetHumanPoseRightEndpointPositionReferencePositiveZScale);
-            _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = Mathf.Clamp01(
-                runOptions.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight);
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = Mathf.Max(
-                0f,
-                runOptions.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
-            _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = Mathf.Max(
-                0f,
-                runOptions.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
+            _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride = runOptions.enablePreSetHumanPoseRightEndpointPositionRuntimeOverride;
+            _preSetHumanPoseRightEndpointPositionReferenceWeight = runOptions.preSetHumanPoseRightEndpointPositionReferenceWeight;
+            _preSetHumanPoseRightEndpointPositionReferenceMaxOffset = runOptions.preSetHumanPoseRightEndpointPositionReferenceMaxOffset;
+            _preSetHumanPoseRightEndpointPositionReferencePositiveZScale = runOptions.preSetHumanPoseRightEndpointPositionReferencePositiveZScale;
+            _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight = runOptions.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight;
+            _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart = runOptions.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart;
+            _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd = runOptions.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd;
             _preSetHumanPoseEndpointPositionUseLeftSide = runOptions.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition;
-            _preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
-                runOptions.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionX =
-                runOptions.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
-            _preSetHumanPoseEndpointPositionInvertBodyPositionZ =
-                runOptions.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
-            _usePostSetHumanPoseRightFootEvaluatorXzReference =
-                runOptions.usePostSetHumanPoseRightFootEvaluatorXzReference;
-            _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = Mathf.Max(
-                0f,
-                runOptions.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude);
+            _preSetHumanPoseEndpointPositionUseGhostCurrentBasis = runOptions.preSetHumanPoseEndpointPositionUseGhostCurrentBasis;
+            _preSetHumanPoseEndpointPositionInvertBodyPositionX = runOptions.ShouldInvertPreSetHumanPoseEndpointPositionBodyX;
+            _preSetHumanPoseEndpointPositionInvertBodyPositionZ = runOptions.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ;
+            _usePostSetHumanPoseRightFootEvaluatorXzReference = runOptions.usePostSetHumanPoseRightFootEvaluatorXzReference;
+            _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude = runOptions.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude;
             _enableManualAnimatorBipedIkFootPositionRuntimeOverride = runOptions.enableManualAnimatorBipedIkFootPositionRuntimeOverride;
-            _manualAnimatorBipedIkFootPositionReferenceWeight = Mathf.Clamp01(
-                runOptions.manualAnimatorBipedIkFootPositionReferenceWeight);
-            _manualAnimatorBipedIkFootPositionReferenceMaxOffset = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorBipedIkFootPositionReferenceMaxOffset);
+            _manualAnimatorBipedIkFootPositionReferenceWeight = runOptions.manualAnimatorBipedIkFootPositionReferenceWeight;
+            _manualAnimatorBipedIkFootPositionReferenceMaxOffset = runOptions.manualAnimatorBipedIkFootPositionReferenceMaxOffset;
             _enableManualAnimatorHipsLocalPositionRuntimeOverride = runOptions.enableManualAnimatorHipsLocalPositionRuntimeOverride;
-            _manualAnimatorHipsLocalPositionReferenceWeight = Mathf.Clamp01(
-                runOptions.manualAnimatorHipsLocalPositionReferenceWeight);
-            _manualAnimatorHipsLocalPositionReferenceMaxOffset = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorHipsLocalPositionReferenceMaxOffset);
-            _enableManualAnimatorBodyPositionXzRuntimeOverride =
-                runOptions.enableManualAnimatorBodyPositionXzRuntimeOverride;
-            _manualAnimatorBodyPositionXzReferenceWeight = Mathf.Clamp01(
-                runOptions.manualAnimatorBodyPositionXzReferenceWeight);
-            _manualAnimatorBodyPositionXzReferenceMaxOffset = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorBodyPositionXzReferenceMaxOffset);
-            _manualAnimatorBodyPositionXzReferenceFrameGateStart = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorBodyPositionXzReferenceFrameGateStart);
-            _manualAnimatorBodyPositionXzReferenceFrameGateEnd = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorBodyPositionXzReferenceFrameGateEnd);
-            _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = Mathf.Max(
-                0f,
-                runOptions.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames);
-            _manualAnimatorBodyPositionXzReferenceAxisXScale = Mathf.Clamp01(
-                runOptions.manualAnimatorBodyPositionXzReferenceAxisXScale);
-            _manualAnimatorBodyPositionXzReferenceAxisZScale = Mathf.Clamp01(
-                runOptions.manualAnimatorBodyPositionXzReferenceAxisZScale);
-            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride =
-                runOptions.enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
-            _yybRightSleeveSilhouetteLocalOffsetX =
-                Mathf.Clamp(runOptions.yybRightSleeveSilhouetteLocalOffsetX, -0.2f, 0.2f);
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
-                Mathf.Clamp(runOptions.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, 0f, 6000f);
-            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
-                Mathf.Clamp(runOptions.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, 0f, 6000f);
-            _enableRetargetBodyPositionXzRootMotionRuntimeOverride =
-                runOptions.enableRetargetBodyPositionXzRootMotionRuntimeOverride;
-            _disableTargetHumanoidBonePositionLockRuntimeOverride =
-                runOptions.disableTargetHumanoidBonePositionLockRuntimeOverride;
+            _manualAnimatorHipsLocalPositionReferenceWeight = runOptions.manualAnimatorHipsLocalPositionReferenceWeight;
+            _manualAnimatorHipsLocalPositionReferenceMaxOffset = runOptions.manualAnimatorHipsLocalPositionReferenceMaxOffset;
+            _enableManualAnimatorBodyPositionXzRuntimeOverride = runOptions.enableManualAnimatorBodyPositionXzRuntimeOverride;
+            _manualAnimatorBodyPositionXzReferenceWeight = runOptions.manualAnimatorBodyPositionXzReferenceWeight;
+            _manualAnimatorBodyPositionXzReferenceMaxOffset = runOptions.manualAnimatorBodyPositionXzReferenceMaxOffset;
+            _manualAnimatorBodyPositionXzReferenceFrameGateStart = runOptions.manualAnimatorBodyPositionXzReferenceFrameGateStart;
+            _manualAnimatorBodyPositionXzReferenceFrameGateEnd = runOptions.manualAnimatorBodyPositionXzReferenceFrameGateEnd;
+            _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames = runOptions.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames;
+            _manualAnimatorBodyPositionXzReferenceAxisXScale = runOptions.manualAnimatorBodyPositionXzReferenceAxisXScale;
+            _manualAnimatorBodyPositionXzReferenceAxisZScale = runOptions.manualAnimatorBodyPositionXzReferenceAxisZScale;
+            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride = runOptions.enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
+            _yybRightSleeveSilhouetteLocalOffsetX = runOptions.yybRightSleeveSilhouetteLocalOffsetX;
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart = runOptions.yybRightSleeveSilhouetteLocalOffsetFrameGateStart;
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = runOptions.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
+            _enableRetargetBodyPositionXzRootMotionRuntimeOverride = runOptions.enableRetargetBodyPositionXzRootMotionRuntimeOverride;
+            _disableTargetHumanoidBonePositionLockRuntimeOverride = runOptions.disableTargetHumanoidBonePositionLockRuntimeOverride;
             _enableVmdPlaybackProbeRuntimeOverride = runOptions.enableVmdPlaybackProbeRuntimeOverride;
-            _applyVmdPlaybackProbeIkTargetsRuntimeOverride =
-                runOptions.enableVmdPlaybackProbeRuntimeOverride && runOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride;
-            _vmdPlaybackProbeSourceVmdPath = string.Empty;
+            _applyVmdPlaybackProbeIkTargetsRuntimeOverride = runOptions.applyVmdPlaybackProbeIkTargetsRuntimeOverride;
+            _vmdPlaybackProbeSourceVmdPath = runOptions.vmdPlaybackProbeSourceVmdPath;
             _enableReferenceMmdTimingRuntimeOverride = runOptions.enableReferenceMmdTimingRuntimeOverride;
             _editorDiagnosticSmokeSegment = ResolveEditorDiagnosticSmokeSegment(runOptions.editorDiagnosticSmokeSegment);
-            _diagnosticCaptureWidthOverride = NormalizeDiagnosticCaptureDimensionOverride(runOptions.diagnosticCaptureWidthOverride);
-            _diagnosticCaptureHeightOverride = NormalizeDiagnosticCaptureDimensionOverride(runOptions.diagnosticCaptureHeightOverride);
-            _diagnosticScreenshotPaddingOverride =
-                NormalizeDiagnosticScreenshotPaddingOverride(runOptions.diagnosticScreenshotPaddingOverride);
-            _diagnosticScreenshotVerticalViewportCenterOverride =
-                NormalizeDiagnosticScreenshotVerticalViewportCenterOverride(
-                    runOptions.diagnosticScreenshotVerticalViewportCenterOverride);
-
+            _diagnosticCaptureWidthOverride = runOptions.diagnosticCaptureWidthOverride;
+            _diagnosticCaptureHeightOverride = runOptions.diagnosticCaptureHeightOverride;
+            _diagnosticScreenshotPaddingOverride = runOptions.diagnosticScreenshotPaddingOverride;
+            _diagnosticScreenshotVerticalViewportCenterOverride = runOptions.diagnosticScreenshotVerticalViewportCenterOverride;
             try
             {
                 _referenceClipAssetPath = ResolveReferenceClipAssetPath(
