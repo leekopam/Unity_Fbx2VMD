@@ -46,13 +46,23 @@ namespace Tests.Editor.FBXImporter
                 "GetCsvString",
                 "GetCsvInt",
                 "NormalizeFbxFileName",
-                "EscapeJson"
+                "EscapeJson",
+                "ApplyMmdIkDeltaGuardRuntimeOverride",
+                "ApplyVmdPlaybackProbeRuntimeOverride",
+                "ApplyManualAnimatorFullBodyPoseRuntimeOverride",
+                "ApplyManualAnimatorBodyRotationRuntimeOverride",
+                "ApplyYybArmSwingLimitRuntimeOverride",
+                "ApplyYybArmDirectionRetargetRuntimeOverride",
+                "ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride",
+                "ApplyManualAnimatorBipedIkFootPositionRuntimeOverride",
+                "ApplyPostSetHumanPoseEndpointPositionRuntimeOverride",
+                "ApplyManualAnimatorHipsLocalPositionRuntimeOverride"
             };
 
+            MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
+                BindingFlags.NonPublic | BindingFlags.Static);
             string[] remainingMethodNames = obsoleteMethodNames
-                .Where(methodName => typeof(YybVisualComparisonBatchRunner).GetMethod(
-                    methodName,
-                    BindingFlags.NonPublic | BindingFlags.Static) != null)
+                .Where(methodName => privateStaticMethods.Any(method => method.Name == methodName))
                 .ToArray();
 
             Assert.That(
