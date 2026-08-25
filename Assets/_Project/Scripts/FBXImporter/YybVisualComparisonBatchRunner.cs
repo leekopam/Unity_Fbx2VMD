@@ -4342,56 +4342,44 @@ namespace Fbx2Vmd.FBXImporter
 
             float startSeconds = Mathf.Max(0f, diagnostics.reference_mp4_current_clip_start_seconds);
             float durationSeconds = Mathf.Max(0f, diagnostics.reference_mp4_current_clip_duration_seconds);
-            float endSeconds = startSeconds + durationSeconds;
-            diagnostics.reference_mp4_current_clip_end_seconds = endSeconds;
+            ReferenceVideoClipCoverageData coverage =
+                ReferenceVideoClipCoverageCalculator.Calculate(
+                    rows,
+                    startSeconds,
+                    durationSeconds);
+            diagnostics.reference_mp4_current_clip_end_seconds = coverage.EndSeconds;
+            diagnostics.reference_mp4_current_clip_sample_gap_seconds = coverage.SampleGapSeconds;
             if (durationSeconds <= 0f)
             {
-                diagnostics.reference_mp4_current_clip_sample_gap_seconds = 0f;
                 return;
             }
 
-            const float epsilonSeconds = 0.0001f;
-            int count = 0;
-            float firstSeconds = float.PositiveInfinity;
-            float lastSeconds = float.NegativeInfinity;
-            float sumBBoxHeight = 0f;
-            float sumBBoxWidth = 0f;
-            float sumBrightArea = 0f;
+            diagnostics.referenceMp4CurrentClipRows.Clear();
+            diagnostics.referenceMp4CurrentClipRows.AddRange(coverage.Rows);
+            diagnostics.reference_mp4_current_clip_sample_count = coverage.SampleCount;
+            diagnostics.reference_mp4_current_clip_sample_seconds = coverage.SampleSeconds;
+            if (coverage.SampleCount <= 0)
+            {
+                return;
+            }
+
+            diagnostics.reference_mp4_current_clip_first_sample_seconds = coverage.FirstSampleSeconds;
+            diagnostics.reference_mp4_current_clip_last_sample_seconds = coverage.LastSampleSeconds;
+            diagnostics.reference_mp4_current_clip_sample_coverage_ratio = coverage.SampleCoverageRatio;
+            diagnostics.reference_mp4_current_clip_avg_bbox_height_ratio =
+                coverage.AverageBBoxHeightRatio;
+            diagnostics.reference_mp4_current_clip_avg_bbox_width_ratio =
+                coverage.AverageBBoxWidthRatio;
+            diagnostics.reference_mp4_current_clip_center_x_range_ratio = coverage.CenterXRangeRatio;
+            diagnostics.reference_mp4_current_clip_max_bottom_gap_ratio = coverage.MaxBottomGapRatio;
+            diagnostics.reference_mp4_current_clip_avg_bright_area_ratio =
+                coverage.AverageBrightAreaRatio;
+
             float sumUpperLimbSpan = 0f;
             float sumLowerLimbSpan = 0f;
             int limbSpanSampleCount = 0;
-            float maxBottomGap = float.NegativeInfinity;
-            float minCenterX = float.PositiveInfinity;
-            float maxCenterX = float.NegativeInfinity;
-            var sampleSeconds = new List<float>();
-            diagnostics.referenceMp4CurrentClipRows.Clear();
-            foreach (Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow row in rows)
+            foreach (Fbx2Vmd.FBXImporter.ReferenceMp4FrameMetricRow row in coverage.Rows)
             {
-                if (row == null)
-                {
-                    continue;
-                }
-
-                float seconds = row.seconds;
-                if (float.IsNaN(seconds) ||
-                    seconds < startSeconds - epsilonSeconds ||
-                    seconds > endSeconds + epsilonSeconds)
-                {
-                    continue;
-                }
-
-                float localSeconds = Mathf.Clamp(seconds - startSeconds, 0f, durationSeconds);
-                count++;
-                firstSeconds = Mathf.Min(firstSeconds, localSeconds);
-                lastSeconds = Mathf.Max(lastSeconds, localSeconds);
-                diagnostics.referenceMp4CurrentClipRows.Add(row);
-                sampleSeconds.Add(localSeconds);
-                sumBBoxHeight += row.bboxHeightRatio;
-                sumBBoxWidth += row.bboxWidthRatio;
-                sumBrightArea += row.brightAreaRatio;
-                maxBottomGap = Mathf.Max(maxBottomGap, row.bottomGapRatio);
-                minCenterX = Mathf.Min(minCenterX, row.centerXRatio);
-                maxCenterX = Mathf.Max(maxCenterX, row.centerXRatio);
                 string framePath = ResolveProjectRelativePath(row.framePath);
                 if (YybScreenshotDiagnosticAnalyzer.TryAnalyzeCandidateScreenshotFrame(
                         framePath,
@@ -4417,23 +4405,6 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
 
-            diagnostics.reference_mp4_current_clip_sample_count = count;
-            diagnostics.reference_mp4_current_clip_sample_seconds = sampleSeconds.ToArray();
-            if (count <= 0)
-            {
-                diagnostics.reference_mp4_current_clip_sample_gap_seconds = durationSeconds;
-                return;
-            }
-
-            diagnostics.reference_mp4_current_clip_first_sample_seconds = firstSeconds;
-            diagnostics.reference_mp4_current_clip_last_sample_seconds = lastSeconds;
-            diagnostics.reference_mp4_current_clip_sample_coverage_ratio = Mathf.Clamp01(lastSeconds / durationSeconds);
-            diagnostics.reference_mp4_current_clip_sample_gap_seconds = Mathf.Max(0f, durationSeconds - lastSeconds);
-            diagnostics.reference_mp4_current_clip_avg_bbox_height_ratio = sumBBoxHeight / count;
-            diagnostics.reference_mp4_current_clip_avg_bbox_width_ratio = sumBBoxWidth / count;
-            diagnostics.reference_mp4_current_clip_center_x_range_ratio = maxCenterX - minCenterX;
-            diagnostics.reference_mp4_current_clip_max_bottom_gap_ratio = maxBottomGap;
-            diagnostics.reference_mp4_current_clip_avg_bright_area_ratio = sumBrightArea / count;
             if (limbSpanSampleCount > 0)
             {
                 diagnostics.reference_mp4_current_clip_avg_upper_limb_span_ratio =
@@ -4442,7 +4413,6 @@ namespace Fbx2Vmd.FBXImporter
                     sumLowerLimbSpan / limbSpanSampleCount;
             }
         }
-
         private static string ResolveCandidateFrameIndexPathForDiagnostics()
         {
             CaptureResult mainAuto = Results.FirstOrDefault(result =>
