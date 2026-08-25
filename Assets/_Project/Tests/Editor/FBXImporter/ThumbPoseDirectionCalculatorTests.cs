@@ -84,6 +84,78 @@ namespace Tests.Editor.FBXImporter
             Assert.That(correctedDirection, Is.EqualTo(Vector3.down));
         }
 
+        [Test]
+        public void Given_SegmentBendExceedsLimit_When_CalculatingStraightenedDirection_Then_RotatesTowardProximal()
+        {
+            bool corrected = TryCalculateStraightenedDirection(
+                Vector3.right,
+                Vector3.up,
+                maximumBendAngle: 45f,
+                straightenWeight: 1f,
+                out Vector3 correctedDirection);
+
+            Assert.That(corrected, Is.True);
+            Assert.That(Vector3.Angle(correctedDirection, Vector3.right), Is.LessThan(0.001f));
+        }
+
+        [Test]
+        public void Given_SegmentBendWithinLimit_When_CalculatingStraightenedDirection_Then_ReturnsFalse()
+        {
+            bool corrected = TryCalculateStraightenedDirection(
+                Vector3.right,
+                Vector3.up,
+                maximumBendAngle: 90f,
+                straightenWeight: 1f,
+                out Vector3 correctedDirection);
+
+            Assert.That(corrected, Is.False);
+            Assert.That(correctedDirection, Is.EqualTo(Vector3.up));
+        }
+
+        [Test]
+        public void Given_StraightenWeightDisabled_When_CalculatingStraightenedDirection_Then_ReturnsFalse()
+        {
+            bool corrected = TryCalculateStraightenedDirection(
+                Vector3.right,
+                Vector3.up,
+                maximumBendAngle: 45f,
+                straightenWeight: 0f,
+                out Vector3 correctedDirection);
+
+            Assert.That(corrected, Is.False);
+            Assert.That(correctedDirection, Is.EqualTo(Vector3.up));
+        }
+
+        private static bool TryCalculateStraightenedDirection(
+            Vector3 proximalDirection,
+            Vector3 intermediateDirection,
+            float maximumBendAngle,
+            float straightenWeight,
+            out Vector3 correctedDirection)
+        {
+            Type calculatorType = typeof(HumanoidThumbDeformationGuard).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.ThumbPoseDirectionCalculator",
+                throwOnError: false);
+            Assert.That(calculatorType, Is.Not.Null);
+
+            MethodInfo method = calculatorType.GetMethod(
+                "TryCalculateStraightenedDirection",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+
+            object[] args =
+            {
+                proximalDirection,
+                intermediateDirection,
+                maximumBendAngle,
+                straightenWeight,
+                Vector3.zero
+            };
+            bool corrected = (bool)method.Invoke(null, args);
+            correctedDirection = (Vector3)args[4];
+            return corrected;
+        }
+
         private static bool TryCalculateCorrectedDirection(
             Vector3 sourceDirection,
             Vector3 indexDirection,

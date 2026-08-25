@@ -122,6 +122,39 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal static bool TryCalculateStraightenedDirection(
+            Vector3 proximalDirection,
+            Vector3 intermediateDirection,
+            float maximumBendAngle,
+            float straightenWeight,
+            out Vector3 correctedDirection)
+        {
+            correctedDirection = intermediateDirection;
+            if (straightenWeight <= 0f || maximumBendAngle >= 59.999f)
+            {
+                return false;
+            }
+
+            float bendAngle = Vector3.Angle(proximalDirection, intermediateDirection);
+            if (bendAngle <= maximumBendAngle)
+            {
+                return false;
+            }
+
+            correctedDirection = Vector3.Slerp(
+                intermediateDirection,
+                proximalDirection,
+                Mathf.Clamp01(straightenWeight));
+            if (!TryNormalize(correctedDirection, out correctedDirection) ||
+                Vector3.Angle(intermediateDirection, correctedDirection) <= 0.1f)
+            {
+                correctedDirection = intermediateDirection;
+                return false;
+            }
+
+            return true;
+        }
+
         private static bool TryNormalize(Vector3 value, out Vector3 normalized)
         {
             normalized = Vector3.zero;
