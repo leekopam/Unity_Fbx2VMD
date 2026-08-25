@@ -217,6 +217,7 @@ namespace Fbx2Vmd.FBXImporter
         private static readonly List<string> Failures = new List<string>();
 
         private static CaptureJob _activeJob;
+        private static YybVisualComparisonRunOptions _currentRunOptions;
         private static FBXVmdPipeline _activeFBXVmdPipeline;
         private static HumanoidSampleCode _activeRecorder;
         private static AnimationClip _referenceClip;
@@ -1478,6 +1479,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void ApplyRunOptions(YybVisualComparisonRunOptions options)
         {
+            _currentRunOptions = options;
             _fbxFileName = options.fbxFileName;
             _durationSeconds = options.durationSeconds;
             _targetFrameCount = options.targetFrameCount;
@@ -3145,6 +3147,7 @@ namespace Fbx2Vmd.FBXImporter
                 File.Exists(stableResult.FilePath))
             {
                 _vmdPlaybackProbeSourceVmdPath = stableResult.FilePath;
+                _currentRunOptions.vmdPlaybackProbeSourceVmdPath = stableResult.FilePath;
             }
 
             FinalizeActiveJob(
@@ -3530,216 +3533,8 @@ namespace Fbx2Vmd.FBXImporter
 
         private static PersistedState BuildCurrentPersistedState()
         {
-            return new PersistedState
+            PersistedState state = new PersistedState
             {
-                fbxFileName = _fbxFileName,
-                durationSeconds = _durationSeconds,
-                targetFrameCount = _targetFrameCount,
-                enableFingerCloseups = _enableFingerCloseups,
-                enableRecorderParentFrameIkOffsetsWhenCenterParented = _enableRecorderParentFrameIkOffsetsWhenCenterParented,
-                mmdIkDeltaGuardLimitOverrideVmd = _mmdIkDeltaGuardLimitOverrideVmd,
-                mmdIkDeltaGuardRecoveryTriggerVmd = _mmdIkDeltaGuardRecoveryTriggerVmd,
-                mmdIkDeltaGuardRecoveryDebtThresholdVmd = _mmdIkDeltaGuardRecoveryDebtThresholdVmd,
-                mmdIkDeltaGuardRecoveryHoldFrames = _mmdIkDeltaGuardRecoveryHoldFrames,
-                enableFinalIkFootGroundingRuntimeOverride = _enableFinalIkFootGroundingRuntimeOverride,
-                enableManualAnimatorFootLocalRotationRuntimeOverride = _enableManualAnimatorFootLocalRotationRuntimeOverride,
-                disableManualAnimatorFootLocalRotationRuntimeOverride = _disableManualAnimatorFootLocalRotationRuntimeOverride,
-                enableManualAnimatorFullBodyPoseRuntimeOverride = _enableManualAnimatorFullBodyPoseRuntimeOverride,
-                disableManualAnimatorFullBodyPoseRuntimeOverride = _disableManualAnimatorFullBodyPoseRuntimeOverride,
-                manualAnimatorFullBodyPoseReferenceWeight = _manualAnimatorFullBodyPoseReferenceWeight,
-                manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride =
-                    _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride,
-                manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride =
-                    _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
-                manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride =
-                    _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
-                manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride =
-                    _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
-                manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride =
-                    _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
-                manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride =
-                    _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
-                manualAnimatorFullBodyPoseReferenceFrameGateStart =
-                    _manualAnimatorFullBodyPoseReferenceFrameGateStart,
-                manualAnimatorFullBodyPoseReferenceFrameGateEnd =
-                    _manualAnimatorFullBodyPoseReferenceFrameGateEnd,
-                enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride =
-                    _enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride,
-                setHumanPoseRightLegTwistOutputReferenceWeight =
-                    _setHumanPoseRightLegTwistOutputReferenceWeight,
-                setHumanPoseRightLegTwistOutputReferenceMaxDelta =
-                    _setHumanPoseRightLegTwistOutputReferenceMaxDelta,
-                enableManualAnimatorBodyRotationRuntimeOverride = _enableManualAnimatorBodyRotationRuntimeOverride,
-                disableManualAnimatorBodyRotationRuntimeOverride = _disableManualAnimatorBodyRotationRuntimeOverride,
-                manualAnimatorBodyRotationReferenceWeight = _manualAnimatorBodyRotationReferenceWeight,
-                enableManualAnimatorHandLocalRotationRuntimeOverride = _enableManualAnimatorHandLocalRotationRuntimeOverride,
-                enableManualAnimatorThumbLocalRotationRuntimeOverride = _enableManualAnimatorThumbLocalRotationRuntimeOverride,
-                enableManualAnimatorHandPalmFrameRuntimeOverride = _enableManualAnimatorHandPalmFrameRuntimeOverride,
-                manualAnimatorHandPalmFrameWeight = _manualAnimatorHandPalmFrameWeight,
-                overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings =
-                    _overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings,
-                enableRetargetPoseVisualSpikeSmoothingRuntimeOverride =
-                    _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride,
-                retargetPoseVisualSpikeCurrentWeight = _retargetPoseVisualSpikeCurrentWeight,
-                retargetPoseVisualSpikeForearmStretchClampMaxOffset =
-                    _retargetPoseVisualSpikeForearmStretchClampMaxOffset,
-                enableRetargetArmStretchClampRuntimeOverride =
-                    _enableRetargetArmStretchClampRuntimeOverride,
-                retargetArmStretchMuscleLimit = _retargetArmStretchMuscleLimit,
-                enableYybArmSwingLimitRuntimeOverride = _enableYybArmSwingLimitRuntimeOverride,
-                yybArmSwingLimitWeight = _yybArmSwingLimitWeight,
-                yybArmSwingMaxDownDot = _yybArmSwingMaxDownDot,
-                yybArmSwingMinHandHorizontalRatio = _yybArmSwingMinHandHorizontalRatio,
-                yybArmSwingMaxHandBelowShoulderRatio = _yybArmSwingMaxHandBelowShoulderRatio,
-                yybArmSwingHorizontalReachLimitWeight = _yybArmSwingHorizontalReachLimitWeight,
-                yybArmSwingMaxHandHorizontalReachRatio = _yybArmSwingMaxHandHorizontalReachRatio,
-                yybArmSwingHorizontalReachMaxHandBelowShoulderRatio =
-                    _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
-                yybArmSwingHorizontalReachMinElbowAngleAfterApply =
-                    _yybArmSwingHorizontalReachMinElbowAngleAfterApply,
-                yybArmSwingRaisedPoseHorizontalReachLimitWeight =
-                    _yybArmSwingRaisedPoseHorizontalReachLimitWeight,
-                yybArmSwingRaisedPoseMinUpperArmDownDot = _yybArmSwingRaisedPoseMinUpperArmDownDot,
-                yybArmSwingRaisedPoseMaxHandBelowShoulderRatio =
-                    _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
-                yybArmSwingRaisedPoseMaxHandHorizontalReachRatio =
-                    _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio,
-                enableYybArmDirectionRetargetRuntimeOverride = _enableYybArmDirectionRetargetRuntimeOverride,
-                yybArmDirectionUpperArmWeight = _yybArmDirectionUpperArmWeight,
-                yybArmDirectionForearmWeight = _yybArmDirectionForearmWeight,
-                yybArmDirectionUpperArmMaxDegrees = _yybArmDirectionUpperArmMaxDegrees,
-                yybArmDirectionForearmMaxDegrees = _yybArmDirectionForearmMaxDegrees,
-                yybArmDirectionLeftSideWeightScale = _yybArmDirectionLeftSideWeightScale,
-                yybArmDirectionRightSideWeightScale = _yybArmDirectionRightSideWeightScale,
-                overrideYybArmSleeveAnchorRuntimeSettings = _overrideYybArmSleeveAnchorRuntimeSettings,
-                enableYybArmSleeveAnchorRuntimeOverride = _enableYybArmSleeveAnchorRuntimeOverride,
-                yybArmSleeveAnchorInfluence = _yybArmSleeveAnchorInfluence,
-                yybArmShoulderCapAnchorInfluence = _yybArmShoulderCapAnchorInfluence,
-                yybArmSleeveAnchorMaxDegrees = _yybArmSleeveAnchorMaxDegrees,
-                overrideYybArmVisualTwistRuntimeSettings = _overrideYybArmVisualTwistRuntimeSettings,
-                enableYybArmVisualTwistRuntimeOverride = _enableYybArmVisualTwistRuntimeOverride,
-                yybArmVisualUpperArmInfluence = _yybArmVisualUpperArmInfluence,
-                yybArmVisualForearmInfluence = _yybArmVisualForearmInfluence,
-                yybArmVisualUpperArmMaxDegrees = _yybArmVisualUpperArmMaxDegrees,
-                yybArmVisualForearmMaxDegrees = _yybArmVisualForearmMaxDegrees,
-                enableYybRightSleeveSilhouetteOffsetRuntimeOverride =
-                    _enableYybRightSleeveSilhouetteOffsetRuntimeOverride,
-                yybRightSleeveSilhouetteLocalOffsetX = _yybRightSleeveSilhouetteLocalOffsetX,
-                yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
-                    _yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
-                yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
-                    _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
-                enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride,
-                enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride,
-                disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride =
-                    _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride,
-                disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride =
-                    _disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride,
-                disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride =
-                    _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
-                disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride =
-                    _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
-                disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride =
-                    _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
-                enablePostSetHumanPoseRightEndpointPositionRuntimeOverride =
-                    _enablePostSetHumanPoseRightEndpointPositionRuntimeOverride,
-                enablePreSetHumanPoseRightEndpointPositionRuntimeOverride =
-                    _enablePreSetHumanPoseRightEndpointPositionRuntimeOverride,
-                enableManualAnimatorBipedIkFootPositionRuntimeOverride = _enableManualAnimatorBipedIkFootPositionRuntimeOverride,
-                enableManualAnimatorHipsLocalPositionRuntimeOverride = _enableManualAnimatorHipsLocalPositionRuntimeOverride,
-                enableManualAnimatorBodyPositionXzRuntimeOverride =
-                    _enableManualAnimatorBodyPositionXzRuntimeOverride,
-                enableRetargetBodyPositionXzRootMotionRuntimeOverride =
-                    _enableRetargetBodyPositionXzRootMotionRuntimeOverride,
-                disableTargetHumanoidBonePositionLockRuntimeOverride =
-                    _disableTargetHumanoidBonePositionLockRuntimeOverride,
-                manualAnimatorLowerBodySegmentDirectionReferenceWeight = _manualAnimatorLowerBodySegmentDirectionReferenceWeight,
-                manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle = _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle =
-                    _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                    _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                    _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight =
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle =
-                    _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle,
-                manualAnimatorFootHipsAlignedResidualYawReferenceWeight = _manualAnimatorFootHipsAlignedResidualYawReferenceWeight,
-                manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle,
-                postSetHumanPoseRightEndpointPositionReferenceWeight =
-                    _postSetHumanPoseRightEndpointPositionReferenceWeight,
-                postSetHumanPoseRightEndpointPositionReferenceMaxOffset =
-                    _postSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                postSetHumanPoseRightEndpointPositionReferencePositiveZScale =
-                    _postSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
-                    _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                postSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
-                    _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
-                    _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                ShouldUseLeftSideForPostSetHumanPoseEndpointPosition =
-                    _postSetHumanPoseEndpointPositionUseLeftSide,
-                preSetHumanPoseRightEndpointPositionReferenceWeight =
-                    _preSetHumanPoseRightEndpointPositionReferenceWeight,
-                preSetHumanPoseRightEndpointPositionReferenceMaxOffset =
-                    _preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                preSetHumanPoseRightEndpointPositionReferencePositiveZScale =
-                    _preSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight =
-                    _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                preSetHumanPoseRightEndpointPositionReferenceFrameGateStart =
-                    _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd =
-                    _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                ShouldUseLeftSideForPreSetHumanPoseEndpointPosition =
-                    _preSetHumanPoseEndpointPositionUseLeftSide,
-                preSetHumanPoseEndpointPositionUseGhostCurrentBasis =
-                    _preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                ShouldInvertPreSetHumanPoseEndpointPositionBodyX =
-                    _preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                ShouldInvertPreSetHumanPoseEndpointPositionBodyZ =
-                    _preSetHumanPoseEndpointPositionInvertBodyPositionZ,
-                usePostSetHumanPoseRightFootEvaluatorXzReference =
-                    _usePostSetHumanPoseRightFootEvaluatorXzReference,
-                postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude =
-                    _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude,
-                manualAnimatorBipedIkFootPositionReferenceWeight = _manualAnimatorBipedIkFootPositionReferenceWeight,
-                manualAnimatorBipedIkFootPositionReferenceMaxOffset = _manualAnimatorBipedIkFootPositionReferenceMaxOffset,
-                manualAnimatorHipsLocalPositionReferenceWeight = _manualAnimatorHipsLocalPositionReferenceWeight,
-                manualAnimatorHipsLocalPositionReferenceMaxOffset = _manualAnimatorHipsLocalPositionReferenceMaxOffset,
-                manualAnimatorBodyPositionXzReferenceWeight = _manualAnimatorBodyPositionXzReferenceWeight,
-                manualAnimatorBodyPositionXzReferenceMaxOffset = _manualAnimatorBodyPositionXzReferenceMaxOffset,
-                manualAnimatorBodyPositionXzReferenceFrameGateStart =
-                    _manualAnimatorBodyPositionXzReferenceFrameGateStart,
-                manualAnimatorBodyPositionXzReferenceFrameGateEnd =
-                    _manualAnimatorBodyPositionXzReferenceFrameGateEnd,
-                manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames =
-                    _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames,
-                manualAnimatorBodyPositionXzReferenceAxisXScale =
-                    _manualAnimatorBodyPositionXzReferenceAxisXScale,
-                manualAnimatorBodyPositionXzReferenceAxisZScale =
-                    _manualAnimatorBodyPositionXzReferenceAxisZScale,
-                enableVmdPlaybackProbeRuntimeOverride = _enableVmdPlaybackProbeRuntimeOverride,
-                applyVmdPlaybackProbeIkTargetsRuntimeOverride = _applyVmdPlaybackProbeIkTargetsRuntimeOverride,
-                vmdPlaybackProbeSourceVmdPath = _vmdPlaybackProbeSourceVmdPath,
-                editorDiagnosticSmokeSegment = _editorDiagnosticSmokeSegment.ToString(),
-                enableReferenceMmdTimingRuntimeOverride = _enableReferenceMmdTimingRuntimeOverride,
-                diagnosticCaptureWidthOverride = _diagnosticCaptureWidthOverride,
-                diagnosticCaptureHeightOverride = _diagnosticCaptureHeightOverride,
-                diagnosticScreenshotPaddingOverride = _diagnosticScreenshotPaddingOverride,
-                diagnosticScreenshotVerticalViewportCenterOverride = _diagnosticScreenshotVerticalViewportCenterOverride,
                 isRunning = _isRunning,
                 activeJobFinished = _activeJobFinished,
                 advanceAfterPlayStopPending = _advanceAfterPlayStopPending,
@@ -3752,9 +3547,11 @@ namespace Fbx2Vmd.FBXImporter
                 results = Results.Select(ToPersistedResult).ToArray(),
                 failures = Failures.ToArray()
             };
-
+            YybVisualComparisonRunOptionsCopier.Copy(_currentRunOptions, state);
+            state.editorDiagnosticSmokeSegment = _editorDiagnosticSmokeSegment.ToString();
+            state.vmdPlaybackProbeSourceVmdPath = _vmdPlaybackProbeSourceVmdPath;
+            return state;
         }
-
         private static void ClearPersistedState()
         {
             VisualComparisonRunStateStore.Clear(RunnerStateSessionKey);
