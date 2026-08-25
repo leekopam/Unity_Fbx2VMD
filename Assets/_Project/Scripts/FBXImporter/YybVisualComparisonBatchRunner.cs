@@ -8507,21 +8507,12 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static string[] SplitSimpleCsvLine(string line)
         {
-            return (line ?? string.Empty).Split(',');
+            return VisualComparisonCsvMetricReader.SplitLine(line);
         }
 
         private static Dictionary<string, int> BuildCsvIndexMap(string[] headers)
         {
-            Dictionary<string, int> indices = new Dictionary<string, int>(StringComparer.Ordinal);
-            for (int index = 0; index < headers.Length; index++)
-            {
-                if (!indices.ContainsKey(headers[index]))
-                {
-                    indices.Add(headers[index], index);
-                }
-            }
-
-            return indices;
+            return VisualComparisonCsvMetricReader.BuildIndexMap(headers);
         }
 
         private static string GetCsvString(
@@ -8529,17 +8520,7 @@ namespace Fbx2Vmd.FBXImporter
             Dictionary<string, int> indices,
             string column)
         {
-            if (row == null ||
-                indices == null ||
-                string.IsNullOrEmpty(column) ||
-                !indices.TryGetValue(column, out int index) ||
-                index < 0 ||
-                index >= row.Length)
-            {
-                return string.Empty;
-            }
-
-            return row[index] ?? string.Empty;
+            return VisualComparisonCsvMetricReader.ReadString(row, indices, column);
         }
 
         private static int GetCsvInt(
@@ -8547,13 +8528,7 @@ namespace Fbx2Vmd.FBXImporter
             Dictionary<string, int> indices,
             string column)
         {
-            return int.TryParse(
-                GetCsvString(row, indices, column),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out int value)
-                ? value
-                : 0;
+            return VisualComparisonCsvMetricReader.ReadInt(row, indices, column);
         }
 
         private static float GetCsvFloat(
@@ -8561,13 +8536,7 @@ namespace Fbx2Vmd.FBXImporter
             Dictionary<string, int> indices,
             string column)
         {
-            return float.TryParse(
-                GetCsvString(row, indices, column),
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out float value)
-                ? value
-                : float.NaN;
+            return VisualComparisonCsvMetricReader.ReadFloat(row, indices, column);
         }
 
         private static string ToAbsoluteProjectPath(string path)
