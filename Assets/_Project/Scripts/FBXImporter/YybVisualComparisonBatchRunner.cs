@@ -198,13 +198,8 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         [Serializable]
-        private sealed class PersistedCaptureJob
+        private sealed class PersistedCaptureJob : VisualComparisonCaptureJobStateData
         {
-            public int mode;
-            public string scenePath;
-            public string sceneName;
-            public string displayName;
-            public string manualTargetNameToken;
         }
 
         [Serializable]
