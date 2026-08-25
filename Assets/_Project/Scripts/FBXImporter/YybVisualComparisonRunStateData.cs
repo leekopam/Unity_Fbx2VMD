@@ -75,6 +75,10 @@ namespace Fbx2Vmd.FBXImporter
         public float yybArmVisualForearmInfluence;
         public float yybArmVisualUpperArmMaxDegrees;
         public float yybArmVisualForearmMaxDegrees;
+        public bool enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
+        public float yybRightSleeveSilhouetteLocalOffsetX;
+        public float yybRightSleeveSilhouetteLocalOffsetFrameGateStart;
+        public float yybRightSleeveSilhouetteLocalOffsetFrameGateEnd;
         public bool enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
         public bool enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
         public bool disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;

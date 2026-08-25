@@ -2677,320 +2677,13 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool ApplyMainSceneRuntimeOverrides(FBXVmdPipeline fileManager)
         {
-            if (fileManager == null)
-            {
-                return false;
-            }
-
-            if (_enableFinalIkFootGroundingRuntimeOverride)
-            {
-                ApplyFinalIkFootGroundingRuntimeOverride(fileManager, true);
-            }
-
-            if (_disableManualAnimatorFootLocalRotationRuntimeOverride)
-            {
-                ApplyManualAnimatorFootLocalRotationRuntimeOverride(fileManager, false);
-            }
-            else if (_enableManualAnimatorFootLocalRotationRuntimeOverride)
-            {
-                ApplyManualAnimatorFootLocalRotationRuntimeOverride(fileManager, true);
-            }
-
-            if (_disableManualAnimatorFullBodyPoseRuntimeOverride)
-            {
-                ApplyManualAnimatorFullBodyPoseRuntimeOverride(
-                    fileManager,
-                    false,
-                    _manualAnimatorFullBodyPoseReferenceWeight,
-                    false,
-                    false);
-            }
-            else if (_enableManualAnimatorFullBodyPoseRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride ||
-                     _manualAnimatorFullBodyPoseReferenceFrameGateStart > 0f ||
-                     _manualAnimatorFullBodyPoseReferenceFrameGateEnd > 0f)
-            {
-                ApplyManualAnimatorFullBodyPoseRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorFullBodyPoseReferenceWeight,
-                    _manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride,
-                    _manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride,
-                    _manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride,
-                    _manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride,
-                    _manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride,
-                    _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride,
-                    _manualAnimatorFullBodyPoseReferenceFrameGateStart,
-                    _manualAnimatorFullBodyPoseReferenceFrameGateEnd);
-            }
-
-            if (_enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride)
-            {
-                ApplySetHumanPoseRightLegTwistOutputRuntimeOverride(
-                    fileManager,
-                    true,
-                    _setHumanPoseRightLegTwistOutputReferenceWeight,
-                    _setHumanPoseRightLegTwistOutputReferenceMaxDelta);
-            }
-
-            if (_disableManualAnimatorBodyRotationRuntimeOverride)
-            {
-                ApplyManualAnimatorBodyRotationRuntimeOverride(
-                    fileManager,
-                    false,
-                    _manualAnimatorBodyRotationReferenceWeight);
-            }
-            else if (_enableManualAnimatorBodyRotationRuntimeOverride)
-            {
-                ApplyManualAnimatorBodyRotationRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorBodyRotationReferenceWeight);
-            }
-
-            if (_enableManualAnimatorHandLocalRotationRuntimeOverride)
-            {
-                ApplyManualAnimatorHandLocalRotationRuntimeOverride(fileManager, true);
-            }
-
-            if (_enableManualAnimatorThumbLocalRotationRuntimeOverride)
-            {
-                ApplyManualAnimatorThumbLocalRotationRuntimeOverride(fileManager, true);
-            }
-
-            if (_enableManualAnimatorHandPalmFrameRuntimeOverride)
-            {
-                ApplyManualAnimatorHandPalmFrameRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorHandPalmFrameWeight);
-            }
-
-            if (_overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings)
-            {
-                ApplyRetargetPoseVisualSpikeSmoothingRuntimeOverride(
-                    fileManager,
-                    _enableRetargetPoseVisualSpikeSmoothingRuntimeOverride,
-                    _retargetPoseVisualSpikeCurrentWeight,
-                    _retargetPoseVisualSpikeForearmStretchClampMaxOffset);
-            }
-
-            if (_enableRetargetArmStretchClampRuntimeOverride)
-            {
-                ApplyRetargetArmStretchClampRuntimeOverride(
-                    fileManager,
-                    true,
-                    _retargetArmStretchMuscleLimit);
-            }
-
-            if (_enableYybArmSwingLimitRuntimeOverride)
-            {
-                ApplyYybArmSwingLimitRuntimeOverride(
-                    fileManager,
-                    true,
-                    _yybArmSwingLimitWeight,
-                    _yybArmSwingMaxDownDot,
-                    _yybArmSwingMinHandHorizontalRatio,
-                    _yybArmSwingMaxHandBelowShoulderRatio,
-                    _yybArmSwingHorizontalReachLimitWeight,
-                    _yybArmSwingMaxHandHorizontalReachRatio,
-                    _yybArmSwingHorizontalReachMaxHandBelowShoulderRatio,
-                    _yybArmSwingHorizontalReachMinElbowAngleAfterApply,
-                    _yybArmSwingRaisedPoseHorizontalReachLimitWeight,
-                    _yybArmSwingRaisedPoseMinUpperArmDownDot,
-                    _yybArmSwingRaisedPoseMaxHandBelowShoulderRatio,
-                    _yybArmSwingRaisedPoseMaxHandHorizontalReachRatio);
-            }
-
-            if (_enableYybArmDirectionRetargetRuntimeOverride)
-            {
-                ApplyYybArmDirectionRetargetRuntimeOverride(
-                    fileManager,
-                    true,
-                    _yybArmDirectionUpperArmWeight,
-                    _yybArmDirectionForearmWeight,
-                    _yybArmDirectionUpperArmMaxDegrees,
-                    _yybArmDirectionForearmMaxDegrees,
-                    _yybArmDirectionLeftSideWeightScale,
-                    _yybArmDirectionRightSideWeightScale);
-            }
-
-            if (_overrideYybArmSleeveAnchorRuntimeSettings)
-            {
-                ApplyYybArmSleeveAnchorRuntimeOverride(
-                    fileManager,
-                    _enableYybArmSleeveAnchorRuntimeOverride,
-                    _yybArmSleeveAnchorInfluence,
-                    _yybArmShoulderCapAnchorInfluence,
-                    _yybArmSleeveAnchorMaxDegrees);
-            }
-
-            if (_overrideYybArmVisualTwistRuntimeSettings)
-            {
-                ApplyYybArmVisualTwistRuntimeOverride(
-                    fileManager,
-                    _enableYybArmVisualTwistRuntimeOverride,
-                    _yybArmVisualUpperArmInfluence,
-                    _yybArmVisualForearmInfluence,
-                    _yybArmVisualUpperArmMaxDegrees,
-                    _yybArmVisualForearmMaxDegrees);
-            }
-
-            if (_disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride)
-            {
-                ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
-                    fileManager,
-                    false,
-                    _manualAnimatorLowerBodySegmentDirectionReferenceWeight,
-                    _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                    _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
-                    _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                    _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
-                    _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                    _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                    _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
-                    _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
-            }
-            else if (_enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride)
-            {
-                ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorLowerBodySegmentDirectionReferenceWeight,
-                    _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle,
-                    _disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride,
-                    _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle,
-                    _disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride,
-                    _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                    _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd,
-                    _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight,
-                    _disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride,
-                    _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle);
-            }
-            else if (HasManualAnimatorLowerBodySegmentDirectionDetailRuntimeOverride())
-            {
-                ApplyManualAnimatorLowerBodySegmentDirectionDetailRuntimeOverride(fileManager);
-            }
-
-            if (_disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride)
-            {
-                ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
-                    fileManager,
-                    false,
-                    _manualAnimatorFootHipsAlignedResidualYawReferenceWeight,
-                    _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle);
-            }
-            else if (_enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride)
-            {
-                ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorFootHipsAlignedResidualYawReferenceWeight,
-                    _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle);
-            }
-
-            if (_enablePostSetHumanPoseRightEndpointPositionRuntimeOverride)
-            {
-                ApplyPostSetHumanPoseEndpointPositionRuntimeOverride(
-                    fileManager,
-                    true,
-                    _postSetHumanPoseRightEndpointPositionReferenceWeight,
-                    _postSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                    _postSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                    _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                    _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                    _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                    _postSetHumanPoseEndpointPositionUseLeftSide,
-                    _usePostSetHumanPoseRightFootEvaluatorXzReference,
-                    _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude);
-            }
-
-            if (_enablePreSetHumanPoseRightEndpointPositionRuntimeOverride)
-            {
-                ApplyPreSetHumanPoseEndpointPositionRuntimeOverride(
-                    fileManager,
-                    true,
-                    _preSetHumanPoseRightEndpointPositionReferenceWeight,
-                    _preSetHumanPoseRightEndpointPositionReferenceMaxOffset,
-                    _preSetHumanPoseRightEndpointPositionReferencePositiveZScale,
-                    _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight,
-                    _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
-                    _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd,
-                    _preSetHumanPoseEndpointPositionUseLeftSide,
-                    _preSetHumanPoseEndpointPositionUseGhostCurrentBasis,
-                    _preSetHumanPoseEndpointPositionInvertBodyPositionX,
-                    _preSetHumanPoseEndpointPositionInvertBodyPositionZ);
-            }
-
-            if (_enableManualAnimatorBipedIkFootPositionRuntimeOverride)
-            {
-                ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorBipedIkFootPositionReferenceWeight,
-                    _manualAnimatorBipedIkFootPositionReferenceMaxOffset);
-            }
-
-            if (_enableManualAnimatorHipsLocalPositionRuntimeOverride)
-            {
-                ApplyManualAnimatorHipsLocalPositionRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorHipsLocalPositionReferenceWeight,
-                    _manualAnimatorHipsLocalPositionReferenceMaxOffset);
-            }
-
-            if (_enableManualAnimatorBodyPositionXzRuntimeOverride)
-            {
-                ApplyManualAnimatorBodyPositionXzRuntimeOverride(
-                    fileManager,
-                    true,
-                    _manualAnimatorBodyPositionXzReferenceWeight,
-                    _manualAnimatorBodyPositionXzReferenceMaxOffset,
-                    _manualAnimatorBodyPositionXzReferenceFrameGateStart,
-                    _manualAnimatorBodyPositionXzReferenceFrameGateEnd,
-                    _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames,
-                    _manualAnimatorBodyPositionXzReferenceAxisXScale,
-                    _manualAnimatorBodyPositionXzReferenceAxisZScale);
-            }
-
-            if (_enableYybRightSleeveSilhouetteOffsetRuntimeOverride)
-            {
-                ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
-                    fileManager,
-                    true,
-                    _yybRightSleeveSilhouetteLocalOffsetX,
-                    _yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
-                    _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
-            }
-
-            if (_enableRetargetBodyPositionXzRootMotionRuntimeOverride)
-            {
-                ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(fileManager, true);
-            }
-
-            if (_disableTargetHumanoidBonePositionLockRuntimeOverride)
-            {
-                ApplyTargetHumanoidBonePositionLockRuntimeOverride(fileManager, false);
-            }
-
-            return true;
+            return YybVisualComparisonRuntimeOverrideCoordinator.Apply(
+                fileManager,
+                BuildCurrentPersistedState(),
+                DefaultRetargetArmStretchMuscleLimit,
+                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale,
+                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
+                DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
         }
 
         private static bool ApplyManualAnimatorFootLocalRotationRuntimeOverride(FBXVmdPipeline fileManager, bool enabled)
@@ -4605,6 +4298,13 @@ namespace Fbx2Vmd.FBXImporter
                 yybArmVisualForearmInfluence = _yybArmVisualForearmInfluence,
                 yybArmVisualUpperArmMaxDegrees = _yybArmVisualUpperArmMaxDegrees,
                 yybArmVisualForearmMaxDegrees = _yybArmVisualForearmMaxDegrees,
+                enableYybRightSleeveSilhouetteOffsetRuntimeOverride =
+                    _enableYybRightSleeveSilhouetteOffsetRuntimeOverride,
+                yybRightSleeveSilhouetteLocalOffsetX = _yybRightSleeveSilhouetteLocalOffsetX,
+                yybRightSleeveSilhouetteLocalOffsetFrameGateStart =
+                    _yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+                yybRightSleeveSilhouetteLocalOffsetFrameGateEnd =
+                    _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
                 enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride,
                 enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride,
                 disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride =
@@ -4966,6 +4666,26 @@ namespace Fbx2Vmd.FBXImporter
                     DefaultYybArmVisualForearmMaxDegrees),
                 0f,
                 120f);
+            _enableYybRightSleeveSilhouetteOffsetRuntimeOverride =
+                state.enableYybRightSleeveSilhouetteOffsetRuntimeOverride;
+            _yybRightSleeveSilhouetteLocalOffsetX = Mathf.Clamp(
+                NormalizeFiniteFloat(
+                    state.yybRightSleeveSilhouetteLocalOffsetX,
+                    DefaultYybRightSleeveSilhouetteLocalOffsetX),
+                -0.2f,
+                0.2f);
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateStart = Mathf.Clamp(
+                NormalizeFiniteFloat(
+                    state.yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+                    DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateStart),
+                0f,
+                6000f);
+            _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd = Mathf.Clamp(
+                NormalizeFiniteFloat(
+                    state.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd,
+                    DefaultYybRightSleeveSilhouetteLocalOffsetFrameGateEnd),
+                0f,
+                6000f);
             _enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride = state.enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride;
             _enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride = state.enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride;
             _disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride =
