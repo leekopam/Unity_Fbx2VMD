@@ -4412,7 +4412,7 @@ namespace Fbx2Vmd.FBXImporter
                 PromoteFrameQualityFailuresToRunFailures(frameQualitySummaries, frameRoleDiagnostics);
                 SummaryContainer summary = BuildSummaryContainer(frameQualitySummaries, frameRoleDiagnostics);
                 WriteSummaryJson(summaryJsonPath, summary);
-                WriteSummaryMarkdown(summaryMarkdownPath, summary, frameQualitySummaries, frameRoleDiagnostics);
+                WriteSummaryMarkdown(summaryMarkdownPath, summary);
                 CopyLatestSummary(summaryJsonPath, LatestSummaryJsonRelativePath);
                 CopyLatestSummary(summaryMarkdownPath, LatestSummaryMarkdownRelativePath);
             }
@@ -5632,191 +5632,17 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void WriteSummaryMarkdown(
             string path,
-            SummaryContainer summaryData,
-            MotionComparisonFrameQualitySummary[] frameQualitySummaries,
-            SummaryFrameRoleDiagnostics frameRoleDiagnostics)
+            SummaryContainer summaryData)
         {
             if (summaryData == null)
             {
                 throw new ArgumentNullException(nameof(summaryData));
             }
 
-            frameRoleDiagnostics = frameRoleDiagnostics ?? BuildCurrentSummaryFrameRoleDiagnostics();
-            frameQualitySummaries = frameQualitySummaries ?? BuildFrameQualitySummaries(frameRoleDiagnostics);
-            StringBuilder builder = new StringBuilder();
-            builder.Append(YybVisualComparisonSummaryMarkdownRenderer.RenderHeader(summaryData));
-            builder.AppendLine("## Frame Count Roles");
-            builder.AppendLine();
-            builder.AppendLine($"- ref target: `{frameRoleDiagnostics.reference_target_frame_count}` ({EscapeMarkdown(frameRoleDiagnostics.target_frame_count_role)})");
-            builder.AppendLine($"- Sub_Manual baseline recorded frames: `{frameRoleDiagnostics.baseline_recorded_frame_count}` ({EscapeMarkdown(frameRoleDiagnostics.baseline_recorded_frame_count_role)})");
-            builder.AppendLine($"- Main_Auto candidate recorded frames: `{frameRoleDiagnostics.candidate_recorded_frame_count}` ({EscapeMarkdown(frameRoleDiagnostics.candidate_recorded_frame_count_role)})");
-            builder.AppendLine($"- metric basis: {EscapeMarkdown(frameRoleDiagnostics.frame_quality_metric_basis)}");
-            builder.AppendLine();
-            builder.AppendLine("## Reference MP4 Diagnostics");
-            builder.AppendLine();
-            builder.AppendLine($"- provenance: `{EscapeMarkdown(frameRoleDiagnostics.reference_mp4_provenance_evidence_path)}` (exists={frameRoleDiagnostics.reference_mp4_provenance_evidence_exists})");
-            builder.AppendLine($"- analysis result: `{EscapeMarkdown(frameRoleDiagnostics.reference_mp4_analysis_result_path)}` (exists={frameRoleDiagnostics.reference_mp4_analysis_result_exists})");
-            builder.AppendLine($"- frame metrics: `{EscapeMarkdown(frameRoleDiagnostics.reference_mp4_frame_metrics_path)}` (exists={frameRoleDiagnostics.reference_mp4_frame_metrics_exists})");
-            builder.AppendLine($"- contact sheet: `{EscapeMarkdown(frameRoleDiagnostics.reference_mp4_contact_sheet_path)}` (exists={frameRoleDiagnostics.reference_mp4_contact_sheet_exists})");
-            builder.AppendLine($"- canonical context: {EscapeMarkdown(frameRoleDiagnostics.reference_mp4_canonical_context)}");
-            builder.AppendLine($"- video: `{frameRoleDiagnostics.reference_mp4_width}x{frameRoleDiagnostics.reference_mp4_height}`, `{EscapeMarkdown(frameRoleDiagnostics.reference_mp4_avg_frame_rate)}`, frames `{frameRoleDiagnostics.reference_mp4_total_video_frames}`, duration `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_stream_duration_seconds)}`");
-            builder.AppendLine($"- bbox metrics: samples `{frameRoleDiagnostics.reference_mp4_frame_metrics_sample_count}`, avg height `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_avg_bbox_height_ratio)}`, avg width `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_avg_bbox_width_ratio)}`, center X range `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_center_x_range_ratio)}`, max bottom gap `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_max_bottom_gap_ratio)}`");
-            builder.AppendLine($"- current clip coverage: start `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_start_seconds)}`, end `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_end_seconds)}`, duration `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_duration_seconds)}`, samples `{frameRoleDiagnostics.reference_mp4_current_clip_sample_count}`, first local `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_first_sample_seconds)}`, last local `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_last_sample_seconds)}`, coverage `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_sample_coverage_ratio)}`, gap `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_sample_gap_seconds)}`");
-            builder.AppendLine($"- current clip bbox metrics: avg height `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_avg_bbox_height_ratio)}`, avg width `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_avg_bbox_width_ratio)}`, center X range `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_center_x_range_ratio)}`, max bottom gap `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_max_bottom_gap_ratio)}`, avg bright area `{FormatQualityFloat(frameRoleDiagnostics.reference_mp4_current_clip_avg_bright_area_ratio)}`");
-            builder.AppendLine($"- current clip coverage basis: {EscapeMarkdown(frameRoleDiagnostics.reference_mp4_current_clip_sample_basis)}");
-            builder.AppendLine($"- current clip framing basis: {EscapeMarkdown(frameRoleDiagnostics.reference_mp4_current_clip_framing_metric_basis)}");
-            builder.AppendLine($"- candidate screenshot framing: index `{EscapeMarkdown(frameRoleDiagnostics.candidate_screenshot_frame_index_path)}` (exists={frameRoleDiagnostics.candidate_screenshot_frame_index_exists}), view `{EscapeMarkdown(frameRoleDiagnostics.candidate_screenshot_frame_metrics_view)}`, samples `{frameRoleDiagnostics.candidate_screenshot_frame_metrics_sample_count}`, nonblank `{frameRoleDiagnostics.candidate_screenshot_nonblank_frame_count}`, avg height `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_avg_bbox_height_ratio)}`, avg width `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_avg_bbox_width_ratio)}`, center X range `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_center_x_range_ratio)}`, max bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_max_bottom_gap_ratio)}`, max top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_max_top_gap_ratio)}`, avg bright area `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_avg_bright_area_ratio)}`");
-            builder.AppendLine($"- candidate screenshot timing: samples `{frameRoleDiagnostics.candidate_screenshot_time_sample_count}`, first `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_first_sample_seconds)}`, last `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_last_sample_seconds)}`, coverage `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_sample_coverage_ratio)}`, gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_sample_gap_seconds)}`, max ref gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_max_ref_sample_seconds_gap)}`, avg ref gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_screenshot_avg_ref_sample_seconds_gap)}`");
-            builder.AppendLine($"- candidate/ref time-matched framing: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_sample_count}`, max time gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_seconds_gap)}`, avg bbox height abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_bbox_height_ratio_abs_delta)}`, max bbox height abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_height_ratio_abs_delta)}`, avg bbox width abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_bbox_width_ratio_abs_delta)}`, max bbox width abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_width_ratio_abs_delta)}`, avg center X abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_center_x_ratio_abs_delta)}`, max bottom gap abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bottom_gap_ratio_abs_delta)}`, avg bright area abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_bright_area_ratio_abs_delta)}`");
-            builder.AppendLine($"- candidate/ref time-matched limb bands: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_limb_band_sample_count}`, avg upper span abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_upper_limb_span_ratio_abs_delta)}`, max upper span abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_upper_limb_span_ratio_abs_delta)}`, avg lower span abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_lower_limb_span_ratio_abs_delta)}`, max lower span abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_lower_limb_span_ratio_abs_delta)}`");
-            builder.AppendLine($"- candidate/ref time-matched silhouette profile: bands `{frameRoleDiagnostics.candidate_vs_reference_time_matched_silhouette_profile_band_count}`, samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_silhouette_profile_sample_count}`, avg L1 abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_silhouette_profile_l1_abs_delta)}`, max L1 abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_profile_l1_abs_delta)}`, max band abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_profile_band_abs_delta)}`");
-            builder.AppendLine($"- candidate/ref time-matched silhouette landmarks: bands `{frameRoleDiagnostics.candidate_vs_reference_time_matched_silhouette_landmark_band_count}`, samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_silhouette_landmark_sample_count}`, avg endpoint abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_silhouette_landmark_endpoint_abs_delta)}`, max endpoint abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_silhouette_landmark_endpoint_abs_delta)}`");
-            builder.AppendLine($"- candidate/ref time-matched image-space keypoints: keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_image_space_keypoint_count}`, samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_image_space_keypoint_sample_count}`, avg L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_image_space_keypoint_l1_delta)}`, max L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_image_space_keypoint_l1_delta)}`");
-            builder.AppendLine($"- candidate/ref bbox-normalized keypoints: keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_bbox_normalized_image_space_keypoint_count}`, samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_bbox_normalized_image_space_keypoint_sample_count}`, avg L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_l1_delta)}`, avg removed `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_avg_image_space_keypoint_l1_delta_removed_by_bbox_normalization)}`, max removed `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_image_space_keypoint_l1_delta_removed_by_bbox_normalization)}`");
-            builder.AppendLine($"- candidate/ref non-hair bbox-normalized keypoints: keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_bbox_normalized_image_space_keypoint_count}`, samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_bbox_normalized_image_space_keypoint_sample_count}`, avg L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max L1 delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_l1_delta)}`, max label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label)}`");
-            builder.AppendLine($"- candidate/ref bbox-normalized max keypoint attribution: label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_label)}`, keypoint `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_index}`, ref seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_reference_seconds)}`, candidate seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_candidate_seconds)}`, recorder frame `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_recorder_frame}`, x delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_x_delta)}`, y delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_image_space_keypoint_y_delta)}`");
-            builder.AppendLine($"- candidate/ref bbox-normalized max keypoint crop context: ref touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_touches_frame_edge}`, candidate touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_touches_frame_edge}`, ref bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_bottom_gap)}`, ref top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_reference_top_gap)}`, candidate bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_bottom_gap)}`, candidate top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_max_bbox_normalized_keypoint_candidate_top_gap)}`");
-            builder.AppendLine($"- candidate/ref non-hair bbox-normalized max keypoint attribution: label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_label)}`, keypoint `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_index}`, ref seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_reference_seconds)}`, candidate seconds `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_candidate_seconds)}`, recorder frame `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_recorder_frame}`, x delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_x_delta)}`, y delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_image_space_keypoint_y_delta)}`");
-            builder.AppendLine($"- candidate/ref non-hair bbox-normalized max keypoint crop context: ref touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_touches_frame_edge}`, candidate touches edge `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_touches_frame_edge}`, ref bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_bottom_gap)}`, ref top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_reference_top_gap)}`, candidate bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_bottom_gap)}`, candidate top gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_max_bbox_normalized_keypoint_candidate_top_gap)}`");
-            builder.AppendLine($"- candidate/ref crop-safe time-matched: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_sample_count}`, avg bbox width abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_bbox_width_ratio_abs_delta)}`, max bbox width abs delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_bbox_width_ratio_abs_delta)}`, silhouette samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_silhouette_profile_sample_count}`, avg silhouette L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_silhouette_profile_l1_abs_delta)}`, max silhouette L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_silhouette_profile_l1_abs_delta)}`");
-            builder.AppendLine($"- candidate/ref crop-safe keypoints: image samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_image_space_keypoint_sample_count}`, avg image L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_image_space_keypoint_l1_delta)}`, max image L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_image_space_keypoint_l1_delta)}`, bbox-normalized samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_bbox_normalized_image_space_keypoint_sample_count}`, avg bbox-normalized L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max bbox-normalized L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta)}`");
-            builder.AppendLine($"- candidate/ref keypoint-local crop-safe bbox-normalized keypoints: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count}`, keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count}`, excluded keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count}`, avg L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta)}`, max label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label)}`");
-            builder.AppendLine($"- candidate/ref non-hair keypoint-local crop-safe bbox-normalized keypoints: samples `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_sample_count}`, keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_count}`, excluded keypoints `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_bbox_normalized_image_space_keypoint_excluded_count}`, avg L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_avg_bbox_normalized_image_space_keypoint_l1_delta)}`, max L1 `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_l1_delta)}`, max label `{EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_label)}`");
-            builder.AppendLine($"- candidate/ref non-hair keypoint-local crop-safe max attribution: keypoint `{frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_index}`, x delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_x_delta)}`, y delta `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_y_delta)}`, candidate x/y `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_x)}`/`{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_candidate_y)}`, reference x/y `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_x)}`/`{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_reference_y)}`, required x reduction to `{ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta:F2}` `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_max_bbox_normalized_image_space_keypoint_required_x_reduction_to_threshold)}`");
-            builder.AppendLine($"- candidate vs ref framing deltas: avg height `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_avg_bbox_height_ratio_delta)}`, avg width `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_avg_bbox_width_ratio_delta)}`, center X range `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_center_x_range_ratio_delta)}`, max bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_max_bottom_gap_ratio_delta)}`, avg bright area `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_avg_bright_area_ratio_delta)}`");
-            builder.AppendLine($"- candidate vs current-clip ref framing deltas: avg height `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_avg_bbox_height_ratio_delta)}`, avg width `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_avg_bbox_width_ratio_delta)}`, center X range `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_center_x_range_ratio_delta)}`, max bottom gap `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_max_bottom_gap_ratio_delta)}`, avg bright area `{FormatQualityFloat(frameRoleDiagnostics.candidate_vs_reference_current_clip_avg_bright_area_ratio_delta)}`");
-            builder.AppendLine($"- candidate screenshot basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_screenshot_frame_metrics_basis)}");
-            builder.AppendLine($"- candidate screenshot timing basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_screenshot_sample_timing_basis)}");
-            builder.AppendLine($"- candidate/ref time-matched basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_framing_metric_basis)}");
-            builder.AppendLine($"- candidate/ref image-space limb span basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_image_space_limb_span_basis)}");
-            builder.AppendLine($"- candidate/ref image-space limb band basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_image_space_limb_band_basis)}");
-            builder.AppendLine($"- candidate/ref silhouette profile basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_silhouette_profile_basis)}");
-            builder.AppendLine($"- candidate/ref silhouette landmark basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_silhouette_landmark_basis)}");
-            builder.AppendLine($"- candidate/ref image-space keypoint basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_image_space_keypoint_basis)}");
-            builder.AppendLine($"- candidate/ref bbox-normalized keypoint basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_bbox_normalized_image_space_keypoint_basis)}");
-            builder.AppendLine($"- candidate/ref non-hair bbox-normalized keypoint basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_bbox_normalized_image_space_keypoint_basis)}");
-            builder.AppendLine($"- candidate/ref crop-safe basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_crop_safe_basis)}");
-            builder.AppendLine($"- candidate/ref keypoint-local crop-safe basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_keypoint_local_crop_safe_basis)}");
-            builder.AppendLine($"- candidate/ref non-hair keypoint-local crop-safe basis: {EscapeMarkdown(frameRoleDiagnostics.candidate_vs_reference_time_matched_non_hair_keypoint_local_crop_safe_basis)}");
-            builder.AppendLine($"- basis: {EscapeMarkdown(frameRoleDiagnostics.reference_mp4_analysis_metric_basis)}");
-            builder.AppendLine();
-
-            builder.AppendLine("## Results");
-            builder.AppendLine();
-            builder.AppendLine("| job | scene | target | success | session | csv | frames | vmd |");
-            builder.AppendLine("|---|---|---|---|---|---|---|---|");
-            foreach (CaptureResult result in Results)
-            {
-                builder.AppendLine(
-                    $"| {EscapeMarkdown(result.jobDisplayName)} | {EscapeMarkdown(result.sceneName)} | {EscapeMarkdown(result.targetName)} | {result.success} | " +
-                    $"`{EscapeMarkdown(result.comparisonSessionId)}` | `{EscapeMarkdown(result.comparisonMetricsCsvPath)}` | " +
-                    $"`{EscapeMarkdown(result.comparisonFrameFolderPath)}` | `{EscapeMarkdown(result.vmdPath)}` |");
-            }
-
-            CaptureResult[] effectiveSettingsResults = Results
-                .Where(result => result.hasFBXVmdPipelineEffectiveSettings)
-                .ToArray();
-            if (effectiveSettingsResults.Length > 0)
-            {
-                builder.AppendLine();
-                builder.AppendLine("## Main Scene Effective Settings");
-                builder.AppendLine();
-                builder.AppendLine("| job | foot local rot | full-body pose | body rot | lower segment | foot yaw | post-set endpoint | pre-set endpoint | evaluator X/Z | arm swing | sleeve | visual twist |");
-                builder.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|");
-                foreach (CaptureResult result in effectiveSettingsResults)
-                {
-                    builder.AppendLine(
-                        $"| {EscapeMarkdown(result.jobDisplayName)} | " +
-                        $"{FormatEnabledWeight(result.ShouldUseManualAnimatorFootLocalRotationReference, result.manualAnimatorFootLocalRotationReferenceWeight)} | " +
-                        $"{FormatEnabledWeight(result.ShouldUseManualAnimatorFullBodyPoseReference, result.manualAnimatorFullBodyPoseReferenceWeight)} | " +
-                        $"{FormatEnabledWeight(result.ShouldUseManualAnimatorBodyRotationReference, result.manualAnimatorBodyRotationReferenceWeight)} | " +
-                        $"{FormatEnabledWeightCap(result.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, result.manualAnimatorLowerBodySegmentDirectionReferenceWeight, result.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle)} | " +
-                        $"{FormatEnabledWeightCap(result.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, result.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, result.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle)} | " +
-                        $"{FormatEnabledWeightCapScaleBlendGate(result.usePostSetHumanPoseRightEndpointPositionReference, result.postSetHumanPoseRightEndpointPositionReferenceWeight, result.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, result.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, result.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, result.postSetHumanPoseRightEndpointPositionReferenceFrameGateStart, result.postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd)} | " +
-                        $"{FormatEnabledWeightCapScaleBlendGate(result.usePreSetHumanPoseRightEndpointPositionReference, result.preSetHumanPoseRightEndpointPositionReferenceWeight, result.preSetHumanPoseRightEndpointPositionReferenceMaxOffset, result.preSetHumanPoseRightEndpointPositionReferencePositiveZScale, result.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, result.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart, result.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd)} | " +
-                        $"{FormatEvaluatorXzReferenceSettings(result)} | " +
-                        $"{FormatArmSwingSettings(result)} | " +
-                        $"{result.enableYybArmSleeveAnchorCorrection} | " +
-                        $"{result.enableYybArmVisualTwistCorrection} |");
-                }
-            }
-
-            SummarySampleOrderingDiagnostic[] sampleOrderingDiagnostics = BuildSampleOrderingDiagnostics();
-            if (sampleOrderingDiagnostics.Length > 0)
-            {
-                builder.AppendLine();
-                builder.AppendLine("## Sample Ordering Diagnostics");
-                builder.AppendLine();
-                builder.AppendLine("| job | scene | rows | first reason | first recorderFrame | first engine frame | recorder span | engine span | first clip time | first grounding step | first step/max | first step at max | grounding clamp delta | grounding smooth delta | finish recorderFrame | finish engine frame |");
-                builder.AppendLine("|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|");
-                foreach (SummarySampleOrderingDiagnostic diagnostic in sampleOrderingDiagnostics)
-                {
-                    builder.AppendLine(
-                        $"| {EscapeMarkdown(diagnostic.job_mode)} | {EscapeMarkdown(diagnostic.scene_name)} | {diagnostic.metric_row_count} | " +
-                        $"{EscapeMarkdown(diagnostic.first_metric_reason)} | {diagnostic.first_metric_recorder_frame} | " +
-                        $"{diagnostic.first_metric_engine_frame_count} | {diagnostic.recording_metric_recorder_frame_span} | " +
-                        $"{diagnostic.recording_metric_engine_frame_span} | {FormatQualityFloat(diagnostic.first_metric_animation_clip_time)} | " +
-                        $"{FormatQualityFloat(diagnostic.first_metric_grounding_vertical_step_last)} | " +
-                        $"{FormatQualityFloat(diagnostic.first_metric_grounding_vertical_step_to_max_ratio)} | " +
-                        $"{diagnostic.first_metric_grounding_vertical_step_at_max_step} | " +
-                        $"{diagnostic.recording_grounding_step_clamp_delta} | {diagnostic.recording_grounding_smoothed_delta} | " +
-                        $"{diagnostic.finish_metric_recorder_frame} | {diagnostic.finish_metric_engine_frame_count} |");
-                }
-            }
-
-            SummaryCandidateArtifactSelection selectedCandidate = BuildCandidateArtifactSelection(frameQualitySummaries);
-            if (selectedCandidate != null && !string.IsNullOrWhiteSpace(selectedCandidate.selected_candidate_vmd_path))
-            {
-                builder.AppendLine();
-                builder.AppendLine("## Selected Candidate Artifact");
-                builder.AppendLine();
-                builder.AppendLine("| selected role | output role | status | acceptance artifact | metrics | vmd | manifest | files | raw status | corrected status | preserves raw diagnostic | basis |");
-                builder.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|");
-                builder.AppendLine(
-                    $"| {EscapeMarkdown(selectedCandidate.selected_candidate_role)} | {EscapeMarkdown(selectedCandidate.selected_candidate_output_role)} | " +
-                    $"{EscapeMarkdown(selectedCandidate.selected_candidate_status)} | {selectedCandidate.selected_candidate_is_acceptance_artifact} | " +
-                    $"`{EscapeMarkdown(selectedCandidate.selected_candidate_metrics_csv)}` | " +
-                    $"`{EscapeMarkdown(selectedCandidate.selected_candidate_vmd_path)}` | " +
-                    $"`{EscapeMarkdown(selectedCandidate.selected_candidate_manifest_path)}` | " +
-                    $"vmd={selectedCandidate.selected_candidate_vmd_exists}, metrics={selectedCandidate.selected_candidate_metrics_exists}, manifest={selectedCandidate.selected_candidate_manifest_exists}, rawVmdDiff={selectedCandidate.selected_candidate_differs_from_raw_vmd}, rawMetricsDiff={selectedCandidate.selected_candidate_differs_from_raw_metrics} | " +
-                    $"{EscapeMarkdown(selectedCandidate.raw_candidate_status)} | {EscapeMarkdown(selectedCandidate.corrected_candidate_status)} | " +
-                    $"{selectedCandidate.selected_candidate_preserves_raw_diagnostic} | " +
-                    $"{EscapeMarkdown(selectedCandidate.selected_candidate_acceptance_basis)}; {EscapeMarkdown(selectedCandidate.selection_basis)} |");
-            }
-
-            if (frameQualitySummaries.Length > 0)
-            {
-                builder.AppendLine();
-                builder.AppendLine("## Frame Quality Gate");
-                builder.AppendLine();
-                builder.AppendLine("| baseline | candidate | evaluation | status | mmd | compared frames | foot min Y | root delta | center step | local foot IK min Y | effective foot IK min Y | metrics | mmd screenshot | mmd report | vmd | reason |");
-                builder.AppendLine("|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---|");
-                foreach (MotionComparisonFrameQualitySummary summary in frameQualitySummaries)
-                {
-                    builder.AppendLine(
-                        $"| {EscapeMarkdown(summary.baseline_label)} | {EscapeMarkdown(summary.candidate_label)} | {EscapeMarkdown(summary.frame_quality_evaluation_role)} | {EscapeMarkdown(summary.status)} | " +
-                        $"{EscapeMarkdown(summary.mmd_result_status)} | {summary.compared_frames} | {FormatQualityFloat(summary.min_candidate_foot_bottom_y)} | " +
-                        $"{FormatQualityFloat(summary.max_same_frame_root_position_delta)} | {FormatQualityFloat(summary.max_candidate_vmd_center_step)} | " +
-                        $"{FormatQualityFloat(summary.min_candidate_vmd_foot_ik_y)} | {FormatQualityFloat(summary.min_candidate_vmd_effective_foot_ik_y)} | " +
-                        $"`{EscapeMarkdown(summary.candidate_metrics_csv)}` | " +
-                        $"`{EscapeMarkdown(summary.mmd_after_play_screenshot_path)}` | `{EscapeMarkdown(summary.mmd_report_path)}` | " +
-                        $"`{EscapeMarkdown(summary.candidate_vmd_path)}` | " +
-                        $"{EscapeMarkdown(summary.status_reason)} |");
-                }
-            }
-
-            if (Failures.Count > 0)
-            {
-                builder.AppendLine();
-                builder.AppendLine("## Failures");
-                builder.AppendLine();
-                foreach (string failure in Failures)
-                {
-                    builder.AppendLine($"- {EscapeMarkdown(failure)}");
-                }
-            }
-
-            VisualComparisonSummaryFileStore.WriteText(path, builder.ToString());
+            string markdown = YybVisualComparisonSummaryMarkdownRenderer.Render(
+                summaryData,
+                ReferenceAlignedVisualEvidenceMaxBBoxNormalizedImageSpaceKeypointL1Delta);
+            VisualComparisonSummaryFileStore.WriteText(path, markdown);
         }
 
         private static MotionComparisonFrameQualitySummary[] BuildFrameQualitySummaries()
@@ -7287,96 +7113,6 @@ namespace Fbx2Vmd.FBXImporter
             return VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(path, _projectRoot);
         }
 
-        private static string FormatQualityFloat(float value)
-        {
-            return VisualComparisonSummaryValueFormatter.FormatFloat(value);
-        }
-
-        private static string FormatEnabledWeight(bool enabled, float weight)
-        {
-            return VisualComparisonSummaryValueFormatter.FormatEnabledWeight(enabled, weight);
-        }
-
-        private static string FormatEnabledWeightCap(bool enabled, float weight, float cap)
-        {
-            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCap(enabled, weight, cap);
-        }
-
-        private static string FormatEnabledWeightCapScale(bool enabled, float weight, float cap, float scale)
-        {
-            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCapScale(
-                enabled,
-                weight,
-                cap,
-                scale);
-        }
-
-        private static string FormatEnabledWeightCapScaleGate(
-            bool enabled,
-            float weight,
-            float cap,
-            float scale,
-            float frameGateStart,
-            float frameGateEnd)
-        {
-            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCapScaleGate(
-                enabled,
-                weight,
-                cap,
-                scale,
-                frameGateStart,
-                frameGateEnd);
-        }
-
-        private static string FormatEnabledWeightCapScaleBlendGate(
-            bool enabled,
-            float weight,
-            float cap,
-            float scale,
-            float blend,
-            float frameGateStart,
-            float frameGateEnd)
-        {
-            return VisualComparisonSummaryValueFormatter.FormatEnabledWeightCapScaleBlendGate(
-                enabled,
-                weight,
-                cap,
-                scale,
-                blend,
-                frameGateStart,
-                frameGateEnd);
-        }
-
-        private static string FormatEvaluatorXzReferenceSettings(CaptureResult result)
-        {
-            return result == null
-                ? "False/n/a"
-                : $"{result.usePostSetHumanPoseRightFootEvaluatorXzReference}/{FormatQualityFloat(result.postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude)}";
-        }
-
-        private static string FormatArmSwingSettings(CaptureResult result)
-        {
-            if (result == null)
-            {
-                return "n/a";
-            }
-
-            return
-                $"{result.enableYybArmSwingLimitCorrection}/" +
-                $"{FormatQualityFloat(result.yybArmSwingLimitWeight)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingMaxDownDot)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingMinHandHorizontalRatio)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingMaxHandBelowShoulderRatio)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingHorizontalReachLimitWeight)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingMaxHandHorizontalReachRatio)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingHorizontalReachMaxHandBelowShoulderRatio)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingHorizontalReachMinElbowAngleAfterApply)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingRaisedPoseHorizontalReachLimitWeight)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingRaisedPoseMinUpperArmDownDot)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingRaisedPoseMaxHandBelowShoulderRatio)}/" +
-                $"{FormatQualityFloat(result.yybArmSwingRaisedPoseMaxHandHorizontalReachRatio)}";
-        }
-
         private static void CopyLatestSummary(string sourcePath, string relativeTargetPath)
         {
             VisualComparisonSummaryFileStore.CopyLatest(sourcePath, _projectRoot, relativeTargetPath);
@@ -7472,11 +7208,6 @@ namespace Fbx2Vmd.FBXImporter
         private static string MakeProjectRelativePath(string absolutePath)
         {
             return VisualComparisonArtifactPathResolver.MakeProjectRelative(absolutePath, _projectRoot);
-        }
-
-        private static string EscapeMarkdown(string value)
-        {
-            return string.IsNullOrEmpty(value) ? string.Empty : value.Replace("|", "\\|");
         }
 
         private static string EscapeJson(string value)
