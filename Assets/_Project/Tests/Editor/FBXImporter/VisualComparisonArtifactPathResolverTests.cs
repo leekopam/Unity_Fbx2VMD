@@ -41,6 +41,61 @@ namespace Tests.Editor.FBXImporter
                 Is.True);
         }
 
+        [Test]
+        public void Given_ShortSessionId_When_BuildingSafeId_Then_SanitizesWithoutShortening()
+        {
+            string result = (string)Invoke(
+                "BuildSafeSessionId",
+                " when:sample session ",
+                "visual_compare",
+                Path.Combine(Path.GetTempPath(), "visual-compare-project"),
+                "Docs/ComparisonSessions",
+                240,
+                (object)new[] { "summary.json", "summary.md" });
+
+            Assert.That(result, Is.EqualTo("when_sample_session"));
+        }
+
+        [Test]
+        public void Given_LongSessionId_When_BuildingSafeId_Then_ReservesLeafFilePathLength()
+        {
+            string projectRoot = Path.Combine(Path.GetTempPath(), "visual-compare-project");
+            const string outputDirectory = "Docs/ComparisonSessions";
+            const int maxFullPathLength = 120;
+            string[] leafFileNames = { "summary.json", "longer-summary.md" };
+            string sessionId = new string('a', 180);
+
+            string result = (string)Invoke(
+                "BuildSafeSessionId",
+                sessionId,
+                "visual_compare",
+                projectRoot,
+                outputDirectory,
+                maxFullPathLength,
+                (object)leafFileNames);
+
+            string rootFolder = Path.Combine(projectRoot, outputDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            int expectedMaxLength = Math.Max(
+                16,
+                maxFullPathLength - rootFolder.Length - 2 - "longer-summary.md".Length);
+            Assert.That(result.Length, Is.EqualTo(expectedMaxLength));
+            Assert.That(result, Does.EndWith("_" + result.Substring(result.Length - 8)));
+        }
+
+        [Test]
+        public void Given_ExtractedSessionPathPolicy_When_CheckingRunner_Then_PathLengthHelpersAreRemoved()
+        {
+            BindingFlags privateStatic = BindingFlags.NonPublic | BindingFlags.Static;
+
+            Assert.That(
+                typeof(YybVisualComparisonBatchRunner).GetMethod("BuildSafeSummarySessionId", privateStatic),
+                Is.Null);
+            Assert.That(
+                typeof(YybVisualComparisonBatchRunner).GetMethod("ShortenFileNameToLength", privateStatic),
+                Is.Null);
+        }
+
         private static object Invoke(string methodName, params object[] arguments)
         {
             Type resolverType = typeof(FBXVmdPipeline).Assembly.GetType(
