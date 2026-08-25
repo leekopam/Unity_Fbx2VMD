@@ -765,19 +765,12 @@ namespace Fbx2Vmd.FBXImporter
                 return 0;
             }
 
-            float bendAngle = Vector3.Angle(proximalDirection, intermediateDirection);
-            if (bendAngle <= thumbMaxSegmentBendAngle)
-            {
-                return 0;
-            }
-
-            Vector3 targetDirection = Vector3.Slerp(
-                intermediateDirection,
-                proximalDirection,
-                Mathf.Clamp01(segmentStraightenWeight));
-
-            if (!TryNormalize(targetDirection, out targetDirection) ||
-                Vector3.Angle(intermediateDirection, targetDirection) <= 0.1f)
+            if (!ThumbPoseDirectionCalculator.TryCalculateStraightenedDirection(
+                    proximalDirection,
+                    intermediateDirection,
+                    thumbMaxSegmentBendAngle,
+                    segmentStraightenWeight,
+                    out Vector3 targetDirection))
             {
                 return 0;
             }
