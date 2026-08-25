@@ -934,43 +934,31 @@ namespace Fbx2Vmd.FBXImporter
                 return sourceTransform.localRotation;
             }
 
-            Quaternion targetRotation = helperInitialRotation;
-            if (syncDetachedThumbBaseHelpers && detachedThumbBaseHelperSyncWeight > 0f)
+            Quaternion sourceRotation = sourceTransform.localRotation;
+            bool hasSourceInitialRotation =
+                _detachedThumbBaseSourceInitialLocalRotations.TryGetValue(
+                    sourceTransform,
+                    out Quaternion sourceInitialRotation);
+            Quaternion deltaAxisRemap = Quaternion.identity;
+            if (syncDetachedThumbBaseHelpers &&
+                detachedThumbBaseHelperSyncWeight > 0f &&
+                hasSourceInitialRotation)
             {
-                Quaternion sourceRotation = sourceTransform.localRotation;
-                targetRotation = sourceRotation;
-                if (_detachedThumbBaseSourceInitialLocalRotations.TryGetValue(sourceTransform, out Quaternion sourceInitialRotation))
-                {
-                    Quaternion sourceDelta = Quaternion.Inverse(sourceInitialRotation) * sourceRotation;
-                    Quaternion deltaAxisRemap = GetDetachedThumbBaseHelperDeltaAxisRemap(sourceTransform);
-                    if (deltaAxisRemap != Quaternion.identity)
-                    {
-                        sourceDelta = deltaAxisRemap * sourceDelta * Quaternion.Inverse(deltaAxisRemap);
-                    }
-
-                    targetRotation = helperInitialRotation * sourceDelta;
-                }
-
-                if (detachedThumbBaseHelperSyncWeight < 0.999f)
-                {
-                    targetRotation = Quaternion.Slerp(helperInitialRotation, targetRotation, detachedThumbBaseHelperSyncWeight);
-                }
+                deltaAxisRemap = GetDetachedThumbBaseHelperDeltaAxisRemap(sourceTransform);
             }
 
             Quaternion targetRotationOffset = GetDetachedThumbBaseHelperTargetRotationOffset(sourceTransform);
-            if (targetRotationOffset != Quaternion.identity)
-            {
-                // YYB Thumb0 helper는 기준축 자체는 맞아도 기본 skin helper pose가 손바닥 쪽으로 덜 접혀 있어
-                // webbing이 벌어져 보일 수 있다. 모델별 정적 보정은 sync된 목표 회전 위에 직접 얹는다.
-                targetRotation *= targetRotationOffset;
-            }
-
-            if (stabilizeDetachedThumbBasePalm && detachedThumbBasePalmStabilizeWeight > 0f)
-            {
-                // YYB 손꿈치 스킨은 joint_*Thumb0 회전에 강하게 끌린다.
-                // 엄지 구동본은 따로 움직이게 두고, 스킨용 Thumb0 보조본은 기본 손바닥 자세를 우선 보존한다.
-                targetRotation = Quaternion.Slerp(targetRotation, helperInitialRotation, detachedThumbBasePalmStabilizeWeight);
-            }
+            Quaternion targetRotation = ThumbBaseHelperRotationCalculator.CalculateBaseRotation(
+                helperInitialRotation,
+                sourceRotation,
+                hasSourceInitialRotation,
+                sourceInitialRotation,
+                syncDetachedThumbBaseHelpers,
+                detachedThumbBaseHelperSyncWeight,
+                deltaAxisRemap,
+                targetRotationOffset,
+                stabilizeDetachedThumbBasePalm,
+                detachedThumbBasePalmStabilizeWeight);
 
             float effectiveWebbingWeight = 0f;
             float effectiveWebbingMaxLocalAngle = thumbWebbingCreaseMaxLocalAngle;
@@ -985,30 +973,18 @@ namespace Fbx2Vmd.FBXImporter
                     out effectiveWebbingMaxLocalAngle,
                     out _);
 
-                // 엄지 웹빙 경계는 joint_*Thumb0 보조본의 작은 회전 차이에도 선처럼 접혀 보인다.
-                // 엄지 구동본 자체는 유지하고, 스킨용 보조본만 초기 손바닥 경계 형태 쪽으로 약하게 되돌린다.
-                targetRotation = Quaternion.Slerp(targetRotation, helperInitialRotation, effectiveWebbingWeight);
             }
 
-            float maxLocalAngle = Mathf.Clamp(detachedThumbBaseHelperMaxLocalAngle, 0f, 45f);
-            if (stabilizeDetachedThumbBasePalm && detachedThumbBasePalmStabilizeWeight > 0f)
-            {
-                maxLocalAngle = Mathf.Min(maxLocalAngle, Mathf.Clamp(detachedThumbBasePalmMaxLocalAngle, 0f, 45f));
-            }
-
-            if (stabilizeThumbWebbingCrease && effectiveWebbingWeight > 0f)
-            {
-                maxLocalAngle = Mathf.Min(maxLocalAngle, Mathf.Clamp(effectiveWebbingMaxLocalAngle, 0f, 45f));
-            }
-
-            if (maxLocalAngle <= 0.001f)
-            {
-                return helperInitialRotation;
-            }
-
-            return Quaternion.Angle(helperInitialRotation, targetRotation) > maxLocalAngle
-                ? Quaternion.RotateTowards(helperInitialRotation, targetRotation, maxLocalAngle)
-                : targetRotation;
+            return ThumbBaseHelperRotationCalculator.FinalizeRotation(
+                helperInitialRotation,
+                targetRotation,
+                stabilizeThumbWebbingCrease,
+                effectiveWebbingWeight,
+                detachedThumbBaseHelperMaxLocalAngle,
+                stabilizeDetachedThumbBasePalm,
+                detachedThumbBasePalmStabilizeWeight,
+                detachedThumbBasePalmMaxLocalAngle,
+                effectiveWebbingMaxLocalAngle);
         }
 
         private Quaternion GetDetachedThumbBaseHelperDeltaAxisRemap(Transform sourceTransform)
