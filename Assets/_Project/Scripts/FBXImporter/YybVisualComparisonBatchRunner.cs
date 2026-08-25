@@ -6890,53 +6890,16 @@ namespace Fbx2Vmd.FBXImporter
             MotionComparisonFrameQualitySummary[] frameQualitySummaries,
             SummaryFrameRoleDiagnostics frameRoleDiagnostics)
         {
-            if (frameQualitySummaries == null || frameQualitySummaries.Length == 0)
-            {
-                return Array.Empty<string>();
-            }
-
             if (frameRoleDiagnostics != null)
             {
                 ApplyImportedFbxVisualEvidenceFrameQualityPolicy(frameQualitySummaries, frameRoleDiagnostics);
             }
 
-            List<string> failures = new List<string>();
             bool acceptedUserFacingArtifactPreservesRawDiagnostic =
                 HasAcceptedUserFacingArtifactPreservingRawDiagnostic(frameQualitySummaries);
-            foreach (MotionComparisonFrameQualitySummary summary in frameQualitySummaries)
-            {
-                if (summary == null ||
-                    !string.Equals(summary.status, "fail", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (acceptedUserFacingArtifactPreservesRawDiagnostic &&
-                    IsRawCandidateRole(summary))
-                {
-                    continue;
-                }
-
-                string candidate = string.IsNullOrWhiteSpace(summary.candidate_label)
-                    ? "unknown candidate"
-                    : summary.candidate_label;
-                string role = string.IsNullOrWhiteSpace(summary.frame_quality_evaluation_role)
-                    ? "unknown_role"
-                    : summary.frame_quality_evaluation_role;
-                string reason = string.IsNullOrWhiteSpace(summary.status_reason)
-                    ? "status=fail"
-                    : summary.status_reason;
-
-                failures.Add(
-                    "frame-quality gate failed: " +
-                    $"candidate={candidate}; " +
-                    $"role={role}; " +
-                    $"reason={reason}; " +
-                    $"metrics={summary.candidate_metrics_csv ?? string.Empty}; " +
-                    $"vmd={summary.candidate_vmd_path ?? string.Empty}");
-            }
-
-            return failures.ToArray();
+            return VisualComparisonFrameQualityFailurePolicy.BuildFailureMessages(
+                frameQualitySummaries,
+                acceptedUserFacingArtifactPreservesRawDiagnostic);
         }
 
         private static bool HasAcceptedUserFacingArtifactPreservingRawDiagnostic(
@@ -8189,9 +8152,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool IsRawCandidateRole(MotionComparisonFrameQualitySummary summary)
         {
-            return summary != null &&
-                (string.Equals(summary.frame_quality_evaluation_role, "raw_candidate_metrics", StringComparison.Ordinal) ||
-                    string.Equals(summary.frame_quality_evaluation_role, "evaluation_candidate_metrics", StringComparison.Ordinal));
+            return VisualComparisonFrameQualityFailurePolicy.IsRawCandidateRole(summary);
         }
 
         private static void EnsureCorrectedCandidateSelectionManifest(
