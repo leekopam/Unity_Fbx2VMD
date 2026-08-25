@@ -122,6 +122,36 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!21 &9509984
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
+  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties:
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!114 &11793772
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -282,75 +312,6 @@ MonoBehaviour:
   boneID: 173
   ikEnabled: 0
   ikWeight: 1
---- !u!1001 &52726877
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: nextEdgeMaterial_Pass4
-      value: 
-      objectReference: {fileID: 519582387}
-    - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: nextEdgeMaterial_Pass8
-      value: 
-      objectReference: {fileID: 957941673}
-    - target: {fileID: 6818878734488371576, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_Name
-      value: YYB Hatsune Miku (1)
-      objectReference: {fileID: 0}
-    - target: {fileID: 6818878734488371576, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8224678450106526242, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
 --- !u!114 &59817864
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1901,7 +1862,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: physicsEngine
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: editorViewPage
@@ -1914,11 +1875,11 @@ PrefabInstance:
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: nextEdgeMaterial_Pass4
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 1173836085}
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: nextEdgeMaterial_Pass8
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 9509984}
     - target: {fileID: 5685924819462444671, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: m_IsActive
       value: 1
@@ -2239,36 +2200,6 @@ MonoBehaviour:
   boneID: 421
   ikEnabled: 0
   ikWeight: 1
---- !u!21 &503749594
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
-  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!114 &506826647
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2301,36 +2232,6 @@ MonoBehaviour:
   boneID: 31
   ikEnabled: 0
   ikWeight: 1
---- !u!21 &519582387
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
-  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!114 &519916040
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4013,7 +3914,7 @@ Material:
   m_CustomRenderQueue: 2001
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties: 
+  m_LockedProperties:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
@@ -4472,36 +4373,6 @@ MonoBehaviour:
   boneID: 398
   ikEnabled: 0
   ikWeight: 1
---- !u!21 &957941673
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
-  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!114 &963017996
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5333,7 +5204,7 @@ Material:
   m_CustomRenderQueue: 2001
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties: 
+  m_LockedProperties:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
@@ -5472,6 +5343,36 @@ MonoBehaviour:
   boneID: 265
   ikEnabled: 0
   ikWeight: 1
+--- !u!21 &1173836085
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
+  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties:
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!114 &1176142238
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5648,36 +5549,6 @@ MonoBehaviour:
   boneID: 272
   ikEnabled: 0
   ikWeight: 1
---- !u!21 &1197370706
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
-  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!114 &1209028217
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6704,6 +6575,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: YYB Hatsune Miku_default_1.0ver
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      propertyPath: m_Controller
+      value:
+      objectReference: {fileID: 9100000, guid: 87f65b936e5e7d34797ea25489fe5f51, type: 2}
     - target: {fileID: 7026134587718898032, guid: a67a6bac72a604e41821293537b3465f, type: 3}
       propertyPath: m_UpdateWhenOffscreen
       value: 1
@@ -6727,6 +6602,18 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a67a6bac72a604e41821293537b3465f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1867772924}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1877614756}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1877614755}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1877614754}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1877614753}
     - targetCorrespondingSourceObject: {fileID: -322271131297604786, guid: a67a6bac72a604e41821293537b3465f, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1442555070}
@@ -10455,8 +10342,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   model: {fileID: 1867772924}
   boneID: 107
   ikEnabled: 0
@@ -10471,8 +10358,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   model: {fileID: 1867772924}
   boneID: 106
   ikEnabled: 0
@@ -10487,8 +10374,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   model: {fileID: 1867772924}
   boneID: 105
   ikEnabled: 0
@@ -10503,8 +10390,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   model: {fileID: 1867772924}
   boneID: 13
   ikEnabled: 0
@@ -14496,6 +14383,134 @@ MonoBehaviour:
   boneID: 249
   ikEnabled: 0
   ikWeight: 1
+--- !u!95 &1877614752 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 5866666021909216657, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+  m_PrefabInstance: {fileID: 1442554600}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1877614753
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1442554601}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53ad2e2fe37809d49b6e8b83b2aa20b0, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _clampMusclesToHumanRange: 0
+  _enableAnatomicalArmGuard: 0
+  _clampArmStretchMuscles: 0
+  _armStretchMuscleLimit: 0
+  _upperArmTwistMuscleLimit: 0.75
+  _lowerArmTwistMuscleLimit: 0.65
+  _lockHumanoidBonePositions: 1
+  _lockLimbChildLocalPositions: 1
+  _lockLimbChildLocalRotations: 0
+  _restoreLocalScales: 1
+  _logCorrections: 0
+--- !u!114 &1877614754
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1442554601}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1ccc933889885ac46823f748e666f353, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _animator: {fileID: 1877614752}
+  _groundLayer:
+    serializedVersion: 2
+    m_Bits: 8
+--- !u!114 &1877614755
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1442554601}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0bf1e550773f04541abd1cc49b5bff75, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  vmdRecorder: {fileID: 0}
+  _progressSlider: {fileID: 0}
+  _progressText: {fileID: 0}
+  ModelName: fbxToVMD
+  HumanoidVMDName: fbxToVMD.vmd
+  StartRecordingTime: 0.1
+  resetAnimatorOnManualStart: 1
+  finishByRecordedFrameCount: 1
+  enableMotionComparisonProbe: 1
+  probeFingerCloseups: 1
+  probeScreenshotWidth: 960
+  probeScreenshotHeight: 960
+  probeScreenshotPadding: 1.8
+  probeScreenshotVerticalViewportCenter: 0.28
+  StopRecordingTime: 0
+  AutoStartRecording: 1
+--- !u!114 &1877614756
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1442554601}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fde9fa28c1a2864d9a1d1adbe4b9a5a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  UseParentOfAll: 1
+  UseCenterAsParentOfAll: 1
+  RouteHumanoidCenterToGroove: 0
+  UseAbsoluteCoordinateSystem: 0
+  EnableParentFrameIkOffsetCompensationWhenCenterParented: 1
+  IgnoreInitialPosition: 0
+  IgnoreInitialRotation: 0
+  FreezeParentOfAllMotionWhenIgnoringInitialPosition: 0
+  UseBottomCenter: 0
+  TrimMorphNumber: 0
+  ZeroNonRootBonePositions: 1
+  ApplyRecorderInitialPose: 0
+  ApplyRecorderAPose: 0
+  RecordAfterLateVisualPose: 1
+  UseCaptureFramerateDuringRecording: 0
+  MaxRecordedFramesPerLateUpdate: 1
+  DropLateFrameBacklogWhenNotUsingCaptureFramerate: 1
+  KeyReductionLevel: 2
+  ForceLeftToeEnd: {fileID: 0}
+  ForceRightToeEnd: {fileID: 0}
+  ParentOfAllOffset: {x: 0, y: 0, z: 0}
+  MmdFootIkExportOffset: {x: 0, y: 0, z: 0}
+  ClampMmdFootIkYToFloor: 0
+  LiftMmdCenterYToKeepFeetAboveFloor: 1
+  MinMmdFootIkY: 0.05
+  ClampMmdCenterExportDeltaSpikes: 1
+  MaxMmdCenterExportDeltaPerFrame: 0.11
+  ClampMmdIkExportDeltaSpikes: 1
+  MaxMmdFootIkExportDeltaPerFrame: 0.11
+  MaxMmdToeIkExportDeltaPerFrame: 0.11
+  UseMmdIkExportDeltaRecoveryLimit: 1
+  MmdIkExportDeltaRecoveryTriggerPerFrame: 0.26
+  MmdIkExportDeltaRecoveryLimitPerFrame: 0.1209
+  MmdIkExportDeltaRecoveryDebtThresholdPerFrame: 0.08
+  MmdIkExportDeltaRecoveryHoldFrames: 3
+  UseMmdIkDynamicToggleOnLargeExportSteps: 1
+  MmdIkDynamicToggleFootStepThreshold: 0.12
+  MmdIkDynamicToggleToeStepThreshold: 0.12
+  EnableExportRotationDiagnostics: 0
+  EnableExportIkSourceDiagnostics: 0
+  LeftFootIKOffset: {x: 0, y: 0, z: 0}
+  RightFootIKOffset: {x: 0, y: 0, z: 0}
+  LeftToeIKOffset: {x: 0, y: 0, z: 0}
+  RightToeIKOffset: {x: 0, y: 0, z: 0}
 --- !u!114 &1878701088
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15862,5 +15877,4 @@ SceneRoots:
   - {fileID: 721950034}
   - {fileID: 421532800}
   - {fileID: 154825441}
-  - {fileID: 52726877}
   - {fileID: 1442554600}
