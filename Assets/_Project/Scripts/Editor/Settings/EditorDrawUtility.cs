@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Settings
+namespace Fbx2Vmd.Settings.EditorTools
 {
     // NotThreadSafe: Unity Editor GUI는 메인 스레드에서만 호출해야 함.
     /// <summary>
