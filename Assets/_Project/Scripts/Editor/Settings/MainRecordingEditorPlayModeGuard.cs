@@ -5,7 +5,7 @@ using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Fbx2Vmd.Settings
+namespace Fbx2Vmd.Settings.EditorTools
 {
     [InitializeOnLoad]
     internal static class MainRecordingEditorPlayModeGuard
