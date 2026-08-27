@@ -45,6 +45,8 @@ namespace Tests.Editor.Settings
                 tests.Given_SimpleModelEdgeQualityPreset_When_CreateMaterialShaderPlan_Then_UsesFineOutlinePreset);
             RunTest(results, nameof(GraphicSettingTests.GraphicSettingInspectorSchema_HasTabbedCategoriesForFocusedInspector),
                 tests.GraphicSettingInspectorSchema_HasTabbedCategoriesForFocusedInspector);
+            RunTest(results, nameof(GraphicSettingTests.GraphicSettingEditorTypes_AreOwnedByResponsibilityNamedFiles),
+                tests.GraphicSettingEditorTypes_AreOwnedByResponsibilityNamedFiles);
             RunTest(results, nameof(GraphicSettingTests.Given_MaterialShaderProfile_When_AppliedToYybMaterial_Then_AdjustsSupportedOutlineAndReportsSkippedUnsupportedProperties),
                 tests.Given_MaterialShaderProfile_When_AppliedToYybMaterial_Then_AdjustsSupportedOutlineAndReportsSkippedUnsupportedProperties);
             RunTest(results, nameof(GraphicSettingTests.Given_MaterialShaderProfile_When_AppliedToCutoutShader_Then_AdjustsCutoffAndSurfaceBlend),
