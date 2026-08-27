@@ -7,6 +7,7 @@ using Fbx2Vmd.FBXImporter;
 using Fbx2Vmd.FileSystem;
 using Fbx2Vmd.Settings;
 using NUnit.Framework;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -24,6 +25,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.MainRecordingSettingsLayoutSpec, Assembly-CSharp";
         private const string RuntimePopupTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsPopup, Assembly-CSharp";
+        private const string KoreanUiTextFallbackTypeName =
+            "Fbx2Vmd.Settings.KoreanUiTextFallback, Assembly-CSharp";
         private const string CompanionControllerTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsCompanionController, Assembly-CSharp";
         private const string EditorPlayModeGuardTypeName =
@@ -1432,6 +1435,79 @@ namespace Tests.Editor.Settings
             Assert.That(root.GetComponent<BackgroundColorSetting>(), Is.Not.Null);
             Assert.That(root.GetComponent<RecordingSetting>(), Is.Not.Null);
             Assert.That(Camera.main, Is.Not.Null);
+        }
+
+        [Test]
+        public void Given_RuntimeSettingsKoreanFallback_When_CheckingOwnership_Then_UsesSharedConcreteType()
+        {
+            const string fallbackPath =
+                "Assets/_Project/Scripts/Settings/KoreanUiTextFallback.cs";
+            const string popupPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopup.cs";
+            const string companionPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsCompanionController.cs";
+
+            Assert.That(File.Exists(fallbackPath), Is.True, fallbackPath);
+
+            string fallbackSource = File.ReadAllText(fallbackPath);
+            string popupSource = File.ReadAllText(popupPath);
+            string companionSource = File.ReadAllText(companionPath);
+
+            Assert.That(fallbackSource, Does.Contain("internal static class KoreanUiTextFallback"));
+            Assert.That(popupSource, Does.Contain("KoreanUiTextFallback.Apply("));
+            Assert.That(companionSource, Does.Contain("KoreanUiTextFallback.Apply("));
+            Assert.That(popupSource, Does.Not.Contain("private static void ApplyReadableKoreanFont"));
+            Assert.That(companionSource, Does.Not.Contain("private static void ApplyReadableKoreanFont"));
+        }
+
+        [Test]
+        public void Given_RuntimePopupNotification_When_ShowingKoreanMessage_Then_RemainsReadable()
+        {
+            var popupObject = new GameObject("Runtime Popup Korean Notification Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+
+                InvokeInstance<object>(popup, "ShowNotification", "설정을 준비 중입니다.");
+
+                Assert.That(popup.HasReadableKoreanTextForTests(), Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_LegacyKoreanFallback_When_TextBecomesNonKorean_Then_RestoresTmpLabel()
+        {
+            Type fallbackType = RequireType(KoreanUiTextFallbackTypeName);
+            var labelObject = new GameObject("Korean Fallback State Test", typeof(RectTransform));
+            var fallbackObject = new GameObject(
+                "KoreanTextFallback",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(UnityEngine.UI.Text));
+
+            try
+            {
+                var label = labelObject.AddComponent<TextMeshProUGUI>();
+                UnityEngine.UI.Text fallbackText = fallbackObject.GetComponent<UnityEngine.UI.Text>();
+                fallbackObject.transform.SetParent(labelObject.transform, false);
+                label.text = "Ready";
+                label.enabled = false;
+                fallbackText.enabled = true;
+
+                InvokeStatic<object>(fallbackType, "Apply", label);
+
+                Assert.That(label.enabled, Is.True);
+                Assert.That(fallbackText.enabled, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(labelObject);
+            }
         }
 
         [Test]

@@ -21,21 +21,6 @@ namespace Fbx2Vmd.Settings
         private Vector2 dragStartAnchoredPosition;
         private Vector2 dragStartPointerPosition;
         private bool isOpen;
-        private const string KoreanUiTextSample =
-            "가나다FBX파일임포트선택프로젝트로가져오고모션캡쳐설정을시작합니다시네마토그래피환경준비중닫기";
-        private static readonly string[] KoreanUiFontNames =
-        {
-            "Malgun Gothic",
-            "맑은 고딕",
-            "Noto Sans KR",
-            "Noto Sans CJK KR",
-            "NanumGothic",
-            "Nanum Gothic"
-        };
-        private static TMP_FontAsset cachedKoreanUiFont;
-        private static Font cachedKoreanLegacyUiFont;
-        private static bool warnedMissingKoreanUiFont;
-
         public bool IsOpen => isOpen;
         public bool OpenOnStart => openOnStart;
         public RecordingSetting RecordingSetting => recodingSetting;
@@ -149,14 +134,9 @@ namespace Fbx2Vmd.Settings
             TextMeshProUGUI[] labels = GetComponentsInChildren<TextMeshProUGUI>(true);
             foreach (TextMeshProUGUI label in labels)
             {
-                if (ContainsKorean(label.text) && !FontAssetSupportsText(label.font, label.text))
+                if (!KoreanUiTextFallback.IsReadable(label))
                 {
-                    Transform fallback = label.transform.Find("KoreanTextFallback");
-                    Text fallbackText = fallback != null ? fallback.GetComponent<Text>() : null;
-                    if (label.enabled || fallbackText == null || !fallbackText.enabled || fallbackText.font == null)
-                    {
-                        return false;
-                    }
+                    return false;
                 }
             }
 
@@ -430,6 +410,7 @@ namespace Fbx2Vmd.Settings
         {
             EnsureBuilt();
             notificationText.text = message;
+            KoreanUiTextFallback.Apply(notificationText);
         }
 
         private Button CreateButton(string name, Transform parent, string label, Rect rect, bool interactable)
@@ -479,197 +460,13 @@ namespace Fbx2Vmd.Settings
             label.enableWordWrapping = true;
             label.overflowMode = TextOverflowModes.Ellipsis;
             label.raycastTarget = false;
-            ApplyReadableKoreanFont(label, text, fontSize, style, alignment);
+            KoreanUiTextFallback.Apply(label);
             if (notificationText == null && name == "Notification")
             {
                 notificationText = label;
             }
 
             return label;
-        }
-
-        private static void ApplyReadableKoreanFont(
-            TextMeshProUGUI label,
-            string text,
-            int fontSize,
-            FontStyles style,
-            TextAlignmentOptions alignment)
-        {
-            if (label == null || !ContainsKorean(text) || FontAssetSupportsText(label.font, text))
-            {
-                return;
-            }
-
-            if (TryEnableLegacyKoreanText(label, text, fontSize, style, alignment))
-            {
-                return;
-            }
-
-            TMP_FontAsset koreanFont = GetOrCreateKoreanUiFont();
-            if (koreanFont == null || !FontAssetSupportsText(koreanFont, text))
-            {
-                if (!warnedMissingKoreanUiFont)
-                {
-                    warnedMissingKoreanUiFont = true;
-                    Debug.LogWarning("[MainRecordingSettingsPopup] 한글 UI 폰트를 찾지 못했습니다. OS 한글 폰트 설치 상태를 확인하세요.");
-                }
-
-                return;
-            }
-
-            label.font = koreanFont;
-            label.SetAllDirty();
-        }
-
-        private static bool TryEnableLegacyKoreanText(
-            TextMeshProUGUI label,
-            string text,
-            int fontSize,
-            FontStyles style,
-            TextAlignmentOptions alignment)
-        {
-            Font legacyFont = GetOrCreateKoreanLegacyUiFont();
-            if (legacyFont == null)
-            {
-                return false;
-            }
-
-            Transform existing = label.transform.Find("KoreanTextFallback");
-            GameObject fallbackObject = existing != null
-                ? existing.gameObject
-                : new GameObject("KoreanTextFallback", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            fallbackObject.transform.SetParent(label.transform, false);
-
-            RectTransform fallbackRect = fallbackObject.GetComponent<RectTransform>();
-            fallbackRect.anchorMin = Vector2.zero;
-            fallbackRect.anchorMax = Vector2.one;
-            fallbackRect.offsetMin = Vector2.zero;
-            fallbackRect.offsetMax = Vector2.zero;
-            fallbackRect.localScale = Vector3.one;
-
-            Text fallbackText = fallbackObject.GetComponent<Text>();
-            fallbackText.text = text;
-            fallbackText.font = legacyFont;
-            fallbackText.fontSize = Mathf.Max(1, fontSize);
-            fallbackText.fontStyle = (style & FontStyles.Bold) == FontStyles.Bold
-                ? FontStyle.Bold
-                : FontStyle.Normal;
-            fallbackText.alignment = ConvertToLegacyAlignment(alignment);
-            fallbackText.color = label.color;
-            fallbackText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            fallbackText.verticalOverflow = VerticalWrapMode.Truncate;
-            fallbackText.raycastTarget = false;
-            fallbackText.supportRichText = true;
-            fallbackText.enabled = true;
-
-            label.enabled = false;
-            return true;
-        }
-
-        private static TextAnchor ConvertToLegacyAlignment(TextAlignmentOptions alignment)
-        {
-            switch (alignment)
-            {
-                case TextAlignmentOptions.Center:
-                    return TextAnchor.MiddleCenter;
-                case TextAlignmentOptions.MidlineRight:
-                    return TextAnchor.MiddleRight;
-                case TextAlignmentOptions.TopLeft:
-                    return TextAnchor.UpperLeft;
-                case TextAlignmentOptions.MidlineLeft:
-                default:
-                    return TextAnchor.MiddleLeft;
-            }
-        }
-
-        private static TMP_FontAsset GetOrCreateKoreanUiFont()
-        {
-            if (cachedKoreanUiFont != null)
-            {
-                return cachedKoreanUiFont;
-            }
-
-            Font osFont = Font.CreateDynamicFontFromOSFont(KoreanUiFontNames, 32);
-            if (osFont == null)
-            {
-                return null;
-            }
-
-            TMP_FontAsset fontAsset = TMP_FontAsset.CreateFontAsset(osFont);
-            if (fontAsset == null)
-            {
-                return null;
-            }
-
-            fontAsset.name = "Main Recording Runtime Korean UI Font";
-            fontAsset.atlasPopulationMode = AtlasPopulationMode.Dynamic;
-            fontAsset.TryAddCharacters(KoreanUiTextSample, out _);
-            if (!FontAssetSupportsText(fontAsset, KoreanUiTextSample))
-            {
-                return null;
-            }
-
-            cachedKoreanUiFont = fontAsset;
-            return cachedKoreanUiFont;
-        }
-
-        private static Font GetOrCreateKoreanLegacyUiFont()
-        {
-            if (cachedKoreanLegacyUiFont != null)
-            {
-                return cachedKoreanLegacyUiFont;
-            }
-
-            Font osFont = Font.CreateDynamicFontFromOSFont(KoreanUiFontNames, 32);
-            if (osFont != null)
-            {
-                cachedKoreanLegacyUiFont = osFont;
-            }
-
-            return cachedKoreanLegacyUiFont;
-        }
-
-        private static bool FontAssetSupportsText(TMP_FontAsset fontAsset, string text)
-        {
-            if (fontAsset == null)
-            {
-                return false;
-            }
-
-            foreach (char character in text)
-            {
-                if (IsKorean(character) && !fontAsset.HasCharacter(character, true, true))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool ContainsKorean(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-            {
-                return false;
-            }
-
-            foreach (char character in text)
-            {
-                if (IsKorean(character))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool IsKorean(char character)
-        {
-            return (character >= '\uAC00' && character <= '\uD7A3') ||
-                   (character >= '\u3130' && character <= '\u318F') ||
-                   (character >= '\u1100' && character <= '\u11FF');
         }
 
         private static Rect RectFull()
