@@ -284,6 +284,63 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void GraphicSettingRuntimeTypes_AreOwnedByTypeNamedFiles()
+        {
+            string settingsDirectory = Path.Combine(
+                Application.dataPath,
+                "_Project/Scripts/Settings");
+            string[] runtimeTypeNames =
+            {
+                "GraphicAntiAliasingMode",
+                "GraphicGameViewScaleMode",
+                "GraphicTextureCompressionPreference",
+                "GraphicSettingQualityPreset",
+                "GraphicMaterialSurfaceMode",
+                "GraphicTextureImportPlan",
+                "GraphicMaterialShaderPlan",
+                "GraphicMaterialShaderApplyResult",
+                "GraphicTextureImportProfile",
+                "GraphicMaterialShaderProfile",
+                "GraphicMaterialShaderController"
+            };
+
+            foreach (string typeName in runtimeTypeNames)
+            {
+                string sourcePath = Path.Combine(settingsDirectory, $"{typeName}.cs");
+                Assert.That(File.Exists(sourcePath), Is.True, $"{typeName} must be stored in {sourcePath}.");
+                Assert.That(
+                    Type.GetType($"Fbx2Vmd.Settings.{typeName}, Assembly-CSharp"),
+                    Is.Not.Null,
+                    $"{typeName} must keep the runtime Settings namespace contract.");
+            }
+
+            string settingSource = File.ReadAllText(
+                Path.Combine(settingsDirectory, "GraphicSetting.cs"));
+            string[] extractedTypeDeclarations =
+            {
+                "enum GraphicAntiAliasingMode",
+                "enum GraphicGameViewScaleMode",
+                "enum GraphicTextureCompressionPreference",
+                "enum GraphicSettingQualityPreset",
+                "enum GraphicMaterialSurfaceMode",
+                "readonly struct GraphicTextureImportPlan",
+                "readonly struct GraphicMaterialShaderPlan",
+                "readonly struct GraphicMaterialShaderApplyResult",
+                "sealed class GraphicTextureImportProfile",
+                "sealed class GraphicMaterialShaderProfile",
+                "static class GraphicMaterialShaderController"
+            };
+
+            foreach (string declaration in extractedTypeDeclarations)
+            {
+                Assert.That(
+                    settingSource,
+                    Does.Not.Contain(declaration),
+                    $"GraphicSetting.cs must not own {declaration}.");
+            }
+        }
+
+        [Test]
         public void Given_MaterialShaderProfile_When_AppliedToYybMaterial_Then_AdjustsSupportedOutlineAndReportsSkippedUnsupportedProperties()
         {
             Material source = AssetDatabase.LoadAssetAtPath<Material>(
