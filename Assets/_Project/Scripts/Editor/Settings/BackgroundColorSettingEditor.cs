@@ -1,7 +1,8 @@
+using Fbx2Vmd.Settings;
 using UnityEditor;
 using UnityEngine;
 
-namespace Fbx2Vmd.Settings
+namespace Fbx2Vmd.Settings.EditorTools
 {
     [CustomEditor(typeof(BackgroundColorSetting))]
     [CanEditMultipleObjects]

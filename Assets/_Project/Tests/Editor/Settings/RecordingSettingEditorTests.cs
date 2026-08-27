@@ -690,6 +690,16 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_EditorDrawUtility_When_InspectingMetadata_Then_UsesEditorToolsNamespace()
+        {
+            Type utilityType = Type.GetType(
+                "Fbx2Vmd.Settings.EditorTools.EditorDrawUtility, Assembly-CSharp-Editor");
+
+            Assert.That(utilityType, Is.Not.Null);
+            Assert.That(utilityType.Assembly.GetName().Name, Is.EqualTo("Assembly-CSharp-Editor"));
+        }
+
+        [Test]
         public void Given_SettingFields_When_InspectingAttributes_Then_UsesKoreanLabels()
         {
             AssertHeader<BackgroundColorSetting>("targetCamera", "대상");
