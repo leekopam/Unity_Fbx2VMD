@@ -1519,8 +1519,9 @@ namespace Tests.Editor.Settings
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
                 Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
-                int initialChildCount = popupObject.transform.childCount;
-                Transform closeButtonTransform = popupObject.transform.Find("CloseButton");
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                int initialGeneratedChildCount = generatedContent.childCount;
+                Transform closeButtonTransform = generatedContent.Find("CloseButton");
                 Assert.That(closeButtonTransform, Is.Not.Null);
 
                 UnityEngine.UI.Button closeButton = closeButtonTransform.GetComponent<UnityEngine.UI.Button>();
@@ -1537,22 +1538,324 @@ namespace Tests.Editor.Settings
                     cardButton.onClick.RemoveAllListeners();
                 }
 
-                cardButtons.Clear();
-                SetField(popup, "panelRoot", null);
-                SetField(popup, "canvasGroup", null);
-                SetField(popup, "notificationText", null);
+                ResetRuntimePopupCache(popup);
 
                 popup.Open();
 
-                Assert.That(popupObject.transform.childCount, Is.EqualTo(initialChildCount));
-                Assert.That(CountDirectChildrenNamed(popupObject.transform, "Page"), Is.EqualTo(1));
-                Assert.That(CountDirectChildrenNamed(popupObject.transform, "Rail"), Is.EqualTo(1));
-                Assert.That(CountDirectChildrenNamed(popupObject.transform, "MainViewport"), Is.EqualTo(1));
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Assert.That(generatedContent.childCount, Is.EqualTo(initialGeneratedChildCount));
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "GeneratedContent"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Page"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Rail"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "MainViewport"), Is.EqualTo(1));
                 Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
                 Assert.That(popupObject.GetComponent<RectTransform>().anchoredPosition, Is.EqualTo(draggedPosition));
 
                 closeButton.onClick.Invoke();
                 Assert.That(popup.IsOpen, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_PartialRuntimePopupHierarchy_When_EnsuringAgain_Then_RebuildsOwnedElementsOnce()
+        {
+            var popupObject = new GameObject("Runtime Popup Partial Hierarchy Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                int completeGeneratedChildCount = generatedContent.childCount;
+                var extensionObject = new GameObject("Runtime Popup Extension", typeof(RectTransform));
+                extensionObject.transform.SetParent(popupObject.transform, false);
+
+                InvokeInstance<object>(popup, "ShowNotification", "부분 계층 복구 메시지");
+                popup.ApplyDragDeltaForTests(new Vector2(72f, -24f));
+                Vector2 draggedPosition = popupObject.GetComponent<RectTransform>().anchoredPosition;
+                UnityEngine.Object.DestroyImmediate(generatedContent.Find("Rail").gameObject);
+
+                popup.Open();
+
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Assert.That(generatedContent.childCount, Is.EqualTo(completeGeneratedChildCount));
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "GeneratedContent"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Page"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Rail"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "MainViewport"), Is.EqualTo(1));
+                Assert.That(extensionObject.transform.parent, Is.EqualTo(popupObject.transform));
+                Assert.That(extensionObject.activeSelf, Is.True);
+                Assert.That(popupObject.GetComponent<RectTransform>().anchoredPosition, Is.EqualTo(draggedPosition));
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(GetField<TextMeshProUGUI>(popup, "notificationText").text,
+                    Is.EqualTo("부분 계층 복구 메시지"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_DamagedRuntimePopupWithReservedExtensionName_When_Rebuilding_Then_PreservesExtension()
+        {
+            var popupObject = new GameObject("Runtime Popup Reserved Extension Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                var extensionObject = new GameObject("Page", typeof(RectTransform));
+                extensionObject.transform.SetParent(popupObject.transform, false);
+                int extensionSiblingIndex = extensionObject.transform.GetSiblingIndex();
+                UnityEngine.Object.DestroyImmediate(generatedContent.Find("Rail").gameObject);
+
+                popup.Open();
+
+                Assert.That(extensionObject, Is.Not.Null);
+                Assert.That(extensionObject.transform.parent, Is.EqualTo(popupObject.transform));
+                Assert.That(extensionObject.activeSelf, Is.True);
+                Assert.That(extensionObject.transform.GetSiblingIndex(), Is.EqualTo(extensionSiblingIndex));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_CompleteLegacyPopupHierarchy_When_EnsuringAgain_Then_MigratesWithoutRebuilding()
+        {
+            var popupObject = new GameObject("Runtime Popup Legacy Hierarchy Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                int completeGeneratedChildCount = generatedContent.childCount;
+                Transform page = generatedContent.Find("Page");
+                UnityEngine.UI.Button closeButton = generatedContent
+                    .Find("CloseButton")
+                    .GetComponent<UnityEngine.UI.Button>();
+                int externalCloseInvocationCount = 0;
+                closeButton.onClick.AddListener(() => externalCloseInvocationCount++);
+
+                InvokeInstance<object>(popup, "ShowNotification", "기존 계층 이전 메시지");
+                popup.ApplyDragDeltaForTests(new Vector2(48f, -16f));
+                Vector2 draggedPosition = popupObject.GetComponent<RectTransform>().anchoredPosition;
+                Vector3 pageWorldPosition = page.position;
+
+                var legacyChildren = new System.Collections.Generic.List<Transform>();
+                for (int i = 0; i < generatedContent.childCount; i++)
+                {
+                    legacyChildren.Add(generatedContent.GetChild(i));
+                }
+
+                foreach (Transform child in legacyChildren)
+                {
+                    child.SetParent(popupObject.transform, true);
+                }
+
+                UnityEngine.Object.DestroyImmediate(generatedContent.gameObject);
+
+                popup.Open();
+
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "GeneratedContent"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "Page"), Is.EqualTo(0));
+                Assert.That(generatedContent.childCount, Is.EqualTo(completeGeneratedChildCount));
+                Assert.That(generatedContent.Find("Page").position, Is.EqualTo(pageWorldPosition));
+                Assert.That(popupObject.GetComponent<RectTransform>().anchoredPosition, Is.EqualTo(draggedPosition));
+                Assert.That(GetField<TextMeshProUGUI>(popup, "notificationText").text,
+                    Is.EqualTo("기존 계층 이전 메시지"));
+
+                closeButton.onClick.Invoke();
+                Assert.That(popup.IsOpen, Is.False);
+                Assert.That(externalCloseInvocationCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_DuplicateRuntimePopupHierarchy_When_EnsuringAgain_Then_NormalizesOwnedElements()
+        {
+            var popupObject = new GameObject("Runtime Popup Duplicate Hierarchy Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                int completeGeneratedChildCount = generatedContent.childCount;
+                GameObject duplicatePage = UnityEngine.Object.Instantiate(
+                    generatedContent.Find("Page").gameObject,
+                    generatedContent);
+                duplicatePage.name = "Page";
+
+                popup.Open();
+
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Assert.That(generatedContent.childCount, Is.EqualTo(completeGeneratedChildCount));
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "GeneratedContent"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Page"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Rail"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "MainViewport"), Is.EqualTo(1));
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_DuplicateGeneratedContentContainer_When_EnsuringAgain_Then_NormalizesOwnedContainer()
+        {
+            var popupObject = new GameObject("Runtime Popup Duplicate Container Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                GameObject duplicateContent = UnityEngine.Object.Instantiate(
+                    generatedContent.gameObject,
+                    popupObject.transform);
+                duplicateContent.name = "GeneratedContent";
+
+                popup.Open();
+
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "GeneratedContent"), Is.EqualTo(1));
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_BalancedMissingAndDuplicateRuntimePopupHierarchy_When_EnsuringAgain_Then_NormalizesOwnedElements()
+        {
+            var popupObject = new GameObject("Runtime Popup Balanced Damage Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                UnityEngine.Object.DestroyImmediate(generatedContent.Find("Rail").gameObject);
+                GameObject duplicatePage = UnityEngine.Object.Instantiate(
+                    generatedContent.Find("Page").gameObject,
+                    generatedContent);
+                duplicatePage.name = "Page";
+
+                popup.Open();
+
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Page"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(generatedContent, "Rail"), Is.EqualTo(1));
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_RuntimePopupWithMissingRequiredComponent_When_EnsuringAgain_Then_RebuildsComponent()
+        {
+            var popupObject = new GameObject("Runtime Popup Component Damage Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                UnityEngine.Object.DestroyImmediate(generatedContent.Find("Rail").GetComponent<UnityEngine.UI.Image>());
+
+                popup.Open();
+
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Assert.That(generatedContent.Find("Rail").GetComponent<UnityEngine.UI.Image>(), Is.Not.Null);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_RuntimePopupWithDuplicateMainContent_When_EnsuringAgain_Then_NormalizesNestedHierarchy()
+        {
+            var popupObject = new GameObject("Runtime Popup Nested Duplicate Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Transform mainViewport = generatedContent.Find("MainViewport");
+                GameObject duplicateMainContent = UnityEngine.Object.Instantiate(
+                    mainViewport.Find("MainContent").gameObject,
+                    mainViewport);
+                duplicateMainContent.name = "MainContent";
+
+                popup.Open();
+
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                mainViewport = generatedContent.Find("MainViewport");
+                Assert.That(CountDirectChildrenNamed(mainViewport, "MainContent"), Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_DamagedLegacyPopupBeforeExtension_When_Rebuilding_Then_PreservesRelativeSiblingOrder()
+        {
+            var popupObject = new GameObject("Runtime Popup Damaged Legacy Order Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                var legacyChildren = new System.Collections.Generic.List<Transform>();
+                for (int i = 0; i < generatedContent.childCount; i++)
+                {
+                    legacyChildren.Add(generatedContent.GetChild(i));
+                }
+
+                foreach (Transform child in legacyChildren)
+                {
+                    child.SetParent(popupObject.transform, true);
+                }
+
+                UnityEngine.Object.DestroyImmediate(generatedContent.gameObject);
+                var extensionObject = new GameObject("Runtime Popup Legacy Extension", typeof(RectTransform));
+                extensionObject.transform.SetParent(popupObject.transform, false);
+                UnityEngine.Object.DestroyImmediate(
+                    popupObject.transform.Find("Rail").GetComponent<UnityEngine.UI.Image>());
+
+                popup.Open();
+
+                generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "GeneratedContent"), Is.EqualTo(1));
+                Assert.That(generatedContent.GetSiblingIndex(), Is.LessThan(extensionObject.transform.GetSiblingIndex()));
+                Assert.That(extensionObject.activeSelf, Is.True);
             }
             finally
             {
@@ -1571,7 +1874,9 @@ namespace Tests.Editor.Settings
                 Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
                 int initialChildCount = popupObject.transform.childCount;
                 UnityEngine.UI.Button closeButton =
-                    popupObject.transform.Find("CloseButton").GetComponent<UnityEngine.UI.Button>();
+                    FindRuntimePopupGeneratedContent(popupObject.transform)
+                        .Find("CloseButton")
+                        .GetComponent<UnityEngine.UI.Button>();
                 int externalCloseInvocationCount = 0;
                 closeButton.onClick.AddListener(() => externalCloseInvocationCount++);
 
@@ -1741,6 +2046,20 @@ namespace Tests.Editor.Settings
             }
 
             return count;
+        }
+
+        private static Transform FindRuntimePopupGeneratedContent(Transform popupRoot)
+        {
+            Transform generatedContent = popupRoot.Find("GeneratedContent");
+            return generatedContent != null ? generatedContent : popupRoot;
+        }
+
+        private static void ResetRuntimePopupCache(MainRecordingSettingsPopup popup)
+        {
+            GetField<System.Collections.Generic.List<UnityEngine.UI.Button>>(popup, "cardButtons").Clear();
+            SetField(popup, "panelRoot", null);
+            SetField(popup, "canvasGroup", null);
+            SetField(popup, "notificationText", null);
         }
 
         private static void SetImportCommand(MainRecordingSettingsDocument document, string commandId, string fbxPath)
