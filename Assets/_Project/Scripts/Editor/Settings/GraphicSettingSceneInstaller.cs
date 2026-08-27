@@ -14,12 +14,9 @@ namespace Fbx2Vmd.Settings.EditorTools
     public static class GraphicSettingSceneInstaller
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
-        private const string YybRootName = "YYB Hatsune Miku";
         private const string ManualRecordButtonName = "MMD_Record_Button";
         private const string RecodingSettingManualRecordMethodName = nameof(RecordingSetting.StartManualRecording);
         private const string LegacyFBXVmdPipelineManualRecordMethodName = "OnClickManualRecordButton";
-        private const string YybTextureFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/tex";
-        private const string YybMaterialFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/Materials";
         private const string DefaultPostProcessResourcesPath =
             "Packages/com.unity.postprocessing/PostProcessing/PostProcessResources.asset";
         private const float DefaultComparisonCameraViewportHeight = 0.56f;
@@ -107,7 +104,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             UniversalRenderPipelineAsset pipelineAsset = ResolveUniversalRenderPipelineAsset();
             Camera mainCamera = Camera.main;
-            GameObject yybRoot = ResolveYybRoot();
+            GameObject targetModelRoot = ResolveTargetModelRoot(recodingSetting);
             var serialized = new SerializedObject(setting);
             serialized.FindProperty("targetCamera").objectReferenceValue = mainCamera;
             serialized.FindProperty("targetRenderPipelineAsset").objectReferenceValue = pipelineAsset;
@@ -128,15 +125,15 @@ namespace Fbx2Vmd.Settings.EditorTools
             serialized.FindProperty("renderScale").floatValue = pipelineAsset == null ? 1.0f : 1.5f;
             ConfigureTextureImportProfile(serialized.FindProperty("textureImportProfile"));
             ConfigureMaterialShaderProfile(serialized.FindProperty("materialShaderProfile"));
-            ConfigureObjectArray(serialized.FindProperty("textureSourceRoots"), null);
-            ConfigureObjectArray(serialized.FindProperty("materialSourceRoots"), yybRoot);
-            ConfigureStringArray(serialized.FindProperty("textureAssetFolders"), YybTextureFolder);
-            ConfigureStringArray(serialized.FindProperty("materialAssetFolders"), YybMaterialFolder);
+            ConfigureObjectArray(serialized.FindProperty("textureSourceRoots"), targetModelRoot);
+            ConfigureObjectArray(serialized.FindProperty("materialSourceRoots"), targetModelRoot);
+            ConfigureStringArray(serialized.FindProperty("textureAssetFolders"), null);
+            ConfigureStringArray(serialized.FindProperty("materialAssetFolders"), null);
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             ConfigureBackgroundColor(backgroundSetting, mainCamera);
             ConfigureRecordingControls(recodingSetting);
-            ConfigureDefaultCameraComposition(mainCamera, yybRoot);
+            ConfigureDefaultCameraComposition(mainCamera, targetModelRoot);
         }
 
         private static void ConfigureBackgroundColor(BackgroundColorSetting backgroundSetting, Camera mainCamera)
@@ -319,9 +316,12 @@ namespace Fbx2Vmd.Settings.EditorTools
             }
         }
 
-        private static GameObject ResolveYybRoot()
+        private static GameObject ResolveTargetModelRoot(RecordingSetting recodingSetting)
         {
-            return GameObject.Find(YybRootName);
+            FBXVmdPipeline fileManager = recodingSetting != null
+                ? recodingSetting.RecordingFBXVmdPipeline
+                : null;
+            return fileManager != null ? fileManager.targetCharacter : null;
         }
 
         private static void ConfigureDefaultCameraComposition(Camera camera, GameObject targetRoot)
