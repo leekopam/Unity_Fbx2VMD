@@ -217,7 +217,7 @@ namespace Tests.Editor.Settings
             Assert.That(File.Exists(ReleaseSmokeScriptPath), Is.True, "Release smoke script must exist.");
 
             string script = File.ReadAllText(ReleaseSmokeScriptPath);
-            Assert.That(script, Does.Contain("Fbx2Vmd.Build.EditorTools.MainRecordingReleaseBuildRunner.BuildWindowsSmoke"));
+            Assert.That(script, Does.Contain("Fbx2Vmd.Build.MainRecordingReleaseBuildRunner.BuildWindowsSmoke"));
             Assert.That(script, Does.Contain("Unity_Fbx2VMD.exe"));
             Assert.That(script, Does.Contain("Unity_Fbx2VMD_Settings.exe"));
             Assert.That(script, Does.Contain("MainRecordingSettings"));
@@ -243,7 +243,7 @@ namespace Tests.Editor.Settings
                 Is.EqualTo("Builds/Local/MainRecordingRelease/Unity_Fbx2VMD_Settings_Data"));
 
             string source = File.ReadAllText(
-                "Assets/_Project/Scripts/Build/Editor/MainRecordingReleaseBuildRunner.cs");
+                "Assets/_Project/Scripts/Editor/Build/MainRecordingReleaseBuildRunner.cs");
             Assert.That(source, Does.Contain("DeleteStaleRootSettingsCompanionOutputs"));
         }
 
