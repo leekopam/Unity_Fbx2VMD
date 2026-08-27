@@ -26,9 +26,6 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.EditorTools.GraphicSettingGameViewScaleAutoApplier, Assembly-CSharp-Editor";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
-        private const string YybTextureFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/tex";
-        private const string YybMaterialFolder = "Assets/_Project/Model/YYB Hatsune Miku_default/Materials";
-        private const string YybRootName = "YYB Hatsune Miku";
         private const string ManualRecordButtonName = "MMD_Record_Button";
         private const string ManualRecordMethodName = "StartManualRecording";
         private const float ReferenceMp4ViewportCenterY = 0.28f;
@@ -506,7 +503,7 @@ namespace Tests.Editor.Settings
             Assert.That(materialProfile, Is.Not.Null,
                 "GraphicSetting must expose a material shader profile for MMD outline and alpha tuning.");
 
-            AssertYybQualityTargets(component);
+            AssertRecordingTargetQualitySources(component, fileManager);
 
             var serialized = new SerializedObject(component);
             Assert.That(serialized.FindProperty("materialShaderProfile"), Is.Not.Null,
@@ -599,7 +596,7 @@ namespace Tests.Editor.Settings
                 Assert.That(GetField<Button>(recodingSetting, "manualRecordButton"), Is.EqualTo(manualRecordButton));
                 Assert.That(GetField<Component>(recodingSetting, "recordingController"), Is.EqualTo(recordingController));
                 Assert.That(HasPersistentCall(manualRecordButton, recodingSetting, ManualRecordMethodName), Is.True);
-                AssertYybQualityTargets(installed);
+                AssertRecordingTargetQualitySources(installed, fileManager);
                 Assert.That(graphicSettingType.GetField("captureQuality", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("captureSuperSize", InstanceFields), Is.Null);
                 Assert.That(graphicSettingType.GetField("captureFolder", InstanceFields), Is.Null);
@@ -734,7 +731,7 @@ namespace Tests.Editor.Settings
             Camera mainCamera = Camera.main;
             Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
 
-            Bounds bounds = GetVisibleRendererBounds(YybRootName);
+            Bounds bounds = GetVisibleRendererBounds(RequireRecordingTargetRoot());
             Plane[] planes = GeometryUtility.CalculateFrustumPlanes(mainCamera);
             Assert.That(GeometryUtility.TestPlanesAABB(planes, bounds), Is.True,
                 $"Main Camera frustum must include YYB bounds. cameraPosition={mainCamera.transform.position}, cameraRotation={mainCamera.transform.eulerAngles}, orthographic={mainCamera.orthographic}, orthographicSize={mainCamera.orthographicSize}, boundsCenter={bounds.center}, boundsSize={bounds.size}");
@@ -764,7 +761,7 @@ namespace Tests.Editor.Settings
             Camera mainCamera = Camera.main;
             Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
 
-            Bounds bounds = GetVisibleRendererBounds(YybRootName);
+            Bounds bounds = GetVisibleRendererBounds(RequireRecordingTargetRoot());
             Vector3 centerViewport = mainCamera.WorldToViewportPoint(bounds.center);
             Vector3 topViewport = mainCamera.WorldToViewportPoint(bounds.center + Vector3.up * bounds.extents.y);
             Vector3 bottomViewport = mainCamera.WorldToViewportPoint(bounds.center - Vector3.up * bounds.extents.y);
@@ -786,7 +783,7 @@ namespace Tests.Editor.Settings
             Camera mainCamera = Camera.main;
             Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
 
-            Bounds bounds = GetVisibleRendererBounds(YybRootName);
+            Bounds bounds = GetVisibleRendererBounds(RequireRecordingTargetRoot());
             if (Application.isBatchMode)
             {
                 Debug.Log(
@@ -800,21 +797,26 @@ namespace Tests.Editor.Settings
                 $"Main Camera render must contain visible YYB pixels for mp4/Unity comparison. cameraPosition={mainCamera.transform.position}, cameraRotation={mainCamera.transform.eulerAngles}, orthographic={mainCamera.orthographic}, orthographicSize={mainCamera.orthographicSize}, boundsCenter={bounds.center}, boundsSize={bounds.size}, nonUniformPixels={nonUniformPixels}");
         }
 
-        private static void AssertYybQualityTargets(object component)
+        private static void AssertRecordingTargetQualitySources(object component, Component fileManager)
         {
-            var textureSourceRoots = GetField<GameObject[]>(component, "textureSourceRoots");
-            Assert.That(textureSourceRoots, Is.Empty,
-                "Texture import must stay limited to the configured YYB tex folder and must not walk toon/fx/spa roots.");
+            GameObject targetRoot = RequireRecordingTargetRoot(fileManager);
+            Assert.That(GetField<GameObject[]>(component, "textureSourceRoots"),
+                Is.EqualTo(new[] { targetRoot }));
+            Assert.That(GetField<GameObject[]>(component, "materialSourceRoots"),
+                Is.EqualTo(new[] { targetRoot }));
+            Assert.That(GetField<string[]>(component, "textureAssetFolders"), Is.Empty);
+            Assert.That(GetField<string[]>(component, "materialAssetFolders"), Is.Empty);
+        }
 
-            var materialSourceRoots = GetField<GameObject[]>(component, "materialSourceRoots");
-            Assert.That(materialSourceRoots, Has.Length.EqualTo(1));
-            Assert.That(materialSourceRoots[0], Is.Not.Null);
-            Assert.That(materialSourceRoots[0].name, Is.EqualTo(YybRootName));
+        private static GameObject RequireRecordingTargetRoot(Component fileManager = null)
+        {
+            Component resolvedFileManager = fileManager ??
+                UnityEngine.Object.FindObjectOfType(RequireType(FBXVmdPipelineTypeName)) as Component;
+            Assert.That(resolvedFileManager, Is.Not.Null, "Expected an active FBXVmdPipeline.");
 
-            Assert.That(GetField<string[]>(component, "textureAssetFolders"),
-                Is.EquivalentTo(new[] { YybTextureFolder }));
-            Assert.That(GetField<string[]>(component, "materialAssetFolders"),
-                Is.EquivalentTo(new[] { YybMaterialFolder }));
+            GameObject targetRoot = GetMemberValue<GameObject>(resolvedFileManager, "targetCharacter");
+            Assert.That(targetRoot, Is.Not.Null, "Expected the recording pipeline target model.");
+            return targetRoot;
         }
 
         private static Type RequireType(string typeName)
@@ -953,10 +955,9 @@ namespace Tests.Editor.Settings
             return shader;
         }
 
-        private static Bounds GetVisibleRendererBounds(string rootName)
+        private static Bounds GetVisibleRendererBounds(GameObject root)
         {
-            GameObject root = GameObject.Find(rootName);
-            Assert.That(root, Is.Not.Null, $"Expected scene object '{rootName}'.");
+            Assert.That(root, Is.Not.Null, "Expected the recording target model.");
 
             Renderer[] renderers = root.GetComponentsInChildren<Renderer>(false);
             var visibleRenderers = new List<Renderer>();
@@ -968,10 +969,11 @@ namespace Tests.Editor.Settings
                 }
             }
 
-            Assert.That(visibleRenderers.Count, Is.GreaterThan(0), $"Expected visible renderers under '{rootName}'.");
+            Assert.That(visibleRenderers.Count, Is.GreaterThan(0),
+                $"Expected visible renderers under '{root.name}'.");
 
             Assert.That(TryGetRendererWorldBounds(visibleRenderers[0], out Bounds bounds), Is.True,
-                $"Expected renderer bounds under '{rootName}'.");
+                $"Expected renderer bounds under '{root.name}'.");
             for (int i = 1; i < visibleRenderers.Count; i++)
             {
                 if (TryGetRendererWorldBounds(visibleRenderers[i], out Bounds rendererBounds))
