@@ -1259,9 +1259,9 @@ namespace Tests.Editor.Settings
             string oldWindowPath =
                 "Assets/_Project/Scripts/Settings/Editor/MainRecordingSettingsWindow.cs";
             string launcherPath =
-                "Assets/_Project/Scripts/Settings/Editor/MainRecordingSettingsCompanionLauncher.cs";
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingSettingsCompanionLauncher.cs";
             string guardPath =
-                "Assets/_Project/Scripts/Settings/Editor/MainRecordingEditorPlayModeGuard.cs";
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorPlayModeGuard.cs";
 
             Assert.That(File.Exists(launcherPath), Is.True, "The menu entry must live in the companion launcher.");
             Assert.That(File.Exists(guardPath), Is.True, "The Play Mode guard must be split from the old IMGUI window.");
@@ -1288,9 +1288,9 @@ namespace Tests.Editor.Settings
         public void Given_EditorSettingsSource_When_InspectingVisibleLogText_Then_KeepsKoreanReadable()
         {
             string launcherPath =
-                "Assets/_Project/Scripts/Settings/Editor/MainRecordingSettingsCompanionLauncher.cs";
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingSettingsCompanionLauncher.cs";
             string guardPath =
-                "Assets/_Project/Scripts/Settings/Editor/MainRecordingEditorPlayModeGuard.cs";
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorPlayModeGuard.cs";
 
             string launcherSource = ReadUtf8Source(launcherPath);
             string guardSource = ReadUtf8Source(guardPath);
