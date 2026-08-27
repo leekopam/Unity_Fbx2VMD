@@ -16,6 +16,7 @@ namespace Fbx2Vmd.Settings
 
         private readonly List<Button> cardButtons = new List<Button>();
         private RectTransform panelRoot;
+        private RectTransform generatedContentRoot;
         private CanvasGroup canvasGroup;
         private TextMeshProUGUI notificationText;
         private Vector2 dragStartAnchoredPosition;
@@ -205,7 +206,17 @@ namespace Fbx2Vmd.Settings
 
         private void EnsureBuilt()
         {
-            if (panelRoot != null &&
+            RectTransform ownedContentRoot = null;
+            bool hasSingleOwnedContent = panelRoot != null &&
+                MainRecordingSettingsGeneratedHierarchy.TryFindContent(
+                    panelRoot,
+                    out ownedContentRoot);
+            if (hasSingleOwnedContent &&
+                generatedContentRoot != null &&
+                generatedContentRoot == ownedContentRoot &&
+                MainRecordingSettingsGeneratedHierarchy.HasCompleteContent(
+                    generatedContentRoot,
+                    MainRecordingSettingsLayoutSpec.Cards) &&
                 canvasGroup != null &&
                 notificationText != null &&
                 cardButtons.Count == MainRecordingSettingsLayoutSpec.Cards.Length)
@@ -215,6 +226,13 @@ namespace Fbx2Vmd.Settings
 
             RectTransform root = EnsureRectTransform(gameObject);
             panelRoot = root;
+            bool hadGeneratedHierarchy = MainRecordingSettingsGeneratedHierarchy.HasOwnedRootChildren(panelRoot);
+            bool hadCanvasGroup = gameObject.GetComponent<CanvasGroup>() != null;
+            string preservedNotification = hadGeneratedHierarchy
+                ? MainRecordingSettingsGeneratedHierarchy.FindNotificationText(panelRoot)
+                : string.Empty;
+            int generatedContentSiblingIndex =
+                MainRecordingSettingsGeneratedHierarchy.FindOwnedSiblingIndex(panelRoot);
             canvasGroup = gameObject.GetComponent<CanvasGroup>();
             if (canvasGroup == null)
             {
@@ -226,47 +244,78 @@ namespace Fbx2Vmd.Settings
                 gameObject.AddComponent<RectMask2D>();
             }
 
+            ConfigurePanelRoot(root, !hadGeneratedHierarchy);
             if (TryRestoreGeneratedHierarchy())
             {
                 return;
             }
 
-            root.anchorMin = new Vector2(0.5f, 0.5f);
-            root.anchorMax = new Vector2(0.5f, 0.5f);
-            root.pivot = new Vector2(0.5f, 0.5f);
-            root.anchoredPosition = Vector2.zero;
-            root.sizeDelta = MainRecordingSettingsLayoutSpec.ReferenceSize;
-            root.localScale = Vector3.one * MainRecordingSettingsLayoutSpec.DefaultDisplayScale;
+            if (TryMigrateLegacyGeneratedHierarchy())
+            {
+                return;
+            }
 
-            CreateImage("Page", panelRoot, RectFull(), MainRecordingSettingsLayoutSpec.PageColor);
-            BuildRail(panelRoot);
-            BuildSidebar(panelRoot);
-            BuildMainArea(panelRoot);
-            SetVisible(false);
+            generatedContentSiblingIndex =
+                MainRecordingSettingsGeneratedHierarchy.FindOwnedSiblingIndex(panelRoot);
+            RemoveOwnedGeneratedHierarchy();
+            generatedContentRoot = CreateRectTransform(
+                MainRecordingSettingsGeneratedHierarchy.ContentObjectName,
+                panelRoot,
+                RectFull());
+            MainRecordingSettingsGeneratedHierarchy.MarkOwned(generatedContentRoot);
+            MainRecordingSettingsGeneratedHierarchy.RestoreSiblingIndex(
+                generatedContentRoot,
+                generatedContentSiblingIndex);
+            CreateImage("Page", generatedContentRoot, RectFull(), MainRecordingSettingsLayoutSpec.PageColor);
+            BuildRail(generatedContentRoot);
+            BuildSidebar(generatedContentRoot);
+            BuildMainArea(generatedContentRoot);
+
+            if (hadGeneratedHierarchy)
+            {
+                if (!string.IsNullOrEmpty(preservedNotification))
+                {
+                    notificationText.text = preservedNotification;
+                    KoreanUiTextFallback.Apply(notificationText);
+                }
+
+                if (!hadCanvasGroup)
+                {
+                    SetVisible(isOpen);
+                }
+            }
+            else
+            {
+                SetVisible(false);
+            }
         }
 
         private bool TryRestoreGeneratedHierarchy()
         {
-            bool shouldRestoreButtonListeners = cardButtons.Count == 0;
-            Transform page = panelRoot.Find("Page");
-            Transform rail = panelRoot.Find("Rail");
-            Transform sidebar = panelRoot.Find("Sidebar");
-            Transform mainContent = panelRoot.Find("MainViewport/MainContent");
-            Transform closeButtonTransform = panelRoot.Find("CloseButton");
-            Transform notificationTransform = panelRoot.Find("Notification");
-            if (page == null ||
-                rail == null ||
-                sidebar == null ||
-                mainContent == null ||
-                closeButtonTransform == null ||
-                notificationTransform == null)
+            if (!MainRecordingSettingsGeneratedHierarchy.TryFindContent(
+                    panelRoot,
+                    out RectTransform contentRoot))
             {
                 return false;
             }
 
+            return TryRestoreGeneratedHierarchy(contentRoot);
+        }
+
+        private bool TryRestoreGeneratedHierarchy(RectTransform contentRoot)
+        {
+            MainRecordingSettingsCardSpec[] cards = MainRecordingSettingsLayoutSpec.Cards;
+            if (!MainRecordingSettingsGeneratedHierarchy.HasCompleteContent(contentRoot, cards))
+            {
+                return false;
+            }
+
+            bool shouldRestoreButtonListeners = cardButtons.Count == 0;
+            Transform mainContent = contentRoot.Find("MainViewport/MainContent");
+            Transform closeButtonTransform = contentRoot.Find("CloseButton");
+            Transform notificationTransform = contentRoot.Find("Notification");
             Button closeButton = closeButtonTransform.GetComponent<Button>();
             TextMeshProUGUI restoredNotification = notificationTransform.GetComponent<TextMeshProUGUI>();
-            MainRecordingSettingsCardSpec[] cards = MainRecordingSettingsLayoutSpec.Cards;
             var restoredCardButtons = new Button[cards.Length];
             if (closeButton == null || restoredNotification == null)
             {
@@ -302,8 +351,56 @@ namespace Fbx2Vmd.Settings
                 cardButtons.Add(button);
             }
 
+            generatedContentRoot = contentRoot;
             notificationText = restoredNotification;
             return true;
+        }
+
+        private bool TryMigrateLegacyGeneratedHierarchy()
+        {
+            var legacyChildren = new List<Transform>(
+                MainRecordingSettingsGeneratedHierarchy.ContentChildCount);
+            if (!MainRecordingSettingsGeneratedHierarchy.TryCollectLegacyRootChildren(
+                    panelRoot,
+                    legacyChildren))
+            {
+                return false;
+            }
+
+            int legacySiblingIndex = legacyChildren[0].GetSiblingIndex();
+            RectTransform migratedContent = CreateRectTransform(
+                MainRecordingSettingsGeneratedHierarchy.ContentObjectName,
+                panelRoot,
+                RectFull());
+            MainRecordingSettingsGeneratedHierarchy.MarkOwned(migratedContent);
+            MainRecordingSettingsGeneratedHierarchy.MoveChildren(legacyChildren, migratedContent);
+            MainRecordingSettingsGeneratedHierarchy.RestoreSiblingIndex(
+                migratedContent,
+                legacySiblingIndex);
+
+            return TryRestoreGeneratedHierarchy(migratedContent);
+        }
+
+        private void RemoveOwnedGeneratedHierarchy()
+        {
+            generatedContentRoot = null;
+            notificationText = null;
+            cardButtons.Clear();
+            MainRecordingSettingsGeneratedHierarchy.RemoveOwnedRootChildren(panelRoot);
+        }
+
+        private static void ConfigurePanelRoot(RectTransform root, bool resetAnchoredPosition)
+        {
+            root.anchorMin = new Vector2(0.5f, 0.5f);
+            root.anchorMax = new Vector2(0.5f, 0.5f);
+            root.pivot = new Vector2(0.5f, 0.5f);
+            if (resetAnchoredPosition)
+            {
+                root.anchoredPosition = Vector2.zero;
+            }
+
+            root.sizeDelta = MainRecordingSettingsLayoutSpec.ReferenceSize;
+            root.localScale = Vector3.one * MainRecordingSettingsLayoutSpec.DefaultDisplayScale;
         }
 
         public void OnBeginDrag(PointerEventData eventData)
