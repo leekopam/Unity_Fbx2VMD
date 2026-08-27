@@ -1511,6 +1511,88 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_BuiltRuntimePopupWithLostRuntimeCache_When_EnsuringAgain_Then_ReusesGeneratedHierarchy()
+        {
+            var popupObject = new GameObject("Runtime Popup Reentry Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                int initialChildCount = popupObject.transform.childCount;
+                Transform closeButtonTransform = popupObject.transform.Find("CloseButton");
+                Assert.That(closeButtonTransform, Is.Not.Null);
+
+                UnityEngine.UI.Button closeButton = closeButtonTransform.GetComponent<UnityEngine.UI.Button>();
+                Assert.That(closeButton, Is.Not.Null);
+                closeButton.onClick.RemoveAllListeners();
+
+                popup.ApplyDragDeltaForTests(new Vector2(96f, -32f));
+                Vector2 draggedPosition = popupObject.GetComponent<RectTransform>().anchoredPosition;
+
+                System.Collections.Generic.List<UnityEngine.UI.Button> cardButtons =
+                    GetField<System.Collections.Generic.List<UnityEngine.UI.Button>>(popup, "cardButtons");
+                foreach (UnityEngine.UI.Button cardButton in cardButtons)
+                {
+                    cardButton.onClick.RemoveAllListeners();
+                }
+
+                cardButtons.Clear();
+                SetField(popup, "panelRoot", null);
+                SetField(popup, "canvasGroup", null);
+                SetField(popup, "notificationText", null);
+
+                popup.Open();
+
+                Assert.That(popupObject.transform.childCount, Is.EqualTo(initialChildCount));
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "Page"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "Rail"), Is.EqualTo(1));
+                Assert.That(CountDirectChildrenNamed(popupObject.transform, "MainViewport"), Is.EqualTo(1));
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(popupObject.GetComponent<RectTransform>().anchoredPosition, Is.EqualTo(draggedPosition));
+
+                closeButton.onClick.Invoke();
+                Assert.That(popup.IsOpen, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
+        public void Given_BuiltRuntimePopupWithLostRootCache_When_EnsuringAgain_Then_PreservesExistingListeners()
+        {
+            var popupObject = new GameObject("Runtime Popup Listener Preservation Test", typeof(RectTransform));
+
+            try
+            {
+                var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
+                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                int initialChildCount = popupObject.transform.childCount;
+                UnityEngine.UI.Button closeButton =
+                    popupObject.transform.Find("CloseButton").GetComponent<UnityEngine.UI.Button>();
+                int externalCloseInvocationCount = 0;
+                closeButton.onClick.AddListener(() => externalCloseInvocationCount++);
+
+                SetField(popup, "panelRoot", null);
+                SetField(popup, "canvasGroup", null);
+                SetField(popup, "notificationText", null);
+
+                popup.Open();
+                closeButton.onClick.Invoke();
+
+                Assert.That(popupObject.transform.childCount, Is.EqualTo(initialChildCount));
+                Assert.That(popup.IsOpen, Is.False);
+                Assert.That(externalCloseInvocationCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(popupObject);
+            }
+        }
+
+        [Test]
         public void Given_MainRecordingScene_When_EnsuringRuntimeSettingsPopup_Then_CreatesPopupUnderUiCanvas()
         {
             Type popupType = RequireType(RuntimePopupTypeName);
@@ -1645,6 +1727,20 @@ namespace Tests.Editor.Settings
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"{instance.GetType().FullName}.{fieldName} must exist.");
             field.SetValue(instance, value);
+        }
+
+        private static int CountDirectChildrenNamed(Transform parent, string childName)
+        {
+            int count = 0;
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                if (parent.GetChild(i).name == childName)
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private static void SetImportCommand(MainRecordingSettingsDocument document, string commandId, string fbxPath)

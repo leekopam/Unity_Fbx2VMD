@@ -205,19 +205,15 @@ namespace Fbx2Vmd.Settings
 
         private void EnsureBuilt()
         {
-            if (panelRoot != null)
+            if (panelRoot != null &&
+                canvasGroup != null &&
+                notificationText != null &&
+                cardButtons.Count == MainRecordingSettingsLayoutSpec.Cards.Length)
             {
                 return;
             }
 
             RectTransform root = EnsureRectTransform(gameObject);
-            root.anchorMin = new Vector2(0.5f, 0.5f);
-            root.anchorMax = new Vector2(0.5f, 0.5f);
-            root.pivot = new Vector2(0.5f, 0.5f);
-            root.anchoredPosition = Vector2.zero;
-            root.sizeDelta = MainRecordingSettingsLayoutSpec.ReferenceSize;
-            root.localScale = Vector3.one * MainRecordingSettingsLayoutSpec.DefaultDisplayScale;
-
             panelRoot = root;
             canvasGroup = gameObject.GetComponent<CanvasGroup>();
             if (canvasGroup == null)
@@ -229,11 +225,85 @@ namespace Fbx2Vmd.Settings
             {
                 gameObject.AddComponent<RectMask2D>();
             }
+
+            if (TryRestoreGeneratedHierarchy())
+            {
+                return;
+            }
+
+            root.anchorMin = new Vector2(0.5f, 0.5f);
+            root.anchorMax = new Vector2(0.5f, 0.5f);
+            root.pivot = new Vector2(0.5f, 0.5f);
+            root.anchoredPosition = Vector2.zero;
+            root.sizeDelta = MainRecordingSettingsLayoutSpec.ReferenceSize;
+            root.localScale = Vector3.one * MainRecordingSettingsLayoutSpec.DefaultDisplayScale;
+
             CreateImage("Page", panelRoot, RectFull(), MainRecordingSettingsLayoutSpec.PageColor);
             BuildRail(panelRoot);
             BuildSidebar(panelRoot);
             BuildMainArea(panelRoot);
             SetVisible(false);
+        }
+
+        private bool TryRestoreGeneratedHierarchy()
+        {
+            bool shouldRestoreButtonListeners = cardButtons.Count == 0;
+            Transform page = panelRoot.Find("Page");
+            Transform rail = panelRoot.Find("Rail");
+            Transform sidebar = panelRoot.Find("Sidebar");
+            Transform mainContent = panelRoot.Find("MainViewport/MainContent");
+            Transform closeButtonTransform = panelRoot.Find("CloseButton");
+            Transform notificationTransform = panelRoot.Find("Notification");
+            if (page == null ||
+                rail == null ||
+                sidebar == null ||
+                mainContent == null ||
+                closeButtonTransform == null ||
+                notificationTransform == null)
+            {
+                return false;
+            }
+
+            Button closeButton = closeButtonTransform.GetComponent<Button>();
+            TextMeshProUGUI restoredNotification = notificationTransform.GetComponent<TextMeshProUGUI>();
+            MainRecordingSettingsCardSpec[] cards = MainRecordingSettingsLayoutSpec.Cards;
+            var restoredCardButtons = new Button[cards.Length];
+            if (closeButton == null || restoredNotification == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < cards.Length; i++)
+            {
+                Transform buttonTransform = mainContent.Find(cards[i].Title + " Button");
+                Button button = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null;
+                if (button == null)
+                {
+                    return false;
+                }
+
+                restoredCardButtons[i] = button;
+            }
+
+            if (shouldRestoreButtonListeners)
+            {
+                BindCloseButton(closeButton);
+            }
+
+            cardButtons.Clear();
+            for (int i = 0; i < cards.Length; i++)
+            {
+                Button button = restoredCardButtons[i];
+                if (shouldRestoreButtonListeners)
+                {
+                    BindCardButton(button, cards[i].Action);
+                }
+
+                cardButtons.Add(button);
+            }
+
+            notificationText = restoredNotification;
+            return true;
         }
 
         public void OnBeginDrag(PointerEventData eventData)
@@ -358,7 +428,7 @@ namespace Fbx2Vmd.Settings
                 "닫기",
                 new Rect(1190f, 632f, 56f, 32f),
                 true);
-            closeButton.onClick.AddListener(Close);
+            BindCloseButton(closeButton);
             notificationText = CreateText("Notification", parent, string.Empty, 13,
                 new Color32(80, 88, 96, 255), FontStyles.Normal,
                 TextAlignmentOptions.MidlineRight, new Rect(860f, 632f, 300f, 32f));
@@ -391,8 +461,20 @@ namespace Fbx2Vmd.Settings
                     MainRecordingSettingsLayoutSpec.CardButtonHeight),
                 card.Enabled);
             MainRecordingSettingsActionType action = card.Action;
-            button.onClick.AddListener(() => HandleCardAction(action));
+            BindCardButton(button, action);
             cardButtons.Add(button);
+        }
+
+        private void BindCloseButton(Button button)
+        {
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(Close);
+        }
+
+        private void BindCardButton(Button button, MainRecordingSettingsActionType action)
+        {
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(() => HandleCardAction(action));
         }
 
         private void HandleCardAction(MainRecordingSettingsActionType action)
