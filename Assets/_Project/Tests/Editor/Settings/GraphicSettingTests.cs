@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -245,6 +246,43 @@ namespace Tests.Editor.Settings
                 bool usesManualApplyButton = (bool)InvokeStatic(schemaType, "UsesManualApplyButton", category);
                 Assert.That(autoApplied, Is.True, $"{category} category must apply changes immediately.");
                 Assert.That(usesManualApplyButton, Is.False, $"{category} category must not expose manual apply buttons.");
+            }
+        }
+
+        [Test]
+        public void GraphicSettingEditorTypes_AreOwnedByResponsibilityNamedFiles()
+        {
+            string editorSettingsDirectory = Path.Combine(
+                Application.dataPath,
+                "_Project/Scripts/Editor/Settings");
+            string[] editorTypeNames =
+            {
+                "GraphicSettingInspectorSchema",
+                "GraphicMaterialShaderEditorController",
+                "GraphicTextureImportEditorController",
+                "GraphicSettingGameViewScaleAutoApplier",
+                "GameViewScaleController",
+                "GraphicSettingSceneInstaller"
+            };
+
+            foreach (string typeName in editorTypeNames)
+            {
+                string sourcePath = Path.Combine(editorSettingsDirectory, $"{typeName}.cs");
+                Assert.That(File.Exists(sourcePath), Is.True, $"{typeName} must be stored in {sourcePath}.");
+                Assert.That(
+                    Type.GetType($"Fbx2Vmd.Settings.EditorTools.{typeName}, Assembly-CSharp-Editor"),
+                    Is.Not.Null,
+                    $"{typeName} must keep the EditorTools namespace contract.");
+            }
+
+            string inspectorSource = File.ReadAllText(
+                Path.Combine(editorSettingsDirectory, "GraphicSettingEditor.cs"));
+            foreach (string typeName in editorTypeNames)
+            {
+                Assert.That(
+                    inspectorSource,
+                    Does.Not.Contain($"class {typeName}"),
+                    $"GraphicSettingEditor.cs must not own {typeName}.");
             }
         }
 
