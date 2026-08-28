@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.PostProcessing;
@@ -154,33 +153,11 @@ namespace Fbx2Vmd.Settings
 
             GraphicMaterialShaderApplyResult result = GraphicMaterialShaderController.Apply(
                 CreateMaterialShaderPlan(),
-                CollectMaterialShaderTargets());
+                GraphicMaterialShaderTargetCollector.Enumerate(
+                    materialShaderTargets,
+                    materialSourceRoots));
             Debug.Log($"GraphicSetting 모델 머티리얼 설정 적용: {result}");
             return result;
-        }
-
-        private IEnumerable<Material> CollectMaterialShaderTargets()
-        {
-            foreach (Material material in materialShaderTargets)
-            {
-                yield return material;
-            }
-
-            foreach (GameObject root in materialSourceRoots)
-            {
-                if (root == null)
-                {
-                    continue;
-                }
-
-                foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
-                {
-                    foreach (Material material in renderer.sharedMaterials)
-                    {
-                        yield return material;
-                    }
-                }
-            }
         }
 
         private void ApplySimplePresetValues()
