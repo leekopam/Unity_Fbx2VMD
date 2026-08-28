@@ -97,11 +97,17 @@ namespace Tests.Editor.FBXImporter
                 DurationInTicks = -1d,
                 TicksPerSecond = 30d
             };
+            var overflowingDuration = new Assimp.Animation
+            {
+                DurationInTicks = double.MaxValue,
+                TicksPerSecond = 60d
+            };
 
             Assert.That(InvokeDuration(calculateMethod, null), Is.Zero);
             Assert.That(InvokeDuration(calculateMethod, missingRate), Is.EqualTo(2f));
             Assert.That(InvokeDuration(calculateMethod, explicitRate), Is.EqualTo(4f));
             Assert.That(InvokeDuration(calculateMethod, invalidDuration), Is.Zero);
+            Assert.That(InvokeDuration(calculateMethod, overflowingDuration), Is.Zero);
         }
 
         [Test]
