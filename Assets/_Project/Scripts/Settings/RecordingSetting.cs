@@ -96,11 +96,11 @@ public sealed class RecordingSetting : MonoBehaviour
     private string lastHandledSharedSettingsCommandId = string.Empty;
     private static readonly Func<FBXVmdPipeline, string, bool> DefaultSharedSettingsFbxImportStarter =
         (fileManager, path) => fileManager.TryStartFbxImportFromSharedSettings(path);
-    private static Func<FBXVmdPipeline, string, bool> sharedSettingsFbxImportStarter =
+    private Func<FBXVmdPipeline, string, bool> sharedSettingsFbxImportStarter =
         DefaultSharedSettingsFbxImportStarter;
 
 #if UNITY_EDITOR
-    public static Func<FBXVmdPipeline, string, bool> SharedSettingsFbxImportStarterForTests
+    public Func<FBXVmdPipeline, string, bool> SharedSettingsFbxImportStarterForTests
     {
         get => sharedSettingsFbxImportStarter;
         set => sharedSettingsFbxImportStarter = value ?? DefaultSharedSettingsFbxImportStarter;
