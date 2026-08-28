@@ -613,8 +613,15 @@ namespace Tests.Editor.FBXImporter
             Type plannerType = typeof(FBXVmdPipeline).Assembly.GetType(
                 "Fbx2Vmd.FBXImporter.FBXEditorDiagnosticPlanner",
                 throwOnError: false);
+            Type legacyRunnerType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorDiagnosticSmokeRunner",
+                throwOnError: false);
 
             Assert.That(plannerType, Is.Not.Null);
+            Assert.That(
+                legacyRunnerType,
+                Is.Null,
+                "대체된 Editor smoke 계획 타입을 중복 유지하면 안 됩니다.");
             Assert.That(
                 plannerType?.GetMethod(
                     "TryBuildCaptureResolutionOverride",
