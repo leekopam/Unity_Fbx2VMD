@@ -191,30 +191,21 @@ namespace Fbx2Vmd.Settings
 
         private void ApplyAntiAliasingPreset()
         {
-            switch (antiAliasingPreset)
-            {
-                case GraphicSettingQualityPreset.Performance:
-                    antiAliasing = GraphicAntiAliasingMode.FXAA;
-                    smaaQuality = AntialiasingQuality.Low;
-                    enableCameraPostProcessing = true;
-                    enableCameraMsaa = true;
-                    msaaSampleCount = 2;
-                    break;
-                case GraphicSettingQualityPreset.Balanced:
-                    antiAliasing = GraphicAntiAliasingMode.SMAA;
-                    smaaQuality = AntialiasingQuality.Medium;
-                    enableCameraPostProcessing = true;
-                    enableCameraMsaa = true;
-                    msaaSampleCount = 4;
-                    break;
-                case GraphicSettingQualityPreset.Quality:
-                    antiAliasing = GraphicAntiAliasingMode.SMAA;
-                    smaaQuality = AntialiasingQuality.High;
-                    enableCameraPostProcessing = true;
-                    enableCameraMsaa = true;
-                    msaaSampleCount = 8;
-                    break;
-            }
+            GraphicAntiAliasingPlan customPlan = new GraphicAntiAliasingPlan(
+                antiAliasing,
+                smaaQuality,
+                enableCameraPostProcessing,
+                enableCameraMsaa,
+                msaaSampleCount);
+            GraphicAntiAliasingPlan plan = GraphicAntiAliasingPresetResolver.Resolve(
+                antiAliasingPreset,
+                customPlan);
+
+            antiAliasing = plan.AntiAliasing;
+            smaaQuality = plan.SmaaQuality;
+            enableCameraPostProcessing = plan.EnableCameraPostProcessing;
+            enableCameraMsaa = plan.EnableCameraMsaa;
+            msaaSampleCount = plan.MsaaSampleCount;
         }
 
         private void ApplyCameraSettings(Camera camera, bool useUniversalRenderPipeline)

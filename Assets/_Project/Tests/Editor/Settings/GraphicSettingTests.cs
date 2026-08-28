@@ -25,6 +25,10 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.GraphicMaterialShaderPlanResolver, Assembly-CSharp";
         private const string RenderScalePresetResolverTypeName =
             "Fbx2Vmd.Settings.GraphicRenderScalePresetResolver, Assembly-CSharp";
+        private const string AntiAliasingPlanTypeName =
+            "Fbx2Vmd.Settings.GraphicAntiAliasingPlan, Assembly-CSharp";
+        private const string AntiAliasingPresetResolverTypeName =
+            "Fbx2Vmd.Settings.GraphicAntiAliasingPresetResolver, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderController, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
@@ -285,6 +289,75 @@ namespace Tests.Editor.Settings
                 customRenderScale);
 
             Assert.That(renderScale, Is.EqualTo(expectedRenderScale).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_GraphicSetting_When_InspectingAntiAliasingOwnership_Then_DelegatesPresetResolution()
+        {
+            const string settingSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicSetting.cs";
+            const string planSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicAntiAliasingPlan.cs";
+            const string resolverSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicAntiAliasingPresetResolver.cs";
+
+            Assert.That(File.Exists(planSourcePath), Is.True, planSourcePath);
+            Assert.That(File.Exists(resolverSourcePath), Is.True, resolverSourcePath);
+            Assert.That(Type.GetType(AntiAliasingPlanTypeName), Is.Not.Null);
+            Assert.That(Type.GetType(AntiAliasingPresetResolverTypeName), Is.Not.Null);
+
+            string settingSource = File.ReadAllText(settingSourcePath);
+            string planSource = File.ReadAllText(planSourcePath);
+            string resolverSource = File.ReadAllText(resolverSourcePath);
+            Assert.That(
+                settingSource,
+                Does.Contain("GraphicAntiAliasingPresetResolver.Resolve("));
+            Assert.That(settingSource, Does.Not.Contain("switch (antiAliasingPreset)"));
+            Assert.That(planSource, Does.Contain("readonly struct GraphicAntiAliasingPlan"));
+            Assert.That(resolverSource, Does.Contain("switch (preset)"));
+            Assert.That(planSource, Does.Not.Contain("MonoBehaviour"));
+            Assert.That(resolverSource, Does.Not.Contain("MonoBehaviour"));
+            Assert.That(resolverSource, Does.Not.Contain("interface "));
+        }
+
+        [TestCase("Performance", "FXAA", "Low", true, true, 2)]
+        [TestCase("Balanced", "SMAA", "Medium", true, true, 4)]
+        [TestCase("Quality", "SMAA", "High", true, true, 8)]
+        [TestCase("Custom", "TAA", "Low", false, false, 6)]
+        public void Given_AntiAliasingPreset_When_ResolvingPlan_Then_ReturnsExpectedValues(
+            string presetName,
+            string expectedMode,
+            string expectedSmaaQuality,
+            bool expectedPostProcessing,
+            bool expectedMsaa,
+            int expectedMsaaSampleCount)
+        {
+            Type planType = RequireType(AntiAliasingPlanTypeName);
+            Type resolverType = RequireType(AntiAliasingPresetResolverTypeName);
+            Type presetType = RequireType(
+                "Fbx2Vmd.Settings.GraphicSettingQualityPreset, Assembly-CSharp");
+            Type modeType = RequireType(
+                "Fbx2Vmd.Settings.GraphicAntiAliasingMode, Assembly-CSharp");
+            object preset = Enum.Parse(presetType, presetName);
+            object customMode = Enum.Parse(modeType, "TAA");
+            object customPlan = Activator.CreateInstance(
+                planType,
+                InstanceFields,
+                null,
+                new object[] { customMode, AntialiasingQuality.Low, false, false, 6 },
+                null);
+
+            object plan = InvokeStatic(resolverType, "Resolve", preset, customPlan);
+
+            Assert.That(GetMemberValue<object>(plan, "AntiAliasing").ToString(), Is.EqualTo(expectedMode));
+            Assert.That(GetMemberValue<object>(plan, "SmaaQuality").ToString(), Is.EqualTo(expectedSmaaQuality));
+            Assert.That(
+                GetMemberValue<bool>(plan, "EnableCameraPostProcessing"),
+                Is.EqualTo(expectedPostProcessing));
+            Assert.That(GetMemberValue<bool>(plan, "EnableCameraMsaa"), Is.EqualTo(expectedMsaa));
+            Assert.That(
+                GetMemberValue<int>(plan, "MsaaSampleCount"),
+                Is.EqualTo(expectedMsaaSampleCount));
         }
 
         [Test]
