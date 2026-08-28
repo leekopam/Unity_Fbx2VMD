@@ -66,7 +66,7 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static string GetEditorSurfacePolicyForTests()
         {
-            return MainRecordingSettingsLayoutSpec.EditorSurfacePolicy;
+            return MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy;
         }
 
         private static bool CanLaunchWebSettingsForTests()

@@ -164,7 +164,7 @@ public sealed class RecordingSetting : MonoBehaviour
             return;
         }
 
-        if (MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(
+        if (MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
                 openSettingsPopupOnStart,
                 Application.isEditor,
                 Application.isBatchMode))
