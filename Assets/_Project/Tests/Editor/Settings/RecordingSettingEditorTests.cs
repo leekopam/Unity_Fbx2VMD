@@ -11,6 +11,7 @@ using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 
 namespace Tests.Editor.Settings
@@ -1921,6 +1922,40 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimePopupPublicApi_When_InspectingSurface_Then_ExcludesDirectTestWrappers()
+        {
+            string[] redundantPublicMethods =
+            {
+                "GetReferenceSizeForTests",
+                "GetDisplayedSizeForTests",
+                "SupportsPointerDragForTests",
+                "CanResolveImportActionForTests",
+                "UsesCharacterVisualAssetForTests",
+                "IsProductionSurfaceForTests",
+                "GetSidebarItemLabelsForTests",
+            };
+
+            foreach (string methodName in redundantPublicMethods)
+            {
+                MethodInfo method = typeof(MainRecordingSettingsPopup).GetMethod(
+                    methodName,
+                    BindingFlags.Instance | BindingFlags.Public);
+                Assert.That(method, Is.Null, methodName);
+            }
+
+            Assert.That(
+                typeof(MainRecordingSettingsPopup).GetMethod(
+                    "ApplyDragDeltaForTests",
+                    BindingFlags.Instance | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(
+                typeof(MainRecordingSettingsPopup).GetMethod(
+                    "GetCardButtonCountForTests",
+                    BindingFlags.Instance | BindingFlags.Public),
+                Is.Not.Null);
+        }
+
+        [Test]
         public void Given_RuntimePopupNotification_When_ShowingKoreanMessage_Then_RemainsReadable()
         {
             var popupObject = new GameObject("Runtime Popup Korean Notification Test", typeof(RectTransform));
@@ -2363,33 +2398,39 @@ namespace Tests.Editor.Settings
             Type popupType = RequireType(RuntimePopupTypeName);
             EditorSceneManager.OpenScene(MainRecordingScenePath);
 
-            RecordingSetting recodingSetting = UnityEngine.Object.FindObjectOfType<RecordingSetting>();
-            Assert.That(recodingSetting, Is.Not.Null, "Main_recoding must keep RecordingSetting on the Setting object.");
-            Assert.That(GetField<bool>(recodingSetting, "openSettingsPopupOnStart"), Is.True);
+            RecordingSetting recordingSetting = UnityEngine.Object.FindObjectOfType<RecordingSetting>();
+            Assert.That(recordingSetting, Is.Not.Null, "Main_recoding must keep RecordingSetting on the Setting object.");
+            Assert.That(GetField<bool>(recordingSetting, "openSettingsPopupOnStart"), Is.True);
 
-            object popup = InvokeInstance<object>(recodingSetting, "EnsureSettingsPopup");
+            object popup = InvokeInstance<object>(recordingSetting, "EnsureSettingsPopup");
             Assert.That(popup, Is.Not.Null);
             Assert.That(popup.GetType(), Is.EqualTo(popupType));
 
-            var popupComponent = (Component)popup;
+            var popupComponent = (MainRecordingSettingsPopup)popup;
             Assert.That(popupComponent.transform.parent, Is.Not.Null);
             Assert.That(popupComponent.transform.parent.name, Is.EqualTo("UI_Canvas"));
-            Assert.That(GetField<Component>(recodingSetting, "settingsPopup"), Is.EqualTo(popupComponent));
-            Assert.That(InvokeInstance<Vector2>(popup, "GetReferenceSizeForTests"), Is.EqualTo(new Vector2(1265f, 675f)));
-            Assert.That(InvokeInstance<Vector2>(popup, "GetDisplayedSizeForTests"),
+            Assert.That(GetField<Component>(recordingSetting, "settingsPopup"), Is.EqualTo(popupComponent));
+            Assert.That(MainRecordingSettingsLayoutSpec.ReferenceSize, Is.EqualTo(new Vector2(1265f, 675f)));
+            Assert.That(MainRecordingSettingsLayoutSpec.DefaultDisplaySize,
                 Is.EqualTo(new Vector2(1581.25f, 843.75f)));
-            Assert.That(InvokeInstance<bool>(popup, "SupportsPointerDragForTests"), Is.True);
+            Assert.That(popupComponent, Is.InstanceOf<IBeginDragHandler>());
+            Assert.That(popupComponent, Is.InstanceOf<IDragHandler>());
             RectTransform popupRect = popupComponent.GetComponent<RectTransform>();
             Vector2 beforeDrag = popupRect.anchoredPosition;
             InvokeInstance<object>(popup, "ApplyDragDeltaForTests", new Vector2(120f, -48f));
             Assert.That(popupRect.anchoredPosition, Is.EqualTo(beforeDrag + new Vector2(120f, -48f)));
             Assert.That(InvokeInstance<int>(popup, "GetCardButtonCountForTests"), Is.EqualTo(3));
-            Assert.That(InvokeInstance<bool>(popup, "CanResolveImportActionForTests"), Is.True);
-            Assert.That(InvokeInstance<bool>(popup, "UsesCharacterVisualAssetForTests"), Is.False);
-            Assert.That(InvokeInstance<bool>(popup, "IsProductionSurfaceForTests"), Is.False);
+            Assert.That(
+                MainRecordingSettingsActions.CanExecute(
+                    MainRecordingSettingsActionType.ImportFbx,
+                    popupComponent.RecordingSetting,
+                    popupComponent.FBXVmdPipeline),
+                Is.True);
             Assert.That(InvokeInstance<bool>(popup, "HasReadableKoreanTextForTests"), Is.True);
             Assert.That(
-                InvokeInstance<string[]>(popup, "GetSidebarItemLabelsForTests"),
+                Array.ConvertAll(
+                    MainRecordingSettingsLayoutSpec.SidebarItems,
+                    item => item.Label),
                 Is.EqualTo(new[] { "Camera 1", "Environment", "Directional Light" }));
             string[] visibleText = InvokeInstance<string[]>(popup, "GetVisibleTextForTests");
             Assert.That(visibleText, Does.Not.Contain("캐릭터"));
