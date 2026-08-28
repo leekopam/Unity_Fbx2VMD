@@ -76,10 +76,13 @@ namespace Tests.Editor.FBXImporter
         public void Given_LibraryLoader_When_InspectingCallSites_Then_PreservesPreloadGuards()
         {
             string importerSource = ReadFbxImporterSource("AssimpFBXImporter.cs");
+            string inspectorSource = ReadFbxImporterSource("AssimpAnimationInspector.cs");
             string comparisonRunnerSource = ReadFbxImporterSource("FbxRuntimePoseClipCompareRunner.cs");
 
-            Assert.That(Regex.Matches(importerSource, @"AssimpLibraryLoader\.IsLoaded").Count, Is.EqualTo(3));
-            Assert.That(Regex.Matches(importerSource, @"AssimpLibraryLoader\.LoadLibrary\(\)").Count, Is.EqualTo(3));
+            Assert.That(Regex.Matches(importerSource, @"AssimpLibraryLoader\.IsLoaded").Count, Is.EqualTo(2));
+            Assert.That(Regex.Matches(importerSource, @"AssimpLibraryLoader\.LoadLibrary\(\)").Count, Is.EqualTo(2));
+            Assert.That(Regex.Matches(inspectorSource, @"AssimpLibraryLoader\.IsLoaded").Count, Is.EqualTo(1));
+            Assert.That(Regex.Matches(inspectorSource, @"AssimpLibraryLoader\.LoadLibrary\(\)").Count, Is.EqualTo(1));
             Assert.That(Regex.Matches(comparisonRunnerSource, @"AssimpLibraryLoader\.IsLoaded").Count, Is.EqualTo(1));
             Assert.That(Regex.Matches(comparisonRunnerSource, @"AssimpLibraryLoader\.LoadLibrary\(\)").Count, Is.EqualTo(1));
         }
