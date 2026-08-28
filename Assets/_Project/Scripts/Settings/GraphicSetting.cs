@@ -183,7 +183,10 @@ namespace Fbx2Vmd.Settings
         private void ApplySimplePresetValues(bool hasRenderScaleTarget)
         {
             ApplyAntiAliasingPreset();
-            ApplyRenderSharpnessPreset(hasRenderScaleTarget);
+            renderScale = GraphicRenderScalePresetResolver.Resolve(
+                renderSharpness,
+                hasRenderScaleTarget,
+                renderScale);
         }
 
         private void ApplyAntiAliasingPreset()
@@ -210,28 +213,6 @@ namespace Fbx2Vmd.Settings
                     enableCameraPostProcessing = true;
                     enableCameraMsaa = true;
                     msaaSampleCount = 8;
-                    break;
-            }
-        }
-
-        private void ApplyRenderSharpnessPreset(bool hasRenderScaleTarget)
-        {
-            if (!hasRenderScaleTarget && renderSharpness != GraphicSettingQualityPreset.Custom)
-            {
-                renderScale = 1.0f;
-                return;
-            }
-
-            switch (renderSharpness)
-            {
-                case GraphicSettingQualityPreset.Performance:
-                    renderScale = 1.0f;
-                    break;
-                case GraphicSettingQualityPreset.Balanced:
-                    renderScale = 1.25f;
-                    break;
-                case GraphicSettingQualityPreset.Quality:
-                    renderScale = 1.5f;
                     break;
             }
         }
