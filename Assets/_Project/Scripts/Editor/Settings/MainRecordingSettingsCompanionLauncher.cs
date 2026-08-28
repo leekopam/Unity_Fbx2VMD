@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
 using Fbx2Vmd.Settings;
 using UnityEditor;
@@ -27,7 +26,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         [MenuItem(MenuPath)]
         public static void OpenMainRecordingSettings()
         {
-            OpenMainRecordingSettingsWithLauncher(LaunchWebSettings);
+            OpenMainRecordingSettingsWithLauncher(MainRecordingSettingsCompanionProcessLauncher.Launch);
         }
 
         private static void OpenMainRecordingSettingsWithLauncher(
@@ -36,7 +35,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             MainRecordingSettingsLaunchPlan plan = CreateDefaultLaunchPlan();
             try
             {
-                (launcher ?? LaunchWebSettings)(plan);
+                (launcher ?? MainRecordingSettingsCompanionProcessLauncher.Launch)(plan);
             }
             catch (Exception exception)
             {
@@ -165,83 +164,6 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             return File.Exists(Path.Combine(ElectronAppRoot, "package.json")) &&
                    File.Exists(Path.Combine(ElectronAppRoot, "electron", "main.js"));
-        }
-
-        private static void LaunchWebSettings(MainRecordingSettingsLaunchPlan plan)
-        {
-            string fullWorkingDirectory = Path.GetFullPath(plan.WorkingDirectory);
-            if (!Directory.Exists(fullWorkingDirectory))
-            {
-                throw new DirectoryNotFoundException(fullWorkingDirectory);
-            }
-
-            string npmExecutable = ResolveNpmExecutable();
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = ResolveProcessFileName(npmExecutable),
-                Arguments = ResolveProcessArguments(npmExecutable, plan.Arguments),
-                WorkingDirectory = fullWorkingDirectory,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            startInfo.Environment[MainRecordingSettingsPathResolver.EnvironmentVariableName] = plan.SettingsPath;
-
-            Process.Start(startInfo);
-        }
-
-        private static string ResolveNpmExecutable()
-        {
-            string pathCommand = FindOnPath("npm.cmd");
-            if (!string.IsNullOrEmpty(pathCommand))
-            {
-                return pathCommand;
-            }
-
-            string standardPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "nodejs",
-                "npm.cmd");
-            return File.Exists(standardPath) ? standardPath : NpmExecutableName;
-        }
-
-        private static string ResolveProcessFileName(string executable)
-        {
-            return IsWindowsCommandScript(executable)
-                ? Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe"
-                : executable;
-        }
-
-        private static string ResolveProcessArguments(string executable, string arguments)
-        {
-            return IsWindowsCommandScript(executable)
-                ? "/d /c \"\"" + executable + "\" " + arguments + "\""
-                : arguments;
-        }
-
-        private static bool IsWindowsCommandScript(string executable)
-        {
-            return executable.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
-                   executable.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string FindOnPath(string fileName)
-        {
-            string path = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-            foreach (string directory in path.Split(Path.PathSeparator))
-            {
-                if (string.IsNullOrWhiteSpace(directory))
-                {
-                    continue;
-                }
-
-                string candidate = Path.Combine(directory.Trim(), fileName);
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
-            }
-
-            return string.Empty;
         }
 
         private static string NormalizeScenePath(string scenePath)
