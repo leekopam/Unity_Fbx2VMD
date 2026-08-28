@@ -74,52 +74,6 @@ namespace Fbx2Vmd.Settings
             isOpen = false;
         }
 
-        public void ApplyDragDeltaForTests(Vector2 delta)
-        {
-            EnsureBuilt();
-            panelRoot.anchoredPosition += delta;
-        }
-
-        public int GetCardButtonCountForTests()
-        {
-            EnsureBuilt();
-            return cardButtons.Count;
-        }
-
-        public bool HasReadableKoreanTextForTests()
-        {
-            EnsureBuilt();
-            TextMeshProUGUI[] labels = GetComponentsInChildren<TextMeshProUGUI>(true);
-            foreach (TextMeshProUGUI label in labels)
-            {
-                if (!KoreanUiTextFallback.IsReadable(label))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        public string[] GetVisibleTextForTests()
-        {
-            EnsureBuilt();
-            var texts = new List<string>();
-            TextMeshProUGUI[] textMeshLabels = GetComponentsInChildren<TextMeshProUGUI>(true);
-            foreach (TextMeshProUGUI label in textMeshLabels)
-            {
-                texts.Add(label.text);
-            }
-
-            Text[] legacyLabels = GetComponentsInChildren<Text>(true);
-            foreach (Text label in legacyLabels)
-            {
-                texts.Add(label.text);
-            }
-
-            return texts.ToArray();
-        }
-
         internal void EnsureBuilt()
         {
             RectTransform ownedContentRoot = null;

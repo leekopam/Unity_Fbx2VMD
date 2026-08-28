@@ -1933,6 +1933,10 @@ namespace Tests.Editor.Settings
                 "UsesCharacterVisualAssetForTests",
                 "IsProductionSurfaceForTests",
                 "GetSidebarItemLabelsForTests",
+                "ApplyDragDeltaForTests",
+                "GetCardButtonCountForTests",
+                "HasReadableKoreanTextForTests",
+                "GetVisibleTextForTests",
             };
 
             foreach (string methodName in redundantPublicMethods)
@@ -1943,16 +1947,6 @@ namespace Tests.Editor.Settings
                 Assert.That(method, Is.Null, methodName);
             }
 
-            Assert.That(
-                typeof(MainRecordingSettingsPopup).GetMethod(
-                    "ApplyDragDeltaForTests",
-                    BindingFlags.Instance | BindingFlags.Public),
-                Is.Not.Null);
-            Assert.That(
-                typeof(MainRecordingSettingsPopup).GetMethod(
-                    "GetCardButtonCountForTests",
-                    BindingFlags.Instance | BindingFlags.Public),
-                Is.Not.Null);
         }
 
         [Test]
@@ -1966,7 +1960,9 @@ namespace Tests.Editor.Settings
 
                 InvokeInstance<object>(popup, "ShowNotification", "설정을 준비 중입니다.");
 
-                Assert.That(popup.HasReadableKoreanTextForTests(), Is.True);
+                Assert.That(
+                    MainRecordingSettingsPopupTestInspector.HasReadableKoreanText(popup),
+                    Is.True);
             }
             finally
             {
@@ -2013,7 +2009,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 int initialGeneratedChildCount = generatedContent.childCount;
                 Transform closeButtonTransform = generatedContent.Find("CloseButton");
@@ -2023,7 +2019,9 @@ namespace Tests.Editor.Settings
                 Assert.That(closeButton, Is.Not.Null);
                 closeButton.onClick.RemoveAllListeners();
 
-                popup.ApplyDragDeltaForTests(new Vector2(96f, -32f));
+                MainRecordingSettingsPopupTestInspector.OffsetAnchoredPosition(
+                    popup,
+                    new Vector2(96f, -32f));
                 Vector2 draggedPosition = popupObject.GetComponent<RectTransform>().anchoredPosition;
 
                 System.Collections.Generic.List<UnityEngine.UI.Button> cardButtons =
@@ -2043,7 +2041,7 @@ namespace Tests.Editor.Settings
                 Assert.That(CountDirectChildrenNamed(generatedContent, "Page"), Is.EqualTo(1));
                 Assert.That(CountDirectChildrenNamed(generatedContent, "Rail"), Is.EqualTo(1));
                 Assert.That(CountDirectChildrenNamed(generatedContent, "MainViewport"), Is.EqualTo(1));
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Assert.That(popupObject.GetComponent<RectTransform>().anchoredPosition, Is.EqualTo(draggedPosition));
 
                 closeButton.onClick.Invoke();
@@ -2063,14 +2061,16 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 int completeGeneratedChildCount = generatedContent.childCount;
                 var extensionObject = new GameObject("Runtime Popup Extension", typeof(RectTransform));
                 extensionObject.transform.SetParent(popupObject.transform, false);
 
                 InvokeInstance<object>(popup, "ShowNotification", "부분 계층 복구 메시지");
-                popup.ApplyDragDeltaForTests(new Vector2(72f, -24f));
+                MainRecordingSettingsPopupTestInspector.OffsetAnchoredPosition(
+                    popup,
+                    new Vector2(72f, -24f));
                 Vector2 draggedPosition = popupObject.GetComponent<RectTransform>().anchoredPosition;
                 UnityEngine.Object.DestroyImmediate(generatedContent.Find("Rail").gameObject);
 
@@ -2085,7 +2085,7 @@ namespace Tests.Editor.Settings
                 Assert.That(extensionObject.transform.parent, Is.EqualTo(popupObject.transform));
                 Assert.That(extensionObject.activeSelf, Is.True);
                 Assert.That(popupObject.GetComponent<RectTransform>().anchoredPosition, Is.EqualTo(draggedPosition));
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Assert.That(GetField<TextMeshProUGUI>(popup, "notificationText").text,
                     Is.EqualTo("부분 계층 복구 메시지"));
             }
@@ -2103,7 +2103,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 var extensionObject = new GameObject("Page", typeof(RectTransform));
                 extensionObject.transform.SetParent(popupObject.transform, false);
@@ -2131,7 +2131,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 int completeGeneratedChildCount = generatedContent.childCount;
                 Transform page = generatedContent.Find("Page");
@@ -2142,7 +2142,9 @@ namespace Tests.Editor.Settings
                 closeButton.onClick.AddListener(() => externalCloseInvocationCount++);
 
                 InvokeInstance<object>(popup, "ShowNotification", "기존 계층 이전 메시지");
-                popup.ApplyDragDeltaForTests(new Vector2(48f, -16f));
+                MainRecordingSettingsPopupTestInspector.OffsetAnchoredPosition(
+                    popup,
+                    new Vector2(48f, -16f));
                 Vector2 draggedPosition = popupObject.GetComponent<RectTransform>().anchoredPosition;
                 Vector3 pageWorldPosition = page.position;
 
@@ -2188,7 +2190,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 int completeGeneratedChildCount = generatedContent.childCount;
                 GameObject duplicatePage = UnityEngine.Object.Instantiate(
@@ -2204,7 +2206,7 @@ namespace Tests.Editor.Settings
                 Assert.That(CountDirectChildrenNamed(generatedContent, "Page"), Is.EqualTo(1));
                 Assert.That(CountDirectChildrenNamed(generatedContent, "Rail"), Is.EqualTo(1));
                 Assert.That(CountDirectChildrenNamed(generatedContent, "MainViewport"), Is.EqualTo(1));
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
             }
             finally
             {
@@ -2220,7 +2222,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 GameObject duplicateContent = UnityEngine.Object.Instantiate(
                     generatedContent.gameObject,
@@ -2230,7 +2232,7 @@ namespace Tests.Editor.Settings
                 popup.Open();
 
                 Assert.That(CountDirectChildrenNamed(popupObject.transform, "GeneratedContent"), Is.EqualTo(1));
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
             }
             finally
             {
@@ -2246,7 +2248,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 UnityEngine.Object.DestroyImmediate(generatedContent.Find("Rail").gameObject);
                 GameObject duplicatePage = UnityEngine.Object.Instantiate(
@@ -2259,7 +2261,7 @@ namespace Tests.Editor.Settings
                 generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 Assert.That(CountDirectChildrenNamed(generatedContent, "Page"), Is.EqualTo(1));
                 Assert.That(CountDirectChildrenNamed(generatedContent, "Rail"), Is.EqualTo(1));
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
             }
             finally
             {
@@ -2275,7 +2277,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 UnityEngine.Object.DestroyImmediate(generatedContent.Find("Rail").GetComponent<UnityEngine.UI.Image>());
 
@@ -2298,7 +2300,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 Transform mainViewport = generatedContent.Find("MainViewport");
                 GameObject duplicateMainContent = UnityEngine.Object.Instantiate(
@@ -2326,7 +2328,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 Transform generatedContent = FindRuntimePopupGeneratedContent(popupObject.transform);
                 var legacyChildren = new System.Collections.Generic.List<Transform>();
                 for (int i = 0; i < generatedContent.childCount; i++)
@@ -2366,7 +2368,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                Assert.That(popup.GetCardButtonCountForTests(), Is.EqualTo(3));
+                Assert.That(MainRecordingSettingsPopupTestInspector.CountCardButtons(popup), Is.EqualTo(3));
                 int initialChildCount = popupObject.transform.childCount;
                 UnityEngine.UI.Button closeButton =
                     FindRuntimePopupGeneratedContent(popupObject.transform)
@@ -2417,22 +2419,29 @@ namespace Tests.Editor.Settings
             Assert.That(popupComponent, Is.InstanceOf<IDragHandler>());
             RectTransform popupRect = popupComponent.GetComponent<RectTransform>();
             Vector2 beforeDrag = popupRect.anchoredPosition;
-            InvokeInstance<object>(popup, "ApplyDragDeltaForTests", new Vector2(120f, -48f));
+            MainRecordingSettingsPopupTestInspector.ApplyDrag(
+                popupComponent,
+                new Vector2(120f, -48f));
             Assert.That(popupRect.anchoredPosition, Is.EqualTo(beforeDrag + new Vector2(120f, -48f)));
-            Assert.That(InvokeInstance<int>(popup, "GetCardButtonCountForTests"), Is.EqualTo(3));
+            Assert.That(
+                MainRecordingSettingsPopupTestInspector.CountCardButtons(popupComponent),
+                Is.EqualTo(3));
             Assert.That(
                 MainRecordingSettingsActions.CanExecute(
                     MainRecordingSettingsActionType.ImportFbx,
                     popupComponent.RecordingSetting,
                     popupComponent.FBXVmdPipeline),
                 Is.True);
-            Assert.That(InvokeInstance<bool>(popup, "HasReadableKoreanTextForTests"), Is.True);
+            Assert.That(
+                MainRecordingSettingsPopupTestInspector.HasReadableKoreanText(popupComponent),
+                Is.True);
             Assert.That(
                 Array.ConvertAll(
                     MainRecordingSettingsLayoutSpec.SidebarItems,
                     item => item.Label),
                 Is.EqualTo(new[] { "Camera 1", "Environment", "Directional Light" }));
-            string[] visibleText = InvokeInstance<string[]>(popup, "GetVisibleTextForTests");
+            string[] visibleText =
+                MainRecordingSettingsPopupTestInspector.GetVisibleText(popupComponent);
             Assert.That(visibleText, Does.Not.Contain("캐릭터"));
             Assert.That(visibleText, Does.Not.Contain("Character 1 (비활성화)"));
             Assert.That(visibleText, Does.Not.Contain("Character 1 (Inactive)"));
