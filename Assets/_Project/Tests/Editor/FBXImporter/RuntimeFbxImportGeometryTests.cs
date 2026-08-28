@@ -62,6 +62,87 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RuntimeAndDiagnosticImports_When_BuildingModel_Then_ShareAssemblySequence()
+        {
+            MethodInfo buildMethod = typeof(AssimpFBXImporter).GetMethod(
+                "BuildImportedModel",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(string), typeof(Assimp.Scene) },
+                modifiers: null);
+            FieldInfo animationClipsField = typeof(AssimpFBXImporter).GetField(
+                "_animationClips",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string source = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "AssimpFBXImporter.cs"));
+            const string sharedAssemblyCall = "return BuildImportedModel(path, scene);";
+            const string rootCreation = "new GameObject(Path.GetFileNameWithoutExtension(path))";
+            int sharedAssemblyCallCount = source.Split(
+                new[] { sharedAssemblyCall },
+                System.StringSplitOptions.None).Length - 1;
+            int rootCreationCount = source.Split(
+                new[] { rootCreation },
+                System.StringSplitOptions.None).Length - 1;
+            int buildIndex = source.IndexOf("private GameObject BuildImportedModel");
+            int hierarchyIndex = buildIndex >= 0
+                ? source.IndexOf("BuildHierarchy(scene.RootNode, rootObject.transform);", buildIndex)
+                : -1;
+            int meshIndex = hierarchyIndex >= 0
+                ? source.IndexOf("ProcessMeshes(scene.RootNode, scene);", hierarchyIndex)
+                : -1;
+            int animationIndex = meshIndex >= 0
+                ? source.IndexOf("ProcessAnimations(scene, rootObject);", meshIndex)
+                : -1;
+            int rootTransformIndex = animationIndex >= 0
+                ? source.IndexOf("ApplyRuntimeRootTransform(rootObject);", animationIndex)
+                : -1;
+
+            Assert.That(buildMethod, Is.Not.Null);
+            Assert.That(animationClipsField, Is.Not.Null);
+            Assert.That(sharedAssemblyCallCount, Is.EqualTo(2));
+            Assert.That(rootCreationCount, Is.EqualTo(1));
+            Assert.That(buildIndex, Is.LessThan(hierarchyIndex));
+            Assert.That(hierarchyIndex, Is.LessThan(meshIndex));
+            Assert.That(meshIndex, Is.LessThan(animationIndex));
+            Assert.That(animationIndex, Is.LessThan(rootTransformIndex));
+
+            var importer = new AssimpFBXImporter();
+            var scene = new Assimp.Scene
+            {
+                RootNode = new Assimp.Node("SceneRoot")
+            };
+            GameObject importedModel = null;
+
+            try
+            {
+                importedModel = (GameObject)buildMethod.Invoke(
+                    importer,
+                    new object[] { "Walk.fbx", scene });
+
+                Assert.That(importedModel.name, Is.EqualTo("Walk"));
+                Assert.That(importedModel.transform.Find("SceneRoot"), Is.Not.Null);
+                Assert.That(importedModel.transform.localScale, Is.EqualTo(Vector3.one));
+                Assert.That(
+                    Quaternion.Angle(importedModel.transform.rotation, Quaternion.Euler(0f, 180f, 0f)),
+                    Is.LessThan(0.001f));
+                Assert.That(importer.GetAnimationClips(), Is.Empty);
+                Assert.That(animationClipsField.GetValue(importer), Is.Not.Null);
+            }
+            finally
+            {
+                if (importedModel != null)
+                {
+                    Object.DestroyImmediate(importedModel);
+                }
+            }
+        }
+
+        [Test]
         public void Given_TextureSampleFbx_When_RuntimeImportCreatesSkinnedMeshes_Then_UsesUnityImporterWorldScale()
         {
             GameObject referencePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(SampleFbxPath);
