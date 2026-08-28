@@ -30,8 +30,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             if (ShouldMaintainEditorPlayModeGuard(
                     SceneManager.GetActiveScene().path,
-                    Application.isBatchMode,
-                    EditorApplication.isPlayingOrWillChangePlaymode))
+                    Application.isBatchMode))
             {
                 ApplyBeforeMainRecordingPlayMode();
             }
@@ -47,8 +46,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             if (ShouldMaintainEditorPlayModeGuard(
                     SceneManager.GetActiveScene().path,
-                    Application.isBatchMode,
-                    EditorApplication.isPlayingOrWillChangePlaymode))
+                    Application.isBatchMode))
             {
                 ApplyBeforeMainRecordingPlayMode();
                 return;
@@ -87,8 +85,7 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static bool ShouldMaintainEditorPlayModeGuard(
             string scenePath,
-            bool isBatchMode,
-            bool isPlayingOrWillChangePlaymode)
+            bool isBatchMode)
         {
             return !isBatchMode &&
                    MainRecordingSettingsCompanionLauncher.ShouldOpenForScene(scenePath);
@@ -160,10 +157,9 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static bool ShouldMaintainEditorPlayModeGuardForTests(
             string scenePath,
-            bool isBatchMode,
-            bool isPlayingOrWillChangePlaymode)
+            bool isBatchMode)
         {
-            return ShouldMaintainEditorPlayModeGuard(scenePath, isBatchMode, isPlayingOrWillChangePlaymode);
+            return ShouldMaintainEditorPlayModeGuard(scenePath, isBatchMode);
         }
 
         private static string GetBurstDisableEnvironmentVariableNameForTests()
