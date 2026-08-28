@@ -21,6 +21,8 @@ namespace Tests.Editor.Settings
         private const string TexturePlanResolverTypeName =
             "Fbx2Vmd.Settings.GraphicTextureImportPlanResolver, Assembly-CSharp";
         private const string MaterialShaderProfileTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderProfile, Assembly-CSharp";
+        private const string MaterialShaderPlanResolverTypeName =
+            "Fbx2Vmd.Settings.GraphicMaterialShaderPlanResolver, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderController, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
@@ -259,6 +261,70 @@ namespace Tests.Editor.Settings
             {
                 UnityEngine.Object.DestroyImmediate(settingObject);
             }
+        }
+
+        [Test]
+        public void Given_GraphicSetting_When_InspectingMaterialPresetOwnership_Then_DelegatesPlanResolution()
+        {
+            const string settingSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicSetting.cs";
+            const string resolverSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicMaterialShaderPlanResolver.cs";
+
+            Assert.That(File.Exists(resolverSourcePath), Is.True, resolverSourcePath);
+            Assert.That(Type.GetType(MaterialShaderPlanResolverTypeName), Is.Not.Null);
+
+            string settingSource = File.ReadAllText(settingSourcePath);
+            string resolverSource = File.ReadAllText(resolverSourcePath);
+            Assert.That(
+                settingSource,
+                Does.Contain("GraphicMaterialShaderPlanResolver.Resolve("));
+            Assert.That(settingSource, Does.Not.Contain("switch (modelEdgeAndAlpha)"));
+            Assert.That(resolverSource, Does.Contain("switch (preset)"));
+            Assert.That(resolverSource, Does.Not.Contain("MonoBehaviour"));
+            Assert.That(resolverSource, Does.Not.Contain("interface "));
+        }
+
+        [TestCase("Performance", false, 0f, 0f, true, 0.35f, "Keep", false)]
+        [TestCase("Balanced", true, 0.0005f, 0.00025f, true, 0.35f, "Keep", true)]
+        [TestCase("Quality", true, 0.00025f, 0.0002f, true, 0.35f, "Keep", true)]
+        [TestCase("Custom", true, 0.0005f, 0.00025f, true, 0.35f, "Keep", true)]
+        public void Given_MaterialQualityPreset_When_ResolvingPlan_Then_ReturnsExpectedValues(
+            string presetName,
+            bool expectedApplyOutline,
+            float expectedOutlineScale,
+            float expectedOutlineSize,
+            bool expectedApplyAlphaCutoff,
+            float expectedAlphaCutoff,
+            string expectedSurfaceMode,
+            bool expectedAlphaToCoverage)
+        {
+            Type resolverType = RequireType(MaterialShaderPlanResolverTypeName);
+            Type presetType = RequireType(
+                "Fbx2Vmd.Settings.GraphicSettingQualityPreset, Assembly-CSharp");
+            object preset = Enum.Parse(presetType, presetName);
+
+            object plan = InvokeStatic(resolverType, "Resolve", preset, null);
+
+            Assert.That(GetMemberValue<bool>(plan, "ApplyOutline"), Is.EqualTo(expectedApplyOutline));
+            Assert.That(
+                GetMemberValue<float>(plan, "OutlineScale"),
+                Is.EqualTo(expectedOutlineScale).Within(0.000001f));
+            Assert.That(
+                GetMemberValue<float>(plan, "OutlineSize"),
+                Is.EqualTo(expectedOutlineSize).Within(0.000001f));
+            Assert.That(
+                GetMemberValue<bool>(plan, "ApplyAlphaCutoff"),
+                Is.EqualTo(expectedApplyAlphaCutoff));
+            Assert.That(
+                GetMemberValue<float>(plan, "AlphaCutoff"),
+                Is.EqualTo(expectedAlphaCutoff).Within(0.0001f));
+            Assert.That(
+                GetMemberValue<object>(plan, "SurfaceMode").ToString(),
+                Is.EqualTo(expectedSurfaceMode));
+            Assert.That(
+                GetMemberValue<bool>(plan, "EnableAlphaToCoverage"),
+                Is.EqualTo(expectedAlphaToCoverage));
         }
 
         [Test]
