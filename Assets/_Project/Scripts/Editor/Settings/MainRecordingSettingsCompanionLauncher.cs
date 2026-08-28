@@ -16,15 +16,20 @@ namespace Fbx2Vmd.Settings.EditorTools
         private const string ElectronAppRoot = "Assets/_Project/Tools/MainRecordingSettings";
         private const string NpmExecutableName = "npm";
         private const string NpmArguments = "run start:prod";
-        private static Action<MainRecordingSettingsLaunchPlan> launchWebSettings = LaunchWebSettings;
 
         [MenuItem(MenuPath)]
         public static void OpenMainRecordingSettings()
         {
+            OpenMainRecordingSettingsWithLauncher(LaunchWebSettings);
+        }
+
+        private static void OpenMainRecordingSettingsWithLauncher(
+            Action<MainRecordingSettingsLaunchPlan> launcher)
+        {
             MainRecordingSettingsLaunchPlan plan = CreateDefaultLaunchPlan();
             try
             {
-                launchWebSettings(plan);
+                (launcher ?? LaunchWebSettings)(plan);
             }
             catch (Exception exception)
             {
@@ -79,14 +84,10 @@ namespace Fbx2Vmd.Settings.EditorTools
             return CreateDefaultLaunchPlan();
         }
 
-        private static void SetLaunchWebSettingsForTests(Action<MainRecordingSettingsLaunchPlan> launcher)
+        private static void OpenMainRecordingSettingsForTests(
+            Action<MainRecordingSettingsLaunchPlan> launcher)
         {
-            launchWebSettings = launcher ?? LaunchWebSettings;
-        }
-
-        private static void ResetLaunchWebSettingsForTests()
-        {
-            launchWebSettings = LaunchWebSettings;
+            OpenMainRecordingSettingsWithLauncher(launcher);
         }
 
         private static bool CanLaunchWebSettings()
