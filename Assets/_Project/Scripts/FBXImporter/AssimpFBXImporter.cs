@@ -75,6 +75,11 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             // 메인 스레드에서 GameObject 생성
+            return BuildImportedModel(path, scene);
+        }
+
+        private GameObject BuildImportedModel(string path, Scene scene)
+        {
             GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
 
             _nodeMap.Clear();
@@ -82,7 +87,6 @@ namespace Fbx2Vmd.FBXImporter
             BuildHierarchy(scene.RootNode, rootObject.transform);
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
-
             ApplyRuntimeRootTransform(rootObject);
 
             return rootObject;
@@ -117,16 +121,7 @@ namespace Fbx2Vmd.FBXImporter
                 return null;
             }
 
-            GameObject rootObject = new GameObject(Path.GetFileNameWithoutExtension(path));
-
-            _nodeMap.Clear();
-            _sourceDirectory = ResolveSourceDirectory(path);
-            BuildHierarchy(scene.RootNode, rootObject.transform);
-            ProcessMeshes(scene.RootNode, scene);
-            ProcessAnimations(scene, rootObject);
-            ApplyRuntimeRootTransform(rootObject);
-
-            return rootObject;
+            return BuildImportedModel(path, scene);
         }
 #endif
         #endregion
