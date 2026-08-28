@@ -1892,6 +1892,35 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimePopupControls_When_CheckingAttachmentOwnership_Then_UsesSingleMethod()
+        {
+            const string popupPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopup.cs";
+            string popupSource = File.ReadAllText(popupPath);
+
+            int attachmentReferences = popupSource.Split(
+                new[] { "AttachGeneratedControls(" },
+                StringSplitOptions.None).Length - 1;
+            int cardButtonAdds = popupSource.Split(
+                new[] { "cardButtons.Add(button);" },
+                StringSplitOptions.None).Length - 1;
+            int closeButtonBindings = popupSource.Split(
+                new[] { "BindCloseButton(closeButton);" },
+                StringSplitOptions.None).Length - 1;
+            int cardButtonClears = popupSource.Split(
+                new[] { "cardButtons.Clear();" },
+                StringSplitOptions.None).Length - 1;
+
+            Assert.That(
+                popupSource,
+                Does.Contain("private void AttachGeneratedControls("));
+            Assert.That(attachmentReferences, Is.EqualTo(3));
+            Assert.That(cardButtonAdds, Is.EqualTo(1));
+            Assert.That(closeButtonBindings, Is.EqualTo(1));
+            Assert.That(cardButtonClears, Is.EqualTo(2));
+        }
+
+        [Test]
         public void Given_RuntimePopupNotification_When_ShowingKoreanMessage_Then_RemainsReadable()
         {
             var popupObject = new GameObject("Runtime Popup Korean Notification Test", typeof(RectTransform));

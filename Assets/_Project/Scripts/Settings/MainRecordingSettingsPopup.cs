@@ -233,16 +233,11 @@ namespace Fbx2Vmd.Settings
                 elementBuilder,
                 out Button closeButton,
                 out notificationText);
-            cardButtons.Clear();
-            MainRecordingSettingsCardSpec[] cards = MainRecordingSettingsLayoutSpec.Cards;
-            for (int i = 0; i < builtCardButtons.Length; i++)
-            {
-                Button button = builtCardButtons[i];
-                BindCardButton(button, cards[i].Action);
-                cardButtons.Add(button);
-            }
-
-            BindCloseButton(closeButton);
+            AttachGeneratedControls(
+                closeButton,
+                builtCardButtons,
+                builtCardButtons.Length,
+                shouldBindListeners: true);
 
             if (hadGeneratedHierarchy)
             {
@@ -289,26 +284,40 @@ namespace Fbx2Vmd.Settings
             }
 
             bool shouldRestoreButtonListeners = cardButtons.Count == 0;
-            if (shouldRestoreButtonListeners)
+            AttachGeneratedControls(
+                closeButton,
+                restoredCardButtons,
+                cards.Length,
+                shouldRestoreButtonListeners);
+
+            generatedContentRoot = contentRoot;
+            notificationText = restoredNotification;
+            return true;
+        }
+
+        private void AttachGeneratedControls(
+            Button closeButton,
+            Button[] resolvedCardButtons,
+            int cardCount,
+            bool shouldBindListeners)
+        {
+            if (shouldBindListeners)
             {
                 BindCloseButton(closeButton);
             }
 
             cardButtons.Clear();
-            for (int i = 0; i < cards.Length; i++)
+            MainRecordingSettingsCardSpec[] cards = MainRecordingSettingsLayoutSpec.Cards;
+            for (int i = 0; i < cardCount; i++)
             {
-                Button button = restoredCardButtons[i];
-                if (shouldRestoreButtonListeners)
+                Button button = resolvedCardButtons[i];
+                if (shouldBindListeners)
                 {
                     BindCardButton(button, cards[i].Action);
                 }
 
                 cardButtons.Add(button);
             }
-
-            generatedContentRoot = contentRoot;
-            notificationText = restoredNotification;
-            return true;
         }
 
         private bool TryMigrateLegacyGeneratedHierarchy(
