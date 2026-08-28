@@ -3,6 +3,7 @@ using Fbx2Vmd.FBXImporter;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace Fbx2Vmd.Settings
@@ -11,7 +12,8 @@ namespace Fbx2Vmd.Settings
     public sealed class MainRecordingSettingsPopup : MonoBehaviour, IBeginDragHandler, IDragHandler
     {
         [SerializeField] private bool openOnStart = true;
-        [SerializeField] private RecordingSetting recodingSetting;
+        [FormerlySerializedAs("recodingSetting")]
+        [SerializeField] private RecordingSetting recordingSetting;
         [SerializeField] private FBXVmdPipeline fileManager;
 
         private readonly List<Button> cardButtons = new List<Button>();
@@ -24,8 +26,8 @@ namespace Fbx2Vmd.Settings
         private bool isOpen;
         public bool IsOpen => isOpen;
         public bool OpenOnStart => openOnStart;
-        public RecordingSetting RecordingSetting => recodingSetting;
-        public FBXVmdPipeline FBXVmdPipeline => MainRecordingSettingsActions.ResolveFBXVmdPipeline(recodingSetting, fileManager);
+        public RecordingSetting RecordingSetting => recordingSetting;
+        public FBXVmdPipeline FBXVmdPipeline => MainRecordingSettingsActions.ResolveFBXVmdPipeline(recordingSetting, fileManager);
 
         private void Awake()
         {
@@ -61,7 +63,7 @@ namespace Fbx2Vmd.Settings
         {
             if (owner != null)
             {
-                recodingSetting = owner;
+                recordingSetting = owner;
             }
 
             if (manager != null)
@@ -115,7 +117,7 @@ namespace Fbx2Vmd.Settings
         {
             return MainRecordingSettingsActions.CanExecute(
                 MainRecordingSettingsActionType.ImportFbx,
-                recodingSetting,
+                recordingSetting,
                 fileManager);
         }
 
@@ -448,7 +450,7 @@ namespace Fbx2Vmd.Settings
                 return;
             }
 
-            MainRecordingSettingsActions.Execute(action, recodingSetting, fileManager, ShowNotification);
+            MainRecordingSettingsActions.Execute(action, recordingSetting, fileManager, ShowNotification);
         }
 
         private void ShowNotification(string message)

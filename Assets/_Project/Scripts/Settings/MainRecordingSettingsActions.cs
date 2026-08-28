@@ -8,13 +8,13 @@ namespace Fbx2Vmd.Settings
     {
         public static bool CanExecute(
             MainRecordingSettingsActionType action,
-            RecordingSetting recodingSetting = null,
+            RecordingSetting recordingSetting = null,
             FBXVmdPipeline fileManager = null)
         {
             switch (action)
             {
                 case MainRecordingSettingsActionType.ImportFbx:
-                    return ResolveFBXVmdPipeline(recodingSetting, fileManager) != null;
+                    return ResolveFBXVmdPipeline(recordingSetting, fileManager) != null;
                 case MainRecordingSettingsActionType.Close:
                 case MainRecordingSettingsActionType.ComingSoon:
                     return true;
@@ -25,14 +25,14 @@ namespace Fbx2Vmd.Settings
 
         public static bool Execute(
             MainRecordingSettingsActionType action,
-            RecordingSetting recodingSetting = null,
+            RecordingSetting recordingSetting = null,
             FBXVmdPipeline fileManager = null,
             Action<string> notify = null)
         {
             switch (action)
             {
                 case MainRecordingSettingsActionType.ImportFbx:
-                    FBXVmdPipeline resolvedFBXVmdPipeline = ResolveFBXVmdPipeline(recodingSetting, fileManager);
+                    FBXVmdPipeline resolvedFBXVmdPipeline = ResolveFBXVmdPipeline(recordingSetting, fileManager);
                     if (resolvedFBXVmdPipeline == null)
                     {
                         const string message = "FBX 가져오기 컨트롤러를 찾지 못했습니다.";
@@ -58,7 +58,7 @@ namespace Fbx2Vmd.Settings
 
         public static MainRecordingSettingsActionResult ApplySharedSettings(
             MainRecordingSettingsDocument document,
-            RecordingSetting recodingSetting,
+            RecordingSetting recordingSetting,
             FBXVmdPipeline fileManager = null,
             bool startFbxImport = true)
         {
@@ -67,9 +67,9 @@ namespace Fbx2Vmd.Settings
                 return MainRecordingSettingsActionResult.Failure("공유 설정 문서가 비어 있습니다.");
             }
 
-            if (recodingSetting != null)
+            if (recordingSetting != null)
             {
-                return recodingSetting.ApplySharedSettingsDocument(
+                return recordingSetting.ApplySharedSettingsDocument(
                     document,
                     fileManager,
                     startFbxImport);
@@ -84,10 +84,10 @@ namespace Fbx2Vmd.Settings
         }
 
         public static FBXVmdPipeline ResolveFBXVmdPipeline(
-            RecordingSetting recodingSetting = null,
+            RecordingSetting recordingSetting = null,
             FBXVmdPipeline fileManager = null)
         {
-            return fileManager ?? recodingSetting?.RecordingFBXVmdPipeline;
+            return fileManager ?? recordingSetting?.RecordingFBXVmdPipeline;
         }
     }
 }
