@@ -92,8 +92,8 @@ public sealed class RecordingSetting : MonoBehaviour
     private string resolvedSharedSettingsFilePath = string.Empty;
     private DateTime lastSharedSettingsWriteTimeUtc = DateTime.MinValue;
     private float nextSharedSettingsPollTime;
-    private string lastAppliedSharedSettingsFbxPath = string.Empty;
-    private string lastHandledSharedSettingsCommandId = string.Empty;
+    private readonly MainRecordingSettingsFbxImportCommandProcessor sharedSettingsFbxImportCommandProcessor =
+        new MainRecordingSettingsFbxImportCommandProcessor();
     private static readonly Func<FBXVmdPipeline, string, bool> DefaultSharedSettingsFbxImportStarter =
         (fileManager, path) => fileManager.TryStartFbxImportFromSharedSettings(path);
     private Func<FBXVmdPipeline, string, bool> sharedSettingsFbxImportStarter =
@@ -355,11 +355,16 @@ public sealed class RecordingSetting : MonoBehaviour
             ApplyDiagnosticsToResolvedFBXVmdPipeline(resolvedFBXVmdPipeline);
         }
 
-        if (TryApplyPendingSharedSettingsCommand(
+        Func<string, bool> tryStartFbxImport = resolvedFBXVmdPipeline == null
+            ? null
+            : path => sharedSettingsFbxImportStarter(resolvedFBXVmdPipeline, path);
+        if (sharedSettingsFbxImportCommandProcessor.TryProcess(
                 document,
-                resolvedFBXVmdPipeline,
                 startFbxImport,
                 clearPendingCommandWhenSkipped,
+                File.Exists,
+                tryStartFbxImport,
+                PersistConsumedSharedSettingsDocumentQuietly,
                 out MainRecordingSettingsActionResult commandResult))
         {
             return commandResult;
@@ -368,87 +373,8 @@ public sealed class RecordingSetting : MonoBehaviour
         return MainRecordingSettingsActionResult.Success("공유 설정을 적용했습니다.");
     }
 
-    private bool TryApplyPendingSharedSettingsCommand(
-        MainRecordingSettingsDocument document,
-        FBXVmdPipeline resolvedFBXVmdPipeline,
-        bool startFbxImport,
-        bool clearPendingCommandWhenSkipped,
-        out MainRecordingSettingsActionResult result)
+    private void PersistConsumedSharedSettingsDocumentQuietly(MainRecordingSettingsDocument document)
     {
-        result = default;
-        MainRecordingSettingsCommandEnvelope command = document.pendingCommand;
-        if (command == null || !command.IsImportFbxCommand())
-        {
-            return false;
-        }
-
-        if (string.Equals(lastHandledSharedSettingsCommandId, command.commandId, StringComparison.Ordinal))
-        {
-            ClearPendingSharedSettingsCommand(document);
-            result = MainRecordingSettingsActionResult.Success("공유 설정 명령을 이미 처리했습니다.");
-            return true;
-        }
-
-        if (!startFbxImport)
-        {
-            if (clearPendingCommandWhenSkipped)
-            {
-                ClearPendingSharedSettingsCommand(document);
-            }
-
-            result = MainRecordingSettingsActionResult.Success("Skipped pending FBX import command during initial settings load.");
-            return true;
-        }
-
-        string commandFbxPath = command.fbxPath;
-        commandFbxPath = string.IsNullOrWhiteSpace(commandFbxPath)
-            ? string.Empty
-            : commandFbxPath.Trim();
-
-        if (string.IsNullOrEmpty(commandFbxPath))
-        {
-            ClearPendingSharedSettingsCommand(document);
-            result = MainRecordingSettingsActionResult.Failure("FBX 명령 경로가 비어 있습니다.");
-            return true;
-        }
-
-        if (resolvedFBXVmdPipeline == null)
-        {
-            ClearPendingSharedSettingsCommand(document);
-            result = MainRecordingSettingsActionResult.Failure("FBX 명령을 적용할 FBXVmdPipeline를 찾지 못했습니다.");
-            return true;
-        }
-
-        if (!File.Exists(commandFbxPath))
-        {
-            ClearPendingSharedSettingsCommand(document);
-            result = MainRecordingSettingsActionResult.Failure($"FBX 파일을 찾을 수 없습니다: {commandFbxPath}");
-            return true;
-        }
-
-        bool started = sharedSettingsFbxImportStarter(resolvedFBXVmdPipeline, commandFbxPath);
-        if (!started)
-        {
-            ClearPendingSharedSettingsCommand(document);
-            result = MainRecordingSettingsActionResult.Failure("FBX 가져오기를 시작하지 못했습니다.");
-            return true;
-        }
-
-        lastHandledSharedSettingsCommandId = command.commandId;
-        lastAppliedSharedSettingsFbxPath = commandFbxPath;
-        ClearPendingSharedSettingsCommand(document);
-        result = MainRecordingSettingsActionResult.Success("FBX 가져오기를 시작했습니다.");
-        return true;
-    }
-
-    private void ClearPendingSharedSettingsCommand(MainRecordingSettingsDocument document)
-    {
-        if (document == null)
-        {
-            return;
-        }
-
-        document.pendingCommand = new MainRecordingSettingsCommandEnvelope();
         if (sharedSettingsStore == null)
         {
             return;

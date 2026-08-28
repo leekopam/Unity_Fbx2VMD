@@ -338,6 +338,7 @@ namespace Tests.Editor.Settings
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsCompanionController.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsCommandEnvelope.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsDocument.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsFbxImportCommandProcessor.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsLaunchPlan.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsPathResolver.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsBootstrap.cs",
