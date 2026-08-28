@@ -28,6 +28,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.MainRecordingSettingsPopup, Assembly-CSharp";
         private const string KoreanUiTextFallbackTypeName =
             "Fbx2Vmd.Settings.KoreanUiTextFallback, Assembly-CSharp";
+        private const string KoreanUiFontResolverTypeName =
+            "Fbx2Vmd.Settings.KoreanUiFontResolver, Assembly-CSharp";
         private const string CompanionControllerTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsCompanionController, Assembly-CSharp";
         private const string CompanionDocumentSessionTypeName =
@@ -2059,6 +2061,52 @@ namespace Tests.Editor.Settings
             Assert.That(companionSource, Does.Contain("KoreanUiTextFallback.Apply("));
             Assert.That(popupSource, Does.Not.Contain("private static void ApplyReadableKoreanFont"));
             Assert.That(companionSource, Does.Not.Contain("private static void ApplyReadableKoreanFont"));
+        }
+
+        [Test]
+        public void Given_KoreanUiFallback_When_CheckingFontOwnership_Then_DelegatesToDedicatedResolver()
+        {
+            const string fallbackPath =
+                "Assets/_Project/Scripts/Settings/KoreanUiTextFallback.cs";
+            const string resolverPath =
+                "Assets/_Project/Scripts/Settings/KoreanUiFontResolver.cs";
+
+            Assert.That(File.Exists(resolverPath), Is.True, resolverPath);
+
+            string fallbackSource = File.ReadAllText(fallbackPath);
+            string resolverSource = File.ReadAllText(resolverPath);
+
+            Assert.That(fallbackSource, Does.Contain("KoreanUiFontResolver.ContainsKorean("));
+            Assert.That(fallbackSource, Does.Contain("KoreanUiFontResolver.SupportsText("));
+            Assert.That(fallbackSource, Does.Contain("KoreanUiFontResolver.TryGetTmpFont("));
+            Assert.That(fallbackSource, Does.Contain("KoreanUiFontResolver.TryGetLegacyFont("));
+            Assert.That(fallbackSource, Does.Not.Contain("Font.CreateDynamicFontFromOSFont"));
+            Assert.That(fallbackSource, Does.Not.Contain("TMP_FontAsset.CreateFontAsset"));
+            Assert.That(fallbackSource, Does.Not.Contain("KoreanUiTextSample"));
+            Assert.That(fallbackSource, Does.Not.Contain("KoreanUiFontNames"));
+            Assert.That(fallbackSource, Does.Not.Contain("cachedKoreanUiFont"));
+            Assert.That(fallbackSource, Does.Not.Contain("cachedKoreanLegacyUiFont"));
+            Assert.That(resolverSource, Does.Contain("Font.CreateDynamicFontFromOSFont"));
+            Assert.That(resolverSource, Does.Contain("TMP_FontAsset.CreateFontAsset"));
+            Assert.That(resolverSource, Does.Contain("KoreanUiTextSample"));
+            Assert.That(resolverSource, Does.Not.Contain("new GameObject"));
+            Assert.That(resolverSource, Does.Not.Contain("RectTransform"));
+            Assert.That(resolverSource, Does.Not.Contain("UnityEngine.UI"));
+            Assert.That(resolverSource, Does.Not.Contain("Debug.Log"));
+            Assert.That(resolverSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_KoreanUiFontResolver_When_ClassifyingText_Then_RecognizesOnlyKoreanGlyphRanges()
+        {
+            Type resolverType = RequireType(KoreanUiFontResolverTypeName);
+
+            Assert.That(InvokeStatic<bool>(resolverType, "ContainsKorean", "설정"), Is.True);
+            Assert.That(InvokeStatic<bool>(resolverType, "ContainsKorean", "ㄱ"), Is.True);
+            Assert.That(InvokeStatic<bool>(resolverType, "ContainsKorean", "ᄀ"), Is.True);
+            Assert.That(InvokeStatic<bool>(resolverType, "ContainsKorean", "Ready"), Is.False);
+            Assert.That(InvokeStatic<bool>(resolverType, "ContainsKorean", string.Empty), Is.False);
+            Assert.That(InvokeStatic<bool>(resolverType, "SupportsText", null, "설정"), Is.False);
         }
 
         [Test]

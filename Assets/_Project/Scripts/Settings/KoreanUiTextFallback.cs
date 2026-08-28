@@ -7,21 +7,6 @@ namespace Fbx2Vmd.Settings
     internal static class KoreanUiTextFallback
     {
         private const string FallbackObjectName = "KoreanTextFallback";
-        private const string KoreanUiTextSample =
-            "가나다FBX파일임포트선택해프로젝트로가져오고모션캡쳐설정을시작합니다공유설정을불러왔습니다저장했습니다시작시열기시네마토그래피환경캐릭터비활성화가로세로경로준비중닫기";
-
-        private static readonly string[] KoreanUiFontNames =
-        {
-            "Malgun Gothic",
-            "맑은 고딕",
-            "Noto Sans KR",
-            "Noto Sans CJK KR",
-            "NanumGothic",
-            "Nanum Gothic"
-        };
-
-        private static TMP_FontAsset cachedKoreanUiFont;
-        private static Font cachedKoreanLegacyUiFont;
         private static bool warnedMissingKoreanUiFont;
 
         internal static void Apply(TextMeshProUGUI label)
@@ -31,7 +16,8 @@ namespace Fbx2Vmd.Settings
                 return;
             }
 
-            if (!ContainsKorean(label.text) || FontAssetSupportsText(label.font, label.text))
+            if (!KoreanUiFontResolver.ContainsKorean(label.text) ||
+                KoreanUiFontResolver.SupportsText(label.font, label.text))
             {
                 RestoreTmpLabel(label);
                 return;
@@ -42,8 +28,8 @@ namespace Fbx2Vmd.Settings
                 return;
             }
 
-            TMP_FontAsset koreanFont = GetOrCreateKoreanUiFont();
-            if (koreanFont == null || !FontAssetSupportsText(koreanFont, label.text))
+            if (!KoreanUiFontResolver.TryGetTmpFont(out TMP_FontAsset koreanFont) ||
+                !KoreanUiFontResolver.SupportsText(koreanFont, label.text))
             {
                 if (!warnedMissingKoreanUiFont)
                 {
@@ -66,7 +52,8 @@ namespace Fbx2Vmd.Settings
                 return true;
             }
 
-            if (!ContainsKorean(label.text) || FontAssetSupportsText(label.font, label.text))
+            if (!KoreanUiFontResolver.ContainsKorean(label.text) ||
+                KoreanUiFontResolver.SupportsText(label.font, label.text))
             {
                 return label.enabled;
             }
@@ -90,8 +77,7 @@ namespace Fbx2Vmd.Settings
 
         private static bool TryEnableLegacyKoreanText(TextMeshProUGUI label)
         {
-            Font legacyFont = GetOrCreateKoreanLegacyUiFont();
-            if (legacyFont == null)
+            if (!KoreanUiFontResolver.TryGetLegacyFont(out Font legacyFont))
             {
                 return false;
             }
@@ -144,94 +130,5 @@ namespace Fbx2Vmd.Settings
             }
         }
 
-        private static TMP_FontAsset GetOrCreateKoreanUiFont()
-        {
-            if (cachedKoreanUiFont != null)
-            {
-                return cachedKoreanUiFont;
-            }
-
-            Font osFont = Font.CreateDynamicFontFromOSFont(KoreanUiFontNames, 32);
-            if (osFont == null)
-            {
-                return null;
-            }
-
-            TMP_FontAsset fontAsset = TMP_FontAsset.CreateFontAsset(osFont);
-            if (fontAsset == null)
-            {
-                return null;
-            }
-
-            fontAsset.name = "Main Recording Runtime Korean UI Font";
-            fontAsset.atlasPopulationMode = AtlasPopulationMode.Dynamic;
-            fontAsset.TryAddCharacters(KoreanUiTextSample, out _);
-            if (!FontAssetSupportsText(fontAsset, KoreanUiTextSample))
-            {
-                return null;
-            }
-
-            cachedKoreanUiFont = fontAsset;
-            return cachedKoreanUiFont;
-        }
-
-        private static Font GetOrCreateKoreanLegacyUiFont()
-        {
-            if (cachedKoreanLegacyUiFont != null)
-            {
-                return cachedKoreanLegacyUiFont;
-            }
-
-            Font osFont = Font.CreateDynamicFontFromOSFont(KoreanUiFontNames, 32);
-            if (osFont != null)
-            {
-                cachedKoreanLegacyUiFont = osFont;
-            }
-
-            return cachedKoreanLegacyUiFont;
-        }
-
-        private static bool FontAssetSupportsText(TMP_FontAsset fontAsset, string text)
-        {
-            if (fontAsset == null)
-            {
-                return false;
-            }
-
-            foreach (char character in text)
-            {
-                if (IsKorean(character) && !fontAsset.HasCharacter(character, true, true))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool ContainsKorean(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-            {
-                return false;
-            }
-
-            foreach (char character in text)
-            {
-                if (IsKorean(character))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool IsKorean(char character)
-        {
-            return (character >= '\uAC00' && character <= '\uD7A3') ||
-                   (character >= '\u3130' && character <= '\u318F') ||
-                   (character >= '\u1100' && character <= '\u11FF');
-        }
     }
 }
