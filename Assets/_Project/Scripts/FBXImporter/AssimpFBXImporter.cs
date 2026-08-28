@@ -429,7 +429,13 @@ namespace Fbx2Vmd.FBXImporter
                     // 위치 애니메이션
                     if (channel.HasPositionKeys)
                     {
-                        if (ImportNonRootPositionCurves || ShouldImportPositionCurves(relativePath, targetNode))
+                        string positionCurveNodeName = targetNode != null
+                            ? targetNode.name
+                            : Path.GetFileName(relativePath);
+                        if (ImportNonRootPositionCurves ||
+                            RuntimeAnimationPositionCurvePolicy.ShouldImport(
+                                relativePath,
+                                positionCurveNodeName))
                         {
                             SetPositionCurves(clip, relativePath, channel.PositionKeys, timeScale);
                         }
@@ -487,27 +493,6 @@ namespace Fbx2Vmd.FBXImporter
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.x", curveX);
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.y", curveY);
             clip.SetCurve(relativePath, typeof(Transform), "localPosition.z", curveZ);
-        }
-
-        private static bool ShouldImportPositionCurves(string relativePath, Transform targetNode)
-        {
-            if (string.IsNullOrEmpty(relativePath))
-            {
-                return true;
-            }
-
-            string nodeName = targetNode != null ? targetNode.name : Path.GetFileName(relativePath);
-            if (string.IsNullOrEmpty(nodeName))
-            {
-                return false;
-            }
-
-            string normalizedName = nodeName.Replace(" ", "").Replace("_", "").Replace(":", "").ToLowerInvariant();
-            return normalizedName.Contains("root")
-                || normalizedName.Contains("hips")
-                || normalizedName.Contains("pelvis")
-                || normalizedName.Contains("center")
-                || normalizedName.Contains("groove");
         }
 
         private void SetRotationCurves(AnimationClip clip, string relativePath, List<QuaternionKey> rotationKeys, float timeScale)
