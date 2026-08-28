@@ -193,10 +193,5 @@ namespace Fbx2Vmd.Settings
             string safeValue = value ?? string.Empty;
             return "\"" + safeValue.Replace("\"", "\\\"") + "\"";
         }
-
-        private static ProcessStartInfo CreateProcessStartInfoForTests(MainRecordingSettingsLaunchPlan plan)
-        {
-            return CreateProcessStartInfo(plan);
-        }
     }
 }

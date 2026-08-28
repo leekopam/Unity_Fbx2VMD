@@ -501,11 +501,6 @@ public sealed class RecordingSetting : MonoBehaviour
         return LoadSharedSettings();
     }
 
-    public MainRecordingSettingsActionResult PollSharedSettingsForTests()
-    {
-        return PollSharedSettingsIfChanged();
-    }
-
 #if UNITY_EDITOR
     public MainRecordingSettingsActionResult WriteRuntimePlayModeStateForTests(string playMode)
     {
