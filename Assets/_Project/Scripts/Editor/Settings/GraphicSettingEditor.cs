@@ -141,12 +141,9 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private void DrawCategoryToolbar()
         {
-            int selectedIndex = Mathf.Clamp(
-                (int)selectedCategory,
-                0,
-                GraphicSettingInspectorSchema.CategoryLabels.Length - 1);
+            int selectedIndex = GraphicSettingInspectorSchema.ResolveCategoryIndex(selectedCategory);
             selectedIndex = GUILayout.Toolbar(selectedIndex, GraphicSettingInspectorSchema.CategoryLabels);
-            selectedCategory = (GraphicSettingInspectorCategory)selectedIndex;
+            selectedCategory = GraphicSettingInspectorSchema.ResolveCategory(selectedIndex);
         }
 
         private void DrawSelectedCategory()
