@@ -21,10 +21,6 @@ namespace Fbx2Vmd.FBXImporter
         private const string MainAutoSceneName = "Main_Auto";
         private const string MainRecordingSceneName = "Main_recoding";
         private const string ImportFbxRelativeDirectory = "Resources/Import_FBX";
-        private const string RuntimeDirectory = "Docs/Workflow/Local/runtime";
-        private const string RequestFileName = "fbx_smoke_request.json";
-        private const string StatusFileName = "fbx_smoke_status.json";
-        private const string TraceFileName = "fbx_smoke_trace.log";
         private const string RunAllImportFbxHeadCommand = "run_all_import_fbx_31s";
         private const string RunAllImportFbxMiddleCommand = "run_all_import_fbx_middle_31s";
         private const string RunAllImportFbxTailCommand = "run_all_import_fbx_tail_31s";
@@ -100,10 +96,7 @@ namespace Fbx2Vmd.FBXImporter
         private static readonly Queue<string> PendingSmokeFiles = new Queue<string>();
         private static readonly List<string> BatchSuccesses = new List<string>();
         private static readonly List<string> BatchFailures = new List<string>();
-        private static readonly string ProjectRoot;
-        private static readonly string RequestPath;
-        private static readonly string StatusPath;
-        private static readonly string TracePath;
+        private static readonly FbxPlaybackSmokeAutomationStore AutomationStore;
         private static FBXVmdPipeline _batchFBXVmdPipeline;
         private static FBXVmdPipeline _singleFBXVmdPipeline;
         private static string _activeSingleFbxFileName;
@@ -116,37 +109,10 @@ namespace Fbx2Vmd.FBXImporter
         private static string _activeAutomationRequestedCommand;
         private static DateTime _nextAutomationPollUtc = DateTime.MinValue;
 
-        [Serializable]
-        private sealed class RequestEnvelope
-        {
-            public string request_id;
-            public string command;
-            public string requested_command;
-        }
-
-        [Serializable]
-        private sealed class StatusEnvelope
-        {
-            public string request_id;
-            public string status;
-            public string updated_at;
-            public string command;
-            public string message;
-            public bool passed;
-            public string manifest_path;
-            public int total_jobs;
-            public int success_jobs;
-            public string[] failures;
-        }
-
         static FbxPlaybackSmokeRunner()
         {
-            ProjectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
-            string runtimeDirectoryPath = Path.Combine(ProjectRoot, RuntimeDirectory);
-            RequestPath = Path.Combine(runtimeDirectoryPath, RequestFileName);
-            StatusPath = Path.Combine(runtimeDirectoryPath, StatusFileName);
-            TracePath = Path.Combine(runtimeDirectoryPath, TraceFileName);
-            Directory.CreateDirectory(runtimeDirectoryPath);
+            string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+            AutomationStore = new FbxPlaybackSmokeAutomationStore(projectRoot);
             EditorApplication.update -= PollAutomationRequest;
             EditorApplication.update += PollAutomationRequest;
         }
@@ -389,21 +355,21 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            if (!File.Exists(RequestPath))
+            if (!AutomationStore.HasPendingRequest)
             {
                 return;
             }
 
-            RequestEnvelope request;
+            FbxPlaybackSmokeAutomationRequest request;
             try
             {
-                request = JsonUtility.FromJson<RequestEnvelope>(File.ReadAllText(RequestPath));
+                request = AutomationStore.ReadRequest();
             }
             catch (Exception ex)
             {
                 TraceAutomation($"request read failed: {ex.Message}");
                 TryDeleteRequestFile();
-                WriteStatus(new StatusEnvelope
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
                     request_id = string.Empty,
                     status = "failed",
@@ -420,7 +386,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 TraceAutomation("request payload is invalid");
                 TryDeleteRequestFile();
-                WriteStatus(new StatusEnvelope
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
                     request_id = request != null ? request.request_id ?? string.Empty : string.Empty,
                     status = "failed",
@@ -454,7 +420,7 @@ namespace Fbx2Vmd.FBXImporter
             if (!TryStartAutomationRequest(request, out string startMessage))
             {
                 TraceAutomation($"request start failed id={request.request_id} command={request.command} requested={request.requested_command} message={startMessage}");
-                WriteStatus(new StatusEnvelope
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
                     request_id = request.request_id,
                     status = "failed",
@@ -472,7 +438,7 @@ namespace Fbx2Vmd.FBXImporter
             _activeAutomationCommand = request.command;
             _activeAutomationRequestedCommand = request.requested_command ?? request.command;
             TraceAutomation($"started request id={request.request_id} command={request.command} requested={_activeAutomationRequestedCommand}");
-            WriteStatus(new StatusEnvelope
+            WriteStatus(new FbxPlaybackSmokeAutomationStatus
             {
                 request_id = request.request_id,
                 status = "running",
@@ -484,7 +450,7 @@ namespace Fbx2Vmd.FBXImporter
             });
         }
 
-        private static bool TryStartAutomationRequest(RequestEnvelope request, out string message)
+        private static bool TryStartAutomationRequest(FbxPlaybackSmokeAutomationRequest request, out string message)
         {
             message = string.Empty;
             if (request == null || string.IsNullOrWhiteSpace(request.command))
@@ -551,7 +517,7 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private static bool TryBootstrapCleanAutomationRequest(RequestEnvelope request)
+        private static bool TryBootstrapCleanAutomationRequest(FbxPlaybackSmokeAutomationRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.command))
             {
@@ -565,7 +531,7 @@ namespace Fbx2Vmd.FBXImporter
                 TraceAutomation(
                     $"clean bootstrap request id={request.request_id} requested={request.requested_command} action=" +
                     (EditorApplication.isPlaying ? "restart-playmode" : "enter-playmode"));
-                WriteStatus(new StatusEnvelope
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
                     request_id = request.request_id ?? string.Empty,
                     status = "running",
@@ -589,7 +555,7 @@ namespace Fbx2Vmd.FBXImporter
             if (!EditorApplication.isPlaying)
             {
                 TraceAutomation($"clean bootstrap resume request id={request.request_id} requested={request.requested_command} action=enter-playmode");
-                WriteStatus(new StatusEnvelope
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
                     request_id = request.request_id ?? string.Empty,
                     status = "running",
@@ -1082,7 +1048,7 @@ namespace Fbx2Vmd.FBXImporter
             int totalJobs,
             int successJobs)
         {
-            WriteStatus(new StatusEnvelope
+            WriteStatus(new FbxPlaybackSmokeAutomationStatus
             {
                 request_id = _activeAutomationRequestId ?? string.Empty,
                 status = passed ? "completed" : "failed",
@@ -1110,20 +1076,16 @@ namespace Fbx2Vmd.FBXImporter
             _activeAutomationRequestedCommand = null;
         }
 
-        private static void WriteStatus(StatusEnvelope status)
+        private static void WriteStatus(FbxPlaybackSmokeAutomationStatus status)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(StatusPath) ?? ProjectRoot);
-            File.WriteAllText(StatusPath, JsonUtility.ToJson(status, true));
+            AutomationStore.SaveStatus(status);
         }
 
         private static void TraceAutomation(string message)
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(TracePath) ?? ProjectRoot);
-                File.AppendAllText(
-                    TracePath,
-                    $"{DateTime.Now.ToString("o", CultureInfo.InvariantCulture)} {message}{Environment.NewLine}");
+                AutomationStore.AppendTrace(message);
             }
             catch (System.Exception ex)
             {
@@ -1131,25 +1093,16 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private static void PersistRequest(RequestEnvelope request)
+        private static void PersistRequest(FbxPlaybackSmokeAutomationRequest request)
         {
-            if (request == null)
-            {
-                return;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(RequestPath) ?? ProjectRoot);
-            File.WriteAllText(RequestPath, JsonUtility.ToJson(request, true));
+            AutomationStore.SaveRequest(request);
         }
 
         private static void TryDeleteRequestFile()
         {
             try
             {
-                if (File.Exists(RequestPath))
-                {
-                    File.Delete(RequestPath);
-                }
+                AutomationStore.DeleteRequest();
             }
             catch (System.Exception ex)
             {
