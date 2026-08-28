@@ -958,11 +958,11 @@ namespace Tests.Editor.Settings
         [Test]
         public void Given_MainRecordingScene_When_EnteringEditorPlayMode_Then_AutoLaunchesWebSettings()
         {
-            Type guardType = RequireType(EditorPlayModeGuardTypeName);
+            Type launcherType = RequireType(SettingsLauncherTypeName);
 
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
+                    launcherType,
                     "ShouldAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     false,
@@ -970,7 +970,7 @@ namespace Tests.Editor.Settings
                 Is.True);
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
+                    launcherType,
                     "ShouldAutoLaunchWebSettingsForPlayModeForTests",
                     MainAutoScenePath,
                     false,
@@ -978,7 +978,7 @@ namespace Tests.Editor.Settings
                 Is.False);
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
+                    launcherType,
                     "ShouldAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     true,
@@ -986,12 +986,123 @@ namespace Tests.Editor.Settings
                 Is.False);
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
+                    launcherType,
                     "ShouldAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     false,
                     PlayModeStateChange.ExitingEditMode),
                 Is.False);
+        }
+
+        [Test]
+        public void Given_EditorPlayModeAutoLaunch_When_InspectingOwnership_Then_BelongsToCompanionLauncher()
+        {
+            Type launcherType = RequireType(SettingsLauncherTypeName);
+            Type guardType = RequireType(EditorPlayModeGuardTypeName);
+            const BindingFlags StaticMembers =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            string[] autoLaunchMemberNames =
+            {
+                "ShouldAutoLaunchWebSettingsForPlayModeForTests",
+                "TryAutoLaunchWebSettingsForPlayModeForTests",
+                "ResetAutoLaunchWebSettingsForTests",
+            };
+
+            Assert.That(
+                launcherType.GetField("hasAutoLaunchedWebSettingsForCurrentPlayMode", StaticMembers),
+                Is.Not.Null);
+            Assert.That(
+                guardType.GetField("hasAutoLaunchedWebSettingsForCurrentPlayMode", StaticMembers),
+                Is.Null);
+
+            foreach (string memberName in autoLaunchMemberNames)
+            {
+                Assert.That(launcherType.GetMethod(memberName, StaticMembers), Is.Not.Null, memberName);
+                Assert.That(guardType.GetMethod(memberName, StaticMembers), Is.Null, memberName);
+            }
+
+            string launcherSource = File.ReadAllText(
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingSettingsCompanionLauncher.cs");
+            string guardSource = File.ReadAllText(
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorPlayModeGuard.cs");
+            Assert.That(
+                launcherSource,
+                Does.Contain("EditorApplication.playModeStateChanged += OnPlayModeStateChanged;"));
+            Assert.That(guardSource, Does.Not.Contain("TryAutoLaunchWebSettingsForPlayMode"));
+            int companionCallbackUnsubscribeIndex = launcherSource.IndexOf(
+                "EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;",
+                StringComparison.Ordinal);
+            int companionCallbackSubscribeIndex = launcherSource.IndexOf(
+                "EditorApplication.playModeStateChanged += OnPlayModeStateChanged;",
+                StringComparison.Ordinal);
+            int guardCallbackRegistrationIndex = guardSource.IndexOf(
+                "EditorApplication.playModeStateChanged += OnPlayModeStateChanged;",
+                StringComparison.Ordinal);
+            int companionCallbackRegistrationIndex = guardSource.IndexOf(
+                "MainRecordingSettingsCompanionLauncher.RegisterEditorPlayModeCallback();",
+                StringComparison.Ordinal);
+            Assert.That(companionCallbackUnsubscribeIndex, Is.GreaterThanOrEqualTo(0));
+            Assert.That(
+                companionCallbackSubscribeIndex,
+                Is.GreaterThan(companionCallbackUnsubscribeIndex),
+                "Companion callback은 중복 구독을 제거한 뒤 다시 등록해야 합니다.");
+            Assert.That(guardCallbackRegistrationIndex, Is.GreaterThanOrEqualTo(0));
+            Assert.That(
+                companionCallbackRegistrationIndex,
+                Is.GreaterThan(guardCallbackRegistrationIndex),
+                "Editor 보호 적용 callback이 Companion 자동 실행 callback보다 먼저 등록돼야 합니다.");
+        }
+
+        [Test]
+        public void Given_CompanionAutoLaunchAlreadyRan_When_PlayModeExits_Then_AllowsNextSessionLaunch()
+        {
+            Type launcherType = RequireType(SettingsLauncherTypeName);
+            int launchCount = 0;
+            Action openSettings = () => launchCount++;
+
+            InvokeStatic<object>(launcherType, "ResetAutoLaunchWebSettingsForTests");
+
+            try
+            {
+                Assert.That(
+                    InvokeStatic<bool>(
+                        launcherType,
+                        "TryAutoLaunchWebSettingsForPlayModeForTests",
+                        MainRecordingScenePath,
+                        false,
+                        PlayModeStateChange.EnteredPlayMode,
+                        openSettings),
+                    Is.True);
+
+                InvokeStatic<object>(launcherType, "OnPlayModeStateChanged", PlayModeStateChange.ExitingPlayMode);
+
+                Assert.That(
+                    InvokeStatic<bool>(
+                        launcherType,
+                        "TryAutoLaunchWebSettingsForPlayModeForTests",
+                        MainRecordingScenePath,
+                        false,
+                        PlayModeStateChange.EnteredPlayMode,
+                        openSettings),
+                    Is.True);
+
+                InvokeStatic<object>(launcherType, "OnPlayModeStateChanged", PlayModeStateChange.EnteredEditMode);
+
+                Assert.That(
+                    InvokeStatic<bool>(
+                        launcherType,
+                        "TryAutoLaunchWebSettingsForPlayModeForTests",
+                        MainRecordingScenePath,
+                        false,
+                        PlayModeStateChange.EnteredPlayMode,
+                        openSettings),
+                    Is.True);
+                Assert.That(launchCount, Is.EqualTo(3));
+            }
+            finally
+            {
+                InvokeStatic<object>(launcherType, "ResetAutoLaunchWebSettingsForTests");
+            }
         }
 
         [Test]
@@ -1022,7 +1133,6 @@ namespace Tests.Editor.Settings
         public void Given_MainRecordingScene_When_AutoLaunchingEditorPlayMode_Then_InvokesWebSettingsLauncherOnce()
         {
             Type launcherType = RequireType(SettingsLauncherTypeName);
-            Type guardType = RequireType(EditorPlayModeGuardTypeName);
             int launchCount = 0;
             string settingsPath = string.Empty;
             Action<MainRecordingSettingsLaunchPlan> launcher = plan =>
@@ -1033,19 +1143,19 @@ namespace Tests.Editor.Settings
             Action openSettings = () =>
                 InvokeStatic<object>(launcherType, "OpenMainRecordingSettingsForTests", launcher);
 
-            InvokeStatic<object>(guardType, "ResetAutoLaunchWebSettingsForTests");
+            InvokeStatic<object>(launcherType, "ResetAutoLaunchWebSettingsForTests");
 
             try
             {
                 bool firstLaunch = InvokeStatic<bool>(
-                    guardType,
+                    launcherType,
                     "TryAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     false,
                     PlayModeStateChange.EnteredPlayMode,
                     openSettings);
                 bool duplicateLaunch = InvokeStatic<bool>(
-                    guardType,
+                    launcherType,
                     "TryAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     false,
@@ -1059,7 +1169,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                InvokeStatic<object>(guardType, "ResetAutoLaunchWebSettingsForTests");
+                InvokeStatic<object>(launcherType, "ResetAutoLaunchWebSettingsForTests");
             }
         }
 
