@@ -9228,7 +9228,8 @@ namespace Fbx2Vmd.FBXImporter
             source = FindTargetTransform(candidate =>
             {
                 string normalizedName = NormalizeTransformName(candidate.name);
-                return normalizedName.Contains(sideToken) && IsActiveThumbBaseSourceName(normalizedName);
+                return normalizedName.Contains(sideToken) &&
+                    ThumbTransformNamePolicy.IsActiveBaseSource(normalizedName);
             });
             if (source != null)
             {
@@ -9255,7 +9256,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 string normalizedName = NormalizeTransformName(candidate.name);
-                if (!IsActiveThumbBaseSourceName(normalizedName))
+                if (!ThumbTransformNamePolicy.IsActiveBaseSource(normalizedName))
                 {
                     continue;
                 }
@@ -9291,7 +9292,7 @@ namespace Fbx2Vmd.FBXImporter
             if (string.IsNullOrEmpty(normalizedName) ||
                 !normalizedName.Contains("thumb") ||
                 normalizedName.Contains("ghost") ||
-                IsActiveThumbBaseSourceName(normalizedName))
+                ThumbTransformNamePolicy.IsActiveBaseSource(normalizedName))
             {
                 return false;
             }
@@ -9357,16 +9358,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return IsThumbBaseName(normalizedName);
-        }
-
-        private static bool IsActiveThumbBaseSourceName(string normalizedName)
-        {
-            return !string.IsNullOrEmpty(normalizedName) &&
-                normalizedName.Contains("thumb0m") &&
-                !normalizedName.Contains("ghost") &&
-                !normalizedName.Contains("thumb1") &&
-                !normalizedName.Contains("thumb2") &&
-                !normalizedName.Contains("thumbtip");
         }
 
         private static bool IsThumbBaseName(string normalizedName)
