@@ -83,14 +83,6 @@ namespace Fbx2Vmd.Settings
             return MainRecordingSettingsActionResult.Success("공유 설정을 적용했습니다.");
         }
 
-        public static MainRecordingSettingsActionResult ApplyForTests(
-            MainRecordingSettingsDocument document,
-            RecordingSetting recodingSetting,
-            FBXVmdPipeline fileManager)
-        {
-            return ApplySharedSettings(document, recodingSetting, fileManager, false);
-        }
-
         public static FBXVmdPipeline ResolveFBXVmdPipeline(
             RecordingSetting recodingSetting = null,
             FBXVmdPipeline fileManager = null)

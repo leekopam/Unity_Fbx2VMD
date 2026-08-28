@@ -78,7 +78,7 @@ namespace Tests.Editor.Settings
             };
 
             MainRecordingSettingsActionResult result =
-                MainRecordingSettingsActions.ApplyForTests(document, null, null);
+                MainRecordingSettingsActions.ApplySharedSettings(document, null, null, false);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.UserMessage, Does.Contain("FBX"));
@@ -515,7 +515,7 @@ namespace Tests.Editor.Settings
                 File.SetLastWriteTimeUtc(settingsPath, DateTime.UtcNow.AddMinutes(1));
 
                 MainRecordingSettingsActionResult firstResult =
-                    firstRecodingSetting.PollSharedSettingsForTests();
+                    firstRecodingSetting.PollSharedSettingsIfChanged();
                 MainRecordingSettingsDocument consumedDocument = store.LoadOrCreateDefault();
                 object consumedCommand = GetField<MainRecordingSettingsCommandEnvelope>(
                     consumedDocument,
@@ -578,7 +578,7 @@ namespace Tests.Editor.Settings
                 });
                 File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
 
-                MainRecordingSettingsActionResult result = recodingSetting.PollSharedSettingsForTests();
+                MainRecordingSettingsActionResult result = recodingSetting.PollSharedSettingsIfChanged();
 
                 Assert.That(result.Succeeded, Is.True);
                 Assert.That(GetField<bool>(recodingSetting, "openSettingsPopupOnStart"), Is.True);
@@ -771,6 +771,33 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_PublicSettingsOperations_When_InspectingTestSurface_Then_HaveNoForwardingWrappers()
+        {
+            Type companionControllerType = RequireType(CompanionControllerTypeName);
+            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+            const BindingFlags InstanceMembers =
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            const BindingFlags StaticMembers =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+            Assert.That(
+                typeof(MainRecordingSettingsActions).GetMethod("ApplyForTests", StaticMembers),
+                Is.Null);
+            Assert.That(
+                typeof(RecordingSetting).GetMethod("PollSharedSettingsForTests", InstanceMembers),
+                Is.Null);
+            Assert.That(
+                companionControllerType.GetMethod("SaveCurrentDocumentForTests", InstanceMembers),
+                Is.Null);
+            Assert.That(
+                companionControllerType.GetMethod("GetStatusMessageForTests", InstanceMembers),
+                Is.Null);
+            Assert.That(
+                runtimeLauncherType.GetMethod("CreateProcessStartInfoForTests", StaticMembers),
+                Is.Null);
+        }
+
+        [Test]
         public void Given_SettingsLauncherType_When_InspectingMetadata_Then_UsesElectronCompanionForMainRecording()
         {
             Type launcherType = RequireType(SettingsLauncherTypeName);
@@ -841,7 +868,7 @@ namespace Tests.Editor.Settings
 
                 var startInfo = InvokeStatic<ProcessStartInfo>(
                     runtimeLauncherType,
-                    "CreateProcessStartInfoForTests",
+                    "CreateProcessStartInfo",
                     plan);
 
                 Assert.That(startInfo.Environment.ContainsKey("ELECTRON_RUN_AS_NODE"), Is.False);
@@ -1480,7 +1507,7 @@ namespace Tests.Editor.Settings
                 };
 
                 InvokeInstance<object>(controller, "SetDocumentForTests", document);
-                Assert.That(InvokeInstance<bool>(controller, "SaveCurrentDocumentForTests"), Is.True);
+                Assert.That(InvokeInstance<bool>(controller, "SaveSettings"), Is.True);
 
                 var store = new MainRecordingSettingsStore(path);
                 MainRecordingSettingsDocument roundTrip = store.LoadOrCreateDefault();
@@ -1489,7 +1516,7 @@ namespace Tests.Editor.Settings
                 Assert.That(roundTrip.captureWidth, Is.EqualTo(2560));
                 Assert.That(roundTrip.captureHeight, Is.EqualTo(1440));
                 Assert.That(roundTrip.openSettingsOnStart, Is.False);
-                Assert.That(InvokeInstance<string>(controller, "GetStatusMessageForTests"), Does.Contain("저장"));
+                Assert.That(GetMemberValue<string>(controller, "StatusMessage"), Does.Contain("저장"));
             }
             finally
             {

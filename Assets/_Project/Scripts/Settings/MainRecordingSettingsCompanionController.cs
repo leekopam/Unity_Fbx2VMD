@@ -262,20 +262,10 @@ namespace Fbx2Vmd.Settings
             RefreshSaveButtonState();
         }
 
-        private bool SaveCurrentDocumentForTests()
-        {
-            return SaveSettings();
-        }
-
         private bool IsSaveButtonEnabledForTests()
         {
             RefreshSaveButtonState();
             return saveButton == null || saveButton.interactable;
-        }
-
-        private string GetStatusMessageForTests()
-        {
-            return statusMessage;
         }
 
         private bool HasReadableKoreanTextForTests()
