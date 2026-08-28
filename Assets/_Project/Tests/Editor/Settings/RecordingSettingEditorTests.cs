@@ -1471,6 +1471,27 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimePopupElementConstruction_When_CheckingOwnership_Then_UsesDedicatedBuilder()
+        {
+            const string popupPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopup.cs";
+            const string builderPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsElementBuilder.cs";
+
+            Assert.That(File.Exists(builderPath), Is.True, builderPath);
+
+            string popupSource = File.ReadAllText(popupPath);
+            string builderSource = File.ReadAllText(builderPath);
+
+            Assert.That(builderSource, Does.Contain("internal sealed class MainRecordingSettingsElementBuilder"));
+            Assert.That(popupSource, Does.Contain("new MainRecordingSettingsElementBuilder("));
+            Assert.That(popupSource, Does.Not.Contain("private Button CreateButton("));
+            Assert.That(popupSource, Does.Not.Contain("private Image CreateImage("));
+            Assert.That(popupSource, Does.Not.Contain("private TextMeshProUGUI CreateText("));
+            Assert.That(popupSource, Does.Not.Contain("private RectTransform CreateRectTransform("));
+        }
+
+        [Test]
         public void Given_RuntimePopupNotification_When_ShowingKoreanMessage_Then_RemainsReadable()
         {
             var popupObject = new GameObject("Runtime Popup Korean Notification Test", typeof(RectTransform));
