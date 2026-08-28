@@ -6,14 +6,12 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.PostProcessing;
 using UnityEngine.Rendering.Universal;
-using UnityEngine.UI;
 
 namespace Fbx2Vmd.Settings.EditorTools
 {
     public static class GraphicSettingSceneInstaller
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
-        private const string ManualRecordButtonName = "MMD_Record_Button";
         private const string DefaultPostProcessResourcesPath =
             "Packages/com.unity.postprocessing/PostProcessing/PostProcessResources.asset";
 
@@ -55,9 +53,9 @@ namespace Fbx2Vmd.Settings.EditorTools
             }
 
             BackgroundColorSetting backgroundSetting = EnsureComponent<BackgroundColorSetting>(root);
-            RecordingSetting recodingSetting = EnsureComponent<RecordingSetting>(root);
+            RecordingSetting recordingSetting = EnsureComponent<RecordingSetting>(root);
             RemoveLegacyGraphicSettingChild(root);
-            ConfigureDefaults(setting, backgroundSetting, recodingSetting);
+            ConfigureDefaults(setting, backgroundSetting, recordingSetting);
             return setting;
         }
 
@@ -92,11 +90,11 @@ namespace Fbx2Vmd.Settings.EditorTools
         private static void ConfigureDefaults(
             GraphicSetting setting,
             BackgroundColorSetting backgroundSetting,
-            RecordingSetting recodingSetting)
+            RecordingSetting recordingSetting)
         {
             UniversalRenderPipelineAsset pipelineAsset = ResolveUniversalRenderPipelineAsset();
             Camera mainCamera = Camera.main;
-            GameObject targetModelRoot = ResolveTargetModelRoot(recodingSetting);
+            GameObject targetModelRoot = ResolveTargetModelRoot(recordingSetting);
             var serialized = new SerializedObject(setting);
             serialized.FindProperty("targetCamera").objectReferenceValue = mainCamera;
             serialized.FindProperty("targetRenderPipelineAsset").objectReferenceValue = pipelineAsset;
@@ -124,7 +122,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             ConfigureBackgroundColor(backgroundSetting, mainCamera);
-            ConfigureRecordingControls(recodingSetting);
+            RecordingSettingSceneConfigurator.Configure(recordingSetting);
             GraphicSettingCameraFramingApplier.ApplyDefaultFraming(mainCamera, targetModelRoot);
         }
 
@@ -142,92 +140,6 @@ namespace Fbx2Vmd.Settings.EditorTools
             serialized.FindProperty("applyBackgroundColor").boolValue = true;
             serialized.FindProperty("backgroundColor").colorValue = Color.black;
             serialized.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        private static void ConfigureRecordingControls(RecordingSetting recodingSetting)
-        {
-            if (recodingSetting == null)
-            {
-                return;
-            }
-
-            FBXVmdPipeline fileManager = recodingSetting.RecordingFBXVmdPipeline;
-            Button button = ResolveManualRecordButton();
-            HumanoidSampleCode controller = ResolveRecordingController(fileManager);
-            var serialized = new SerializedObject(recodingSetting);
-            serialized.FindProperty("recordingFBXVmdPipeline").objectReferenceValue = fileManager;
-            serialized.FindProperty("manualRecordButton").objectReferenceValue = button;
-            SetObjectReference(serialized, "recordingController", controller);
-            SetBool(serialized, "enableRecordingDiagnostics", fileManager != null && fileManager.enableRecordingDiagnostics);
-            SetBool(
-                serialized,
-                "useDeterministicCaptureFramerateForDiagnostics",
-                fileManager != null && fileManager.useDeterministicCaptureFramerateForDiagnostics);
-            SetBool(serialized, "enableDiagnosticFingerCloseups", fileManager == null || fileManager.enableDiagnosticFingerCloseups);
-            SetEnum(serialized, "recordingCaptureQuality", (int)RecordingCaptureQualityPreset.Uhd4K);
-            SetInt(serialized, "customRecordingCaptureWidth", 3840);
-            SetInt(serialized, "customRecordingCaptureHeight", 2160);
-            SetBool(serialized, "applyDiagnosticsToFBXVmdPipelineOnAwake", true);
-            SetObjectReference(serialized, "settingsPopup", null);
-            SetBool(serialized, "openSettingsPopupOnStart", true);
-            serialized.ApplyModifiedPropertiesWithoutUndo();
-            ManualRecordingButtonBindingApplier.Apply(button, recodingSetting, fileManager);
-        }
-
-        private static HumanoidSampleCode ResolveRecordingController(FBXVmdPipeline fileManager)
-        {
-            if (fileManager != null && fileManager.targetCharacter != null)
-            {
-                HumanoidSampleCode controller = fileManager.targetCharacter.GetComponent<HumanoidSampleCode>();
-                if (controller != null)
-                {
-                    return controller;
-                }
-            }
-
-            return null;
-        }
-
-        private static void SetObjectReference(SerializedObject serialized, string propertyName, UnityEngine.Object value)
-        {
-            SerializedProperty property = serialized.FindProperty(propertyName);
-            if (property != null)
-            {
-                property.objectReferenceValue = value;
-            }
-        }
-
-        private static void SetBool(SerializedObject serialized, string propertyName, bool value)
-        {
-            SerializedProperty property = serialized.FindProperty(propertyName);
-            if (property != null)
-            {
-                property.boolValue = value;
-            }
-        }
-
-        private static void SetEnum(SerializedObject serialized, string propertyName, int value)
-        {
-            SerializedProperty property = serialized.FindProperty(propertyName);
-            if (property != null)
-            {
-                property.enumValueIndex = value;
-            }
-        }
-
-        private static void SetInt(SerializedObject serialized, string propertyName, int value)
-        {
-            SerializedProperty property = serialized.FindProperty(propertyName);
-            if (property != null)
-            {
-                property.intValue = value;
-            }
-        }
-
-        private static Button ResolveManualRecordButton()
-        {
-            GameObject buttonObject = GameObject.Find(ManualRecordButtonName);
-            return buttonObject != null ? buttonObject.GetComponent<Button>() : null;
         }
 
         private static void ConfigureTextureImportProfile(SerializedProperty property)
@@ -288,10 +200,10 @@ namespace Fbx2Vmd.Settings.EditorTools
             }
         }
 
-        private static GameObject ResolveTargetModelRoot(RecordingSetting recodingSetting)
+        private static GameObject ResolveTargetModelRoot(RecordingSetting recordingSetting)
         {
-            FBXVmdPipeline fileManager = recodingSetting != null
-                ? recodingSetting.RecordingFBXVmdPipeline
+            FBXVmdPipeline fileManager = recordingSetting != null
+                ? recordingSetting.RecordingFBXVmdPipeline
                 : null;
             return fileManager != null ? fileManager.targetCharacter : null;
         }
