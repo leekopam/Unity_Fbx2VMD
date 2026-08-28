@@ -29,6 +29,23 @@ namespace Fbx2Vmd.FBXImporter
                 !normalizedName.Contains("thumbtip");
         }
 
+        internal static bool IsDetachedBaseHelper(string transformName)
+        {
+            if (string.IsNullOrEmpty(transformName))
+            {
+                return false;
+            }
+
+            string normalizedName = transformName.ToLowerInvariant();
+            return !normalizedName.Contains("!") &&
+                !normalizedName.Contains("ghost") &&
+                !normalizedName.Contains("thumb0m") &&
+                normalizedName.Contains("thumb0") &&
+                !normalizedName.Contains("thumb1") &&
+                !normalizedName.Contains("thumb2") &&
+                !normalizedName.Contains("thumbtip");
+        }
+
         internal static bool IsActiveBaseSource(string transformName)
         {
             if (string.IsNullOrEmpty(transformName))
