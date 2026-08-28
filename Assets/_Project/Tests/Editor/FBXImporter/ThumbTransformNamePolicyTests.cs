@@ -3,6 +3,7 @@ using NUnit.Framework;
 using System;
 using System.IO;
 using System.Reflection;
+using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -23,10 +24,13 @@ namespace Tests.Editor.FBXImporter
             Assert.That(guardSource, Does.Contain("ThumbTransformNamePolicy.IsActiveBaseSource("));
             Assert.That(guardSource, Does.Contain("ThumbTransformNamePolicy.TryResolveSide("));
             Assert.That(retargeterSource, Does.Contain("ThumbTransformNamePolicy.IsActiveBaseSource("));
+            Assert.That(retargeterSource, Does.Contain("ThumbTransformNamePolicy.IsDetachedBaseHelper("));
             Assert.That(guardSource, Does.Not.Contain("private static bool IsThumbBaseHelperName("));
             Assert.That(guardSource, Does.Not.Contain("private static bool IsActiveThumbBaseSourceName("));
             Assert.That(guardSource, Does.Not.Contain("private static bool TryResolveThumbSideFromName("));
             Assert.That(retargeterSource, Does.Not.Contain("private static bool IsActiveThumbBaseSourceName("));
+            Assert.That(retargeterSource, Does.Not.Contain("private static bool IsDetachedThumbBaseHelperName("));
+            Assert.That(retargeterSource, Does.Not.Contain("private static bool IsThumbBaseName("));
         }
 
         [TestCase(null, false)]
@@ -65,6 +69,60 @@ namespace Tests.Editor.FBXImporter
             bool actual = InvokePolicy("IsActiveBaseSource", transformName);
 
             Assert.That(actual, Is.EqualTo(expected));
+        }
+
+        [TestCase(null, false)]
+        [TestCase("", false)]
+        [TestCase("joint_LeftThumb0", true)]
+        [TestCase("JOINT_RIGHTTHUMB0", true)]
+        [TestCase("!joint_LeftThumb0", false)]
+        [TestCase("ghost_LeftThumb0", false)]
+        [TestCase("joint_LeftThumb0M", false)]
+        [TestCase("joint_LeftThumb0_Thumb1", false)]
+        [TestCase("joint_LeftThumb0_Thumb2", false)]
+        [TestCase("joint_LeftThumb0_ThumbTip", false)]
+        [TestCase("joint_LeftThumb0_Thumb3", true)]
+        [TestCase("joint_LeftThumb0_Proximal", true)]
+        [TestCase("joint_LeftThumb0_Intermediate", true)]
+        [TestCase("joint_LeftThumb0_Distal", true)]
+        [TestCase("joint_LeftThumb-0", false)]
+        [TestCase("joint_LeftThumb 0", false)]
+        public void Given_TransformName_When_CheckingDetachedBaseHelper_Then_PreservesClassification(
+            string transformName,
+            bool expected)
+        {
+            bool actual = InvokePolicy("IsDetachedBaseHelper", transformName);
+
+            Assert.That(actual, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void Given_PoseReferenceHierarchy_When_FindingHelper_Then_PreservesFirstMatchingCandidate()
+        {
+            var root = new GameObject("ThumbHelperPolicyRoot");
+            try
+            {
+                Animator animator = root.AddComponent<Animator>();
+                PoseSpaceRetargeter retargeter = root.AddComponent<PoseSpaceRetargeter>();
+                retargeter.targetAnimator = animator;
+                AddChild(root.transform, "joint_LeftThumb0M");
+                AddChild(root.transform, "ghost_LeftThumb0");
+                Transform expected = AddChild(root.transform, "joint_LeftThumb0_Proximal");
+                AddChild(root.transform, "joint_LeftThumb0");
+
+                MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+                    "FindThumbBaseHelperByName",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null);
+
+                Transform actual = (Transform)method.Invoke(retargeter, new object[] { true });
+
+                Assert.That(actual, Is.SameAs(expected));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         [TestCase(null, false, false)]
@@ -120,6 +178,13 @@ namespace Tests.Editor.FBXImporter
             bool resolved = (bool)method.Invoke(null, arguments);
             isRight = (bool)arguments[1];
             return resolved;
+        }
+
+        private static Transform AddChild(Transform parent, string name)
+        {
+            var child = new GameObject(name);
+            child.transform.SetParent(parent, false);
+            return child.transform;
         }
 
         private static string ReadRuntimeSource(string fileName)
