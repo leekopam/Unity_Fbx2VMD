@@ -22,6 +22,8 @@ namespace Tests.Editor.Settings
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderController, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
+        private const string CameraFramingApplierTypeName =
+            "Fbx2Vmd.Settings.EditorTools.GraphicSettingCameraFramingApplier, Assembly-CSharp-Editor";
         private const string GameViewScaleAutoApplierTypeName =
             "Fbx2Vmd.Settings.EditorTools.GraphicSettingGameViewScaleAutoApplier, Assembly-CSharp-Editor";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
@@ -346,6 +348,66 @@ namespace Tests.Editor.Settings
                     inspectorSource,
                     Does.Not.Contain($"class {typeName}"),
                     $"GraphicSettingEditor.cs must not own {typeName}.");
+            }
+        }
+
+        [Test]
+        public void Given_GenericVisibleRenderers_When_ApplyingDefaultFraming_Then_UsesDedicatedCameraBoundary()
+        {
+            const string applierSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingCameraFramingApplier.cs";
+            const string sceneInstallerSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingSceneInstaller.cs";
+
+            Assert.That(File.Exists(applierSourcePath), Is.True, applierSourcePath);
+            string sceneInstallerSource = File.ReadAllText(sceneInstallerSourcePath);
+            Assert.That(sceneInstallerSource, Does.Not.Contain("TryGetVisibleRendererBounds"));
+            Assert.That(sceneInstallerSource, Does.Not.Contain("TryGetRendererWorldBounds"));
+
+            Type applierType = RequireType(CameraFramingApplierTypeName);
+            var cameraObject = new GameObject("Graphic Setting Camera Framing Test");
+            var targetRoot = new GameObject("Generic Camera Framing Target");
+            GameObject firstTarget = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject secondTarget = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject disabledTarget = GameObject.CreatePrimitive(PrimitiveType.Cube);
+
+            try
+            {
+                firstTarget.transform.SetParent(targetRoot.transform);
+                firstTarget.transform.position = new Vector3(-2f, 1f, 0f);
+                firstTarget.transform.localScale = new Vector3(2f, 4f, 1f);
+                secondTarget.transform.SetParent(targetRoot.transform);
+                secondTarget.transform.position = new Vector3(4f, 2f, 1f);
+                secondTarget.transform.localScale = new Vector3(1f, 2f, 2f);
+                Bounds expectedBounds = firstTarget.GetComponent<Renderer>().bounds;
+                expectedBounds.Encapsulate(secondTarget.GetComponent<Renderer>().bounds);
+                secondTarget.SetActive(false);
+                disabledTarget.transform.SetParent(targetRoot.transform);
+                disabledTarget.transform.position = new Vector3(100f, 100f, 100f);
+                disabledTarget.GetComponent<Renderer>().enabled = false;
+
+                var camera = cameraObject.AddComponent<Camera>();
+                InvokeStatic(applierType, "ApplyDefaultFraming", camera, targetRoot);
+
+                float expectedSize = Mathf.Max(
+                    expectedBounds.extents.y / 0.56f,
+                    expectedBounds.extents.x / ((16f / 9f) * 0.82f));
+                float expectedY = expectedBounds.center.y - (0.28f - 0.5f) * 2f * expectedSize;
+
+                Assert.That(camera.orthographic, Is.True);
+                Assert.That(camera.orthographicSize, Is.EqualTo(expectedSize).Within(0.0001f));
+                Assert.That(camera.transform.position.x, Is.EqualTo(expectedBounds.center.x).Within(0.0001f));
+                Assert.That(camera.transform.position.y, Is.EqualTo(expectedY).Within(0.0001f));
+                Assert.That(camera.transform.position.z, Is.EqualTo(expectedBounds.center.z + 39f).Within(0.0001f));
+                Assert.That(Vector3.Dot(camera.transform.forward, Vector3.back), Is.GreaterThan(0.999f));
+                Assert.That(camera.nearClipPlane, Is.EqualTo(0.3f).Within(0.0001f));
+                Assert.That(camera.farClipPlane, Is.EqualTo(139f + expectedBounds.extents.z).Within(0.0001f));
+                Assert.That(camera.useOcclusionCulling, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(targetRoot);
+                UnityEngine.Object.DestroyImmediate(cameraObject);
             }
         }
 
