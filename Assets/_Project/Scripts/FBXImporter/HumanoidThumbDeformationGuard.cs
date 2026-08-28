@@ -1303,7 +1303,7 @@ namespace Fbx2Vmd.FBXImporter
                     continue;
                 }
 
-                if (!IsActiveThumbBaseSourceName(candidate.name) ||
+                if (!ThumbTransformNamePolicy.IsActiveBaseSource(candidate.name) ||
                     !TryResolveThumbSide(candidate, out bool candidateIsRightThumb) ||
                     candidateIsRightThumb != isRightThumb)
                 {
@@ -1342,7 +1342,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             return candidate != null &&
                 !IsMappedHumanThumbBone(candidate) &&
-                IsThumbBaseHelperName(candidate.name);
+                ThumbTransformNamePolicy.IsBaseHelper(candidate.name);
         }
 
         private bool IsDetachedThumbBaseHelperTransform(Transform candidate)
@@ -1559,51 +1559,10 @@ namespace Fbx2Vmd.FBXImporter
             return Mathf.Min(handDistance, thumbDistance);
         }
 
-        private static bool IsThumbBaseHelperName(string transformName)
-        {
-            if (string.IsNullOrEmpty(transformName))
-            {
-                return false;
-            }
-
-            string normalizedName = transformName.ToLowerInvariant();
-            string compactName = normalizedName
-                .Replace("_", string.Empty)
-                .Replace("-", string.Empty)
-                .Replace(".", string.Empty)
-                .Replace(" ", string.Empty);
-            if (!compactName.Contains("thumb0"))
-            {
-                return false;
-            }
-
-            return !normalizedName.Contains("thumb1") &&
-                !normalizedName.Contains("thumb2") &&
-                !normalizedName.Contains("thumb3") &&
-                !normalizedName.Contains("proximal") &&
-                !normalizedName.Contains("intermediate") &&
-                !normalizedName.Contains("distal") &&
-                !normalizedName.Contains("thumbtip");
-        }
-
         private static bool IsExplicitDetachedThumbBaseSource(Transform sourceTransform)
         {
-            return sourceTransform != null && IsActiveThumbBaseSourceName(sourceTransform.name);
-        }
-
-        private static bool IsActiveThumbBaseSourceName(string transformName)
-        {
-            if (string.IsNullOrEmpty(transformName))
-            {
-                return false;
-            }
-
-            string normalizedName = transformName.ToLowerInvariant();
-            return normalizedName.Contains("thumb0m") &&
-                !normalizedName.Contains("ghost") &&
-                !normalizedName.Contains("thumb1") &&
-                !normalizedName.Contains("thumb2") &&
-                !normalizedName.Contains("thumbtip");
+            return sourceTransform != null &&
+                ThumbTransformNamePolicy.IsActiveBaseSource(sourceTransform.name);
         }
 
         private Quaternion GetThumbRotationOffset(HumanBodyBones thumbBone)
