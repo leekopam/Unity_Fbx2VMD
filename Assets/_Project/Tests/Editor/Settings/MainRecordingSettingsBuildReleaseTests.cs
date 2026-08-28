@@ -208,12 +208,59 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_SettingsLayoutPublicTypes_When_InspectingSourceOwnership_Then_LiveInTypeNamedFiles()
+        {
+            const string layoutSpecPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsLayoutSpec.cs";
+            const string actionTypePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsActionType.cs";
+            const string sidebarItemSpecPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsSidebarItemSpec.cs";
+            const string cardSpecPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsCardSpec.cs";
+
+            Assert.That(File.Exists(layoutSpecPath), Is.True, layoutSpecPath);
+            Assert.That(File.Exists(actionTypePath), Is.True, actionTypePath);
+            Assert.That(File.Exists(sidebarItemSpecPath), Is.True, sidebarItemSpecPath);
+            Assert.That(File.Exists(cardSpecPath), Is.True, cardSpecPath);
+
+            string layoutSpecSource = File.ReadAllText(layoutSpecPath);
+            string actionTypeSource = File.ReadAllText(actionTypePath);
+            string sidebarItemSpecSource = File.ReadAllText(sidebarItemSpecPath);
+            string cardSpecSource = File.ReadAllText(cardSpecPath);
+
+            Assert.That(
+                layoutSpecSource,
+                Does.Not.Contain("public enum MainRecordingSettingsActionType"));
+            Assert.That(
+                layoutSpecSource,
+                Does.Not.Contain("public readonly struct MainRecordingSettingsSidebarItemSpec"));
+            Assert.That(
+                layoutSpecSource,
+                Does.Not.Contain("public readonly struct MainRecordingSettingsCardSpec"));
+            Assert.That(actionTypeSource, Does.Contain("namespace Fbx2Vmd.Settings"));
+            Assert.That(
+                actionTypeSource,
+                Does.Contain("public enum MainRecordingSettingsActionType"));
+            Assert.That(sidebarItemSpecSource, Does.Contain("namespace Fbx2Vmd.Settings"));
+            Assert.That(
+                sidebarItemSpecSource,
+                Does.Contain("public readonly struct MainRecordingSettingsSidebarItemSpec"));
+            Assert.That(cardSpecSource, Does.Contain("namespace Fbx2Vmd.Settings"));
+            Assert.That(
+                cardSpecSource,
+                Does.Contain("public readonly struct MainRecordingSettingsCardSpec"));
+        }
+
+        [Test]
         public void Given_RuntimeSettingsSourceFiles_When_InspectingContents_Then_UnityEditorIsNotReferenced()
         {
             string[] runtimeSourceFiles =
             {
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsActionResult.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsActions.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsActionType.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsCardSpec.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsCompanionController.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsCommandEnvelope.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsDocument.cs",
@@ -223,6 +270,7 @@ namespace Tests.Editor.Settings
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsLauncher.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsState.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsStore.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsSidebarItemSpec.cs",
                 "Assets/_Project/Scripts/Settings/RecordingSetting.cs",
             };
 

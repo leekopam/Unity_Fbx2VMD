@@ -2,58 +2,6 @@
 
 namespace Fbx2Vmd.Settings
 {
-    public enum MainRecordingSettingsActionType
-    {
-        ComingSoon,
-        ImportFbx,
-        Close
-    }
-
-    public readonly struct MainRecordingSettingsSidebarItemSpec
-    {
-        public MainRecordingSettingsSidebarItemSpec(string label, string iconName, bool active, bool enabled)
-        {
-            Label = label;
-            IconName = iconName;
-            Active = active;
-            Enabled = enabled;
-        }
-
-        public string Label { get; }
-        public string IconName { get; }
-        public bool Active { get; }
-        public bool Enabled { get; }
-    }
-
-    public readonly struct MainRecordingSettingsCardSpec
-    {
-        public MainRecordingSettingsCardSpec(
-            string title,
-            string body,
-            string buttonLabel,
-            Color backgroundColor,
-            Color bodyTextColor,
-            MainRecordingSettingsActionType action,
-            bool enabled)
-        {
-            Title = title;
-            Body = body;
-            ButtonLabel = buttonLabel;
-            BackgroundColor = backgroundColor;
-            BodyTextColor = bodyTextColor;
-            Action = action;
-            Enabled = enabled;
-        }
-
-        public string Title { get; }
-        public string Body { get; }
-        public string ButtonLabel { get; }
-        public Color BackgroundColor { get; }
-        public Color BodyTextColor { get; }
-        public MainRecordingSettingsActionType Action { get; }
-        public bool Enabled { get; }
-    }
-
     public static class MainRecordingSettingsLayoutSpec
     {
         public const string WindowTitle = "Onboarding Assistant";
