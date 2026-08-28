@@ -159,25 +159,26 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void Given_RecodingSetting_When_ApplyingSameSharedFbxPathTwice_Then_SkipsDuplicateImport()
+        public void Given_RecordingSetting_When_ApplyingDocumentWithoutImportCommand_Then_DoesNotStartImport()
         {
-            string tempFbxPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.fbx");
             var fileManagerObject = new GameObject("Shared Settings Duplicate FBX FBXVmdPipeline Test");
             var settingObject = new GameObject("Shared Settings Duplicate FBX RecordingSetting Test");
 
             try
             {
-                File.WriteAllBytes(tempFbxPath, Array.Empty<byte>());
-
                 var fileManager = fileManagerObject.AddComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
                 var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
-                SetField(recodingSetting, "lastAppliedSharedSettingsFbxPath", tempFbxPath);
-                SetField(fileManager, "_isProcessing", true);
+                int startCount = 0;
+                recodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
+                {
+                    startCount++;
+                    return true;
+                };
 
                 var document = new MainRecordingSettingsDocument
                 {
-                    fbxPath = tempFbxPath,
+                    fbxPath = "D:/motion/stored-only.fbx",
                     captureWidth = 1920,
                     captureHeight = 1080,
                 };
@@ -186,15 +187,10 @@ namespace Tests.Editor.Settings
                     recodingSetting.ApplySharedSettingsDocument(document, fileManager);
 
                 Assert.That(result.Succeeded, Is.True);
-                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(tempFbxPath));
+                Assert.That(startCount, Is.EqualTo(0));
             }
             finally
             {
-                if (File.Exists(tempFbxPath))
-                {
-                    File.Delete(tempFbxPath);
-                }
-
                 UnityEngine.Object.DestroyImmediate(settingObject);
                 UnityEngine.Object.DestroyImmediate(fileManagerObject);
             }
@@ -235,6 +231,7 @@ namespace Tests.Editor.Settings
 
                 MainRecordingSettingsActionResult firstResult =
                     recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+                SetImportCommand(document, "cmd-1", tempFbxPath);
                 MainRecordingSettingsActionResult secondResult =
                     recodingSetting.ApplySharedSettingsDocument(document, fileManager);
 
@@ -243,7 +240,7 @@ namespace Tests.Editor.Settings
                 Assert.That(startCount, Is.EqualTo(1));
                 Assert.That(startedManager, Is.SameAs(fileManager));
                 Assert.That(startedPath, Is.EqualTo(tempFbxPath));
-                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(tempFbxPath));
+                Assert.That(secondResult.UserMessage, Does.Contain("이미 처리"));
             }
             finally
             {
@@ -292,6 +289,7 @@ namespace Tests.Editor.Settings
                 SetImportCommand(document, "cmd-2", tempFbxPath);
                 MainRecordingSettingsActionResult secondResult =
                     recodingSetting.ApplySharedSettingsDocument(document, fileManager);
+                SetImportCommand(document, "cmd-2", tempFbxPath);
                 MainRecordingSettingsActionResult duplicateResult =
                     recodingSetting.ApplySharedSettingsDocument(document, fileManager);
 
@@ -299,7 +297,7 @@ namespace Tests.Editor.Settings
                 Assert.That(secondResult.Succeeded, Is.True);
                 Assert.That(duplicateResult.Succeeded, Is.True);
                 Assert.That(startCount, Is.EqualTo(2));
-                Assert.That(GetField<string>(recodingSetting, "lastHandledSharedSettingsCommandId"), Is.EqualTo("cmd-2"));
+                Assert.That(duplicateResult.UserMessage, Does.Contain("이미 처리"));
             }
             finally
             {
@@ -347,7 +345,6 @@ namespace Tests.Editor.Settings
 
                 Assert.That(result.Succeeded, Is.True);
                 Assert.That(startCount, Is.EqualTo(0));
-                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(string.Empty));
             }
             finally
             {
@@ -456,7 +453,6 @@ namespace Tests.Editor.Settings
                 Assert.That(result.Succeeded, Is.False);
                 Assert.That(startCount, Is.EqualTo(0),
                     "An import command must carry its own FBX path and must not reuse a stored document path.");
-                Assert.That(GetField<string>(recodingSetting, "lastAppliedSharedSettingsFbxPath"), Is.EqualTo(string.Empty));
                 Assert.That(GetField<string>(consumedCommand, "commandId"), Is.EqualTo(string.Empty));
                 Assert.That(GetField<string>(consumedCommand, "action"), Is.EqualTo(string.Empty));
                 Assert.That(GetField<string>(consumedCommand, "fbxPath"), Is.EqualTo(string.Empty));
