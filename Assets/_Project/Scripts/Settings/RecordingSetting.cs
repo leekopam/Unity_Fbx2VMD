@@ -88,9 +88,7 @@ public sealed class RecordingSetting : MonoBehaviour
     public bool LoadSharedSettingsOnAwake => loadSharedSettingsOnAwake;
     public float SharedSettingsPollingIntervalSeconds => sharedSettingsPollingIntervalSeconds;
 
-    private MainRecordingSettingsStore sharedSettingsStore;
-    private string resolvedSharedSettingsFilePath = string.Empty;
-    private DateTime lastSharedSettingsWriteTimeUtc = DateTime.MinValue;
+    private RecordingSharedSettingsFileSession sharedSettingsFileSession;
     private float nextSharedSettingsPollTime;
     private readonly MainRecordingSettingsFbxImportCommandProcessor sharedSettingsFbxImportCommandProcessor =
         new MainRecordingSettingsFbxImportCommandProcessor();
@@ -263,10 +261,9 @@ public sealed class RecordingSetting : MonoBehaviour
     {
         try
         {
-            sharedSettingsStore = CreateSharedSettingsStore();
-            resolvedSharedSettingsFilePath = sharedSettingsStore.SettingsFilePath;
-            MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
-            lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
+            sharedSettingsFileSession =
+                new RecordingSharedSettingsFileSession(sharedSettingsFilePathOverride);
+            MainRecordingSettingsDocument document = sharedSettingsFileSession.LoadCurrent();
             return ApplySharedSettingsDocument(
                 document,
                 recordingFBXVmdPipeline,
@@ -285,15 +282,13 @@ public sealed class RecordingSetting : MonoBehaviour
     {
         try
         {
-            EnsureSharedSettingsStore();
-            DateTime currentWriteTime = sharedSettingsStore.ResolveLastWriteTimeUtc();
-            if (currentWriteTime <= lastSharedSettingsWriteTimeUtc)
+            EnsureSharedSettingsFileSession();
+            if (!sharedSettingsFileSession.TryLoadChanged(
+                    out MainRecordingSettingsDocument document))
             {
                 return MainRecordingSettingsActionResult.Success("공유 설정 변경 없음");
             }
 
-            MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
-            lastSharedSettingsWriteTimeUtc = currentWriteTime;
             return ApplySharedSettingsDocument(document, recordingFBXVmdPipeline, true);
         }
         catch (Exception exception)
@@ -317,11 +312,8 @@ public sealed class RecordingSetting : MonoBehaviour
     {
         try
         {
-            EnsureSharedSettingsStore();
-            MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
-            document.runtimeState = MainRecordingSettingsState.Create(playMode, DateTime.UtcNow);
-            sharedSettingsStore.Save(document);
-            lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
+            EnsureSharedSettingsFileSession();
+            sharedSettingsFileSession.WriteRuntimePlayModeState(playMode);
             return MainRecordingSettingsActionResult.Success("Play Mode 상태를 기록했습니다.");
         }
         catch (Exception exception)
@@ -375,15 +367,14 @@ public sealed class RecordingSetting : MonoBehaviour
 
     private void PersistConsumedSharedSettingsDocumentQuietly(MainRecordingSettingsDocument document)
     {
-        if (sharedSettingsStore == null)
+        if (sharedSettingsFileSession == null)
         {
             return;
         }
 
         try
         {
-            sharedSettingsStore.Save(document);
-            lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
+            sharedSettingsFileSession.Save(document);
         }
         catch (Exception exception)
         {
@@ -436,21 +427,11 @@ public sealed class RecordingSetting : MonoBehaviour
         fileManager.customRecordingCaptureHeight = customRecordingCaptureHeight;
     }
 
-    private MainRecordingSettingsStore CreateSharedSettingsStore()
-    {
-        return new MainRecordingSettingsStore(sharedSettingsFilePathOverride);
-    }
-
     private string ResolveSharedSettingsFilePathForExternalLauncher()
     {
-        if (!string.IsNullOrWhiteSpace(resolvedSharedSettingsFilePath))
+        if (sharedSettingsFileSession != null)
         {
-            return resolvedSharedSettingsFilePath;
-        }
-
-        if (sharedSettingsStore != null)
-        {
-            return sharedSettingsStore.SettingsFilePath;
+            return sharedSettingsFileSession.SettingsFilePath;
         }
 
         if (!string.IsNullOrWhiteSpace(sharedSettingsFilePathOverride))
@@ -461,16 +442,15 @@ public sealed class RecordingSetting : MonoBehaviour
         return MainRecordingSettingsPathResolver.ResolveSettingsFilePath();
     }
 
-    private void EnsureSharedSettingsStore()
+    private void EnsureSharedSettingsFileSession()
     {
-        if (sharedSettingsStore != null)
+        if (sharedSettingsFileSession != null)
         {
             return;
         }
 
-        sharedSettingsStore = CreateSharedSettingsStore();
-        resolvedSharedSettingsFilePath = sharedSettingsStore.SettingsFilePath;
-        lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
+        sharedSettingsFileSession =
+            new RecordingSharedSettingsFileSession(sharedSettingsFilePathOverride);
     }
 
     private HumanoidSampleCode ResolveRecordingController()
