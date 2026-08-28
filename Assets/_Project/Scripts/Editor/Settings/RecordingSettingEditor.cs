@@ -61,9 +61,9 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             foreach (Object targetObject in targets)
             {
-                if (targetObject is RecordingSetting recodingSetting)
+                if (targetObject is RecordingSetting recordingSetting)
                 {
-                    recodingSetting.StartManualRecording();
+                    recordingSetting.StartManualRecording();
                 }
             }
         }

@@ -108,6 +108,50 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RecordingSettingsProductionSources_When_InspectingIdentifiers_Then_UseRecordingSpelling()
+        {
+            const string actionsSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsActions.cs";
+            const string popupSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopup.cs";
+            const string editorSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/RecordingSettingEditor.cs";
+            const string legacySerializedName = "FormerlySerializedAs(\"recodingSetting\")";
+
+            string actionsSource = File.ReadAllText(actionsSourcePath);
+            string popupSource = File.ReadAllText(popupSourcePath);
+            string editorSource = File.ReadAllText(editorSourcePath);
+
+            Assert.That(actionsSource, Does.Not.Contain("recodingSetting"));
+            Assert.That(editorSource, Does.Not.Contain("recodingSetting"));
+            Assert.That(popupSource, Does.Contain(legacySerializedName));
+            Assert.That(
+                popupSource.Replace(legacySerializedName, string.Empty),
+                Does.Not.Contain("recodingSetting"));
+            Assert.That(
+                popupSource,
+                Does.Contain("[SerializeField] private RecordingSetting recordingSetting;"));
+
+            const BindingFlags InstanceFields =
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            FieldInfo recordingSettingField = typeof(MainRecordingSettingsPopup).GetField(
+                "recordingSetting",
+                InstanceFields);
+            Assert.That(recordingSettingField, Is.Not.Null);
+            Assert.That(
+                typeof(MainRecordingSettingsPopup).GetField("recodingSetting", InstanceFields),
+                Is.Null);
+
+            object[] formerNames = recordingSettingField.GetCustomAttributes(
+                typeof(UnityEngine.Serialization.FormerlySerializedAsAttribute),
+                false);
+            Assert.That(formerNames.Length, Is.EqualTo(1));
+            Assert.That(
+                ((UnityEngine.Serialization.FormerlySerializedAsAttribute)formerNames[0]).oldName,
+                Is.EqualTo("recodingSetting"));
+        }
+
+        [Test]
         public void Given_RecordingDiagnosticsSettings_When_AssignedToPipeline_Then_RoundTripsAllValues()
         {
             var pipelineObject = new GameObject("Recording Diagnostics Settings Pipeline Test");
