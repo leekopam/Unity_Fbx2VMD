@@ -15,19 +15,24 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.EditorTools.ManualRecordingButtonBindingApplier, Assembly-CSharp-Editor";
         private const string ApplierSourcePath =
             "Assets/_Project/Scripts/Editor/Settings/ManualRecordingButtonBindingApplier.cs";
-        private const string SceneInstallerSourcePath =
-            "Assets/_Project/Scripts/Editor/Settings/GraphicSettingSceneInstaller.cs";
+        private const string SceneConfiguratorSourcePath =
+            "Assets/_Project/Scripts/Editor/Settings/RecordingSettingSceneConfigurator.cs";
 
         [Test]
         public void Given_ManualRecordingButton_When_ApplyingBinding_Then_ReplacesOwnedPersistentListeners()
         {
             Assert.That(File.Exists(ApplierSourcePath), Is.True, ApplierSourcePath);
-            string sceneInstallerSource = File.ReadAllText(SceneInstallerSourcePath);
-            Assert.That(sceneInstallerSource, Does.Not.Contain("UnityEventTools"));
-            Assert.That(sceneInstallerSource, Does.Not.Contain("LegacyFBXVmdPipelineManualRecordMethodName"));
+            string sceneConfiguratorSource = File.ReadAllText(SceneConfiguratorSourcePath);
+            Assert.That(sceneConfiguratorSource, Does.Not.Contain("UnityEventTools"));
             Assert.That(
-                sceneInstallerSource,
-                Does.Contain("ManualRecordingButtonBindingApplier.Apply(button, recodingSetting, fileManager)"));
+                sceneConfiguratorSource,
+                Does.Not.Contain("LegacyFBXVmdPipelineManualRecordMethodName"));
+            Assert.That(
+                sceneConfiguratorSource,
+                Does.Contain("ManualRecordingButtonBindingApplier.Apply("));
+            Assert.That(sceneConfiguratorSource, Does.Contain("manualRecordButton,"));
+            Assert.That(sceneConfiguratorSource, Does.Contain("recordingSetting,"));
+            Assert.That(sceneConfiguratorSource, Does.Contain("pipeline);"));
 
             MethodInfo applyMethod = RequireApplyMethod();
 
