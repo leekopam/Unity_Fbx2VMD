@@ -18,6 +18,17 @@ namespace Tests.Editor.Settings
         private const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
         [Test]
+        public void Given_RecordingPreviewWindow_When_InspectingProductionSurface_Then_HasNoTestOnlyMethods()
+        {
+            Type windowType = RequireType(PreviewWindowTypeName);
+            MethodInfo[] testOnlyMethods = Array.FindAll(
+                windowType.GetMethods(StaticMembers | InstanceMembers | BindingFlags.DeclaredOnly),
+                method => method.Name.EndsWith("ForTests", StringComparison.Ordinal));
+
+            Assert.That(testOnlyMethods, Is.Empty);
+        }
+
+        [Test]
         public void Given_RecordingPreviewWindow_When_InspectingDefaults_Then_UsesThrottledPreview()
         {
             Type windowType = RequireType(PreviewWindowTypeName);
@@ -78,13 +89,11 @@ namespace Tests.Editor.Settings
                 ExpectHeadlessWindowLogsIfNeeded();
                 window = InvokeStatic<EditorWindow>(windowType, "OpenForMainCamera");
 
-                Assert.That(InvokeInstance<int>(window, "GetPreviewTextureWidthForTests"), Is.EqualTo(1920));
-                Assert.That(InvokeInstance<int>(window, "GetPreviewTextureHeightForTests"), Is.EqualTo(1080));
-                int differentSamples = InvokeInstance<int>(
-                    window,
-                    "CountPreviewSamplesDifferentFromCornerForTests",
-                    32,
-                    18);
+                RenderTexture previewTexture = GetMemberValue<RenderTexture>(window, "previewTexture");
+                Assert.That(previewTexture, Is.Not.Null);
+                Assert.That(previewTexture.width, Is.EqualTo(1920));
+                Assert.That(previewTexture.height, Is.EqualTo(1080));
+                int differentSamples = CountSamplesDifferentFromCorner(previewTexture, 32, 18);
                 Debug.Log(
                     "[RecordingPreviewWindowTests] " +
                     $"preview_width=1920 preview_height=1080 sample_count=576 nonbackground_samples={differentSamples}");
@@ -96,6 +105,71 @@ namespace Tests.Editor.Settings
                 {
                     window.Close();
                 }
+            }
+        }
+
+        private static int CountSamplesDifferentFromCorner(
+            RenderTexture previewTexture,
+            int columns,
+            int rows)
+        {
+            if (previewTexture == null || !previewTexture.IsCreated())
+            {
+                return 0;
+            }
+
+            int clampedColumns = Mathf.Clamp(columns, 1, 128);
+            int clampedRows = Mathf.Clamp(rows, 1, 128);
+            RenderTexture previousActive = RenderTexture.active;
+            var texture = new Texture2D(
+                previewTexture.width,
+                previewTexture.height,
+                TextureFormat.RGBA32,
+                false);
+
+            try
+            {
+                RenderTexture.active = previewTexture;
+                texture.ReadPixels(
+                    new Rect(0, 0, previewTexture.width, previewTexture.height),
+                    0,
+                    0,
+                    false);
+                texture.Apply(false, false);
+
+                Color32 corner = texture.GetPixel(0, 0);
+                int differentSamples = 0;
+                for (int row = 0; row < clampedRows; row++)
+                {
+                    int y = Mathf.Clamp(
+                        Mathf.RoundToInt(((row + 0.5f) / clampedRows) * (texture.height - 1)),
+                        0,
+                        texture.height - 1);
+                    for (int column = 0; column < clampedColumns; column++)
+                    {
+                        int x = Mathf.Clamp(
+                            Mathf.RoundToInt(((column + 0.5f) / clampedColumns) * (texture.width - 1)),
+                            0,
+                            texture.width - 1);
+                        Color32 sample = texture.GetPixel(x, y);
+                        int delta =
+                            Mathf.Abs(sample.r - corner.r) +
+                            Mathf.Abs(sample.g - corner.g) +
+                            Mathf.Abs(sample.b - corner.b) +
+                            Mathf.Abs(sample.a - corner.a);
+                        if (delta > 24)
+                        {
+                            differentSamples++;
+                        }
+                    }
+                }
+
+                return differentSamples;
+            }
+            finally
+            {
+                RenderTexture.active = previousActive;
+                UnityEngine.Object.DestroyImmediate(texture);
             }
         }
 
@@ -111,13 +185,6 @@ namespace Tests.Editor.Settings
             MethodInfo method = type.GetMethod(methodName, StaticMembers);
             Assert.That(method, Is.Not.Null, $"{type.FullName}.{methodName} must exist.");
             return (T)method.Invoke(null, args);
-        }
-
-        private static T InvokeInstance<T>(object target, string methodName, params object[] args)
-        {
-            MethodInfo method = target.GetType().GetMethod(methodName, InstanceMembers);
-            Assert.That(method, Is.Not.Null, $"{target.GetType().FullName}.{methodName} must exist.");
-            return (T)method.Invoke(target, args);
         }
 
         private static T GetStaticMemberValue<T>(Type type, string memberName)
