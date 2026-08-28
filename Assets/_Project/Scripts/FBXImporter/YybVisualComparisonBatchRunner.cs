@@ -34,6 +34,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string SummaryJsonFileName = "yyb_visual_compare_summary.json";
         private const string SummaryMarkdownFileName = "yyb_visual_compare_summary.md";
         private const string RunnerTraceRelativePath = "Docs/Workflow/Local/runtime/yyb_visual_compare_runner_trace.log";
+        private const string ComparisonArtifactFallbackRole = "yyb_visual_compare";
         private const string ReferenceMp4ProvenanceEvidenceRelativePath = "Docs/Workflow/Local/ReferenceAnalysis/main-recoding-a2-reference-mp4-provenance-evidence-20260609.md";
         private const string ReferenceMp4AnalysisResultRelativePath = "Docs/Workflow/Local/ReferenceAnalysis/when-20260608-204850_where-ref-mp4_who-yyb_what-detailed-mp4-analysis_why-main-recoding-problem-list_how-ffmpeg-24-samples/result.json";
         private const string ReferenceMp4FrameMetricsRelativePath = "Docs/Workflow/Local/ReferenceAnalysis/when-20260608-204850_where-ref-mp4_who-yyb_what-detailed-mp4-analysis_why-main-recoding-problem-list_how-ffmpeg-24-samples/frame-metrics.json";
@@ -1465,7 +1466,10 @@ namespace Fbx2Vmd.FBXImporter
                 sourceExtension = ".vmd";
             }
 
-            string fileName = BuildCandidateVmdEvidenceFileName(job.Mode, sourceExtension);
+            string fileName = VisualComparisonArtifactNamePolicy.BuildCandidateVmdEvidenceFileName(
+                job.Mode.ToString(),
+                sourceExtension,
+                ComparisonArtifactFallbackRole);
             return Path.Combine(_summaryDirectory, fileName);
         }
 
@@ -2309,7 +2313,10 @@ namespace Fbx2Vmd.FBXImporter
 
             string shortPath = Path.Combine(
                 _summaryDirectory,
-                BuildCandidateVmdEvidenceFileName(candidate.jobMode, sourceExtension));
+                VisualComparisonArtifactNamePolicy.BuildCandidateVmdEvidenceFileName(
+                    candidate.jobMode,
+                    sourceExtension,
+                    ComparisonArtifactFallbackRole));
             if (!File.Exists(shortPath))
             {
                 return;
@@ -2811,30 +2818,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             return VisualComparisonArtifactNamePolicy.SanitizeFileName(
                 fileName,
-                "yyb_visual_compare");
-        }
-
-        private static string BuildCandidateVmdEvidenceFileName(CaptureMode mode, string extension)
-        {
-            return BuildCandidateVmdEvidenceFileName(mode.ToString(), extension);
-        }
-
-        private static string BuildCandidateVmdEvidenceFileName(string mode, string extension)
-        {
-            string safeExtension = string.IsNullOrWhiteSpace(extension) ? ".vmd" : extension;
-            string shortMode = string.Equals(mode, CaptureMode.MainRecording.ToString(), StringComparison.Ordinal)
-                ? "rec"
-                : string.Equals(mode, CaptureMode.MainRecordingVmdPlaybackProbe.ToString(), StringComparison.Ordinal)
-                    ? "replay"
-                    : string.Equals(mode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal)
-                        ? "auto"
-                        : SanitizeFileName(mode);
-            return VisualComparisonArtifactNamePolicy.BuildEvidenceFileName(
-                "vmd",
-                shortMode,
-                safeExtension,
-                ".vmd",
-                "yyb_visual_compare");
+                ComparisonArtifactFallbackRole);
         }
 
         [Serializable]

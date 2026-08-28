@@ -33,6 +33,21 @@ namespace Fbx2Vmd.FBXImporter
             return $"{safePrefix}-{safeRole}{safeExtension}";
         }
 
+        internal static string BuildCandidateVmdEvidenceFileName(
+            string mode,
+            string extension,
+            string fallbackRole)
+        {
+            string role = string.Equals(mode, "MainRecording", StringComparison.Ordinal)
+                ? "rec"
+                : string.Equals(mode, "MainRecordingVmdPlaybackProbe", StringComparison.Ordinal)
+                    ? "replay"
+                    : string.Equals(mode, "MainAuto", StringComparison.Ordinal)
+                        ? "auto"
+                        : mode;
+            return BuildEvidenceFileName("vmd", role, extension, ".vmd", fallbackRole);
+        }
+
         internal static string ShortenToLength(string value, int maxLength)
         {
             if (string.IsNullOrEmpty(value))
