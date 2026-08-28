@@ -32,7 +32,50 @@ namespace Tests.Editor.Settings
             Assert.That(companionSource, Does.Not.Contain("ProcessStartInfo"));
             Assert.That(companionSource, Does.Not.Contain("ResolveNpmExecutable"));
             Assert.That(companionSource, Does.Not.Contain("FindOnPath("));
+            Assert.That(companionSource, Does.Not.Contain("File.Exists("));
+            Assert.That(companionSource, Does.Not.Contain("Path.Combine("));
+            Assert.That(
+                companionSource,
+                Does.Contain("MainRecordingSettingsCompanionProcessLauncher.HasRequiredCompanionFiles("));
             Assert.That(processSource, Does.Contain("Process.Start("));
+            Assert.That(processSource, Does.Contain("bool HasRequiredCompanionFiles("));
+        }
+
+        [Test]
+        public void Given_CompanionFiles_When_CheckingRequiredFiles_Then_RequiresPackageAndElectronMain()
+        {
+            Type processLauncherType = Type.GetType(ProcessLauncherTypeName);
+            Assert.That(processLauncherType, Is.Not.Null, ProcessLauncherTypeName);
+            MethodInfo hasRequiredFiles = processLauncherType.GetMethod(
+                "HasRequiredCompanionFiles",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(hasRequiredFiles, Is.Not.Null);
+
+            string workingDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "Unity_Fbx2VMD-CompanionFiles-" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                Directory.CreateDirectory(workingDirectory);
+                Assert.That(hasRequiredFiles.Invoke(null, new object[] { workingDirectory }), Is.False);
+
+                File.WriteAllText(Path.Combine(workingDirectory, "package.json"), "{}");
+                Assert.That(hasRequiredFiles.Invoke(null, new object[] { workingDirectory }), Is.False);
+
+                string electronDirectory = Path.Combine(workingDirectory, "electron");
+                Directory.CreateDirectory(electronDirectory);
+                File.WriteAllText(Path.Combine(electronDirectory, "main.js"), string.Empty);
+
+                Assert.That(hasRequiredFiles.Invoke(null, new object[] { workingDirectory }), Is.True);
+            }
+            finally
+            {
+                if (Directory.Exists(workingDirectory))
+                {
+                    Directory.Delete(workingDirectory, true);
+                }
+            }
         }
 
         [Test]

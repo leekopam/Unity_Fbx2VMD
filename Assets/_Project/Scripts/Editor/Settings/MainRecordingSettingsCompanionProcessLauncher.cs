@@ -19,6 +19,12 @@ namespace Fbx2Vmd.Settings.EditorTools
             Process.Start(BuildProcessStartInfo(plan, executable, fullWorkingDirectory));
         }
 
+        internal static bool HasRequiredCompanionFiles(string workingDirectory)
+        {
+            return File.Exists(Path.Combine(workingDirectory, "package.json")) &&
+                   File.Exists(Path.Combine(workingDirectory, "electron", "main.js"));
+        }
+
         internal static ProcessStartInfo BuildProcessStartInfo(
             MainRecordingSettingsLaunchPlan plan,
             string executable,

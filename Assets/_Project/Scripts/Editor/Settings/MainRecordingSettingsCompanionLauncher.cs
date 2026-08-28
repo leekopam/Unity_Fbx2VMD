@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using Fbx2Vmd.Settings;
 using UnityEditor;
 using UnityEngine;
@@ -162,8 +161,7 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static bool CanLaunchWebSettings()
         {
-            return File.Exists(Path.Combine(ElectronAppRoot, "package.json")) &&
-                   File.Exists(Path.Combine(ElectronAppRoot, "electron", "main.js"));
+            return MainRecordingSettingsCompanionProcessLauncher.HasRequiredCompanionFiles(ElectronAppRoot);
         }
 
         private static string NormalizeScenePath(string scenePath)
