@@ -69,6 +69,116 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RecordingSetting_When_InspectingDiagnosticsMapping_Then_UsesDiagnosticsSettingsValue()
+        {
+            const string diagnosticsSettingsSourcePath =
+                "Assets/_Project/Scripts/Settings/RecordingDiagnosticsSettings.cs";
+            const string recordingSettingSourcePath =
+                "Assets/_Project/Scripts/Settings/RecordingSetting.cs";
+            const string pipelineSourcePath =
+                "Assets/_Project/Scripts/FBXImporter/FBXVmdPipeline.cs";
+            const string diagnosticsSettingsTypeName =
+                "Fbx2Vmd.Settings.RecordingDiagnosticsSettings, Assembly-CSharp";
+
+            Assert.That(File.Exists(diagnosticsSettingsSourcePath), Is.True, diagnosticsSettingsSourcePath);
+            Assert.That(Type.GetType(diagnosticsSettingsTypeName), Is.Not.Null, diagnosticsSettingsTypeName);
+
+            string diagnosticsSettingsSource = File.ReadAllText(diagnosticsSettingsSourcePath);
+            string recordingSettingSource = File.ReadAllText(recordingSettingSourcePath);
+            string pipelineSource = File.ReadAllText(pipelineSourcePath);
+
+            Assert.That(diagnosticsSettingsSource, Does.Contain("public readonly struct RecordingDiagnosticsSettings"));
+            Assert.That(diagnosticsSettingsSource, Does.Not.Contain("MonoBehaviour"));
+            Assert.That(diagnosticsSettingsSource, Does.Not.Contain("interface "));
+            Assert.That(pipelineSource, Does.Contain("public RecordingDiagnosticsSettings DiagnosticsSettings"));
+            Assert.That(
+                recordingSettingSource,
+                Does.Contain("fileManager.DiagnosticsSettings = CreateDiagnosticsSettings();"));
+            Assert.That(
+                recordingSettingSource,
+                Does.Contain("ApplyDiagnosticsSettings(fileManager.DiagnosticsSettings);"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("fileManager.enableRecordingDiagnostics"));
+            Assert.That(
+                recordingSettingSource,
+                Does.Not.Contain("fileManager.useDeterministicCaptureFramerateForDiagnostics"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("fileManager.enableDiagnosticFingerCloseups"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("fileManager.recordingCaptureQuality"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("fileManager.customRecordingCaptureWidth"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("fileManager.customRecordingCaptureHeight"));
+        }
+
+        [Test]
+        public void Given_RecordingDiagnosticsSettings_When_AssignedToPipeline_Then_RoundTripsAllValues()
+        {
+            var pipelineObject = new GameObject("Recording Diagnostics Settings Pipeline Test");
+
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                var expected = new RecordingDiagnosticsSettings(
+                    enableRecordingDiagnostics: true,
+                    useDeterministicCaptureFramerateForDiagnostics: true,
+                    enableDiagnosticFingerCloseups: false,
+                    captureQuality: RecordingCaptureQualityPreset.Custom,
+                    customCaptureWidth: 2560,
+                    customCaptureHeight: 1440);
+
+                pipeline.DiagnosticsSettings = expected;
+                RecordingDiagnosticsSettings actual = pipeline.DiagnosticsSettings;
+
+                Assert.That(actual.EnableRecordingDiagnostics, Is.True);
+                Assert.That(actual.UseDeterministicCaptureFramerateForDiagnostics, Is.True);
+                Assert.That(actual.EnableDiagnosticFingerCloseups, Is.False);
+                Assert.That(actual.CaptureQuality, Is.EqualTo(RecordingCaptureQualityPreset.Custom));
+                Assert.That(actual.CustomCaptureWidth, Is.EqualTo(2560));
+                Assert.That(actual.CustomCaptureHeight, Is.EqualTo(1440));
+
+                RecordingCaptureResolutionPlan capturePlan = actual.CreateCaptureResolutionPlan();
+                Assert.That(capturePlan.Width, Is.EqualTo(2560));
+                Assert.That(capturePlan.Height, Is.EqualTo(1440));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_RecordingSetting_When_ApplyingDiagnostics_Then_TransfersAllValuesToPipeline()
+        {
+            var pipelineObject = new GameObject("Recording Diagnostics Pipeline Transfer Test");
+            var settingObject = new GameObject("Recording Diagnostics Setting Transfer Test");
+
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                var recordingSetting = settingObject.AddComponent<RecordingSetting>();
+                SetField(recordingSetting, "recordingFBXVmdPipeline", pipeline);
+                SetField(recordingSetting, "enableRecordingDiagnostics", true);
+                SetField(recordingSetting, "useDeterministicCaptureFramerateForDiagnostics", true);
+                SetField(recordingSetting, "enableDiagnosticFingerCloseups", false);
+                SetField(recordingSetting, "recordingCaptureQuality", RecordingCaptureQualityPreset.Custom);
+                SetField(recordingSetting, "customRecordingCaptureWidth", 3200);
+                SetField(recordingSetting, "customRecordingCaptureHeight", 1800);
+
+                recordingSetting.ApplyDiagnosticsToFBXVmdPipeline();
+                RecordingDiagnosticsSettings actual = pipeline.DiagnosticsSettings;
+
+                Assert.That(actual.EnableRecordingDiagnostics, Is.True);
+                Assert.That(actual.UseDeterministicCaptureFramerateForDiagnostics, Is.True);
+                Assert.That(actual.EnableDiagnosticFingerCloseups, Is.False);
+                Assert.That(actual.CaptureQuality, Is.EqualTo(RecordingCaptureQualityPreset.Custom));
+                Assert.That(actual.CustomCaptureWidth, Is.EqualTo(3200));
+                Assert.That(actual.CustomCaptureHeight, Is.EqualTo(1800));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_MultipleRecordingSettings_When_OverridingFbxImportStarter_Then_KeepsInstanceIsolation()
         {
             var firstSettingObject = new GameObject("First RecordingSetting Import Starter Test");

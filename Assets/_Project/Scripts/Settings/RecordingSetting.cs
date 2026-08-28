@@ -367,14 +367,7 @@ public sealed class RecordingSetting : MonoBehaviour
 
     public RecordingCaptureResolutionPlan CreateRecordingCaptureResolutionPlan()
     {
-        if (recordingCaptureQuality == RecordingCaptureQualityPreset.Custom)
-        {
-            return RecordingCaptureResolution.CreateCustomPlan(
-                customRecordingCaptureWidth,
-                customRecordingCaptureHeight);
-        }
-
-        return RecordingCaptureResolution.CreatePlan(recordingCaptureQuality);
+        return CreateDiagnosticsSettings().CreateCaptureResolutionPlan();
     }
 
     private void PullDiagnosticsFromFBXVmdPipeline()
@@ -385,13 +378,7 @@ public sealed class RecordingSetting : MonoBehaviour
             return;
         }
 
-        enableRecordingDiagnostics = fileManager.enableRecordingDiagnostics;
-        useDeterministicCaptureFramerateForDiagnostics =
-            fileManager.useDeterministicCaptureFramerateForDiagnostics;
-        enableDiagnosticFingerCloseups = fileManager.enableDiagnosticFingerCloseups;
-        recordingCaptureQuality = fileManager.recordingCaptureQuality;
-        customRecordingCaptureWidth = fileManager.customRecordingCaptureWidth;
-        customRecordingCaptureHeight = fileManager.customRecordingCaptureHeight;
+        ApplyDiagnosticsSettings(fileManager.DiagnosticsSettings);
     }
 
     private void ApplyDiagnosticsToResolvedFBXVmdPipeline(FBXVmdPipeline fileManager)
@@ -401,13 +388,29 @@ public sealed class RecordingSetting : MonoBehaviour
             return;
         }
 
-        fileManager.enableRecordingDiagnostics = enableRecordingDiagnostics;
-        fileManager.useDeterministicCaptureFramerateForDiagnostics =
-            useDeterministicCaptureFramerateForDiagnostics;
-        fileManager.enableDiagnosticFingerCloseups = enableDiagnosticFingerCloseups;
-        fileManager.recordingCaptureQuality = recordingCaptureQuality;
-        fileManager.customRecordingCaptureWidth = customRecordingCaptureWidth;
-        fileManager.customRecordingCaptureHeight = customRecordingCaptureHeight;
+        fileManager.DiagnosticsSettings = CreateDiagnosticsSettings();
+    }
+
+    private RecordingDiagnosticsSettings CreateDiagnosticsSettings()
+    {
+        return new RecordingDiagnosticsSettings(
+            enableRecordingDiagnostics,
+            useDeterministicCaptureFramerateForDiagnostics,
+            enableDiagnosticFingerCloseups,
+            recordingCaptureQuality,
+            customRecordingCaptureWidth,
+            customRecordingCaptureHeight);
+    }
+
+    private void ApplyDiagnosticsSettings(RecordingDiagnosticsSettings settings)
+    {
+        enableRecordingDiagnostics = settings.EnableRecordingDiagnostics;
+        useDeterministicCaptureFramerateForDiagnostics =
+            settings.UseDeterministicCaptureFramerateForDiagnostics;
+        enableDiagnosticFingerCloseups = settings.EnableDiagnosticFingerCloseups;
+        recordingCaptureQuality = settings.CaptureQuality;
+        customRecordingCaptureWidth = settings.CustomCaptureWidth;
+        customRecordingCaptureHeight = settings.CustomCaptureHeight;
     }
 
     private void EnsureSharedSettingsFileSession()
