@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -8,19 +7,6 @@ using Assimp;
 
 namespace Fbx2Vmd.FBXImporter
 {
-    public sealed class FBXImportException : Exception
-    {
-        public FBXImportException(string message)
-            : base(message)
-        {
-        }
-
-        public FBXImportException(string message, Exception innerException)
-            : base(message, innerException)
-        {
-        }
-    }
-
     /// <summary>
     /// 런타임에서 Assimp 라이브러리를 사용하여 FBX 파일을 임포트하는 서비스
     /// </summary>
