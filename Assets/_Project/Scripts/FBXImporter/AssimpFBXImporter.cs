@@ -461,7 +461,7 @@ namespace Fbx2Vmd.FBXImporter
 
                 // 런타임 Legacy 재생을 위해 true 설정
                 clip.legacy = true;
-                clip.wrapMode = WrapMode.Loop; // 기본 반복 재생
+                clip.wrapMode = WrapMode.Loop;
 
                 // FBX tick → Unity seconds 변환
                 double ticksPerSecond = anim.TicksPerSecond;
@@ -500,13 +500,6 @@ namespace Fbx2Vmd.FBXImporter
                     }
                 }
 
-                // 애니메이션 길이 보정
-                double duration = anim.DurationInTicks / anim.TicksPerSecond;
-                if (duration > 600)
-                {
-                    if (anim.TicksPerSecond == 0 || anim.TicksPerSecond == 1)
-                        duration = anim.DurationInTicks / 60.0;
-                }
                 clip.frameRate = 60;
 
                 // 컴포넌트에 클립 등록
@@ -514,20 +507,12 @@ namespace Fbx2Vmd.FBXImporter
                 clips.Add(clip);
             }
 
-            // 생성된 클립들을 필드에 저장
             _animationClips = clips.ToArray();
 
-            // 클립 강제 납품 및 로깅
             if (clips.Count > 0)
             {
-                animComp.clip = clips[0]; // 기본 클립 설정
-                // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
-            if (clips.Count > 0)
-            {
-                animComp.clip = clips[0]; // 기본 클립 설정
-                // TimeScale은 루프 내에서 계산되지만, 여기서는 성공 사실을 강조
+                animComp.clip = clips[0];
                 Debug.Log($"[FBXImport] 애니메이션 클립 생성됨. 개수={clips.Count}");
-            }
             }
             else
             {
