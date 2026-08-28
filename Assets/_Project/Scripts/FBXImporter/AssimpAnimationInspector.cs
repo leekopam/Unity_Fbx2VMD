@@ -113,7 +113,13 @@ namespace Fbx2Vmd.FBXImporter
                 return 0f;
             }
 
-            return (float)duration;
+            float durationSeconds = (float)duration;
+            if (float.IsNaN(durationSeconds) || float.IsInfinity(durationSeconds))
+            {
+                return 0f;
+            }
+
+            return durationSeconds;
         }
     }
 }
