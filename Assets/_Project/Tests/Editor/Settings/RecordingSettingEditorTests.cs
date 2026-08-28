@@ -35,6 +35,38 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.MainRecordingSettingsLauncher, Assembly-CSharp";
         private const string RuntimeBootstrapTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsBootstrap, Assembly-CSharp";
+        private const string SharedSettingsFileSessionTypeName =
+            "Fbx2Vmd.Settings.RecordingSharedSettingsFileSession, Assembly-CSharp";
+
+        [Test]
+        public void Given_RecordingSetting_When_InspectingSharedSettingsFileState_Then_DelegatesToFileSession()
+        {
+            const string recordingSettingSourcePath =
+                "Assets/_Project/Scripts/Settings/RecordingSetting.cs";
+            const string sessionSourcePath =
+                "Assets/_Project/Scripts/Settings/RecordingSharedSettingsFileSession.cs";
+
+            Assert.That(File.Exists(sessionSourcePath), Is.True, sessionSourcePath);
+            Assert.That(Type.GetType(SharedSettingsFileSessionTypeName), Is.Not.Null);
+
+            string recordingSettingSource = File.ReadAllText(recordingSettingSourcePath);
+            string sessionSource = File.ReadAllText(sessionSourcePath);
+
+            Assert.That(
+                recordingSettingSource,
+                Does.Contain("private RecordingSharedSettingsFileSession sharedSettingsFileSession;"));
+            Assert.That(recordingSettingSource, Does.Contain("sharedSettingsFileSession.LoadCurrent()"));
+            Assert.That(recordingSettingSource, Does.Contain("sharedSettingsFileSession.TryLoadChanged("));
+            Assert.That(recordingSettingSource, Does.Not.Contain("private MainRecordingSettingsStore"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("lastSharedSettingsWriteTimeUtc"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("DateTime.UtcNow"));
+            Assert.That(recordingSettingSource, Does.Not.Contain("EnsureSharedSettingsStore("));
+            Assert.That(sessionSource, Does.Contain("new MainRecordingSettingsStore("));
+            Assert.That(sessionSource, Does.Contain("bool TryLoadChanged("));
+            Assert.That(sessionSource, Does.Contain("void WriteRuntimePlayModeState("));
+            Assert.That(sessionSource, Does.Not.Contain("MonoBehaviour"));
+            Assert.That(sessionSource, Does.Not.Contain("interface "));
+        }
 
         [Test]
         public void Given_MultipleRecordingSettings_When_OverridingFbxImportStarter_Then_KeepsInstanceIsolation()
