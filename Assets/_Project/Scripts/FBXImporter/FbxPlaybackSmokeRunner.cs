@@ -675,7 +675,7 @@ namespace Fbx2Vmd.FBXImporter
             EditorApplication.playModeStateChanged -= HandlePlayModeStateChanged;
             EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
 
-            string segmentLabel = GetSegmentLabel(segment);
+            string segmentLabel = VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(segment);
             Debug.Log($"[FbxPlaybackSmokeRunner] Import_FBX 전체 smoke 시작됨: segment={segmentLabel}, {_batchTotalCount} files, {SmokeDurationSeconds:F0}s cap");
             StartNextBatchSmoke();
         }
@@ -713,7 +713,7 @@ namespace Fbx2Vmd.FBXImporter
 
             _activeBatchFbxFileName = PendingSmokeFiles.Dequeue();
             int currentIndex = _batchTotalCount - PendingSmokeFiles.Count;
-            string segmentLabel = GetSegmentLabel(_batchSegment);
+            string segmentLabel = VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(_batchSegment);
             Debug.Log($"[FbxPlaybackSmokeRunner] 전체 smoke 진행 {currentIndex}/{_batchTotalCount}: segment={segmentLabel}, {_activeBatchFbxFileName}");
 
             if (!StartSmoke(_batchFBXVmdPipeline, _activeBatchFbxFileName, "batch", _batchSegment, SmokeDurationSeconds, enableFingerCloseups: false, sampleTimesOverride: null))
@@ -764,7 +764,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (started)
             {
-                string segmentLabel = GetSegmentLabel(segment);
+                string segmentLabel = VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(segment);
                 string sampleSummary = sampleTimesOverride != null && sampleTimesOverride.Length > 0
                     ? string.Join("/", sampleTimesOverride.Select(time => time.ToString("0.###")))
                     : "default";
@@ -1107,19 +1107,6 @@ namespace Fbx2Vmd.FBXImporter
             catch (System.Exception ex)
             {
                 Debug.LogWarning($"[FbxPlaybackSmokeRunner] 요청 파일 삭제 실패: {ex.Message}");
-            }
-        }
-
-        private static string GetSegmentLabel(FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
-        {
-            switch (segment)
-            {
-                case FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle:
-                    return "middle";
-                case FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail:
-                    return "tail";
-                default:
-                    return "head";
             }
         }
 

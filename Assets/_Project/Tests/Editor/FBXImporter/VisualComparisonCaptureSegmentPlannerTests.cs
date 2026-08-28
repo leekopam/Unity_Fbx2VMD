@@ -37,6 +37,33 @@ namespace Tests.Editor.FBXImporter
             Assert.That(ReadField<string>(plan, "OutputBaseName"), Is.EqualTo("target_motion_5s_animtime"));
         }
 
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head, "head")]
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, "middle")]
+        [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail, "tail")]
+        [TestCase((FBXVmdPipeline.EditorDiagnosticSmokeSegment)999, "head")]
+        public void Given_Segment_When_GettingLabel_Then_UsesStableToken(
+            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment,
+            string expected)
+        {
+            object actual = FindMethod(FindPlannerType(), "GetSegmentLabel")
+                .Invoke(null, new object[] { segment });
+
+            Assert.That(actual, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void Given_CentralSegmentLabelPolicy_When_CheckingPlaybackRunner_Then_NoPrivateWrapperRemains()
+        {
+            MethodInfo method = typeof(FbxPlaybackSmokeRunner).GetMethod(
+                "GetSegmentLabel",
+                BindingFlags.Static | BindingFlags.NonPublic);
+
+            Assert.That(
+                method,
+                Is.Null,
+                "FBX smoke runner가 segment label 계산을 중복 소유하면 안 됩니다.");
+        }
+
         private static Type FindPlannerType()
         {
             Type plannerType = typeof(FBXVmdPipeline).Assembly.GetType(

@@ -58,7 +58,8 @@ namespace Tests.Editor.FBXImporter
                 "ApplyPostSetHumanPoseEndpointPositionRuntimeOverride",
                 "ApplyManualAnimatorHipsLocalPositionRuntimeOverride",
                 "BuildCandidateVmdEvidenceFileName",
-                "FormatProbeSampleTimes"
+                "FormatProbeSampleTimes",
+                "GetEditorDiagnosticSmokeSegmentLabel"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
