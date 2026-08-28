@@ -30,6 +30,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorAutoApplyController, Assembly-CSharp-Editor";
         private const string RecordingSettingSceneConfiguratorTypeName =
             "Fbx2Vmd.Settings.EditorTools.RecordingSettingSceneConfigurator, Assembly-CSharp-Editor";
+        private const string GraphicSettingSceneConfiguratorTypeName =
+            "Fbx2Vmd.Settings.EditorTools.GraphicSettingSceneConfigurator, Assembly-CSharp-Editor";
         private const string RenderScalePresetResolverTypeName =
             "Fbx2Vmd.Settings.GraphicRenderScalePresetResolver, Assembly-CSharp";
         private const string AntiAliasingPlanTypeName =
@@ -620,38 +622,83 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void Given_GraphicSettingSceneInstaller_When_InspectingRecordingDefaults_Then_DelegatesToConfigurator()
+        public void Given_GraphicSettingSceneConfigurator_When_InspectingRecordingDefaults_Then_DelegatesToRecordingConfigurator()
         {
-            const string installerSourcePath =
-                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingSceneInstaller.cs";
-            const string configuratorSourcePath =
+            const string sceneConfiguratorSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingSceneConfigurator.cs";
+            const string recordingConfiguratorSourcePath =
                 "Assets/_Project/Scripts/Editor/Settings/RecordingSettingSceneConfigurator.cs";
 
-            Assert.That(File.Exists(configuratorSourcePath), Is.True, configuratorSourcePath);
+            Assert.That(
+                File.Exists(sceneConfiguratorSourcePath),
+                Is.True,
+                sceneConfiguratorSourcePath);
+            Assert.That(
+                File.Exists(recordingConfiguratorSourcePath),
+                Is.True,
+                recordingConfiguratorSourcePath);
             Assert.That(Type.GetType(RecordingSettingSceneConfiguratorTypeName), Is.Not.Null);
 
-            string installerSource = File.ReadAllText(installerSourcePath);
-            string configuratorSource = File.ReadAllText(configuratorSourcePath);
+            string sceneConfiguratorSource = File.ReadAllText(sceneConfiguratorSourcePath);
+            string recordingConfiguratorSource = File.ReadAllText(recordingConfiguratorSourcePath);
             const string backgroundCall = "ConfigureBackgroundColor(backgroundSetting, mainCamera);";
             const string recordingCall =
                 "RecordingSettingSceneConfigurator.Configure(recordingSetting);";
             const string framingCall =
                 "GraphicSettingCameraFramingApplier.ApplyDefaultFraming(mainCamera, targetModelRoot);";
 
-            Assert.That(installerSource, Does.Contain(recordingCall));
+            Assert.That(sceneConfiguratorSource, Does.Contain(recordingCall));
             Assert.That(
-                installerSource.IndexOf(recordingCall),
-                Is.GreaterThan(installerSource.IndexOf(backgroundCall)));
+                sceneConfiguratorSource.IndexOf(recordingCall),
+                Is.GreaterThan(sceneConfiguratorSource.IndexOf(backgroundCall)));
             Assert.That(
-                installerSource.IndexOf(framingCall),
-                Is.GreaterThan(installerSource.IndexOf(recordingCall)));
-            Assert.That(installerSource, Does.Not.Contain("ConfigureRecordingControls("));
-            Assert.That(installerSource, Does.Not.Contain("ManualRecordButtonName"));
-            Assert.That(installerSource, Does.Not.Contain("ManualRecordingButtonBindingApplier.Apply("));
-            Assert.That(installerSource, Does.Not.Contain("recodingSetting"));
-            Assert.That(configuratorSource, Does.Contain("recordingCaptureQuality"));
-            Assert.That(configuratorSource, Does.Contain("customRecordingCaptureWidth"));
-            Assert.That(configuratorSource, Does.Contain("ManualRecordingButtonBindingApplier.Apply("));
+                sceneConfiguratorSource.IndexOf(framingCall),
+                Is.GreaterThan(sceneConfiguratorSource.IndexOf(recordingCall)));
+            Assert.That(sceneConfiguratorSource, Does.Not.Contain("ConfigureRecordingControls("));
+            Assert.That(sceneConfiguratorSource, Does.Not.Contain("ManualRecordButtonName"));
+            Assert.That(
+                sceneConfiguratorSource,
+                Does.Not.Contain("ManualRecordingButtonBindingApplier.Apply("));
+            Assert.That(sceneConfiguratorSource, Does.Not.Contain("recodingSetting"));
+            Assert.That(recordingConfiguratorSource, Does.Contain("recordingCaptureQuality"));
+            Assert.That(recordingConfiguratorSource, Does.Contain("customRecordingCaptureWidth"));
+            Assert.That(
+                recordingConfiguratorSource,
+                Does.Contain("ManualRecordingButtonBindingApplier.Apply("));
+            Assert.That(recordingConfiguratorSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_GraphicSettingSceneInstaller_When_InspectingDefaultConfiguration_Then_DelegatesToConfigurator()
+        {
+            const string installerSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingSceneInstaller.cs";
+            const string configuratorSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingSceneConfigurator.cs";
+
+            Assert.That(File.Exists(configuratorSourcePath), Is.True, configuratorSourcePath);
+            Assert.That(Type.GetType(GraphicSettingSceneConfiguratorTypeName), Is.Not.Null);
+
+            string installerSource = File.ReadAllText(installerSourcePath);
+            string configuratorSource = File.ReadAllText(configuratorSourcePath);
+            const string configurationCall =
+                "GraphicSettingSceneConfigurator.Configure(setting, backgroundSetting, recordingSetting);";
+
+            Assert.That(installerSource, Does.Contain(configurationCall));
+            Assert.That(installerSource, Does.Not.Contain("ConfigureDefaults("));
+            Assert.That(installerSource, Does.Not.Contain("SerializedObject"));
+            Assert.That(installerSource, Does.Not.Contain("DefaultPostProcessResourcesPath"));
+            Assert.That(installerSource, Does.Not.Contain("ResolveUniversalRenderPipelineAsset("));
+            Assert.That(
+                configuratorSource,
+                Does.Contain("ConfigureBackgroundColor(backgroundSetting, mainCamera);"));
+            Assert.That(
+                configuratorSource,
+                Does.Contain("RecordingSettingSceneConfigurator.Configure(recordingSetting);"));
+            Assert.That(
+                configuratorSource,
+                Does.Contain(
+                    "GraphicSettingCameraFramingApplier.ApplyDefaultFraming(mainCamera, targetModelRoot);"));
             Assert.That(configuratorSource, Does.Not.Contain("interface "));
         }
 
