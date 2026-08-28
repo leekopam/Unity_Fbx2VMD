@@ -26,6 +26,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.GraphicMaterialShaderPlanResolver, Assembly-CSharp";
         private const string MaterialShaderTargetCollectorTypeName =
             "Fbx2Vmd.Settings.GraphicMaterialShaderTargetCollector, Assembly-CSharp";
+        private const string InspectorAutoApplyControllerTypeName =
+            "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorAutoApplyController, Assembly-CSharp-Editor";
         private const string RenderScalePresetResolverTypeName =
             "Fbx2Vmd.Settings.GraphicRenderScalePresetResolver, Assembly-CSharp";
         private const string AntiAliasingPlanTypeName =
@@ -585,6 +587,34 @@ namespace Tests.Editor.Settings
             Assert.That(editorControllerSource, Does.Not.Contain("GetComponentsInChildren<Renderer>"));
             Assert.That(collectorSource, Does.Contain("GetComponentsInChildren<Renderer>(true)"));
             Assert.That(collectorSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_GraphicSettingInspector_When_InspectingAutoApplyOwnership_Then_DelegatesToController()
+        {
+            const string inspectorSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingEditor.cs";
+            const string controllerSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingInspectorAutoApplyController.cs";
+
+            Assert.That(File.Exists(controllerSourcePath), Is.True, controllerSourcePath);
+            Assert.That(Type.GetType(InspectorAutoApplyControllerTypeName), Is.Not.Null);
+
+            string inspectorSource = File.ReadAllText(inspectorSourcePath);
+            string controllerSource = File.ReadAllText(controllerSourcePath);
+            Assert.That(
+                inspectorSource,
+                Does.Contain("GraphicSettingInspectorAutoApplyController.Schedule(setting, selectedCategory);"));
+            Assert.That(inspectorSource, Does.Not.Contain("PendingAutoApplyIds"));
+            Assert.That(inspectorSource, Does.Not.Contain("EditorApplication.delayCall"));
+            Assert.That(inspectorSource, Does.Not.Contain("Selection.objects"));
+            Assert.That(inspectorSource, Does.Not.Contain("ApplyChangedSettings("));
+            Assert.That(inspectorSource, Does.Not.Contain("MarkSettingDirty("));
+            Assert.That(controllerSource, Does.Contain("EditorApplication.delayCall"));
+            Assert.That(controllerSource, Does.Contain("Selection.objects"));
+            Assert.That(controllerSource, Does.Contain("ApplyChangedSettings("));
+            Assert.That(controllerSource, Does.Contain("MarkSettingDirty("));
+            Assert.That(controllerSource, Does.Not.Contain("interface "));
         }
 
         [Test]
