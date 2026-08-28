@@ -139,9 +139,7 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 # FBX Exporter stores a machine-specific integration path here.
 /ProjectSettings/FbxExportSettings.asset
 
-# Generated companion script metas remain local by project policy.
-/Assets/_Project/Scripts/FBXImporter/*.cs.meta
-/Assets/_Project/Tests/Editor/FBXImporter/*.cs.meta
+# 일반 Unity source/test의 companion .meta는 source와 함께 추적한다.
 
 /Memo/
 
@@ -151,17 +149,6 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /Assets/_Project/Tools.meta
 /Assets/_Project/Tools/MainRecordingSettings.meta
 /Assets/_Project/Tools/MainRecordingSettings/**/*.meta
-
-# Unity-generated companion script metas are local-only in this workspace.
-/Assets/_Project/Scripts/Member_Han/Modules/Setting/MainRecordingSettingsRuntimeState.cs.meta
-/Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingSettingsCompanionLauncher.cs.meta
-/Assets/_Project/Scripts/Member_Han/Modules/Setting/Editor/MainRecordingEditorPlayModeGuard.cs.meta
-/Assets/Plugins/VMDRecorderSample/MainScript/VmdRuntimePlayback.meta
-/Assets/Plugins/VMDRecorderSample/MainScript/VmdRuntimePlayback/*.cs.meta
-/Assets/_Project/Tests/Editor/VMDRecorderSample/VmdHumanoidBoneMapTests.cs.meta
-/Assets/_Project/Tests/Editor/VMDRecorderSample/VmdMotionReaderTests.cs.meta
-/Assets/_Project/Tests/Editor/VMDRecorderSample/VmdPlaybackProbeTests.cs.meta
-/Assets/_Project/Tests/Editor/VMDRecorderSample/VmdUnityTransformConverterTests.cs.meta
 
 # BEGIN LOCAL PRIVATE WORKFLOW FILES
 /DOCS/Workflow.md
