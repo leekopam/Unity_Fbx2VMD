@@ -36,6 +36,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.MainRecordingSettingsCompanionDocumentSession, Assembly-CSharp";
         private const string EditorPlayModeGuardTypeName =
             "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorPlayModeGuard, Assembly-CSharp-Editor";
+        private const string EditorBurstCompilationSessionTypeName =
+            "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorBurstCompilationSession, Assembly-CSharp-Editor";
         private const string EditorPlayModeTintControllerTypeName =
             "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorPlayModeTintController, Assembly-CSharp-Editor";
         private const string RuntimeLauncherTypeName =
@@ -1513,6 +1515,47 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_EditorPlayModeGuard_When_InspectingBurstOwnership_Then_DelegatesToBurstCompilationSession()
+        {
+            const string guardSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorPlayModeGuard.cs";
+            const string sessionSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorBurstCompilationSession.cs";
+
+            Assert.That(File.Exists(sessionSourcePath), Is.True, sessionSourcePath);
+            Assert.That(Type.GetType(EditorBurstCompilationSessionTypeName), Is.Not.Null);
+
+            string guardSource = File.ReadAllText(guardSourcePath);
+            string sessionSource = File.ReadAllText(sessionSourcePath);
+
+            Assert.That(
+                guardSource,
+                Does.Contain("private static readonly MainRecordingEditorBurstCompilationSession burstCompilationSession"));
+            Assert.That(guardSource, Does.Contain("burstCompilationSession.ApplyForScene("));
+            Assert.That(guardSource, Does.Contain("burstCompilationSession.Restore();"));
+            Assert.That(guardSource, Does.Not.Contain("Environment."));
+            Assert.That(guardSource, Does.Not.Contain("SessionState."));
+            Assert.That(guardSource, Does.Not.Contain("CompilationPipeline."));
+            Assert.That(guardSource, Does.Not.Contain("Unity.Burst.BurstCompiler"));
+            Assert.That(guardSource, Does.Not.Contain("savedBurstCompilation"));
+            Assert.That(guardSource, Does.Not.Contain("savedBurstDisableEnvironment"));
+            Assert.That(guardSource, Does.Not.Contain("GetBurstDisableEnvironmentVariableNameForTests"));
+            Assert.That(guardSource, Does.Not.Contain("IsBurstDisableEnvironmentValueForTests"));
+            Assert.That(guardSource, Does.Not.Contain("ShouldRequestBurstDisableCleanCompilationForTests"));
+            Assert.That(guardSource, Does.Not.Contain("CanReflectBurstCompilerOptionsForTests"));
+            Assert.That(guardSource, Does.Not.Contain("GetCurrentBurstCompilationForTests"));
+            Assert.That(guardSource, Does.Not.Contain("ApplyBurstCompilationForTests"));
+            Assert.That(sessionSource, Does.Contain("internal sealed class MainRecordingEditorBurstCompilationSession"));
+            Assert.That(sessionSource, Does.Contain("void ApplyForScene("));
+            Assert.That(sessionSource, Does.Contain("void Restore()"));
+            Assert.That(sessionSource, Does.Contain("Environment."));
+            Assert.That(sessionSource, Does.Contain("SessionState."));
+            Assert.That(sessionSource, Does.Contain("CompilationPipeline."));
+            Assert.That(sessionSource, Does.Contain("Unity.Burst.BurstCompiler"));
+            Assert.That(sessionSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
         public void Given_EditorPlayModeTint_When_InspectingOwnership_Then_UsesDedicatedController()
         {
             const string guardSourcePath =
@@ -1577,6 +1620,7 @@ namespace Tests.Editor.Settings
         public void Given_MainRecordingScene_When_PreparingEditorPlayMode_Then_DisablesBurstDirectCallsAndNeutralizesEditorTint()
         {
             Type guardType = RequireType(EditorPlayModeGuardTypeName);
+            Type burstSessionType = RequireType(EditorBurstCompilationSessionTypeName);
             Type tintControllerType = RequireType(EditorPlayModeTintControllerTypeName);
 
             Assert.That(
@@ -1634,44 +1678,44 @@ namespace Tests.Editor.Settings
                     MainRecordingScenePath,
                     true),
                 Is.False);
-            Assert.That(InvokeStatic<bool>(guardType, "CanReflectBurstCompilerOptionsForTests"), Is.True);
+            Assert.DoesNotThrow(() => ReadCurrentBurstCompilation(burstSessionType));
             Assert.That(
-                InvokeStatic<string>(guardType, "GetBurstDisableEnvironmentVariableNameForTests"),
+                GetStaticMemberValue<string>(burstSessionType, "BurstDisableCompilationEnvironmentVariable"),
                 Is.EqualTo("UNITY_BURST_DISABLE_COMPILATION"));
             Assert.That(
-                InvokeStatic<bool>(guardType, "IsBurstDisableEnvironmentValueForTests", "1"),
+                InvokeStatic<bool>(burstSessionType, "IsBurstDisableEnvironmentValue", "1"),
                 Is.True);
             Assert.That(
-                InvokeStatic<bool>(guardType, "IsBurstDisableEnvironmentValueForTests", "0"),
+                InvokeStatic<bool>(burstSessionType, "IsBurstDisableEnvironmentValue", "0"),
                 Is.False);
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
-                    "ShouldRequestBurstDisableCleanCompilationForTests",
+                    burstSessionType,
+                    "ShouldRequestBurstDisableCleanCompilation",
                     null,
                     false,
                     false),
                 Is.True);
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
-                    "ShouldRequestBurstDisableCleanCompilationForTests",
+                    burstSessionType,
+                    "ShouldRequestBurstDisableCleanCompilation",
                     "1",
                     false,
                     false),
                 Is.False);
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
-                    "ShouldRequestBurstDisableCleanCompilationForTests",
+                    burstSessionType,
+                    "ShouldRequestBurstDisableCleanCompilation",
                     null,
                     true,
                     false),
                 Is.False);
             Assert.That(
                 InvokeStatic<bool>(
-                    guardType,
-                    "ShouldRequestBurstDisableCleanCompilationForTests",
+                    burstSessionType,
+                    "ShouldRequestBurstDisableCleanCompilation",
                     null,
                     false,
                     true),
@@ -1689,34 +1733,40 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void Given_MainRecordingScene_When_RestoringEditorPlayModeState_Then_RestoresBurstAndEnvironment()
+        public void Given_BurstCompilationSession_When_ApplyingTwiceAndRestoring_Then_RestoresOriginalBurstAndEnvironment()
         {
-            Type guardType = RequireType(EditorPlayModeGuardTypeName);
-            string environmentVariableName =
-                InvokeStatic<string>(guardType, "GetBurstDisableEnvironmentVariableNameForTests");
+            Type sessionType = RequireType(EditorBurstCompilationSessionTypeName);
+            string environmentVariableName = GetStaticMemberValue<string>(
+                sessionType,
+                "BurstDisableCompilationEnvironmentVariable");
+            string cleanCompileSessionKey = GetStaticMemberValue<string>(
+                sessionType,
+                "BurstDisableCleanCompileSessionKey");
             string originalEnvironmentValue =
                 Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
-            bool originalBurstCompilation = InvokeStatic<bool>(guardType, "GetCurrentBurstCompilationForTests");
+            bool originalBurstCompilation = ReadCurrentBurstCompilation(sessionType);
+            bool originalCleanCompileRequested = SessionState.GetBool(cleanCompileSessionKey, false);
+            object session = Activator.CreateInstance(sessionType, true);
 
             try
             {
-                InvokeStatic<object>(guardType, "RestoreEditorPlayModeState");
-                EditorSceneManager.OpenScene(MainRecordingScenePath);
+                SessionState.SetBool(cleanCompileSessionKey, true);
                 Environment.SetEnvironmentVariable(environmentVariableName, null, EnvironmentVariableTarget.Process);
-                InvokeStatic<bool>(guardType, "ApplyBurstCompilationForTests", true);
-                bool savedBurstCompilation = InvokeStatic<bool>(guardType, "GetCurrentBurstCompilationForTests");
+                Assert.That(InvokeStatic<bool>(sessionType, "TrySetBurstCompilation", true), Is.True);
+                bool savedBurstCompilation = ReadCurrentBurstCompilation(sessionType);
 
-                InvokeStatic<object>(guardType, "ApplyBeforeMainRecordingPlayMode");
+                InvokeInstance<object>(session, "ApplyForScene", MainRecordingScenePath, false);
+                InvokeInstance<object>(session, "ApplyForScene", MainRecordingScenePath, false);
 
-                Assert.That(InvokeStatic<bool>(guardType, "GetCurrentBurstCompilationForTests"), Is.False);
+                Assert.That(ReadCurrentBurstCompilation(sessionType), Is.False);
                 Assert.That(
                     Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process),
                     Is.EqualTo("1"));
 
-                InvokeStatic<object>(guardType, "RestoreEditorPlayModeState");
+                InvokeInstance<object>(session, "Restore");
 
                 Assert.That(
-                    InvokeStatic<bool>(guardType, "GetCurrentBurstCompilationForTests"),
+                    ReadCurrentBurstCompilation(sessionType),
                     Is.EqualTo(savedBurstCompilation));
                 Assert.That(
                     Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process),
@@ -1724,11 +1774,31 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                Environment.SetEnvironmentVariable(
-                    environmentVariableName,
-                    originalEnvironmentValue,
-                    EnvironmentVariableTarget.Process);
-                InvokeStatic<bool>(guardType, "ApplyBurstCompilationForTests", originalBurstCompilation);
+                try
+                {
+                    InvokeInstance<object>(session, "Restore");
+                }
+                finally
+                {
+                    try
+                    {
+                        Environment.SetEnvironmentVariable(
+                            environmentVariableName,
+                            originalEnvironmentValue,
+                            EnvironmentVariableTarget.Process);
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            InvokeStatic<bool>(sessionType, "TrySetBurstCompilation", originalBurstCompilation);
+                        }
+                        finally
+                        {
+                            SessionState.SetBool(cleanCompileSessionKey, originalCleanCompileRequested);
+                        }
+                    }
+                }
             }
         }
 
@@ -1803,19 +1873,24 @@ namespace Tests.Editor.Settings
                 "Assets/_Project/Scripts/Editor/Settings/MainRecordingSettingsCompanionLauncher.cs";
             string guardPath =
                 "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorPlayModeGuard.cs";
+            string burstSessionPath =
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorBurstCompilationSession.cs";
 
             string launcherSource = ReadUtf8Source(launcherPath);
             string guardSource = ReadUtf8Source(guardPath);
+            string burstSessionSource = ReadUtf8Source(burstSessionPath);
 
             Assert.That(HasUtf8Bom(launcherPath), Is.True, launcherPath);
             Assert.That(HasUtf8Bom(guardPath), Is.True, guardPath);
+            Assert.That(HasUtf8Bom(burstSessionPath), Is.True, burstSessionPath);
             Assert.That(launcherSource, Does.Contain("Web 설정창 실행에 실패했습니다."));
             Assert.That(
-                guardSource,
+                burstSessionSource,
                 Does.Contain(
                     "Main_Recoding Play 준비를 위해 Burst direct-call 컴파일을 비활성화하고 스크립트 clean compile을 요청했습니다."));
             AssertSourceDoesNotContainReplacementCharacters(launcherPath, launcherSource);
             AssertSourceDoesNotContainReplacementCharacters(guardPath, guardSource);
+            AssertSourceDoesNotContainReplacementCharacters(burstSessionPath, burstSessionSource);
         }
 
         [Test]
@@ -2778,6 +2853,15 @@ namespace Tests.Editor.Settings
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null, $"{type.FullName}.{methodName} must exist.");
             return (T)method.Invoke(null, args);
+        }
+
+        private static bool ReadCurrentBurstCompilation(Type sessionType)
+        {
+            object[] arguments = { false };
+            Assert.That(
+                InvokeStatic<bool>(sessionType, "TryGetBurstCompilation", arguments),
+                Is.True);
+            return (bool)arguments[0];
         }
 
         private static T InvokeInstance<T>(object target, string methodName, params object[] args)
