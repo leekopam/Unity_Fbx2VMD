@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using Fbx2Vmd.Settings;
-using Fbx2Vmd.Settings.EditorTools;
+using Fbx2Vmd.EditorTools;
 using UnityEditor;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
