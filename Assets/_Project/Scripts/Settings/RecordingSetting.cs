@@ -214,7 +214,7 @@ public sealed class RecordingSetting : MonoBehaviour
     {
         if (settingsPopup == null)
         {
-            settingsPopup = MainRecordingSettingsPopup.EnsurePopupForScene(this);
+            settingsPopup = MainRecordingSettingsPopupSceneResolver.EnsurePopup(this);
         }
 
         settingsPopup.Bind(this, recordingFBXVmdPipeline);

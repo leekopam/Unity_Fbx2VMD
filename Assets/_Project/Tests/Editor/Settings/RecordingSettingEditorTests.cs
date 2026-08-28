@@ -1850,6 +1850,48 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimePopupScenePlacement_When_CheckingOwnership_Then_UsesDedicatedResolver()
+        {
+            const string recordingSettingPath =
+                "Assets/_Project/Scripts/Settings/RecordingSetting.cs";
+            const string popupPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopup.cs";
+            const string resolverPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopupSceneResolver.cs";
+
+            Assert.That(File.Exists(resolverPath), Is.True, resolverPath);
+
+            string recordingSettingSource = File.ReadAllText(recordingSettingPath);
+            string popupSource = File.ReadAllText(popupPath);
+            string resolverSource = File.ReadAllText(resolverPath);
+
+            Assert.That(
+                recordingSettingSource,
+                Does.Contain("MainRecordingSettingsPopupSceneResolver.EnsurePopup(this)"));
+            Assert.That(
+                popupSource,
+                Does.Contain("MainRecordingSettingsPopupSceneResolver.EnsurePopup(owner)"));
+            Assert.That(
+                resolverSource,
+                Does.Contain("internal static class MainRecordingSettingsPopupSceneResolver"));
+            Assert.That(
+                resolverSource,
+                Does.Contain("GameObject canvasObject = GameObject.Find("));
+            Assert.That(
+                resolverSource,
+                Does.Contain("MainRecordingSettingsLayoutSpec.CanvasObjectName);"));
+            Assert.That(resolverSource, Does.Contain("var popupObject = new GameObject("));
+            Assert.That(
+                resolverSource,
+                Does.Contain("MainRecordingSettingsLayoutSpec.PopupObjectName,"));
+            Assert.That(popupSource, Does.Not.Contain("private static Canvas ResolveCanvas("));
+            Assert.That(popupSource, Does.Not.Contain("GameObject.Find("));
+            Assert.That(
+                popupSource,
+                Does.Not.Contain("MainRecordingSettingsLayoutSpec.PopupObjectName"));
+        }
+
+        [Test]
         public void Given_RuntimePopupNotification_When_ShowingKoreanMessage_Then_RemainsReadable()
         {
             var popupObject = new GameObject("Runtime Popup Korean Notification Test", typeof(RectTransform));
