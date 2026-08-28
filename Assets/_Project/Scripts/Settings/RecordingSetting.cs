@@ -426,12 +426,6 @@ public sealed class RecordingSetting : MonoBehaviour
             return true;
         }
 
-        if (!startFbxImport)
-        {
-            result = MainRecordingSettingsActionResult.Success("공유 FBX 명령을 적용했습니다.");
-            return true;
-        }
-
         bool started = sharedSettingsFbxImportStarter(resolvedFBXVmdPipeline, commandFbxPath);
         if (!started)
         {
