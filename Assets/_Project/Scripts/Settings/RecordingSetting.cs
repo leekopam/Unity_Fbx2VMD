@@ -266,7 +266,7 @@ public sealed class RecordingSetting : MonoBehaviour
             sharedSettingsStore = CreateSharedSettingsStore();
             resolvedSharedSettingsFilePath = sharedSettingsStore.SettingsFilePath;
             MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
-            lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
+            lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
             return ApplySharedSettingsDocument(
                 document,
                 ResolveRecordingFBXVmdPipeline(),
@@ -286,7 +286,7 @@ public sealed class RecordingSetting : MonoBehaviour
         try
         {
             EnsureSharedSettingsStore();
-            DateTime currentWriteTime = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
+            DateTime currentWriteTime = sharedSettingsStore.ResolveLastWriteTimeUtc();
             if (currentWriteTime <= lastSharedSettingsWriteTimeUtc)
             {
                 return MainRecordingSettingsActionResult.Success("공유 설정 변경 없음");
@@ -321,7 +321,7 @@ public sealed class RecordingSetting : MonoBehaviour
             MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
             document.runtimeState = MainRecordingSettingsState.Create(playMode, DateTime.UtcNow);
             sharedSettingsStore.Save(document);
-            lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
+            lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
             return MainRecordingSettingsActionResult.Success("Play Mode 상태를 기록했습니다.");
         }
         catch (Exception exception)
@@ -463,7 +463,7 @@ public sealed class RecordingSetting : MonoBehaviour
         try
         {
             sharedSettingsStore.Save(document);
-            lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
+            lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
         }
         catch (Exception exception)
         {
@@ -550,14 +550,7 @@ public sealed class RecordingSetting : MonoBehaviour
 
         sharedSettingsStore = CreateSharedSettingsStore();
         resolvedSharedSettingsFilePath = sharedSettingsStore.SettingsFilePath;
-        lastSharedSettingsWriteTimeUtc = GetSettingsFileLastWriteTimeUtc(resolvedSharedSettingsFilePath);
-    }
-
-    private static DateTime GetSettingsFileLastWriteTimeUtc(string path)
-    {
-        return !string.IsNullOrWhiteSpace(path) && File.Exists(path)
-            ? File.GetLastWriteTimeUtc(path)
-            : DateTime.MinValue;
+        lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
     }
 
     private FBXVmdPipeline ResolveRecordingFBXVmdPipeline()

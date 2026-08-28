@@ -2,6 +2,7 @@ using Fbx2Vmd.Settings;
 using NUnit.Framework;
 using System;
 using System.IO;
+using System.Reflection;
 
 namespace Tests.Editor.Settings
 {
@@ -102,6 +103,32 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_MissingSettingsFile_When_ResolvingLastWriteTime_Then_ReturnsMinimumValue()
+        {
+            string folder = CreateTempFolder();
+            string path = Path.Combine(folder, "missing", "settings.json");
+            var store = new MainRecordingSettingsStore(path);
+
+            DateTime writeTimeUtc = ResolveLastWriteTimeUtc(store);
+
+            Assert.That(writeTimeUtc, Is.EqualTo(DateTime.MinValue));
+        }
+
+        [Test]
+        public void Given_ExistingSettingsFile_When_ResolvingLastWriteTime_Then_ReturnsFileTimestamp()
+        {
+            string folder = CreateTempFolder();
+            string path = Path.Combine(folder, "main-recording-settings.json");
+            File.WriteAllText(path, "{}");
+            DateTime expectedWriteTimeUtc = File.GetLastWriteTimeUtc(path);
+            var store = new MainRecordingSettingsStore(path);
+
+            DateTime writeTimeUtc = ResolveLastWriteTimeUtc(store);
+
+            Assert.That(writeTimeUtc, Is.EqualTo(expectedWriteTimeUtc));
+        }
+
+        [Test]
         public void Given_SettingsDocument_When_SavingAndLoading_Then_RoundTripsJsonAndCreatesFolder()
         {
             string folder = CreateTempFolder();
@@ -186,6 +213,15 @@ namespace Tests.Editor.Settings
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             return folder;
+        }
+
+        private static DateTime ResolveLastWriteTimeUtc(MainRecordingSettingsStore store)
+        {
+            MethodInfo method = typeof(MainRecordingSettingsStore).GetMethod(
+                "ResolveLastWriteTimeUtc",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, "MainRecordingSettingsStore must own settings file timestamp resolution.");
+            return (DateTime)method.Invoke(store, null);
         }
 
         private static object GetFieldValue(object instance, string fieldName)

@@ -43,6 +43,13 @@ namespace Fbx2Vmd.Settings
             }
         }
 
+        internal DateTime ResolveLastWriteTimeUtc()
+        {
+            return File.Exists(SettingsFilePath)
+                ? File.GetLastWriteTimeUtc(SettingsFilePath)
+                : DateTime.MinValue;
+        }
+
         public void Save(MainRecordingSettingsDocument document)
         {
             MainRecordingSettingsDocument normalized = NormalizeDocument(document);
