@@ -1,6 +1,8 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 
 namespace Tests.Editor.FBXImporter
@@ -39,6 +41,43 @@ namespace Tests.Editor.FBXImporter
                 "candidate");
 
             Assert.That(fileName, Is.EqualTo("vmd-auto_result.vmd"));
+        }
+
+        [TestCase("MainRecording", ".vmd", "visual_compare", "vmd-rec.vmd")]
+        [TestCase("MainRecordingVmdPlaybackProbe", ".vmd", "visual_compare", "vmd-replay.vmd")]
+        [TestCase("MainAuto", ".vmd", "visual_compare", "vmd-auto.vmd")]
+        [TestCase(" custom mode ", ".motion", "visual_compare", "vmd-custom_mode.motion")]
+        [TestCase("custom mode", "motion", "visual_compare", "vmd-custom_modemotion")]
+        [TestCase(null, null, "model compare", "vmd-model_compare.vmd")]
+        [TestCase("", "", "model compare", "vmd-model_compare.vmd")]
+        [TestCase("MainRecording", "   ", "visual_compare", "vmd-rec.vmd")]
+        public void Given_CaptureMode_When_BuildingCandidateVmdName_Then_UsesStableGenericRole(
+            string mode,
+            string extension,
+            string fallbackRole,
+            string expected)
+        {
+            string fileName = (string)Invoke(
+                "BuildCandidateVmdEvidenceFileName",
+                mode,
+                extension,
+                fallbackRole);
+
+            Assert.That(fileName, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void Given_InvalidModeCharacter_When_BuildingCandidateVmdName_Then_ReplacesCharacter()
+        {
+            char invalidCharacter = Path.GetInvalidFileNameChars().First(character => !char.IsControl(character));
+
+            string fileName = (string)Invoke(
+                "BuildCandidateVmdEvidenceFileName",
+                $"bad{invalidCharacter}name",
+                ".vmd",
+                "visual_compare");
+
+            Assert.That(fileName, Is.EqualTo("vmd-bad_name.vmd"));
         }
 
         private static object Invoke(string methodName, params object[] arguments)

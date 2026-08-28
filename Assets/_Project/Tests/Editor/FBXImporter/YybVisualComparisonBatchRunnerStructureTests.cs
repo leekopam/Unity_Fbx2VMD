@@ -56,7 +56,8 @@ namespace Tests.Editor.FBXImporter
                 "ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride",
                 "ApplyManualAnimatorBipedIkFootPositionRuntimeOverride",
                 "ApplyPostSetHumanPoseEndpointPositionRuntimeOverride",
-                "ApplyManualAnimatorHipsLocalPositionRuntimeOverride"
+                "ApplyManualAnimatorHipsLocalPositionRuntimeOverride",
+                "BuildCandidateVmdEvidenceFileName"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
