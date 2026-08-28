@@ -253,6 +253,47 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_SettingsSurfacePolicy_When_InspectingSourceOwnership_Then_LivesOutsideLayoutSpec()
+        {
+            const string layoutSpecPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsLayoutSpec.cs";
+            const string surfacePolicyPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsSurfacePolicy.cs";
+
+            Assert.That(File.Exists(layoutSpecPath), Is.True, layoutSpecPath);
+            Assert.That(File.Exists(surfacePolicyPath), Is.True, surfacePolicyPath);
+
+            string layoutSpecSource = File.ReadAllText(layoutSpecPath);
+            string surfacePolicySource = File.ReadAllText(surfacePolicyPath);
+            string[] policyConstants =
+            {
+                "EditorSurface",
+                "EditorSurfacePolicy",
+                "ProductionSurface",
+                "FallbackSurface",
+                "DeliveryPolicy",
+            };
+
+            foreach (string policyConstant in policyConstants)
+            {
+                string declaration = $"public const string {policyConstant}";
+                Assert.That(layoutSpecSource, Does.Not.Contain(declaration));
+                Assert.That(surfacePolicySource, Does.Contain(declaration));
+            }
+
+            Assert.That(
+                layoutSpecSource,
+                Does.Not.Contain("public static bool ShouldAutoOpenRuntimePopup"));
+            Assert.That(surfacePolicySource, Does.Contain("namespace Fbx2Vmd.Settings"));
+            Assert.That(
+                surfacePolicySource,
+                Does.Contain("public static class MainRecordingSettingsSurfacePolicy"));
+            Assert.That(
+                surfacePolicySource,
+                Does.Contain("public static bool ShouldAutoOpenRuntimePopup"));
+        }
+
+        [Test]
         public void Given_RuntimeSettingsSourceFiles_When_InspectingContents_Then_UnityEditorIsNotReferenced()
         {
             string[] runtimeSourceFiles =
@@ -271,6 +312,7 @@ namespace Tests.Editor.Settings
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsState.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsStore.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsSidebarItemSpec.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsSurfacePolicy.cs",
                 "Assets/_Project/Scripts/Settings/RecordingSetting.cs",
             };
 

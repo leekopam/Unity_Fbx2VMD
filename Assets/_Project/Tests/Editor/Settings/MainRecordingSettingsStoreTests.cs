@@ -8,13 +8,12 @@ namespace Tests.Editor.Settings
     public class MainRecordingSettingsStoreTests
     {
         [Test]
-        public void Given_SettingsDeliveryPolicy_When_InspectingLayoutSpec_Then_UsesCompanionAndSharedFile()
+        public void Given_SettingsDeliveryPolicy_When_InspectingSurfacePolicy_Then_UsesCompanionAndSharedFile()
         {
-            Assert.That(MainRecordingSettingsLayoutSpec.ProductionSurface, Is.EqualTo("electron web companion"));
-            Assert.That(MainRecordingSettingsLayoutSpec.FallbackSurface, Does.Contain("popup"));
-            Assert.That(MainRecordingSettingsLayoutSpec.DisabledCardCount, Is.GreaterThanOrEqualTo(2));
+            Assert.That(MainRecordingSettingsSurfacePolicy.ProductionSurface, Is.EqualTo("electron web companion"));
+            Assert.That(MainRecordingSettingsSurfacePolicy.FallbackSurface, Does.Contain("popup"));
 
-            string policy = MainRecordingSettingsLayoutSpec.DeliveryPolicy;
+            string policy = MainRecordingSettingsSurfacePolicy.DeliveryPolicy;
             Assert.That(policy, Does.Contain("companion"));
             Assert.That(policy, Does.Contain("Player"));
             Assert.That(policy, Does.Contain("shared settings file"));
@@ -23,24 +22,24 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void Given_EditorSettingsPolicy_When_InspectingLayoutSpec_Then_EditorUsesElectronWebLauncherNotGameViewPopup()
+        public void Given_EditorSettingsPolicy_When_InspectingSurfacePolicy_Then_EditorUsesElectronWebLauncherNotGameViewPopup()
         {
-            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurface, Is.EqualTo("electron web launcher"));
-            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Contain("Electron"));
-            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Contain("Web UI"));
-            Assert.That(MainRecordingSettingsLayoutSpec.EditorSurfacePolicy, Does.Not.Contain("EditorWindow"));
+            Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurface, Is.EqualTo("electron web launcher"));
+            Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Contain("Electron"));
+            Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Contain("Web UI"));
+            Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Not.Contain("EditorWindow"));
             Assert.That(
-                MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(
+                MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
                     requestedOpen: true,
                     isEditor: true),
                 Is.False);
             Assert.That(
-                MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(
+                MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
                     requestedOpen: true,
                     isEditor: false),
                 Is.True);
             Assert.That(
-                MainRecordingSettingsLayoutSpec.ShouldAutoOpenRuntimePopup(
+                MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
                     requestedOpen: true,
                     isEditor: false,
                     isBatchMode: true),
@@ -53,6 +52,7 @@ namespace Tests.Editor.Settings
             Assert.That(MainRecordingSettingsLayoutSpec.VisualAssetPolicy, Does.Contain("Clean & Minimalist GUI Pack"));
             Assert.That(MainRecordingSettingsLayoutSpec.VisualAssetPolicy, Does.Contain("external reference product assets").IgnoreCase);
             Assert.That(MainRecordingSettingsLayoutSpec.GuiPackRoot, Is.EqualTo("Assets/UI/GUIPack-Clean&Minimalist"));
+            Assert.That(MainRecordingSettingsLayoutSpec.DisabledCardCount, Is.GreaterThanOrEqualTo(2));
 
             int availableAssetCount = 0;
             foreach (string assetPath in MainRecordingSettingsLayoutSpec.RequiredGuiPackAssetPaths)
