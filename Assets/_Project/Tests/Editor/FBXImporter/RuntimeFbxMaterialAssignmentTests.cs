@@ -11,6 +11,58 @@ namespace Tests.Editor.FBXImporter
     public class RuntimeFbxMaterialAssignmentTests
     {
         [Test]
+        public void Given_RuntimeMaterialAssignment_When_CheckingOwnership_Then_ImporterDelegatesToApplier()
+        {
+            Type applierType = typeof(AssimpFBXImporter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.AssimpRuntimeMaterialApplier");
+            MethodInfo applyMethod = applierType?.GetMethod(
+                "Apply",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(GameObject), typeof(Assimp.Mesh), typeof(Scene), typeof(string) },
+                modifiers: null);
+            string importerSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "AssimpFBXImporter.cs"));
+            string[] movedMemberNames =
+            {
+                "AssignRuntimeMaterial(",
+                "ResolveAssimpMaterial(",
+                "CreateRuntimeMaterial(",
+                "SelectRuntimeMaterialShader(",
+                "ApplyReferenceMaterialDefaults(",
+                "SetMaterialFloatIfSupported(",
+                "ResolveMainTexturePath(",
+                "AssignMainTexture(",
+                "ResolveDiffuseTextureReference(",
+                "ApplyTextureMaterialState(",
+                "UsesCutoutShader(",
+                "ApplyAlphaCutoutMaterialState(",
+                "TextureContainsTransparentPixels(",
+                "DestroyTexture("
+            };
+
+            Assert.That(applierType, Is.Not.Null);
+            Assert.That(applyMethod, Is.Not.Null);
+            Assert.That(
+                importerSource,
+                Does.Contain("AssimpRuntimeMaterialApplier.Apply(meshObject, asmMesh, scene, _sourceDirectory);"));
+            foreach (string memberName in movedMemberNames)
+            {
+                Assert.That(importerSource, Does.Not.Contain(memberName));
+            }
+
+            Assert.That(importerSource, Does.Not.Contain("ALPHA_CUTOUT_OPAQUE_THRESHOLD"));
+            Assert.That(importerSource, Does.Not.Contain("STANDARD_SHADER_CUTOUT_MODE"));
+            Assert.That(importerSource, Does.Not.Contain("STANDARD_SHADER_CUTOUT_THRESHOLD"));
+            Assert.That(importerSource, Does.Not.Contain("UNLIT_TRANSPARENT_CUTOUT_SHADER"));
+        }
+
+        [Test]
         public void Given_FbxMeshHasMaterialIndex_When_RuntimeImportCreatesRenderer_Then_AssignsNamedMaterial()
         {
             var importer = new AssimpFBXImporter();
