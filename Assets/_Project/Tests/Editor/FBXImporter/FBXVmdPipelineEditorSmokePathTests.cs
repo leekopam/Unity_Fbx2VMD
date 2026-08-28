@@ -10,6 +10,11 @@ namespace Tests.Editor.FBXImporter
 {
     public class FBXVmdPipelineEditorSmokePathTests
     {
+        private const string EditorSourcePath =
+            "Assets/_Project/Scripts/Editor/FBXImporter/FBXVmdPipelineEditor.cs";
+        private const string LegacyEditorSourcePath =
+            "Assets/_Project/Scripts/Editor/Settings/FBXVmdPipelineEditor.cs";
+
         private static readonly Type[] SmokeResolverParameterTypes =
         {
             typeof(string),
@@ -84,6 +89,18 @@ namespace Tests.Editor.FBXImporter
             typeof(int).MakeByRefType(),
             typeof(int).MakeByRefType()
         };
+
+        [Test]
+        public void Given_FBXVmdPipelineEditor_When_InspectingSourceOwnership_Then_LivesWithFbxImporterEditorCode()
+        {
+            Assert.That(File.Exists(EditorSourcePath), Is.True, EditorSourcePath);
+            Assert.That(File.Exists(LegacyEditorSourcePath), Is.False, LegacyEditorSourcePath);
+
+            Type editorType = Type.GetType(
+                "Fbx2Vmd.FBXImporter.FBXVmdPipelineEditor, Assembly-CSharp-Editor",
+                throwOnError: false);
+            Assert.That(editorType, Is.Not.Null);
+        }
 
         [Test]
         public void Given_ControlledFileExists_When_ResolvingEditorSmokeFbxPath_Then_UsesControlledPath()

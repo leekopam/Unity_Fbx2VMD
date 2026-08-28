@@ -21,6 +21,8 @@ namespace Tests.Editor.FBXImporter
             var results = new List<TestResultRecord>();
             var tests = new FBXVmdPipelineEditorSmokePathTests();
 
+            RunTest(results, nameof(tests.Given_FBXVmdPipelineEditor_When_InspectingSourceOwnership_Then_LivesWithFbxImporterEditorCode),
+                tests.Given_FBXVmdPipelineEditor_When_InspectingSourceOwnership_Then_LivesWithFbxImporterEditorCode);
             RunTest(results, nameof(tests.Given_ControlledFileExists_When_ResolvingEditorSmokeFbxPath_Then_UsesControlledPath),
                 tests.Given_ControlledFileExists_When_ResolvingEditorSmokeFbxPath_Then_UsesControlledPath);
             RunTest(results, nameof(tests.Given_ControlledMissingAndProjectFbxExists_When_ResolvingEditorSmokeFbxPath_Then_UsesProjectFallback),
