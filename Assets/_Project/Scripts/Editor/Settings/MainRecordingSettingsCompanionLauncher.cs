@@ -59,29 +59,14 @@ namespace Fbx2Vmd.Settings.EditorTools
                 MainRecordingSettingsPathResolver.ResolveSettingsFilePath());
         }
 
-        private static string GetMenuPathForTests()
-        {
-            return MenuPath;
-        }
-
         private static string GetMainRecordingScenePathForTests()
         {
             return MainRecordingScenePath;
         }
 
-        private static string GetEditorSurfacePolicyForTests()
-        {
-            return MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy;
-        }
-
         private static bool CanLaunchWebSettingsForTests()
         {
             return CanLaunchWebSettings();
-        }
-
-        private static MainRecordingSettingsLaunchPlan CreateDefaultLaunchPlanForTests()
-        {
-            return CreateDefaultLaunchPlan();
         }
 
         private static void OpenMainRecordingSettingsForTests(
