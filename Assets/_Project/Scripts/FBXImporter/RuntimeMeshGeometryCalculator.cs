@@ -61,5 +61,32 @@ namespace Fbx2Vmd.FBXImporter
 
             return triangleIndices;
         }
+
+        internal static UnityEngine.Matrix4x4 ConvertBindPoseMatrix(
+            Assimp.Matrix4x4 source,
+            float unitScale)
+        {
+            var converted = new UnityEngine.Matrix4x4
+            {
+                m00 = source.A1,
+                m01 = source.A2,
+                m02 = source.A3,
+                m03 = source.A4 * unitScale,
+                m10 = source.B1,
+                m11 = source.B2,
+                m12 = source.B3,
+                m13 = source.B4 * unitScale,
+                m20 = source.C1,
+                m21 = source.C2,
+                m22 = source.C3,
+                m23 = source.C4 * unitScale,
+                m30 = source.D1,
+                m31 = source.D2,
+                m32 = source.D3,
+                m33 = source.D4
+            };
+
+            return converted;
+        }
     }
 }

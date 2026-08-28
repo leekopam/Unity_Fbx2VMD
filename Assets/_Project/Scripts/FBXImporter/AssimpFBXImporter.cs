@@ -322,7 +322,9 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     boneIndex = bones.Count;
                     bones.Add(boneTrans);
-                    bindPoses.Add(ToUnityMatrix(bone.OffsetMatrix));
+                    bindPoses.Add(RuntimeMeshGeometryCalculator.ConvertBindPoseMatrix(
+                        bone.OffsetMatrix,
+                        FBX_TO_UNITY_UNIT_SCALE));
                 }
 
                 foreach (var weight in bone.VertexWeights)
@@ -551,19 +553,6 @@ namespace Fbx2Vmd.FBXImporter
         #endregion
 
         #region 유틸리티 메서드
-        private UnityEngine.Matrix4x4 ToUnityMatrix(Assimp.Matrix4x4 m)
-        {
-            UnityEngine.Matrix4x4 mat = new UnityEngine.Matrix4x4();
-            mat.m00 = m.A1; mat.m01 = m.A2; mat.m02 = m.A3; mat.m03 = m.A4;
-            mat.m10 = m.B1; mat.m11 = m.B2; mat.m12 = m.B3; mat.m13 = m.B4;
-            mat.m20 = m.C1; mat.m21 = m.C2; mat.m22 = m.C3; mat.m23 = m.C4;
-            mat.m30 = m.D1; mat.m31 = m.D2; mat.m32 = m.D3; mat.m33 = m.D4;
-            mat.m03 *= FBX_TO_UNITY_UNIT_SCALE;
-            mat.m13 *= FBX_TO_UNITY_UNIT_SCALE;
-            mat.m23 *= FBX_TO_UNITY_UNIT_SCALE;
-            return mat;
-        }
-
         private string GetRelativePath(Transform root, Transform target)
         {
             if (root == target) return "";

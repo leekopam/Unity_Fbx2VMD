@@ -31,10 +31,12 @@ namespace Tests.Editor.FBXImporter
             Assert.That(importerSource, Does.Contain("RuntimeMeshGeometryCalculator.ConvertNormals("));
             Assert.That(importerSource, Does.Contain("RuntimeMeshGeometryCalculator.ConvertTextureCoordinates("));
             Assert.That(importerSource, Does.Contain("RuntimeMeshGeometryCalculator.BuildTriangleIndices("));
+            Assert.That(importerSource, Does.Contain("RuntimeMeshGeometryCalculator.ConvertBindPoseMatrix("));
             Assert.That(importerSource, Does.Not.Contain("foreach (var v in asmMesh.Vertices)"));
             Assert.That(importerSource, Does.Not.Contain("foreach (var n in asmMesh.Normals)"));
             Assert.That(importerSource, Does.Not.Contain("foreach (var uv in asmMesh.TextureCoordinateChannels[0])"));
             Assert.That(importerSource, Does.Not.Contain("foreach (var face in asmMesh.Faces)"));
+            Assert.That(importerSource, Does.Not.Contain("private UnityEngine.Matrix4x4 ToUnityMatrix("));
         }
 
         [Test]
@@ -97,6 +99,55 @@ namespace Tests.Editor.FBXImporter
                 new object[] { faces });
 
             Assert.That(indices, Is.EqualTo(new[] { 0, 1, 2, 7, 8, 9 }));
+        }
+
+        [Test]
+        public void Given_AssimpBindPoseMatrix_When_Converting_Then_CopiesElementsAndScalesTranslationOnly()
+        {
+            MethodInfo convertMethod = FindCalculatorMethod(
+                "ConvertBindPoseMatrix",
+                typeof(Assimp.Matrix4x4),
+                typeof(float));
+            var source = new Assimp.Matrix4x4
+            {
+                A1 = 1f,
+                A2 = 2f,
+                A3 = 3f,
+                A4 = 4f,
+                B1 = 5f,
+                B2 = 6f,
+                B3 = 7f,
+                B4 = 8f,
+                C1 = 9f,
+                C2 = 10f,
+                C3 = 11f,
+                C4 = 12f,
+                D1 = 13f,
+                D2 = 14f,
+                D3 = 15f,
+                D4 = 16f
+            };
+
+            var converted = (UnityEngine.Matrix4x4)convertMethod.Invoke(
+                null,
+                new object[] { source, 0.01f });
+
+            Assert.That(converted.m00, Is.EqualTo(1f));
+            Assert.That(converted.m01, Is.EqualTo(2f));
+            Assert.That(converted.m02, Is.EqualTo(3f));
+            Assert.That(converted.m03, Is.EqualTo(0.04f).Within(0.000001f));
+            Assert.That(converted.m10, Is.EqualTo(5f));
+            Assert.That(converted.m11, Is.EqualTo(6f));
+            Assert.That(converted.m12, Is.EqualTo(7f));
+            Assert.That(converted.m13, Is.EqualTo(0.08f).Within(0.000001f));
+            Assert.That(converted.m20, Is.EqualTo(9f));
+            Assert.That(converted.m21, Is.EqualTo(10f));
+            Assert.That(converted.m22, Is.EqualTo(11f));
+            Assert.That(converted.m23, Is.EqualTo(0.12f).Within(0.000001f));
+            Assert.That(converted.m30, Is.EqualTo(13f));
+            Assert.That(converted.m31, Is.EqualTo(14f));
+            Assert.That(converted.m32, Is.EqualTo(15f));
+            Assert.That(converted.m33, Is.EqualTo(16f));
         }
 
         private static MethodInfo FindCalculatorMethod(string methodName, params Type[] parameterTypes)
