@@ -30,6 +30,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.KoreanUiTextFallback, Assembly-CSharp";
         private const string CompanionControllerTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsCompanionController, Assembly-CSharp";
+        private const string CompanionDocumentSessionTypeName =
+            "Fbx2Vmd.Settings.MainRecordingSettingsCompanionDocumentSession, Assembly-CSharp";
         private const string EditorPlayModeGuardTypeName =
             "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorPlayModeGuard, Assembly-CSharp-Editor";
         private const string EditorPlayModeTintControllerTypeName =
@@ -1876,6 +1878,97 @@ namespace Tests.Editor.Settings
             {
                 UnityEngine.Object.DestroyImmediate(gameObject);
             }
+        }
+
+        [Test]
+        public void Given_CompanionController_When_InspectingDocumentOwnership_Then_DelegatesToDocumentSession()
+        {
+            const string controllerSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsCompanionController.cs";
+            const string sessionSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsCompanionDocumentSession.cs";
+
+            Assert.That(File.Exists(sessionSourcePath), Is.True, sessionSourcePath);
+            Assert.That(Type.GetType(CompanionDocumentSessionTypeName), Is.Not.Null);
+
+            string controllerSource = File.ReadAllText(controllerSourcePath);
+            string sessionSource = File.ReadAllText(sessionSourcePath);
+
+            Assert.That(
+                controllerSource,
+                Does.Contain(
+                    "private readonly MainRecordingSettingsCompanionDocumentSession documentSession"));
+            Assert.That(controllerSource, Does.Not.Contain("MainRecordingSettingsStore store"));
+            Assert.That(controllerSource, Does.Not.Contain("new MainRecordingSettingsCommandEnvelope"));
+            Assert.That(controllerSource, Does.Not.Contain("Guid.NewGuid()"));
+            Assert.That(controllerSource, Does.Not.Contain("DateTime.UtcNow"));
+            Assert.That(sessionSource, Does.Contain("private MainRecordingSettingsDocument document"));
+            Assert.That(sessionSource, Does.Contain("MainRecordingSettingsDocument Load("));
+            Assert.That(sessionSource, Does.Contain("void Save("));
+            Assert.That(sessionSource, Does.Contain("bool TrySaveImportFbxCommand("));
+            Assert.That(sessionSource, Does.Contain("new MainRecordingSettingsCommandEnvelope"));
+            Assert.That(sessionSource, Does.Contain("Guid.NewGuid()"));
+            Assert.That(sessionSource, Does.Contain("DateTime.UtcNow"));
+            Assert.That(sessionSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_CompanionDocumentSession_When_SavingImportCommand_Then_PersistsNormalizedCommandEnvelope()
+        {
+            Type sessionType = RequireType(CompanionDocumentSessionTypeName);
+            object session = Activator.CreateInstance(sessionType, true);
+            string path = CreateTempSettingsPath();
+            MainRecordingSettingsDocument document =
+                GetMemberValue<MainRecordingSettingsDocument>(session, "CurrentDocument");
+            int updateCount = 0;
+            Action<MainRecordingSettingsDocument> keepEmptyPath = current =>
+            {
+                updateCount++;
+                Assert.That(current, Is.SameAs(document));
+            };
+
+            Assert.That(
+                InvokeInstance<bool>(
+                    session,
+                    "TrySaveImportFbxCommand",
+                    path,
+                    keepEmptyPath),
+                Is.False);
+            Assert.That(updateCount, Is.EqualTo(1));
+            Assert.That(File.Exists(path), Is.False);
+
+            Action<MainRecordingSettingsDocument> applyFbxPath = current =>
+            {
+                updateCount++;
+                Assert.That(current, Is.SameAs(document));
+                current.fbxPath = "  D:/motions/session-command.fbx  ";
+            };
+
+            Assert.That(
+                InvokeInstance<bool>(
+                    session,
+                    "TrySaveImportFbxCommand",
+                    path,
+                    applyFbxPath),
+                Is.True);
+            Assert.That(updateCount, Is.EqualTo(2));
+
+            MainRecordingSettingsDocument saved =
+                new MainRecordingSettingsStore(path).LoadOrCreateDefault();
+            Assert.That(
+                saved.pendingCommand.action,
+                Is.EqualTo(MainRecordingSettingsCommandEnvelope.ImportFbxAction));
+            Assert.That(saved.pendingCommand.fbxPath, Is.EqualTo("D:/motions/session-command.fbx"));
+            Assert.That(saved.pendingCommand.commandId, Has.Length.EqualTo(32));
+            Assert.That(
+                Guid.TryParseExact(saved.pendingCommand.commandId, "N", out _),
+                Is.True);
+            Assert.That(
+                DateTimeOffset.TryParse(
+                    saved.pendingCommand.requestedAtUtc,
+                    out DateTimeOffset requestedAtUtc),
+                Is.True);
+            Assert.That(requestedAtUtc.Offset, Is.EqualTo(TimeSpan.Zero));
         }
 
         [Test]
