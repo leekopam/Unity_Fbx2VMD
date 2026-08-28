@@ -82,7 +82,8 @@ namespace Fbx2Vmd.Settings
 
         private void OnValidate()
         {
-            msaaSampleCount = NormalizeMsaaSampleCount(msaaSampleCount);
+            msaaSampleCount =
+                GraphicRenderPipelineSettingsApplier.NormalizeMsaaSampleCount(msaaSampleCount);
             renderScale = Mathf.Clamp(renderScale, 0.1f, 2.0f);
             if (builtInPostProcessResources == null)
             {
@@ -123,14 +124,11 @@ namespace Fbx2Vmd.Settings
                     ResolveBuiltInPostProcessResources);
             }
 
-            if (pipelineAsset != null)
-            {
-                pipelineAsset.msaaSampleCount = NormalizeMsaaSampleCount(msaaSampleCount);
-                pipelineAsset.renderScale = Mathf.Clamp(renderScale, 0.1f, 2.0f);
-                return;
-            }
-
-            QualitySettings.antiAliasing = enableCameraMsaa ? NormalizeMsaaSampleCount(msaaSampleCount) : 0;
+            GraphicRenderPipelineSettingsApplier.Apply(
+                pipelineAsset,
+                renderScale,
+                enableCameraMsaa,
+                msaaSampleCount);
         }
 
         public GraphicTextureImportPlan CreateTextureImportPlan()
@@ -279,26 +277,6 @@ namespace Fbx2Vmd.Settings
 #else
             return Resources.Load<PostProcessResources>("PostProcessResources");
 #endif
-        }
-
-        private static int NormalizeMsaaSampleCount(int samples)
-        {
-            if (samples >= 8)
-            {
-                return 8;
-            }
-
-            if (samples >= 4)
-            {
-                return 4;
-            }
-
-            if (samples >= 2)
-            {
-                return 2;
-            }
-
-            return 1;
         }
     }
 }

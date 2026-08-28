@@ -32,6 +32,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.GraphicAntiAliasingPresetResolver, Assembly-CSharp";
         private const string CameraSettingsApplierTypeName =
             "Fbx2Vmd.Settings.GraphicCameraSettingsApplier, Assembly-CSharp";
+        private const string RenderPipelineSettingsApplierTypeName =
+            "Fbx2Vmd.Settings.GraphicRenderPipelineSettingsApplier, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderController, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
@@ -467,6 +469,93 @@ namespace Tests.Editor.Settings
             {
                 UnityEngine.Object.DestroyImmediate(cameraObject);
             }
+        }
+
+        [Test]
+        public void Given_GraphicSetting_When_InspectingRenderPipelineWriterOwnership_Then_DelegatesToApplier()
+        {
+            const string settingSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicSetting.cs";
+            const string applierSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicRenderPipelineSettingsApplier.cs";
+
+            Assert.That(File.Exists(applierSourcePath), Is.True, applierSourcePath);
+            Assert.That(Type.GetType(RenderPipelineSettingsApplierTypeName), Is.Not.Null);
+
+            string settingSource = File.ReadAllText(settingSourcePath);
+            string applierSource = File.ReadAllText(applierSourcePath);
+            Assert.That(settingSource, Does.Contain("GraphicRenderPipelineSettingsApplier.Apply("));
+            Assert.That(
+                settingSource,
+                Does.Contain("GraphicRenderPipelineSettingsApplier.NormalizeMsaaSampleCount("));
+            Assert.That(settingSource, Does.Not.Contain("pipelineAsset.msaaSampleCount ="));
+            Assert.That(settingSource, Does.Not.Contain("pipelineAsset.renderScale ="));
+            Assert.That(settingSource, Does.Not.Contain("QualitySettings.antiAliasing ="));
+            Assert.That(settingSource, Does.Not.Contain("private static int NormalizeMsaaSampleCount("));
+            Assert.That(applierSource, Does.Contain("pipelineAsset.msaaSampleCount ="));
+            Assert.That(applierSource, Does.Contain("pipelineAsset.renderScale ="));
+            Assert.That(applierSource, Does.Contain("QualitySettings.antiAliasing ="));
+            Assert.That(applierSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_UrpPipelineSettings_When_Applying_Then_ConfiguresAssetWithSupportedValues()
+        {
+            Type applierType = RequireType(RenderPipelineSettingsApplierTypeName);
+            var pipelineAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+
+            try
+            {
+                InvokeStatic(applierType, "Apply", pipelineAsset, 3.0f, true, 6);
+
+                Assert.That(pipelineAsset.msaaSampleCount, Is.EqualTo(4));
+                Assert.That(pipelineAsset.renderScale, Is.EqualTo(2.0f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineAsset);
+            }
+        }
+
+        [Test]
+        public void Given_BuiltInPipelineSettings_When_Applying_Then_ConfiguresGlobalMsaa()
+        {
+            Type applierType = RequireType(RenderPipelineSettingsApplierTypeName);
+            int previousAntiAliasing = QualitySettings.antiAliasing;
+
+            try
+            {
+                InvokeStatic(applierType, "Apply", null, 1.5f, true, 3);
+                Assert.That(QualitySettings.antiAliasing, Is.EqualTo(2));
+
+                InvokeStatic(applierType, "Apply", null, 1.5f, false, 8);
+                Assert.That(QualitySettings.antiAliasing, Is.Zero);
+            }
+            finally
+            {
+                QualitySettings.antiAliasing = previousAntiAliasing;
+            }
+        }
+
+        [TestCase(-1, 1)]
+        [TestCase(1, 1)]
+        [TestCase(2, 2)]
+        [TestCase(3, 2)]
+        [TestCase(7, 4)]
+        [TestCase(8, 8)]
+        [TestCase(16, 8)]
+        public void Given_MsaaSampleCount_When_Normalizing_Then_ReturnsSupportedValue(
+            int samples,
+            int expectedSamples)
+        {
+            Type applierType = RequireType(RenderPipelineSettingsApplierTypeName);
+
+            int normalizedSamples = (int)InvokeStatic(
+                applierType,
+                "NormalizeMsaaSampleCount",
+                samples);
+
+            Assert.That(normalizedSamples, Is.EqualTo(expectedSamples));
         }
 
         [Test]
