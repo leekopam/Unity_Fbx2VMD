@@ -185,6 +185,29 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_SettingsCommandEnvelope_When_InspectingSourceOwnership_Then_LivesInDedicatedFile()
+        {
+            const string documentPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsDocument.cs";
+            const string commandEnvelopePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsCommandEnvelope.cs";
+
+            Assert.That(File.Exists(documentPath), Is.True, documentPath);
+            Assert.That(File.Exists(commandEnvelopePath), Is.True, commandEnvelopePath);
+
+            string documentSource = File.ReadAllText(documentPath);
+            string commandEnvelopeSource = File.ReadAllText(commandEnvelopePath);
+            Assert.That(
+                documentSource,
+                Does.Not.Contain("public sealed class MainRecordingSettingsCommandEnvelope"));
+            Assert.That(commandEnvelopeSource, Does.Contain("namespace Fbx2Vmd.Settings"));
+            Assert.That(commandEnvelopeSource, Does.Contain("[Serializable]"));
+            Assert.That(
+                commandEnvelopeSource,
+                Does.Contain("public sealed class MainRecordingSettingsCommandEnvelope"));
+        }
+
+        [Test]
         public void Given_RuntimeSettingsSourceFiles_When_InspectingContents_Then_UnityEditorIsNotReferenced()
         {
             string[] runtimeSourceFiles =
@@ -192,6 +215,7 @@ namespace Tests.Editor.Settings
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsActionResult.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsActions.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsCompanionController.cs",
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsCommandEnvelope.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsDocument.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsLaunchPlan.cs",
                 "Assets/_Project/Scripts/Settings/MainRecordingSettingsPathResolver.cs",
