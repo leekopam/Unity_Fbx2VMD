@@ -21,9 +21,11 @@ namespace Tests.Editor.FBXImporter
             Assert.That(policyType, Is.Not.Null);
             Assert.That(guardSource, Does.Contain("ThumbTransformNamePolicy.IsBaseHelper("));
             Assert.That(guardSource, Does.Contain("ThumbTransformNamePolicy.IsActiveBaseSource("));
+            Assert.That(guardSource, Does.Contain("ThumbTransformNamePolicy.TryResolveSide("));
             Assert.That(retargeterSource, Does.Contain("ThumbTransformNamePolicy.IsActiveBaseSource("));
             Assert.That(guardSource, Does.Not.Contain("private static bool IsThumbBaseHelperName("));
             Assert.That(guardSource, Does.Not.Contain("private static bool IsActiveThumbBaseSourceName("));
+            Assert.That(guardSource, Does.Not.Contain("private static bool TryResolveThumbSideFromName("));
             Assert.That(retargeterSource, Does.Not.Contain("private static bool IsActiveThumbBaseSourceName("));
         }
 
@@ -65,6 +67,30 @@ namespace Tests.Editor.FBXImporter
             Assert.That(actual, Is.EqualTo(expected));
         }
 
+        [TestCase(null, false, false)]
+        [TestCase("", false, false)]
+        [TestCase("joint_RightThumb0", true, true)]
+        [TestCase("joint_LeftThumb0", true, false)]
+        [TestCase("joint_RThumb1", true, true)]
+        [TestCase("joint_LThumb1", true, false)]
+        [TestCase("joint_thumb_r", true, true)]
+        [TestCase("joint_thumb_l", true, false)]
+        [TestCase("joint.rThumb", true, true)]
+        [TestCase("joint.lThumb", true, false)]
+        [TestCase("joint_Left_RightThumb0", true, true)]
+        [TestCase("joint_thumb0_root", true, true)]
+        [TestCase("joint_Thumb0", false, false)]
+        public void Given_TransformName_When_ResolvingSide_Then_PreservesClassification(
+            string transformName,
+            bool expectedResolved,
+            bool expectedIsRight)
+        {
+            bool resolved = TryResolveSide(transformName, out bool isRight);
+
+            Assert.That(resolved, Is.EqualTo(expectedResolved));
+            Assert.That(isRight, Is.EqualTo(expectedIsRight));
+        }
+
         private static bool InvokePolicy(string methodName, string transformName)
         {
             Type policyType = typeof(HumanoidThumbDeformationGuard).Assembly.GetType(PolicyTypeName);
@@ -78,6 +104,22 @@ namespace Tests.Editor.FBXImporter
                 modifiers: null);
             Assert.That(method, Is.Not.Null, methodName);
             return (bool)method.Invoke(null, new object[] { transformName });
+        }
+
+        private static bool TryResolveSide(string transformName, out bool isRight)
+        {
+            Type policyType = typeof(HumanoidThumbDeformationGuard).Assembly.GetType(PolicyTypeName);
+            Assert.That(policyType, Is.Not.Null);
+
+            MethodInfo method = policyType.GetMethod(
+                "TryResolveSide",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+
+            object[] arguments = { transformName, false };
+            bool resolved = (bool)method.Invoke(null, arguments);
+            isRight = (bool)arguments[1];
+            return resolved;
         }
 
         private static string ReadRuntimeSource(string fileName)

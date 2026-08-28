@@ -43,5 +43,35 @@ namespace Fbx2Vmd.FBXImporter
                 !normalizedName.Contains("thumb2") &&
                 !normalizedName.Contains("thumbtip");
         }
+
+        internal static bool TryResolveSide(string transformName, out bool isRightThumb)
+        {
+            if (!string.IsNullOrEmpty(transformName))
+            {
+                string normalizedName = transformName.ToLowerInvariant();
+                if (normalizedName.Contains("right") ||
+                    normalizedName.Contains("_r") ||
+                    normalizedName.Contains(".r") ||
+                    normalizedName.Contains("rthumb") ||
+                    normalizedName.Contains("thumb_r"))
+                {
+                    isRightThumb = true;
+                    return true;
+                }
+
+                if (normalizedName.Contains("left") ||
+                    normalizedName.Contains("_l") ||
+                    normalizedName.Contains(".l") ||
+                    normalizedName.Contains("lthumb") ||
+                    normalizedName.Contains("thumb_l"))
+                {
+                    isRightThumb = false;
+                    return true;
+                }
+            }
+
+            isRightThumb = false;
+            return false;
+        }
     }
 }

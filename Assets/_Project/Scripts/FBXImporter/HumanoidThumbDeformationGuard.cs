@@ -1331,7 +1331,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             if (TryResolveThumbSideFromHumanMapping(thumbTransform, out bool isRightThumb) ||
-                TryResolveThumbSideFromName(thumbTransform, out isRightThumb) ||
+                (thumbTransform != null &&
+                    ThumbTransformNamePolicy.TryResolveSide(thumbTransform.name, out isRightThumb)) ||
                 TryResolveThumbSideByReferenceDistance(thumbTransform, out isRightThumb))
             {
                 _cachedThumbSides[thumbTransform] = isRightThumb;
@@ -1419,7 +1420,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             if (TryResolveThumbSideFromHumanMapping(thumbTransform, out isRightThumb) ||
-                TryResolveThumbSideFromName(thumbTransform, out isRightThumb) ||
+                (thumbTransform != null &&
+                    ThumbTransformNamePolicy.TryResolveSide(thumbTransform.name, out isRightThumb)) ||
                 TryResolveThumbSideByReferenceDistance(thumbTransform, out isRightThumb))
             {
                 if (thumbTransform != null)
@@ -1467,36 +1469,6 @@ namespace Fbx2Vmd.FBXImporter
         private bool IsRightThumbTransform(Transform thumbTransform)
         {
             return TryResolveThumbSide(thumbTransform, out bool isRightThumb) && isRightThumb;
-        }
-
-        private static bool TryResolveThumbSideFromName(Transform thumbTransform, out bool isRightThumb)
-        {
-            if (thumbTransform != null)
-            {
-                string normalizedName = thumbTransform.name.ToLowerInvariant();
-                if (normalizedName.Contains("right") ||
-                    normalizedName.Contains("_r") ||
-                    normalizedName.Contains(".r") ||
-                    normalizedName.Contains("rthumb") ||
-                    normalizedName.Contains("thumb_r"))
-                {
-                    isRightThumb = true;
-                    return true;
-                }
-
-                if (normalizedName.Contains("left") ||
-                    normalizedName.Contains("_l") ||
-                    normalizedName.Contains(".l") ||
-                    normalizedName.Contains("lthumb") ||
-                    normalizedName.Contains("thumb_l"))
-                {
-                    isRightThumb = false;
-                    return true;
-                }
-            }
-
-            isRightThumb = false;
-            return false;
         }
 
         private bool TryResolveThumbSideByReferenceDistance(Transform thumbTransform, out bool isRightThumb)
