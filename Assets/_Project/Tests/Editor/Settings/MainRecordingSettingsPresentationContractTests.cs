@@ -116,6 +116,36 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimePopup_When_InspectingViewConstruction_Then_DelegatesToDedicatedBuilder()
+        {
+            const string popupSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopup.cs";
+            const string viewBuilderSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopupViewBuilder.cs";
+            const string viewBuilderTypeName =
+                "Fbx2Vmd.Settings.MainRecordingSettingsPopupViewBuilder, Assembly-CSharp";
+
+            Assert.That(File.Exists(viewBuilderSourcePath), Is.True, viewBuilderSourcePath);
+            Assert.That(System.Type.GetType(viewBuilderTypeName), Is.Not.Null, viewBuilderTypeName);
+
+            string popupSource = File.ReadAllText(popupSourcePath);
+            string viewBuilderSource = File.ReadAllText(viewBuilderSourcePath);
+
+            Assert.That(
+                popupSource,
+                Does.Contain("MainRecordingSettingsPopupViewBuilder.Build("));
+            Assert.That(popupSource, Does.Not.Contain("BuildRail("));
+            Assert.That(popupSource, Does.Not.Contain("BuildSidebar("));
+            Assert.That(popupSource, Does.Not.Contain("BuildMainArea("));
+            Assert.That(popupSource, Does.Not.Contain("BuildCard("));
+            Assert.That(viewBuilderSource, Does.Contain("BuildRail("));
+            Assert.That(viewBuilderSource, Does.Contain("BuildSidebar("));
+            Assert.That(viewBuilderSource, Does.Contain("BuildMainArea("));
+            Assert.That(viewBuilderSource, Does.Contain("BuildCard("));
+            Assert.That(viewBuilderSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
         public void Given_RuntimePopup_When_InspectingDirectLabels_Then_KeepsReadableKoreanText()
         {
             var popupObject = new GameObject(
