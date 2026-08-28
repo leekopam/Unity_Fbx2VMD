@@ -6,6 +6,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering.PostProcessing;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
@@ -29,6 +30,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.GraphicAntiAliasingPlan, Assembly-CSharp";
         private const string AntiAliasingPresetResolverTypeName =
             "Fbx2Vmd.Settings.GraphicAntiAliasingPresetResolver, Assembly-CSharp";
+        private const string CameraSettingsApplierTypeName =
+            "Fbx2Vmd.Settings.GraphicCameraSettingsApplier, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderController, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
@@ -358,6 +361,112 @@ namespace Tests.Editor.Settings
             Assert.That(
                 GetMemberValue<int>(plan, "MsaaSampleCount"),
                 Is.EqualTo(expectedMsaaSampleCount));
+        }
+
+        [Test]
+        public void Given_GraphicSetting_When_InspectingCameraWriterOwnership_Then_DelegatesToApplier()
+        {
+            const string settingSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicSetting.cs";
+            const string applierSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicCameraSettingsApplier.cs";
+
+            Assert.That(File.Exists(applierSourcePath), Is.True, applierSourcePath);
+            Assert.That(Type.GetType(CameraSettingsApplierTypeName), Is.Not.Null);
+
+            string settingSource = File.ReadAllText(settingSourcePath);
+            string applierSource = File.ReadAllText(applierSourcePath);
+            Assert.That(settingSource, Does.Contain("GraphicCameraSettingsApplier.Apply("));
+            Assert.That(settingSource, Does.Not.Contain("ApplyCameraSettings("));
+            Assert.That(settingSource, Does.Not.Contain("ApplyBuiltInPostProcessSettings("));
+            Assert.That(settingSource, Does.Not.Contain("ToUrpAntialiasingMode("));
+            Assert.That(settingSource, Does.Not.Contain("ToBuiltInAntialiasingMode("));
+            Assert.That(settingSource, Does.Not.Contain("ToBuiltInSmaaQuality("));
+            Assert.That(applierSource, Does.Contain("camera.allowMSAA"));
+            Assert.That(applierSource, Does.Contain("GetUniversalAdditionalCameraData()"));
+            Assert.That(applierSource, Does.Contain("PostProcessLayer"));
+            Assert.That(applierSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_UrpCameraAndAntiAliasingPlan_When_ApplyingCameraSettings_Then_ConfiguresAdditionalData()
+        {
+            Type applierType = RequireType(CameraSettingsApplierTypeName);
+            Type planType = RequireType(AntiAliasingPlanTypeName);
+            Type modeType = RequireType(
+                "Fbx2Vmd.Settings.GraphicAntiAliasingMode, Assembly-CSharp");
+            var cameraObject = new GameObject("Graphic Camera Applier URP Test");
+
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                object mode = Enum.Parse(modeType, "SMAA");
+                object plan = Activator.CreateInstance(
+                    planType,
+                    InstanceFields,
+                    null,
+                    new object[] { mode, AntialiasingQuality.High, true, true, 8 },
+                    null);
+
+                InvokeStatic(applierType, "Apply", camera, true, plan, null);
+
+                UniversalAdditionalCameraData cameraData = camera.GetUniversalAdditionalCameraData();
+                Assert.That(camera.allowMSAA, Is.True);
+                Assert.That(cameraData.renderPostProcessing, Is.True);
+                Assert.That(
+                    cameraData.antialiasing,
+                    Is.EqualTo(AntialiasingMode.SubpixelMorphologicalAntiAliasing));
+                Assert.That(cameraData.antialiasingQuality, Is.EqualTo(AntialiasingQuality.High));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        [Test]
+        public void Given_BuiltInCameraAndAntiAliasingPlan_When_ApplyingCameraSettings_Then_ConfiguresPostProcessLayer()
+        {
+            Type applierType = RequireType(CameraSettingsApplierTypeName);
+            Type planType = RequireType(AntiAliasingPlanTypeName);
+            Type modeType = RequireType(
+                "Fbx2Vmd.Settings.GraphicAntiAliasingMode, Assembly-CSharp");
+            Type postProcessLayerType = RequireType(
+                "UnityEngine.Rendering.PostProcessing.PostProcessLayer, Unity.Postprocessing.Runtime");
+            PostProcessResources resources = AssetDatabase.LoadAssetAtPath<PostProcessResources>(
+                "Packages/com.unity.postprocessing/PostProcessing/PostProcessResources.asset");
+            var cameraObject = new GameObject("Graphic Camera Applier Built-in Test");
+
+            Assert.That(resources, Is.Not.Null);
+            try
+            {
+                var camera = cameraObject.AddComponent<Camera>();
+                object mode = Enum.Parse(modeType, "SMAA");
+                object plan = Activator.CreateInstance(
+                    planType,
+                    InstanceFields,
+                    null,
+                    new object[] { mode, AntialiasingQuality.Medium, true, false, 2 },
+                    null);
+                Func<PostProcessResources> resolveResources = () => resources;
+
+                InvokeStatic(applierType, "Apply", camera, false, plan, resolveResources);
+
+                Component layer = camera.GetComponent(postProcessLayerType);
+                Assert.That(camera.allowMSAA, Is.False);
+                Assert.That(layer, Is.Not.Null);
+                Assert.That(GetMemberValue<bool>(layer, "enabled"), Is.True);
+                Assert.That(
+                    GetMemberValue<object>(layer, "antialiasingMode").ToString(),
+                    Is.EqualTo("SubpixelMorphologicalAntialiasing"));
+                object smaa = GetMemberValue<object>(layer, "subpixelMorphologicalAntialiasing");
+                Assert.That(GetMemberValue<object>(smaa, "quality").ToString(), Is.EqualTo("Medium"));
+                Assert.That(GetMemberValue<object>(layer, "m_Resources"), Is.EqualTo(resources));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(cameraObject);
+            }
         }
 
         [Test]
