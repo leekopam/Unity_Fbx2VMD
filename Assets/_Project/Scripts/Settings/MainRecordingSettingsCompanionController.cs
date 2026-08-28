@@ -18,10 +18,10 @@ namespace Fbx2Vmd.Settings
         [SerializeField] private Button importFbxButton;
         [SerializeField] private TextMeshProUGUI feedbackText;
 
-        private MainRecordingSettingsStore store;
-        private MainRecordingSettingsDocument document;
+        private readonly MainRecordingSettingsCompanionDocumentSession documentSession =
+            new MainRecordingSettingsCompanionDocumentSession();
         private string statusMessage = string.Empty;
-        public MainRecordingSettingsDocument CurrentDocument => EnsureDocument();
+        public MainRecordingSettingsDocument CurrentDocument => documentSession.CurrentDocument;
         public string StatusMessage => statusMessage;
 
         private void Awake()
@@ -43,14 +43,13 @@ namespace Fbx2Vmd.Settings
         {
             try
             {
-                store = CreateStore();
-                document = store.LoadOrCreateDefault();
+                documentSession.Load(settingsFilePathOverride);
                 RefreshUiFromDocument();
                 SetStatus("설정을 불러왔습니다.");
             }
             catch (Exception exception)
             {
-                document = new MainRecordingSettingsDocument();
+                documentSession.ReplaceDocument(new MainRecordingSettingsDocument());
                 RefreshUiFromDocument();
                 SetStatus("설정 로드에 실패했습니다.");
                 Debug.LogWarning("[MainRecordingSettingsCompanionController] " + exception.Message);
@@ -65,9 +64,7 @@ namespace Fbx2Vmd.Settings
         {
             try
             {
-                store = CreateStore();
-                ApplyUiToDocument();
-                store.Save(EnsureDocument());
+                documentSession.Save(settingsFilePathOverride, ApplyUiToDocument);
                 SetStatus("설정을 저장했습니다.");
                 RefreshSaveButtonState();
                 return true;
@@ -85,29 +82,14 @@ namespace Fbx2Vmd.Settings
         {
             try
             {
-                store = CreateStore();
-                ApplyUiToDocument();
-
-                MainRecordingSettingsDocument current = EnsureDocument();
-                string fbxPath = string.IsNullOrWhiteSpace(current.fbxPath)
-                    ? string.Empty
-                    : current.fbxPath.Trim();
-                if (string.IsNullOrEmpty(fbxPath))
+                if (!documentSession.TrySaveImportFbxCommand(
+                        settingsFilePathOverride,
+                        ApplyUiToDocument))
                 {
                     SetStatus("FBX 경로가 비어 있습니다.");
                     RefreshSaveButtonState();
                     return false;
                 }
-
-                current.pendingCommand = new MainRecordingSettingsCommandEnvelope
-                {
-                    commandId = Guid.NewGuid().ToString("N"),
-                    action = MainRecordingSettingsCommandEnvelope.ImportFbxAction,
-                    fbxPath = fbxPath,
-                    requestedAtUtc = DateTime.UtcNow.ToString("O"),
-                };
-
-                store.Save(current);
                 SetStatus("FBX 가져오기 명령을 저장했습니다.");
                 RefreshSaveButtonState();
                 return true;
@@ -119,16 +101,6 @@ namespace Fbx2Vmd.Settings
                 RefreshSaveButtonState();
                 return false;
             }
-        }
-
-        private MainRecordingSettingsStore CreateStore()
-        {
-            return new MainRecordingSettingsStore(settingsFilePathOverride);
-        }
-
-        private MainRecordingSettingsDocument EnsureDocument()
-        {
-            return document ?? (document = new MainRecordingSettingsDocument());
         }
 
         private void BindSaveButton()
@@ -165,7 +137,7 @@ namespace Fbx2Vmd.Settings
 
         private void RefreshUiFromDocument()
         {
-            MainRecordingSettingsDocument current = EnsureDocument();
+            MainRecordingSettingsDocument current = documentSession.CurrentDocument;
             SetInputText(fbxPathInput, current.fbxPath);
             SetInputText(characterModelPathInput, current.characterModelPath);
             SetInputText(captureWidthInput, current.captureWidth.ToString());
@@ -176,9 +148,8 @@ namespace Fbx2Vmd.Settings
             }
         }
 
-        private void ApplyUiToDocument()
+        private void ApplyUiToDocument(MainRecordingSettingsDocument current)
         {
-            MainRecordingSettingsDocument current = EnsureDocument();
             if (fbxPathInput != null)
             {
                 current.fbxPath = fbxPathInput.text ?? string.Empty;
@@ -209,7 +180,7 @@ namespace Fbx2Vmd.Settings
         {
             if (saveButton != null)
             {
-                saveButton.interactable = EnsureDocument() != null;
+                saveButton.interactable = documentSession.CurrentDocument != null;
             }
         }
 
@@ -252,12 +223,12 @@ namespace Fbx2Vmd.Settings
         {
             settingsFilePathOverride = path;
             LoadSettings();
-            return EnsureDocument();
+            return documentSession.CurrentDocument;
         }
 
         private void SetDocumentForTests(MainRecordingSettingsDocument value)
         {
-            document = value ?? new MainRecordingSettingsDocument();
+            documentSession.ReplaceDocument(value);
             RefreshUiFromDocument();
             RefreshSaveButtonState();
         }
