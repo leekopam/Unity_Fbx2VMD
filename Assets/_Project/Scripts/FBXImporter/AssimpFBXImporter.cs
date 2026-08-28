@@ -249,47 +249,26 @@ namespace Fbx2Vmd.FBXImporter
                 unityMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             }
 
-            // 버텍스
-            List<UnityEngine.Vector3> vertices = new List<UnityEngine.Vector3>();
-            foreach (var v in asmMesh.Vertices)
-            {
-                vertices.Add(new UnityEngine.Vector3(v.X, v.Y, v.Z) * FBX_TO_UNITY_UNIT_SCALE);
-            }
+            List<UnityEngine.Vector3> vertices = RuntimeMeshGeometryCalculator.ConvertVertices(
+                asmMesh.Vertices,
+                FBX_TO_UNITY_UNIT_SCALE);
             unityMesh.SetVertices(vertices);
 
-            // 노멀
             if (asmMesh.HasNormals)
             {
-                List<UnityEngine.Vector3> normals = new List<UnityEngine.Vector3>();
-                foreach (var n in asmMesh.Normals)
-                {
-                    normals.Add(new UnityEngine.Vector3(n.X, n.Y, n.Z));
-                }
+                List<UnityEngine.Vector3> normals = RuntimeMeshGeometryCalculator.ConvertNormals(
+                    asmMesh.Normals);
                 unityMesh.SetNormals(normals);
             }
 
-            // UV
             if (asmMesh.HasTextureCoords(0))
             {
-                List<UnityEngine.Vector2> uvs = new List<UnityEngine.Vector2>();
-                foreach (var uv in asmMesh.TextureCoordinateChannels[0])
-                {
-                    uvs.Add(new UnityEngine.Vector2(uv.X, uv.Y));
-                }
+                List<UnityEngine.Vector2> uvs = RuntimeMeshGeometryCalculator.ConvertTextureCoordinates(
+                    asmMesh.TextureCoordinateChannels[0]);
                 unityMesh.SetUVs(0, uvs);
             }
 
-            // 삼각형 인덱스
-            List<int> indices = new List<int>();
-            foreach (var face in asmMesh.Faces)
-            {
-                if (face.IndexCount == 3)
-                {
-                    indices.Add(face.Indices[0]);
-                    indices.Add(face.Indices[1]);
-                    indices.Add(face.Indices[2]);
-                }
-            }
+            List<int> indices = RuntimeMeshGeometryCalculator.BuildTriangleIndices(asmMesh.Faces);
             unityMesh.SetTriangles(indices, 0);
 
             // 본이 있으면 SkinnedMeshRenderer, 없으면 일반 MeshRenderer
