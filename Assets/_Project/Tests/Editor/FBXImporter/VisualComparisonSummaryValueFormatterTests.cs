@@ -31,6 +31,21 @@ namespace Tests.Editor.FBXImporter
                 Is.EqualTo("True/0.5/1/2/blend:0.25/10-20"));
         }
 
+        [Test]
+        public void Given_ProbeSampleTimes_When_Formatting_Then_UsesInvariantSlashSeparatedValues()
+        {
+            Assert.That(
+                Invoke("FormatProbeSampleTimes", new float[] { 0f, 1.2345f, 2.5f }),
+                Is.EqualTo("0/1.235/2.5"));
+        }
+
+        [Test]
+        public void Given_NoProbeSampleTimes_When_Formatting_Then_ReturnsNone()
+        {
+            Assert.That(Invoke("FormatProbeSampleTimes", Array.Empty<float>()), Is.EqualTo("none"));
+            Assert.That(Invoke("FormatProbeSampleTimes", new object[] { null }), Is.EqualTo("none"));
+        }
+
         private static object Invoke(string methodName, params object[] arguments)
         {
             Type formatterType = typeof(FBXVmdPipeline).Assembly.GetType(
