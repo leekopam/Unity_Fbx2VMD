@@ -1174,6 +1174,22 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_EditorPlayModeGuardMaintainPolicy_When_InspectingSignature_Then_HasNoUnusedPlayModeArgument()
+        {
+            Type guardType = RequireType(EditorPlayModeGuardTypeName);
+            const BindingFlags StaticMembers =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            MethodInfo maintainPolicy = guardType.GetMethod(
+                "ShouldMaintainEditorPlayModeGuardForTests",
+                StaticMembers);
+
+            Assert.That(maintainPolicy, Is.Not.Null);
+            Assert.That(maintainPolicy.GetParameters(), Has.Length.EqualTo(2));
+            Assert.That(maintainPolicy.GetParameters()[0].Name, Is.EqualTo("scenePath"));
+            Assert.That(maintainPolicy.GetParameters()[1].Name, Is.EqualTo("isBatchMode"));
+        }
+
+        [Test]
         public void Given_MainRecordingScene_When_PreparingEditorPlayMode_Then_DisablesBurstDirectCallsAndNeutralizesEditorTint()
         {
             Type guardType = RequireType(EditorPlayModeGuardTypeName);
@@ -1216,16 +1232,14 @@ namespace Tests.Editor.Settings
                     guardType,
                     "ShouldMaintainEditorPlayModeGuardForTests",
                     MainRecordingScenePath,
-                    false,
                     false),
                 Is.True,
-                "Burst direct-call IL postprocessing must be disabled before the user presses Play, because the direct-call initializer can run during the Play transition.");
+                "Burst direct-call IL postprocessing must remain disabled for the Main Recording scene before and during Play Mode.");
             Assert.That(
                 InvokeStatic<bool>(
                     guardType,
                     "ShouldMaintainEditorPlayModeGuardForTests",
                     MainAutoScenePath,
-                    false,
                     false),
                 Is.False);
             Assert.That(
@@ -1233,18 +1247,8 @@ namespace Tests.Editor.Settings
                     guardType,
                     "ShouldMaintainEditorPlayModeGuardForTests",
                     MainRecordingScenePath,
-                    true,
-                    false),
-                Is.False);
-            Assert.That(
-                InvokeStatic<bool>(
-                    guardType,
-                    "ShouldMaintainEditorPlayModeGuardForTests",
-                    MainRecordingScenePath,
-                    false,
                     true),
-                Is.True,
-                "The guard must keep the neutral Playmode tint while Unity is playing or still changing Play Mode.");
+                Is.False);
             Assert.That(InvokeStatic<bool>(guardType, "CanReflectBurstCompilerOptionsForTests"), Is.True);
             Assert.That(
                 InvokeStatic<string>(guardType, "GetBurstDisableEnvironmentVariableNameForTests"),
