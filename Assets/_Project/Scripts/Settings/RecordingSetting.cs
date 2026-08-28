@@ -97,14 +97,6 @@ public sealed class RecordingSetting : MonoBehaviour
     private Func<FBXVmdPipeline, string, bool> sharedSettingsFbxImportStarter =
         DefaultSharedSettingsFbxImportStarter;
 
-#if UNITY_EDITOR
-    public Func<FBXVmdPipeline, string, bool> SharedSettingsFbxImportStarterForTests
-    {
-        get => sharedSettingsFbxImportStarter;
-        set => sharedSettingsFbxImportStarter = value ?? DefaultSharedSettingsFbxImportStarter;
-    }
-#endif
-
     private void Reset()
     {
         manualRecordButton = ResolveManualRecordButton();
@@ -446,16 +438,4 @@ public sealed class RecordingSetting : MonoBehaviour
         return buttonObject != null ? buttonObject.GetComponent<Button>() : null;
     }
 
-    public MainRecordingSettingsActionResult LoadSharedSettingsFromPathForTests(string path)
-    {
-        sharedSettingsFilePathOverride = path;
-        return LoadSharedSettings();
-    }
-
-#if UNITY_EDITOR
-    public MainRecordingSettingsActionResult WriteRuntimePlayModeStateForTests(string playMode)
-    {
-        return WriteRuntimePlayModeState(playMode);
-    }
-#endif
 }
