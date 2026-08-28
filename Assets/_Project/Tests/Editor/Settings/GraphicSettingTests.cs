@@ -211,12 +211,29 @@ namespace Tests.Editor.Settings
         {
             Type schemaType = RequireType(InspectorSchemaTypeName);
             string[] labels = GetStaticMemberValue<string[]>(schemaType, "CategoryLabels");
+            Array categories = GetStaticMemberValue<Array>(schemaType, "Categories");
 
-            Assert.That(labels, Is.EqualTo(new[] { "품질", "대상", "녹화", "텍스처", "모델", "고급" }));
+            Assert.That(labels, Is.EqualTo(new[] { "품질", "대상", "텍스처", "모델", "고급" }));
+            Assert.That(categories.Length, Is.EqualTo(labels.Length));
+            Assert.That(
+                GetEnumNames(categories),
+                Is.EqualTo(new[] { "Quality", "Target", "Texture", "Model", "Advanced" }));
 
             Type verifiedCategoryType = GetStaticMemberValue<Type>(schemaType, "CategoryEnumType");
             Assert.That(Enum.GetNames(verifiedCategoryType), Does.Not.Contain("Capture"));
             Assert.That(Enum.GetNames(verifiedCategoryType), Does.Not.Contain("Recording"));
+            Assert.That(Convert.ToInt32(Enum.Parse(verifiedCategoryType, "Quality")), Is.EqualTo(0));
+            Assert.That(Convert.ToInt32(Enum.Parse(verifiedCategoryType, "Target")), Is.EqualTo(1));
+            Assert.That(Convert.ToInt32(Enum.Parse(verifiedCategoryType, "Recoding")), Is.EqualTo(2));
+            Assert.That(Convert.ToInt32(Enum.Parse(verifiedCategoryType, "Texture")), Is.EqualTo(3));
+            Assert.That(Convert.ToInt32(Enum.Parse(verifiedCategoryType, "Model")), Is.EqualTo(4));
+            Assert.That(Convert.ToInt32(Enum.Parse(verifiedCategoryType, "Advanced")), Is.EqualTo(5));
+            FieldInfo legacyRecodingCategory = verifiedCategoryType.GetField("Recoding");
+            Assert.That(legacyRecodingCategory, Is.Not.Null);
+            Assert.That(
+                legacyRecodingCategory.GetCustomAttribute<ObsoleteAttribute>(),
+                Is.Not.Null,
+                "Recoding enum value must remain only as an obsolete compatibility member.");
             object verifiedPresetCategory = Enum.Parse(verifiedCategoryType, "Quality");
             string[] verifiedPresetFields = (string[])InvokeStatic(schemaType, "GetVisiblePropertyNames", verifiedPresetCategory);
 
@@ -237,12 +254,61 @@ namespace Tests.Editor.Settings
             string displayName = (string)InvokeStatic(schemaType, "GetPropertyDisplayName", "targetRenderPipelineAsset");
             Assert.That(displayName, Is.EqualTo("URP 렌더 파이프라인 에셋"));
 
-            foreach (object category in Enum.GetValues(verifiedCategoryType))
+            string inspectorSource = File.ReadAllText(
+                "Assets/_Project/Scripts/Editor/Settings/GraphicSettingEditor.cs");
+            Assert.That(
+                inspectorSource,
+                Does.Contain("GraphicSettingInspectorSchema.ResolveCategoryIndex(selectedCategory)"));
+            Assert.That(
+                inspectorSource,
+                Does.Contain("GraphicSettingInspectorSchema.ResolveCategory(selectedIndex)"));
+            Assert.That(
+                inspectorSource,
+                Does.Not.Contain("(GraphicSettingInspectorCategory)selectedIndex"));
+
+            for (int categoryIndex = 0; categoryIndex < categories.Length; categoryIndex++)
             {
+                object category = categories.GetValue(categoryIndex);
+                int resolvedIndex = (int)InvokeStatic(
+                    schemaType,
+                    "ResolveCategoryIndex",
+                    category);
+                object resolvedCategory = InvokeStatic(
+                    schemaType,
+                    "ResolveCategory",
+                    categoryIndex);
                 bool autoApplied = (bool)InvokeStatic(schemaType, "AppliesAutomatically", category);
                 bool usesManualApplyButton = (bool)InvokeStatic(schemaType, "UsesManualApplyButton", category);
+
+                Assert.That(resolvedIndex, Is.EqualTo(categoryIndex));
+                Assert.That(resolvedCategory, Is.EqualTo(category));
                 Assert.That(autoApplied, Is.True, $"{category} category must apply changes immediately.");
                 Assert.That(usesManualApplyButton, Is.False, $"{category} category must not expose manual apply buttons.");
+            }
+
+            object legacyRecodingValue = Enum.Parse(verifiedCategoryType, "Recoding");
+            Assert.That(
+                InvokeStatic(schemaType, "ResolveCategoryIndex", legacyRecodingValue),
+                Is.EqualTo(0));
+        }
+
+        [Test]
+        public void GraphicSettingInspectorSchema_ExposesOnlyCategoriesWithVisibleProperties()
+        {
+            Type schemaType = RequireType(InspectorSchemaTypeName);
+            Array categories = GetStaticMemberValue<Array>(schemaType, "Categories");
+
+            foreach (object category in categories)
+            {
+                string[] visibleProperties = (string[])InvokeStatic(
+                    schemaType,
+                    "GetVisiblePropertyNames",
+                    category);
+
+                Assert.That(
+                    visibleProperties,
+                    Is.Not.Empty,
+                    $"{category} category must expose at least one editable property.");
             }
         }
 
@@ -928,6 +994,17 @@ namespace Tests.Editor.Settings
             FieldInfo field = type.GetField(memberName, StaticMembers);
             Assert.That(field, Is.Not.Null, $"Expected static field or property '{memberName}'.");
             return (T)field.GetValue(null);
+        }
+
+        private static string[] GetEnumNames(Array values)
+        {
+            var names = new string[values.Length];
+            for (int index = 0; index < values.Length; index++)
+            {
+                names[index] = values.GetValue(index).ToString();
+            }
+
+            return names;
         }
 
         private static object Invoke(object target, string methodName)

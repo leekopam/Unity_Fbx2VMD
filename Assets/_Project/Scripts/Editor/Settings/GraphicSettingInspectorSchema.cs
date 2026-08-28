@@ -6,12 +6,13 @@ namespace Fbx2Vmd.Settings.EditorTools
 {
     public enum GraphicSettingInspectorCategory
     {
-        Quality,
-        Target,
-        Recoding,
-        Texture,
-        Model,
-        Advanced
+        Quality = 0,
+        Target = 1,
+        [Obsolete("녹화 설정은 RecordingSetting 전용 Inspector에서 관리합니다.")]
+        Recoding = 2,
+        Texture = 3,
+        Model = 4,
+        Advanced = 5
     }
 
     public static class GraphicSettingInspectorSchema
@@ -108,13 +109,33 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             "품질",
             "대상",
-            "녹화",
             "텍스처",
             "모델",
             "고급"
         };
 
+        public static GraphicSettingInspectorCategory[] Categories { get; } =
+        {
+            GraphicSettingInspectorCategory.Quality,
+            GraphicSettingInspectorCategory.Target,
+            GraphicSettingInspectorCategory.Texture,
+            GraphicSettingInspectorCategory.Model,
+            GraphicSettingInspectorCategory.Advanced
+        };
+
         public static Type CategoryEnumType => typeof(GraphicSettingInspectorCategory);
+
+        public static int ResolveCategoryIndex(GraphicSettingInspectorCategory category)
+        {
+            int index = Array.IndexOf(Categories, category);
+            return index >= 0 ? index : 0;
+        }
+
+        public static GraphicSettingInspectorCategory ResolveCategory(int index)
+        {
+            int clampedIndex = Math.Max(0, Math.Min(index, Categories.Length - 1));
+            return Categories[clampedIndex];
+        }
 
         public static string[] GetVisiblePropertyNames(GraphicSettingInspectorCategory category)
         {
@@ -122,8 +143,10 @@ namespace Fbx2Vmd.Settings.EditorTools
             {
                 case GraphicSettingInspectorCategory.Target:
                     return TargetFields;
+#pragma warning disable CS0618
                 case GraphicSettingInspectorCategory.Recoding:
                     return Array.Empty<string>();
+#pragma warning restore CS0618
                 case GraphicSettingInspectorCategory.Texture:
                     return TextureFields;
                 case GraphicSettingInspectorCategory.Model:
