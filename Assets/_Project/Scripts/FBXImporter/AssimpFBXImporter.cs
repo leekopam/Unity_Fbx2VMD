@@ -12,7 +12,6 @@ namespace Fbx2Vmd.FBXImporter
     public class AssimpFBXImporter
     {
         #region 상수
-        private const int MAX_BONE_WEIGHTS_PER_VERTEX = 4;
         private const int VERTEX_INDEX_FORMAT_THRESHOLD = 65535;
         private const float FBX_TO_UNITY_UNIT_SCALE = 0.01f;
         #endregion
@@ -353,11 +352,15 @@ namespace Fbx2Vmd.FBXImporter
                     float val = weight.Weight;
                     if (vIndex >= weights.Length) continue;
 
-                    AddBoneWeight(ref weights[vIndex], ref weightCount[vIndex], boneIndex, val);
+                    RuntimeMeshBoneWeightCalculator.Add(
+                        ref weights[vIndex],
+                        ref weightCount[vIndex],
+                        boneIndex,
+                        val);
                 }
             }
 
-            NormalizeBoneWeights(weights);
+            RuntimeMeshBoneWeightCalculator.Normalize(weights);
             unityMesh.boneWeights = weights;
             unityMesh.bindposes = bindPoses.ToArray();
             unityMesh.RecalculateBounds();
@@ -397,36 +400,6 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private void AddBoneWeight(ref BoneWeight bw, ref int count, int boneIndex, float weight)
-        {
-            if (weight <= 0) return;
-
-            // Assimp LimitBoneWeights 단계에서 최대 4개로 제한하지만 구조체를 올바르게 채워야 함
-            if (count == 0) { bw.boneIndex0 = boneIndex; bw.weight0 = weight; }
-            else if (count == 1) { bw.boneIndex1 = boneIndex; bw.weight1 = weight; }
-            else if (count == 2) { bw.boneIndex2 = boneIndex; bw.weight2 = weight; }
-            else if (count == 3) { bw.boneIndex3 = boneIndex; bw.weight3 = weight; }
-            count++;
-        }
-
-        private static void NormalizeBoneWeights(BoneWeight[] weights)
-        {
-            for (int i = 0; i < weights.Length; i++)
-            {
-                BoneWeight weight = weights[i];
-                float total = weight.weight0 + weight.weight1 + weight.weight2 + weight.weight3;
-                if (total <= 0f)
-                {
-                    continue;
-                }
-
-                weight.weight0 /= total;
-                weight.weight1 /= total;
-                weight.weight2 /= total;
-                weight.weight3 /= total;
-                weights[i] = weight;
-            }
-        }
         #endregion
 
         #region 애니메이션 처리
