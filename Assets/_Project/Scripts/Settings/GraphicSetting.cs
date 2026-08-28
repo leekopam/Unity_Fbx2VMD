@@ -110,7 +110,17 @@ namespace Fbx2Vmd.Settings
             Camera camera = ResolveTargetCamera();
             if (camera != null)
             {
-                ApplyCameraSettings(camera, pipelineAsset != null);
+                GraphicAntiAliasingPlan plan = new GraphicAntiAliasingPlan(
+                    antiAliasing,
+                    smaaQuality,
+                    enableCameraPostProcessing,
+                    enableCameraMsaa,
+                    msaaSampleCount);
+                GraphicCameraSettingsApplier.Apply(
+                    camera,
+                    pipelineAsset != null,
+                    plan,
+                    ResolveBuiltInPostProcessResources);
             }
 
             if (pipelineAsset != null)
@@ -208,42 +218,6 @@ namespace Fbx2Vmd.Settings
             msaaSampleCount = plan.MsaaSampleCount;
         }
 
-        private void ApplyCameraSettings(Camera camera, bool useUniversalRenderPipeline)
-        {
-            camera.allowMSAA = enableCameraMsaa;
-
-            if (!useUniversalRenderPipeline)
-            {
-                ApplyBuiltInPostProcessSettings(camera);
-                return;
-            }
-
-            UniversalAdditionalCameraData cameraData = camera.GetUniversalAdditionalCameraData();
-            cameraData.renderPostProcessing = enableCameraPostProcessing;
-            cameraData.antialiasing = ToUrpAntialiasingMode(antiAliasing);
-            cameraData.antialiasingQuality = smaaQuality;
-        }
-
-        private void ApplyBuiltInPostProcessSettings(Camera camera)
-        {
-            PostProcessLayer layer = camera.GetComponent<PostProcessLayer>();
-            if (layer == null)
-            {
-                layer = camera.gameObject.AddComponent<PostProcessLayer>();
-            }
-
-            layer.enabled = enableCameraPostProcessing && antiAliasing != GraphicAntiAliasingMode.Off;
-            layer.volumeLayer = ~0;
-            layer.antialiasingMode = ToBuiltInAntialiasingMode(antiAliasing);
-            layer.subpixelMorphologicalAntialiasing.quality = ToBuiltInSmaaQuality(smaaQuality);
-
-            PostProcessResources resources = ResolveBuiltInPostProcessResources();
-            if (resources != null)
-            {
-                layer.Init(resources);
-            }
-        }
-
         private PostProcessResources ResolveBuiltInPostProcessResources()
         {
             return builtInPostProcessResources != null
@@ -305,49 +279,6 @@ namespace Fbx2Vmd.Settings
 #else
             return Resources.Load<PostProcessResources>("PostProcessResources");
 #endif
-        }
-
-        private static AntialiasingMode ToUrpAntialiasingMode(GraphicAntiAliasingMode mode)
-        {
-            switch (mode)
-            {
-                case GraphicAntiAliasingMode.FXAA:
-                    return AntialiasingMode.FastApproximateAntialiasing;
-                case GraphicAntiAliasingMode.SMAA:
-                    return AntialiasingMode.SubpixelMorphologicalAntiAliasing;
-                case GraphicAntiAliasingMode.TAA:
-                    return AntialiasingMode.TemporalAntiAliasing;
-                default:
-                    return AntialiasingMode.None;
-            }
-        }
-
-        private static PostProcessLayer.Antialiasing ToBuiltInAntialiasingMode(GraphicAntiAliasingMode mode)
-        {
-            switch (mode)
-            {
-                case GraphicAntiAliasingMode.FXAA:
-                    return PostProcessLayer.Antialiasing.FastApproximateAntialiasing;
-                case GraphicAntiAliasingMode.SMAA:
-                    return PostProcessLayer.Antialiasing.SubpixelMorphologicalAntialiasing;
-                case GraphicAntiAliasingMode.TAA:
-                    return PostProcessLayer.Antialiasing.TemporalAntialiasing;
-                default:
-                    return PostProcessLayer.Antialiasing.None;
-            }
-        }
-
-        private static SubpixelMorphologicalAntialiasing.Quality ToBuiltInSmaaQuality(AntialiasingQuality quality)
-        {
-            switch (quality)
-            {
-                case AntialiasingQuality.Low:
-                    return SubpixelMorphologicalAntialiasing.Quality.Low;
-                case AntialiasingQuality.Medium:
-                    return SubpixelMorphologicalAntialiasing.Quality.Medium;
-                default:
-                    return SubpixelMorphologicalAntialiasing.Quality.High;
-            }
         }
 
         private static int NormalizeMsaaSampleCount(int samples)
