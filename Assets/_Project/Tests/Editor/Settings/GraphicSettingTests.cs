@@ -23,6 +23,8 @@ namespace Tests.Editor.Settings
         private const string MaterialShaderProfileTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderProfile, Assembly-CSharp";
         private const string MaterialShaderPlanResolverTypeName =
             "Fbx2Vmd.Settings.GraphicMaterialShaderPlanResolver, Assembly-CSharp";
+        private const string RenderScalePresetResolverTypeName =
+            "Fbx2Vmd.Settings.GraphicRenderScalePresetResolver, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderController, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
         private const string SceneInstallerTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingSceneInstaller, Assembly-CSharp-Editor";
@@ -234,6 +236,55 @@ namespace Tests.Editor.Settings
                 UnityEngine.Object.DestroyImmediate(settingObject);
                 UnityEngine.Object.DestroyImmediate(cameraObject);
             }
+        }
+
+        [Test]
+        public void Given_GraphicSetting_When_InspectingRenderScaleOwnership_Then_DelegatesPresetResolution()
+        {
+            const string settingSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicSetting.cs";
+            const string resolverSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicRenderScalePresetResolver.cs";
+
+            Assert.That(File.Exists(resolverSourcePath), Is.True, resolverSourcePath);
+            Assert.That(Type.GetType(RenderScalePresetResolverTypeName), Is.Not.Null);
+
+            string settingSource = File.ReadAllText(settingSourcePath);
+            string resolverSource = File.ReadAllText(resolverSourcePath);
+            Assert.That(
+                settingSource,
+                Does.Contain("GraphicRenderScalePresetResolver.Resolve("));
+            Assert.That(settingSource, Does.Not.Contain("ApplyRenderSharpnessPreset("));
+            Assert.That(resolverSource, Does.Contain("switch (preset)"));
+            Assert.That(resolverSource, Does.Not.Contain("MonoBehaviour"));
+            Assert.That(resolverSource, Does.Not.Contain("interface "));
+        }
+
+        [TestCase("Performance", true, 1.8f, 1.0f)]
+        [TestCase("Balanced", true, 1.8f, 1.25f)]
+        [TestCase("Quality", true, 1.8f, 1.5f)]
+        [TestCase("Custom", true, 1.8f, 1.8f)]
+        [TestCase("Balanced", false, 1.8f, 1.0f)]
+        [TestCase("Custom", false, 1.8f, 1.8f)]
+        public void Given_RenderSharpnessPreset_When_ResolvingScale_Then_ReturnsExpectedValue(
+            string presetName,
+            bool hasRenderScaleTarget,
+            float customRenderScale,
+            float expectedRenderScale)
+        {
+            Type resolverType = RequireType(RenderScalePresetResolverTypeName);
+            Type presetType = RequireType(
+                "Fbx2Vmd.Settings.GraphicSettingQualityPreset, Assembly-CSharp");
+            object preset = Enum.Parse(presetType, presetName);
+
+            float renderScale = (float)InvokeStatic(
+                resolverType,
+                "Resolve",
+                preset,
+                hasRenderScaleTarget,
+                customRenderScale);
+
+            Assert.That(renderScale, Is.EqualTo(expectedRenderScale).Within(0.0001f));
         }
 
         [Test]
