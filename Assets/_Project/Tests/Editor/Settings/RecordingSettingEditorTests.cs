@@ -690,13 +690,22 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void Given_EditorDrawUtility_When_InspectingMetadata_Then_UsesEditorToolsNamespace()
+        public void Given_EditorDrawUtility_When_InspectingOwnership_Then_UsesInspectorEditorBoundary()
         {
+            const string sourcePath =
+                "Assets/_Project/Scripts/Editor/Inspector/EditorDrawUtility.cs";
+            const string legacySourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/EditorDrawUtility.cs";
             Type utilityType = Type.GetType(
-                "Fbx2Vmd.Settings.EditorTools.EditorDrawUtility, Assembly-CSharp-Editor");
+                "Fbx2Vmd.EditorTools.EditorDrawUtility, Assembly-CSharp-Editor");
 
+            Assert.That(File.Exists(sourcePath), Is.True, sourcePath);
+            Assert.That(File.Exists(legacySourcePath), Is.False, legacySourcePath);
             Assert.That(utilityType, Is.Not.Null);
             Assert.That(utilityType.Assembly.GetName().Name, Is.EqualTo("Assembly-CSharp-Editor"));
+            Assert.That(
+                Type.GetType("Fbx2Vmd.Settings.EditorTools.EditorDrawUtility, Assembly-CSharp-Editor"),
+                Is.Null);
         }
 
         [Test]
