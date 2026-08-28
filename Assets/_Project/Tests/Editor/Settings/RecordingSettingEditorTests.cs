@@ -967,14 +967,15 @@ namespace Tests.Editor.Settings
         public void Given_RuntimeSettingsProcessAlreadyStarted_When_TryLaunchRunsAgain_Then_SkipsDuplicateProcess()
         {
             Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
-            int launchCount = 0;
-            Func<MainRecordingSettingsLaunchPlan, Process> launcher = plan =>
-            {
-                launchCount++;
-                return Process.GetCurrentProcess();
-            };
+            const BindingFlags StaticMembers =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            FieldInfo[] mutableStaticDelegates = Array.FindAll(
+                runtimeLauncherType.GetFields(StaticMembers),
+                field => typeof(Delegate).IsAssignableFrom(field.FieldType) && !field.IsInitOnly);
 
-            InvokeStatic<object>(runtimeLauncherType, "SetLaunchProcessForTests", launcher);
+            Assert.That(mutableStaticDelegates, Is.Empty);
+            Assert.That(runtimeLauncherType.GetMethod("SetLaunchProcessForTests", StaticMembers), Is.Null);
+            Assert.That(runtimeLauncherType.GetMethod("ResetLaunchProcessForTests", StaticMembers), Is.Null);
             SetStaticField(runtimeLauncherType, "startedProcess", Process.GetCurrentProcess());
 
             try
@@ -987,11 +988,11 @@ namespace Tests.Editor.Settings
                         "D:/Data/main-recording-settings.json");
 
                 Assert.That(result.Succeeded, Is.True);
-                Assert.That(launchCount, Is.EqualTo(0));
+                Assert.That(result.UserMessage, Does.Contain("이미 실행 중"));
             }
             finally
             {
-                InvokeStatic<object>(runtimeLauncherType, "ResetLaunchProcessForTests");
+                SetStaticField(runtimeLauncherType, "startedProcess", null);
             }
         }
 

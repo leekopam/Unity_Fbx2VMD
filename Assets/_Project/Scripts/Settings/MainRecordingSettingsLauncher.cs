@@ -13,9 +13,6 @@ namespace Fbx2Vmd.Settings
         private const string SettingsPathArgumentName = "--settings-path";
         private const string ElectronRunAsNodeEnvironmentVariableName = "ELECTRON_RUN_AS_NODE";
 
-        private static readonly Func<MainRecordingSettingsLaunchPlan, Process> DefaultLaunchProcess =
-            LaunchProcess;
-        private static Func<MainRecordingSettingsLaunchPlan, Process> launchProcess = DefaultLaunchProcess;
         private static Process startedProcess;
 
         public static bool ShouldAutoLaunchForPlayer(bool requestedOpen, bool isEditor, bool isBatchMode)
@@ -67,7 +64,7 @@ namespace Fbx2Vmd.Settings
 
             try
             {
-                startedProcess = launchProcess(plan);
+                startedProcess = LaunchProcess(plan);
                 if (startedProcess == null)
                 {
                     return MainRecordingSettingsActionResult.Failure("Web 설정창 프로세스 시작 결과가 비어 있습니다.");
@@ -219,17 +216,6 @@ namespace Fbx2Vmd.Settings
             bool launchSucceeded)
         {
             return ShouldOpenGameViewPopupFallback(requestedOpen, isEditor, isBatchMode, launchSucceeded);
-        }
-
-        private static void SetLaunchProcessForTests(Func<MainRecordingSettingsLaunchPlan, Process> launcher)
-        {
-            launchProcess = launcher ?? DefaultLaunchProcess;
-        }
-
-        private static void ResetLaunchProcessForTests()
-        {
-            launchProcess = DefaultLaunchProcess;
-            startedProcess = null;
         }
 
         private static ProcessStartInfo CreateProcessStartInfoForTests(MainRecordingSettingsLaunchPlan plan)
