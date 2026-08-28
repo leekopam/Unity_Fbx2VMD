@@ -1067,6 +1067,27 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private int _customRecordingCaptureHeight= 2160;
         public int customRecordingCaptureHeight { get => _customRecordingCaptureHeight; set => _customRecordingCaptureHeight = value; }
 
+        public RecordingDiagnosticsSettings DiagnosticsSettings
+        {
+            get => new RecordingDiagnosticsSettings(
+                enableRecordingDiagnostics,
+                useDeterministicCaptureFramerateForDiagnostics,
+                enableDiagnosticFingerCloseups,
+                recordingCaptureQuality,
+                customRecordingCaptureWidth,
+                customRecordingCaptureHeight);
+            set
+            {
+                enableRecordingDiagnostics = value.EnableRecordingDiagnostics;
+                useDeterministicCaptureFramerateForDiagnostics =
+                    value.UseDeterministicCaptureFramerateForDiagnostics;
+                enableDiagnosticFingerCloseups = value.EnableDiagnosticFingerCloseups;
+                recordingCaptureQuality = value.CaptureQuality;
+                customRecordingCaptureWidth = value.CustomCaptureWidth;
+                customRecordingCaptureHeight = value.CustomCaptureHeight;
+            }
+        }
+
         [Tooltip("Editor smoke에서 MotionComparisonProbe 엄지 리스크가 임계치를 넘으면 VMD 저장 성공도 smoke 실패로 승격합니다.")]
         [FormerlySerializedAs("failEditorSmokeOnThumbRisk")]
         [SerializeField] private bool _failEditorSmokeOnThumbRisk= true;
