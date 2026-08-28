@@ -1,5 +1,7 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
+using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -9,6 +11,55 @@ namespace Tests.Editor.FBXImporter
     {
         private const string SampleFbxPath = "Assets/Plugins/VMDRecorderSample/Models/TestModel/test.fbx";
         private const float BoundsSizeToleranceRatio = 0.05f;
+
+        [Test]
+        public void Given_RuntimeGeometryImplementation_When_CheckingDeadCode_Then_UsesOnlyRequiredValues()
+        {
+            MethodInfo hierarchyMethod = typeof(AssimpFBXImporter).GetMethod(
+                "BuildHierarchy",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Assimp.Node), typeof(Transform) },
+                modifiers: null);
+            MethodInfo legacyHierarchyMethod = typeof(AssimpFBXImporter).GetMethod(
+                "BuildHierarchy",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(Assimp.Node), typeof(Transform), typeof(Assimp.Scene) },
+                modifiers: null);
+            MethodInfo setupStaticMeshMethod = typeof(AssimpFBXImporter).GetMethod(
+                "SetupStaticMesh",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            string source = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "AssimpFBXImporter.cs"));
+            var meshObject = new GameObject("StaticMesh");
+            var mesh = new UnityEngine.Mesh();
+
+            try
+            {
+                Assert.That(hierarchyMethod, Is.Not.Null);
+                Assert.That(legacyHierarchyMethod, Is.Null);
+                Assert.That(setupStaticMeshMethod, Is.Not.Null);
+                Assert.That(source, Does.Not.Contain("MeshRenderer mr = go.AddComponent<MeshRenderer>();"));
+
+                setupStaticMeshMethod.Invoke(
+                    new AssimpFBXImporter(),
+                    new object[] { meshObject, mesh });
+
+                Assert.That(meshObject.GetComponent<MeshFilter>().sharedMesh, Is.SameAs(mesh));
+                Assert.That(meshObject.GetComponent<MeshRenderer>(), Is.Not.Null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(meshObject);
+                Object.DestroyImmediate(mesh);
+            }
+        }
 
         [Test]
         public void Given_TextureSampleFbx_When_RuntimeImportCreatesSkinnedMeshes_Then_UsesUnityImporterWorldScale()

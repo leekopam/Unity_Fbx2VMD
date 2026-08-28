@@ -79,7 +79,7 @@ namespace Fbx2Vmd.FBXImporter
 
             _nodeMap.Clear();
             _sourceDirectory = ResolveSourceDirectory(path);
-            BuildHierarchy(scene.RootNode, rootObject.transform, scene);
+            BuildHierarchy(scene.RootNode, rootObject.transform);
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
 
@@ -121,7 +121,7 @@ namespace Fbx2Vmd.FBXImporter
 
             _nodeMap.Clear();
             _sourceDirectory = ResolveSourceDirectory(path);
-            BuildHierarchy(scene.RootNode, rootObject.transform, scene);
+            BuildHierarchy(scene.RootNode, rootObject.transform);
             ProcessMeshes(scene.RootNode, scene);
             ProcessAnimations(scene, rootObject);
             ApplyRuntimeRootTransform(rootObject);
@@ -193,7 +193,7 @@ namespace Fbx2Vmd.FBXImporter
         #endregion
 
         #region 노드 처리
-        private void BuildHierarchy(Node node, Transform parent, Scene scene)
+        private void BuildHierarchy(Node node, Transform parent)
         {
             GameObject go = new GameObject(node.Name);
             go.transform.SetParent(parent, false);
@@ -213,7 +213,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 foreach (Node child in node.Children)
                 {
-                    BuildHierarchy(child, go.transform, scene);
+                    BuildHierarchy(child, go.transform);
                 }
             }
         }
@@ -380,7 +380,7 @@ namespace Fbx2Vmd.FBXImporter
         private void SetupStaticMesh(GameObject go, UnityEngine.Mesh unityMesh)
         {
             MeshFilter mf = go.AddComponent<MeshFilter>();
-            MeshRenderer mr = go.AddComponent<MeshRenderer>();
+            go.AddComponent<MeshRenderer>();
             mf.sharedMesh = unityMesh;
             unityMesh.RecalculateBounds();
         }
