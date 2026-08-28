@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 
 namespace Fbx2Vmd.FBXImporter
@@ -9,6 +10,17 @@ namespace Fbx2Vmd.FBXImporter
             return float.IsNaN(value) || float.IsInfinity(value)
                 ? "n/a"
                 : value.ToString("0.######", CultureInfo.InvariantCulture);
+        }
+
+        internal static string FormatProbeSampleTimes(float[] sampleTimes)
+        {
+            return sampleTimes == null || sampleTimes.Length == 0
+                ? "none"
+                : string.Join(
+                    "/",
+                    Array.ConvertAll(
+                        sampleTimes,
+                        sampleTime => sampleTime.ToString("0.###", CultureInfo.InvariantCulture)));
         }
 
         internal static string FormatEnabledWeight(bool enabled, float weight)

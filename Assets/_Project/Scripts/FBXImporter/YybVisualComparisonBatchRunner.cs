@@ -1148,7 +1148,8 @@ namespace Fbx2Vmd.FBXImporter
                 $"referenceClipStart={referenceClipStartSeconds:F3}s " +
                 $"candidateClipStart={timingPlan.CandidateClipStartSeconds:F3}s " +
                 $"candidateScale={timingPlan.CandidateClipSecondsPerReferenceSecond:F5} " +
-                $"referenceTiming={timingPlan.Enabled} probeSamples={FormatProbeSampleTimes(probeSampleTimes)}");
+                $"referenceTiming={timingPlan.Enabled} " +
+                $"probeSamples={VisualComparisonSummaryValueFormatter.FormatProbeSampleTimes(probeSampleTimes)}");
         }
 
         private static bool ApplyMainSceneRuntimeOverrides(FBXVmdPipeline fileManager)
@@ -1263,7 +1264,7 @@ namespace Fbx2Vmd.FBXImporter
                 $"job started scene={_activeJob.SceneName} display={_activeJob.DisplayName} " +
                 $"label={capturePlan.ComparisonLabel} segment={GetEditorDiagnosticSmokeSegmentLabel(_editorDiagnosticSmokeSegment)} " +
                 $"start={capturePlan.StartTimeSeconds:F2}s duration={capturePlan.DurationSeconds:F2}s " +
-                $"probeSamples={FormatProbeSampleTimes(probeSampleTimes)}");
+                $"probeSamples={VisualComparisonSummaryValueFormatter.FormatProbeSampleTimes(probeSampleTimes)}");
         }
 
         private static void PrepareManualAnimator(Animator animator, AnimationClip clip, float startTimeSeconds)
@@ -2475,18 +2476,6 @@ namespace Fbx2Vmd.FBXImporter
                 referenceVideo.FrameMetricRows,
                 referenceClipStartSeconds,
                 requestedDurationSeconds);
-        }
-
-        private static string FormatProbeSampleTimes(float[] sampleTimes)
-        {
-            if (sampleTimes == null || sampleTimes.Length <= 0)
-            {
-                return "none";
-            }
-
-            return string.Join(
-                "/",
-                sampleTimes.Select(sampleTime => sampleTime.ToString("0.###", CultureInfo.InvariantCulture)));
         }
 
         private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
