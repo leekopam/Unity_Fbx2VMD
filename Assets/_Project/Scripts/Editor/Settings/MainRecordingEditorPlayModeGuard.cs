@@ -25,7 +25,6 @@ namespace Fbx2Vmd.Settings.EditorTools
         private static bool savedBurstCompilation;
         private static bool hasSavedBurstDisableEnvironment;
         private static string savedBurstDisableEnvironmentValue;
-        private static bool hasAutoLaunchedWebSettingsForCurrentPlayMode;
 
         static MainRecordingEditorPlayModeGuard()
         {
@@ -39,6 +38,7 @@ namespace Fbx2Vmd.Settings.EditorTools
 
             EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            MainRecordingSettingsCompanionLauncher.RegisterEditorPlayModeCallback();
             EditorApplication.update -= MaintainEditModeGuard;
             EditorApplication.update += MaintainEditModeGuard;
         }
@@ -65,13 +65,11 @@ namespace Fbx2Vmd.Settings.EditorTools
             if (ShouldApplyEditorPlayModeGuard(SceneManager.GetActiveScene().path, Application.isBatchMode, state))
             {
                 ApplyBeforeMainRecordingPlayMode();
-                TryAutoLaunchWebSettingsForPlayMode(SceneManager.GetActiveScene().path, Application.isBatchMode, state);
                 return;
             }
 
             if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.EnteredEditMode)
             {
-                hasAutoLaunchedWebSettingsForCurrentPlayMode = false;
                 RestoreEditorPlayModeState();
             }
         }
@@ -94,45 +92,6 @@ namespace Fbx2Vmd.Settings.EditorTools
         {
             return !isBatchMode &&
                    MainRecordingSettingsCompanionLauncher.ShouldOpenForScene(scenePath);
-        }
-
-        private static bool ShouldAutoLaunchWebSettingsForPlayMode(
-            string scenePath,
-            bool isBatchMode,
-            PlayModeStateChange playModeState)
-        {
-            return !isBatchMode &&
-                   playModeState == PlayModeStateChange.EnteredPlayMode &&
-                   MainRecordingSettingsCompanionLauncher.ShouldOpenForScene(scenePath);
-        }
-
-        private static bool TryAutoLaunchWebSettingsForPlayMode(
-            string scenePath,
-            bool isBatchMode,
-            PlayModeStateChange playModeState)
-        {
-            return TryAutoLaunchWebSettingsForPlayModeWithLauncher(
-                scenePath,
-                isBatchMode,
-                playModeState,
-                MainRecordingSettingsCompanionLauncher.OpenMainRecordingSettings);
-        }
-
-        private static bool TryAutoLaunchWebSettingsForPlayModeWithLauncher(
-            string scenePath,
-            bool isBatchMode,
-            PlayModeStateChange playModeState,
-            Action openSettings)
-        {
-            if (!ShouldAutoLaunchWebSettingsForPlayMode(scenePath, isBatchMode, playModeState) ||
-                hasAutoLaunchedWebSettingsForCurrentPlayMode)
-            {
-                return false;
-            }
-
-            hasAutoLaunchedWebSettingsForCurrentPlayMode = true;
-            (openSettings ?? MainRecordingSettingsCompanionLauncher.OpenMainRecordingSettings)();
-            return true;
         }
 
         private static void ApplyBeforeMainRecordingPlayMode()
@@ -205,32 +164,6 @@ namespace Fbx2Vmd.Settings.EditorTools
             bool isPlayingOrWillChangePlaymode)
         {
             return ShouldMaintainEditorPlayModeGuard(scenePath, isBatchMode, isPlayingOrWillChangePlaymode);
-        }
-
-        private static bool ShouldAutoLaunchWebSettingsForPlayModeForTests(
-            string scenePath,
-            bool isBatchMode,
-            PlayModeStateChange playModeState)
-        {
-            return ShouldAutoLaunchWebSettingsForPlayMode(scenePath, isBatchMode, playModeState);
-        }
-
-        private static bool TryAutoLaunchWebSettingsForPlayModeForTests(
-            string scenePath,
-            bool isBatchMode,
-            PlayModeStateChange playModeState,
-            Action openSettings)
-        {
-            return TryAutoLaunchWebSettingsForPlayModeWithLauncher(
-                scenePath,
-                isBatchMode,
-                playModeState,
-                openSettings);
-        }
-
-        private static void ResetAutoLaunchWebSettingsForTests()
-        {
-            hasAutoLaunchedWebSettingsForCurrentPlayMode = false;
         }
 
         private static string GetBurstDisableEnvironmentVariableNameForTests()

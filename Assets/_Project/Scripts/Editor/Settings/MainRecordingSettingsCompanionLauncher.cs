@@ -16,6 +16,13 @@ namespace Fbx2Vmd.Settings.EditorTools
         private const string ElectronAppRoot = "Assets/_Project/Tools/MainRecordingSettings";
         private const string NpmExecutableName = "npm";
         private const string NpmArguments = "run start:prod";
+        private static bool hasAutoLaunchedWebSettingsForCurrentPlayMode;
+
+        internal static void RegisterEditorPlayModeCallback()
+        {
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+        }
 
         [MenuItem(MenuPath)]
         public static void OpenMainRecordingSettings()
@@ -59,6 +66,59 @@ namespace Fbx2Vmd.Settings.EditorTools
                 MainRecordingSettingsPathResolver.ResolveSettingsFilePath());
         }
 
+        private static void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.EnteredEditMode)
+            {
+                hasAutoLaunchedWebSettingsForCurrentPlayMode = false;
+                return;
+            }
+
+            TryAutoLaunchWebSettingsForPlayMode(
+                SceneManager.GetActiveScene().path,
+                Application.isBatchMode,
+                state);
+        }
+
+        private static bool ShouldAutoLaunchWebSettingsForPlayMode(
+            string scenePath,
+            bool isBatchMode,
+            PlayModeStateChange playModeState)
+        {
+            return !isBatchMode &&
+                   playModeState == PlayModeStateChange.EnteredPlayMode &&
+                   ShouldOpenForScene(scenePath);
+        }
+
+        private static bool TryAutoLaunchWebSettingsForPlayMode(
+            string scenePath,
+            bool isBatchMode,
+            PlayModeStateChange playModeState)
+        {
+            return TryAutoLaunchWebSettingsForPlayModeWithLauncher(
+                scenePath,
+                isBatchMode,
+                playModeState,
+                OpenMainRecordingSettings);
+        }
+
+        private static bool TryAutoLaunchWebSettingsForPlayModeWithLauncher(
+            string scenePath,
+            bool isBatchMode,
+            PlayModeStateChange playModeState,
+            Action openSettings)
+        {
+            if (!ShouldAutoLaunchWebSettingsForPlayMode(scenePath, isBatchMode, playModeState) ||
+                hasAutoLaunchedWebSettingsForCurrentPlayMode)
+            {
+                return false;
+            }
+
+            hasAutoLaunchedWebSettingsForCurrentPlayMode = true;
+            (openSettings ?? OpenMainRecordingSettings)();
+            return true;
+        }
+
         private static string GetMainRecordingScenePathForTests()
         {
             return MainRecordingScenePath;
@@ -73,6 +133,32 @@ namespace Fbx2Vmd.Settings.EditorTools
             Action<MainRecordingSettingsLaunchPlan> launcher)
         {
             OpenMainRecordingSettingsWithLauncher(launcher);
+        }
+
+        private static bool ShouldAutoLaunchWebSettingsForPlayModeForTests(
+            string scenePath,
+            bool isBatchMode,
+            PlayModeStateChange playModeState)
+        {
+            return ShouldAutoLaunchWebSettingsForPlayMode(scenePath, isBatchMode, playModeState);
+        }
+
+        private static bool TryAutoLaunchWebSettingsForPlayModeForTests(
+            string scenePath,
+            bool isBatchMode,
+            PlayModeStateChange playModeState,
+            Action openSettings)
+        {
+            return TryAutoLaunchWebSettingsForPlayModeWithLauncher(
+                scenePath,
+                isBatchMode,
+                playModeState,
+                openSettings);
+        }
+
+        private static void ResetAutoLaunchWebSettingsForTests()
+        {
+            hasAutoLaunchedWebSettingsForCurrentPlayMode = false;
         }
 
         private static bool CanLaunchWebSettings()
