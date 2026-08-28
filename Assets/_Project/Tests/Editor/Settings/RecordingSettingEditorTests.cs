@@ -32,6 +32,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.MainRecordingSettingsCompanionController, Assembly-CSharp";
         private const string EditorPlayModeGuardTypeName =
             "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorPlayModeGuard, Assembly-CSharp-Editor";
+        private const string EditorPlayModeTintControllerTypeName =
+            "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorPlayModeTintController, Assembly-CSharp-Editor";
         private const string RuntimeLauncherTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsLauncher, Assembly-CSharp";
         private const string RuntimeBootstrapTypeName =
@@ -1474,9 +1476,71 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_EditorPlayModeTint_When_InspectingOwnership_Then_UsesDedicatedController()
+        {
+            const string guardSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorPlayModeGuard.cs";
+            const string controllerSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/MainRecordingEditorPlayModeTintController.cs";
+
+            Assert.That(File.Exists(controllerSourcePath), Is.True, controllerSourcePath);
+            Assert.That(Type.GetType(EditorPlayModeTintControllerTypeName), Is.Not.Null);
+
+            string guardSource = File.ReadAllText(guardSourcePath);
+            string controllerSource = File.ReadAllText(controllerSourcePath);
+
+            Assert.That(
+                guardSource,
+                Does.Contain("private static readonly MainRecordingEditorPlayModeTintController playModeTintController"));
+            Assert.That(guardSource, Does.Not.Contain("UnityEditor.HostView"));
+            Assert.That(guardSource, Does.Not.Contain("savedPlayModeTint"));
+            Assert.That(controllerSource, Does.Contain("UnityEditor.HostView"));
+            Assert.That(controllerSource, Does.Contain("void ApplyNeutralTint()"));
+            Assert.That(controllerSource, Does.Contain("void RestoreTint()"));
+            Assert.That(controllerSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_PlayModeTintController_When_ApplyingAndRestoring_Then_RestoresOriginalTint()
+        {
+            Type controllerType = RequireType(EditorPlayModeTintControllerTypeName);
+            Assert.That(InvokeStatic<bool>(controllerType, "CanReflectPlayModeTintForTests"), Is.True);
+
+            var testTint = new Color(0.2f, 0.3f, 0.4f, 1f);
+            object controller = Activator.CreateInstance(controllerType, true);
+            Color originalTint = InvokeStatic<Color>(
+                controllerType,
+                "GetCurrentPlayModeTintForTests");
+
+            try
+            {
+                InvokeStatic<Color>(controllerType, "ApplyPlayModeTintForTests", testTint);
+                InvokeInstance<object>(controller, "ApplyNeutralTint");
+                InvokeInstance<object>(controller, "ApplyNeutralTint");
+                Color neutralTint = InvokeStatic<Color>(
+                    controllerType,
+                    "GetCurrentPlayModeTintForTests");
+                Assert.That(
+                    InvokeStatic<bool>(controllerType, "IsNeutralPlayModeTintForTests", neutralTint),
+                    Is.True);
+
+                InvokeInstance<object>(controller, "RestoreTint");
+
+                Assert.That(
+                    InvokeStatic<Color>(controllerType, "GetCurrentPlayModeTintForTests"),
+                    Is.EqualTo(testTint));
+            }
+            finally
+            {
+                InvokeStatic<Color>(controllerType, "ApplyPlayModeTintForTests", originalTint);
+            }
+        }
+
+        [Test]
         public void Given_MainRecordingScene_When_PreparingEditorPlayMode_Then_DisablesBurstDirectCallsAndNeutralizesEditorTint()
         {
             Type guardType = RequireType(EditorPlayModeGuardTypeName);
+            Type tintControllerType = RequireType(EditorPlayModeTintControllerTypeName);
 
             Assert.That(
                 InvokeStatic<bool>(
@@ -1575,12 +1639,12 @@ namespace Tests.Editor.Settings
                     false,
                     true),
                 Is.False);
-            Assert.That(InvokeStatic<bool>(guardType, "CanReflectPlayModeTintForTests"), Is.True);
+            Assert.That(InvokeStatic<bool>(tintControllerType, "CanReflectPlayModeTintForTests"), Is.True);
             Assert.That(
-                InvokeStatic<bool>(guardType, "IsNeutralPlayModeTintForTests", new Color(1f, 1f, 1f, 1f)),
+                InvokeStatic<bool>(tintControllerType, "IsNeutralPlayModeTintForTests", new Color(1f, 1f, 1f, 1f)),
                 Is.True);
             Assert.That(
-                InvokeStatic<bool>(guardType, "IsNeutralPlayModeTintForTests", new Color(0.8f, 0.8f, 0.8f, 1f)),
+                InvokeStatic<bool>(tintControllerType, "IsNeutralPlayModeTintForTests", new Color(0.8f, 0.8f, 0.8f, 1f)),
                 Is.False);
             Assert.That(
                 InvokeStatic<string>(guardType, "GetEditorPlayModeGuardPolicyForTests"),

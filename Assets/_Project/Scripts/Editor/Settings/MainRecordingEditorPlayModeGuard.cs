@@ -18,9 +18,8 @@ namespace Fbx2Vmd.Settings.EditorTools
             "[MainRecordingEditorPlayModeGuard] Main_Recoding Play 준비를 위해 Burst direct-call 컴파일을 비활성화하고 스크립트 clean compile을 요청했습니다.";
         private const string GuardPolicy =
             "Main_Recoding Editor Play Mode sets UNITY_BURST_DISABLE_COMPILATION=1 and requests one clean script compilation to avoid Burst direct-call initializer failures; Unity Playmode tint is neutralized while Play Mode is active.";
-        private static readonly Color NeutralPlayModeTint = Color.white;
-        private static bool hasSavedPlayModeTint;
-        private static Color savedPlayModeTint;
+        private static readonly MainRecordingEditorPlayModeTintController playModeTintController =
+            new MainRecordingEditorPlayModeTintController();
         private static bool hasSavedBurstCompilation;
         private static bool savedBurstCompilation;
         private static bool hasSavedBurstDisableEnvironment;
@@ -96,13 +95,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             SaveEditorPlayModeStateBeforeGuard();
             EnsureBurstDirectCallCompilationDisabledForScene(SceneManager.GetActiveScene().path);
             TrySetBurstCompilation(false);
-
-            if (!hasSavedPlayModeTint && TryGetPlayModeTint(out Color playModeTint))
-            {
-                savedPlayModeTint = playModeTint;
-                hasSavedPlayModeTint = true;
-                TrySetPlayModeTint(NeutralPlayModeTint);
-            }
+            playModeTintController.ApplyNeutralTint();
         }
 
         private static void RestoreEditorPlayModeState()
@@ -123,11 +116,7 @@ namespace Fbx2Vmd.Settings.EditorTools
                 hasSavedBurstDisableEnvironment = false;
             }
 
-            if (hasSavedPlayModeTint)
-            {
-                TrySetPlayModeTint(savedPlayModeTint);
-                hasSavedPlayModeTint = false;
-            }
+            playModeTintController.RestoreTint();
         }
 
         private static void SaveEditorPlayModeStateBeforeGuard()
@@ -193,19 +182,6 @@ namespace Fbx2Vmd.Settings.EditorTools
             return TryGetBurstCompilation(out _);
         }
 
-        private static bool CanReflectPlayModeTintForTests()
-        {
-            return TryGetPlayModeTint(out _);
-        }
-
-        private static bool IsNeutralPlayModeTintForTests(Color color)
-        {
-            return Mathf.Abs(color.r - 1f) <= 0.0001f &&
-                   Mathf.Abs(color.g - 1f) <= 0.0001f &&
-                   Mathf.Abs(color.b - 1f) <= 0.0001f &&
-                   Mathf.Abs(color.a - 1f) <= 0.0001f;
-        }
-
         private static bool GetCurrentBurstCompilationForTests()
         {
             return TryGetBurstCompilation(out bool enabled) && enabled;
@@ -219,22 +195,6 @@ namespace Fbx2Vmd.Settings.EditorTools
             }
 
             TrySetBurstCompilation(enabled);
-            return current;
-        }
-
-        private static Color GetCurrentPlayModeTintForTests()
-        {
-            return TryGetPlayModeTint(out Color color) ? color : Color.clear;
-        }
-
-        private static Color ApplyPlayModeTintForTests(Color color)
-        {
-            if (!TryGetPlayModeTint(out Color current))
-            {
-                return Color.clear;
-            }
-
-            TrySetPlayModeTint(color);
             return current;
         }
 
@@ -328,47 +288,5 @@ namespace Fbx2Vmd.Settings.EditorTools
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         }
 
-        private static bool TryGetPlayModeTint(out Color color)
-        {
-            color = Color.clear;
-            object prefColor = GetPlayModeTintPrefColor();
-            PropertyInfo property = GetPrefColorProperty(prefColor);
-            if (prefColor == null || property == null || property.PropertyType != typeof(Color))
-            {
-                return false;
-            }
-
-            color = (Color)property.GetValue(prefColor);
-            return true;
-        }
-
-        private static bool TrySetPlayModeTint(Color color)
-        {
-            object prefColor = GetPlayModeTintPrefColor();
-            PropertyInfo property = GetPrefColorProperty(prefColor);
-            if (prefColor == null || property == null || property.PropertyType != typeof(Color) || !property.CanWrite)
-            {
-                return false;
-            }
-
-            property.SetValue(prefColor, color);
-            return true;
-        }
-
-        private static object GetPlayModeTintPrefColor()
-        {
-            Type hostViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.HostView");
-            FieldInfo field = hostViewType?.GetField(
-                "kPlayModeDarken",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            return field?.GetValue(null);
-        }
-
-        private static PropertyInfo GetPrefColorProperty(object prefColor)
-        {
-            return prefColor?.GetType().GetProperty(
-                "Color",
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-        }
     }
 }
