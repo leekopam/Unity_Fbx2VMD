@@ -47,6 +47,8 @@ namespace Tests.Editor.Settings
                 tests.GraphicSettingInspectorSchema_HasTabbedCategoriesForFocusedInspector);
             RunTest(results, nameof(GraphicSettingTests.GraphicSettingEditorTypes_AreOwnedByResponsibilityNamedFiles),
                 tests.GraphicSettingEditorTypes_AreOwnedByResponsibilityNamedFiles);
+            RunTest(results, nameof(GraphicSettingTests.Given_GenericVisibleRenderers_When_ApplyingDefaultFraming_Then_UsesDedicatedCameraBoundary),
+                tests.Given_GenericVisibleRenderers_When_ApplyingDefaultFraming_Then_UsesDedicatedCameraBoundary);
             RunTest(results, nameof(GraphicSettingTests.GraphicSettingRuntimeTypes_AreOwnedByTypeNamedFiles),
                 tests.GraphicSettingRuntimeTypes_AreOwnedByTypeNamedFiles);
             RunTest(results, nameof(GraphicSettingTests.Given_MaterialShaderProfile_When_AppliedToYybMaterial_Then_AdjustsSupportedOutlineAndReportsSkippedUnsupportedProperties),
