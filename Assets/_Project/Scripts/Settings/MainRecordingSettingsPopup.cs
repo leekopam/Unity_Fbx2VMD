@@ -74,21 +74,6 @@ namespace Fbx2Vmd.Settings
             isOpen = false;
         }
 
-        public Vector2 GetReferenceSizeForTests()
-        {
-            return MainRecordingSettingsLayoutSpec.ReferenceSize;
-        }
-
-        public Vector2 GetDisplayedSizeForTests()
-        {
-            return MainRecordingSettingsLayoutSpec.DefaultDisplaySize;
-        }
-
-        public bool SupportsPointerDragForTests()
-        {
-            return true;
-        }
-
         public void ApplyDragDeltaForTests(Vector2 delta)
         {
             EnsureBuilt();
@@ -99,24 +84,6 @@ namespace Fbx2Vmd.Settings
         {
             EnsureBuilt();
             return cardButtons.Count;
-        }
-
-        public bool CanResolveImportActionForTests()
-        {
-            return MainRecordingSettingsActions.CanExecute(
-                MainRecordingSettingsActionType.ImportFbx,
-                recordingSetting,
-                fileManager);
-        }
-
-        public bool UsesCharacterVisualAssetForTests()
-        {
-            return false;
-        }
-
-        public bool IsProductionSurfaceForTests()
-        {
-            return false;
         }
 
         public bool HasReadableKoreanTextForTests()
@@ -132,18 +99,6 @@ namespace Fbx2Vmd.Settings
             }
 
             return true;
-        }
-
-        public string[] GetSidebarItemLabelsForTests()
-        {
-            MainRecordingSettingsSidebarItemSpec[] items = MainRecordingSettingsLayoutSpec.SidebarItems;
-            var labels = new string[items.Length];
-            for (int i = 0; i < items.Length; i++)
-            {
-                labels[i] = items[i].Label;
-            }
-
-            return labels;
         }
 
         public string[] GetVisibleTextForTests()
