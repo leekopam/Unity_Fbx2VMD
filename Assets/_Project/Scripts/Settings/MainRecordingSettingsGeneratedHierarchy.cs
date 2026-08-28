@@ -176,6 +176,43 @@ namespace Fbx2Vmd.Settings
             return true;
         }
 
+        internal static bool TryResolveControls(
+            RectTransform contentRoot,
+            MainRecordingSettingsCardSpec[] cards,
+            out Button closeButton,
+            out TextMeshProUGUI notificationText,
+            out Button[] cardButtons)
+        {
+            closeButton = null;
+            notificationText = null;
+            cardButtons = null;
+            if (!HasCompleteContent(contentRoot, cards))
+            {
+                return false;
+            }
+
+            Transform mainContent = contentRoot.Find("MainViewport/MainContent");
+            closeButton = contentRoot.Find("CloseButton").GetComponent<Button>();
+            notificationText = contentRoot.Find("Notification").GetComponent<TextMeshProUGUI>();
+            var resolvedCardButtons = new Button[cards.Length];
+            for (int i = 0; i < cards.Length; i++)
+            {
+                Transform buttonTransform = mainContent.Find(cards[i].Title + " Button");
+                Button button = buttonTransform != null
+                    ? buttonTransform.GetComponent<Button>()
+                    : null;
+                if (button == null)
+                {
+                    return false;
+                }
+
+                resolvedCardButtons[i] = button;
+            }
+
+            cardButtons = resolvedCardButtons;
+            return true;
+        }
+
         internal static bool TryCollectLegacyRootChildren(
             Transform root,
             List<Transform> legacyChildren)

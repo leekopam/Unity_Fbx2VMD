@@ -317,35 +317,17 @@ namespace Fbx2Vmd.Settings
         private bool TryRestoreGeneratedHierarchy(RectTransform contentRoot)
         {
             MainRecordingSettingsCardSpec[] cards = MainRecordingSettingsLayoutSpec.Cards;
-            if (!MainRecordingSettingsGeneratedHierarchy.HasCompleteContent(contentRoot, cards))
+            if (!MainRecordingSettingsGeneratedHierarchy.TryResolveControls(
+                    contentRoot,
+                    cards,
+                    out Button closeButton,
+                    out TextMeshProUGUI restoredNotification,
+                    out Button[] restoredCardButtons))
             {
                 return false;
             }
 
             bool shouldRestoreButtonListeners = cardButtons.Count == 0;
-            Transform mainContent = contentRoot.Find("MainViewport/MainContent");
-            Transform closeButtonTransform = contentRoot.Find("CloseButton");
-            Transform notificationTransform = contentRoot.Find("Notification");
-            Button closeButton = closeButtonTransform.GetComponent<Button>();
-            TextMeshProUGUI restoredNotification = notificationTransform.GetComponent<TextMeshProUGUI>();
-            var restoredCardButtons = new Button[cards.Length];
-            if (closeButton == null || restoredNotification == null)
-            {
-                return false;
-            }
-
-            for (int i = 0; i < cards.Length; i++)
-            {
-                Transform buttonTransform = mainContent.Find(cards[i].Title + " Button");
-                Button button = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null;
-                if (button == null)
-                {
-                    return false;
-                }
-
-                restoredCardButtons[i] = button;
-            }
-
             if (shouldRestoreButtonListeners)
             {
                 BindCloseButton(closeButton);

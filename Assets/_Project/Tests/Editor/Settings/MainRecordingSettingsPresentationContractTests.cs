@@ -146,6 +146,27 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimePopup_When_InspectingExistingViewResolution_Then_DelegatesHierarchyLookup()
+        {
+            const string popupSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPopup.cs";
+            const string generatedHierarchySourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsGeneratedHierarchy.cs";
+
+            string popupSource = File.ReadAllText(popupSourcePath);
+            string generatedHierarchySource = File.ReadAllText(generatedHierarchySourcePath);
+
+            Assert.That(
+                popupSource,
+                Does.Contain("MainRecordingSettingsGeneratedHierarchy.TryResolveControls("));
+            Assert.That(popupSource, Does.Not.Contain("MainViewport/MainContent"));
+            Assert.That(popupSource, Does.Not.Contain("cards[i].Title + \" Button\""));
+            Assert.That(generatedHierarchySource, Does.Contain("MainViewport/MainContent"));
+            Assert.That(generatedHierarchySource, Does.Contain("cards[i].Title + \" Button\""));
+            Assert.That(generatedHierarchySource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
         public void Given_RuntimePopup_When_InspectingDirectLabels_Then_KeepsReadableKoreanText()
         {
             var popupObject = new GameObject(
