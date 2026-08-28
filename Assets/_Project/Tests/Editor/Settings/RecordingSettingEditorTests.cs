@@ -745,12 +745,38 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_PublicSettingsLaunchPolicies_When_InspectingTestSurface_Then_HaveNoForwardingWrappers()
+        {
+            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+            Type bootstrapType = RequireType(RuntimeBootstrapTypeName);
+            Type editorLauncherType = RequireType(SettingsLauncherTypeName);
+            const BindingFlags StaticMembers =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+            Assert.That(runtimeLauncherType.GetMethod("CreateLaunchPlanForTests", StaticMembers), Is.Null);
+            Assert.That(runtimeLauncherType.GetMethod("ShouldAutoLaunchForPlayerForTests", StaticMembers), Is.Null);
+            Assert.That(runtimeLauncherType.GetMethod("ShouldOpenGameViewPopupFallbackForTests", StaticMembers), Is.Null);
+            Assert.That(bootstrapType.GetMethod("ShouldAutoLaunchOnPlayerStartupForTests", StaticMembers), Is.Null);
+            Assert.That(editorLauncherType.GetMethod("GetMenuPathForTests", StaticMembers), Is.Null);
+            Assert.That(editorLauncherType.GetMethod("GetEditorSurfacePolicyForTests", StaticMembers), Is.Null);
+            Assert.That(editorLauncherType.GetMethod("CreateDefaultLaunchPlanForTests", StaticMembers), Is.Null);
+
+            const string bootstrapSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsBootstrap.cs";
+            string bootstrapSource = File.ReadAllText(bootstrapSourcePath);
+            Assert.That(
+                bootstrapSource,
+                Does.Contain("MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer("));
+            Assert.That(bootstrapSource, Does.Not.Contain("ShouldAutoLaunchOnPlayerStartup("));
+        }
+
+        [Test]
         public void Given_SettingsLauncherType_When_InspectingMetadata_Then_UsesElectronCompanionForMainRecording()
         {
             Type launcherType = RequireType(SettingsLauncherTypeName);
 
             Assert.That(typeof(EditorWindow).IsAssignableFrom(launcherType), Is.False);
-            Assert.That(InvokeStatic<string>(launcherType, "GetMenuPathForTests"),
+            Assert.That(GetStaticMemberValue<string>(launcherType, "MenuPath"),
                 Is.EqualTo("Tools/Graphics/Open Main_recording Settings"));
             Assert.That(
                 InvokeStatic<string>(launcherType, "GetMainRecordingScenePathForTests"),
@@ -758,12 +784,8 @@ namespace Tests.Editor.Settings
             Assert.That(File.Exists(MainRecordingScenePath), Is.True);
             Assert.That(InvokeStatic<bool>(launcherType, "ShouldOpenForScene", MainRecordingScenePath), Is.True);
             Assert.That(InvokeStatic<bool>(launcherType, "ShouldOpenForScene", MainAutoScenePath), Is.False);
-            Assert.That(
-                InvokeStatic<string>(launcherType, "GetEditorSurfacePolicyForTests"),
-                Does.Contain("Electron"));
-            Assert.That(
-                InvokeStatic<string>(launcherType, "GetEditorSurfacePolicyForTests"),
-                Does.Contain("Web UI"));
+            Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Contain("Electron"));
+            Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Contain("Web UI"));
             Assert.That(InvokeStatic<bool>(launcherType, "CanLaunchWebSettingsForTests"), Is.True);
         }
 
@@ -772,7 +794,7 @@ namespace Tests.Editor.Settings
         {
             Type launcherType = RequireType(SettingsLauncherTypeName);
 
-            object plan = InvokeStatic<object>(launcherType, "CreateDefaultLaunchPlanForTests");
+            object plan = InvokeStatic<object>(launcherType, "CreateDefaultLaunchPlan");
 
             Assert.That(GetMemberValue<string>(plan, "WorkingDirectory"),
                 Is.EqualTo("Assets/_Project/Tools/MainRecordingSettings"));
@@ -785,11 +807,7 @@ namespace Tests.Editor.Settings
         [Test]
         public void Given_PlayerExecutableDirectory_When_CreatingSettingsLaunchPlan_Then_UsesPackagedSettingsExe()
         {
-            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
-
-            object plan = InvokeStatic<object>(
-                runtimeLauncherType,
-                "CreateLaunchPlanForTests",
+            MainRecordingSettingsLaunchPlan plan = MainRecordingSettingsLauncher.CreateLaunchPlan(
                 "D:/Builds/Local/MainRecordingRelease",
                 "D:/Data/main-recording-settings.json");
 
@@ -817,9 +835,7 @@ namespace Tests.Editor.Settings
 
             try
             {
-                object plan = InvokeStatic<object>(
-                    runtimeLauncherType,
-                    "CreateLaunchPlanForTests",
+                MainRecordingSettingsLaunchPlan plan = MainRecordingSettingsLauncher.CreateLaunchPlan(
                     "D:/Builds/Local/MainRecordingRelease",
                     "D:/Data/main-recording-settings.json");
 
@@ -845,73 +861,31 @@ namespace Tests.Editor.Settings
         [Test]
         public void Given_PlayerRuntimePolicy_When_CheckingAutoLaunch_Then_UsesExternalSettingsOnlyForNonBatchPlayer()
         {
-            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
-
             Assert.That(
-                InvokeStatic<bool>(
-                    runtimeLauncherType,
-                    "ShouldAutoLaunchForPlayerForTests",
-                    true,
-                    false,
-                    false),
+                MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(true, false, false),
                 Is.True);
             Assert.That(
-                InvokeStatic<bool>(
-                    runtimeLauncherType,
-                    "ShouldAutoLaunchForPlayerForTests",
-                    true,
-                    true,
-                    false),
+                MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(true, true, false),
                 Is.False);
             Assert.That(
-                InvokeStatic<bool>(
-                    runtimeLauncherType,
-                    "ShouldAutoLaunchForPlayerForTests",
-                    true,
-                    false,
-                    true),
+                MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(true, false, true),
                 Is.False);
             Assert.That(
-                InvokeStatic<bool>(
-                    runtimeLauncherType,
-                    "ShouldAutoLaunchForPlayerForTests",
-                    false,
-                    false,
-                    false),
+                MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(false, false, false),
                 Is.False);
         }
 
         [Test]
         public void Given_PlayerRuntimeLaunchResult_When_LaunchSucceeds_Then_GameViewPopupStaysFallbackOnly()
         {
-            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
-
             Assert.That(
-                InvokeStatic<bool>(
-                    runtimeLauncherType,
-                    "ShouldOpenGameViewPopupFallbackForTests",
-                    true,
-                    false,
-                    false,
-                    true),
+                MainRecordingSettingsLauncher.ShouldOpenGameViewPopupFallback(true, false, false, true),
                 Is.False);
             Assert.That(
-                InvokeStatic<bool>(
-                    runtimeLauncherType,
-                    "ShouldOpenGameViewPopupFallbackForTests",
-                    true,
-                    false,
-                    false,
-                    false),
+                MainRecordingSettingsLauncher.ShouldOpenGameViewPopupFallback(true, false, false, false),
                 Is.True);
             Assert.That(
-                InvokeStatic<bool>(
-                    runtimeLauncherType,
-                    "ShouldOpenGameViewPopupFallbackForTests",
-                    true,
-                    true,
-                    false,
-                    false),
+                MainRecordingSettingsLauncher.ShouldOpenGameViewPopupFallback(true, true, false, false),
                 Is.False);
         }
 
@@ -932,28 +906,13 @@ namespace Tests.Editor.Settings
             Assert.That(attribute.loadType, Is.EqualTo(RuntimeInitializeLoadType.BeforeSceneLoad));
 
             Assert.That(
-                InvokeStatic<bool>(
-                    bootstrapType,
-                    "ShouldAutoLaunchOnPlayerStartupForTests",
-                    true,
-                    false,
-                    false),
+                MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(true, false, false),
                 Is.True);
             Assert.That(
-                InvokeStatic<bool>(
-                    bootstrapType,
-                    "ShouldAutoLaunchOnPlayerStartupForTests",
-                    true,
-                    true,
-                    false),
+                MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(true, true, false),
                 Is.False);
             Assert.That(
-                InvokeStatic<bool>(
-                    bootstrapType,
-                    "ShouldAutoLaunchOnPlayerStartupForTests",
-                    true,
-                    false,
-                    true),
+                MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(true, false, true),
                 Is.False);
 
             EditorSceneManager.OpenScene(MainAutoScenePath);

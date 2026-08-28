@@ -194,30 +194,6 @@ namespace Fbx2Vmd.Settings
             return "\"" + safeValue.Replace("\"", "\\\"") + "\"";
         }
 
-        private static MainRecordingSettingsLaunchPlan CreateLaunchPlanForTests(
-            string playerExecutableDirectory,
-            string settingsPath)
-        {
-            return CreateLaunchPlan(playerExecutableDirectory, settingsPath);
-        }
-
-        private static bool ShouldAutoLaunchForPlayerForTests(
-            bool requestedOpen,
-            bool isEditor,
-            bool isBatchMode)
-        {
-            return ShouldAutoLaunchForPlayer(requestedOpen, isEditor, isBatchMode);
-        }
-
-        private static bool ShouldOpenGameViewPopupFallbackForTests(
-            bool requestedOpen,
-            bool isEditor,
-            bool isBatchMode,
-            bool launchSucceeded)
-        {
-            return ShouldOpenGameViewPopupFallback(requestedOpen, isEditor, isBatchMode, launchSucceeded);
-        }
-
         private static ProcessStartInfo CreateProcessStartInfoForTests(MainRecordingSettingsLaunchPlan plan)
         {
             return CreateProcessStartInfo(plan);

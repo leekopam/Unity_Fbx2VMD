@@ -13,7 +13,7 @@ namespace Fbx2Vmd.Settings
 
             string settingsPath = MainRecordingSettingsPathResolver.ResolveSettingsFilePath();
             bool openSettingsOnStart = ResolveOpenSettingsOnStart(settingsPath);
-            if (!ShouldAutoLaunchOnPlayerStartup(
+            if (!MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(
                     openSettingsOnStart,
                     Application.isEditor,
                     Application.isBatchMode))
@@ -27,17 +27,6 @@ namespace Fbx2Vmd.Settings
             {
                 Debug.LogWarning($"[MainRecordingSettingsBootstrap] {result.UserMessage}");
             }
-        }
-
-        private static bool ShouldAutoLaunchOnPlayerStartup(
-            bool requestedOpen,
-            bool isEditor,
-            bool isBatchMode)
-        {
-            return MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(
-                requestedOpen,
-                isEditor,
-                isBatchMode);
         }
 
         private static bool ResolveOpenSettingsOnStart(string settingsPath)
@@ -57,12 +46,5 @@ namespace Fbx2Vmd.Settings
             }
         }
 
-        private static bool ShouldAutoLaunchOnPlayerStartupForTests(
-            bool requestedOpen,
-            bool isEditor,
-            bool isBatchMode)
-        {
-            return ShouldAutoLaunchOnPlayerStartup(requestedOpen, isEditor, isBatchMode);
-        }
     }
 }
