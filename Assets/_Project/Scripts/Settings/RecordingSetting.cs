@@ -192,7 +192,7 @@ public sealed class RecordingSetting : MonoBehaviour
 
     public void StartManualRecording()
     {
-        FBXVmdPipeline fileManager = ResolveRecordingFBXVmdPipeline();
+        FBXVmdPipeline fileManager = recordingFBXVmdPipeline;
         HumanoidSampleCode controller = ResolveRecordingController();
 
         if (fileManager != null && fileManager.IsProcessing)
@@ -236,7 +236,7 @@ public sealed class RecordingSetting : MonoBehaviour
             settingsPopup = MainRecordingSettingsPopup.EnsurePopupForScene(this);
         }
 
-        settingsPopup.Bind(this, ResolveRecordingFBXVmdPipeline());
+        settingsPopup.Bind(this, recordingFBXVmdPipeline);
         return settingsPopup;
     }
 
@@ -255,7 +255,7 @@ public sealed class RecordingSetting : MonoBehaviour
 
     public void ApplyDiagnosticsToFBXVmdPipeline()
     {
-        FBXVmdPipeline fileManager = ResolveRecordingFBXVmdPipeline();
+        FBXVmdPipeline fileManager = recordingFBXVmdPipeline;
         ApplyDiagnosticsToResolvedFBXVmdPipeline(fileManager);
     }
 
@@ -269,7 +269,7 @@ public sealed class RecordingSetting : MonoBehaviour
             lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
             return ApplySharedSettingsDocument(
                 document,
-                ResolveRecordingFBXVmdPipeline(),
+                recordingFBXVmdPipeline,
                 startFbxImport: false,
                 clearPendingCommandWhenSkipped: true);
         }
@@ -294,7 +294,7 @@ public sealed class RecordingSetting : MonoBehaviour
 
             MainRecordingSettingsDocument document = sharedSettingsStore.LoadOrCreateDefault();
             lastSharedSettingsWriteTimeUtc = currentWriteTime;
-            return ApplySharedSettingsDocument(document, ResolveRecordingFBXVmdPipeline(), true);
+            return ApplySharedSettingsDocument(document, recordingFBXVmdPipeline, true);
         }
         catch (Exception exception)
         {
@@ -349,7 +349,7 @@ public sealed class RecordingSetting : MonoBehaviour
         customRecordingCaptureWidth = capturePlan.Width;
         customRecordingCaptureHeight = capturePlan.Height;
 
-        FBXVmdPipeline resolvedFBXVmdPipeline = fileManager != null ? fileManager : ResolveRecordingFBXVmdPipeline();
+        FBXVmdPipeline resolvedFBXVmdPipeline = fileManager != null ? fileManager : recordingFBXVmdPipeline;
         if (resolvedFBXVmdPipeline != null)
         {
             ApplyDiagnosticsToResolvedFBXVmdPipeline(resolvedFBXVmdPipeline);
@@ -485,7 +485,7 @@ public sealed class RecordingSetting : MonoBehaviour
 
     private void PullDiagnosticsFromFBXVmdPipeline()
     {
-        FBXVmdPipeline fileManager = ResolveRecordingFBXVmdPipeline();
+        FBXVmdPipeline fileManager = recordingFBXVmdPipeline;
         if (fileManager == null)
         {
             return;
@@ -553,16 +553,6 @@ public sealed class RecordingSetting : MonoBehaviour
         lastSharedSettingsWriteTimeUtc = sharedSettingsStore.ResolveLastWriteTimeUtc();
     }
 
-    private FBXVmdPipeline ResolveRecordingFBXVmdPipeline()
-    {
-        if (recordingFBXVmdPipeline != null)
-        {
-            return recordingFBXVmdPipeline;
-        }
-
-        return recordingFBXVmdPipeline;
-    }
-
     private HumanoidSampleCode ResolveRecordingController()
     {
         if (recordingController != null)
@@ -570,7 +560,7 @@ public sealed class RecordingSetting : MonoBehaviour
             return recordingController;
         }
 
-        FBXVmdPipeline fileManager = ResolveRecordingFBXVmdPipeline();
+        FBXVmdPipeline fileManager = recordingFBXVmdPipeline;
         if (fileManager != null && fileManager.targetCharacter != null)
         {
             recordingController = fileManager.targetCharacter.GetComponent<HumanoidSampleCode>();
