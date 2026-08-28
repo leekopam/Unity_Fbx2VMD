@@ -1035,6 +1035,30 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_SettingsLauncher_When_InspectingTestSeam_Then_UsesCallScopedDependency()
+        {
+            Type launcherType = RequireType(SettingsLauncherTypeName);
+            const BindingFlags StaticMembers =
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+            FieldInfo[] mutableStaticDelegates = Array.FindAll(
+                launcherType.GetFields(StaticMembers),
+                field => typeof(Delegate).IsAssignableFrom(field.FieldType) && !field.IsInitOnly);
+            MethodInfo scopedLaunchMethod = launcherType.GetMethod(
+                "OpenMainRecordingSettingsForTests",
+                StaticMembers);
+
+            Assert.That(mutableStaticDelegates, Is.Empty);
+            Assert.That(launcherType.GetMethod("SetLaunchWebSettingsForTests", StaticMembers), Is.Null);
+            Assert.That(launcherType.GetMethod("ResetLaunchWebSettingsForTests", StaticMembers), Is.Null);
+            Assert.That(scopedLaunchMethod, Is.Not.Null);
+            Assert.That(scopedLaunchMethod.GetParameters(), Has.Length.EqualTo(1));
+            Assert.That(
+                scopedLaunchMethod.GetParameters()[0].ParameterType,
+                Is.EqualTo(typeof(Action<MainRecordingSettingsLaunchPlan>)));
+        }
+
+        [Test]
         public void Given_MainRecordingScene_When_AutoLaunchingEditorPlayMode_Then_InvokesWebSettingsLauncherOnce()
         {
             Type launcherType = RequireType(SettingsLauncherTypeName);
@@ -1046,9 +1070,10 @@ namespace Tests.Editor.Settings
                 launchCount++;
                 settingsPath = plan.SettingsPath;
             };
+            Action openSettings = () =>
+                InvokeStatic<object>(launcherType, "OpenMainRecordingSettingsForTests", launcher);
 
             InvokeStatic<object>(guardType, "ResetAutoLaunchWebSettingsForTests");
-            InvokeStatic<object>(launcherType, "SetLaunchWebSettingsForTests", launcher);
 
             try
             {
@@ -1057,13 +1082,15 @@ namespace Tests.Editor.Settings
                     "TryAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     false,
-                    PlayModeStateChange.EnteredPlayMode);
+                    PlayModeStateChange.EnteredPlayMode,
+                    openSettings);
                 bool duplicateLaunch = InvokeStatic<bool>(
                     guardType,
                     "TryAutoLaunchWebSettingsForPlayModeForTests",
                     MainRecordingScenePath,
                     false,
-                    PlayModeStateChange.EnteredPlayMode);
+                    PlayModeStateChange.EnteredPlayMode,
+                    openSettings);
 
                 Assert.That(firstLaunch, Is.True);
                 Assert.That(duplicateLaunch, Is.False);
@@ -1072,7 +1099,6 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                InvokeStatic<object>(launcherType, "ResetLaunchWebSettingsForTests");
                 InvokeStatic<object>(guardType, "ResetAutoLaunchWebSettingsForTests");
             }
         }
