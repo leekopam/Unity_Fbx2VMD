@@ -40,20 +40,12 @@ namespace Fbx2Vmd.Settings.EditorTools
             var materials = new List<Material>();
             var seen = new HashSet<Material>();
 
-            AddMaterials(setting.MaterialShaderTargets, materials, seen);
-
-            foreach (GameObject root in setting.MaterialSourceRoots)
-            {
-                if (root == null)
-                {
-                    continue;
-                }
-
-                foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
-                {
-                    AddMaterials(renderer.sharedMaterials, materials, seen);
-                }
-            }
+            AddMaterials(
+                GraphicMaterialShaderTargetCollector.Enumerate(
+                    setting.MaterialShaderTargets,
+                    setting.MaterialSourceRoots),
+                materials,
+                seen);
 
             foreach (string folder in setting.MaterialAssetFolders)
             {

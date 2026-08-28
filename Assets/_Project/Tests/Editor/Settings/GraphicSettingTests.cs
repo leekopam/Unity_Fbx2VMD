@@ -24,6 +24,8 @@ namespace Tests.Editor.Settings
         private const string MaterialShaderProfileTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderProfile, Assembly-CSharp";
         private const string MaterialShaderPlanResolverTypeName =
             "Fbx2Vmd.Settings.GraphicMaterialShaderPlanResolver, Assembly-CSharp";
+        private const string MaterialShaderTargetCollectorTypeName =
+            "Fbx2Vmd.Settings.GraphicMaterialShaderTargetCollector, Assembly-CSharp";
         private const string RenderScalePresetResolverTypeName =
             "Fbx2Vmd.Settings.GraphicRenderScalePresetResolver, Assembly-CSharp";
         private const string AntiAliasingPlanTypeName =
@@ -556,6 +558,80 @@ namespace Tests.Editor.Settings
                 samples);
 
             Assert.That(normalizedSamples, Is.EqualTo(expectedSamples));
+        }
+
+        [Test]
+        public void Given_MaterialShaderPaths_When_InspectingTargetTraversal_Then_DelegateToSharedCollector()
+        {
+            const string settingSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicSetting.cs";
+            const string editorControllerSourcePath =
+                "Assets/_Project/Scripts/Editor/Settings/GraphicMaterialShaderEditorController.cs";
+            const string collectorSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicMaterialShaderTargetCollector.cs";
+
+            Assert.That(File.Exists(collectorSourcePath), Is.True, collectorSourcePath);
+            Assert.That(Type.GetType(MaterialShaderTargetCollectorTypeName), Is.Not.Null);
+
+            string settingSource = File.ReadAllText(settingSourcePath);
+            string editorControllerSource = File.ReadAllText(editorControllerSourcePath);
+            string collectorSource = File.ReadAllText(collectorSourcePath);
+            Assert.That(settingSource, Does.Contain("GraphicMaterialShaderTargetCollector.Enumerate("));
+            Assert.That(settingSource, Does.Not.Contain("CollectMaterialShaderTargets("));
+            Assert.That(settingSource, Does.Not.Contain("GetComponentsInChildren<Renderer>"));
+            Assert.That(
+                editorControllerSource,
+                Does.Contain("GraphicMaterialShaderTargetCollector.Enumerate("));
+            Assert.That(editorControllerSource, Does.Not.Contain("GetComponentsInChildren<Renderer>"));
+            Assert.That(collectorSource, Does.Contain("GetComponentsInChildren<Renderer>(true)"));
+            Assert.That(collectorSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_ExplicitAndRootMaterials_When_EnumeratingTargets_Then_PreservesTraversalOrder()
+        {
+            Type collectorType = RequireType(MaterialShaderTargetCollectorTypeName);
+            Shader shader = Shader.Find("Hidden/InternalErrorShader");
+            Assert.That(shader, Is.Not.Null);
+
+            var explicitMaterial = new Material(shader);
+            var rootMaterial = new Material(shader);
+            var inactiveChildMaterial = new Material(shader);
+            var root = new GameObject("Graphic Material Target Root Test");
+            var inactiveChild = new GameObject("Graphic Material Target Inactive Child Test");
+
+            try
+            {
+                root.AddComponent<MeshRenderer>().sharedMaterials = new[] { rootMaterial };
+                inactiveChild.transform.SetParent(root.transform, false);
+                inactiveChild.AddComponent<MeshRenderer>().sharedMaterials =
+                    new[] { inactiveChildMaterial };
+                inactiveChild.SetActive(false);
+
+                object targets = InvokeStatic(
+                    collectorType,
+                    "Enumerate",
+                    new Material[] { explicitMaterial, null },
+                    new GameObject[] { null, root });
+                var materials = new List<Material>((IEnumerable<Material>)targets);
+
+                CollectionAssert.AreEqual(
+                    new Material[]
+                    {
+                        explicitMaterial,
+                        null,
+                        rootMaterial,
+                        inactiveChildMaterial
+                    },
+                    materials);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(inactiveChildMaterial);
+                UnityEngine.Object.DestroyImmediate(rootMaterial);
+                UnityEngine.Object.DestroyImmediate(explicitMaterial);
+            }
         }
 
         [Test]
