@@ -30,6 +30,7 @@ namespace Tests.Editor.Settings
             string resultPath = Path.Combine(Directory.GetCurrentDirectory(), "TestResults-GraphicSetting.xml");
             var results = new List<TestResult>();
             var tests = new GraphicSettingTests();
+            var manualRecordingButtonTests = new ManualRecordingButtonBindingApplierTests();
 
             RunTest(results, nameof(GraphicSettingTests.Given_InspectorProfile_When_ApplyNow_Then_AppliesCameraAndUrpQualitySettings),
                 tests.Given_InspectorProfile_When_ApplyNow_Then_AppliesCameraAndUrpQualitySettings);
@@ -49,6 +50,14 @@ namespace Tests.Editor.Settings
                 tests.GraphicSettingEditorTypes_AreOwnedByResponsibilityNamedFiles);
             RunTest(results, nameof(GraphicSettingTests.Given_GenericVisibleRenderers_When_ApplyingDefaultFraming_Then_UsesDedicatedCameraBoundary),
                 tests.Given_GenericVisibleRenderers_When_ApplyingDefaultFraming_Then_UsesDedicatedCameraBoundary);
+            RunTest(
+                results,
+                nameof(ManualRecordingButtonBindingApplierTests.Given_ManualRecordingButton_When_ApplyingBinding_Then_ReplacesOwnedPersistentListeners),
+                manualRecordingButtonTests.Given_ManualRecordingButton_When_ApplyingBinding_Then_ReplacesOwnedPersistentListeners);
+            RunTest(
+                results,
+                nameof(ManualRecordingButtonBindingApplierTests.Given_MissingPipeline_When_ApplyingBinding_Then_PreservesUnrelatedListener),
+                manualRecordingButtonTests.Given_MissingPipeline_When_ApplyingBinding_Then_PreservesUnrelatedListener);
             RunTest(results, nameof(GraphicSettingTests.GraphicSettingRuntimeTypes_AreOwnedByTypeNamedFiles),
                 tests.GraphicSettingRuntimeTypes_AreOwnedByTypeNamedFiles);
             RunTest(results, nameof(GraphicSettingTests.Given_MaterialShaderProfile_When_AppliedToYybMaterial_Then_AdjustsSupportedOutlineAndReportsSkippedUnsupportedProperties),

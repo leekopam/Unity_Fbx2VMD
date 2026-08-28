@@ -1,7 +1,6 @@
 using Fbx2Vmd.FBXImporter;
 using Fbx2Vmd.Settings;
 using UnityEditor;
-using UnityEditor.Events;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -15,8 +14,6 @@ namespace Fbx2Vmd.Settings.EditorTools
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string ManualRecordButtonName = "MMD_Record_Button";
-        private const string RecodingSettingManualRecordMethodName = nameof(RecordingSetting.StartManualRecording);
-        private const string LegacyFBXVmdPipelineManualRecordMethodName = "OnClickManualRecordButton";
         private const string DefaultPostProcessResourcesPath =
             "Packages/com.unity.postprocessing/PostProcessing/PostProcessResources.asset";
 
@@ -174,27 +171,7 @@ namespace Fbx2Vmd.Settings.EditorTools
             SetObjectReference(serialized, "settingsPopup", null);
             SetBool(serialized, "openSettingsPopupOnStart", true);
             serialized.ApplyModifiedPropertiesWithoutUndo();
-
-            if (button == null)
-            {
-                return;
-            }
-
-            for (int i = button.onClick.GetPersistentEventCount() - 1; i >= 0; i--)
-            {
-                UnityEngine.Object target = button.onClick.GetPersistentTarget(i);
-                string methodName = button.onClick.GetPersistentMethodName(i);
-                if (target == recodingSetting ||
-                    target == fileManager ||
-                    methodName == RecodingSettingManualRecordMethodName ||
-                    methodName == LegacyFBXVmdPipelineManualRecordMethodName)
-                {
-                    UnityEventTools.RemovePersistentListener(button.onClick, i);
-                }
-            }
-
-            UnityEventTools.AddPersistentListener(button.onClick, recodingSetting.StartManualRecording);
-            EditorUtility.SetDirty(button);
+            ManualRecordingButtonBindingApplier.Apply(button, recodingSetting, fileManager);
         }
 
         private static HumanoidSampleCode ResolveRecordingController(FBXVmdPipeline fileManager)
