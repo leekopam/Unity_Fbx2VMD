@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using UnityEngine;
 
@@ -11,9 +10,8 @@ namespace Fbx2Vmd.Settings
         public const string SettingsExecutableFileName = "Unity_Fbx2VMD_Settings.exe";
 
         private const string SettingsPathArgumentName = "--settings-path";
-        private const string ElectronRunAsNodeEnvironmentVariableName = "ELECTRON_RUN_AS_NODE";
-
-        private static Process startedProcess;
+        private static readonly MainRecordingSettingsPlayerProcessSession playerProcessSession =
+            new MainRecordingSettingsPlayerProcessSession();
 
         public static bool ShouldAutoLaunchForPlayer(bool requestedOpen, bool isEditor, bool isBatchMode)
         {
@@ -35,39 +33,8 @@ namespace Fbx2Vmd.Settings
 
         public static MainRecordingSettingsActionResult TryLaunch(string playerExecutableDirectory, string settingsPath)
         {
-            if (IsSettingsProcessRunning())
-            {
-                return MainRecordingSettingsActionResult.Success("Web 설정창이 이미 실행 중입니다.");
-            }
-
-            MainRecordingSettingsLaunchPlan plan = CreateLaunchPlan(playerExecutableDirectory, settingsPath);
-            if (!Directory.Exists(plan.WorkingDirectory))
-            {
-                return MainRecordingSettingsActionResult.Failure(
-                    $"Web 설정창 폴더를 찾을 수 없습니다: {plan.WorkingDirectory}");
-            }
-
-            if (!File.Exists(plan.ExecutablePath))
-            {
-                return MainRecordingSettingsActionResult.Failure(
-                    $"Web 설정창 실행 파일을 찾을 수 없습니다: {plan.ExecutablePath}");
-            }
-
-            try
-            {
-                startedProcess = LaunchProcess(plan);
-                if (startedProcess == null)
-                {
-                    return MainRecordingSettingsActionResult.Failure("Web 설정창 프로세스 시작 결과가 비어 있습니다.");
-                }
-
-                return MainRecordingSettingsActionResult.Success("Web 설정창을 실행했습니다.");
-            }
-            catch (Exception exception)
-            {
-                return MainRecordingSettingsActionResult.Failure(
-                    $"Web 설정창 실행에 실패했습니다: {exception.Message}");
-            }
+            return playerProcessSession.TryLaunch(
+                () => CreateLaunchPlan(playerExecutableDirectory, settingsPath));
         }
 
         public static MainRecordingSettingsLaunchPlan CreateLaunchPlan(
@@ -89,73 +56,12 @@ namespace Fbx2Vmd.Settings
 
         public static void CloseStartedProcessQuietly()
         {
-            Process process = startedProcess;
-            startedProcess = null;
-            if (process == null)
-            {
-                return;
-            }
-
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.CloseMainWindow();
-                }
-            }
-            catch (Exception exception)
-            {
-                UnityEngine.Debug.LogWarning(
-                    "[MainRecordingSettingsLauncher] Web 설정창 종료 요청에 실패했습니다. " +
-                    exception.Message);
-            }
-            finally
-            {
-                process.Dispose();
-            }
+            playerProcessSession.CloseQuietly();
         }
 
         public static bool IsSettingsProcessRunning()
         {
-            return IsProcessRunning(startedProcess);
-        }
-
-        private static bool IsProcessRunning(Process process)
-        {
-            if (process == null)
-            {
-                return false;
-            }
-
-            try
-            {
-                return !process.HasExited;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
-        private static Process LaunchProcess(MainRecordingSettingsLaunchPlan plan)
-        {
-            return Process.Start(CreateProcessStartInfo(plan));
-        }
-
-        private static ProcessStartInfo CreateProcessStartInfo(MainRecordingSettingsLaunchPlan plan)
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = plan.ExecutablePath,
-                Arguments = plan.Arguments,
-                WorkingDirectory = plan.WorkingDirectory,
-                UseShellExecute = false,
-                CreateNoWindow = false,
-            };
-            startInfo.Environment[MainRecordingSettingsPathResolver.EnvironmentVariableName] = plan.SettingsPath;
-            startInfo.Environment.Remove(ElectronRunAsNodeEnvironmentVariableName);
-
-            return startInfo;
+            return playerProcessSession.IsRunning();
         }
 
         private static string ResolvePlayerExecutableDirectory()

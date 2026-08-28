@@ -36,6 +36,8 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.EditorTools.MainRecordingEditorPlayModeTintController, Assembly-CSharp-Editor";
         private const string RuntimeLauncherTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsLauncher, Assembly-CSharp";
+        private const string PlayerProcessSessionTypeName =
+            "Fbx2Vmd.Settings.MainRecordingSettingsPlayerProcessSession, Assembly-CSharp";
         private const string RuntimeBootstrapTypeName =
             "Fbx2Vmd.Settings.MainRecordingSettingsBootstrap, Assembly-CSharp";
         private const string SharedSettingsFileSessionTypeName =
@@ -1083,9 +1085,37 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimeSettingsLauncher_When_InspectingProcessOwnership_Then_DelegatesToPlayerProcessSession()
+        {
+            const string launcherSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsLauncher.cs";
+            const string sessionSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsPlayerProcessSession.cs";
+
+            Assert.That(File.Exists(sessionSourcePath), Is.True, sessionSourcePath);
+            Assert.That(Type.GetType(PlayerProcessSessionTypeName), Is.Not.Null);
+
+            string launcherSource = File.ReadAllText(launcherSourcePath);
+            string sessionSource = File.ReadAllText(sessionSourcePath);
+
+            Assert.That(
+                launcherSource,
+                Does.Contain("private static readonly MainRecordingSettingsPlayerProcessSession playerProcessSession"));
+            Assert.That(launcherSource, Does.Not.Contain("private static Process startedProcess"));
+            Assert.That(launcherSource, Does.Not.Contain("Process.Start("));
+            Assert.That(launcherSource, Does.Not.Contain("ProcessStartInfo"));
+            Assert.That(sessionSource, Does.Contain("private Process startedProcess"));
+            Assert.That(sessionSource, Does.Contain("MainRecordingSettingsActionResult TryLaunch("));
+            Assert.That(sessionSource, Does.Contain("void CloseQuietly()"));
+            Assert.That(sessionSource, Does.Contain("bool IsRunning()"));
+            Assert.That(sessionSource, Does.Contain("Process.Start("));
+            Assert.That(sessionSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
         public void Given_PlayerLaunchPlan_When_CreatingProcessStartInfo_Then_DoesNotInheritElectronRunAsNode()
         {
-            Type runtimeLauncherType = RequireType(RuntimeLauncherTypeName);
+            Type processSessionType = RequireType(PlayerProcessSessionTypeName);
             string originalElectronRunAsNode = Environment.GetEnvironmentVariable(
                 "ELECTRON_RUN_AS_NODE",
                 EnvironmentVariableTarget.Process);
@@ -1098,7 +1128,7 @@ namespace Tests.Editor.Settings
                     "D:/Data/main-recording-settings.json");
 
                 var startInfo = InvokeStatic<ProcessStartInfo>(
-                    runtimeLauncherType,
+                    processSessionType,
                     "CreateProcessStartInfo",
                     plan);
 
@@ -1221,7 +1251,10 @@ namespace Tests.Editor.Settings
             Assert.That(mutableStaticDelegates, Is.Empty);
             Assert.That(runtimeLauncherType.GetMethod("SetLaunchProcessForTests", StaticMembers), Is.Null);
             Assert.That(runtimeLauncherType.GetMethod("ResetLaunchProcessForTests", StaticMembers), Is.Null);
-            SetStaticField(runtimeLauncherType, "startedProcess", Process.GetCurrentProcess());
+            object processSession = GetStaticMemberValue<object>(
+                runtimeLauncherType,
+                "playerProcessSession");
+            SetField(processSession, "startedProcess", Process.GetCurrentProcess());
 
             try
             {
@@ -1233,11 +1266,11 @@ namespace Tests.Editor.Settings
                         "D:/Data/main-recording-settings.json");
 
                 Assert.That(result.Succeeded, Is.True);
-                Assert.That(result.UserMessage, Does.Contain("이미 실행 중"));
+                Assert.That(result.UserMessage, Is.EqualTo("Web 설정창이 이미 실행 중입니다."));
             }
             finally
             {
-                SetStaticField(runtimeLauncherType, "startedProcess", null);
+                SetField(processSession, "startedProcess", null);
             }
         }
 
