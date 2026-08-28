@@ -10,9 +10,13 @@ namespace Fbx2Vmd.Settings
         public const string DeliveryPolicy =
             "Production settings surface launches the packaged Electron/Web companion beside the Player, then uses HTTP/WebSocket bridge and shared settings file.";
 
-        public static bool ShouldAutoOpenRuntimePopup(bool requestedOpen, bool isEditor, bool isBatchMode = false)
+        public static bool ShouldOpenRuntimePopupFallback(
+            bool requestedOpen,
+            bool isEditor,
+            bool isBatchMode,
+            bool isSettingsProcessRunning)
         {
-            return requestedOpen && !isEditor && !isBatchMode;
+            return requestedOpen && !isEditor && !isBatchMode && !isSettingsProcessRunning;
         }
     }
 }

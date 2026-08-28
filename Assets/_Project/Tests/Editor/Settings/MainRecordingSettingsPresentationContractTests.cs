@@ -44,20 +44,32 @@ namespace Tests.Editor.Settings
             Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Contain("Web UI"));
             Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Not.Contain("EditorWindow"));
             Assert.That(
-                MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
+                MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(
                     requestedOpen: true,
-                    isEditor: true),
+                    isEditor: true,
+                    isBatchMode: false,
+                    isSettingsProcessRunning: false),
                 Is.False);
             Assert.That(
-                MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
-                    requestedOpen: true,
-                    isEditor: false),
-                Is.True);
-            Assert.That(
-                MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
+                MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(
                     requestedOpen: true,
                     isEditor: false,
-                    isBatchMode: true),
+                    isBatchMode: false,
+                    isSettingsProcessRunning: false),
+                Is.True);
+            Assert.That(
+                MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(
+                    requestedOpen: true,
+                    isEditor: false,
+                    isBatchMode: true,
+                    isSettingsProcessRunning: false),
+                Is.False);
+            Assert.That(
+                MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(
+                    requestedOpen: true,
+                    isEditor: false,
+                    isBatchMode: false,
+                    isSettingsProcessRunning: true),
                 Is.False);
         }
 

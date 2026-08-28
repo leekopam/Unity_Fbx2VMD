@@ -935,16 +935,44 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_PlayerSettingsStartup_When_InspectingOwnership_Then_BootstrapOwnsLaunchAndRecordingSettingOwnsFallback()
+        {
+            const string bootstrapSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsBootstrap.cs";
+            const string recordingSettingSourcePath =
+                "Assets/_Project/Scripts/Settings/RecordingSetting.cs";
+
+            string bootstrapSource = File.ReadAllText(bootstrapSourcePath);
+            string recordingSettingSource = File.ReadAllText(recordingSettingSourcePath);
+
+            Assert.That(
+                bootstrapSource,
+                Does.Contain("MainRecordingSettingsLauncher.TryLaunchForPlayer("));
+            Assert.That(
+                recordingSettingSource,
+                Does.Not.Contain("MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer("));
+            Assert.That(
+                recordingSettingSource,
+                Does.Not.Contain("MainRecordingSettingsLauncher.TryLaunchForPlayer("));
+            Assert.That(
+                recordingSettingSource,
+                Does.Contain("MainRecordingSettingsLauncher.IsSettingsProcessRunning()"));
+            Assert.That(
+                recordingSettingSource,
+                Does.Contain("MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback("));
+        }
+
+        [Test]
         public void Given_PlayerRuntimeLaunchResult_When_LaunchSucceeds_Then_GameViewPopupStaysFallbackOnly()
         {
             Assert.That(
-                MainRecordingSettingsLauncher.ShouldOpenGameViewPopupFallback(true, false, false, true),
+                MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(true, false, false, true),
                 Is.False);
             Assert.That(
-                MainRecordingSettingsLauncher.ShouldOpenGameViewPopupFallback(true, false, false, false),
+                MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(true, false, false, false),
                 Is.True);
             Assert.That(
-                MainRecordingSettingsLauncher.ShouldOpenGameViewPopupFallback(true, true, false, false),
+                MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(true, true, false, false),
                 Is.False);
         }
 
