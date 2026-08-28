@@ -224,6 +224,28 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RecordingSetting_When_InspectingPublicSurface_Then_HasNoTestOnlyMembers()
+        {
+            const BindingFlags PublicInstance = BindingFlags.Instance | BindingFlags.Public;
+
+            Assert.That(
+                typeof(RecordingSetting).GetProperty(
+                    "SharedSettingsFbxImportStarterForTests",
+                    PublicInstance),
+                Is.Null);
+            Assert.That(
+                typeof(RecordingSetting).GetMethod(
+                    "LoadSharedSettingsFromPathForTests",
+                    PublicInstance),
+                Is.Null);
+            Assert.That(
+                typeof(RecordingSetting).GetMethod(
+                    "WriteRuntimePlayModeStateForTests",
+                    PublicInstance),
+                Is.Null);
+        }
+
+        [Test]
         public void Given_MultipleRecordingSettings_When_OverridingFbxImportStarter_Then_KeepsInstanceIsolation()
         {
             var firstSettingObject = new GameObject("First RecordingSetting Import Starter Test");
@@ -233,19 +255,17 @@ namespace Tests.Editor.Settings
             {
                 var firstSetting = firstSettingObject.AddComponent<RecordingSetting>();
                 var secondSetting = secondSettingObject.AddComponent<RecordingSetting>();
-                PropertyInfo starterProperty = typeof(RecordingSetting).GetProperty(
-                    nameof(RecordingSetting.SharedSettingsFbxImportStarterForTests),
-                    BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public);
-                Assert.That(starterProperty, Is.Not.Null);
-
                 Func<FBXVmdPipeline, string, bool> firstStarter = (_, _) => true;
                 Func<FBXVmdPipeline, string, bool> secondStarter = (_, _) => false;
-                starterProperty.SetValue(firstSetting, firstStarter);
-                starterProperty.SetValue(secondSetting, secondStarter);
+                RecordingSettingTestInspector.SetFbxImportStarter(firstSetting, firstStarter);
+                RecordingSettingTestInspector.SetFbxImportStarter(secondSetting, secondStarter);
 
-                Assert.That(starterProperty.GetValue(firstSetting), Is.SameAs(firstStarter));
-                Assert.That(starterProperty.GetValue(secondSetting), Is.SameAs(secondStarter));
-                Assert.That(starterProperty.GetMethod.IsStatic, Is.False);
+                Assert.That(
+                    RecordingSettingTestInspector.GetFbxImportStarter(firstSetting),
+                    Is.SameAs(firstStarter));
+                Assert.That(
+                    RecordingSettingTestInspector.GetFbxImportStarter(secondSetting),
+                    Is.SameAs(secondStarter));
             }
             finally
             {
@@ -293,7 +313,9 @@ namespace Tests.Editor.Settings
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 MainRecordingSettingsActionResult result =
-                    recodingSetting.LoadSharedSettingsFromPathForTests(path);
+                    RecordingSettingTestInspector.LoadSharedSettingsFromPath(
+                        recodingSetting,
+                        path);
 
                 Assert.That(result.Succeeded, Is.True);
                 Assert.That(GetField<bool>(recodingSetting, "openSettingsPopupOnStart"), Is.False);
@@ -357,11 +379,13 @@ namespace Tests.Editor.Settings
                 var recodingSetting = settingObject.AddComponent<RecordingSetting>();
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
                 int startCount = 0;
-                recodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
-                {
-                    startCount++;
-                    return true;
-                };
+                RecordingSettingTestInspector.SetFbxImportStarter(
+                    recodingSetting,
+                    (_, _) =>
+                    {
+                        startCount++;
+                        return true;
+                    });
 
                 var document = new MainRecordingSettingsDocument
                 {
@@ -400,13 +424,15 @@ namespace Tests.Editor.Settings
                 int startCount = 0;
                 FBXVmdPipeline startedManager = null;
                 string startedPath = string.Empty;
-                recodingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
-                {
-                    startCount++;
-                    startedManager = manager;
-                    startedPath = path;
-                    return true;
-                };
+                RecordingSettingTestInspector.SetFbxImportStarter(
+                    recodingSetting,
+                    (manager, path) =>
+                    {
+                        startCount++;
+                        startedManager = manager;
+                        startedPath = path;
+                        return true;
+                    });
 
                 var document = new MainRecordingSettingsDocument
                 {
@@ -456,11 +482,13 @@ namespace Tests.Editor.Settings
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                recodingSetting.SharedSettingsFbxImportStarterForTests = (manager, path) =>
-                {
-                    startCount++;
-                    return manager == fileManager && path == tempFbxPath;
-                };
+                RecordingSettingTestInspector.SetFbxImportStarter(
+                    recodingSetting,
+                    (manager, path) =>
+                    {
+                        startCount++;
+                        return manager == fileManager && path == tempFbxPath;
+                    });
 
                 var document = new MainRecordingSettingsDocument
                 {
@@ -521,14 +549,18 @@ namespace Tests.Editor.Settings
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                recodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
-                {
-                    startCount++;
-                    return true;
-                };
+                RecordingSettingTestInspector.SetFbxImportStarter(
+                    recodingSetting,
+                    (_, _) =>
+                    {
+                        startCount++;
+                        return true;
+                    });
 
                 MainRecordingSettingsActionResult result =
-                    recodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+                    RecordingSettingTestInspector.LoadSharedSettingsFromPath(
+                        recodingSetting,
+                        settingsPath);
 
                 Assert.That(result.Succeeded, Is.True);
                 Assert.That(startCount, Is.EqualTo(0));
@@ -570,14 +602,18 @@ namespace Tests.Editor.Settings
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                recodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
-                {
-                    startCount++;
-                    return true;
-                };
+                RecordingSettingTestInspector.SetFbxImportStarter(
+                    recodingSetting,
+                    (_, _) =>
+                    {
+                        startCount++;
+                        return true;
+                    });
 
                 MainRecordingSettingsActionResult result =
-                    recodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+                    RecordingSettingTestInspector.LoadSharedSettingsFromPath(
+                        recodingSetting,
+                        settingsPath);
                 MainRecordingSettingsDocument loadedDocument = store.LoadOrCreateDefault();
                 object loadedCommand = GetField<MainRecordingSettingsCommandEnvelope>(
                     loadedDocument,
@@ -617,11 +653,13 @@ namespace Tests.Editor.Settings
                 SetField(recodingSetting, "recordingFBXVmdPipeline", fileManager);
 
                 int startCount = 0;
-                recodingSetting.SharedSettingsFbxImportStarterForTests = (_, _) =>
-                {
-                    startCount++;
-                    return true;
-                };
+                RecordingSettingTestInspector.SetFbxImportStarter(
+                    recodingSetting,
+                    (_, _) =>
+                    {
+                        startCount++;
+                        return true;
+                    });
 
                 var document = new MainRecordingSettingsDocument
                 {
@@ -680,14 +718,18 @@ namespace Tests.Editor.Settings
                 var firstFBXVmdPipeline = firstFBXVmdPipelineObject.AddComponent<FBXVmdPipeline>();
                 var firstRecodingSetting = firstSettingObject.AddComponent<RecordingSetting>();
                 SetField(firstRecodingSetting, "recordingFBXVmdPipeline", firstFBXVmdPipeline);
-                firstRecodingSetting.SharedSettingsFbxImportStarterForTests = (_, path) =>
-                {
-                    startCount++;
-                    return path == tempFbxPath;
-                };
+                RecordingSettingTestInspector.SetFbxImportStarter(
+                    firstRecodingSetting,
+                    (_, path) =>
+                    {
+                        startCount++;
+                        return path == tempFbxPath;
+                    });
 
                 MainRecordingSettingsActionResult initialResult =
-                    firstRecodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+                    RecordingSettingTestInspector.LoadSharedSettingsFromPath(
+                        firstRecodingSetting,
+                        settingsPath);
                 Assert.That(initialResult.Succeeded, Is.True);
                 Assert.That(startCount, Is.EqualTo(0));
 
@@ -719,7 +761,9 @@ namespace Tests.Editor.Settings
                 SetField(secondRecodingSetting, "recordingFBXVmdPipeline", secondFBXVmdPipeline);
 
                 MainRecordingSettingsActionResult secondResult =
-                    secondRecodingSetting.LoadSharedSettingsFromPathForTests(settingsPath);
+                    RecordingSettingTestInspector.LoadSharedSettingsFromPath(
+                        secondRecodingSetting,
+                        settingsPath);
 
                 Assert.That(secondResult.Succeeded, Is.True);
                 Assert.That(startCount, Is.EqualTo(1));
@@ -755,7 +799,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var recodingSetting = settingObject.AddComponent<RecordingSetting>();
-                recodingSetting.LoadSharedSettingsFromPathForTests(path);
+                RecordingSettingTestInspector.LoadSharedSettingsFromPath(recodingSetting, path);
 
                 store.Save(new MainRecordingSettingsDocument
                 {
@@ -796,12 +840,11 @@ namespace Tests.Editor.Settings
             try
             {
                 var recodingSetting = settingObject.AddComponent<RecordingSetting>();
-                recodingSetting.LoadSharedSettingsFromPathForTests(path);
+                RecordingSettingTestInspector.LoadSharedSettingsFromPath(recodingSetting, path);
 
                 MainRecordingSettingsActionResult playingResult =
-                    InvokeInstance<MainRecordingSettingsActionResult>(
+                    RecordingSettingTestInspector.WriteRuntimePlayModeState(
                         recodingSetting,
-                        "WriteRuntimePlayModeStateForTests",
                         "playing");
                 MainRecordingSettingsDocument playingDocument = store.LoadOrCreateDefault();
                 object playingState = GetField<object>(playingDocument, "runtimeState");
@@ -815,9 +858,8 @@ namespace Tests.Editor.Settings
                 Assert.That(playingDocument.openSettingsOnStart, Is.False);
 
                 MainRecordingSettingsActionResult stoppedResult =
-                    InvokeInstance<MainRecordingSettingsActionResult>(
+                    RecordingSettingTestInspector.WriteRuntimePlayModeState(
                         recodingSetting,
-                        "WriteRuntimePlayModeStateForTests",
                         "stopped");
                 MainRecordingSettingsDocument stoppedDocument = store.LoadOrCreateDefault();
                 object stoppedState = GetField<object>(stoppedDocument, "runtimeState");
