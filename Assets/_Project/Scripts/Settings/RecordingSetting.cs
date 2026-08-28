@@ -144,28 +144,11 @@ public sealed class RecordingSetting : MonoBehaviour
 
     private void Start()
     {
-        if (MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(
+        if (MainRecordingSettingsSurfacePolicy.ShouldOpenRuntimePopupFallback(
                 openSettingsPopupOnStart,
                 Application.isEditor,
-                Application.isBatchMode))
-        {
-            MainRecordingSettingsActionResult launchResult =
-                MainRecordingSettingsLauncher.TryLaunchForPlayer(
-                    openSettingsPopupOnStart,
-                    ResolveSharedSettingsFilePathForExternalLauncher());
-            if (!launchResult.Succeeded)
-            {
-                Debug.LogWarning($"[RecordingSetting] {launchResult.UserMessage}");
-                OpenSettingsPopup();
-            }
-
-            return;
-        }
-
-        if (MainRecordingSettingsSurfacePolicy.ShouldAutoOpenRuntimePopup(
-                openSettingsPopupOnStart,
-                Application.isEditor,
-                Application.isBatchMode))
+                Application.isBatchMode,
+                MainRecordingSettingsLauncher.IsSettingsProcessRunning()))
         {
             OpenSettingsPopup();
         }
@@ -425,21 +408,6 @@ public sealed class RecordingSetting : MonoBehaviour
         fileManager.recordingCaptureQuality = recordingCaptureQuality;
         fileManager.customRecordingCaptureWidth = customRecordingCaptureWidth;
         fileManager.customRecordingCaptureHeight = customRecordingCaptureHeight;
-    }
-
-    private string ResolveSharedSettingsFilePathForExternalLauncher()
-    {
-        if (sharedSettingsFileSession != null)
-        {
-            return sharedSettingsFileSession.SettingsFilePath;
-        }
-
-        if (!string.IsNullOrWhiteSpace(sharedSettingsFilePathOverride))
-        {
-            return sharedSettingsFilePathOverride;
-        }
-
-        return MainRecordingSettingsPathResolver.ResolveSettingsFilePath();
     }
 
     private void EnsureSharedSettingsFileSession()

@@ -20,15 +20,6 @@ namespace Fbx2Vmd.Settings
             return requestedOpen && !isEditor && !isBatchMode;
         }
 
-        public static bool ShouldOpenGameViewPopupFallback(
-            bool requestedOpen,
-            bool isEditor,
-            bool isBatchMode,
-            bool launchSucceeded)
-        {
-            return requestedOpen && !isEditor && !isBatchMode && !launchSucceeded;
-        }
-
         public static MainRecordingSettingsActionResult TryLaunchForPlayer(
             bool requestedOpen,
             string settingsFilePathOverride = null)
@@ -44,7 +35,7 @@ namespace Fbx2Vmd.Settings
 
         public static MainRecordingSettingsActionResult TryLaunch(string playerExecutableDirectory, string settingsPath)
         {
-            if (IsStartedSettingsProcessRunning())
+            if (IsSettingsProcessRunning())
             {
                 return MainRecordingSettingsActionResult.Success("Web 설정창이 이미 실행 중입니다.");
             }
@@ -124,7 +115,7 @@ namespace Fbx2Vmd.Settings
             }
         }
 
-        private static bool IsStartedSettingsProcessRunning()
+        public static bool IsSettingsProcessRunning()
         {
             return IsProcessRunning(startedProcess);
         }

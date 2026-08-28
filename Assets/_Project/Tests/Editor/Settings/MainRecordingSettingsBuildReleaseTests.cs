@@ -283,14 +283,14 @@ namespace Tests.Editor.Settings
 
             Assert.That(
                 layoutSpecSource,
-                Does.Not.Contain("public static bool ShouldAutoOpenRuntimePopup"));
+                Does.Not.Contain("public static bool ShouldOpenRuntimePopupFallback"));
             Assert.That(surfacePolicySource, Does.Contain("namespace Fbx2Vmd.Settings"));
             Assert.That(
                 surfacePolicySource,
                 Does.Contain("public static class MainRecordingSettingsSurfacePolicy"));
             Assert.That(
                 surfacePolicySource,
-                Does.Contain("public static bool ShouldAutoOpenRuntimePopup"));
+                Does.Contain("public static bool ShouldOpenRuntimePopupFallback"));
         }
 
         [Test]
