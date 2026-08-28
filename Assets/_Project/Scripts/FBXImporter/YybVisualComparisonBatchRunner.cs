@@ -1144,7 +1144,7 @@ namespace Fbx2Vmd.FBXImporter
             Debug.Log($"[YybVisualComparisonBatchRunner] 시작됨: {_activeJob.DisplayName}");
             AppendRunnerTrace(
                 $"job started scene={_activeJob.SceneName} display={_activeJob.DisplayName} " +
-                $"segment={GetEditorDiagnosticSmokeSegmentLabel(_editorDiagnosticSmokeSegment)} " +
+                $"segment={VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(_editorDiagnosticSmokeSegment)} " +
                 $"referenceClipStart={referenceClipStartSeconds:F3}s " +
                 $"candidateClipStart={timingPlan.CandidateClipStartSeconds:F3}s " +
                 $"candidateScale={timingPlan.CandidateClipSecondsPerReferenceSecond:F5} " +
@@ -1192,11 +1192,6 @@ namespace Fbx2Vmd.FBXImporter
                 referenceClipLengthSeconds,
                 requestedDurationSeconds,
                 segment);
-        }
-
-        private static string GetEditorDiagnosticSmokeSegmentLabel(FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
-        {
-            return VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(segment);
         }
 
         private static void StartSubManualJob(string targetNameToken)
@@ -1262,7 +1257,8 @@ namespace Fbx2Vmd.FBXImporter
             Debug.Log($"[YybVisualComparisonBatchRunner] 시작됨: {_activeJob.DisplayName} / {comparisonLabel}");
             AppendRunnerTrace(
                 $"job started scene={_activeJob.SceneName} display={_activeJob.DisplayName} " +
-                $"label={capturePlan.ComparisonLabel} segment={GetEditorDiagnosticSmokeSegmentLabel(_editorDiagnosticSmokeSegment)} " +
+                $"label={capturePlan.ComparisonLabel} " +
+                $"segment={VisualComparisonCaptureSegmentPlanner.GetSegmentLabel(_editorDiagnosticSmokeSegment)} " +
                 $"start={capturePlan.StartTimeSeconds:F2}s duration={capturePlan.DurationSeconds:F2}s " +
                 $"probeSamples={VisualComparisonSummaryValueFormatter.FormatProbeSampleTimes(probeSampleTimes)}");
         }
