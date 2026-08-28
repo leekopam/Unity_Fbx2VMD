@@ -267,11 +267,6 @@ namespace Fbx2Vmd.Settings
             return SaveSettings();
         }
 
-        private bool SaveImportFbxCommandForTests()
-        {
-            return SaveImportFbxCommand();
-        }
-
         private bool IsSaveButtonEnabledForTests()
         {
             RefreshSaveButtonState();

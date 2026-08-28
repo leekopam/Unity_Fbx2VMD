@@ -232,11 +232,6 @@ namespace Fbx2Vmd.Settings
             startedProcess = null;
         }
 
-        private static bool IsStartedSettingsProcessRunningForTests()
-        {
-            return IsStartedSettingsProcessRunning();
-        }
-
         private static ProcessStartInfo CreateProcessStartInfoForTests(MainRecordingSettingsLaunchPlan plan)
         {
             return CreateProcessStartInfo(plan);
