@@ -125,34 +125,9 @@ namespace Fbx2Vmd.Settings
 
         public GraphicTextureImportPlan CreateTextureImportPlan()
         {
-            switch (textureResolution)
-            {
-                case GraphicSettingQualityPreset.Performance:
-                    return new GraphicTextureImportPlan(
-                        FilterMode.Bilinear,
-                        4,
-                        2048,
-                        GraphicTextureCompressionPreference.HighQuality,
-                        true);
-                case GraphicSettingQualityPreset.Quality:
-                    return new GraphicTextureImportPlan(
-                        FilterMode.Trilinear,
-                        16,
-                        8192,
-                        GraphicTextureCompressionPreference.None,
-                        true);
-                case GraphicSettingQualityPreset.Custom:
-                    return textureImportProfile != null
-                        ? textureImportProfile.CreatePlan()
-                        : new GraphicTextureImportProfile().CreatePlan();
-                default:
-                    return new GraphicTextureImportPlan(
-                        FilterMode.Trilinear,
-                        8,
-                        4096,
-                        GraphicTextureCompressionPreference.HighQuality,
-                        true);
-            }
+            return GraphicTextureImportPlanResolver.Resolve(
+                textureResolution,
+                textureImportProfile);
         }
 
         public GraphicMaterialShaderPlan CreateMaterialShaderPlan()

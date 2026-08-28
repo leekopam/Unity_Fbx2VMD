@@ -18,6 +18,8 @@ namespace Tests.Editor.Settings
         private const string RecodingSettingTypeName = "RecordingSetting, Assembly-CSharp";
         private const string FBXVmdPipelineTypeName = "Fbx2Vmd.FBXImporter.FBXVmdPipeline, Assembly-CSharp";
         private const string TextureProfileTypeName = "Fbx2Vmd.Settings.GraphicTextureImportProfile, Assembly-CSharp";
+        private const string TexturePlanResolverTypeName =
+            "Fbx2Vmd.Settings.GraphicTextureImportPlanResolver, Assembly-CSharp";
         private const string MaterialShaderProfileTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderProfile, Assembly-CSharp";
         private const string MaterialShaderUtilityTypeName = "Fbx2Vmd.Settings.GraphicMaterialShaderController, Assembly-CSharp";
         private const string InspectorSchemaTypeName = "Fbx2Vmd.Settings.EditorTools.GraphicSettingInspectorSchema, Assembly-CSharp-Editor";
@@ -145,6 +147,57 @@ namespace Tests.Editor.Settings
             {
                 UnityEngine.Object.DestroyImmediate(settingObject);
             }
+        }
+
+        [Test]
+        public void Given_GraphicSetting_When_InspectingTexturePresetOwnership_Then_DelegatesPlanResolution()
+        {
+            const string settingSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicSetting.cs";
+            const string resolverSourcePath =
+                "Assets/_Project/Scripts/Settings/GraphicTextureImportPlanResolver.cs";
+
+            Assert.That(File.Exists(resolverSourcePath), Is.True, resolverSourcePath);
+            Assert.That(Type.GetType(TexturePlanResolverTypeName), Is.Not.Null);
+
+            string settingSource = File.ReadAllText(settingSourcePath);
+            string resolverSource = File.ReadAllText(resolverSourcePath);
+            Assert.That(
+                settingSource,
+                Does.Contain("GraphicTextureImportPlanResolver.Resolve("));
+            Assert.That(settingSource, Does.Not.Contain("switch (textureResolution)"));
+            Assert.That(resolverSource, Does.Contain("switch (preset)"));
+            Assert.That(resolverSource, Does.Not.Contain("MonoBehaviour"));
+            Assert.That(resolverSource, Does.Not.Contain("interface "));
+        }
+
+        [TestCase("Performance", FilterMode.Bilinear, 4, 2048, "HighQuality")]
+        [TestCase("Balanced", FilterMode.Trilinear, 8, 4096, "HighQuality")]
+        [TestCase("Quality", FilterMode.Trilinear, 16, 8192, "None")]
+        [TestCase("Custom", FilterMode.Trilinear, 8, 4096, "HighQuality")]
+        public void Given_TextureQualityPreset_When_ResolvingPlan_Then_ReturnsExpectedValues(
+            string presetName,
+            FilterMode expectedFilterMode,
+            int expectedAnisoLevel,
+            int expectedMaxTextureSize,
+            string expectedCompression)
+        {
+            Type resolverType = RequireType(TexturePlanResolverTypeName);
+            Type presetType = RequireType(
+                "Fbx2Vmd.Settings.GraphicSettingQualityPreset, Assembly-CSharp");
+            object preset = Enum.Parse(presetType, presetName);
+
+            object plan = InvokeStatic(resolverType, "Resolve", preset, null);
+
+            Assert.That(
+                GetMemberValue<FilterMode>(plan, "FilterMode"),
+                Is.EqualTo(expectedFilterMode));
+            Assert.That(GetMemberValue<int>(plan, "AnisoLevel"), Is.EqualTo(expectedAnisoLevel));
+            Assert.That(GetMemberValue<int>(plan, "MaxTextureSize"), Is.EqualTo(expectedMaxTextureSize));
+            Assert.That(
+                GetMemberValue<object>(plan, "Compression").ToString(),
+                Is.EqualTo(expectedCompression));
+            Assert.That(GetMemberValue<bool>(plan, "AlphaIsTransparency"), Is.True);
         }
 
         [Test]
