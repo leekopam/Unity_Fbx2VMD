@@ -47,6 +47,104 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_SettingsStore_When_InspectingNormalizationOwnership_Then_DelegatesToIoIndependentDocumentNormalizer()
+        {
+            const string storeSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsStore.cs";
+            const string normalizerSourcePath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsDocumentNormalizer.cs";
+
+            Assert.That(File.Exists(normalizerSourcePath), Is.True, normalizerSourcePath);
+
+            string storeSource = File.ReadAllText(storeSourcePath);
+            string normalizerSource = File.ReadAllText(normalizerSourcePath);
+
+            Assert.That(
+                storeSource,
+                Does.Contain("MainRecordingSettingsDocumentNormalizer.Normalize("));
+            Assert.That(
+                storeSource,
+                Does.Not.Contain("private static MainRecordingSettingsDocument NormalizeDocument("));
+            Assert.That(normalizerSource, Does.Not.Contain("File."));
+            Assert.That(normalizerSource, Does.Not.Contain("JsonUtility"));
+            Assert.That(normalizerSource, Does.Not.Contain("DateTime.UtcNow"));
+            Assert.That(normalizerSource, Does.Not.Contain("UnityEngine"));
+            Assert.That(normalizerSource, Does.Not.Contain("interface "));
+        }
+
+        [Test]
+        public void Given_InvalidSettingsDocument_When_Normalizing_Then_RestoresEveryDocumentInvariant()
+        {
+            var document = new MainRecordingSettingsDocument
+            {
+                schemaVersion = 0,
+                updatedAtUtc = null,
+                fbxPath = null,
+                characterModelPath = null,
+                captureWidth = 0,
+                captureHeight = -1,
+                openSettingsOnStart = false,
+                runtimeState = new MainRecordingSettingsState
+                {
+                    playMode = "paused",
+                    updatedAtUtc = "invalid",
+                },
+                pendingCommand = new MainRecordingSettingsCommandEnvelope
+                {
+                    commandId = null,
+                    action = null,
+                    fbxPath = null,
+                    requestedAtUtc = null,
+                },
+            };
+
+            MainRecordingSettingsDocument normalized = NormalizeDocument(document);
+
+            Assert.That(normalized, Is.SameAs(document));
+            Assert.That(normalized.schemaVersion, Is.EqualTo(1));
+            Assert.That(normalized.captureWidth, Is.EqualTo(1920));
+            Assert.That(normalized.captureHeight, Is.EqualTo(1080));
+            Assert.That(normalized.updatedAtUtc, Is.EqualTo(string.Empty));
+            Assert.That(normalized.fbxPath, Is.EqualTo(string.Empty));
+            Assert.That(normalized.characterModelPath, Is.EqualTo(string.Empty));
+            Assert.That(normalized.openSettingsOnStart, Is.False);
+            Assert.That(normalized.runtimeState.playMode, Is.EqualTo(MainRecordingSettingsState.Stopped));
+            Assert.That(normalized.runtimeState.updatedAtUtc, Is.EqualTo(string.Empty));
+            Assert.That(normalized.pendingCommand.commandId, Is.EqualTo(string.Empty));
+            Assert.That(normalized.pendingCommand.action, Is.EqualTo(string.Empty));
+            Assert.That(normalized.pendingCommand.fbxPath, Is.EqualTo(string.Empty));
+            Assert.That(normalized.pendingCommand.requestedAtUtc, Is.EqualTo(string.Empty));
+        }
+
+        [Test]
+        public void Given_MissingNestedSettings_When_Normalizing_Then_CreatesDefaultNestedObjects()
+        {
+            var missingNestedDocument = new MainRecordingSettingsDocument
+            {
+                runtimeState = null,
+                pendingCommand = null,
+            };
+            MainRecordingSettingsDocument normalized = NormalizeDocument(missingNestedDocument);
+
+            Assert.That(normalized, Is.SameAs(missingNestedDocument));
+            Assert.That(normalized.runtimeState, Is.Not.Null);
+            Assert.That(normalized.pendingCommand, Is.Not.Null);
+        }
+
+        [Test]
+        public void Given_NullSettingsDocument_When_Normalizing_Then_ReturnsCompleteDefault()
+        {
+            MainRecordingSettingsDocument normalized = NormalizeDocument(null);
+
+            Assert.That(normalized, Is.Not.Null);
+            Assert.That(normalized.schemaVersion, Is.EqualTo(1));
+            Assert.That(normalized.captureWidth, Is.EqualTo(1920));
+            Assert.That(normalized.captureHeight, Is.EqualTo(1080));
+            Assert.That(normalized.runtimeState, Is.Not.Null);
+            Assert.That(normalized.pendingCommand, Is.Not.Null);
+        }
+
+        [Test]
         public void Given_NoOverride_When_ResolvingSettingsPath_Then_UsesStableLocalAppDataJsonFile()
         {
             string localAppData = Path.Combine("C:", "Users", "Tester", "AppData", "Local");
@@ -222,6 +320,23 @@ namespace Tests.Editor.Settings
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(method, Is.Not.Null, "MainRecordingSettingsStore must own settings file timestamp resolution.");
             return (DateTime)method.Invoke(store, null);
+        }
+
+        private static MainRecordingSettingsDocument NormalizeDocument(
+            MainRecordingSettingsDocument document)
+        {
+            Type normalizerType = typeof(MainRecordingSettingsStore).Assembly.GetType(
+                "Fbx2Vmd.Settings.MainRecordingSettingsDocumentNormalizer");
+            Assert.That(normalizerType, Is.Not.Null);
+
+            MethodInfo normalizeMethod = normalizerType.GetMethod(
+                "Normalize",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(normalizeMethod, Is.Not.Null);
+
+            return (MainRecordingSettingsDocument)normalizeMethod.Invoke(
+                null,
+                new object[] { document });
         }
 
         private static object GetFieldValue(object instance, string fieldName)
