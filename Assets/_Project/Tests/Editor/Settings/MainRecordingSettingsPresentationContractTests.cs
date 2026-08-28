@@ -188,7 +188,7 @@ namespace Tests.Editor.Settings
             try
             {
                 var popup = popupObject.AddComponent<MainRecordingSettingsPopup>();
-                string[] visibleText = popup.GetVisibleTextForTests();
+                string[] visibleText = MainRecordingSettingsPopupTestInspector.GetVisibleText(popup);
 
                 Assert.That(visibleText, Does.Contain("시네마토그래피"));
                 Assert.That(visibleText, Does.Contain("환경"));
