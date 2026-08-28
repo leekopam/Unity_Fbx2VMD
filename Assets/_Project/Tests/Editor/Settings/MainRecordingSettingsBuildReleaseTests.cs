@@ -294,6 +294,39 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
+        public void Given_RuntimeLayoutSpec_When_InspectingSource_Then_DoesNotOwnEditorQaFixtures()
+        {
+            const string layoutSpecPath =
+                "Assets/_Project/Scripts/Settings/MainRecordingSettingsLayoutSpec.cs";
+            Assert.That(File.Exists(layoutSpecPath), Is.True, layoutSpecPath);
+
+            string layoutSpecSource = File.ReadAllText(layoutSpecPath);
+            string[] editorQaMembers =
+            {
+                "VisualAssetPolicy",
+                "KoreanTextPolicy",
+                "GuiPackRoot",
+                "GuiPackSettingsPopupPrefabPath",
+                "GuiPackRoundedBackgroundPrefabPath",
+                "GuiPackRoundedButtonPrefabPath",
+                "GuiPackInputFieldPrefabPath",
+                "GuiPackSettingsIconPath",
+                "GuiPackHomeIconPath",
+                "GuiPackVideoIconPath",
+                "GuiPackInfoIconPath",
+                "GuiPackMenuIconPath",
+                "DisabledCardCount",
+                "RequiredGuiPackAssetPaths",
+                "KoreanUiTextSamples",
+            };
+
+            foreach (string editorQaMember in editorQaMembers)
+            {
+                Assert.That(layoutSpecSource, Does.Not.Contain(editorQaMember), editorQaMember);
+            }
+        }
+
+        [Test]
         public void Given_RuntimeSettingsSourceFiles_When_InspectingContents_Then_UnityEditorIsNotReferenced()
         {
             string[] runtimeSourceFiles =
