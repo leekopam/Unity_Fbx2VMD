@@ -317,6 +317,74 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RightSleeveSilhouetteOffsetOverride_When_Toggled_Then_ClampsOnlySleeveOffsetSettings()
+        {
+            var pipelineObject = new GameObject("right sleeve silhouette offset override pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.ShouldUseManualAnimatorBodyPositionXzReference = false;
+                pipeline.enableYybArmSleeveAnchorCorrection = true;
+
+                bool enabledApplied = ApplyRightSleeveSilhouetteOffset(
+                    pipeline,
+                    true,
+                    localOffsetX: -0.055f,
+                    frameGateStart: 90f,
+                    frameGateEnd: 90f);
+
+                Assert.That(enabledApplied, Is.True);
+                Assert.That(pipeline.useYybRightSleeveSilhouetteLocalOffsetReference, Is.True);
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(-0.055f).Within(0.0001f));
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyPositionXzReference, Is.False);
+                Assert.That(pipeline.enableYybArmSleeveAnchorCorrection, Is.True);
+
+                bool clampedApplied = ApplyRightSleeveSilhouetteOffset(
+                    pipeline,
+                    true,
+                    localOffsetX: 0.5f,
+                    frameGateStart: -10f,
+                    frameGateEnd: 7000f);
+
+                Assert.That(clampedApplied, Is.True);
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(0.2f).Within(0.0001f));
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(6000f).Within(0.0001f));
+
+                bool lowerClampedApplied = ApplyRightSleeveSilhouetteOffset(
+                    pipeline,
+                    true,
+                    localOffsetX: -0.5f,
+                    frameGateStart: 90f,
+                    frameGateEnd: 90f);
+
+                Assert.That(lowerClampedApplied, Is.True);
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(-0.2f).Within(0.0001f));
+
+                bool disabledApplied = ApplyRightSleeveSilhouetteOffset(
+                    pipeline,
+                    false,
+                    localOffsetX: -0.055f,
+                    frameGateStart: 90f,
+                    frameGateEnd: 90f);
+
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(pipeline.useYybRightSleeveSilhouetteLocalOffsetReference, Is.False);
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(-0.055f).Within(0.0001f));
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
+                Assert.That(pipeline.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_DirectionOverride_When_Enabled_Then_ClampsOnlyDirectionSettings()
         {
             var pipelineObject = new GameObject("arm direction override pipeline");
@@ -476,6 +544,27 @@ namespace Tests.Editor.FBXImporter
                     forearmInfluence,
                     upperArmMaxDegrees,
                     forearmMaxDegrees
+                });
+        }
+
+        private static bool ApplyRightSleeveSilhouetteOffset(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float localOffsetX,
+            float frameGateStart,
+            float frameGateEnd)
+        {
+            MethodInfo applyMethod = FindApplyMethod("ApplyRightSleeveSilhouetteOffset");
+
+            return (bool)applyMethod.Invoke(
+                null,
+                new object[]
+                {
+                    pipeline,
+                    enabled,
+                    localOffsetX,
+                    frameGateStart,
+                    frameGateEnd
                 });
         }
 
