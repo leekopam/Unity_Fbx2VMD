@@ -779,7 +779,7 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private bool _logYybArmSleeveAnchorCorrection= false;
         public bool logYybArmSleeveAnchorCorrection { get => _logYybArmSleeveAnchorCorrection; private set => _logYybArmSleeveAnchorCorrection = value; }
 
-        [Header("디버그 설정 (HumanoidPoseRetargeter에 적용됨)")]
+        [Header("디버그 설정")]
         [Tooltip("본 매핑 관련 디버그 로그 출력")]
         [FormerlySerializedAs("showBoneMappingLog")]
         [SerializeField] private bool _showBoneMappingLog= false;
