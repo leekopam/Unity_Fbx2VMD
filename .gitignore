@@ -146,9 +146,11 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 # Local tool dependency caches
 /Tools/**/node_modules/
 /Assets/_Project/Tools/**/node_modules/
-/Assets/_Project/Tools.meta
-/Assets/_Project/Tools/MainRecordingSettings.meta
-/Assets/_Project/Tools/MainRecordingSettings/**/*.meta
+/Assets/_Project/Tools/**/node_modules.meta
+
+# MainRecordingSettings build 산출물의 Unity 메타데이터는 재생성되므로 추적하지 않는다.
+/Assets/_Project/Tools/MainRecordingSettings/build.meta
+/Assets/_Project/Tools/MainRecordingSettings/build/**/*.meta
 
 # BEGIN LOCAL PRIVATE WORKFLOW FILES
 /DOCS/Workflow.md
