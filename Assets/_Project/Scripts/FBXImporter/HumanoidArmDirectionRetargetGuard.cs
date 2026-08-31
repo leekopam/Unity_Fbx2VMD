@@ -8,7 +8,7 @@ namespace Fbx2Vmd.FBXImporter
     [DefaultExecutionOrder(22500)]
     public class HumanoidArmDirectionRetargetGuard : MonoBehaviour
     {
-        [Header("YYB Arm Direction Retarget Guard")]
+        [Header("Humanoid Arm Direction Retarget Guard")]
         [FormerlySerializedAs("enableDirectionRetarget")]
         [SerializeField] private bool _enableDirectionRetarget= true;
         public bool enableDirectionRetarget { get => _enableDirectionRetarget; set => _enableDirectionRetarget = value; }
