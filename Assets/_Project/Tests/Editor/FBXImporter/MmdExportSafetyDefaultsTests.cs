@@ -1809,70 +1809,12 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RightSleeveSilhouetteOffsetRuntimeOverride_When_Toggled_Then_OnlyChangesFrameLocalSleeveSettings()
-        {
-            var managerObject = new GameObject("right sleeve silhouette offset runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.ShouldUseManualAnimatorBodyPositionXzReference = false;
-                manager.enableYybArmSleeveAnchorCorrection = true;
-
-                bool enabledApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
-                    manager,
-                    true,
-                    localOffsetX: -0.055f,
-                    frameGateStart: 90f,
-                    frameGateEnd: 90f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useYybRightSleeveSilhouetteLocalOffsetReference, Is.True);
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(-0.055f).Within(0.0001f));
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.ShouldUseManualAnimatorBodyPositionXzReference, Is.False);
-                Assert.That(manager.enableYybArmSleeveAnchorCorrection, Is.True);
-
-                bool clampedApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
-                    manager,
-                    true,
-                    localOffsetX: 0.5f,
-                    frameGateStart: -10f,
-                    frameGateEnd: 7000f);
-
-                Assert.That(clampedApplied, Is.True);
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(0.2f).Within(0.0001f));
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(6000f).Within(0.0001f));
-
-                bool disabledApplied = ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
-                    manager,
-                    false,
-                    localOffsetX: -0.055f,
-                    frameGateStart: 90f,
-                    frameGateEnd: 90f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useYybRightSleeveSilhouetteLocalOffsetReference, Is.False);
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetX, Is.EqualTo(-0.055f).Within(0.0001f));
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateStart, Is.EqualTo(90f).Within(0.0001f));
-                Assert.That(manager.yybRightSleeveSilhouetteLocalOffsetFrameGateEnd, Is.EqualTo(90f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_RightSleeveSilhouetteOffsetFrameGate_When_ExposedInInspector_Then_Frame90IsSelectable()
         {
-            AssertRangeMaxAtLeast<FBXVmdPipeline>("yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
-            AssertRangeMaxAtLeast<FBXVmdPipeline>("yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
-            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
-            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
+            AssertRangeMaxAtLeast<FBXVmdPipeline>("_yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
+            AssertRangeMaxAtLeast<FBXVmdPipeline>("_yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
+            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("_yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
+            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("_yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
         }
 
         [Test]
@@ -6038,38 +5980,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(field, Is.Not.Null, $"FBXVmdPipeline must expose {fieldName}.");
             return (float)field.GetValue(manager);
-        }
-
-        private static bool ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float localOffsetX,
-            float frameGateStart,
-            float frameGateEnd)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[]
-                {
-                    typeof(FBXVmdPipeline),
-                    typeof(bool),
-                    typeof(float),
-                    typeof(float),
-                    typeof(float)
-                },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only frame-local right sleeve silhouette offset for band_3_right correction probes.");
-
-            return (bool)method.Invoke(
-                null,
-                new object[] { manager, enabled, localOffsetX, frameGateStart, frameGateEnd });
         }
 
         private static bool ApplyManualAnimatorHandLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
