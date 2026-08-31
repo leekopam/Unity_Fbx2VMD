@@ -1672,8 +1672,14 @@ namespace Fbx2Vmd.FBXImporter
                 SummaryContainer summary = BuildSummaryContainer(frameQualitySummaries, frameRoleDiagnostics);
                 WriteSummaryJson(summaryJsonPath, summary);
                 WriteSummaryMarkdown(summaryMarkdownPath, summary);
-                CopyLatestSummary(summaryJsonPath, LatestSummaryJsonRelativePath);
-                CopyLatestSummary(summaryMarkdownPath, LatestSummaryMarkdownRelativePath);
+                VisualComparisonSummaryFileStore.CopyLatest(
+                    summaryJsonPath,
+                    _projectRoot,
+                    LatestSummaryJsonRelativePath);
+                VisualComparisonSummaryFileStore.CopyLatest(
+                    summaryMarkdownPath,
+                    _projectRoot,
+                    LatestSummaryMarkdownRelativePath);
             }
             catch (Exception ex)
             {
@@ -2791,11 +2797,6 @@ namespace Fbx2Vmd.FBXImporter
             string column)
         {
             return VisualComparisonCsvMetricReader.ReadFloat(row, indices, column);
-        }
-
-        private static void CopyLatestSummary(string sourcePath, string relativeTargetPath)
-        {
-            VisualComparisonSummaryFileStore.CopyLatest(sourcePath, _projectRoot, relativeTargetPath);
         }
 
         private static string ResolveReferenceClipAssetPath(string fbxFileName, Func<string, bool> hasReferenceClip)
