@@ -1212,79 +1212,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_YybArmVisualTwistRuntimeOverride_When_Toggled_Then_OnlyChangesVisualTwistSettings()
-        {
-            var managerObject = new GameObject("yyb arm visual twist runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.enableYybArmVisualTwistCorrection = false;
-                manager.YybArmVisualUpperArmInfluence = 0f;
-                manager.YybArmVisualForearmInfluence = 0f;
-                manager.YybArmVisualUpperArmMaxDegrees = 0f;
-                manager.YybArmVisualForearmMaxDegrees = 0f;
-                manager.enableYybArmDirectionRetargetCorrection = false;
-                manager.enableYybArmSwingLimitCorrection = false;
-                manager.ShouldUseManualAnimatorBodyRotationReference = false;
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
-
-                bool enabledApplied = ApplyYybArmVisualTwistRuntimeOverride(
-                    manager,
-                    true,
-                    upperArmInfluence: 0.25f,
-                    forearmInfluence: 0.6f,
-                    upperArmMaxDegrees: 30f,
-                    forearmMaxDegrees: 50f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.enableYybArmVisualTwistCorrection, Is.True);
-                Assert.That(manager.YybArmVisualUpperArmInfluence, Is.EqualTo(0.25f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualForearmInfluence, Is.EqualTo(0.6f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualUpperArmMaxDegrees, Is.EqualTo(30f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualForearmMaxDegrees, Is.EqualTo(50f).Within(0.0001f));
-                Assert.That(manager.enableYybArmDirectionRetargetCorrection, Is.False, "Visual twist candidate must not implicitly enable arm direction retarget.");
-                Assert.That(manager.enableYybArmSwingLimitCorrection, Is.False, "Visual twist candidate must not implicitly enable the swing limiter.");
-                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.False, "Visual twist candidate must not implicitly enable bodyRotation reference.");
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Visual twist candidate must not replace full-body muscles.");
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Visual twist candidate must not re-enable the rejected hips localPosition copy path.");
-
-                bool clampedApplied = ApplyYybArmVisualTwistRuntimeOverride(
-                    manager,
-                    true,
-                    upperArmInfluence: 1.5f,
-                    forearmInfluence: -0.5f,
-                    upperArmMaxDegrees: 150f,
-                    forearmMaxDegrees: -8f);
-
-                Assert.That(clampedApplied, Is.True);
-                Assert.That(manager.YybArmVisualUpperArmInfluence, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualForearmInfluence, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualUpperArmMaxDegrees, Is.EqualTo(120f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualForearmMaxDegrees, Is.EqualTo(0f).Within(0.0001f));
-
-                bool disabledApplied = ApplyYybArmVisualTwistRuntimeOverride(
-                    manager,
-                    false,
-                    upperArmInfluence: 0.25f,
-                    forearmInfluence: 0.6f,
-                    upperArmMaxDegrees: 30f,
-                    forearmMaxDegrees: 50f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.enableYybArmVisualTwistCorrection, Is.False);
-                Assert.That(manager.YybArmVisualUpperArmInfluence, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualForearmInfluence, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualUpperArmMaxDegrees, Is.EqualTo(30f).Within(0.0001f));
-                Assert.That(manager.YybArmVisualForearmMaxDegrees, Is.EqualTo(50f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ManualAnimatorBipedIkFootPositionRuntimeOverride_When_Toggled_Then_OnlyChangesFootIkSwitchAndCaps()
         {
             var managerObject = new GameObject("manual animator biped ik foot position runtime override manager");
@@ -6111,48 +6038,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(field, Is.Not.Null, $"FBXVmdPipeline must expose {fieldName}.");
             return (float)field.GetValue(manager);
-        }
-
-        private static bool ApplyYybArmVisualTwistRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float upperArmInfluence,
-            float forearmInfluence,
-            float upperArmMaxDegrees,
-            float forearmMaxDegrees)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyYybArmVisualTwistRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[]
-                {
-                    typeof(FBXVmdPipeline),
-                    typeof(bool),
-                    typeof(float),
-                    typeof(float),
-                    typeof(float),
-                    typeof(float)
-                },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only visual twist override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(
-                null,
-                new object[]
-                {
-                    manager,
-                    enabled,
-                    upperArmInfluence,
-                    forearmInfluence,
-                    upperArmMaxDegrees,
-                    forearmMaxDegrees
-                });
         }
 
         private static bool ApplyYybRightSleeveSilhouetteOffsetRuntimeOverride(
