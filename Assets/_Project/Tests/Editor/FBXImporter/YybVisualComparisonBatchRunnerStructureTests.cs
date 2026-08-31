@@ -61,7 +61,8 @@ namespace Tests.Editor.FBXImporter
                 "FormatProbeSampleTimes",
                 "GetEditorDiagnosticSmokeSegmentLabel",
                 "ToAbsoluteProjectPath",
-                "MakeProjectRelativePath"
+                "MakeProjectRelativePath",
+                "SanitizeFileName"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
