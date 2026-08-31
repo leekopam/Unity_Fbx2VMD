@@ -1389,14 +1389,30 @@ namespace Fbx2Vmd.FBXImporter
                 targetName = targetName,
                 success = result.Success,
                 error = result.Success ? string.Empty : result.ErrorMessage,
-                vmdPath = MakeProjectRelativePath(result.FilePath),
+                vmdPath = VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                    result.FilePath,
+                    _projectRoot),
                 frameCount = result.FrameCount,
                 fileSizeBytes = result.FileSizeBytes,
-                comparisonSessionManifestPath = probe != null ? MakeProjectRelativePath(probe.LastSessionManifestPath) : string.Empty,
-                comparisonMetricsCsvPath = probe != null ? MakeProjectRelativePath(probe.LastCsvPath) : string.Empty,
-                comparisonFrameFolderPath = probe != null ? MakeProjectRelativePath(probe.LastScreenshotFolder) : string.Empty,
+                comparisonSessionManifestPath = probe != null
+                    ? VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                        probe.LastSessionManifestPath,
+                        _projectRoot)
+                    : string.Empty,
+                comparisonMetricsCsvPath = probe != null
+                    ? VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                        probe.LastCsvPath,
+                        _projectRoot)
+                    : string.Empty,
+                comparisonFrameFolderPath = probe != null
+                    ? VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                        probe.LastScreenshotFolder,
+                        _projectRoot)
+                    : string.Empty,
                 comparisonFrameIndexPath = probe != null && !string.IsNullOrEmpty(probe.LastScreenshotFolder)
-                    ? MakeProjectRelativePath(Path.Combine(probe.LastScreenshotFolder, "index.csv"))
+                    ? VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                        Path.Combine(probe.LastScreenshotFolder, "index.csv"),
+                        _projectRoot)
                     : string.Empty,
                 comparisonSessionId = probe != null && !string.IsNullOrEmpty(probe.LastSessionManifestPath)
                     ? Path.GetFileName(Path.GetDirectoryName(probe.LastSessionManifestPath))
@@ -1671,9 +1687,12 @@ namespace Fbx2Vmd.FBXImporter
                 AppendRunnerTrace(message);
             }
 
+            string relativeSummaryJsonPath = VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                summaryJsonPath,
+                _projectRoot);
             string resultMessage =
                 $"[YybVisualComparisonBatchRunner] 종료: success={Results.Count(result => result.success)}/{Results.Count}, " +
-                $"failures={Failures.Count}, summary={MakeProjectRelativePath(summaryJsonPath)}";
+                $"failures={Failures.Count}, summary={relativeSummaryJsonPath}";
             if (Failures.Count > 0)
             {
                 Debug.LogWarning(resultMessage);
@@ -1711,8 +1730,12 @@ namespace Fbx2Vmd.FBXImporter
             {
                 passed = passed,
                 sessionId = _summarySessionId,
-                summaryJsonPath = MakeProjectRelativePath(summaryJsonPath),
-                summaryMarkdownPath = MakeProjectRelativePath(summaryMarkdownPath),
+                summaryJsonPath = VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                    summaryJsonPath,
+                    _projectRoot),
+                summaryMarkdownPath = VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                    summaryMarkdownPath,
+                    _projectRoot),
                 latestSummaryJsonPath = LatestSummaryJsonRelativePath,
                 latestSummaryMarkdownPath = LatestSummaryMarkdownRelativePath,
                 failures = failures ?? Array.Empty<string>(),
@@ -2070,7 +2093,9 @@ namespace Fbx2Vmd.FBXImporter
                 summary,
                 state,
                 ResolveSummaryTargetFrameCount(),
-                MakeProjectRelativePath(state.vmdPlaybackProbeSourceVmdPath));
+                VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                    state.vmdPlaybackProbeSourceVmdPath,
+                    _projectRoot));
             summary.generated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
             summary.reference_clip_name = _referenceClip != null ? _referenceClip.name : string.Empty;
             summary.reference_clip_asset_path = _referenceClipAssetPath;
@@ -2235,10 +2260,14 @@ namespace Fbx2Vmd.FBXImporter
             ResolveShortCandidateVmdPath(candidate);
             MotionComparisonFrameQualitySummary summary = MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
                 baseline.jobDisplayName,
-                ToAbsoluteProjectPath(baseline.comparisonMetricsCsvPath),
+                VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(
+                    baseline.comparisonMetricsCsvPath,
+                    _projectRoot),
                 candidate.jobDisplayName,
-                ToAbsoluteProjectPath(candidate.comparisonMetricsCsvPath),
-                ToAbsoluteProjectPath(candidate.vmdPath),
+                VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(
+                    candidate.comparisonMetricsCsvPath,
+                    _projectRoot),
+                VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(candidate.vmdPath, _projectRoot),
                 baseline.frameCount,
                 candidate.frameCount,
                 ResolveSummaryTargetFrameCount());
@@ -2251,10 +2280,14 @@ namespace Fbx2Vmd.FBXImporter
                 candidate.fileSizeBytes = promotion.promoted_vmd_bytes;
                 summary = MotionComparisonProbeReportWriter.BuildFrameQualitySummary(
                     baseline.jobDisplayName,
-                    ToAbsoluteProjectPath(baseline.comparisonMetricsCsvPath),
+                    VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(
+                        baseline.comparisonMetricsCsvPath,
+                        _projectRoot),
                     candidate.jobDisplayName,
-                    ToAbsoluteProjectPath(candidate.comparisonMetricsCsvPath),
-                    ToAbsoluteProjectPath(candidate.vmdPath),
+                    VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(
+                        candidate.comparisonMetricsCsvPath,
+                        _projectRoot),
+                    VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(candidate.vmdPath, _projectRoot),
                     baseline.frameCount,
                     candidate.frameCount,
                     ResolveSummaryTargetFrameCount());
@@ -2319,13 +2352,17 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            string currentAbsolutePath = ToAbsoluteProjectPath(candidate.vmdPath);
+            string currentAbsolutePath = VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(
+                candidate.vmdPath,
+                _projectRoot);
             if (string.Equals(currentAbsolutePath, shortPath, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            candidate.vmdPath = MakeProjectRelativePath(shortPath);
+            candidate.vmdPath = VisualComparisonArtifactPathResolver.MakeProjectRelative(
+                shortPath,
+                _projectRoot);
             candidate.fileSizeBytes = new FileInfo(shortPath).Length;
             SavePersistedState();
         }
@@ -2756,11 +2793,6 @@ namespace Fbx2Vmd.FBXImporter
             return VisualComparisonCsvMetricReader.ReadFloat(row, indices, column);
         }
 
-        private static string ToAbsoluteProjectPath(string path)
-        {
-            return VisualComparisonArtifactPathResolver.ToAbsoluteProjectPath(path, _projectRoot);
-        }
-
         private static void CopyLatestSummary(string sourcePath, string relativeTargetPath)
         {
             VisualComparisonSummaryFileStore.CopyLatest(sourcePath, _projectRoot, relativeTargetPath);
@@ -2792,11 +2824,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return string.Join("/", names.ToArray());
-        }
-
-        private static string MakeProjectRelativePath(string absolutePath)
-        {
-            return VisualComparisonArtifactPathResolver.MakeProjectRelative(absolutePath, _projectRoot);
         }
 
         private static string SanitizeFileName(string fileName)
