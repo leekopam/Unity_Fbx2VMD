@@ -2773,27 +2773,6 @@ namespace Fbx2Vmd.FBXImporter
             return diagnostic;
         }
 
-        private static float ResolveGroundingStepToMaxRatio(
-            string[] row,
-            Dictionary<string, int> indices,
-            float step,
-            float maxStep)
-        {
-            float reportedRatio = GetCsvFloat(row, indices, "retargetGroundingLastStepToMaxStepRatio");
-            return VisualComparisonMetricCalculator.ResolveGroundingStepToMaxRatio(
-                reportedRatio,
-                step,
-                maxStep);
-        }
-
-        private static float GetCsvFloat(
-            string[] row,
-            Dictionary<string, int> indices,
-            string column)
-        {
-            return VisualComparisonCsvMetricReader.ReadFloat(row, indices, column);
-        }
-
         private static string ResolveReferenceClipAssetPath(string fbxFileName, Func<string, bool> hasReferenceClip)
         {
             return FbxReferenceClipPathResolver.Resolve(
