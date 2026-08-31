@@ -1463,7 +1463,7 @@ namespace Fbx2Vmd.FBXImporter
                 result,
                 copyPath,
                 _summaryDirectory,
-                SanitizeFileName);
+                SanitizeComparisonArtifactFileName);
         }
 
         private static string BuildCandidateVmdEvidencePath(CaptureJob job, string sourceVmdPath)
@@ -2826,7 +2826,7 @@ namespace Fbx2Vmd.FBXImporter
             return string.Join("/", names.ToArray());
         }
 
-        private static string SanitizeFileName(string fileName)
+        private static string SanitizeComparisonArtifactFileName(string fileName)
         {
             return VisualComparisonArtifactNamePolicy.SanitizeFileName(
                 fileName,
