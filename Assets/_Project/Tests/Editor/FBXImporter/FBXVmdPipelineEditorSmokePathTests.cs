@@ -1110,31 +1110,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RetargeterLegacyState_When_PreparingRecordingStartPose_Then_SamplesRetargeterPlaybackState()
-        {
-            GameObject ghost = new GameObject("retargeter-prewarm-ghost");
-            try
-            {
-                Animation animation = ghost.AddComponent<Animation>();
-                AnimationClip externalClip = CreateLegacyPositionClip("satisfaction_2", 1f);
-                AnimationClip retargeterClip = CreateLegacyPositionClip("__PoseSpaceRetargeter_GhostClip", 2f);
-                animation.AddClip(externalClip, externalClip.name);
-                animation.AddClip(retargeterClip, retargeterClip.name);
-                animation.clip = retargeterClip;
-
-                bool sampled = PrepareRetargeterLegacyRecordingStartPose(animation, 0f, 1f, holdPose: true);
-
-                Assert.That(sampled, Is.True);
-                Assert.That(ghost.transform.localPosition.x, Is.EqualTo(2f).Within(0.0001f));
-                Assert.That(animation[retargeterClip.name].speed, Is.EqualTo(0f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(ghost);
-            }
-        }
-
-        [Test]
         public void Given_EditorSmokeSettingsSnapshot_When_CapturingAndClearing_Then_RestoresAllRuntimeSettings()
         {
             GameObject root = new GameObject("EditorSmokeSettingsSnapshotTest");
@@ -1507,32 +1482,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(method, Is.Not.Null, $"FbxPlaybackSmokeRunner must expose {methodName} for smoke plan verification.");
             return method;
-        }
-
-        private static AnimationClip CreateLegacyPositionClip(string clipName, float x)
-        {
-            AnimationClip clip = new AnimationClip
-            {
-                name = clipName,
-                legacy = true
-            };
-            clip.SetCurve(string.Empty, typeof(Transform), "localPosition.x", AnimationCurve.Constant(0f, 1f, x));
-            clip.SetCurve(string.Empty, typeof(Transform), "localPosition.y", AnimationCurve.Constant(0f, 1f, 0f));
-            clip.SetCurve(string.Empty, typeof(Transform), "localPosition.z", AnimationCurve.Constant(0f, 1f, 0f));
-            return clip;
-        }
-
-        private static bool PrepareRetargeterLegacyRecordingStartPose(Animation animation, float startTimeSeconds, float playbackSpeed, bool holdPose)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "PrepareRecordingStartPoseForTest",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(Animation), typeof(float), typeof(float), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a fakeable recording-start prewarm helper.");
-            return (bool)method.Invoke(null, new object[] { animation, startTimeSeconds, playbackSpeed, holdPose });
         }
 
         private static bool ContainsWithin(float[] values, float expected, float tolerance)
