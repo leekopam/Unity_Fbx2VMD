@@ -187,37 +187,122 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_YybArmProfile_When_ApplyingDirectionSettings_Then_ClampsSideWeights()
+        public void Given_DirectionOverride_When_Enabled_Then_ClampsOnlyDirectionSettings()
         {
-            var pipelineObject = new GameObject("YYB arm override pipeline");
+            var pipelineObject = new GameObject("arm direction override pipeline");
             try
             {
                 var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
-                Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
-                    "Fbx2Vmd.FBXImporter.YybArmRuntimeOverrideApplier",
-                    throwOnError: false);
-                Assert.That(applierType, Is.Not.Null, "YYB 전용 팔 override 적용기가 필요합니다.");
+                pipeline.enableYybArmSwingLimitCorrection = false;
+                pipeline.ShouldUseManualAnimatorBodyRotationReference = false;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = false;
 
-                MethodInfo applyMethod = applierType.GetMethod(
-                    "ApplyDirection",
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                Assert.That(applyMethod, Is.Not.Null);
+                bool enabledApplied = ApplyDirection(
+                    pipeline,
+                    true,
+                    upperArmWeight: 0.4f,
+                    forearmWeight: 0.55f,
+                    upperArmMaxDegrees: 22f,
+                    forearmMaxDegrees: 35f,
+                    leftSideWeightScale: 0.7f,
+                    rightSideWeightScale: 0.8f);
 
-                bool applied = (bool)applyMethod.Invoke(
-                    null,
-                    new object[] { pipeline, true, 0.4f, 0.5f, 70f, 80f, -1f, 2f });
-
-                Assert.That(applied, Is.True);
+                Assert.That(enabledApplied, Is.True);
                 Assert.That(pipeline.enableYybArmDirectionRetargetCorrection, Is.True);
                 Assert.That(pipeline.YybArmDirectionUpperArmWeight, Is.EqualTo(0.4f).Within(0.0001f));
-                Assert.That(pipeline.YybArmDirectionForearmWeight, Is.EqualTo(0.5f).Within(0.0001f));
-                Assert.That(pipeline.YybArmDirectionLeftSideWeightScale, Is.EqualTo(0f));
-                Assert.That(pipeline.YybArmDirectionRightSideWeightScale, Is.EqualTo(1f));
+                Assert.That(pipeline.YybArmDirectionForearmWeight, Is.EqualTo(0.55f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionUpperArmMaxDegrees, Is.EqualTo(22f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionForearmMaxDegrees, Is.EqualTo(35f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionLeftSideWeightScale, Is.EqualTo(0.7f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionRightSideWeightScale, Is.EqualTo(0.8f).Within(0.0001f));
+                Assert.That(pipeline.enableYybArmSwingLimitCorrection, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyRotationReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
+
+                bool clampedApplied = ApplyDirection(
+                    pipeline,
+                    true,
+                    upperArmWeight: 1.5f,
+                    forearmWeight: -0.5f,
+                    upperArmMaxDegrees: 150f,
+                    forearmMaxDegrees: -8f,
+                    leftSideWeightScale: -0.5f,
+                    rightSideWeightScale: 1.25f);
+
+                Assert.That(clampedApplied, Is.True);
+                Assert.That(pipeline.YybArmDirectionUpperArmWeight, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionForearmWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionUpperArmMaxDegrees, Is.EqualTo(120f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionForearmMaxDegrees, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionLeftSideWeightScale, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionRightSideWeightScale, Is.EqualTo(1f).Within(0.0001f));
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(pipelineObject);
             }
+        }
+
+        [Test]
+        public void Given_DirectionOverride_When_Disabled_Then_ZerosWeightsAndPreservesAngleLimits()
+        {
+            var pipelineObject = new GameObject("disabled arm direction override pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+
+                bool applied = ApplyDirection(
+                    pipeline,
+                    false,
+                    upperArmWeight: 0.4f,
+                    forearmWeight: 0.55f,
+                    upperArmMaxDegrees: 22f,
+                    forearmMaxDegrees: 35f,
+                    leftSideWeightScale: 0.7f,
+                    rightSideWeightScale: 0.8f);
+
+                Assert.That(applied, Is.True);
+                Assert.That(pipeline.enableYybArmDirectionRetargetCorrection, Is.False);
+                Assert.That(pipeline.YybArmDirectionUpperArmWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionForearmWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionUpperArmMaxDegrees, Is.EqualTo(22f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionForearmMaxDegrees, Is.EqualTo(35f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionLeftSideWeightScale, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmDirectionRightSideWeightScale, Is.EqualTo(0f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        private static bool ApplyDirection(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float upperArmWeight,
+            float forearmWeight,
+            float upperArmMaxDegrees,
+            float forearmMaxDegrees,
+            float leftSideWeightScale,
+            float rightSideWeightScale)
+        {
+            MethodInfo applyMethod = FindApplyMethod("ApplyDirection");
+
+            return (bool)applyMethod.Invoke(
+                null,
+                new object[]
+                {
+                    pipeline,
+                    enabled,
+                    upperArmWeight,
+                    forearmWeight,
+                    upperArmMaxDegrees,
+                    forearmMaxDegrees,
+                    leftSideWeightScale,
+                    rightSideWeightScale
+                });
         }
 
         private static bool ApplySwingLimit(
@@ -236,15 +321,7 @@ namespace Tests.Editor.FBXImporter
             float raisedPoseMaxHandBelowShoulderRatio = 0.05f,
             float raisedPoseMaxHandHorizontalReachRatio = 0f)
         {
-            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.FBXImporter.YybArmRuntimeOverrideApplier",
-                throwOnError: false);
-            Assert.That(applierType, Is.Not.Null, "팔 override 적용기가 필요합니다.");
-
-            MethodInfo applyMethod = applierType.GetMethod(
-                "ApplySwingLimit",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(applyMethod, Is.Not.Null, "팔 스윙 제한 적용 메서드가 필요합니다.");
+            MethodInfo applyMethod = FindApplyMethod("ApplySwingLimit");
 
             return (bool)applyMethod.Invoke(
                 null,
@@ -265,6 +342,20 @@ namespace Tests.Editor.FBXImporter
                     raisedPoseMaxHandBelowShoulderRatio,
                     raisedPoseMaxHandHorizontalReachRatio
                 });
+        }
+
+        private static MethodInfo FindApplyMethod(string methodName)
+        {
+            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.YybArmRuntimeOverrideApplier",
+                throwOnError: false);
+            Assert.That(applierType, Is.Not.Null, "팔 override 적용기가 필요합니다.");
+
+            MethodInfo applyMethod = applierType.GetMethod(
+                methodName,
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(applyMethod, Is.Not.Null, $"{methodName} 적용 메서드가 필요합니다.");
+            return applyMethod;
         }
     }
 }
