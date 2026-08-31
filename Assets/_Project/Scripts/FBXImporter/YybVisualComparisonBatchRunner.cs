@@ -256,6 +256,11 @@ namespace Fbx2Vmd.FBXImporter
             StartRun(options);
         }
 
+        internal static void RunWithOptions(YybVisualComparisonRunOptions runOptions)
+        {
+            StartRun(runOptions);
+        }
+
         public static void RunWithOptions(string fbxFileName, float durationSeconds, bool enableFingerCloseups)
         {
             RunWithOptions(
