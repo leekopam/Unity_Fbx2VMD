@@ -37,6 +37,23 @@ namespace Tests.Editor.FBXImporter
             Assert.That(ReadField<string>(plan, "OutputBaseName"), Is.EqualTo("target_motion_5s_animtime"));
         }
 
+        [TestCase("tail", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail)]
+        [TestCase("TAIL", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail)]
+        [TestCase("middle", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle)]
+        [TestCase("MIDDLE", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle)]
+        [TestCase("", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head)]
+        [TestCase("unknown", FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head)]
+        [TestCase(null, FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head)]
+        public void Given_SegmentText_When_ResolvingSegment_Then_UsesStableFallback(
+            string value,
+            FBXVmdPipeline.EditorDiagnosticSmokeSegment expected)
+        {
+            object actual = FindMethod(FindPlannerType(), "ResolveSegment")
+                .Invoke(null, new object[] { value });
+
+            Assert.That(actual, Is.EqualTo(expected));
+        }
+
         [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head, "head")]
         [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle, "middle")]
         [TestCase(FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail, "tail")]

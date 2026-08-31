@@ -821,7 +821,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             _currentRunOptions = options ?? throw new ArgumentNullException(nameof(options));
             _editorDiagnosticSmokeSegment =
-                ResolveEditorDiagnosticSmokeSegment(options.editorDiagnosticSmokeSegment);
+                VisualComparisonCaptureSegmentPlanner.ResolveSegment(options.editorDiagnosticSmokeSegment);
         }
 
         private static void ContinueStartRunAfterRefresh()
@@ -1162,11 +1162,6 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
         }
-        private static FBXVmdPipeline.EditorDiagnosticSmokeSegment ResolveEditorDiagnosticSmokeSegment(string value)
-        {
-            return VisualComparisonCaptureSegmentPlanner.ResolveSegment(value);
-        }
-
         private static VisualComparisonManualCapturePlan BuildManualAnimatorCapturePlan(
             string labelSuffix,
             string fbxFileName,
