@@ -1183,17 +1183,6 @@ namespace Fbx2Vmd.FBXImporter
                 segment);
         }
 
-        private static float CalculateEditorDiagnosticSmokeStartTime(
-            float referenceClipLengthSeconds,
-            float requestedDurationSeconds,
-            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
-        {
-            return VisualComparisonCaptureSegmentPlanner.CalculateStartTime(
-                referenceClipLengthSeconds,
-                requestedDurationSeconds,
-                segment);
-        }
-
         private static void StartSubManualJob(string targetNameToken)
         {
             _activeRecorder = SelectActiveManualRecorder(targetNameToken);

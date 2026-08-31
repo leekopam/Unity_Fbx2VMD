@@ -66,7 +66,8 @@ namespace Tests.Editor.FBXImporter
                 "CopyLatestSummary",
                 "WriteSummaryJson",
                 "GetCsvFloat",
-                "ResolveGroundingStepToMaxRatio"
+                "ResolveGroundingStepToMaxRatio",
+                "CalculateEditorDiagnosticSmokeStartTime"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
