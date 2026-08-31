@@ -249,6 +249,74 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_VisualTwistOverride_When_Toggled_Then_ClampsOnlyVisualTwistSettings()
+        {
+            var pipelineObject = new GameObject("arm visual twist override pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.enableYybArmDirectionRetargetCorrection = false;
+                pipeline.enableYybArmSwingLimitCorrection = false;
+                pipeline.ShouldUseManualAnimatorBodyRotationReference = false;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = false;
+
+                bool enabledApplied = ApplyVisualTwist(
+                    pipeline,
+                    true,
+                    upperArmInfluence: 0.25f,
+                    forearmInfluence: 0.6f,
+                    upperArmMaxDegrees: 30f,
+                    forearmMaxDegrees: 50f);
+
+                Assert.That(enabledApplied, Is.True);
+                Assert.That(pipeline.enableYybArmVisualTwistCorrection, Is.True);
+                Assert.That(pipeline.YybArmVisualUpperArmInfluence, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualForearmInfluence, Is.EqualTo(0.6f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualUpperArmMaxDegrees, Is.EqualTo(30f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualForearmMaxDegrees, Is.EqualTo(50f).Within(0.0001f));
+                Assert.That(pipeline.enableYybArmDirectionRetargetCorrection, Is.False);
+                Assert.That(pipeline.enableYybArmSwingLimitCorrection, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyRotationReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
+
+                bool clampedApplied = ApplyVisualTwist(
+                    pipeline,
+                    true,
+                    upperArmInfluence: 1.5f,
+                    forearmInfluence: -0.5f,
+                    upperArmMaxDegrees: 150f,
+                    forearmMaxDegrees: -8f);
+
+                Assert.That(clampedApplied, Is.True);
+                Assert.That(pipeline.YybArmVisualUpperArmInfluence, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualForearmInfluence, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualUpperArmMaxDegrees, Is.EqualTo(120f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualForearmMaxDegrees, Is.EqualTo(0f).Within(0.0001f));
+
+                bool disabledApplied = ApplyVisualTwist(
+                    pipeline,
+                    false,
+                    upperArmInfluence: 0.25f,
+                    forearmInfluence: 0.6f,
+                    upperArmMaxDegrees: 30f,
+                    forearmMaxDegrees: 50f);
+
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(pipeline.enableYybArmVisualTwistCorrection, Is.False);
+                Assert.That(pipeline.YybArmVisualUpperArmInfluence, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualForearmInfluence, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualUpperArmMaxDegrees, Is.EqualTo(30f).Within(0.0001f));
+                Assert.That(pipeline.YybArmVisualForearmMaxDegrees, Is.EqualTo(50f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_DirectionOverride_When_Enabled_Then_ClampsOnlyDirectionSettings()
         {
             var pipelineObject = new GameObject("arm direction override pipeline");
@@ -385,6 +453,29 @@ namespace Tests.Editor.FBXImporter
                     sleeveInfluence,
                     shoulderCapInfluence,
                     maxDegrees
+                });
+        }
+
+        private static bool ApplyVisualTwist(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float upperArmInfluence,
+            float forearmInfluence,
+            float upperArmMaxDegrees,
+            float forearmMaxDegrees)
+        {
+            MethodInfo applyMethod = FindApplyMethod("ApplyVisualTwist");
+
+            return (bool)applyMethod.Invoke(
+                null,
+                new object[]
+                {
+                    pipeline,
+                    enabled,
+                    upperArmInfluence,
+                    forearmInfluence,
+                    upperArmMaxDegrees,
+                    forearmMaxDegrees
                 });
         }
 
