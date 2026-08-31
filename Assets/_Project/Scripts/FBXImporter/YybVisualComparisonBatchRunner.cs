@@ -1402,7 +1402,9 @@ namespace Fbx2Vmd.FBXImporter
                     ? Path.GetFileName(Path.GetDirectoryName(probe.LastSessionManifestPath))
                     : string.Empty
             };
-            CaptureFBXVmdPipelineEffectiveSettings(captureResult, _activeFBXVmdPipeline);
+            YybVisualComparisonEffectiveSettingsSnapshotter.Capture(
+                captureResult,
+                _activeFBXVmdPipeline);
             Results.Add(captureResult);
             SavePersistedState();
 
@@ -1420,11 +1422,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             RequestPlayModeStop();
-        }
-
-        private static void CaptureFBXVmdPipelineEffectiveSettings(CaptureResult result, FBXVmdPipeline fileManager)
-        {
-            YybVisualComparisonEffectiveSettingsSnapshotter.Capture(result, fileManager);
         }
 
         private static VmdSaveResult BuildStableCandidateResult(VmdSaveResult result)
