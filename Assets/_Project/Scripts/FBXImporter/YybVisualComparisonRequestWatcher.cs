@@ -514,7 +514,7 @@ namespace Fbx2Vmd.FBXImporter
                     disableManualAnimatorFootLocalRotationRuntimeOverride: request.manual_animator_foot_local_rotation_disabled,
                     enableManualAnimatorFullBodyPoseRuntimeOverride: request.manual_animator_full_body_pose_enabled,
                     disableManualAnimatorFullBodyPoseRuntimeOverride: request.manual_animator_full_body_pose_disabled,
-                    manualAnimatorFullBodyPoseReferenceWeight: Mathf.Clamp01(NormalizePositiveFloat(
+                    manualAnimatorFullBodyPoseReferenceWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_full_body_pose_weight,
                         DefaultManualAnimatorFullBodyPoseReferenceWeight)),
                     manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride:
@@ -531,25 +531,25 @@ namespace Fbx2Vmd.FBXImporter
                         request.manual_animator_full_body_pose_right_sleeve_chain_muscles_only,
                     manualAnimatorFullBodyPoseReferenceFrameGateStart: Mathf.Max(
                         0f,
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_full_body_pose_frame_gate_start,
                             0f)),
                     manualAnimatorFullBodyPoseReferenceFrameGateEnd: Mathf.Max(
                         0f,
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_full_body_pose_frame_gate_end,
                             0f)),
                     enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride:
                         request.set_human_pose_right_leg_twist_output_enabled,
-                    setHumanPoseRightLegTwistOutputReferenceWeight: Mathf.Clamp01(NormalizeFiniteFloat(
+                    setHumanPoseRightLegTwistOutputReferenceWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.set_human_pose_right_leg_twist_output_weight,
                         DefaultSetHumanPoseRightLegTwistOutputReferenceWeight)),
-                    setHumanPoseRightLegTwistOutputReferenceMaxDelta: Mathf.Max(0f, NormalizeFiniteFloat(
+                    setHumanPoseRightLegTwistOutputReferenceMaxDelta: Mathf.Max(0f, VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.set_human_pose_right_leg_twist_output_max_delta,
                         DefaultSetHumanPoseRightLegTwistOutputReferenceMaxDelta)),
                     enableManualAnimatorBodyRotationRuntimeOverride: request.manual_animator_body_rotation_enabled,
                     disableManualAnimatorBodyRotationRuntimeOverride: request.manual_animator_body_rotation_disabled,
-                    manualAnimatorBodyRotationReferenceWeight: NormalizePositiveFloat(
+                    manualAnimatorBodyRotationReferenceWeight: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_body_rotation_weight,
                         DefaultManualAnimatorBodyRotationReferenceWeight),
                     enableManualAnimatorHandLocalRotationRuntimeOverride:
@@ -558,7 +558,7 @@ namespace Fbx2Vmd.FBXImporter
                         request.manual_animator_thumb_local_rotation_enabled,
                     enableManualAnimatorHandPalmFrameRuntimeOverride:
                         request.manual_animator_hand_palm_frame_enabled,
-                    manualAnimatorHandPalmFrameWeight: Mathf.Clamp01(NormalizePositiveFloat(
+                    manualAnimatorHandPalmFrameWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_hand_palm_frame_weight,
                         DefaultManualAnimatorHandPalmFrameWeight)),
                     overrideRetargetPoseVisualSpikeSmoothingRuntimeSettings:
@@ -566,136 +566,136 @@ namespace Fbx2Vmd.FBXImporter
                     enableRetargetPoseVisualSpikeSmoothingRuntimeOverride:
                         request.retarget_pose_visual_spike_smoothing_enabled,
                     retargetPoseVisualSpikeCurrentWeight: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.retarget_pose_visual_spike_current_weight,
                             DefaultRetargetPoseVisualSpikeCurrentWeight),
                         0.1f,
                         1f),
                     retargetPoseVisualSpikeForearmStretchClampMaxOffset: Mathf.Clamp01(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.retarget_pose_visual_spike_forearm_stretch_clamp_max_offset,
                             DefaultRetargetPoseVisualSpikeForearmStretchClampMaxOffset)),
                     enableRetargetArmStretchClampRuntimeOverride:
                         request.retarget_arm_stretch_clamp_enabled,
                     retargetArmStretchMuscleLimit: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.retarget_arm_stretch_muscle_limit,
                             DefaultRetargetArmStretchMuscleLimit),
                         0f,
                         DefaultRetargetArmStretchMuscleLimit),
                     enableYybArmSwingLimitRuntimeOverride: request.yyb_arm_swing_limit_enabled,
-                    yybArmSwingLimitWeight: Mathf.Clamp01(NormalizePositiveFloat(
+                    yybArmSwingLimitWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.yyb_arm_swing_limit_weight,
                         DefaultYybArmSwingLimitWeight)),
-                    yybArmSwingMaxDownDot: Mathf.Clamp01(NormalizePositiveFloat(
+                    yybArmSwingMaxDownDot: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.yyb_arm_swing_max_down_dot,
                         DefaultYybArmSwingMaxDownDot)),
                     yybArmSwingMinHandHorizontalRatio: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_swing_min_hand_horizontal_ratio,
                             DefaultYybArmSwingMinHandHorizontalRatio),
                         0f,
                         1.5f),
                     yybArmSwingMaxHandBelowShoulderRatio: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_swing_max_hand_below_shoulder_ratio,
                             DefaultYybArmSwingMaxHandBelowShoulderRatio),
                         0f,
                         1.5f),
-                    yybArmSwingHorizontalReachLimitWeight: Mathf.Clamp01(NormalizePositiveFloat(
+                    yybArmSwingHorizontalReachLimitWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.yyb_arm_swing_horizontal_reach_limit_weight,
                         DefaultYybArmSwingHorizontalReachLimitWeight)),
                     yybArmSwingMaxHandHorizontalReachRatio: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_swing_max_hand_horizontal_reach_ratio,
                             DefaultYybArmSwingMaxHandHorizontalReachRatio),
                         0f,
                         1.5f),
                     yybArmSwingHorizontalReachMaxHandBelowShoulderRatio: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_swing_horizontal_reach_max_hand_below_shoulder_ratio,
                             DefaultYybArmSwingHorizontalReachMaxHandBelowShoulderRatio),
                         0f,
                         1.5f),
                     yybArmSwingHorizontalReachMinElbowAngleAfterApply: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_swing_horizontal_reach_min_elbow_angle_after_apply,
                             DefaultYybArmSwingHorizontalReachMinElbowAngleAfterApply),
                         0f,
                         180f),
-                    yybArmSwingRaisedPoseHorizontalReachLimitWeight: Mathf.Clamp01(NormalizePositiveFloat(
+                    yybArmSwingRaisedPoseHorizontalReachLimitWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.yyb_arm_swing_raised_pose_horizontal_reach_limit_weight,
                         DefaultYybArmSwingRaisedPoseHorizontalReachLimitWeight)),
-                    yybArmSwingRaisedPoseMinUpperArmDownDot: Mathf.Clamp01(NormalizePositiveFloat(
+                    yybArmSwingRaisedPoseMinUpperArmDownDot: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.yyb_arm_swing_raised_pose_min_upper_arm_down_dot,
                         DefaultYybArmSwingRaisedPoseMinUpperArmDownDot)),
                     yybArmSwingRaisedPoseMaxHandBelowShoulderRatio: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_swing_raised_pose_max_hand_below_shoulder_ratio,
                             DefaultYybArmSwingRaisedPoseMaxHandBelowShoulderRatio),
                         0f,
                         1.5f),
                     yybArmSwingRaisedPoseMaxHandHorizontalReachRatio: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_swing_raised_pose_max_hand_horizontal_reach_ratio,
                             DefaultYybArmSwingRaisedPoseMaxHandHorizontalReachRatio),
                         0f,
                         1.5f),
                     enableYybArmDirectionRetargetRuntimeOverride: request.yyb_arm_direction_retarget_enabled,
-                    yybArmDirectionUpperArmWeight: Mathf.Clamp01(NormalizePositiveFloat(
+                    yybArmDirectionUpperArmWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.yyb_arm_direction_upper_arm_weight,
                         DefaultYybArmDirectionUpperArmWeight)),
-                    yybArmDirectionForearmWeight: Mathf.Clamp01(NormalizePositiveFloat(
+                    yybArmDirectionForearmWeight: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.yyb_arm_direction_forearm_weight,
                         DefaultYybArmDirectionForearmWeight)),
                     yybArmDirectionUpperArmMaxDegrees: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_direction_upper_arm_max_degrees,
                             DefaultYybArmDirectionUpperArmMaxDegrees),
                         0f,
                         120f),
                     yybArmDirectionForearmMaxDegrees: Mathf.Clamp(
-                        NormalizePositiveFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                             request.yyb_arm_direction_forearm_max_degrees,
                             DefaultYybArmDirectionForearmMaxDegrees),
                         0f,
                         120f),
-                    yybArmDirectionLeftSideWeightScale: Mathf.Clamp01(NormalizeFiniteFloat(
+                    yybArmDirectionLeftSideWeightScale: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.yyb_arm_direction_left_side_weight_scale,
                         DefaultYybArmDirectionLeftSideWeightScale)),
-                    yybArmDirectionRightSideWeightScale: Mathf.Clamp01(NormalizeFiniteFloat(
+                    yybArmDirectionRightSideWeightScale: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.yyb_arm_direction_right_side_weight_scale,
                         DefaultYybArmDirectionRightSideWeightScale)),
                     overrideYybArmSleeveAnchorRuntimeSettings: request.yyb_arm_sleeve_anchor_override,
                     enableYybArmSleeveAnchorRuntimeOverride: request.yyb_arm_sleeve_anchor_enabled,
-                    yybArmSleeveAnchorInfluence: Mathf.Clamp01(NormalizeFiniteFloat(
+                    yybArmSleeveAnchorInfluence: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.yyb_arm_sleeve_anchor_influence,
                         DefaultYybArmSleeveAnchorInfluence)),
-                    yybArmShoulderCapAnchorInfluence: Mathf.Clamp01(NormalizeFiniteFloat(
+                    yybArmShoulderCapAnchorInfluence: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.yyb_arm_shoulder_cap_anchor_influence,
                         DefaultYybArmShoulderCapAnchorInfluence)),
                     yybArmSleeveAnchorMaxDegrees: Mathf.Clamp(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.yyb_arm_sleeve_anchor_max_degrees,
                             DefaultYybArmSleeveAnchorMaxDegrees),
                         0f,
                         120f),
                     overrideYybArmVisualTwistRuntimeSettings: request.yyb_arm_visual_twist_override,
                     enableYybArmVisualTwistRuntimeOverride: request.yyb_arm_visual_twist_enabled,
-                    yybArmVisualUpperArmInfluence: Mathf.Clamp01(NormalizeFiniteFloat(
+                    yybArmVisualUpperArmInfluence: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.yyb_arm_visual_upper_arm_influence,
                         DefaultYybArmVisualUpperArmInfluence)),
-                    yybArmVisualForearmInfluence: Mathf.Clamp01(NormalizeFiniteFloat(
+                    yybArmVisualForearmInfluence: Mathf.Clamp01(VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.yyb_arm_visual_forearm_influence,
                         DefaultYybArmVisualForearmInfluence)),
                     yybArmVisualUpperArmMaxDegrees: Mathf.Clamp(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.yyb_arm_visual_upper_arm_max_degrees,
                             DefaultYybArmVisualUpperArmMaxDegrees),
                         0f,
                         120f),
                     yybArmVisualForearmMaxDegrees: Mathf.Clamp(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.yyb_arm_visual_forearm_max_degrees,
                             DefaultYybArmVisualForearmMaxDegrees),
                         0f,
@@ -703,82 +703,82 @@ namespace Fbx2Vmd.FBXImporter
                     enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride: request.manual_animator_lower_body_segment_direction_enabled,
                     disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride:
                         request.manual_animator_lower_body_segment_direction_disabled,
-                    manualAnimatorLowerBodySegmentDirectionReferenceWeight: NormalizePositiveFloat(
+                    manualAnimatorLowerBodySegmentDirectionReferenceWeight: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_lower_body_segment_direction_weight,
                         DefaultManualAnimatorLowerBodySegmentDirectionReferenceWeight),
-                    manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle: NormalizePositiveFloat(
+                    manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_lower_body_segment_direction_max_angle,
                         DefaultManualAnimatorLowerBodySegmentDirectionReferenceMaxAngle),
                     disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride:
                         request.manual_animator_upper_leg_to_lower_leg_segment_direction_disabled,
-                    manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle: NormalizePositiveFloat(
+                    manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_upper_leg_to_lower_leg_segment_direction_max_angle,
                         DefaultManualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle),
                     disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride:
                         request.manual_animator_lower_leg_to_foot_segment_direction_disabled,
-                    manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle: NormalizePositiveFloat(
+                    manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_lower_leg_to_foot_segment_direction_max_angle,
                         DefaultManualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle),
-                    manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle: NormalizePositiveFloat(
+                    manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_left_lower_leg_to_foot_segment_direction_max_angle,
                         DefaultManualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle),
-                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle: NormalizePositiveFloat(
+                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_right_lower_leg_to_foot_segment_direction_max_angle,
                         DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle),
                     manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_right_lower_leg_to_foot_segment_direction_axis_xz_scale,
                             DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale)),
                     manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_right_lower_leg_to_foot_segment_direction_blend_weight,
                             DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight)),
-                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart: NormalizePositiveFloat(
+                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_right_lower_leg_to_foot_segment_direction_frame_gate_start,
                         DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart),
-                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd: NormalizePositiveFloat(
+                    manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_right_lower_leg_to_foot_segment_direction_frame_gate_end,
                         DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd),
                     manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_right_lower_leg_to_foot_segment_direction_endpoint_blend_weight,
                             DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight)),
                     disableManualAnimatorFootToToesSegmentDirectionRuntimeOverride:
                         request.manual_animator_foot_to_toes_segment_direction_disabled,
-                    manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle: NormalizePositiveFloat(
+                    manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_foot_to_toes_segment_direction_max_angle,
                         DefaultManualAnimatorFootToToesSegmentDirectionReferenceMaxAngle),
                     enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride:
                         request.manual_animator_foot_hips_aligned_residual_yaw_enabled,
                     disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride:
                         request.manual_animator_foot_hips_aligned_residual_yaw_disabled,
-                    manualAnimatorFootHipsAlignedResidualYawReferenceWeight: NormalizePositiveFloat(
+                    manualAnimatorFootHipsAlignedResidualYawReferenceWeight: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_foot_hips_aligned_residual_yaw_weight,
                         DefaultManualAnimatorFootHipsAlignedResidualYawReferenceWeight),
-                    manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle: NormalizePositiveFloat(
+                    manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_foot_hips_aligned_residual_yaw_max_angle,
                         DefaultManualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle),
                     enablePostSetHumanPoseRightEndpointPositionRuntimeOverride:
                         request.post_set_human_pose_right_endpoint_position_enabled,
                     postSetHumanPoseRightEndpointPositionReferenceWeight: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.post_set_human_pose_right_endpoint_position_weight,
                             DefaultPostSetHumanPoseRightEndpointPositionReferenceWeight)),
-                    postSetHumanPoseRightEndpointPositionReferenceMaxOffset: NormalizePositiveFloat(
+                    postSetHumanPoseRightEndpointPositionReferenceMaxOffset: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.post_set_human_pose_right_endpoint_position_max_offset,
                         DefaultPostSetHumanPoseRightEndpointPositionReferenceMaxOffset),
                     postSetHumanPoseRightEndpointPositionReferencePositiveZScale: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.post_set_human_pose_right_endpoint_position_positive_z_scale,
                             DefaultPostSetHumanPoseRightEndpointPositionReferencePositiveZScale)),
                     postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.post_set_human_pose_right_endpoint_position_toes_blend_weight,
                             DefaultPostSetHumanPoseRightEndpointPositionReferenceToesBlendWeight)),
-                    postSetHumanPoseRightEndpointPositionReferenceFrameGateStart: NormalizePositiveFloat(
+                    postSetHumanPoseRightEndpointPositionReferenceFrameGateStart: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.post_set_human_pose_right_endpoint_position_frame_gate_start,
                         DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateStart),
-                    postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: NormalizePositiveFloat(
+                    postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.post_set_human_pose_right_endpoint_position_frame_gate_end,
                         DefaultPostSetHumanPoseRightEndpointPositionReferenceFrameGateEnd),
                     ShouldUseLeftSideForPostSetHumanPoseEndpointPosition:
@@ -786,24 +786,24 @@ namespace Fbx2Vmd.FBXImporter
                     enablePreSetHumanPoseRightEndpointPositionRuntimeOverride:
                         request.pre_set_human_pose_right_endpoint_position_enabled,
                     preSetHumanPoseRightEndpointPositionReferenceWeight: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.pre_set_human_pose_right_endpoint_position_weight,
                             DefaultPreSetHumanPoseRightEndpointPositionReferenceWeight)),
-                    preSetHumanPoseRightEndpointPositionReferenceMaxOffset: NormalizePositiveFloat(
+                    preSetHumanPoseRightEndpointPositionReferenceMaxOffset: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.pre_set_human_pose_right_endpoint_position_max_offset,
                         DefaultPreSetHumanPoseRightEndpointPositionReferenceMaxOffset),
                     preSetHumanPoseRightEndpointPositionReferencePositiveZScale: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.pre_set_human_pose_right_endpoint_position_positive_z_scale,
                             DefaultPreSetHumanPoseRightEndpointPositionReferencePositiveZScale)),
                     preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.pre_set_human_pose_right_endpoint_position_toes_blend_weight,
                             DefaultPreSetHumanPoseRightEndpointPositionReferenceToesBlendWeight)),
-                    preSetHumanPoseRightEndpointPositionReferenceFrameGateStart: NormalizePositiveFloat(
+                    preSetHumanPoseRightEndpointPositionReferenceFrameGateStart: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.pre_set_human_pose_right_endpoint_position_frame_gate_start,
                         DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateStart),
-                    preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: NormalizePositiveFloat(
+                    preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.pre_set_human_pose_right_endpoint_position_frame_gate_end,
                         DefaultPreSetHumanPoseRightEndpointPositionReferenceFrameGateEnd),
                     ShouldUseLeftSideForPreSetHumanPoseEndpointPosition:
@@ -816,66 +816,66 @@ namespace Fbx2Vmd.FBXImporter
                         request.pre_set_human_pose_endpoint_position_invert_body_position_z,
                     usePostSetHumanPoseRightFootEvaluatorXzReference:
                         request.post_set_human_pose_right_foot_evaluator_xz_reference_enabled,
-                    postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude: NormalizePositiveFloat(
+                    postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.post_set_human_pose_right_foot_evaluator_xz_reference_target_magnitude,
                         DefaultPostSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude),
                     enableManualAnimatorBipedIkFootPositionRuntimeOverride: request.manual_animator_biped_ik_foot_position_enabled,
-                    manualAnimatorBipedIkFootPositionReferenceWeight: NormalizePositiveFloat(
+                    manualAnimatorBipedIkFootPositionReferenceWeight: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_biped_ik_foot_position_weight,
                         DefaultManualAnimatorBipedIkFootPositionReferenceWeight),
-                    manualAnimatorBipedIkFootPositionReferenceMaxOffset: NormalizePositiveFloat(
+                    manualAnimatorBipedIkFootPositionReferenceMaxOffset: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_biped_ik_foot_position_max_offset,
                         DefaultManualAnimatorBipedIkFootPositionReferenceMaxOffset),
                     enableManualAnimatorHipsLocalPositionRuntimeOverride:
                         request.manual_animator_hips_local_position_enabled,
-                    manualAnimatorHipsLocalPositionReferenceWeight: NormalizePositiveFloat(
+                    manualAnimatorHipsLocalPositionReferenceWeight: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_hips_local_position_weight,
                         DefaultManualAnimatorHipsLocalPositionReferenceWeight),
-                    manualAnimatorHipsLocalPositionReferenceMaxOffset: NormalizePositiveFloat(
+                    manualAnimatorHipsLocalPositionReferenceMaxOffset: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_hips_local_position_max_offset,
                         DefaultManualAnimatorHipsLocalPositionReferenceMaxOffset),
                     enableManualAnimatorBodyPositionXzRuntimeOverride:
                         request.manual_animator_body_position_xz_enabled,
                     manualAnimatorBodyPositionXzReferenceWeight: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_body_position_xz_weight,
                             DefaultManualAnimatorBodyPositionXzReferenceWeight)),
-                    manualAnimatorBodyPositionXzReferenceMaxOffset: NormalizePositiveFloat(
+                    manualAnimatorBodyPositionXzReferenceMaxOffset: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_body_position_xz_max_offset,
                         DefaultManualAnimatorBodyPositionXzReferenceMaxOffset),
-                    manualAnimatorBodyPositionXzReferenceFrameGateStart: NormalizePositiveFloat(
+                    manualAnimatorBodyPositionXzReferenceFrameGateStart: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_body_position_xz_frame_gate_start,
                         0f),
-                    manualAnimatorBodyPositionXzReferenceFrameGateEnd: NormalizePositiveFloat(
+                    manualAnimatorBodyPositionXzReferenceFrameGateEnd: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_body_position_xz_frame_gate_end,
                         0f),
-                    manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames: NormalizePositiveFloat(
+                    manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.manual_animator_body_position_xz_frame_gate_blend_frames,
                         DefaultManualAnimatorBodyPositionXzReferenceFrameGateBlendFrames),
                     manualAnimatorBodyPositionXzReferenceAxisXScale: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_body_position_xz_axis_x_scale,
                             1f)),
                     manualAnimatorBodyPositionXzReferenceAxisZScale: Mathf.Clamp01(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.manual_animator_body_position_xz_axis_z_scale,
                             1f)),
                     enableYybRightSleeveSilhouetteOffsetRuntimeOverride:
                         request.yyb_right_sleeve_silhouette_offset_enabled,
                     yybRightSleeveSilhouetteLocalOffsetX: Mathf.Clamp(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.yyb_right_sleeve_silhouette_local_offset_x,
                             0f),
                         -0.2f,
                         0.2f),
                     yybRightSleeveSilhouetteLocalOffsetFrameGateStart: Mathf.Clamp(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.yyb_right_sleeve_silhouette_local_offset_frame_gate_start,
                             0f),
                         0f,
                         6000f),
                     yybRightSleeveSilhouetteLocalOffsetFrameGateEnd: Mathf.Clamp(
-                        NormalizeFiniteFloat(
+                        VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                             request.yyb_right_sleeve_silhouette_local_offset_frame_gate_end,
                             0f),
                         0f,
@@ -890,10 +890,10 @@ namespace Fbx2Vmd.FBXImporter
                     enableReferenceMmdTimingRuntimeOverride: request.reference_mmd_timing_enabled,
                     diagnosticCaptureWidthOverride: Mathf.Max(0, request.diagnostic_capture_width_override),
                     diagnosticCaptureHeightOverride: Mathf.Max(0, request.diagnostic_capture_height_override),
-                    diagnosticScreenshotPaddingOverride: NormalizePositiveFloat(
+                    diagnosticScreenshotPaddingOverride: VisualComparisonRuntimeValueNormalizer.NormalizePositive(
                         request.diagnostic_screenshot_padding_override,
                         float.NaN),
-                    diagnosticScreenshotVerticalViewportCenterOverride: NormalizeFiniteFloat(
+                    diagnosticScreenshotVerticalViewportCenterOverride: VisualComparisonRuntimeValueNormalizer.NormalizeFinite(
                         request.diagnostic_screenshot_vertical_viewport_center_override,
                         float.NaN));
             }
@@ -998,26 +998,6 @@ namespace Fbx2Vmd.FBXImporter
             {
                 AppendTrace($"request delete skipped path={RequestPath} reason={ex.Message}");
             }
-        }
-
-        private static float NormalizePositiveFloat(float value, float fallbackValue)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
-            {
-                return fallbackValue;
-            }
-
-            return value;
-        }
-
-        private static float NormalizeFiniteFloat(float value, float fallbackValue)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-            {
-                return fallbackValue;
-            }
-
-            return value;
         }
 
         private static void AppendTrace(string message)
