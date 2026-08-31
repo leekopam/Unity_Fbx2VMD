@@ -70,7 +70,8 @@ namespace Tests.Editor.FBXImporter
                 "CalculateEditorDiagnosticSmokeStartTime",
                 "ResolveEditorDiagnosticSmokeSegment",
                 "CaptureFBXVmdPipelineEffectiveSettings",
-                "RequestRuntimeDiagnosticScriptRefresh"
+                "RequestRuntimeDiagnosticScriptRefresh",
+                "ResolveMainAutoFrameCount"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(

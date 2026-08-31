@@ -2352,11 +2352,6 @@ namespace Fbx2Vmd.FBXImporter
             return result != null ? result.frameCount : 0;
         }
 
-        private static int ResolveMainAutoFrameCount()
-        {
-            return ResolveFrameCount(CaptureMode.MainAuto);
-        }
-
         private static int ResolveSummaryTargetFrameCount()
         {
             return ResolveSummaryTargetFrameCount(
@@ -2366,7 +2361,7 @@ namespace Fbx2Vmd.FBXImporter
                     _currentRunOptions.targetFrameCount,
                     _referenceClip != null ? _referenceClip.length : 0f,
                     DefaultFrameRate),
-                ResolveMainAutoFrameCount());
+                ResolveFrameCount(CaptureMode.MainAuto));
         }
 
         private static int ResolveSummaryTargetFrameCount(int referenceTargetFrameCount, int mainAutoFrameCount)
