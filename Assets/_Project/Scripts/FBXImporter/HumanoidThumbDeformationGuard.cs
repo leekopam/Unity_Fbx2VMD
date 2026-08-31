@@ -1466,11 +1466,6 @@ namespace Fbx2Vmd.FBXImporter
             return false;
         }
 
-        private bool IsRightThumbTransform(Transform thumbTransform)
-        {
-            return TryResolveThumbSide(thumbTransform, out bool isRightThumb) && isRightThumb;
-        }
-
         private bool TryResolveThumbSideByReferenceDistance(Transform thumbTransform, out bool isRightThumb)
         {
             if (thumbTransform != null && targetAnimator != null)
