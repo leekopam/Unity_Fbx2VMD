@@ -59,7 +59,9 @@ namespace Tests.Editor.FBXImporter
                 "ApplyManualAnimatorHipsLocalPositionRuntimeOverride",
                 "BuildCandidateVmdEvidenceFileName",
                 "FormatProbeSampleTimes",
-                "GetEditorDiagnosticSmokeSegmentLabel"
+                "GetEditorDiagnosticSmokeSegmentLabel",
+                "ToAbsoluteProjectPath",
+                "MakeProjectRelativePath"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(

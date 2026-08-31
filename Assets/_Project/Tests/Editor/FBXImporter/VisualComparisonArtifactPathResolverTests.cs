@@ -21,6 +21,16 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ProjectRelativeArtifactPath_When_ConvertingToAbsolute_Then_UsesProjectRoot()
+        {
+            string projectRoot = Path.Combine(Path.GetTempPath(), "visual-compare-project");
+
+            Assert.That(
+                Invoke("ToAbsoluteProjectPath", "Docs/summary.json", projectRoot),
+                Is.EqualTo(Path.Combine(projectRoot, "Docs", "summary.json")));
+        }
+
+        [Test]
         public void Given_ProjectArtifactPath_When_MakingRelative_Then_NormalizesSeparators()
         {
             string projectRoot = Path.Combine(Path.GetTempPath(), "visual-compare-project");
