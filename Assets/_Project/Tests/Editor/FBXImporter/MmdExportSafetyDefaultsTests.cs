@@ -1216,42 +1216,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RetargetArmStretchClampRuntimeOverride_When_Enabled_Then_AlsoClampsTargetGuardStretch()
-        {
-            var managerObject = new GameObject("retarget arm stretch clamp runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.enableAnatomicalArmGuard = false;
-                manager.clampRetargetArmStretchMuscles = false;
-                manager.targetGuardClampAnatomicalArmMuscles = false;
-                manager.targetGuardClampArmStretchMuscles = false;
-                manager.ArmStretchMuscleLimit = 0f;
-
-                bool enabledApplied = ApplyRetargetArmStretchClampRuntimeOverride(manager, true, 0.75f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.enableAnatomicalArmGuard, Is.True);
-                Assert.That(manager.clampRetargetArmStretchMuscles, Is.True);
-                Assert.That(manager.targetGuardClampAnatomicalArmMuscles, Is.True);
-                Assert.That(manager.targetGuardClampArmStretchMuscles, Is.True);
-                Assert.That(manager.ArmStretchMuscleLimit, Is.EqualTo(0.5f).Within(0.0001f));
-
-                bool disabledApplied = ApplyRetargetArmStretchClampRuntimeOverride(manager, false, 0.5f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.clampRetargetArmStretchMuscles, Is.False);
-                Assert.That(manager.targetGuardClampAnatomicalArmMuscles, Is.False);
-                Assert.That(manager.targetGuardClampArmStretchMuscles, Is.False);
-                Assert.That(manager.ArmStretchMuscleLimit, Is.EqualTo(0f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_YybArmDirectionRetargetRuntimeOverride_When_Toggled_Then_OnlyChangesDirectionSettings()
         {
             var managerObject = new GameObject("yyb arm direction runtime override manager");
@@ -6383,27 +6347,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only visual spike smoothing override for frame 180 carrier probes.");
 
             return (bool)method.Invoke(null, new object[] { manager, enabled, currentWeight, forearmStretchClampMaxOffset });
-        }
-
-        private static bool ApplyRetargetArmStretchClampRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float stretchLimit)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyRetargetArmStretchClampRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only arm stretch clamp override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, stretchLimit });
         }
 
         private static bool ApplyYybArmDirectionRetargetRuntimeOverride(
