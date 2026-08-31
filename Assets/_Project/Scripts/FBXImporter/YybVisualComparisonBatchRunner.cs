@@ -68,8 +68,8 @@ namespace Fbx2Vmd.FBXImporter
             "Assets/_Project/Scripts/FBXImporter/HumanoidArmDeformationGuard.cs",
             "Assets/_Project/Scripts/FBXImporter/HumanoidArmDirectionRetargetGuard.cs",
             "Assets/_Project/Scripts/FBXImporter/PoseSpaceRetargeter.cs",
-            "Assets/_Project/Scripts/FBXImporter/Editor/YybVisualComparisonBatchRunner.cs",
-            "Assets/_Project/Scripts/FBXImporter/Editor/YybVisualComparisonRequestWatcher.cs"
+            "Assets/_Project/Scripts/FBXImporter/YybVisualComparisonBatchRunner.cs",
+            "Assets/_Project/Scripts/FBXImporter/YybVisualComparisonRequestWatcher.cs"
         };
         private const float DefaultFrameRate = 30f;
         private const float DefaultStartDelaySeconds = 0.2f;
@@ -801,7 +801,10 @@ namespace Fbx2Vmd.FBXImporter
                 _currentRunOptions,
                 _editorDiagnosticSmokeSegment.ToString()));
 
-            if (!Application.isBatchMode && RequestRuntimeDiagnosticScriptRefresh())
+            if (!Application.isBatchMode &&
+                UnityManualRefreshGuard.RequestRefreshForAssets(
+                    RuntimeDiagnosticScriptPaths,
+                    "yyb_visual_comparison_runtime_diagnostics"))
             {
                 Debug.Log("[YybVisualComparisonBatchRunner] 런타임 진단 스크립트 새로고침 대기 중.");
                 AppendRunnerTrace("runtime diagnostics script refresh requested; waiting before first job");
@@ -839,13 +842,6 @@ namespace Fbx2Vmd.FBXImporter
 
             AppendRunnerTrace("runtime diagnostics script refresh settled; continuing run");
             StartNextJob();
-        }
-
-        private static bool RequestRuntimeDiagnosticScriptRefresh()
-        {
-            return UnityManualRefreshGuard.RequestRefreshForAssets(
-                RuntimeDiagnosticScriptPaths,
-                "yyb_visual_comparison_runtime_diagnostics");
         }
 
         private static CaptureJob[] BuildCaptureJobs(bool enableVmdPlaybackProbeRuntimeOverride)

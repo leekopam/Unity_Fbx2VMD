@@ -69,7 +69,8 @@ namespace Tests.Editor.FBXImporter
                 "ResolveGroundingStepToMaxRatio",
                 "CalculateEditorDiagnosticSmokeStartTime",
                 "ResolveEditorDiagnosticSmokeSegment",
-                "CaptureFBXVmdPipelineEffectiveSettings"
+                "CaptureFBXVmdPipelineEffectiveSettings",
+                "RequestRuntimeDiagnosticScriptRefresh"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
@@ -82,6 +83,27 @@ namespace Tests.Editor.FBXImporter
                 remainingMethodNames,
                 Is.Empty,
                 $"추출 완료된 private wrapper가 남아 있습니다: {string.Join(", ", remainingMethodNames)}");
+        }
+
+        [Test]
+        public void Given_RuntimeDiagnosticRefreshPaths_When_CheckingRunner_Then_UsesCurrentScriptLocations()
+        {
+            FieldInfo field = typeof(YybVisualComparisonBatchRunner).GetField(
+                "RuntimeDiagnosticScriptPaths",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(field, Is.Not.Null);
+
+            var paths = (string[])field.GetValue(null);
+            Assert.That(
+                paths,
+                Does.Contain("Assets/_Project/Scripts/FBXImporter/YybVisualComparisonBatchRunner.cs"));
+            Assert.That(
+                paths,
+                Does.Contain("Assets/_Project/Scripts/FBXImporter/YybVisualComparisonRequestWatcher.cs"));
+            Assert.That(
+                paths.Any(path => path.Contains("/Editor/YybVisualComparison")),
+                Is.False,
+                "이동 전 Editor 하위 경로가 남으면 실제 진단 스크립트가 refresh 대상에서 제외됩니다.");
         }
     }
 }
