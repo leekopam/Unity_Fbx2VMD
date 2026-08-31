@@ -187,6 +187,68 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_SleeveAnchorOverride_When_Toggled_Then_ClampsOnlySleeveAnchorSettings()
+        {
+            var pipelineObject = new GameObject("arm sleeve anchor override pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.enableYybArmDirectionRetargetCorrection = false;
+                pipeline.enableYybArmSwingLimitCorrection = false;
+                pipeline.ShouldUseManualAnimatorBodyRotationReference = false;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = false;
+
+                bool enabledApplied = ApplySleeveAnchor(
+                    pipeline,
+                    true,
+                    sleeveInfluence: 0.45f,
+                    shoulderCapInfluence: 0.2f,
+                    maxDegrees: 42f);
+
+                Assert.That(enabledApplied, Is.True);
+                Assert.That(pipeline.enableYybArmSleeveAnchorCorrection, Is.True);
+                Assert.That(pipeline.YybArmSleeveAnchorInfluence, Is.EqualTo(0.45f).Within(0.0001f));
+                Assert.That(pipeline.YybArmShoulderCapAnchorInfluence, Is.EqualTo(0.2f).Within(0.0001f));
+                Assert.That(pipeline.YybArmSleeveAnchorMaxDegrees, Is.EqualTo(42f).Within(0.0001f));
+                Assert.That(pipeline.enableYybArmDirectionRetargetCorrection, Is.False);
+                Assert.That(pipeline.enableYybArmSwingLimitCorrection, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyRotationReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
+
+                bool clampedApplied = ApplySleeveAnchor(
+                    pipeline,
+                    true,
+                    sleeveInfluence: 1.5f,
+                    shoulderCapInfluence: -0.5f,
+                    maxDegrees: 150f);
+
+                Assert.That(clampedApplied, Is.True);
+                Assert.That(pipeline.YybArmSleeveAnchorInfluence, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(pipeline.YybArmShoulderCapAnchorInfluence, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmSleeveAnchorMaxDegrees, Is.EqualTo(120f).Within(0.0001f));
+
+                bool disabledApplied = ApplySleeveAnchor(
+                    pipeline,
+                    false,
+                    sleeveInfluence: 0.45f,
+                    shoulderCapInfluence: 0.2f,
+                    maxDegrees: 42f);
+
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(pipeline.enableYybArmSleeveAnchorCorrection, Is.False);
+                Assert.That(pipeline.YybArmSleeveAnchorInfluence, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmShoulderCapAnchorInfluence, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.YybArmSleeveAnchorMaxDegrees, Is.EqualTo(42f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_DirectionOverride_When_Enabled_Then_ClampsOnlyDirectionSettings()
         {
             var pipelineObject = new GameObject("arm direction override pipeline");
@@ -302,6 +364,27 @@ namespace Tests.Editor.FBXImporter
                     forearmMaxDegrees,
                     leftSideWeightScale,
                     rightSideWeightScale
+                });
+        }
+
+        private static bool ApplySleeveAnchor(
+            FBXVmdPipeline pipeline,
+            bool enabled,
+            float sleeveInfluence,
+            float shoulderCapInfluence,
+            float maxDegrees)
+        {
+            MethodInfo applyMethod = FindApplyMethod("ApplySleeveAnchor");
+
+            return (bool)applyMethod.Invoke(
+                null,
+                new object[]
+                {
+                    pipeline,
+                    enabled,
+                    sleeveInfluence,
+                    shoulderCapInfluence,
+                    maxDegrees
                 });
         }
 
