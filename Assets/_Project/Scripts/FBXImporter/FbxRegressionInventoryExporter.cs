@@ -516,57 +516,6 @@ namespace Fbx2Vmd.FBXImporter
             File.WriteAllText(path, builder.ToString(), new UTF8Encoding(false));
         }
 
-        private static void WriteIndex(string path, string inputAssetDirectory, int mappingCount, List<InventoryRow> rows, string csvPath)
-        {
-            int passCount = rows.Count(row => row.GateStatus == "pass");
-            int warnCount = rows.Count(row => row.GateStatus == "warn");
-            int failCount = rows.Count(row => row.GateStatus == "fail");
-
-            var builder = new StringBuilder();
-            builder.AppendLine("# FBX 인벤토리와 mapping 진단 세션");
-            builder.AppendLine();
-            builder.AppendLine($"생성일: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            builder.AppendLine();
-            builder.AppendLine($"입력 폴더: `{inputAssetDirectory}`");
-            builder.AppendLine();
-            builder.AppendLine($"BoneMapping 항목 수: `{mappingCount}`");
-            builder.AppendLine();
-            builder.AppendLine($"CSV: `{NormalizePathForMarkdown(csvPath)}`");
-            builder.AppendLine();
-            builder.AppendLine("## 요약");
-            builder.AppendLine();
-            builder.AppendLine($"- 전체 FBX: {rows.Count}");
-            builder.AppendLine($"- pass: {passCount}");
-            builder.AppendLine($"- warn: {warnCount}");
-            builder.AppendLine($"- fail: {failCount}");
-            builder.AppendLine();
-            builder.AppendLine("## 파일별 결과");
-            builder.AppendLine();
-            builder.AppendLine("| 파일 | 상태 | 실패 분류 | 필수 본 | 손가락 본 | Unity 클립 | Runtime 애니메이션 | Skeleton family | 경고 |");
-            builder.AppendLine("|---|---|---|---:|---:|---:|---:|---|---|");
-
-            foreach (InventoryRow row in rows)
-            {
-                builder.AppendLine(
-                    $"| {EscapeMarkdown(row.FileName)} | {row.GateStatus} | {EscapeMarkdown(row.FailureClass)} | {row.RequiredMatchedCount}/{row.RequiredTotal} | {row.FingerMatchedCount}/{row.FingerTotal} | {row.ClipCount} | {row.RuntimeAnimationCount} | {EscapeMarkdown(row.SkeletonNamingFamily)} | {EscapeMarkdown(row.WarningReasons)} |");
-            }
-
-            builder.AppendLine();
-            builder.AppendLine("## 판정 기준");
-            builder.AppendLine();
-            builder.AppendLine("- `pass`: 필수 본 mapping, Avatar 생성, clip 존재가 모두 통과했고 경고가 없다.");
-            builder.AppendLine("- `warn`: 변환 기본 조건은 통과했지만 humanMotion clip 없음, alias 매핑 사용, 손가락 일부 누락 같은 후속 확인 항목이 있다.");
-            builder.AppendLine("- `fail`: 입력 미지원, skeleton mapping 실패, Avatar 생성 실패 중 하나다.");
-            builder.AppendLine();
-            builder.AppendLine("## 다음 작업");
-            builder.AppendLine();
-            builder.AppendLine("1. fail 항목은 실패 분류별로 원인을 나눈다.");
-            builder.AppendLine("2. warn 항목은 DiagnosticOnly 배치 샘플링 전에 위험 frame 우선순위를 정한다.");
-            builder.AppendLine("3. 새 alias나 fallback이 필요하면 파일명 분기가 아니라 skeleton naming family와 본 이름 패턴으로 처리한다.");
-
-            File.WriteAllText(path, builder.ToString(), new UTF8Encoding(false));
-        }
-
         private static void WriteIndexV2(string path, string inputAssetDirectory, int mappingCount, List<InventoryRow> rows, string csvPath)
         {
             int passCount = rows.Count(row => row.GateStatus == "pass");
