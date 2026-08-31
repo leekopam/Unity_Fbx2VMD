@@ -1670,7 +1670,7 @@ namespace Fbx2Vmd.FBXImporter
                     BuildFrameQualitySummaries(frameRoleDiagnostics);
                 PromoteFrameQualityFailuresToRunFailures(frameQualitySummaries, frameRoleDiagnostics);
                 SummaryContainer summary = BuildSummaryContainer(frameQualitySummaries, frameRoleDiagnostics);
-                WriteSummaryJson(summaryJsonPath, summary);
+                VisualComparisonSummaryFileStore.WriteJson(summaryJsonPath, summary);
                 WriteSummaryMarkdown(summaryMarkdownPath, summary);
                 VisualComparisonSummaryFileStore.CopyLatest(
                     summaryJsonPath,
@@ -2113,11 +2113,6 @@ namespace Fbx2Vmd.FBXImporter
             summary.failures = Failures.ToArray();
 
             return summary;
-        }
-
-        private static void WriteSummaryJson(string path, SummaryContainer summary)
-        {
-            VisualComparisonSummaryFileStore.WriteJson(path, summary);
         }
 
         private static void WriteSummaryMarkdown(
