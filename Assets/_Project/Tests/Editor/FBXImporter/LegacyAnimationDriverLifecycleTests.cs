@@ -85,6 +85,42 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_ExternalAndDriverClips_When_PreparingRecordingStartPose_Then_SamplesDriverClipAndHoldsPose()
+        {
+            var root = new GameObject("Legacy Animation Driver Recording Start Test");
+            object driver = CreateDriver();
+            AnimationClip externalClip = CreateLegacyPositionClip("external-motion", 1f);
+            AnimationClip driverClip = CreateLegacyPositionClip("driver-motion", 2f);
+
+            try
+            {
+                Animation animation = root.AddComponent<Animation>();
+                animation.AddClip(externalClip, externalClip.name);
+                animation.clip = externalClip;
+
+                Invoke(driver, "Initialize", root, null, driverClip);
+                animation.clip = externalClip;
+                animation.Play(externalClip.name);
+                animation.Sample();
+
+                Assert.That(root.transform.localPosition.x, Is.EqualTo(1f).Within(0.0001f));
+
+                bool sampled = (bool)Invoke(driver, "TryPrepareRecordingStartPose", 0f, 1f, true);
+
+                Assert.That(sampled, Is.True);
+                Assert.That(root.transform.localPosition.x, Is.EqualTo(2f).Within(0.0001f));
+                Assert.That(animation["__PoseSpaceRetargeter_GhostClip"].speed, Is.EqualTo(0f).Within(0.0001f));
+            }
+            finally
+            {
+                Invoke(driver, "Dispose");
+                UnityEngine.Object.DestroyImmediate(root);
+                UnityEngine.Object.DestroyImmediate(externalClip);
+                UnityEngine.Object.DestroyImmediate(driverClip);
+            }
+        }
+
         private static AnimationClip CreateLegacyClip()
         {
             var clip = new AnimationClip { legacy = true };
@@ -96,6 +132,17 @@ namespace Tests.Editor.FBXImporter
         {
             var clip = new AnimationClip();
             clip.SetCurve("", typeof(Transform), "localPosition.x", AnimationCurve.Linear(0f, 0f, 1f, 1f));
+            return clip;
+        }
+
+        private static AnimationClip CreateLegacyPositionClip(string clipName, float x)
+        {
+            var clip = new AnimationClip
+            {
+                name = clipName,
+                legacy = true
+            };
+            clip.SetCurve("", typeof(Transform), "localPosition.x", AnimationCurve.Constant(0f, 1f, x));
             return clip;
         }
 
