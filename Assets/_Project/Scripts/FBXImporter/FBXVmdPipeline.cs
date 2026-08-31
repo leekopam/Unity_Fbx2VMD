@@ -614,8 +614,8 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private bool _logAnimationRiggingArmTwistCorrection= false;
         public bool logAnimationRiggingArmTwistCorrection { get => _logAnimationRiggingArmTwistCorrection; private set => _logAnimationRiggingArmTwistCorrection = value; }
 
-        [Header("YYB Arm Direction Retarget Correction")]
-        [Tooltip("실험 옵션입니다. Ghost 팔 세그먼트 방향을 Target YYB 팔 방향에 제한적으로 다시 맞춥니다. 현재는 일부 정상 프레임을 망가뜨릴 수 있어 기본 비활성화합니다.")]
+        [Header("Humanoid Arm Direction Retarget Correction")]
+        [Tooltip("실험 옵션입니다. Ghost 팔 세그먼트 방향을 Target Character의 Humanoid 팔 방향에 제한적으로 다시 맞춥니다. 현재는 일부 정상 프레임을 망가뜨릴 수 있어 기본 비활성화합니다.")]
         [FormerlySerializedAs("enableYybArmDirectionRetargetCorrection")]
         [SerializeField] private bool _enableYybArmDirectionRetargetCorrection= false;
         public bool enableYybArmDirectionRetargetCorrection { get => _enableYybArmDirectionRetargetCorrection; set => _enableYybArmDirectionRetargetCorrection = value; }
@@ -640,17 +640,17 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private float _YybArmDirectionForearmMaxDegrees= 85f;
         public float YybArmDirectionForearmMaxDegrees { get => _YybArmDirectionForearmMaxDegrees; set => _YybArmDirectionForearmMaxDegrees = value; }
 
-        [Tooltip("YYB 팔 방향 보정의 왼쪽 팔 영향도 배율입니다.")]
+        [Tooltip("Humanoid 팔 방향 보정의 왼쪽 팔 영향도 배율입니다.")]
         [Range(0f, 1f)] [FormerlySerializedAs("YybArmDirectionLeftSideWeightScale")]
         [SerializeField] private float _YybArmDirectionLeftSideWeightScale= 1f;
         public float YybArmDirectionLeftSideWeightScale { get => _YybArmDirectionLeftSideWeightScale; set => _YybArmDirectionLeftSideWeightScale = value; }
 
-        [Tooltip("YYB 팔 방향 보정의 오른쪽 팔 영향도 배율입니다.")]
+        [Tooltip("Humanoid 팔 방향 보정의 오른쪽 팔 영향도 배율입니다.")]
         [Range(0f, 1f)] [FormerlySerializedAs("YybArmDirectionRightSideWeightScale")]
         [SerializeField] private float _YybArmDirectionRightSideWeightScale= 1f;
         public float YybArmDirectionRightSideWeightScale { get => _YybArmDirectionRightSideWeightScale; set => _YybArmDirectionRightSideWeightScale = value; }
 
-        [Tooltip("YYB 팔 방향 보정 구성 로그를 출력합니다.")]
+        [Tooltip("Humanoid 팔 방향 보정 구성 로그를 출력합니다.")]
         [FormerlySerializedAs("logYybArmDirectionRetargetCorrection")]
         [SerializeField] private bool _logYybArmDirectionRetargetCorrection= false;
         public bool logYybArmDirectionRetargetCorrection { get => _logYybArmDirectionRetargetCorrection; private set => _logYybArmDirectionRetargetCorrection = value; }
