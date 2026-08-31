@@ -1063,51 +1063,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RetargetPoseVisualSpikeSmoothingRuntimeOverride_When_Applied_Then_OnlyChangesSmoothingSettings()
-        {
-            var managerObject = new GameObject("retarget pose visual spike smoothing runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.smoothRetargetPoseOnVisualStepSpike = true;
-                manager.RetargetPoseVisualSpikeCurrentWeight = 0.65f;
-                manager.RetargetPoseVisualSpikeForearmStretchClampMaxOffset = 0f;
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.enableYybArmSwingLimitCorrection = false;
-                manager.usePostSetHumanPoseRightEndpointPositionReference = false;
-
-                bool disabledApplied = ApplyRetargetPoseVisualSpikeSmoothingRuntimeOverride(
-                    manager,
-                    enabled: false,
-                    currentWeight: 1.5f,
-                    forearmStretchClampMaxOffset: 2f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.smoothRetargetPoseOnVisualStepSpike, Is.False);
-                Assert.That(manager.RetargetPoseVisualSpikeCurrentWeight, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.RetargetPoseVisualSpikeForearmStretchClampMaxOffset, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Visual spike smoothing candidate must not replace full-body muscles.");
-                Assert.That(manager.enableYybArmSwingLimitCorrection, Is.False, "Visual spike smoothing candidate must not implicitly change the arm swing limiter.");
-                Assert.That(manager.usePostSetHumanPoseRightEndpointPositionReference, Is.False, "Visual spike smoothing candidate must not enable endpoint compensation.");
-
-                bool enabledApplied = ApplyRetargetPoseVisualSpikeSmoothingRuntimeOverride(
-                    manager,
-                    enabled: true,
-                    currentWeight: 0.05f,
-                    forearmStretchClampMaxOffset: 0.15f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.smoothRetargetPoseOnVisualStepSpike, Is.True);
-                Assert.That(manager.RetargetPoseVisualSpikeCurrentWeight, Is.EqualTo(0.1f).Within(0.0001f));
-                Assert.That(manager.RetargetPoseVisualSpikeForearmStretchClampMaxOffset, Is.EqualTo(0.15f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ManualAnimatorHandLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesHandLocalSwitch()
         {
             var managerObject = new GameObject("manual animator hand local rotation runtime override manager");
@@ -6325,28 +6280,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "YYB runner must expose a weighted runtime-only body rotation reference override for Ref MP4 visual comparison candidates.");
 
             return (bool)method.Invoke(null, new object[] { manager, enabled, weight });
-        }
-
-        private static bool ApplyRetargetPoseVisualSpikeSmoothingRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float currentWeight,
-            float forearmStretchClampMaxOffset = 0f)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyRetargetPoseVisualSpikeSmoothingRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only visual spike smoothing override for frame 180 carrier probes.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, currentWeight, forearmStretchClampMaxOffset });
         }
 
         private static bool ApplyYybArmDirectionRetargetRuntimeOverride(

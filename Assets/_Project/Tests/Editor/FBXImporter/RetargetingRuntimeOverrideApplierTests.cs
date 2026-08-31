@@ -9,22 +9,51 @@ namespace Tests.Editor.FBXImporter
     public class RetargetingRuntimeOverrideApplierTests
     {
         [Test]
-        public void Given_GenericRetargetingSettings_When_ApplyingSmoothing_Then_ClampsConfiguration()
+        public void Given_PoseVisualSpikeSmoothing_When_Toggled_Then_ClampsOnlySmoothingSettings()
         {
-            var pipelineObject = new GameObject("generic retargeting pipeline");
+            var pipelineObject = new GameObject("pose visual spike smoothing override pipeline");
             try
             {
                 var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.enableYybArmSwingLimitCorrection = false;
+                pipeline.usePostSetHumanPoseRightEndpointPositionReference = false;
                 MethodInfo applyMethod = FindApplyMethod("ApplyPoseVisualSpikeSmoothing");
 
-                bool applied = (bool)applyMethod.Invoke(
+                bool disabledApplied = (bool)applyMethod.Invoke(
                     null,
-                    new object[] { pipeline, true, 2f, -1f });
+                    new object[] { pipeline, false, 1.5f, 2f });
 
-                Assert.That(applied, Is.True);
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(pipeline.smoothRetargetPoseOnVisualStepSpike, Is.False);
+                Assert.That(pipeline.RetargetPoseVisualSpikeCurrentWeight, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(
+                    pipeline.RetargetPoseVisualSpikeForearmStretchClampMaxOffset,
+                    Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.enableYybArmSwingLimitCorrection, Is.False);
+                Assert.That(pipeline.usePostSetHumanPoseRightEndpointPositionReference, Is.False);
+
+                bool enabledApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true, 0.05f, 0.15f });
+
+                Assert.That(enabledApplied, Is.True);
                 Assert.That(pipeline.smoothRetargetPoseOnVisualStepSpike, Is.True);
-                Assert.That(pipeline.RetargetPoseVisualSpikeCurrentWeight, Is.EqualTo(1f));
-                Assert.That(pipeline.RetargetPoseVisualSpikeForearmStretchClampMaxOffset, Is.EqualTo(0f));
+                Assert.That(pipeline.RetargetPoseVisualSpikeCurrentWeight, Is.EqualTo(0.1f).Within(0.0001f));
+                Assert.That(
+                    pipeline.RetargetPoseVisualSpikeForearmStretchClampMaxOffset,
+                    Is.EqualTo(0.15f).Within(0.0001f));
+
+                bool lowerBoundApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true, 0.5f, -1f });
+
+                Assert.That(lowerBoundApplied, Is.True);
+                Assert.That(pipeline.RetargetPoseVisualSpikeCurrentWeight, Is.EqualTo(0.5f).Within(0.0001f));
+                Assert.That(
+                    pipeline.RetargetPoseVisualSpikeForearmStretchClampMaxOffset,
+                    Is.EqualTo(0f).Within(0.0001f));
             }
             finally
             {
