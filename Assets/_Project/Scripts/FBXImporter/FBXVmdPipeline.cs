@@ -686,7 +686,7 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private bool _logYybArmVisualTwistCorrection= false;
         public bool logYybArmVisualTwistCorrection { get => _logYybArmVisualTwistCorrection; private set => _logYybArmVisualTwistCorrection = value; }
 
-        [Header("YYB Arm Anatomical Swing Correction")]
+        [Header("휴머노이드 팔 해부학적 스윙 보정")]
         [Tooltip("손이 몸 밖/어깨 근처에 있는데 상완만 아래로 크게 떨어지는 포즈를 제한합니다.")]
         [FormerlySerializedAs("enableYybArmSwingLimitCorrection")]
         [SerializeField] private bool _enableYybArmSwingLimitCorrection= false;
@@ -702,7 +702,7 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private float _YybArmSwingMaxDownDot= 0.68f;
         public float YybArmSwingMaxDownDot { get => _YybArmSwingMaxDownDot; set => _YybArmSwingMaxDownDot = value; }
 
-        [Tooltip("손이 어깨에서 팔 길이 대비 이 비율 이상 옆/앞으로 떨어져 있을 때만 보정합니다. YYB는 몸 가까이에서도 소매가 무너질 수 있어 낮게 둡니다.")]
+        [Tooltip("손이 어깨에서 팔 길이 대비 이 비율 이상 옆/앞으로 떨어져 있을 때만 보정합니다. 몸 가까이에서 소매가 무너지는 체형도 감지할 수 있도록 기본값을 낮게 둡니다.")]
         [Range(0f, 1.5f)] [FormerlySerializedAs("YybArmSwingMinHandHorizontalRatio")]
         [SerializeField] private float _YybArmSwingMinHandHorizontalRatio= 0.05f;
         public float YybArmSwingMinHandHorizontalRatio { get => _YybArmSwingMinHandHorizontalRatio; set => _YybArmSwingMinHandHorizontalRatio = value; }
@@ -712,43 +712,47 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private float _YybArmSwingMaxHandBelowShoulderRatio= 0.75f;
         public float YybArmSwingMaxHandBelowShoulderRatio { get => _YybArmSwingMaxHandBelowShoulderRatio; set => _YybArmSwingMaxHandBelowShoulderRatio = value; }
 
-        [Tooltip("손이 몸 밖으로 과하게 벌어진 경우 수평 reach를 제한하는 보정 강도입니다. 0이면 비활성화합니다.")]
+        [Tooltip("손이 몸 밖으로 과하게 벌어진 경우 수평 도달 거리를 제한하는 보정 강도입니다. 0이면 비활성화합니다.")]
         [Range(0f, 1f)] [FormerlySerializedAs("YybArmSwingHorizontalReachLimitWeight")]
         [SerializeField] private float _YybArmSwingHorizontalReachLimitWeight= 0f;
         public float YybArmSwingHorizontalReachLimitWeight { get => _YybArmSwingHorizontalReachLimitWeight; set => _YybArmSwingHorizontalReachLimitWeight = value; }
 
-        [Tooltip("팔 길이 대비 허용할 최대 손 수평 reach입니다. 0이면 수평 reach 제한을 사용하지 않습니다.")]
+        [Tooltip("팔 길이 대비 허용할 최대 손 수평 도달 거리 비율입니다. 0이면 수평 도달 거리 제한을 사용하지 않습니다.")]
         [Range(0f, 1.5f)] [FormerlySerializedAs("YybArmSwingMaxHandHorizontalReachRatio")]
         [SerializeField] private float _YybArmSwingMaxHandHorizontalReachRatio= 0f;
         public float YybArmSwingMaxHandHorizontalReachRatio { get => _YybArmSwingMaxHandHorizontalReachRatio; set => _YybArmSwingMaxHandHorizontalReachRatio = value; }
 
-        [Tooltip("Horizontal reach only below-shoulder gate. 0 keeps using YybArmSwingMaxHandBelowShoulderRatio.")]
+        [Tooltip("수평 도달 거리 제한에만 적용하는 손 하강 비율입니다. 0이면 기본 손 하강 비율 설정을 사용합니다.")]
         [Range(0f, 1.5f)] [FormerlySerializedAs("YybArmSwingHorizontalReachMaxHandBelowShoulderRatio")]
         [SerializeField] private float _YybArmSwingHorizontalReachMaxHandBelowShoulderRatio= 0f;
         public float YybArmSwingHorizontalReachMaxHandBelowShoulderRatio { get => _YybArmSwingHorizontalReachMaxHandBelowShoulderRatio; set => _YybArmSwingHorizontalReachMaxHandBelowShoulderRatio = value; }
 
-        [Tooltip("Horizontal reach 적용 뒤 팔꿈치 각도가 이 값보다 작으면 해당 reach 보정을 되돌립니다. 0이면 비활성화합니다.")]
+        [Tooltip("수평 도달 거리 보정 뒤 팔꿈치 각도가 이 값보다 작으면 해당 보정을 되돌립니다. 0이면 비활성화합니다.")]
         [Range(0f, 180f)] [FormerlySerializedAs("YybArmSwingHorizontalReachMinElbowAngleAfterApply")]
         [SerializeField] private float _YybArmSwingHorizontalReachMinElbowAngleAfterApply= 0f;
         public float YybArmSwingHorizontalReachMinElbowAngleAfterApply { get => _YybArmSwingHorizontalReachMinElbowAngleAfterApply; set => _YybArmSwingHorizontalReachMinElbowAngleAfterApply = value; }
 
+        [Tooltip("기존 상완 하강 제한이 동작하지 않는 들어 올린 팔 자세에서 수평 도달 거리를 제한하는 보정 강도입니다.")]
         [Range(0f, 1f)] [FormerlySerializedAs("YybArmSwingRaisedPoseHorizontalReachLimitWeight")]
         [SerializeField] private float _YybArmSwingRaisedPoseHorizontalReachLimitWeight= 0f;
         public float YybArmSwingRaisedPoseHorizontalReachLimitWeight { get => _YybArmSwingRaisedPoseHorizontalReachLimitWeight; set => _YybArmSwingRaisedPoseHorizontalReachLimitWeight = value; }
 
+        [Tooltip("들어 올린 팔 자세의 수평 도달 거리 제한을 적용할 최소 상완 하강 내적값입니다.")]
         [Range(0f, 1f)] [FormerlySerializedAs("YybArmSwingRaisedPoseMinUpperArmDownDot")]
         [SerializeField] private float _YybArmSwingRaisedPoseMinUpperArmDownDot= 0.55f;
         public float YybArmSwingRaisedPoseMinUpperArmDownDot { get => _YybArmSwingRaisedPoseMinUpperArmDownDot; set => _YybArmSwingRaisedPoseMinUpperArmDownDot = value; }
 
+        [Tooltip("손이 어깨 아래로 이 비율보다 더 내려가 있으면 들어 올린 팔 자세의 수평 도달 거리 제한을 건너뜁니다.")]
         [Range(0f, 1.5f)] [FormerlySerializedAs("YybArmSwingRaisedPoseMaxHandBelowShoulderRatio")]
         [SerializeField] private float _YybArmSwingRaisedPoseMaxHandBelowShoulderRatio= 0.05f;
         public float YybArmSwingRaisedPoseMaxHandBelowShoulderRatio { get => _YybArmSwingRaisedPoseMaxHandBelowShoulderRatio; set => _YybArmSwingRaisedPoseMaxHandBelowShoulderRatio = value; }
 
+        [Tooltip("들어 올린 팔 자세에서 허용할 최대 손 수평 도달 거리 비율입니다.")]
         [Range(0f, 1.5f)] [FormerlySerializedAs("YybArmSwingRaisedPoseMaxHandHorizontalReachRatio")]
         [SerializeField] private float _YybArmSwingRaisedPoseMaxHandHorizontalReachRatio= 0f;
         public float YybArmSwingRaisedPoseMaxHandHorizontalReachRatio { get => _YybArmSwingRaisedPoseMaxHandHorizontalReachRatio; set => _YybArmSwingRaisedPoseMaxHandHorizontalReachRatio = value; }
 
-        [Tooltip("YYB 상완 하강 제한 보정 로그를 출력합니다.")]
+        [Tooltip("팔 스윙 제한 보정 로그를 출력합니다.")]
         [FormerlySerializedAs("logYybArmSwingLimitCorrection")]
         [SerializeField] private bool _logYybArmSwingLimitCorrection= false;
         public bool logYybArmSwingLimitCorrection { get => _logYybArmSwingLimitCorrection; private set => _logYybArmSwingLimitCorrection = value; }
