@@ -64,7 +64,9 @@ namespace Tests.Editor.FBXImporter
                 "MakeProjectRelativePath",
                 "SanitizeFileName",
                 "CopyLatestSummary",
-                "WriteSummaryJson"
+                "WriteSummaryJson",
+                "GetCsvFloat",
+                "ResolveGroundingStepToMaxRatio"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
