@@ -5284,15 +5284,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_VisualCompareSegmentTail_When_ResolvingSmokeSegment_Then_UsesTailCaptureWindow()
-        {
-            Assert.That(ResolveVisualCompareSmokeSegment("tail"), Is.EqualTo("Tail"));
-            Assert.That(ResolveVisualCompareSmokeSegment("middle"), Is.EqualTo("Middle"));
-            Assert.That(ResolveVisualCompareSmokeSegment(""), Is.EqualTo("Head"));
-            Assert.That(ResolveVisualCompareSmokeSegment("unknown"), Is.EqualTo("Head"));
-        }
-
-        [Test]
         public void Given_VisualCompareSegmentTail_When_BuildingManualCapturePlan_Then_AlignsSubManualToTailWindow()
         {
             object plan = BuildManualAnimatorCapturePlan(
@@ -5300,7 +5291,7 @@ namespace Tests.Editor.FBXImporter
                 "neo_1_001.fbx",
                 referenceClipLengthSeconds: 184.85f,
                 requestedDurationSeconds: 31f,
-                segment: "tail");
+                segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail);
 
             Assert.That(GetField<float>(plan, "StartTimeSeconds"), Is.EqualTo(153.85f).Within(0.001f));
             Assert.That(GetField<float>(plan, "DurationSeconds"), Is.EqualTo(31f).Within(0.0001f));
@@ -5321,7 +5312,7 @@ namespace Tests.Editor.FBXImporter
                 "neo_1_001.fbx",
                 referenceClipLengthSeconds: 184.85f,
                 requestedDurationSeconds: 31f,
-                segment: "head");
+                segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head);
 
             Assert.That(GetField<float>(plan, "StartTimeSeconds"), Is.EqualTo(0f).Within(0.0001f));
             Assert.That(GetField<float>(plan, "DurationSeconds"), Is.EqualTo(31f).Within(0.0001f));
@@ -8041,43 +8032,16 @@ namespace Tests.Editor.FBXImporter
                 .ToArray();
         }
 
-        private static string ResolveVisualCompareSmokeSegment(string segment)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ResolveEditorDiagnosticSmokeSegment",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(string) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB visual comparison runner must expose a segment resolver so tail visual-review targets can be replayed fresh.");
-
-            return method.Invoke(null, new object[] { segment }).ToString();
-        }
-
         private static object BuildManualAnimatorCapturePlan(
             string labelSuffix,
             string fbxFileName,
             float referenceClipLengthSeconds,
             float requestedDurationSeconds,
-            string segment)
+            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
         {
             Type runnerType = Type.GetType(
                 "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo segmentMethod = runnerType.GetMethod(
-                "ResolveEditorDiagnosticSmokeSegment",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(string) },
-                modifiers: null);
-            Assert.That(segmentMethod, Is.Not.Null);
-            object resolvedSegment = segmentMethod.Invoke(null, new object[] { segment });
 
             MethodInfo method = runnerType.GetMethod(
                 "BuildManualAnimatorCapturePlan",
@@ -8089,14 +8053,14 @@ namespace Tests.Editor.FBXImporter
                     typeof(string),
                     typeof(float),
                     typeof(float),
-                    resolvedSegment.GetType()
+                    typeof(FBXVmdPipeline.EditorDiagnosticSmokeSegment)
                 },
                 modifiers: null);
 
             Assert.That(method, Is.Not.Null, "YYB runner must build a testable manual capture plan so Sub_Manual uses the same head/middle/tail segment as Main_Auto.");
             return method.Invoke(
                 null,
-                new[] { labelSuffix, fbxFileName, referenceClipLengthSeconds, requestedDurationSeconds, resolvedSegment });
+                new object[] { labelSuffix, fbxFileName, referenceClipLengthSeconds, requestedDurationSeconds, segment });
         }
 
         private static float[] BuildReferenceMp4AlignedProbeSampleTimes(
