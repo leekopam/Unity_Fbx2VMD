@@ -2433,7 +2433,7 @@ namespace Fbx2Vmd.FBXImporter
             ApplyEditorHumanoidHandLocalRotationReference();
             ApplyEditorHumanoidThumbSegmentDirectionReference();
             ApplyEditorHumanoidThumbHandDirectionReference();
-            ApplyYybRightSleeveSilhouetteLocalOffsetReference();
+            ApplyRightSleeveSilhouetteLocalOffsetReference();
 #endif
             ClampTargetRootPositionSpike(targetPositionBeforePose, "SetHumanPose");
             Vector3 implicitRootGuardReference = SelectImplicitRootGuardReference(
@@ -5966,7 +5966,7 @@ namespace Fbx2Vmd.FBXImporter
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 
-        private bool ShouldApplyYybRightSleeveSilhouetteLocalOffsetFrameGate()
+        private bool ShouldApplyRightSleeveSilhouetteLocalOffsetFrameGate()
         {
             float start = Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateStart);
             float end = Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
@@ -5985,11 +5985,11 @@ namespace Fbx2Vmd.FBXImporter
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 
-        private void ApplyYybRightSleeveSilhouetteLocalOffsetReference()
+        private void ApplyRightSleeveSilhouetteLocalOffsetReference()
         {
-            RestoreYybRightSleeveSilhouetteLocalOffsetReference();
+            RestoreRightSleeveSilhouetteLocalOffsetReference();
             if (!useYybRightSleeveSilhouetteLocalOffsetReference ||
-                !ShouldApplyYybRightSleeveSilhouetteLocalOffsetFrameGate())
+                !ShouldApplyRightSleeveSilhouetteLocalOffsetFrameGate())
             {
                 return;
             }
@@ -6001,24 +6001,24 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             Vector3 offset = new Vector3(offsetX, 0f, 0f);
-            ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(
+            ApplyRightSleeveSilhouetteLocalOffsetToTransform(
                 targetAnimator != null ? targetAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm) : null,
                 offset);
-            ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(
+            ApplyRightSleeveSilhouetteLocalOffsetToTransform(
                 targetAnimator != null ? targetAnimator.GetBoneTransform(HumanBodyBones.RightLowerArm) : null,
                 offset);
-            ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(
+            ApplyRightSleeveSilhouetteLocalOffsetToTransform(
                 targetAnimator != null ? targetAnimator.GetBoneTransform(HumanBodyBones.RightHand) : null,
                 offset);
             for (int i = 0; i < RightSleeveSilhouetteLocalOffsetTransformSuffixes.Length; i++)
             {
                 Transform target = FindTargetTransformByNameSuffix(
                     RightSleeveSilhouetteLocalOffsetTransformSuffixes[i]);
-                ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(target, offset);
+                ApplyRightSleeveSilhouetteLocalOffsetToTransform(target, offset);
             }
         }
 
-        private void ApplyYybRightSleeveSilhouetteLocalOffsetToTransform(Transform target, Vector3 offset)
+        private void ApplyRightSleeveSilhouetteLocalOffsetToTransform(Transform target, Vector3 offset)
         {
             if (target == null ||
                 !IsFinite(target.localPosition) ||
@@ -6032,7 +6032,7 @@ namespace Fbx2Vmd.FBXImporter
             target.localPosition += offset;
         }
 
-        private void RestoreYybRightSleeveSilhouetteLocalOffsetReference()
+        private void RestoreRightSleeveSilhouetteLocalOffsetReference()
         {
             if (_rightSleeveSilhouetteLocalOffsetBaseLocalPositions.Count == 0)
             {
