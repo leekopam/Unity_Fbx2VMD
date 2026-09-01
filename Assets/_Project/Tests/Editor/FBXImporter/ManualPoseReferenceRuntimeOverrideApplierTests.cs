@@ -117,6 +117,52 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_GenericCharacterPipeline_When_ApplyingBipedIkFootPosition_Then_ClampsAndScopesSettings()
+        {
+            var pipelineObject = new GameObject("generic biped IK foot position reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.useManualAnimatorBipedIkFootPositionReference = false;
+                pipeline.manualAnimatorBipedIkFootPositionReferenceWeight = 0f;
+                pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0f;
+                pipeline.ShouldUseManualAnimatorFootLocalRotationReference = false;
+                pipeline.ShouldUseManualAnimatorFootHeightGroundingReference = false;
+                pipeline.enableFinalIkFootGroundingExperiment = false;
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyBipedIkFootPosition", pipeline, true, 0.2f, 0.04f);
+
+                Assert.That(pipeline.useManualAnimatorBipedIkFootPositionReference, Is.True);
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(0.2f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFootLocalRotationReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False);
+                Assert.That(pipeline.enableFinalIkFootGroundingExperiment, Is.False);
+
+                InvokeApply(applierType, "ApplyBipedIkFootPosition", pipeline, true, 2f, -1f);
+
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(1f));
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0f));
+
+                InvokeApply(applierType, "ApplyBipedIkFootPosition", pipeline, true, -1f, 0.12f);
+
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0.12f).Within(0.0001f));
+
+                InvokeApply(applierType, "ApplyBipedIkFootPosition", pipeline, false, 0.65f, 0.12f);
+
+                Assert.That(pipeline.useManualAnimatorBipedIkFootPositionReference, Is.False);
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0.12f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_GenericCharacterPipeline_When_ApplyingLowerBodyReferences_Then_ClampsSettings()
         {
             var pipelineObject = new GameObject("generic lower body reference pipeline");
@@ -126,7 +172,6 @@ namespace Tests.Editor.FBXImporter
                 Type applierType = FindApplierType();
 
                 InvokeApply(applierType, "ApplyFootHipsAlignedResidualYaw", pipeline, true, 2f, -1f);
-                InvokeApply(applierType, "ApplyBipedIkFootPosition", pipeline, true, 2f, -1f);
                 InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, true, 2f, -1f);
                 InvokeApply(
                     applierType,
@@ -144,9 +189,6 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
                 Assert.That(pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f));
                 Assert.That(pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(0f));
-                Assert.That(pipeline.useManualAnimatorBipedIkFootPositionReference, Is.True);
-                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(1f));
-                Assert.That(pipeline.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0f));
                 Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
                 Assert.That(pipeline.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(1f));
                 Assert.That(pipeline.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0f));
