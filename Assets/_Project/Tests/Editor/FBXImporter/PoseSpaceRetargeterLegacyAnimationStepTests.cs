@@ -122,17 +122,6 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
-        private static readonly Type[] HipsLocalPositionTargetGapGuardParameterTypes =
-        {
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(float)
-        };
-
         private static readonly Type[] RetargetEndpointStageJumpParameterTypes =
         {
             typeof(string[]),
@@ -556,38 +545,6 @@ namespace Tests.Editor.FBXImporter
                     Is.Empty,
                     $"{methodName} must not remain in PoseSpaceRetargeter.");
             }
-        }
-
-        [Test]
-        public void Given_HipsLocalReferenceWouldIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate()
-        {
-            bool shouldKeep = ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
-                ghostRightFootPosition: new Vector3(0f, 0f, 0f),
-                ghostRightToesPosition: new Vector3(0.02f, 0f, 0f),
-                beforeRightFootPosition: new Vector3(0.24f, 0f, 0f),
-                beforeRightToesPosition: new Vector3(0.23f, 0f, 0f),
-                afterRightFootPosition: new Vector3(0.2422f, 0f, 0f),
-                afterRightToesPosition: new Vector3(0.2321f, 0f, 0f),
-                maxAllowedIncrease: 0.0005f);
-
-            Assert.That(shouldKeep, Is.False,
-                "The hips local-position candidate must roll back when it grows the right foot/toes target gap by the same ~0.002m pattern seen in the fresh row-local evidence.");
-        }
-
-        [Test]
-        public void Given_HipsLocalReferenceDoesNotIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate()
-        {
-            bool shouldKeep = ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
-                ghostRightFootPosition: new Vector3(0f, 0f, 0f),
-                ghostRightToesPosition: new Vector3(0.02f, 0f, 0f),
-                beforeRightFootPosition: new Vector3(0.24f, 0f, 0f),
-                beforeRightToesPosition: new Vector3(0.23f, 0f, 0f),
-                afterRightFootPosition: new Vector3(0.2398f, 0f, 0f),
-                afterRightToesPosition: new Vector3(0.2297f, 0f, 0f),
-                maxAllowedIncrease: 0.0005f);
-
-            Assert.That(shouldKeep, Is.True,
-                "A hips local-position candidate may stay active when it preserves or improves the pre-solve endpoint basis.");
         }
 
         [Test]
@@ -1270,37 +1227,6 @@ namespace Tests.Editor.FBXImporter
                 currentFootPosition,
                 pivotPosition,
                 maxOffset
-            });
-        }
-
-        private static bool ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
-            Vector3 ghostRightFootPosition,
-            Vector3 ghostRightToesPosition,
-            Vector3 beforeRightFootPosition,
-            Vector3 beforeRightToesPosition,
-            Vector3 afterRightFootPosition,
-            Vector3 afterRightToesPosition,
-            float maxAllowedIncrease)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ShouldKeepEditorHipsLocalPositionReferenceByTargetGap",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: HipsLocalPositionTargetGapGuardParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null,
-                "PoseSpaceRetargeter should expose a pure guard that rejects hips local-position candidates when they increase the pre-solve right endpoint target gap.");
-
-            return (bool)method.Invoke(null, new object[]
-            {
-                ghostRightFootPosition,
-                ghostRightToesPosition,
-                beforeRightFootPosition,
-                beforeRightToesPosition,
-                afterRightFootPosition,
-                afterRightToesPosition,
-                maxAllowedIncrease
             });
         }
 

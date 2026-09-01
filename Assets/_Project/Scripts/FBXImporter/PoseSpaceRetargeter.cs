@@ -3051,7 +3051,7 @@ namespace Fbx2Vmd.FBXImporter
             ManualPoseReferenceApplier.ApplyHipsLocalPosition(targetHips, nextLocalPosition);
             Vector3 afterRightFootPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightFoot);
             Vector3 afterRightToesPosition = ReadAnimatorBoneWorldPosition(targetAnimator, HumanBodyBones.RightToes);
-            if (!ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
+            if (!RetargetingEndpointDiagnostics.ShouldKeepHipsLocalPositionReferenceByTargetGap(
                 ghostRightFootPosition,
                 ghostRightToesPosition,
                 beforeRightFootPosition,
@@ -3071,64 +3071,6 @@ namespace Fbx2Vmd.FBXImporter
                 Debug.Log($"[PoseSpaceRetargeter] Manual Animator Hips localPosition reference applied. weight={manualAnimatorHipsLocalPositionWeight:F2}, maxOffset={manualAnimatorHipsLocalPositionMaxOffset:F3}m");
                 _editorHipsLocalPositionReferenceLogged = true;
             }
-        }
-
-        private static bool ShouldKeepEditorHipsLocalPositionReferenceByTargetGap(
-            Vector3 ghostRightFootPosition,
-            Vector3 ghostRightToesPosition,
-            Vector3 beforeRightFootPosition,
-            Vector3 beforeRightToesPosition,
-            Vector3 afterRightFootPosition,
-            Vector3 afterRightToesPosition,
-            float maxAllowedIncrease)
-        {
-            if (!TryCalculateRightEndpointTargetGap(
-                    ghostRightFootPosition,
-                    ghostRightToesPosition,
-                    beforeRightFootPosition,
-                    beforeRightToesPosition,
-                    out float beforeGap) ||
-                !TryCalculateRightEndpointTargetGap(
-                    ghostRightFootPosition,
-                    ghostRightToesPosition,
-                    afterRightFootPosition,
-                    afterRightToesPosition,
-                    out float afterGap))
-            {
-                return true;
-            }
-
-            return afterGap <= beforeGap + Mathf.Max(0f, maxAllowedIncrease);
-        }
-
-        private static bool TryCalculateRightEndpointTargetGap(
-            Vector3 ghostRightFootPosition,
-            Vector3 ghostRightToesPosition,
-            Vector3 targetRightFootPosition,
-            Vector3 targetRightToesPosition,
-            out float gap)
-        {
-            gap = float.NaN;
-            if (!TryCalculateXzDistance(ghostRightFootPosition, targetRightFootPosition, out float footGap) ||
-                !TryCalculateXzDistance(ghostRightToesPosition, targetRightToesPosition, out float toesGap))
-            {
-                return false;
-            }
-
-            gap = Mathf.Max(footGap, toesGap);
-            return IsFinite(gap);
-        }
-
-        private static bool TryCalculateXzDistance(Vector3 a, Vector3 b, out float distance)
-        {
-            distance = float.NaN;
-            if (!IsFinite(a) || !IsFinite(b))
-            {
-                return false;
-            }
-
-            distance = Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
-            return IsFinite(distance);
         }
 
         private void RecordEditorHipsLocalReferenceDiagnostics(Vector3 beforeLocalPosition, Vector3 afterLocalPosition)

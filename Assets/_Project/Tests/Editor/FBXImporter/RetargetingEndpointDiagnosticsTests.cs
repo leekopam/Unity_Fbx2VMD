@@ -133,6 +133,96 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_HipsLocalReferenceWouldIncreaseEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate()
+        {
+            bool shouldKeep = ShouldKeepHipsLocalPositionReferenceByTargetGap(
+                referenceFootPosition: new Vector3(0f, 0f, 0f),
+                referenceToesPosition: new Vector3(0.02f, 0f, 0f),
+                beforeFootPosition: new Vector3(0.24f, 0f, 0f),
+                beforeToesPosition: new Vector3(0.23f, 0f, 0f),
+                afterFootPosition: new Vector3(0.2422f, 0f, 0f),
+                afterToesPosition: new Vector3(0.2321f, 0f, 0f),
+                maxAllowedIncrease: 0.0005f);
+
+            Assert.That(shouldKeep, Is.False);
+        }
+
+        [Test]
+        public void Given_HipsLocalReferencePreservesEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate()
+        {
+            bool shouldKeep = ShouldKeepHipsLocalPositionReferenceByTargetGap(
+                referenceFootPosition: new Vector3(0f, 0f, 0f),
+                referenceToesPosition: new Vector3(0.02f, 0f, 0f),
+                beforeFootPosition: new Vector3(0.24f, 0f, 0f),
+                beforeToesPosition: new Vector3(0.23f, 0f, 0f),
+                afterFootPosition: new Vector3(0.2398f, 0f, 0f),
+                afterToesPosition: new Vector3(0.2297f, 0f, 0f),
+                maxAllowedIncrease: 0.0005f);
+
+            Assert.That(shouldKeep, Is.True);
+        }
+
+        [Test]
+        public void Given_EndpointTargetGapAtAllowedIncrease_When_CheckingTargetGapGuard_Then_KeepsCandidate()
+        {
+            bool shouldKeep = ShouldKeepHipsLocalPositionReferenceByTargetGap(
+                referenceFootPosition: Vector3.zero,
+                referenceToesPosition: Vector3.zero,
+                beforeFootPosition: new Vector3(0.25f, 0f, 0f),
+                beforeToesPosition: new Vector3(0.25f, 0f, 0f),
+                afterFootPosition: new Vector3(0.375f, 0f, 0f),
+                afterToesPosition: new Vector3(0.375f, 0f, 0f),
+                maxAllowedIncrease: 0.125f);
+
+            Assert.That(shouldKeep, Is.True);
+        }
+
+        [Test]
+        public void Given_NegativeAllowedIncrease_When_CheckingTargetGapGuard_Then_ClampsAllowanceToZero()
+        {
+            bool shouldKeep = ShouldKeepHipsLocalPositionReferenceByTargetGap(
+                referenceFootPosition: Vector3.zero,
+                referenceToesPosition: Vector3.zero,
+                beforeFootPosition: new Vector3(0.25f, 0f, 0f),
+                beforeToesPosition: new Vector3(0.25f, 0f, 0f),
+                afterFootPosition: new Vector3(0.3125f, 0f, 0f),
+                afterToesPosition: new Vector3(0.3125f, 0f, 0f),
+                maxAllowedIncrease: -1f);
+
+            Assert.That(shouldKeep, Is.False);
+        }
+
+        [Test]
+        public void Given_NonFiniteEndpointPosition_When_CheckingTargetGapGuard_Then_FailsOpen()
+        {
+            bool shouldKeep = ShouldKeepHipsLocalPositionReferenceByTargetGap(
+                referenceFootPosition: new Vector3(float.NaN, 0f, 0f),
+                referenceToesPosition: Vector3.zero,
+                beforeFootPosition: Vector3.zero,
+                beforeToesPosition: Vector3.zero,
+                afterFootPosition: Vector3.zero,
+                afterToesPosition: Vector3.zero,
+                maxAllowedIncrease: 0f);
+
+            Assert.That(shouldKeep, Is.True);
+        }
+
+        [Test]
+        public void Given_OnlyEndpointHeightChanges_When_CheckingTargetGapGuard_Then_IgnoresY()
+        {
+            bool shouldKeep = ShouldKeepHipsLocalPositionReferenceByTargetGap(
+                referenceFootPosition: new Vector3(0f, 100f, 0f),
+                referenceToesPosition: new Vector3(0f, -100f, 0f),
+                beforeFootPosition: new Vector3(0f, -200f, 0f),
+                beforeToesPosition: new Vector3(0f, 200f, 0f),
+                afterFootPosition: new Vector3(0f, 500f, 0f),
+                afterToesPosition: new Vector3(0f, -500f, 0f),
+                maxAllowedIncrease: 0f);
+
+            Assert.That(shouldKeep, Is.True);
+        }
+
+        [Test]
         public void Given_EndpointDiagnosticCalculation_When_CheckingOwnership_Then_UsesDedicatedType()
         {
             Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
@@ -143,6 +233,9 @@ namespace Tests.Editor.FBXImporter
                 Is.Not.Empty);
             Assert.That(
                 diagnosticsType.GetMember("TryCalculateEvaluatorXzReferencePosition", StaticNonPublic),
+                Is.Not.Empty);
+            Assert.That(
+                diagnosticsType.GetMember("ShouldKeepHipsLocalPositionReferenceByTargetGap", StaticNonPublic),
                 Is.Not.Empty);
             Assert.That(snapshotType.GetField("Correction", InstanceNonPublic), Is.Not.Null);
 
@@ -156,6 +249,60 @@ namespace Tests.Editor.FBXImporter
                     "TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "ShouldKeepEditorHipsLocalPositionReferenceByTargetGap",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateRightEndpointTargetGap",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateXzDistance",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
+        }
+
+        private static bool ShouldKeepHipsLocalPositionReferenceByTargetGap(
+            Vector3 referenceFootPosition,
+            Vector3 referenceToesPosition,
+            Vector3 beforeFootPosition,
+            Vector3 beforeToesPosition,
+            Vector3 afterFootPosition,
+            Vector3 afterToesPosition,
+            float maxAllowedIncrease)
+        {
+            Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
+            MethodInfo method = diagnosticsType.GetMethod(
+                "ShouldKeepHipsLocalPositionReferenceByTargetGap",
+                StaticNonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(float)
+                },
+                modifiers: null);
+            Assert.That(method, Is.Not.Null);
+
+            return (bool)method.Invoke(null, new object[]
+            {
+                referenceFootPosition,
+                referenceToesPosition,
+                beforeFootPosition,
+                beforeToesPosition,
+                afterFootPosition,
+                afterToesPosition,
+                maxAllowedIncrease
+            });
         }
 
         private static Type GetRequiredType(string fullName)
