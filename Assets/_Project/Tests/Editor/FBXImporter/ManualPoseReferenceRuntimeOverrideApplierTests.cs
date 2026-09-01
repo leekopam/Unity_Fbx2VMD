@@ -448,6 +448,54 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(4)]
+        [TestCase(5)]
+        public void Given_FullBodyPoseMaskIndex_When_Applying_Then_PreservesBooleanMapping(int activeMaskIndex)
+        {
+            var pipelineObject = new GameObject("full body pose mask mapping pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                var masks = new bool[6];
+                masks[activeMaskIndex] = true;
+
+                InvokeApply(
+                    FindApplierType(),
+                    "ApplyFullBodyPose",
+                    pipeline,
+                    true,
+                    0.5f,
+                    masks[0],
+                    masks[1],
+                    masks[2],
+                    masks[3],
+                    masks[4],
+                    masks[5],
+                    4f,
+                    12f);
+
+                bool[] actual =
+                {
+                    pipeline.ShouldExcludeManualAnimatorFullBodyLowerMuscles,
+                    pipeline.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly,
+                    pipeline.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly,
+                    pipeline.manualAnimatorFullBodyPoseRightArmMusclesOnly,
+                    pipeline.manualAnimatorFullBodyPoseLeftArmMusclesOnly,
+                    pipeline.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly
+                };
+
+                Assert.That(actual, Is.EqualTo(masks));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
         [Test]
         public void Given_GenericCharacterPipeline_When_ApplyingFullBodyReference_Then_ClampsAndScopesSettings()
         {
@@ -455,34 +503,27 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
-                Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
-                    "Fbx2Vmd.FBXImporter.ManualPoseReferenceRuntimeOverrideApplier",
-                    throwOnError: false);
-                Assert.That(applierType, Is.Not.Null, "모델 중립적인 수동 포즈 참조 override 적용기가 필요합니다.");
+                pipeline.ShouldUseManualAnimatorBodyRotationReference = true;
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = true;
+                pipeline.ShouldUseManualAnimatorFootHeightGroundingReference = true;
+                pipeline.ShouldUseManualAnimatorFootLocalRotationReference = true;
+                Type applierType = FindApplierType();
 
-                MethodInfo applyMethod = applierType.GetMethod(
+                InvokeApply(
+                    applierType,
                     "ApplyFullBodyPose",
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                Assert.That(applyMethod, Is.Not.Null);
+                    pipeline,
+                    true,
+                    2f,
+                    true,
+                    false,
+                    true,
+                    false,
+                    true,
+                    false,
+                    -1f,
+                    12f);
 
-                bool applied = (bool)applyMethod.Invoke(
-                    null,
-                    new object[]
-                    {
-                        pipeline,
-                        true,
-                        2f,
-                        true,
-                        false,
-                        true,
-                        false,
-                        true,
-                        false,
-                        -1f,
-                        12f
-                    });
-
-                Assert.That(applied, Is.True);
                 Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
                 Assert.That(pipeline.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f));
                 Assert.That(pipeline.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.True);
@@ -493,6 +534,74 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(pipeline.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
                 Assert.That(pipeline.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f));
                 Assert.That(pipeline.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(12f));
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
+
+                InvokeApply(
+                    applierType,
+                    "ApplyFullBodyPose",
+                    pipeline,
+                    true,
+                    0.35f,
+                    true,
+                    false,
+                    true,
+                    false,
+                    true,
+                    false,
+                    4f,
+                    12f);
+
+                Assert.That(pipeline.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(0.35f).Within(0.0001f));
+
+                InvokeApply(
+                    applierType,
+                    "ApplyFullBodyPose",
+                    pipeline,
+                    true,
+                    -1f,
+                    true,
+                    false,
+                    true,
+                    false,
+                    true,
+                    false,
+                    4f,
+                    12f);
+
+                Assert.That(pipeline.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(0f));
+
+                InvokeApply(
+                    applierType,
+                    "ApplyFullBodyPose",
+                    pipeline,
+                    false,
+                    0.35f,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    4f,
+                    12f);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
+                Assert.That(pipeline.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
+                Assert.That(pipeline.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False);
+                Assert.That(pipeline.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False);
+                Assert.That(pipeline.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False);
+                Assert.That(pipeline.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
+                Assert.That(pipeline.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f));
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
             }
             finally
             {
