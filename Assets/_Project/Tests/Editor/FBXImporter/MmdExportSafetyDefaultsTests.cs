@@ -1203,48 +1203,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorFootHipsAlignedResidualYawRuntimeOverride_When_CustomWeightAndCapProvided_Then_UsesCustomCandidateValues()
-        {
-            var managerObject = new GameObject("manual animator foot residual yaw runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = false;
-                manager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight = 0f;
-                manager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle = 0f;
-
-                bool enabledApplied = ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
-                    manager,
-                    true,
-                    weight: 0.8f,
-                    maxAngle: 12f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
-                Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(0.8f).Within(0.0001f));
-                Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(12f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Foot residual yaw candidate must not enable the rejected BipedIK pull path.");
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Foot residual yaw candidate must not re-enable the rejected hips localPosition copy path.");
-                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Foot residual yaw candidate must not change grounding.");
-
-                bool disabledApplied = ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
-                    manager,
-                    false,
-                    weight: 0.8f,
-                    maxAngle: 12f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False);
-                Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(12f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ManualAnimatorLowerBodySegmentDirectionRuntimeOverride_When_Toggled_Then_OnlyChangesSegmentDirectionSwitchAndCaps()
         {
             var managerObject = new GameObject("manual animator lower body segment direction runtime override manager");
@@ -5348,34 +5306,6 @@ namespace Tests.Editor.FBXImporter
             bool result = (bool)method.Invoke(null, args);
             nextFootPosition = (Vector3)args[6];
             return result;
-        }
-
-        private static bool ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float weight,
-            float maxAngle)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float), typeof(float) },
-                modifiers: null);
-            if (method == null)
-            {
-                method = runnerType.GetMethod(
-                    "ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride",
-                    BindingFlags.Static | BindingFlags.NonPublic);
-            }
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support custom foot residual yaw candidate weight and max angle for lower-body A/B probes.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, weight, maxAngle });
         }
 
         private static bool ApplyManualAnimatorLowerBodySegmentDirectionRuntimeOverride(
