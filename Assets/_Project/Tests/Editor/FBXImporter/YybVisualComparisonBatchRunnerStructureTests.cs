@@ -89,6 +89,21 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ReferenceAlignedSampleTimePlanner_When_CheckingRunner_Then_KeepsOnlyRuntimeAdapter()
+        {
+            MethodInfo[] sampleTimeMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
+                    BindingFlags.NonPublic | BindingFlags.Static)
+                .Where(method => method.Name == "BuildReferenceMp4AlignedProbeSampleTimes")
+                .ToArray();
+
+            Assert.That(
+                sampleTimeMethods,
+                Has.Length.EqualTo(1),
+                "참조 정렬 샘플 시간 계산은 pure planner가 소유하고 runner에는 런타임 입력 adapter 하나만 남아야 합니다.");
+            Assert.That(sampleTimeMethods[0].GetParameters(), Has.Length.EqualTo(2));
+        }
+
+        [Test]
         public void Given_RuntimeDiagnosticRefreshPaths_When_CheckingRunner_Then_UsesCurrentScriptLocations()
         {
             FieldInfo field = typeof(YybVisualComparisonBatchRunner).GetField(

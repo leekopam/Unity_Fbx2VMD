@@ -1111,11 +1111,13 @@ namespace Fbx2Vmd.FBXImporter
             float[] referenceLocalSampleSeconds = LoadReferenceMp4CurrentClipLocalSampleSeconds(
                 referenceClipStartSeconds,
                 _currentRunOptions.durationSeconds);
-            float[] probeSampleTimes = BuildReferenceMp4AlignedProbeSampleTimes(
+            float[] probeSampleTimes = ReferenceAlignedSampleTimePlanner.Build(
                 timingPlan.CandidateClipStartSeconds,
                 _currentRunOptions.durationSeconds,
+                ReferenceMp4ProbeDefaultLocalSampleTimes,
                 referenceLocalSampleSeconds,
-                timingPlan.CandidateClipSecondsPerReferenceSecond);
+                timingPlan.CandidateClipSecondsPerReferenceSecond,
+                DefaultFrameRate);
             bool started = _activeFBXVmdPipeline.StartEditorDiagnosticSmoke(
                 _currentRunOptions.fbxFileName,
                 _currentRunOptions.durationSeconds,
@@ -2417,38 +2419,14 @@ namespace Fbx2Vmd.FBXImporter
             float referenceClipStartSeconds,
             float requestedDurationSeconds)
         {
-            return BuildReferenceMp4AlignedProbeSampleTimes(
-                referenceClipStartSeconds,
-                requestedDurationSeconds,
-                LoadReferenceMp4CurrentClipLocalSampleSeconds(
-                    referenceClipStartSeconds,
-                    requestedDurationSeconds));
-        }
-
-        private static float[] BuildReferenceMp4AlignedProbeSampleTimes(
-            float referenceClipStartSeconds,
-            float requestedDurationSeconds,
-            float[] referenceLocalSampleSeconds)
-        {
-            return BuildReferenceMp4AlignedProbeSampleTimes(
-                referenceClipStartSeconds,
-                requestedDurationSeconds,
-                referenceLocalSampleSeconds,
-                1f);
-        }
-
-        private static float[] BuildReferenceMp4AlignedProbeSampleTimes(
-            float referenceClipStartSeconds,
-            float requestedDurationSeconds,
-            float[] referenceLocalSampleSeconds,
-            float candidateClipSecondsPerReferenceSecond)
-        {
             return ReferenceAlignedSampleTimePlanner.Build(
                 referenceClipStartSeconds,
                 requestedDurationSeconds,
                 ReferenceMp4ProbeDefaultLocalSampleTimes,
-                referenceLocalSampleSeconds,
-                candidateClipSecondsPerReferenceSecond,
+                LoadReferenceMp4CurrentClipLocalSampleSeconds(
+                    referenceClipStartSeconds,
+                    requestedDurationSeconds),
+                1f,
                 DefaultFrameRate);
         }
 
