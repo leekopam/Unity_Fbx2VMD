@@ -56,9 +56,9 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline),
                 () => new MmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorFootLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesReferenceSwitchAndWeight),
-                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorFootLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesReferenceSwitchAndWeight());
+            RunTest(results, typeof(ManualPoseReferenceRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualPoseReferenceRuntimeOverrideApplierTests.Given_GenericCharacterPipeline_When_TogglingFootLocalRotation_Then_ChangesOnlyFootRotationSettings),
+                () => new ManualPoseReferenceRuntimeOverrideApplierTests().Given_GenericCharacterPipeline_When_TogglingFootLocalRotation_Then_ChangesOnlyFootRotationSettings());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults),
                 () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults());

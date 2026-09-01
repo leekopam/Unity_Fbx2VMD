@@ -9,6 +9,45 @@ namespace Tests.Editor.FBXImporter
     public class ManualPoseReferenceRuntimeOverrideApplierTests
     {
         [Test]
+        public void Given_GenericCharacterPipeline_When_TogglingFootLocalRotation_Then_ChangesOnlyFootRotationSettings()
+        {
+            var pipelineObject = new GameObject("generic foot local rotation reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseManualAnimatorFootLocalRotationReference = false;
+                pipeline.manualAnimatorFootLocalRotationReferenceWeight = 0f;
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = true;
+                pipeline.ShouldUseManualAnimatorFootHeightGroundingReference = true;
+                pipeline.useManualAnimatorBipedIkFootPositionReference = true;
+                pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = true;
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyFootLocalRotation", pipeline, true);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
+                Assert.That(pipeline.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.useManualAnimatorBipedIkFootPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+
+                InvokeApply(applierType, "ApplyFootLocalRotation", pipeline, false);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorFootLocalRotationReference, Is.False);
+                Assert.That(pipeline.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.useManualAnimatorBipedIkFootPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_GenericCharacterPipeline_When_TogglingHandLocalRotation_Then_ChangesOnlyHandSwitch()
         {
             var pipelineObject = new GameObject("generic hand local rotation reference pipeline");
