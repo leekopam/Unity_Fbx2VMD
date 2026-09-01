@@ -33,12 +33,22 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_NonFiniteCorrection_When_CalculatingRootCorrection_Then_ReturnsFalse);
             RunTest(results, nameof(tests.Given_UnlockedFootInsideContact_When_CalculatingFootLockCorrection_Then_StartsLockWithoutCorrection),
                 tests.Given_UnlockedFootInsideContact_When_CalculatingFootLockCorrection_Then_StartsLockWithoutCorrection);
+            RunTest(results, nameof(tests.Given_UnlockedFootAtContactHeight_When_CalculatingFootLockCorrection_Then_StartsLock),
+                tests.Given_UnlockedFootAtContactHeight_When_CalculatingFootLockCorrection_Then_StartsLock);
             RunTest(results, nameof(tests.Given_LockedFootStillGrounded_When_CalculatingFootLockCorrection_Then_ReturnsPlanarCorrection),
                 tests.Given_LockedFootStillGrounded_When_CalculatingFootLockCorrection_Then_ReturnsPlanarCorrection);
             RunTest(results, nameof(tests.Given_LockedFootAboveReleaseHeight_When_CalculatingFootLockCorrection_Then_UnlocksWithoutCorrection),
                 tests.Given_LockedFootAboveReleaseHeight_When_CalculatingFootLockCorrection_Then_UnlocksWithoutCorrection);
+            RunTest(results, nameof(tests.Given_LockedFootAtReleaseHeight_When_CalculatingFootLockCorrection_Then_RefreshesLockPosition),
+                tests.Given_LockedFootAtReleaseHeight_When_CalculatingFootLockCorrection_Then_RefreshesLockPosition);
             RunTest(results, nameof(tests.Given_LockedFootCorrectionExceedsResetDistance_When_CalculatingFootLockCorrection_Then_ResetsLockAndAccumulatesZero),
                 tests.Given_LockedFootCorrectionExceedsResetDistance_When_CalculatingFootLockCorrection_Then_ResetsLockAndAccumulatesZero);
+            RunTest(results, nameof(tests.Given_LockedFootCorrectionAtResetDistance_When_CalculatingFootLockCorrection_Then_KeepsCorrection),
+                tests.Given_LockedFootCorrectionAtResetDistance_When_CalculatingFootLockCorrection_Then_KeepsCorrection);
+            RunTest(results, nameof(tests.Given_NonFiniteFootBottom_When_CalculatingFootLockCorrection_Then_UnlocksWithoutChangingLockPosition),
+                tests.Given_NonFiniteFootBottom_When_CalculatingFootLockCorrection_Then_UnlocksWithoutChangingLockPosition);
+            RunTest(results, nameof(tests.Given_FootGroundingCalculations_When_CheckingOwnership_Then_PoseSpaceRetargeterDoesNotOwnThem),
+                tests.Given_FootGroundingCalculations_When_CheckingOwnership_Then_PoseSpaceRetargeterDoesNotOwnThem);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

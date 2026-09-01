@@ -1,6 +1,6 @@
 using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Retargeting;
 using NUnit.Framework;
-using System;
 using System.Reflection;
 using UnityEngine;
 
@@ -8,31 +8,10 @@ namespace Tests.Editor.FBXImporter
 {
     public class PoseSpaceRetargeterGroundedFootLockCorrectionTests
     {
-        private static readonly Type[] GroundedFootLockCorrectionParameterTypes =
-        {
-            typeof(Vector3),
-            typeof(int),
-            typeof(float),
-            typeof(float),
-            typeof(Vector3).MakeByRefType()
-        };
-
-        private static readonly Type[] FootLockCorrectionParameterTypes =
-        {
-            typeof(float),
-            typeof(Vector3),
-            typeof(float),
-            typeof(bool),
-            typeof(Vector3),
-            typeof(bool).MakeByRefType(),
-            typeof(Vector3).MakeByRefType(),
-            typeof(Vector3).MakeByRefType()
-        };
-
         [Test]
         public void Given_NoFootCorrections_When_CalculatingRootCorrection_Then_ReturnsFalse()
         {
-            bool shouldApply = TryCalculateGroundedFootLockRootCorrection(
+            bool shouldApply = GroundingStabilizer.TryCalculateGroundedFootLockRootCorrection(
                 correctionSum: new Vector3(1f, 2f, 3f),
                 correctionCount: 0,
                 groundedFootLockWeight: 0.5f,
@@ -46,7 +25,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_WeightedAverageWithinMaxStep_When_CalculatingRootCorrection_Then_DropsYAndAppliesWeight()
         {
-            bool shouldApply = TryCalculateGroundedFootLockRootCorrection(
+            bool shouldApply = GroundingStabilizer.TryCalculateGroundedFootLockRootCorrection(
                 correctionSum: new Vector3(0.08f, 0.2f, -0.04f),
                 correctionCount: 2,
                 groundedFootLockWeight: 0.5f,
@@ -62,7 +41,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_CorrectionExceedsMaxStep_When_CalculatingRootCorrection_Then_ClampsMagnitude()
         {
-            bool shouldApply = TryCalculateGroundedFootLockRootCorrection(
+            bool shouldApply = GroundingStabilizer.TryCalculateGroundedFootLockRootCorrection(
                 correctionSum: new Vector3(0.3f, 0f, 0.4f),
                 correctionCount: 1,
                 groundedFootLockWeight: 1f,
@@ -79,7 +58,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_TinyCorrection_When_CalculatingRootCorrection_Then_ReturnsFalse()
         {
-            bool shouldApply = TryCalculateGroundedFootLockRootCorrection(
+            bool shouldApply = GroundingStabilizer.TryCalculateGroundedFootLockRootCorrection(
                 correctionSum: new Vector3(0.000001f, 0f, 0f),
                 correctionCount: 1,
                 groundedFootLockWeight: 1f,
@@ -93,7 +72,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_NonFiniteCorrection_When_CalculatingRootCorrection_Then_ReturnsFalse()
         {
-            bool shouldApply = TryCalculateGroundedFootLockRootCorrection(
+            bool shouldApply = GroundingStabilizer.TryCalculateGroundedFootLockRootCorrection(
                 correctionSum: new Vector3(float.NaN, 0f, 0f),
                 correctionCount: 1,
                 groundedFootLockWeight: 1f,
@@ -107,7 +86,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_UnlockedFootInsideContact_When_CalculatingFootLockCorrection_Then_StartsLockWithoutCorrection()
         {
-            bool shouldAccumulate = TryCalculateFootLockCorrection(
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
                 bottomY: 0.04f,
                 footPosition: new Vector3(1f, 2f, -3f),
                 targetHeight: 0f,
@@ -126,9 +105,28 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_UnlockedFootAtContactHeight_When_CalculatingFootLockCorrection_Then_StartsLock()
+        {
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
+                bottomY: 0.08f,
+                footPosition: new Vector3(1f, 2f, -3f),
+                targetHeight: 0f,
+                locked: false,
+                lockPosition: Vector3.zero,
+                out bool nextLocked,
+                out Vector3 nextLockPosition,
+                out Vector3 correction);
+
+            Assert.That(shouldAccumulate, Is.False);
+            Assert.That(nextLocked, Is.True);
+            Assert.That(nextLockPosition, Is.EqualTo(new Vector3(1f, 0f, -3f)));
+            Assert.That(correction, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
         public void Given_LockedFootStillGrounded_When_CalculatingFootLockCorrection_Then_ReturnsPlanarCorrection()
         {
-            bool shouldAccumulate = TryCalculateFootLockCorrection(
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
                 bottomY: 0.02f,
                 footPosition: new Vector3(0.95f, 4f, 1.94f),
                 targetHeight: 0f,
@@ -150,7 +148,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_LockedFootAboveReleaseHeight_When_CalculatingFootLockCorrection_Then_UnlocksWithoutCorrection()
         {
-            bool shouldAccumulate = TryCalculateFootLockCorrection(
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
                 bottomY: 0.15f,
                 footPosition: new Vector3(1f, 0f, 2f),
                 targetHeight: 0f,
@@ -168,9 +166,28 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_LockedFootAtReleaseHeight_When_CalculatingFootLockCorrection_Then_RefreshesLockPosition()
+        {
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
+                bottomY: 0.14f,
+                footPosition: new Vector3(1f, 0f, 2f),
+                targetHeight: 0f,
+                locked: true,
+                lockPosition: new Vector3(9f, 0f, 9f),
+                out bool nextLocked,
+                out Vector3 nextLockPosition,
+                out Vector3 correction);
+
+            Assert.That(shouldAccumulate, Is.False);
+            Assert.That(nextLocked, Is.False);
+            Assert.That(nextLockPosition, Is.EqualTo(new Vector3(1f, 0f, 2f)));
+            Assert.That(correction, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
         public void Given_LockedFootCorrectionExceedsResetDistance_When_CalculatingFootLockCorrection_Then_ResetsLockAndAccumulatesZero()
         {
-            bool shouldAccumulate = TryCalculateFootLockCorrection(
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
                 bottomY: 0.02f,
                 footPosition: new Vector3(1f, 0f, 0f),
                 targetHeight: 0f,
@@ -188,72 +205,67 @@ namespace Tests.Editor.FBXImporter
             Assert.That(correction, Is.EqualTo(Vector3.zero));
         }
 
-        private static bool TryCalculateGroundedFootLockRootCorrection(
-            Vector3 correctionSum,
-            int correctionCount,
-            float groundedFootLockWeight,
-            float maxGroundedFootLockStep,
-            out Vector3 correction)
+        [Test]
+        public void Given_LockedFootCorrectionAtResetDistance_When_CalculatingFootLockCorrection_Then_KeepsCorrection()
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateGroundedFootLockRootCorrection",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: GroundedFootLockCorrectionParameterTypes,
-                modifiers: null);
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
+                bottomY: 0.02f,
+                footPosition: new Vector3(0.25f, 0f, 0f),
+                targetHeight: 0f,
+                locked: true,
+                lockPosition: Vector3.zero,
+                out bool nextLocked,
+                out Vector3 nextLockPosition,
+                out Vector3 correction);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for grounded foot-lock root correction calculation.");
-
-            object[] args =
-            {
-                correctionSum,
-                correctionCount,
-                groundedFootLockWeight,
-                maxGroundedFootLockStep,
-                Vector3.zero
-            };
-
-            bool shouldApply = (bool)method.Invoke(null, args);
-            correction = (Vector3)args[4];
-            return shouldApply;
+            Assert.That(shouldAccumulate, Is.True);
+            Assert.That(nextLocked, Is.True);
+            Assert.That(nextLockPosition, Is.EqualTo(Vector3.zero));
+            Assert.That(correction, Is.EqualTo(new Vector3(-0.25f, 0f, 0f)));
         }
 
-        private static bool TryCalculateFootLockCorrection(
-            float bottomY,
-            Vector3 footPosition,
-            float targetHeight,
-            bool locked,
-            Vector3 lockPosition,
-            out bool nextLocked,
-            out Vector3 nextLockPosition,
-            out Vector3 correction)
+        [Test]
+        public void Given_NonFiniteFootBottom_When_CalculatingFootLockCorrection_Then_UnlocksWithoutChangingLockPosition()
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateFootLockCorrection",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: FootLockCorrectionParameterTypes,
-                modifiers: null);
+            var lockPosition = new Vector3(1f, 0f, 2f);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for per-foot lock correction calculation.");
+            bool shouldAccumulate = GroundingStabilizer.TryCalculateFootLockCorrection(
+                bottomY: float.NaN,
+                footPosition: new Vector3(3f, 0f, 4f),
+                targetHeight: 0f,
+                locked: true,
+                lockPosition: lockPosition,
+                out bool nextLocked,
+                out Vector3 nextLockPosition,
+                out Vector3 correction);
 
-            object[] args =
+            Assert.That(shouldAccumulate, Is.False);
+            Assert.That(nextLocked, Is.False);
+            Assert.That(nextLockPosition, Is.EqualTo(lockPosition));
+            Assert.That(correction, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
+        public void Given_FootGroundingCalculations_When_CheckingOwnership_Then_PoseSpaceRetargeterDoesNotOwnThem()
+        {
+            string[] methodNames =
             {
-                bottomY,
-                footPosition,
-                targetHeight,
-                locked,
-                lockPosition,
-                false,
-                Vector3.zero,
-                Vector3.zero
+                "TryCalculateEstimatedFootRadius",
+                "TryCalculateFootBottomY",
+                "TryCalculateLowestFootBottomY",
+                "TryCalculateGroundedFootLockRootCorrection",
+                "TryCalculateFootLockCorrection"
             };
 
-            bool shouldAccumulate = (bool)method.Invoke(null, args);
-            nextLocked = (bool)args[5];
-            nextLockPosition = (Vector3)args[6];
-            correction = (Vector3)args[7];
-            return shouldAccumulate;
+            foreach (string methodName in methodNames)
+            {
+                Assert.That(
+                    typeof(PoseSpaceRetargeter).GetMember(
+                        methodName,
+                        BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Empty,
+                    methodName);
+            }
         }
     }
 }
