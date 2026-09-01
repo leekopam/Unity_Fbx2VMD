@@ -33,6 +33,29 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_TimeMatchedImageDiagnostics_When_CheckingTestOwnership_Then_BuilderFixtureOwnsIntegrationContracts()
+        {
+            string[] integrationContractNames =
+            {
+                "Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming",
+                "Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans",
+                "Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans",
+                "Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints"
+            };
+
+            foreach (string contractName in integrationContractNames)
+            {
+                MethodInfo legacyMethod = typeof(MmdExportSafetyDefaultsTests).GetMethod(
+                    contractName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                Assert.That(
+                    legacyMethod,
+                    Is.Null,
+                    $"프레임 역할 진단 통합 계약 '{contractName}'은 거대 안전 기본값 fixture가 아니라 builder fixture가 소유해야 합니다.");
+            }
+        }
+
+        [Test]
         public void Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines()
         {
             string root = Path.Combine(Path.GetTempPath(), "FrameRoleDiagnostics_" + Guid.NewGuid().ToString("N"));
@@ -462,6 +485,345 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybCandidateTimeMatchedFraming_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string provenancePath = Path.Combine(root, "provenance.md");
+            string resultPath = Path.Combine(root, "result.json");
+            string frameMetricsPath = Path.Combine(root, "frame-metrics.json");
+            string contactSheetPath = Path.Combine(root, "contact-sheet.png");
+            string frameFolder = Path.Combine(root, "frames");
+            Directory.CreateDirectory(frameFolder);
+            string frontA = Path.Combine(frameFolder, "front-a.png");
+            string frontB = Path.Combine(frameFolder, "front-b.png");
+            string frontC = Path.Combine(frameFolder, "front-c.png");
+            string indexPath = Path.Combine(frameFolder, "index.csv");
+
+            try
+            {
+                File.WriteAllText(provenancePath, "fixture provenance");
+                File.WriteAllText(
+                    resultPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-analysis-fixture-v1\",\n" +
+                    "  \"extractedFrameCount\": 3,\n" +
+                    "  \"video\": { \"width\": 10, \"height\": 10, \"avg_frame_rate\": \"30/1\", \"stream_duration\": \"3.0\", \"nb_frames\": \"90\" }\n" +
+                    "}\n");
+                File.WriteAllText(
+                    frameMetricsPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-frame-metrics-fixture-v1\",\n" +
+                    "  \"sampleCount\": 3,\n" +
+                    "  \"extractedFrameCount\": 3,\n" +
+                    "  \"avgBBoxHeightRatio\": 0.58,\n" +
+                    "  \"avgBBoxWidthRatio\": 0.46,\n" +
+                    "  \"centerXRangeRatio\": 0.13,\n" +
+                    "  \"maxBottomGapRatio\": 0.22,\n" +
+                    "  \"avgBrightAreaRatio\": 0.26,\n" +
+                    "  \"rows\": [\n" +
+                    "    { \"seconds\": 0.0, \"bboxHeightRatio\": 0.7, \"bboxWidthRatio\": 0.44, \"centerXRatio\": 0.45, \"bottomGapRatio\": 0.08, \"brightAreaRatio\": 0.30 },\n" +
+                    "    { \"seconds\": 1.5, \"bboxHeightRatio\": 0.55, \"bboxWidthRatio\": 0.38, \"centerXRatio\": 0.52, \"bottomGapRatio\": 0.22, \"brightAreaRatio\": 0.27 },\n" +
+                    "    { \"seconds\": 3.0, \"bboxHeightRatio\": 0.48, \"bboxWidthRatio\": 0.56, \"centerXRatio\": 0.58, \"bottomGapRatio\": 0.18, \"brightAreaRatio\": 0.22 }\n" +
+                    "  ]\n" +
+                    "}\n");
+                File.WriteAllBytes(contactSheetPath, new byte[] { 0x89, 0x50, 0x4e, 0x47 });
+                WriteFixturePng(frontA, new RectInt(2, 1, 4, 8));
+                WriteFixturePng(frontB, new RectInt(3, 2, 4, 6));
+                WriteFixturePng(frontC, new RectInt(4, 2, 4, 5));
+                File.WriteAllText(
+                    indexPath,
+                    "label,scene,reason,recorderFrame,view,path\n" +
+                    $"fixture,Main_Auto,start,0,front,{frontA}\n" +
+                    $"fixture,Main_Auto,t1.5,45,front,{frontB}\n" +
+                    $"fixture,Main_Auto,finish,90,front,{frontC}\n");
+
+                object diagnostics = BuildSummaryFrameRoleDiagnostics(
+                    referenceTargetFrameCount: 90,
+                    baselineRecordedFrameCount: 90,
+                    candidateRecordedFrameCount: 90,
+                    requestedDurationSeconds: 3f,
+                    provenancePath,
+                    resultPath,
+                    frameMetricsPath,
+                    contactSheetPath,
+                    indexPath);
+
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_sample_count"), Is.EqualTo(3));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_seconds_gap"), Is.EqualTo(0f).Within(0.000001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_bbox_height_ratio_abs_delta"), Is.EqualTo(0.05666667f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_bbox_height_ratio_abs_delta"), Is.EqualTo(0.1f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "reference_mp4_current_clip_avg_bbox_width_ratio"), Is.EqualTo(0.46f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_screenshot_avg_bbox_width_ratio"), Is.EqualTo(0.4f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_bbox_width_ratio_abs_delta"), Is.EqualTo(0.07333333f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_bbox_width_ratio_abs_delta"), Is.EqualTo(0.16f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_center_x_ratio_abs_delta"), Is.EqualTo(0.03f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_bottom_gap_ratio_abs_delta"), Is.EqualTo(0.02f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_bright_area_ratio_abs_delta"), Is.EqualTo(0.02333333f).Within(0.00001f));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_framing_metric_basis"), Does.Contain("nearest"));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_image_space_limb_span_basis"), Does.Contain("bbox width"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybCandidateBandedLimbSpan_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string provenancePath = Path.Combine(root, "provenance.md");
+            string resultPath = Path.Combine(root, "result.json");
+            string frameMetricsPath = Path.Combine(root, "frame-metrics.json");
+            string contactSheetPath = Path.Combine(root, "contact-sheet.png");
+            string frameFolder = Path.Combine(root, "frames");
+            Directory.CreateDirectory(frameFolder);
+            string refA = Path.Combine(frameFolder, "ref-a.png");
+            string refB = Path.Combine(frameFolder, "ref-b.png");
+            string frontA = Path.Combine(frameFolder, "front-a.png");
+            string frontB = Path.Combine(frameFolder, "front-b.png");
+            string indexPath = Path.Combine(frameFolder, "index.csv");
+
+            try
+            {
+                File.WriteAllText(provenancePath, "fixture provenance");
+                File.WriteAllText(
+                    resultPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-analysis-fixture-v1\",\n" +
+                    "  \"extractedFrameCount\": 2,\n" +
+                    "  \"video\": { \"width\": 10, \"height\": 10, \"avg_frame_rate\": \"30/1\", \"stream_duration\": \"3.0\", \"nb_frames\": \"90\" }\n" +
+                    "}\n");
+                File.WriteAllText(
+                    frameMetricsPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-frame-metrics-fixture-v1\",\n" +
+                    "  \"sampleCount\": 2,\n" +
+                    "  \"extractedFrameCount\": 2,\n" +
+                    "  \"avgBBoxHeightRatio\": 0.8,\n" +
+                    "  \"avgBBoxWidthRatio\": 0.5,\n" +
+                    "  \"centerXRangeRatio\": 0.1,\n" +
+                    "  \"maxBottomGapRatio\": 0.1,\n" +
+                    "  \"avgBrightAreaRatio\": 0.25,\n" +
+                    "  \"rows\": [\n" +
+                    $"    {{ \"seconds\": 0.0, \"framePath\": \"{refA.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 0.8, \"bboxWidthRatio\": 0.6, \"centerXRatio\": 0.5, \"bottomGapRatio\": 0.1, \"brightAreaRatio\": 0.30 }},\n" +
+                    $"    {{ \"seconds\": 3.0, \"framePath\": \"{refB.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 0.8, \"bboxWidthRatio\": 0.4, \"centerXRatio\": 0.5, \"bottomGapRatio\": 0.1, \"brightAreaRatio\": 0.20 }}\n" +
+                    "  ]\n" +
+                    "}\n");
+                File.WriteAllBytes(contactSheetPath, new byte[] { 0x89, 0x50, 0x4e, 0x47 });
+                WriteFixturePng(refA, new RectInt(3, 1, 4, 4), new RectInt(2, 5, 6, 4));
+                WriteFixturePng(refB, new RectInt(4, 1, 2, 4), new RectInt(3, 5, 4, 4));
+                WriteFixturePng(frontA, new RectInt(2, 1, 5, 4), new RectInt(1, 5, 8, 4));
+                WriteFixturePng(frontB, new RectInt(4, 1, 2, 4), new RectInt(2, 5, 5, 4));
+                File.WriteAllText(
+                    indexPath,
+                    "label,scene,reason,recorderFrame,view,path\n" +
+                    $"fixture,Main_Auto,start,0,front,{frontA}\n" +
+                    $"fixture,Main_Auto,finish,90,front,{frontB}\n");
+
+                object diagnostics = BuildSummaryFrameRoleDiagnostics(
+                    referenceTargetFrameCount: 90,
+                    baselineRecordedFrameCount: 90,
+                    candidateRecordedFrameCount: 90,
+                    requestedDurationSeconds: 3f,
+                    provenancePath,
+                    resultPath,
+                    frameMetricsPath,
+                    contactSheetPath,
+                    indexPath);
+
+                Assert.That(GetField<float>(diagnostics, "reference_mp4_current_clip_avg_upper_limb_span_ratio"), Is.EqualTo(0.5f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "reference_mp4_current_clip_avg_lower_limb_span_ratio"), Is.EqualTo(0.3f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_screenshot_avg_upper_limb_span_ratio"), Is.EqualTo(0.65f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_screenshot_avg_lower_limb_span_ratio"), Is.EqualTo(0.35f).Within(0.00001f));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_limb_band_sample_count"), Is.EqualTo(2));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_upper_limb_span_ratio_abs_delta"), Is.EqualTo(0.15f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_upper_limb_span_ratio_abs_delta"), Is.EqualTo(0.2f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_lower_limb_span_ratio_abs_delta"), Is.EqualTo(0.05f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_lower_limb_span_ratio_abs_delta"), Is.EqualTo(0.1f).Within(0.00001f));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_image_space_limb_band_basis"), Does.Contain("silhouette"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybCandidateSilhouetteProfile_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string provenancePath = Path.Combine(root, "provenance.md");
+            string resultPath = Path.Combine(root, "result.json");
+            string frameMetricsPath = Path.Combine(root, "frame-metrics.json");
+            string contactSheetPath = Path.Combine(root, "contact-sheet.png");
+            string frameFolder = Path.Combine(root, "frames");
+            Directory.CreateDirectory(frameFolder);
+            string refA = Path.Combine(frameFolder, "ref-a.png");
+            string refB = Path.Combine(frameFolder, "ref-b.png");
+            string frontA = Path.Combine(frameFolder, "front-a.png");
+            string frontB = Path.Combine(frameFolder, "front-b.png");
+            string indexPath = Path.Combine(frameFolder, "index.csv");
+
+            try
+            {
+                File.WriteAllText(provenancePath, "fixture provenance");
+                File.WriteAllText(
+                    resultPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-analysis-fixture-v1\",\n" +
+                    "  \"extractedFrameCount\": 2,\n" +
+                    "  \"video\": { \"width\": 10, \"height\": 10, \"avg_frame_rate\": \"30/1\", \"stream_duration\": \"3.0\", \"nb_frames\": \"90\" }\n" +
+                    "}\n");
+                File.WriteAllText(
+                    frameMetricsPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-frame-metrics-fixture-v1\",\n" +
+                    "  \"sampleCount\": 2,\n" +
+                    "  \"extractedFrameCount\": 2,\n" +
+                    "  \"avgBBoxHeightRatio\": 0.8,\n" +
+                    "  \"avgBBoxWidthRatio\": 0.5,\n" +
+                    "  \"centerXRangeRatio\": 0.1,\n" +
+                    "  \"maxBottomGapRatio\": 0.1,\n" +
+                    "  \"avgBrightAreaRatio\": 0.25,\n" +
+                    "  \"rows\": [\n" +
+                    $"    {{ \"seconds\": 0.0, \"framePath\": \"{refA.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 0.8, \"bboxWidthRatio\": 0.6, \"centerXRatio\": 0.5, \"bottomGapRatio\": 0.1, \"brightAreaRatio\": 0.30 }},\n" +
+                    $"    {{ \"seconds\": 3.0, \"framePath\": \"{refB.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 0.8, \"bboxWidthRatio\": 0.4, \"centerXRatio\": 0.5, \"bottomGapRatio\": 0.1, \"brightAreaRatio\": 0.20 }}\n" +
+                    "  ]\n" +
+                    "}\n");
+                File.WriteAllBytes(contactSheetPath, new byte[] { 0x89, 0x50, 0x4e, 0x47 });
+                WriteFixturePng(refA, new RectInt(3, 1, 4, 4), new RectInt(2, 5, 6, 4));
+                WriteFixturePng(refB, new RectInt(4, 1, 2, 4), new RectInt(3, 5, 4, 4));
+                WriteFixturePng(frontA, new RectInt(2, 1, 5, 4), new RectInt(1, 5, 8, 4));
+                WriteFixturePng(frontB, new RectInt(4, 1, 2, 4), new RectInt(2, 5, 5, 4));
+                File.WriteAllText(
+                    indexPath,
+                    "label,scene,reason,recorderFrame,view,path\n" +
+                    $"fixture,Main_Auto,start,0,front,{frontA}\n" +
+                    $"fixture,Main_Auto,finish,90,front,{frontB}\n");
+
+                object diagnostics = BuildSummaryFrameRoleDiagnostics(
+                    referenceTargetFrameCount: 90,
+                    baselineRecordedFrameCount: 90,
+                    candidateRecordedFrameCount: 90,
+                    requestedDurationSeconds: 3f,
+                    provenancePath,
+                    resultPath,
+                    frameMetricsPath,
+                    contactSheetPath,
+                    indexPath);
+
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_silhouette_profile_band_count"), Is.EqualTo(4));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_silhouette_profile_sample_count"), Is.EqualTo(2));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_silhouette_profile_l1_abs_delta"), Is.EqualTo(0.1f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_silhouette_profile_l1_abs_delta"), Is.EqualTo(0.15f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_silhouette_profile_band_abs_delta"), Is.EqualTo(0.2f).Within(0.00001f));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_silhouette_profile_basis"), Does.Contain("4-band"));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_silhouette_landmark_band_count"), Is.EqualTo(4));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_silhouette_landmark_sample_count"), Is.EqualTo(2));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_silhouette_landmark_endpoint_abs_delta"), Is.EqualTo(0.05f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_silhouette_landmark_endpoint_abs_delta"), Is.EqualTo(0.1f).Within(0.00001f));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_silhouette_landmark_basis"), Does.Contain("left/right"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "YybCandidateImageSpaceKeypoints_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string provenancePath = Path.Combine(root, "provenance.md");
+            string resultPath = Path.Combine(root, "result.json");
+            string frameMetricsPath = Path.Combine(root, "frame-metrics.json");
+            string contactSheetPath = Path.Combine(root, "contact-sheet.png");
+            string frameFolder = Path.Combine(root, "frames");
+            Directory.CreateDirectory(frameFolder);
+            string refA = Path.Combine(frameFolder, "ref-a.png");
+            string refB = Path.Combine(frameFolder, "ref-b.png");
+            string frontA = Path.Combine(frameFolder, "front-a.png");
+            string frontB = Path.Combine(frameFolder, "front-b.png");
+            string indexPath = Path.Combine(frameFolder, "index.csv");
+
+            try
+            {
+                File.WriteAllText(provenancePath, "fixture provenance");
+                File.WriteAllText(
+                    resultPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-analysis-fixture-v1\",\n" +
+                    "  \"extractedFrameCount\": 2,\n" +
+                    "  \"video\": { \"width\": 10, \"height\": 10, \"avg_frame_rate\": \"30/1\", \"stream_duration\": \"3.0\", \"nb_frames\": \"90\" }\n" +
+                    "}\n");
+                File.WriteAllText(
+                    frameMetricsPath,
+                    "{\n" +
+                    "  \"schema\": \"ref-mp4-frame-metrics-fixture-v1\",\n" +
+                    "  \"sampleCount\": 2,\n" +
+                    "  \"extractedFrameCount\": 2,\n" +
+                    "  \"avgBBoxHeightRatio\": 0.8,\n" +
+                    "  \"avgBBoxWidthRatio\": 0.5,\n" +
+                    "  \"centerXRangeRatio\": 0.1,\n" +
+                    "  \"maxBottomGapRatio\": 0.1,\n" +
+                    "  \"avgBrightAreaRatio\": 0.25,\n" +
+                    "  \"rows\": [\n" +
+                    $"    {{ \"seconds\": 0.0, \"framePath\": \"{refA.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 0.8, \"bboxWidthRatio\": 0.6, \"centerXRatio\": 0.5, \"bottomGapRatio\": 0.1, \"brightAreaRatio\": 0.30 }},\n" +
+                    $"    {{ \"seconds\": 3.0, \"framePath\": \"{refB.Replace("\\", "\\\\")}\", \"bboxHeightRatio\": 0.8, \"bboxWidthRatio\": 0.4, \"centerXRatio\": 0.5, \"bottomGapRatio\": 0.1, \"brightAreaRatio\": 0.20 }}\n" +
+                    "  ]\n" +
+                    "}\n");
+                File.WriteAllBytes(contactSheetPath, new byte[] { 0x89, 0x50, 0x4e, 0x47 });
+                WriteFixturePng(refA, new RectInt(3, 1, 4, 4), new RectInt(2, 5, 6, 4));
+                WriteFixturePng(refB, new RectInt(4, 1, 2, 4), new RectInt(3, 5, 4, 4));
+                WriteFixturePng(frontA, new RectInt(2, 1, 5, 4), new RectInt(1, 5, 8, 4));
+                WriteFixturePng(frontB, new RectInt(4, 1, 2, 4), new RectInt(2, 5, 5, 4));
+                File.WriteAllText(
+                    indexPath,
+                    "label,scene,reason,recorderFrame,view,path\n" +
+                    $"fixture,Main_Auto,start,0,front,{frontA}\n" +
+                    $"fixture,Main_Auto,finish,90,front,{frontB}\n");
+
+                object diagnostics = BuildSummaryFrameRoleDiagnostics(
+                    referenceTargetFrameCount: 90,
+                    baselineRecordedFrameCount: 90,
+                    candidateRecordedFrameCount: 90,
+                    requestedDurationSeconds: 3f,
+                    provenancePath,
+                    resultPath,
+                    frameMetricsPath,
+                    contactSheetPath,
+                    indexPath);
+
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_image_space_keypoint_sample_count"), Is.EqualTo(2));
+                Assert.That(GetField<int>(diagnostics, "candidate_vs_reference_time_matched_image_space_keypoint_count"), Is.EqualTo(10));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_avg_image_space_keypoint_l1_delta"), Is.EqualTo(0.045f).Within(0.00001f));
+                Assert.That(GetField<float>(diagnostics, "candidate_vs_reference_time_matched_max_image_space_keypoint_l1_delta"), Is.EqualTo(0.1f).Within(0.00001f));
+                Assert.That(GetField<string>(diagnostics, "candidate_vs_reference_time_matched_image_space_keypoint_basis"), Does.Contain("deterministic 2D silhouette keypoints"));
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, recursive: true);
+                }
+            }
+        }
+
         private static object BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
             int baselineRecordedFrameCount,
@@ -610,6 +972,11 @@ namespace Tests.Editor.FBXImporter
 
         private static void WriteFixturePng(string path, RectInt brightRect)
         {
+            WriteFixturePng(path, new[] { brightRect });
+        }
+
+        private static void WriteFixturePng(string path, params RectInt[] brightRects)
+        {
             var texture = new Texture2D(10, 10, TextureFormat.RGBA32, mipChain: false);
             try
             {
@@ -619,11 +986,14 @@ namespace Tests.Editor.FBXImporter
                     pixels[index] = new Color32(0, 0, 0, 255);
                 }
 
-                for (int y = brightRect.yMin; y < brightRect.yMax; y++)
+                foreach (RectInt brightRect in brightRects)
                 {
-                    for (int x = brightRect.xMin; x < brightRect.xMax; x++)
+                    for (int y = brightRect.yMin; y < brightRect.yMax; y++)
                     {
-                        pixels[(y * 10) + x] = new Color32(255, 255, 255, 255);
+                        for (int x = brightRect.xMin; x < brightRect.xMax; x++)
+                        {
+                            pixels[(y * 10) + x] = new Color32(255, 255, 255, 255);
+                        }
                     }
                 }
 

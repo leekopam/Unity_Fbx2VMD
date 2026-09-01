@@ -159,18 +159,18 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
                 nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window),
                 () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming),
-                () => new MmdExportSafetyDefaultsTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans),
-                () => new MmdExportSafetyDefaultsTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans),
-                () => new MmdExportSafetyDefaultsTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints),
-                () => new MmdExportSafetyDefaultsTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
                 () => new MmdExportSafetyDefaultsTests().Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
