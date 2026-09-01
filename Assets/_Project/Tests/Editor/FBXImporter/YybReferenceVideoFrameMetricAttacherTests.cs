@@ -49,20 +49,20 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ExtractedAttacher_When_CheckingRunner_Then_RowImageEnrichmentMethodIsRemoved()
+        public void Given_ExtractedAttacher_When_CheckingBuilder_Then_RowImageEnrichmentIsDelegated()
         {
             BindingFlags privateStatic = BindingFlags.NonPublic | BindingFlags.Static;
             MethodInfo method = typeof(YybVisualComparisonBatchRunner).GetMethod(
                 "AttachReferenceMp4CurrentClipCoverage",
                 privateStatic);
-            string runnerPath = Path.Combine(
+            string builderPath = Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "Assets",
                 "_Project",
                 "Scripts",
                 "FBXImporter",
-                "YybVisualComparisonBatchRunner.cs");
-            string source = File.ReadAllText(runnerPath);
+                "VisualComparisonFrameRoleDiagnosticsBuilder.cs");
+            string source = File.ReadAllText(builderPath);
 
             Assert.That(method, Is.Null);
             Assert.That(

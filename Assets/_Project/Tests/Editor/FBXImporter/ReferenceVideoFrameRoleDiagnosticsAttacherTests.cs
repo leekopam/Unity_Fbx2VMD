@@ -51,19 +51,19 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ExtractedAttacher_When_CheckingRunner_Then_FileReadAndCoverageCalculationAreDelegated()
+        public void Given_ExtractedAttacher_When_CheckingBuilder_Then_FileReadAndCoverageCalculationAreDelegated()
         {
-            string runnerPath = Path.Combine(
+            string builderPath = Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "Assets",
                 "_Project",
                 "Scripts",
                 "FBXImporter",
-                "YybVisualComparisonBatchRunner.cs");
-            string source = File.ReadAllText(runnerPath);
+                "VisualComparisonFrameRoleDiagnosticsBuilder.cs");
+            string source = File.ReadAllText(builderPath);
 
             Assert.That(Count(source, "ReferenceVideoFrameRoleDiagnosticsAttacher.Attach("), Is.EqualTo(1));
-            Assert.That(Count(source, "ReferenceVideoDiagnosticsReader.Read("), Is.EqualTo(1));
+            Assert.That(Count(source, "ReferenceVideoDiagnosticsReader.Read("), Is.EqualTo(0));
             Assert.That(Count(source, "ReferenceVideoClipCoverageCalculator.Calculate("), Is.EqualTo(0));
         }
 
