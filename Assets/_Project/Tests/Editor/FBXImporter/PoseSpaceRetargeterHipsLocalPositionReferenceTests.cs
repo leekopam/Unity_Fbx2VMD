@@ -148,6 +148,7 @@ namespace Tests.Editor.FBXImporter
             typeof(Quaternion),
             typeof(float),
             typeof(float),
+            typeof(float),
             typeof(Quaternion).MakeByRefType()
         };
 
@@ -749,12 +750,13 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_LowerBodySegmentDirectionReference_When_CalculatingCorrection_Then_RotatesTowardReferenceDirection()
         {
-            bool calculated = TryCalculateEditorLowerBodySegmentDirectionReference(
+            bool calculated = TryCalculateSegmentDirectionReference(
                 referenceSegmentDirection: Vector3.forward,
                 currentSegmentDirection: Vector3.right,
                 currentParentWorldRotation: Quaternion.identity,
                 weight: 0.5f,
                 maxAngleDegrees: 0f,
+                correctionAxisXzScale: 1f,
                 out Quaternion nextRotation);
 
             Assert.That(calculated, Is.True);
@@ -764,16 +766,115 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_LowerBodySegmentDirectionMaxAngle_When_CalculatingCorrection_Then_ClampsBeforeWeight()
         {
-            bool calculated = TryCalculateEditorLowerBodySegmentDirectionReference(
+            bool calculated = TryCalculateSegmentDirectionReference(
                 referenceSegmentDirection: Vector3.forward,
                 currentSegmentDirection: Vector3.right,
                 currentParentWorldRotation: Quaternion.identity,
-                weight: 1f,
+                weight: 0.5f,
                 maxAngleDegrees: 10f,
+                correctionAxisXzScale: 1f,
                 out Quaternion nextRotation);
 
             Assert.That(calculated, Is.True);
-            Assert.That(Quaternion.Angle(Quaternion.identity, nextRotation), Is.EqualTo(10f).Within(0.05f));
+            Assert.That(Quaternion.Angle(Quaternion.identity, nextRotation), Is.EqualTo(5f).Within(0.05f));
+        }
+
+        [Test]
+        public void Given_LowerBodySegmentDirectionAxisScale_When_CalculatingCorrection_Then_RemovesXzAxisContribution()
+        {
+            bool calculated = TryCalculateSegmentDirectionReference(
+                referenceSegmentDirection: new Vector3(1f, 1f, 0f),
+                currentSegmentDirection: Vector3.forward,
+                currentParentWorldRotation: Quaternion.identity,
+                weight: 1f,
+                maxAngleDegrees: 0f,
+                correctionAxisXzScale: 0f,
+                out Quaternion nextRotation);
+
+            nextRotation.ToAngleAxis(out float angle, out Vector3 axis);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(angle, Is.EqualTo(90f).Within(0.05f));
+            Assert.That(Mathf.Abs(axis.x), Is.LessThan(0.0001f));
+            Assert.That(Mathf.Abs(axis.y), Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(Mathf.Abs(axis.z), Is.LessThan(0.0001f));
+        }
+
+        [Test]
+        public void Given_LowerBodySegmentDirectionAxisScaleRemovesCorrection_When_CalculatingCorrection_Then_KeepsRotation()
+        {
+            Quaternion currentRotation = Quaternion.Euler(10f, 20f, 30f);
+            bool calculated = TryCalculateSegmentDirectionReference(
+                referenceSegmentDirection: Vector3.up,
+                currentSegmentDirection: Vector3.forward,
+                currentParentWorldRotation: currentRotation,
+                weight: 1f,
+                maxAngleDegrees: 0f,
+                correctionAxisXzScale: 0f,
+                out Quaternion nextRotation);
+
+            Assert.That(calculated, Is.False);
+            Assert.That(nextRotation, Is.EqualTo(currentRotation));
+        }
+
+        [Test]
+        public void Given_ZeroSegmentDirectionWeight_When_CalculatingCorrection_Then_KeepsRotation()
+        {
+            Quaternion currentRotation = Quaternion.Euler(10f, 20f, 30f);
+            bool calculated = TryCalculateSegmentDirectionReference(
+                referenceSegmentDirection: Vector3.forward,
+                currentSegmentDirection: Vector3.right,
+                currentParentWorldRotation: currentRotation,
+                weight: 0f,
+                maxAngleDegrees: 0f,
+                correctionAxisXzScale: 1f,
+                out Quaternion nextRotation);
+
+            Assert.That(calculated, Is.False);
+            Assert.That(nextRotation, Is.EqualTo(currentRotation));
+        }
+
+        [Test]
+        public void Given_NonFiniteSegmentDirection_When_CalculatingCorrection_Then_KeepsRotation()
+        {
+            Quaternion currentRotation = Quaternion.Euler(10f, 20f, 30f);
+            bool calculated = TryCalculateSegmentDirectionReference(
+                referenceSegmentDirection: new Vector3(float.NaN, 0f, 0f),
+                currentSegmentDirection: Vector3.right,
+                currentParentWorldRotation: currentRotation,
+                weight: 1f,
+                maxAngleDegrees: 0f,
+                correctionAxisXzScale: 1f,
+                out Quaternion nextRotation);
+
+            Assert.That(calculated, Is.False);
+            Assert.That(nextRotation, Is.EqualTo(currentRotation));
+        }
+
+        [Test]
+        public void Given_SegmentDirectionCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            MethodInfo applierMethod = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateSegmentDirectionReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: LowerBodySegmentDirectionReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(applierMethod, Is.Not.Null,
+                "ManualPoseReferenceApplier should own segment-direction calculation.");
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateEditorLowerBodySegmentDirectionReference",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty,
+                "PoseSpaceRetargeter should delegate segment-direction calculation.");
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "ScaleCorrectionAxisXz",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty,
+                "PoseSpaceRetargeter should delegate correction-axis scaling.");
         }
 
         private static bool TryCalculateHipsLocalPositionReference(
@@ -1183,22 +1284,24 @@ namespace Tests.Editor.FBXImporter
             return calculated;
         }
 
-        private static bool TryCalculateEditorLowerBodySegmentDirectionReference(
+        private static bool TryCalculateSegmentDirectionReference(
             Vector3 referenceSegmentDirection,
             Vector3 currentSegmentDirection,
             Quaternion currentParentWorldRotation,
             float weight,
             float maxAngleDegrees,
+            float correctionAxisXzScale,
             out Quaternion nextRotation)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateEditorLowerBodySegmentDirectionReference",
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateSegmentDirectionReference",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: LowerBodySegmentDirectionReferenceParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure segment-direction helper for morphology-aware lower-body runtime candidates.");
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should expose generic segment-direction calculation.");
 
             object[] args =
             {
@@ -1207,11 +1310,12 @@ namespace Tests.Editor.FBXImporter
                 currentParentWorldRotation,
                 weight,
                 maxAngleDegrees,
+                correctionAxisXzScale,
                 currentParentWorldRotation
             };
 
             bool calculated = (bool)method.Invoke(null, args);
-            nextRotation = (Quaternion)args[5];
+            nextRotation = (Quaternion)args[6];
             return calculated;
         }
 

@@ -3733,7 +3733,7 @@ namespace Fbx2Vmd.FBXImporter
             Quaternion childWorldRotationBefore = targetChild.rotation;
             Quaternion childLocalRotationBefore = targetChild.localRotation;
             float preAngle = Vector3.Angle(currentDirection, desiredWorldDirection);
-            if (!TryCalculateEditorLowerBodySegmentDirectionReference(
+            if (!ManualPoseReferenceApplier.TryCalculateSegmentDirectionReference(
                     desiredWorldDirection,
                     currentDirection,
                     currentParentRotation,
@@ -3968,105 +3968,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return axis.normalized;
-        }
-
-        private static bool TryCalculateEditorLowerBodySegmentDirectionReference(
-            Vector3 referenceSegmentDirection,
-            Vector3 currentSegmentDirection,
-            Quaternion currentParentWorldRotation,
-            float weight,
-            float maxAngleDegrees,
-            out Quaternion nextParentWorldRotation)
-        {
-            return TryCalculateEditorLowerBodySegmentDirectionReference(
-                referenceSegmentDirection,
-                currentSegmentDirection,
-                currentParentWorldRotation,
-                weight,
-                maxAngleDegrees,
-                1f,
-                out nextParentWorldRotation);
-        }
-
-        private static bool TryCalculateEditorLowerBodySegmentDirectionReference(
-            Vector3 referenceSegmentDirection,
-            Vector3 currentSegmentDirection,
-            Quaternion currentParentWorldRotation,
-            float weight,
-            float maxAngleDegrees,
-            float correctionAxisXzScale,
-            out Quaternion nextParentWorldRotation)
-        {
-            nextParentWorldRotation = currentParentWorldRotation;
-            if (!IsFinite(referenceSegmentDirection) ||
-                !IsFinite(currentSegmentDirection) ||
-                !IsFinite(currentParentWorldRotation) ||
-                !TryNormalize(referenceSegmentDirection, out Vector3 referenceDirection) ||
-                !TryNormalize(currentSegmentDirection, out Vector3 currentDirection))
-            {
-                return false;
-            }
-
-            Quaternion correction = Quaternion.FromToRotation(currentDirection, referenceDirection);
-            if (!IsFinite(correction))
-            {
-                return false;
-            }
-
-            float maxAngle = Mathf.Max(0f, maxAngleDegrees);
-            if (maxAngle > 0f)
-            {
-                float angle = Quaternion.Angle(Quaternion.identity, correction);
-                if (angle > maxAngle)
-                {
-                    correction = Quaternion.Slerp(Quaternion.identity, correction, maxAngle / angle);
-                }
-            }
-
-            correction = ScaleCorrectionAxisXz(correction, correctionAxisXzScale);
-            if (!IsFinite(correction))
-            {
-                return false;
-            }
-
-            float clampedWeight = Mathf.Clamp01(weight);
-            if (clampedWeight < 0.999f)
-            {
-                correction = Quaternion.Slerp(Quaternion.identity, correction, clampedWeight);
-            }
-
-            nextParentWorldRotation = correction * currentParentWorldRotation;
-            if (!IsFinite(nextParentWorldRotation) ||
-                Quaternion.Angle(currentParentWorldRotation, nextParentWorldRotation) <= 0.001f)
-            {
-                nextParentWorldRotation = currentParentWorldRotation;
-                return false;
-            }
-
-            return true;
-        }
-
-        private static Quaternion ScaleCorrectionAxisXz(Quaternion correction, float axisXzScale)
-        {
-            float scale = Mathf.Clamp01(axisXzScale);
-            if (scale >= 0.999f)
-            {
-                return correction;
-            }
-
-            correction.ToAngleAxis(out float angle, out Vector3 axis);
-            if (!IsFinite(angle) || angle <= 0.001f || !IsFinite(axis))
-            {
-                return correction;
-            }
-
-            Vector3 scaledAxis = new Vector3(axis.x * scale, axis.y, axis.z * scale);
-            if (!TryNormalize(scaledAxis, out Vector3 normalizedAxis))
-            {
-                return Quaternion.identity;
-            }
-
-            return Quaternion.AngleAxis(angle, normalizedAxis);
         }
 
         private void ApplyEditorHumanoidFootHipsAlignedResidualYawReference()

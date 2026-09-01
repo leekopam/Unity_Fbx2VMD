@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
-    /// 수동 포즈 기준 Animator에서 대상 Transform으로 로컬 회전과 Hips·Foot 위치를 적용함.
+    /// 수동 포즈 기준의 회전·본 구간 방향·Hips·Foot 위치를 계산하고 대상 Transform에 적용함.
     /// </summary>
     internal static class ManualPoseReferenceApplier
     {
@@ -182,6 +182,64 @@ namespace Fbx2Vmd.FBXImporter
                 -Mathf.Max(0f, maxDelta),
                 Mathf.Max(0f, maxDelta));
             return outputValue + clampedCorrection * Mathf.Clamp01(weight);
+        }
+
+        internal static bool TryCalculateSegmentDirectionReference(
+            Vector3 referenceSegmentDirection,
+            Vector3 currentSegmentDirection,
+            Quaternion currentParentWorldRotation,
+            float weight,
+            float maxAngleDegrees,
+            float correctionAxisXzScale,
+            out Quaternion nextParentWorldRotation)
+        {
+            nextParentWorldRotation = currentParentWorldRotation;
+            if (!IsFinite(referenceSegmentDirection) ||
+                !IsFinite(currentSegmentDirection) ||
+                !IsFinite(currentParentWorldRotation) ||
+                !TryNormalize(referenceSegmentDirection, out Vector3 referenceDirection) ||
+                !TryNormalize(currentSegmentDirection, out Vector3 currentDirection))
+            {
+                return false;
+            }
+
+            Quaternion correction = Quaternion.FromToRotation(currentDirection, referenceDirection);
+            if (!IsFinite(correction))
+            {
+                return false;
+            }
+
+            float maxAngle = Mathf.Max(0f, maxAngleDegrees);
+            if (maxAngle > 0f)
+            {
+                float angle = Quaternion.Angle(Quaternion.identity, correction);
+                if (angle > maxAngle)
+                {
+                    correction = Quaternion.Slerp(Quaternion.identity, correction, maxAngle / angle);
+                }
+            }
+
+            correction = ScaleCorrectionAxisXz(correction, correctionAxisXzScale);
+            if (!IsFinite(correction))
+            {
+                return false;
+            }
+
+            float clampedWeight = Mathf.Clamp01(weight);
+            if (clampedWeight < 0.999f)
+            {
+                correction = Quaternion.Slerp(Quaternion.identity, correction, clampedWeight);
+            }
+
+            nextParentWorldRotation = correction * currentParentWorldRotation;
+            if (!IsFinite(nextParentWorldRotation) ||
+                Quaternion.Angle(currentParentWorldRotation, nextParentWorldRotation) <= 0.001f)
+            {
+                nextParentWorldRotation = currentParentWorldRotation;
+                return false;
+            }
+
+            return true;
         }
 
         internal static bool HasActiveFrameGate(float startFrame, float endFrame)
@@ -597,6 +655,29 @@ namespace Fbx2Vmd.FBXImporter
                 !float.IsNaN(value.w) && !float.IsInfinity(value.w);
         }
 
+        private static Quaternion ScaleCorrectionAxisXz(Quaternion correction, float axisXzScale)
+        {
+            float scale = Mathf.Clamp01(axisXzScale);
+            if (scale >= 0.999f)
+            {
+                return correction;
+            }
+
+            correction.ToAngleAxis(out float angle, out Vector3 axis);
+            if (!IsFinite(angle) || angle <= 0.001f || !IsFinite(axis))
+            {
+                return correction;
+            }
+
+            Vector3 scaledAxis = new Vector3(axis.x * scale, axis.y, axis.z * scale);
+            if (!TryNormalize(scaledAxis, out Vector3 normalizedAxis))
+            {
+                return Quaternion.identity;
+            }
+
+            return Quaternion.AngleAxis(angle, normalizedAxis);
+        }
+
         private static bool TryApplyBodyPositionXzDelta(
             Vector3 currentBodyPosition,
             Vector3 delta,
@@ -632,6 +713,18 @@ namespace Fbx2Vmd.FBXImporter
             return !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
                 !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
                 !float.IsNaN(value.z) && !float.IsInfinity(value.z);
+        }
+
+        private static bool TryNormalize(Vector3 value, out Vector3 normalized)
+        {
+            normalized = Vector3.zero;
+            if (!IsFinite(value) || value.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            normalized = value.normalized;
+            return IsFinite(normalized);
         }
     }
 }
