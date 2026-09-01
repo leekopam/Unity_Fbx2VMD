@@ -60,7 +60,14 @@ namespace Fbx2Vmd.FBXImporter
         {
             float start = Mathf.Max(0f, startFrame);
             float end = Mathf.Max(0f, endFrame);
-            return (start > 0f || end > 0f) && end >= start && end > 0f;
+            return HasConfiguredFrameGate(start, end) && end >= start && end > 0f;
+        }
+
+        internal static bool HasConfiguredFrameGate(float startFrame, float endFrame)
+        {
+            float start = Mathf.Max(0f, startFrame);
+            float end = Mathf.Max(0f, endFrame);
+            return start > 0f || end > 0f;
         }
 
         internal static bool IsFrameWithinGate(int currentFrame, float startFrame, float endFrame)
@@ -72,6 +79,26 @@ namespace Fbx2Vmd.FBXImporter
 
             float start = Mathf.Max(0f, startFrame);
             float end = Mathf.Max(0f, endFrame);
+            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+        }
+
+        internal static bool IsFrameWithinSingleFrameFallbackGate(
+            int currentFrame,
+            float startFrame,
+            float endFrame)
+        {
+            float start = Mathf.Max(0f, startFrame);
+            float end = Mathf.Max(0f, endFrame);
+            if (!HasConfiguredFrameGate(start, end))
+            {
+                return true;
+            }
+
+            if (end <= 0f || end < start)
+            {
+                end = start;
+            }
+
             return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
         }
 

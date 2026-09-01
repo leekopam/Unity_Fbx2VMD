@@ -5877,40 +5877,31 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool ShouldApplyManualFullBodyPoseReferenceFrameGate()
         {
-            float start = Mathf.Max(0f, manualAnimatorFullBodyPoseFrameGateStart);
-            float end = Mathf.Max(0f, manualAnimatorFullBodyPoseFrameGateEnd);
-            if (start <= 0f && end <= 0f)
-            {
-                return true;
-            }
-
-            if (end <= 0f || end < start)
-            {
-                end = start;
-            }
-
-            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 1f, 240f);
-            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
-            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+            return ShouldApplySingleFrameFallbackReferenceFrameGate(
+                manualAnimatorFullBodyPoseFrameGateStart,
+                manualAnimatorFullBodyPoseFrameGateEnd);
         }
 
         private bool ShouldApplyRightSleeveSilhouetteLocalOffsetFrameGate()
         {
-            float start = Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateStart);
-            float end = Mathf.Max(0f, yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
-            if (start <= 0f && end <= 0f)
+            return ShouldApplySingleFrameFallbackReferenceFrameGate(
+                yybRightSleeveSilhouetteLocalOffsetFrameGateStart,
+                yybRightSleeveSilhouetteLocalOffsetFrameGateEnd);
+        }
+
+        private bool ShouldApplySingleFrameFallbackReferenceFrameGate(float startFrame, float endFrame)
+        {
+            if (!ManualPoseReferenceApplier.HasConfiguredFrameGate(startFrame, endFrame))
             {
                 return true;
             }
 
-            if (end <= 0f || end < start)
-            {
-                end = start;
-            }
-
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 1f, 240f);
             int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
-            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+            return ManualPoseReferenceApplier.IsFrameWithinSingleFrameFallbackGate(
+                currentFrame,
+                startFrame,
+                endFrame);
         }
 
         private void ApplyRightSleeveSilhouetteLocalOffsetReference()

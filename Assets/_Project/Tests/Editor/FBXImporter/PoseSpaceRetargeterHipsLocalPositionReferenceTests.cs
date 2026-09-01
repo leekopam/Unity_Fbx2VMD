@@ -340,6 +340,18 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_SingleFrameFallbackGate_When_EndIsInvalid_Then_UsesRoundedStartFrameOnly()
+        {
+            Assert.That(HasConfiguredFrameGate(0f, 0f), Is.False);
+            Assert.That(HasConfiguredFrameGate(90f, 0f), Is.True);
+            Assert.That(IsFrameWithinSingleFrameFallbackGate(240, 0f, 0f), Is.True);
+            Assert.That(IsFrameWithinSingleFrameFallbackGate(89, 89.5f, 0f), Is.False);
+            Assert.That(IsFrameWithinSingleFrameFallbackGate(90, 89.5f, 0f), Is.True);
+            Assert.That(IsFrameWithinSingleFrameFallbackGate(91, 89.5f, 0f), Is.False);
+            Assert.That(IsFrameWithinSingleFrameFallbackGate(300, 299.5f, 180f), Is.True);
+        }
+
+        [Test]
         public void Given_ManualFootIkPositionAccess_When_CheckingOwnership_Then_UsesDedicatedApplier()
         {
             string[] applierMethodNames =
@@ -693,6 +705,37 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null,
                 "ManualPoseReferenceApplier should expose frame gate activation without reading animation time.");
             return (bool)method.Invoke(null, new object[] { startFrame, endFrame });
+        }
+
+        private static bool HasConfiguredFrameGate(float startFrame, float endFrame)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "HasConfiguredFrameGate",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: ActiveFrameGateParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should detect configured gates before reading animation time.");
+            return (bool)method.Invoke(null, new object[] { startFrame, endFrame });
+        }
+
+        private static bool IsFrameWithinSingleFrameFallbackGate(
+            int currentFrame,
+            float startFrame,
+            float endFrame)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "IsFrameWithinSingleFrameFallbackGate",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: FrameWithinGateParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should own the single-frame fallback gate calculation.");
+            return (bool)method.Invoke(null, new object[] { currentFrame, startFrame, endFrame });
         }
 
         private static bool TryCalculateHipsAlignedEndpointPositionReference(
