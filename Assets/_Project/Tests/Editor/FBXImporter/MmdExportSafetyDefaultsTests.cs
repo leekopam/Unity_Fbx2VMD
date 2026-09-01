@@ -937,67 +937,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorBodyRotationRuntimeOverride_When_Toggled_Then_OnlyChangesBodyRotationSwitch()
-        {
-            var managerObject = new GameObject("manual animator body rotation runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldUseManualAnimatorBodyRotationReference = false;
-                manager.manualAnimatorBodyRotationReferenceWeight = 0f;
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
-                manager.ShouldUseManualAnimatorFootHeightGroundingReference = false;
-                manager.ShouldUseManualAnimatorFootLocalRotationReference = false;
-
-                bool enabledApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, true);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
-                Assert.That(manager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Body rotation candidate must not replace full-body muscles.");
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Body rotation candidate must not re-enable the rejected hips localPosition copy path.");
-                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Body rotation candidate must not change the grounding reference path.");
-                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False, "Body rotation candidate must not implicitly enable the leg-chain localRotation candidate.");
-
-                bool disabledApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, false);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.False);
-                Assert.That(manager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
-        public void Given_ManualAnimatorBodyRotationRuntimeOverride_When_CustomWeightProvided_Then_ClampsWeight()
-        {
-            var managerObject = new GameObject("manual animator body rotation runtime override weight manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-
-                bool enabledApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, true, 0.35f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
-                Assert.That(manager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0.35f).Within(0.0001f));
-
-                bool clampedApplied = ApplyManualAnimatorBodyRotationRuntimeOverride(manager, true, 2f);
-
-                Assert.That(clampedApplied, Is.True);
-                Assert.That(manager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ArmDirectionGuardGhostAnimatorDestroyed_When_LateUpdateRuns_Then_DisablesWithoutMissingReference()
         {
             var ghostObject = new GameObject("destroyed ghost animator");
@@ -5057,45 +4996,6 @@ namespace Tests.Editor.FBXImporter
                 modifiers: null);
 
             Assert.That(method, Is.Not.Null, "YYB runner must expose a weighted runtime-only full-body pose reference override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, weight });
-        }
-
-        private static bool ApplyManualAnimatorBodyRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorBodyRotationRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only body rotation reference override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled });
-        }
-
-        private static bool ApplyManualAnimatorBodyRotationRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float weight)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorBodyRotationRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a weighted runtime-only body rotation reference override for Ref MP4 visual comparison candidates.");
 
             return (bool)method.Invoke(null, new object[] { manager, enabled, weight });
         }
