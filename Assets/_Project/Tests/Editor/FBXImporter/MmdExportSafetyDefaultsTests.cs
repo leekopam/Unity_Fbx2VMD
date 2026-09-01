@@ -1203,48 +1203,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorHipsLocalPositionRuntimeOverride_When_CustomWeightAndCapProvided_Then_UsesCustomCandidateValues()
-        {
-            var managerObject = new GameObject("manual animator hips local position runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
-                manager.manualAnimatorHipsLocalPositionWeight = 0f;
-                manager.manualAnimatorHipsLocalPositionMaxOffset = 0f;
-
-                bool enabledApplied = ApplyManualAnimatorHipsLocalPositionRuntimeOverride(
-                    manager,
-                    true,
-                    weight: 0.25f,
-                    maxOffset: 0.04f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
-                Assert.That(manager.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(0.25f).Within(0.0001f));
-                Assert.That(manager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Hips local-position candidate must not enable the full-body pose copy path.");
-                Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False, "Hips local-position candidate must not enable the rejected BipedIK pull path.");
-                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Hips local-position candidate must not change grounding.");
-
-                bool disabledApplied = ApplyManualAnimatorHipsLocalPositionRuntimeOverride(
-                    manager,
-                    false,
-                    weight: 0.25f,
-                    maxOffset: 0.04f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
-                Assert.That(manager.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ManualAnimatorFootHipsAlignedResidualYawRuntimeOverride_When_CustomWeightAndCapProvided_Then_UsesCustomCandidateValues()
         {
             var managerObject = new GameObject("manual animator foot residual yaw runtime override manager");
@@ -5390,28 +5348,6 @@ namespace Tests.Editor.FBXImporter
             bool result = (bool)method.Invoke(null, args);
             nextFootPosition = (Vector3)args[6];
             return result;
-        }
-
-        private static bool ApplyManualAnimatorHipsLocalPositionRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float weight,
-            float maxOffset)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorHipsLocalPositionRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support custom Hips local-position candidate weight and max offset for bbox-normalized pose probes.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, weight, maxOffset });
         }
 
         private static bool ApplyManualAnimatorFootHipsAlignedResidualYawRuntimeOverride(

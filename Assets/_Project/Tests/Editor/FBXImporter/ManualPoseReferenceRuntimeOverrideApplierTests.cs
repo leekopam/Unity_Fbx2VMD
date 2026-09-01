@@ -297,23 +297,71 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_GenericCharacterPipeline_When_ApplyingLowerBodyReferences_Then_ClampsSettings()
+        public void Given_GenericCharacterPipeline_When_ApplyingHipsLocalPosition_Then_ClampsAndScopesSettings()
         {
-            var pipelineObject = new GameObject("generic lower body reference pipeline");
+            var pipelineObject = new GameObject("generic hips local position reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = false;
+                pipeline.manualAnimatorHipsLocalPositionWeight = 0f;
+                pipeline.manualAnimatorHipsLocalPositionMaxOffset = 0f;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.useManualAnimatorBipedIkFootPositionReference = true;
+                pipeline.ShouldUseManualAnimatorFootHeightGroundingReference = true;
+                pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = true;
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, true, 0.25f, 0.04f);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.useManualAnimatorBipedIkFootPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+
+                InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, true, 2f, -1f);
+
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(1f));
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0f));
+
+                InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, true, -1f, 0.12f);
+
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.12f).Within(0.0001f));
+
+                InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, false, 0.25f, 0.04f);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.useManualAnimatorBipedIkFootPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_GenericCharacterPipeline_When_ApplyingFootHipsAlignedResidualYaw_Then_ClampsSettings()
+        {
+            var pipelineObject = new GameObject("generic foot hips aligned residual yaw reference pipeline");
             try
             {
                 var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
                 Type applierType = FindApplierType();
 
                 InvokeApply(applierType, "ApplyFootHipsAlignedResidualYaw", pipeline, true, 2f, -1f);
-                InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, true, 2f, -1f);
 
                 Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
                 Assert.That(pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f));
                 Assert.That(pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(0f));
-                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
-                Assert.That(pipeline.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(1f));
-                Assert.That(pipeline.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0f));
             }
             finally
             {
