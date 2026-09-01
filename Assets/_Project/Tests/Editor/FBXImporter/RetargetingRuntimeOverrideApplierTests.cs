@@ -140,6 +140,48 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_BodyPositionXzRootMotion_When_Toggled_Then_ChangesOnlyRetargetRootBasis()
+        {
+            var pipelineObject = new GameObject("body position xz root motion override pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseRetargetBodyPositionXZRootMotion = false;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = true;
+                pipeline.usePreSetHumanPoseRightEndpointPositionReference = false;
+                pipeline.ShouldLockTargetHumanoidBonePositions = true;
+                pipeline.ShouldUseManualAnimatorBodyPositionXzReference = true;
+                MethodInfo applyMethod = FindApplyMethod("ApplyBodyPositionXzRootMotion");
+
+                bool enabledApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true });
+
+                Assert.That(enabledApplied, Is.True);
+                Assert.That(pipeline.ShouldUseRetargetBodyPositionXZRootMotion, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+                Assert.That(pipeline.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
+                Assert.That(pipeline.ShouldLockTargetHumanoidBonePositions, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyPositionXzReference, Is.True);
+
+                bool disabledApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, false });
+
+                Assert.That(disabledApplied, Is.True);
+                Assert.That(pipeline.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+                Assert.That(pipeline.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
+                Assert.That(pipeline.ShouldLockTargetHumanoidBonePositions, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyPositionXzReference, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
         private static MethodInfo FindApplyMethod(string methodName)
         {
             Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
