@@ -171,12 +171,12 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
                 nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints),
                 () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
-                () => new MmdExportSafetyDefaultsTests().Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
-                () => new MmdExportSafetyDefaultsTests().Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
+            RunTest(results, typeof(YybScreenshotNonHairDiagnosticsTests).FullName + "." +
+                nameof(YybScreenshotNonHairDiagnosticsTests.Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
+                () => new YybScreenshotNonHairDiagnosticsTests().Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
+            RunTest(results, typeof(YybScreenshotNonHairDiagnosticsTests).FullName + "." +
+                nameof(YybScreenshotNonHairDiagnosticsTests.Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
+                () => new YybScreenshotNonHairDiagnosticsTests().Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
             RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
                 nameof(VisualComparisonCandidateArtifactSelectorTests.Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw),
                 () => new VisualComparisonCandidateArtifactSelectorTests().Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw());
