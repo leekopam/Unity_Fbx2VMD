@@ -121,6 +121,7 @@ crashlytics-build.properties
 # FBX 파일은 업로드 되지 않도록 설정
 *.fbx
 *.FBX
+*.[fF][bB][xX].meta
 Assets/_Project/FBX/
 Assets/Resources/Import_FBX/
 
