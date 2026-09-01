@@ -101,24 +101,140 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_PreSetEndpointSettings_When_Applied_Then_PreservesAxisFlags()
+        public void Given_PreSetEndpointSettings_When_Applied_Then_ClampsValuesAndScopesChanges()
         {
             var pipelineObject = new GameObject("pre-set endpoint override pipeline");
             try
             {
                 var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.usePostSetHumanPoseRightEndpointPositionReference = true;
+                pipeline.postSetHumanPoseRightEndpointPositionReferenceWeight = 0.6f;
+                pipeline.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = true;
                 MethodInfo applyMethod = FindApplyMethod("ApplyPreSetReference");
 
                 bool applied = (bool)applyMethod.Invoke(
                     null,
-                    new object[] { pipeline, true, 0.5f, 0.1f, 0.7f, 0.3f, 10f, 20f, true, true, true, false });
+                    new object[] { pipeline, true, 0.7f, 0.025f, 0.5f, 0.25f, 180f, 900f, false, false, false, false });
 
                 Assert.That(applied, Is.True);
                 Assert.That(pipeline.usePreSetHumanPoseRightEndpointPositionReference, Is.True);
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(0.7f).Within(0.0001f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.025f).Within(0.0001f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(0.5f).Within(0.0001f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart, Is.EqualTo(180f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd, Is.EqualTo(900f));
+                Assert.That(pipeline.usePostSetHumanPoseRightEndpointPositionReference, Is.True);
+                Assert.That(pipeline.postSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(0.6f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition, Is.True);
+
+                bool clamped = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true, 2f, -1f, 2f, -1f, -2f, -3f, false, false, false, false });
+
+                Assert.That(clamped, Is.True);
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(1f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(1f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart, Is.EqualTo(0f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd, Is.EqualTo(0f));
+                Assert.That(pipeline.usePostSetHumanPoseRightEndpointPositionReference, Is.True);
+                Assert.That(pipeline.postSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(0.6f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_PreSetEndpointFlags_When_Applied_Then_PreservesIndependentMappings()
+        {
+            var pipelineObject = new GameObject("pre-set endpoint flag override pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                MethodInfo applyMethod = FindApplyMethod("ApplyPreSetReference");
+
+                bool leftSideApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true, 0.5f, 0.1f, 0.7f, 0.3f, 10f, 20f, true, false, false, false });
+
+                Assert.That(leftSideApplied, Is.True);
                 Assert.That(pipeline.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition, Is.True);
+                Assert.That(pipeline.preSetHumanPoseEndpointPositionUseGhostCurrentBasis, Is.False);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyX, Is.False);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ, Is.False);
+
+                bool ghostBasisApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true, 0.5f, 0.1f, 0.7f, 0.3f, 10f, 20f, false, true, false, false });
+
+                Assert.That(ghostBasisApplied, Is.True);
+                Assert.That(pipeline.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition, Is.False);
                 Assert.That(pipeline.preSetHumanPoseEndpointPositionUseGhostCurrentBasis, Is.True);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyX, Is.False);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ, Is.False);
+
+                bool invertXApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true, 0.5f, 0.1f, 0.7f, 0.3f, 10f, 20f, false, false, true, false });
+
+                Assert.That(invertXApplied, Is.True);
+                Assert.That(pipeline.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition, Is.False);
+                Assert.That(pipeline.preSetHumanPoseEndpointPositionUseGhostCurrentBasis, Is.False);
                 Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyX, Is.True);
                 Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ, Is.False);
+
+                bool invertZApplied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, true, 0.5f, 0.1f, 0.7f, 0.3f, 10f, 20f, false, false, false, true });
+
+                Assert.That(invertZApplied, Is.True);
+                Assert.That(pipeline.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition, Is.False);
+                Assert.That(pipeline.preSetHumanPoseEndpointPositionUseGhostCurrentBasis, Is.False);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyX, Is.False);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_PreSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps()
+        {
+            var pipelineObject = new GameObject("disabled pre-set endpoint override pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.usePostSetHumanPoseRightEndpointPositionReference = true;
+                pipeline.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition = true;
+                pipeline.usePostSetHumanPoseRightFootEvaluatorXzReference = true;
+                MethodInfo applyMethod = FindApplyMethod("ApplyPreSetReference");
+
+                bool applied = (bool)applyMethod.Invoke(
+                    null,
+                    new object[] { pipeline, false, 0.8f, 0.04f, 0.25f, 0.25f, 899f, 901f, true, true, true, true });
+
+                Assert.That(applied, Is.True);
+                Assert.That(pipeline.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateStart, Is.EqualTo(899f));
+                Assert.That(pipeline.preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd, Is.EqualTo(901f));
+                Assert.That(pipeline.ShouldUseLeftSideForPreSetHumanPoseEndpointPosition, Is.False);
+                Assert.That(pipeline.preSetHumanPoseEndpointPositionUseGhostCurrentBasis, Is.False);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyX, Is.False);
+                Assert.That(pipeline.ShouldInvertPreSetHumanPoseEndpointPositionBodyZ, Is.False);
+                Assert.That(pipeline.usePostSetHumanPoseRightEndpointPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseLeftSideForPostSetHumanPoseEndpointPosition, Is.True);
+                Assert.That(pipeline.usePostSetHumanPoseRightFootEvaluatorXzReference, Is.True);
             }
             finally
             {
