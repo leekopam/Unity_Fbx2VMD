@@ -125,12 +125,12 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(ManualPoseReferenceRuntimeOverrideApplierTests).FullName + "." +
                 nameof(ManualPoseReferenceRuntimeOverrideApplierTests.Given_GenericCharacterPipeline_When_ApplyingBodyPositionXz_Then_ClampsAndScopesSettings),
                 () => new ManualPoseReferenceRuntimeOverrideApplierTests().Given_GenericCharacterPipeline_When_ApplyingBodyPositionXz_Then_ClampsAndScopesSettings());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow),
-                () => new MmdExportSafetyDefaultsTests().Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RuntimeMmdIkDeltaRecoveryHoldOverride_When_ApplyingToRecorder_Then_SetsHoldWindow),
-                () => new MmdExportSafetyDefaultsTests().Given_RuntimeMmdIkDeltaRecoveryHoldOverride_When_ApplyingToRecorder_Then_SetsHoldWindow());
+            RunTest(results, typeof(VmdIkDeltaGuardRuntimeOverrideApplierTests).FullName + "." +
+                nameof(VmdIkDeltaGuardRuntimeOverrideApplierTests.Given_RecoveryDebtThreshold_When_Applying_Then_SetsDebtRecoveryWindow),
+                () => new VmdIkDeltaGuardRuntimeOverrideApplierTests().Given_RecoveryDebtThreshold_When_Applying_Then_SetsDebtRecoveryWindow());
+            RunTest(results, typeof(VmdIkDeltaGuardRuntimeOverrideApplierTests).FullName + "." +
+                nameof(VmdIkDeltaGuardRuntimeOverrideApplierTests.Given_RecoveryHoldFrames_When_Applying_Then_SetsHoldWindow),
+                () => new VmdIkDeltaGuardRuntimeOverrideApplierTests().Given_RecoveryHoldFrames_When_Applying_Then_SetsHoldWindow());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport),
                 () => new MmdExportSafetyDefaultsTests().Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport());
