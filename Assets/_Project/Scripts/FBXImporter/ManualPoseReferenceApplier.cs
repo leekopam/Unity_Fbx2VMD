@@ -56,6 +56,110 @@ namespace Fbx2Vmd.FBXImporter
             return Mathf.Clamp01((fadeEnd - currentFrame) / blend);
         }
 
+        internal static bool TryCalculateBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 referenceBodyPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            out Vector3 nextBodyPosition)
+        {
+            nextBodyPosition = currentBodyPosition;
+            if (!IsFinite(currentBodyPosition) || !IsFinite(referenceBodyPosition))
+            {
+                return false;
+            }
+
+            float clampedWeight = Mathf.Clamp01(weight);
+            if (clampedWeight <= 0f)
+            {
+                return false;
+            }
+
+            Vector3 delta = new Vector3(
+                (referenceBodyPosition.x - currentBodyPosition.x) * Mathf.Clamp01(axisXScale),
+                0f,
+                (referenceBodyPosition.z - currentBodyPosition.z) * Mathf.Clamp01(axisZScale));
+            return TryApplyBodyPositionXzDelta(
+                currentBodyPosition,
+                delta,
+                clampedWeight,
+                maxOffset,
+                out nextBodyPosition);
+        }
+
+        internal static bool TryCalculateSignCorrectedBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 referenceFootPosition,
+            Vector3 currentFootPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            out Vector3 nextBodyPosition)
+        {
+            return TryCalculateSignCorrectedBodyPositionXzReference(
+                currentBodyPosition,
+                referenceFootPosition,
+                currentFootPosition,
+                weight,
+                maxOffset,
+                axisXScale,
+                axisZScale,
+                invertX: false,
+                invertZ: false,
+                out nextBodyPosition);
+        }
+
+        internal static bool TryCalculateSignCorrectedBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 referenceFootPosition,
+            Vector3 currentFootPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            bool invertX,
+            bool invertZ,
+            out Vector3 nextBodyPosition)
+        {
+            nextBodyPosition = currentBodyPosition;
+            if (!IsFinite(currentBodyPosition) ||
+                !IsFinite(referenceFootPosition) ||
+                !IsFinite(currentFootPosition))
+            {
+                return false;
+            }
+
+            float clampedWeight = Mathf.Clamp01(weight);
+            if (clampedWeight <= 0f)
+            {
+                return false;
+            }
+
+            Vector3 delta = referenceFootPosition - currentFootPosition;
+            delta = new Vector3(
+                delta.x * Mathf.Clamp01(axisXScale),
+                0f,
+                delta.z * Mathf.Clamp01(axisZScale));
+            if (invertX)
+            {
+                delta.x = -delta.x;
+            }
+            if (invertZ)
+            {
+                delta.z = -delta.z;
+            }
+
+            return TryApplyBodyPositionXzDelta(
+                currentBodyPosition,
+                delta,
+                clampedWeight,
+                maxOffset,
+                out nextBodyPosition);
+        }
+
         internal static bool HasActiveFrameGate(float startFrame, float endFrame)
         {
             float start = Mathf.Max(0f, startFrame);
@@ -462,6 +566,36 @@ namespace Fbx2Vmd.FBXImporter
                 !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
                 !float.IsNaN(value.z) && !float.IsInfinity(value.z) &&
                 !float.IsNaN(value.w) && !float.IsInfinity(value.w);
+        }
+
+        private static bool TryApplyBodyPositionXzDelta(
+            Vector3 currentBodyPosition,
+            Vector3 delta,
+            float clampedWeight,
+            float maxOffset,
+            out Vector3 nextBodyPosition)
+        {
+            nextBodyPosition = currentBodyPosition;
+            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
+            {
+                return false;
+            }
+
+            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
+            if (clampedMaxOffset > 0f)
+            {
+                float magnitude = delta.magnitude;
+                if (magnitude > clampedMaxOffset)
+                {
+                    delta = delta / magnitude * clampedMaxOffset;
+                }
+            }
+
+            nextBodyPosition = new Vector3(
+                currentBodyPosition.x + delta.x * clampedWeight,
+                currentBodyPosition.y,
+                currentBodyPosition.z + delta.z * clampedWeight);
+            return IsFinite(nextBodyPosition);
         }
 
         private static bool IsFinite(Vector3 value)

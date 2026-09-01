@@ -71,6 +71,43 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
+        private static readonly Type[] BodyPositionXzReferenceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(Vector3).MakeByRefType()
+        };
+
+        private static readonly Type[] SignCorrectedBodyPositionXzReferenceParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(Vector3).MakeByRefType()
+        };
+
+        private static readonly Type[] SignCorrectedBodyPositionXzReferenceWithInversionParameterTypes =
+        {
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(Vector3),
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(bool),
+            typeof(bool),
+            typeof(Vector3).MakeByRefType()
+        };
+
         private static readonly Type[] FrameWithinGateParameterTypes =
         {
             typeof(int),
@@ -323,6 +360,150 @@ namespace Tests.Editor.FBXImporter
                     "CalculateManualAnimatorBodyPositionXzFrameGateWeight",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Null);
+        }
+
+        [Test]
+        public void Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly()
+        {
+            bool calculated = TryCalculateBodyPositionXzReference(
+                currentBodyPosition: new Vector3(0.1f, 1.2f, -0.2f),
+                referenceBodyPosition: new Vector3(0.3f, 2.4f, -0.6f),
+                weight: 1f,
+                maxOffset: 0.05f,
+                axisXScale: 1f,
+                axisZScale: 1f,
+                out Vector3 nextBodyPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextBodyPosition.y, Is.EqualTo(1.2f).Within(0.000001f),
+                "The solver input candidate must not disturb the existing Y basis.");
+            Assert.That(
+                Vector2.Distance(new Vector2(0.1f, -0.2f), new Vector2(nextBodyPosition.x, nextBodyPosition.z)),
+                Is.EqualTo(0.05f).Within(0.00001f),
+                "The candidate should bound X/Z bodyPosition motion instead of applying a full root jump.");
+        }
+
+        [Test]
+        public void Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis()
+        {
+            bool calculated = TryCalculateBodyPositionXzReference(
+                currentBodyPosition: new Vector3(1f, 2f, 3f),
+                referenceBodyPosition: new Vector3(5f, 9f, 7f),
+                weight: 1f,
+                maxOffset: 0.08f,
+                axisXScale: 1f,
+                axisZScale: 0f,
+                out Vector3 nextBodyPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextBodyPosition.x, Is.EqualTo(1.08f).Within(0.0001f));
+            Assert.That(nextBodyPosition.y, Is.EqualTo(2f).Within(0.0001f));
+            Assert.That(nextBodyPosition.z, Is.EqualTo(3f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedBodyPosition_Then_MovesTowardGhost()
+        {
+            Vector3 currentBodyPosition = new Vector3(0.1f, 1.2f, -0.2f);
+            Vector3 ghostFootPosition = new Vector3(0.000073f, 0f, -0.000769f);
+            Vector3 currentFootPosition = new Vector3(-0.150225f, 0f, 0.022191f);
+
+            bool calculated = TryCalculateSignCorrectedBodyPositionXzReference(
+                currentBodyPosition,
+                ghostFootPosition,
+                currentFootPosition,
+                weight: 1f,
+                maxOffset: 0.012f,
+                axisXScale: 1f,
+                axisZScale: 1f,
+                out Vector3 nextBodyPosition);
+
+            Vector3 bodyDelta = nextBodyPosition - currentBodyPosition;
+            Vector3 translatedFootPosition = currentFootPosition + new Vector3(bodyDelta.x, 0f, bodyDelta.z);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextBodyPosition.y, Is.EqualTo(currentBodyPosition.y).Within(0.000001f));
+            Assert.That(bodyDelta.x, Is.GreaterThan(0f), "Frame 300 left foot needs +X correction toward the ghost row, not the previous -X target drift.");
+            Assert.That(bodyDelta.z, Is.LessThan(0f), "Frame 300 left foot needs -Z correction toward the ghost row.");
+            Assert.That(new Vector2(bodyDelta.x, bodyDelta.z).magnitude, Is.EqualTo(0.012f).Within(0.00001f));
+            Assert.That(
+                Vector2.Distance(
+                    new Vector2(translatedFootPosition.x, translatedFootPosition.z),
+                    new Vector2(ghostFootPosition.x, ghostFootPosition.z)),
+                Is.LessThan(
+                    Vector2.Distance(
+                        new Vector2(currentFootPosition.x, currentFootPosition.z),
+                        new Vector2(ghostFootPosition.x, ghostFootPosition.z))),
+                "The row-local translation basis must reduce the measured ghost/current gap before runtime visual compare.");
+        }
+
+        [Test]
+        public void Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput()
+        {
+            Vector3 currentBodyPosition = new Vector3(0.1f, 1.2f, -0.2f);
+            Vector3 ghostFootPosition = new Vector3(0.000073f, 0f, -0.000769f);
+            Vector3 currentFootPosition = new Vector3(-0.150225f, 0f, 0.022191f);
+
+            bool calculated = TryCalculateSignCorrectedBodyPositionXzReference(
+                currentBodyPosition,
+                ghostFootPosition,
+                currentFootPosition,
+                weight: 1f,
+                maxOffset: 0.012f,
+                axisXScale: 1f,
+                axisZScale: 1f,
+                invertX: false,
+                invertZ: true,
+                out Vector3 nextBodyPosition);
+
+            Vector3 bodyDelta = nextBodyPosition - currentBodyPosition;
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextBodyPosition.y, Is.EqualTo(currentBodyPosition.y).Within(0.000001f));
+            Assert.That(bodyDelta.x, Is.GreaterThan(0f),
+                "The Z inversion candidate must keep the existing +X left-foot correction input.");
+            Assert.That(bodyDelta.z, Is.GreaterThan(0f),
+                "The frame 300/600 diagnostic showed realized endpoint motion overreacting in -Z, so the runtime candidate needs a positive bodyPosition Z input.");
+            Assert.That(new Vector2(bodyDelta.x, bodyDelta.z).magnitude, Is.EqualTo(0.012f).Within(0.00001f));
+        }
+
+        [Test]
+        public void Given_BodyPositionXzCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            Assert.That(
+                ManualPoseReferenceApplierType.GetMethod(
+                    "TryCalculateBodyPositionXzReference",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: BodyPositionXzReferenceParameterTypes,
+                    modifiers: null),
+                Is.Not.Null);
+            Assert.That(
+                ManualPoseReferenceApplierType.GetMethod(
+                    "TryCalculateSignCorrectedBodyPositionXzReference",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: SignCorrectedBodyPositionXzReferenceParameterTypes,
+                    modifiers: null),
+                Is.Not.Null);
+            Assert.That(
+                ManualPoseReferenceApplierType.GetMethod(
+                    "TryCalculateSignCorrectedBodyPositionXzReference",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: SignCorrectedBodyPositionXzReferenceWithInversionParameterTypes,
+                    modifiers: null),
+                Is.Not.Null);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateManualAnimatorBodyPositionXzReference",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateSignCorrectedRowLocalBodyPositionXzReference",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
         }
 
         [Test]
@@ -677,6 +858,119 @@ namespace Tests.Editor.FBXImporter
                 endFrame,
                 blendFrames
             });
+        }
+
+        private static bool TryCalculateBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 referenceBodyPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            out Vector3 nextBodyPosition)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateBodyPositionXzReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: BodyPositionXzReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should own the bounded body position XZ calculation.");
+
+            object[] args =
+            {
+                currentBodyPosition,
+                referenceBodyPosition,
+                weight,
+                maxOffset,
+                axisXScale,
+                axisZScale,
+                Vector3.zero
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextBodyPosition = (Vector3)args[6];
+            return calculated;
+        }
+
+        private static bool TryCalculateSignCorrectedBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 ghostFootPosition,
+            Vector3 currentFootPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            out Vector3 nextBodyPosition)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateSignCorrectedBodyPositionXzReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: SignCorrectedBodyPositionXzReferenceParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should own the sign-corrected body position XZ calculation.");
+
+            object[] args =
+            {
+                currentBodyPosition,
+                ghostFootPosition,
+                currentFootPosition,
+                weight,
+                maxOffset,
+                axisXScale,
+                axisZScale,
+                Vector3.zero
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextBodyPosition = (Vector3)args[7];
+            return calculated;
+        }
+
+        private static bool TryCalculateSignCorrectedBodyPositionXzReference(
+            Vector3 currentBodyPosition,
+            Vector3 ghostFootPosition,
+            Vector3 currentFootPosition,
+            float weight,
+            float maxOffset,
+            float axisXScale,
+            float axisZScale,
+            bool invertX,
+            bool invertZ,
+            out Vector3 nextBodyPosition)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "TryCalculateSignCorrectedBodyPositionXzReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: SignCorrectedBodyPositionXzReferenceWithInversionParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should own body position XZ axis inversion.");
+
+            object[] args =
+            {
+                currentBodyPosition,
+                ghostFootPosition,
+                currentFootPosition,
+                weight,
+                maxOffset,
+                axisXScale,
+                axisZScale,
+                invertX,
+                invertZ,
+                Vector3.zero
+            };
+
+            bool calculated = (bool)method.Invoke(null, args);
+            nextBodyPosition = (Vector3)args[9];
+            return calculated;
         }
 
         private static bool IsFrameWithinGate(int currentFrame, float startFrame, float endFrame)

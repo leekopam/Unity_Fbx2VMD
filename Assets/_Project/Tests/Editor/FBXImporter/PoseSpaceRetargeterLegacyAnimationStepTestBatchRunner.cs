@@ -74,14 +74,16 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_HipsLocalReferenceWouldIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate);
             RunTest(results, nameof(tests.Given_HipsLocalReferenceDoesNotIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate),
                 tests.Given_HipsLocalReferenceDoesNotIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate);
-            RunTest(results, nameof(tests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly),
-                tests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly);
-            RunTest(results, nameof(tests.Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis),
-                tests.Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis);
-            RunTest(results, nameof(tests.Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedRowLocalBodyPosition_Then_MovesTowardGhost),
-                tests.Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedRowLocalBodyPosition_Then_MovesTowardGhost);
-            RunTest(results, nameof(tests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput),
-                tests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput);
+            RunTest(results, nameof(manualPoseTests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly),
+                manualPoseTests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly);
+            RunTest(results, nameof(manualPoseTests.Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis),
+                manualPoseTests.Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis);
+            RunTest(results, nameof(manualPoseTests.Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedBodyPosition_Then_MovesTowardGhost),
+                manualPoseTests.Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedBodyPosition_Then_MovesTowardGhost);
+            RunTest(results, nameof(manualPoseTests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput),
+                manualPoseTests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput);
+            RunTest(results, nameof(manualPoseTests.Given_BodyPositionXzCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier),
+                manualPoseTests.Given_BodyPositionXzCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier);
             RunTest(results, nameof(manualPoseTests.Given_BodyPositionXzFrameGate_When_CalculatingWeight_Then_BlendsAtBothEdges),
                 manualPoseTests.Given_BodyPositionXzFrameGate_When_CalculatingWeight_Then_BlendsAtBothEdges);
             RunTest(results, nameof(manualPoseTests.Given_InclusiveFrameGate_When_CheckingFrame_Then_PreservesDisabledInvalidAndRoundedBounds),

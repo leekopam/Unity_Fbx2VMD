@@ -2351,7 +2351,7 @@ namespace Fbx2Vmd.FBXImporter
             if (ShouldUseManualAnimatorBodyPositionXzReference &&
                 manualBodyPositionXzFrameGateWeight > 0f &&
                 _hasEditorReferenceBodyPosition &&
-                TryCalculateManualAnimatorBodyPositionXzReference(
+                ManualPoseReferenceApplier.TryCalculateBodyPositionXzReference(
                     bodyPos,
                     _editorReferenceBodyPosition,
                     manualAnimatorBodyPositionXzReferenceWeight * manualBodyPositionXzFrameGateWeight,
@@ -4396,7 +4396,7 @@ namespace Fbx2Vmd.FBXImporter
             Vector3 currentFootPosition = useLeftSide ? currentPositions.LeftFoot : currentPositions.RightFoot;
             Vector3 bodyPositionBefore = pose.bodyPosition;
 
-            if (TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
+            if (ManualPoseReferenceApplier.TryCalculateSignCorrectedBodyPositionXzReference(
                     bodyPositionBefore,
                     ghostFootPosition,
                     currentFootPosition,
@@ -6415,137 +6415,6 @@ namespace Fbx2Vmd.FBXImporter
         private static bool IsFinite(Quaternion value)
         {
             return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
-        }
-
-        private static bool TryCalculateManualAnimatorBodyPositionXzReference(
-            Vector3 currentBodyPosition,
-            Vector3 referenceBodyPosition,
-            float weight,
-            float maxOffset,
-            float axisXScale,
-            float axisZScale,
-            out Vector3 nextBodyPosition)
-        {
-            nextBodyPosition = currentBodyPosition;
-            if (!IsFinite(currentBodyPosition) || !IsFinite(referenceBodyPosition))
-            {
-                return false;
-            }
-
-            float clampedWeight = Mathf.Clamp01(weight);
-            if (clampedWeight <= 0f)
-            {
-                return false;
-            }
-
-            Vector3 delta = new Vector3(
-                (referenceBodyPosition.x - currentBodyPosition.x) * Mathf.Clamp01(axisXScale),
-                0f,
-                (referenceBodyPosition.z - currentBodyPosition.z) * Mathf.Clamp01(axisZScale));
-            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
-            {
-                return false;
-            }
-
-            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
-            if (clampedMaxOffset > 0f)
-            {
-                float magnitude = delta.magnitude;
-                if (magnitude > clampedMaxOffset)
-                {
-                    delta = delta / magnitude * clampedMaxOffset;
-                }
-            }
-
-            nextBodyPosition = new Vector3(
-                currentBodyPosition.x + delta.x * clampedWeight,
-                currentBodyPosition.y,
-                currentBodyPosition.z + delta.z * clampedWeight);
-            return IsFinite(nextBodyPosition);
-        }
-
-        private static bool TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
-            Vector3 currentBodyPosition,
-            Vector3 ghostFootPosition,
-            Vector3 currentFootPosition,
-            float weight,
-            float maxOffset,
-            float axisXScale,
-            float axisZScale,
-            out Vector3 nextBodyPosition)
-        {
-            return TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
-                currentBodyPosition,
-                ghostFootPosition,
-                currentFootPosition,
-                weight,
-                maxOffset,
-                axisXScale,
-                axisZScale,
-                invertX: false,
-                invertZ: false,
-                out nextBodyPosition);
-        }
-
-        private static bool TryCalculateSignCorrectedRowLocalBodyPositionXzReference(
-            Vector3 currentBodyPosition,
-            Vector3 ghostFootPosition,
-            Vector3 currentFootPosition,
-            float weight,
-            float maxOffset,
-            float axisXScale,
-            float axisZScale,
-            bool invertX,
-            bool invertZ,
-            out Vector3 nextBodyPosition)
-        {
-            nextBodyPosition = currentBodyPosition;
-            if (!IsFinite(currentBodyPosition) ||
-                !IsFinite(ghostFootPosition) ||
-                !IsFinite(currentFootPosition))
-            {
-                return false;
-            }
-
-            float clampedWeight = Mathf.Clamp01(weight);
-            if (clampedWeight <= 0f)
-            {
-                return false;
-            }
-
-            Vector3 delta = ghostFootPosition - currentFootPosition;
-            delta = new Vector3(
-                delta.x * Mathf.Clamp01(axisXScale),
-                0f,
-                delta.z * Mathf.Clamp01(axisZScale));
-            if (invertX)
-            {
-                delta.x = -delta.x;
-            }
-            if (invertZ)
-            {
-                delta.z = -delta.z;
-            }
-            if (!IsFinite(delta) || delta.sqrMagnitude <= 0.00000001f)
-            {
-                return false;
-            }
-
-            float clampedMaxOffset = Mathf.Max(0f, maxOffset);
-            if (clampedMaxOffset > 0f)
-            {
-                float magnitude = delta.magnitude;
-                if (magnitude > clampedMaxOffset)
-                {
-                    delta = delta / magnitude * clampedMaxOffset;
-                }
-            }
-
-            nextBodyPosition = new Vector3(
-                currentBodyPosition.x + delta.x * clampedWeight,
-                currentBodyPosition.y,
-                currentBodyPosition.z + delta.z * clampedWeight);
-            return IsFinite(nextBodyPosition);
         }
 
         private static bool IsFinite(HumanPose pose)
