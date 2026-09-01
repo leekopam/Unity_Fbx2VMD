@@ -195,12 +195,12 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
                 nameof(VisualComparisonCandidateArtifactSelectorTests.Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact),
                 () => new VisualComparisonCandidateArtifactSelectorTests().Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure),
-                () => new MmdExportSafetyDefaultsTests().Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly),
-                () => new MmdExportSafetyDefaultsTests().Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly());
+            RunTest(results, typeof(VisualComparisonFrameQualityFailurePolicyTests).FullName + "." +
+                nameof(VisualComparisonFrameQualityFailurePolicyTests.Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure),
+                () => new VisualComparisonFrameQualityFailurePolicyTests().Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure());
+            RunTest(results, typeof(YybVisualComparisonReferenceAlignmentPolicyTests).FullName + "." +
+                nameof(YybVisualComparisonReferenceAlignmentPolicyTests.Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly),
+                () => new YybVisualComparisonReferenceAlignmentPolicyTests().Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes),
                 () => new MmdExportSafetyDefaultsTests().Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes());

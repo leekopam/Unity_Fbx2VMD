@@ -8,6 +8,27 @@ namespace Tests.Editor.FBXImporter
     public class VisualComparisonFrameQualityFailurePolicyTests
     {
         [Test]
+        public void Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure()
+        {
+            var mainAuto = new MotionComparisonFrameQualitySummary
+            {
+                candidate_label = "Main_Auto automatic path",
+                frame_quality_evaluation_role = "main_auto_integrated_vertical_solve_metrics",
+                status = "fail",
+                status_reason = "same-frame limb pose delta threshold exceeded",
+                candidate_metrics_csv = "main-auto.csv",
+                candidate_vmd_path = "main-auto.vmd",
+            };
+
+            string[] failures = InvokeBuild(new[] { mainAuto }, false);
+
+            Assert.That(failures, Has.Length.EqualTo(1));
+            Assert.That(failures[0], Does.Contain("frame-quality gate failed"));
+            Assert.That(failures[0], Does.Contain("Main_Auto automatic path"));
+            Assert.That(failures[0], Does.Contain("same-frame limb pose delta"));
+        }
+
+        [Test]
         public void Given_AcceptedArtifactPreservingRawDiagnostic_When_RawCandidateFails_Then_DoesNotPromoteFailure()
         {
             MotionComparisonFrameQualitySummary raw = CreateFailedSummary(

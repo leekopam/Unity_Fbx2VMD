@@ -71,7 +71,9 @@ namespace Tests.Editor.FBXImporter
                 "ResolveEditorDiagnosticSmokeSegment",
                 "CaptureFBXVmdPipelineEffectiveSettings",
                 "RequestRuntimeDiagnosticScriptRefresh",
-                "ResolveMainAutoFrameCount"
+                "ResolveMainAutoFrameCount",
+                "BuildFrameQualityFailureMessages",
+                "HasAcceptedUserFacingArtifactPreservingRawDiagnostic"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
