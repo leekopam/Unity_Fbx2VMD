@@ -8358,7 +8358,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             Vector3 currentPosition = targetAnimator.transform.position;
-            bool shouldClamp = TryCalculateRootPositionSpikeClamp(
+            bool shouldClamp = RetargetingPoseSmoothing.TryCalculateRootPositionSpikeClamp(
                 positionBeforePose,
                 currentPosition,
                 maxRootDeltaPerFrame,
@@ -8465,31 +8465,6 @@ namespace Fbx2Vmd.FBXImporter
                 rootMotionCarrierPositionBeforePose.z);
         }
 
-        private static bool TryCalculateRootPositionSpikeClamp(
-            Vector3 positionBeforePose,
-            Vector3 currentPosition,
-            float maxRootDeltaPerFrame,
-            out Vector3 clampedPosition,
-            out float deltaMagnitude)
-        {
-            clampedPosition = currentPosition;
-            Vector3 poseDelta = currentPosition - positionBeforePose;
-            if (!IsFinite(poseDelta))
-            {
-                deltaMagnitude = float.NaN;
-                return false;
-            }
-
-            deltaMagnitude = poseDelta.magnitude;
-            if (deltaMagnitude <= maxRootDeltaPerFrame)
-            {
-                return false;
-            }
-
-            clampedPosition = positionBeforePose + Vector3.ClampMagnitude(poseDelta, maxRootDeltaPerFrame);
-            return true;
-        }
-
         private void ClampTargetHipsLocalPositionSpike()
         {
             if (!clampTargetHipsLocalPositionSpikes || targetAnimator == null || !targetAnimator.isHuman)
@@ -8512,7 +8487,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            bool shouldClamp = TryCalculateHipsLocalPositionSpikeClamp(
+            bool shouldClamp = RetargetingPoseSmoothing.TryCalculateHipsLocalPositionSpikeClamp(
                 _previousTargetHipsLocalPosition,
                 currentLocalPosition,
                 maxTargetHipsLocalPositionDeltaPerFrame,
@@ -8553,32 +8528,6 @@ namespace Fbx2Vmd.FBXImporter
             _lastTargetHipsLocalPositionDelta = float.NaN;
             _maxTargetHipsLocalPositionDelta = 0f;
             _targetHipsLocalPositionSpikeClampedCount = 0;
-        }
-
-        private static bool TryCalculateHipsLocalPositionSpikeClamp(
-            Vector3 previousLocalPosition,
-            Vector3 currentLocalPosition,
-            float maxDeltaPerFrame,
-            out Vector3 clampedPosition,
-            out float deltaMagnitude)
-        {
-            clampedPosition = currentLocalPosition;
-            Vector3 delta = currentLocalPosition - previousLocalPosition;
-            if (!IsFinite(delta))
-            {
-                deltaMagnitude = float.NaN;
-                return false;
-            }
-
-            deltaMagnitude = delta.magnitude;
-            float clampedMaxDelta = Mathf.Max(0f, maxDeltaPerFrame);
-            if (clampedMaxDelta <= 0f || deltaMagnitude <= clampedMaxDelta)
-            {
-                return false;
-            }
-
-            clampedPosition = previousLocalPosition + Vector3.ClampMagnitude(delta, clampedMaxDelta);
-            return true;
         }
 
         private void CaptureTargetInitialTransforms(GameObject targetRoot)

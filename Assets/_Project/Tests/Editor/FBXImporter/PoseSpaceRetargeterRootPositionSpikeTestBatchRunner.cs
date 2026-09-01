@@ -27,10 +27,20 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_RootDeltaExceedsLimit_When_CalculatingClamp_Then_ClampsFromPositionBeforePose);
             RunTest(results, nameof(tests.Given_NonFiniteRootDelta_When_CalculatingClamp_Then_ReportsNaNAndDoesNotClamp),
                 tests.Given_NonFiniteRootDelta_When_CalculatingClamp_Then_ReportsNaNAndDoesNotClamp);
+            RunTest(results, nameof(tests.Given_ZeroRootDeltaLimit_When_CalculatingClamp_Then_ClampsToPositionBeforePose),
+                tests.Given_ZeroRootDeltaLimit_When_CalculatingClamp_Then_ClampsToPositionBeforePose);
+            RunTest(results, nameof(tests.Given_NegativeRootDeltaLimit_When_CalculatingClamp_Then_PreservesRawClampMagnitudeBehavior),
+                tests.Given_NegativeRootDeltaLimit_When_CalculatingClamp_Then_PreservesRawClampMagnitudeBehavior);
             RunTest(results, nameof(tests.Given_HipsLocalDeltaWithinLimit_When_CalculatingClamp_Then_KeepsCurrentPosition),
                 tests.Given_HipsLocalDeltaWithinLimit_When_CalculatingClamp_Then_KeepsCurrentPosition);
             RunTest(results, nameof(tests.Given_HipsLocalDeltaSpike_When_CalculatingClamp_Then_ClampsFromPreviousPosition),
                 tests.Given_HipsLocalDeltaSpike_When_CalculatingClamp_Then_ClampsFromPreviousPosition);
+            RunTest(results, nameof(tests.Given_ZeroHipsLocalDeltaLimit_When_CalculatingClamp_Then_KeepsCurrentPosition),
+                tests.Given_ZeroHipsLocalDeltaLimit_When_CalculatingClamp_Then_KeepsCurrentPosition);
+            RunTest(results, nameof(tests.Given_NegativeHipsLocalDeltaLimit_When_CalculatingClamp_Then_KeepsCurrentPosition),
+                tests.Given_NegativeHipsLocalDeltaLimit_When_CalculatingClamp_Then_KeepsCurrentPosition);
+            RunTest(results, nameof(tests.Given_PositionSpikeClampCalculation_When_CheckingOwnership_Then_UsesPoseSmoothing),
+                tests.Given_PositionSpikeClampCalculation_When_CheckingOwnership_Then_UsesPoseSmoothing);
             RunTest(results, nameof(tests.Given_BodyPositionRootMotionDisabled_When_ApplyingImplicitRootGuard_Then_RestoresRootXZAndKeepsPoseY),
                 tests.Given_BodyPositionRootMotionDisabled_When_ApplyingImplicitRootGuard_Then_RestoresRootXZAndKeepsPoseY);
             RunTest(results, nameof(tests.Given_BodyPositionRootMotionEnabled_When_ApplyingImplicitRootGuard_Then_KeepsPoseRootPosition),
