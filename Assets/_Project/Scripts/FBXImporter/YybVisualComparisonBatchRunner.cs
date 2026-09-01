@@ -2090,7 +2090,9 @@ namespace Fbx2Vmd.FBXImporter
             summary.results = Results.ToArray();
             summary.frame_count_roles = frameRoleDiagnostics;
             summary.sample_ordering_diagnostics = BuildSampleOrderingDiagnostics();
-            summary.selected_candidate_artifact = BuildCandidateArtifactSelection(frameQualitySummaries);
+            summary.selected_candidate_artifact = VisualComparisonCandidateArtifactSelector.Select(
+                frameQualitySummaries,
+                _projectRoot);
             summary.frame_quality_summaries = frameQualitySummaries;
             summary.failures = Failures.ToArray();
 
@@ -2193,7 +2195,9 @@ namespace Fbx2Vmd.FBXImporter
             MotionComparisonFrameQualitySummary[] frameQualitySummaries)
         {
             VisualComparisonCandidateArtifactSelectionData selection =
-                BuildCandidateArtifactSelection(frameQualitySummaries);
+                VisualComparisonCandidateArtifactSelector.Select(
+                    frameQualitySummaries,
+                    _projectRoot);
             return selection != null &&
                 selection.selected_candidate_is_acceptance_artifact &&
                 selection.selected_candidate_preserves_raw_diagnostic &&
@@ -2708,14 +2712,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return projectRoot.FullName;
-        }
-
-        private static VisualComparisonCandidateArtifactSelectionData BuildCandidateArtifactSelection(
-            MotionComparisonFrameQualitySummary[] frameQualitySummaries)
-        {
-            return VisualComparisonCandidateArtifactSelector.Select(
-                frameQualitySummaries,
-                _projectRoot);
         }
 
         private static SummarySampleOrderingDiagnostic[] BuildSampleOrderingDiagnostics()
