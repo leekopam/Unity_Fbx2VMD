@@ -160,6 +160,30 @@ namespace Fbx2Vmd.FBXImporter
                 out nextBodyPosition);
         }
 
+        internal static float CalculateBoundedMuscleOutputReference(
+            float inputValue,
+            float outputValue,
+            float weight,
+            float maxDelta,
+            float fallbackValue)
+        {
+            if (!IsFinite(outputValue))
+            {
+                return IsFinite(fallbackValue) ? fallbackValue : outputValue;
+            }
+
+            if (!IsFinite(inputValue))
+            {
+                return outputValue;
+            }
+
+            float clampedCorrection = Mathf.Clamp(
+                inputValue - outputValue,
+                -Mathf.Max(0f, maxDelta),
+                Mathf.Max(0f, maxDelta));
+            return outputValue + clampedCorrection * Mathf.Clamp01(weight);
+        }
+
         internal static bool HasActiveFrameGate(float startFrame, float endFrame)
         {
             float start = Mathf.Max(0f, startFrame);
@@ -558,6 +582,11 @@ namespace Fbx2Vmd.FBXImporter
             desiredEndpointPosition = targetHipsPosition + desiredTargetOffset;
             desiredEndpointPosition.y = currentTargetEndpointPosition.y;
             return IsFinite(desiredEndpointPosition);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private static bool IsFinite(Quaternion value)
