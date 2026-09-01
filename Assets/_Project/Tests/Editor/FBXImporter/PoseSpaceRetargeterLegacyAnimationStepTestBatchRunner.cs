@@ -22,9 +22,16 @@ namespace Tests.Editor.FBXImporter
             var tests = new PoseSpaceRetargeterLegacyAnimationStepTests();
             var manualPoseTests = new PoseSpaceRetargeterHipsLocalPositionReferenceTests();
             var endpointTests = new RetargetingEndpointDiagnosticsTests();
+            var muscleReferenceTests = new RetargetingMuscleReferencePolicyTests();
 
-            RunTest(results, nameof(tests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference),
-                tests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_MuscleReferencePolicyOwner_When_InspectingResponsibilities_Then_OwnsPurePolicies),
+                muscleReferenceTests.Given_MuscleReferencePolicyOwner_When_InspectingResponsibilities_Then_OwnsPurePolicies);
+            RunTest(results, nameof(muscleReferenceTests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingPoseReferenceUse_Then_UsesReference),
+                muscleReferenceTests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingPoseReferenceUse_Then_UsesReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_FingerReferenceEnabledWithFingerMuscles_When_DeterminingPoseReferenceUse_Then_UsesReference),
+                muscleReferenceTests.Given_FingerReferenceEnabledWithFingerMuscles_When_DeterminingPoseReferenceUse_Then_UsesReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_NoReferenceSource_When_DeterminingPoseReferenceUse_Then_DoesNotUseReference),
+                muscleReferenceTests.Given_NoReferenceSource_When_DeterminingPoseReferenceUse_Then_DoesNotUseReference);
             RunTest(results, nameof(tests.Given_BodyPositionSpike_When_DeterminingVisualPoseSmoothing_Then_SmoothsWithoutMuscleOnlySkip),
                 tests.Given_BodyPositionSpike_When_DeterminingVisualPoseSmoothing_Then_SmoothsWithoutMuscleOnlySkip);
             RunTest(results, nameof(tests.Given_MainRecordingResidualBodyPositionSpike_When_DeterminingVisualPoseSmoothing_Then_Smooths),
@@ -47,26 +54,30 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_BodyPoseSpikeForearmStretchRow_When_BlendingVisualPoseSpikeWithClamp_Then_LimitsBlendAroundCurrent);
             RunTest(results, nameof(tests.Given_Frame49StyleForearmValue_When_BlendingVisualPoseSpikeWithClamp_Then_KeepsDefaultSmoothing),
                 tests.Given_Frame49StyleForearmValue_When_BlendingVisualPoseSpikeWithClamp_Then_KeepsDefaultSmoothing);
-            RunTest(results, nameof(tests.Given_EditorReferenceForearmStretchMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference),
-                tests.Given_EditorReferenceForearmStretchMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference);
-            RunTest(results, nameof(tests.Given_EditorReferenceLeftUpperArmTwistMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference),
-                tests.Given_EditorReferenceLeftUpperArmTwistMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference);
-            RunTest(results, nameof(tests.Given_EditorReferenceRightUpperArmTwistMuscle_When_CheckingReferenceUse_Then_UsesReference),
-                tests.Given_EditorReferenceRightUpperArmTwistMuscle_When_CheckingReferenceUse_Then_UsesReference);
-            RunTest(results, nameof(tests.Given_UpperArmTwistPoseInput_When_TransformingRetargetInput_Then_FlipsTwistSign),
-                tests.Given_UpperArmTwistPoseInput_When_TransformingRetargetInput_Then_FlipsTwistSign);
-            RunTest(results, nameof(tests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningRetargetInput_Then_FlipsSignOnly),
-                tests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningRetargetInput_Then_FlipsSignOnly);
-            RunTest(results, nameof(tests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningRetargetInput_Then_KeepsLiveInput),
-                tests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningRetargetInput_Then_KeepsLiveInput);
-            RunTest(results, nameof(tests.Given_RightArmTwistInputSharesModerateOverrangeReferenceSign_When_AligningRetargetInput_Then_FlipsSignOnly),
-                tests.Given_RightArmTwistInputSharesModerateOverrangeReferenceSign_When_AligningRetargetInput_Then_FlipsSignOnly);
-            RunTest(results, nameof(tests.Given_RightArmTwistInputSharesLowerOverrangeReferenceSign_When_AligningRetargetInput_Then_KeepsLiveInput),
-                tests.Given_RightArmTwistInputSharesLowerOverrangeReferenceSign_When_AligningRetargetInput_Then_KeepsLiveInput);
-            RunTest(results, nameof(tests.Given_RightUpperArmTwistReferenceIsModeratelyOverrange_When_CheckingReferenceValueUse_Then_DoesNotUseReference),
-                tests.Given_RightUpperArmTwistReferenceIsModeratelyOverrange_When_CheckingReferenceValueUse_Then_DoesNotUseReference);
-            RunTest(results, nameof(tests.Given_RightUpperArmTwistReferenceIsBounded_When_CheckingReferenceValueUse_Then_UsesReference),
-                tests.Given_RightUpperArmTwistReferenceIsBounded_When_CheckingReferenceValueUse_Then_UsesReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_ForearmStretchMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference),
+                muscleReferenceTests.Given_ForearmStretchMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_LeftUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference),
+                muscleReferenceTests.Given_LeftUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_RightUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_UsesReference),
+                muscleReferenceTests.Given_RightUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_UsesReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_UpperArmTwistPoseInput_When_TransformingInput_Then_FlipsLeftTwistSignOnly),
+                muscleReferenceTests.Given_UpperArmTwistPoseInput_When_TransformingInput_Then_FlipsLeftTwistSignOnly);
+            RunTest(results, nameof(muscleReferenceTests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningInput_Then_FlipsSignOnly),
+                muscleReferenceTests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningInput_Then_FlipsSignOnly);
+            RunTest(results, nameof(muscleReferenceTests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningInput_Then_KeepsLiveInput),
+                muscleReferenceTests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningInput_Then_KeepsLiveInput);
+            RunTest(results, nameof(muscleReferenceTests.Given_RightArmTwistInputSharesModerateOverrangeReferenceSign_When_AligningInput_Then_FlipsSignOnly),
+                muscleReferenceTests.Given_RightArmTwistInputSharesModerateOverrangeReferenceSign_When_AligningInput_Then_FlipsSignOnly);
+            RunTest(results, nameof(muscleReferenceTests.Given_RightArmTwistInputSharesLowerOverrangeReferenceSign_When_AligningInput_Then_KeepsLiveInput),
+                muscleReferenceTests.Given_RightArmTwistInputSharesLowerOverrangeReferenceSign_When_AligningInput_Then_KeepsLiveInput);
+            RunTest(results, nameof(muscleReferenceTests.Given_RightUpperArmTwistReferenceIsModeratelyOverrange_When_CheckingValueUse_Then_DoesNotUseReference),
+                muscleReferenceTests.Given_RightUpperArmTwistReferenceIsModeratelyOverrange_When_CheckingValueUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_RightUpperArmTwistReferenceIsBounded_When_CheckingValueUse_Then_UsesReference),
+                muscleReferenceTests.Given_RightUpperArmTwistReferenceIsBounded_When_CheckingValueUse_Then_UsesReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_NonFiniteReferenceValue_When_CheckingValueUse_Then_DoesNotUseReference),
+                muscleReferenceTests.Given_NonFiniteReferenceValue_When_CheckingValueUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_InvalidMuscleIndex_When_ApplyingPolicies_Then_PreservesExistingFallbacks),
+                muscleReferenceTests.Given_InvalidMuscleIndex_When_ApplyingPolicies_Then_PreservesExistingFallbacks);
             RunTest(results, nameof(tests.Given_FootHipsAlignedResidualYawCorrection_When_TargetDirectionDiffers_Then_LimitsYawOnlyRotation),
                 tests.Given_FootHipsAlignedResidualYawCorrection_When_TargetDirectionDiffers_Then_LimitsYawOnlyRotation);
             RunTest(results, nameof(tests.Given_OneFootResidualAlreadyInsideGate_When_ResolvingYawMaxAngle_Then_ProtectsPassingSide),
@@ -119,8 +130,14 @@ namespace Tests.Editor.FBXImporter
                 endpointTests.Given_EndpointDiagnosticCalculation_When_CheckingOwnership_Then_UsesDedicatedType);
             RunTest(results, nameof(tests.Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
                 tests.Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
-            RunTest(results, nameof(tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist),
-                tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist);
+            RunTest(results, nameof(muscleReferenceTests.Given_LegTwistOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyLegInOutAndTwist),
+                muscleReferenceTests.Given_LegTwistOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyLegInOutAndTwist);
+            RunTest(results, nameof(muscleReferenceTests.Given_RightArmOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyRightArmChain),
+                muscleReferenceTests.Given_RightArmOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyRightArmChain);
+            RunTest(results, nameof(muscleReferenceTests.Given_LeftArmOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyLeftArmChain),
+                muscleReferenceTests.Given_LeftArmOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyLeftArmChain);
+            RunTest(results, nameof(muscleReferenceTests.Given_RightSleeveChainOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsSpineAndRightSleeveChain),
+                muscleReferenceTests.Given_RightSleeveChainOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsSpineAndRightSleeveChain);
             RunTest(results, nameof(manualPoseTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit),
                 manualPoseTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit);
             RunTest(results, nameof(manualPoseTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy),

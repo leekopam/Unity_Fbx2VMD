@@ -17,6 +17,9 @@ namespace Tests.Editor.FBXImporter
         private static Type RetargetingEndpointDiagnosticsType =>
             typeof(PoseSpaceRetargeter).Assembly.GetType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics", throwOnError: true);
 
+        private static Type RetargetingMuscleReferencePolicyType =>
+            typeof(PoseSpaceRetargeter).Assembly.GetType("Fbx2Vmd.FBXImporter.RetargetingMuscleReferencePolicy", throwOnError: true);
+
         private static readonly Type[] ManualAdvanceParameterTypes =
         {
             typeof(float),
@@ -35,13 +38,6 @@ namespace Tests.Editor.FBXImporter
             typeof(float),
             typeof(float),
             typeof(float).MakeByRefType()
-        };
-
-        private static readonly Type[] EditorPoseReferenceEnabledParameterTypes =
-        {
-            typeof(bool),
-            typeof(bool),
-            typeof(int)
         };
 
         private static readonly Type[] VisualPoseSpikeParameterTypes =
@@ -72,30 +68,6 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
-        private static readonly Type[] EditorHumanoidMuscleReferenceParameterTypes =
-        {
-            typeof(int)
-        };
-
-        private static readonly Type[] EditorHumanoidMuscleReferenceValueParameterTypes =
-        {
-            typeof(int),
-            typeof(float)
-        };
-
-        private static readonly Type[] RetargetPoseInputMuscleTransformParameterTypes =
-        {
-            typeof(int),
-            typeof(float)
-        };
-
-        private static readonly Type[] RetargetPoseInputReferenceAlignmentParameterTypes =
-        {
-            typeof(int),
-            typeof(float),
-            typeof(float)
-        };
-
         private static readonly Type[] FootHipsAlignedResidualYawReferenceParameterTypes =
         {
             typeof(Vector3),
@@ -121,17 +93,6 @@ namespace Tests.Editor.FBXImporter
             typeof(Vector3),
             typeof(float)
         };
-
-        [Test]
-        public void Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference()
-        {
-            bool shouldUseReference = ShouldUseEditorPoseReference(
-                enableFingerPoseReference: false,
-                enableFullBodyPoseReference: true,
-                fingerReferenceMuscleCount: 0);
-
-            Assert.That(shouldUseReference, Is.True);
-        }
 
         [Test]
         public void Given_BodyPositionSpike_When_DeterminingVisualPoseSmoothing_Then_SmoothsWithoutMuscleOnlySkip()
@@ -338,129 +299,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_EditorReferenceForearmStretchMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference()
-        {
-            int rightForearmStretchIndex = FindHumanMuscleIndex("Right Forearm Stretch");
-            Assert.That(rightForearmStretchIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the right forearm stretch muscle.");
-
-            bool shouldUseReference = ShouldUseEditorHumanoidMuscleReference(rightForearmStretchIndex);
-
-            Assert.That(shouldUseReference, Is.False,
-                "Forearm stretch editor curves can exceed HumanPose muscle range and should not override the live ghost pose.");
-        }
-
-        [Test]
-        public void Given_EditorReferenceLeftUpperArmTwistMuscle_When_CheckingReferenceUse_Then_DoesNotUseReference()
-        {
-            int leftArmTwistIndex = FindHumanMuscleIndex("Left Arm Twist In-Out");
-            Assert.That(leftArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the left arm twist muscle.");
-
-            bool shouldUseReference = ShouldUseEditorHumanoidMuscleReference(leftArmTwistIndex);
-
-            Assert.That(shouldUseReference, Is.False,
-                "Upper arm twist editor curves can over-rotate tail frames and should not override the live ghost pose.");
-        }
-
-        [Test]
-        public void Given_EditorReferenceRightUpperArmTwistMuscle_When_CheckingReferenceUse_Then_UsesReference()
-        {
-            int rightArmTwistIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
-            Assert.That(rightArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the right arm twist muscle.");
-
-            bool shouldUseReference = ShouldUseEditorHumanoidMuscleReference(rightArmTwistIndex);
-
-            Assert.That(shouldUseReference, Is.True,
-                "Right upper arm twist ghost pose input can drift from the manual reference while the neighboring arm muscles stay aligned.");
-        }
-
-        [Test]
-        public void Given_UpperArmTwistPoseInput_When_TransformingRetargetInput_Then_FlipsTwistSign()
-        {
-            int leftArmTwistIndex = FindHumanMuscleIndex("Left Arm Twist In-Out");
-            int rightArmTwistIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
-            Assert.That(leftArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the left arm twist muscle.");
-            Assert.That(rightArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the right arm twist muscle.");
-
-            Assert.That(TransformRetargetPoseInputMuscleValue(leftArmTwistIndex, 0.797207f), Is.EqualTo(-0.797207f).Within(0.000001f));
-            Assert.That(TransformRetargetPoseInputMuscleValue(rightArmTwistIndex, -0.250876f), Is.EqualTo(-0.250876f).Within(0.000001f));
-
-            int leftShoulderFrontBackIndex = FindHumanMuscleIndex("Left Shoulder Front-Back");
-            Assert.That(TransformRetargetPoseInputMuscleValue(leftShoulderFrontBackIndex, 1f), Is.EqualTo(1f).Within(0.000001f));
-        }
-
-        [Test]
-        public void Given_LeftArmTwistInputOpposesBoundedReference_When_AligningRetargetInput_Then_FlipsSignOnly()
-        {
-            int leftArmTwistIndex = FindHumanMuscleIndex("Left Arm Twist In-Out");
-            Assert.That(leftArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the left arm twist muscle.");
-
-            float aligned = AlignRetargetPoseInputWithEditorReference(leftArmTwistIndex, -0.760319f, 0.758726f);
-
-            Assert.That(aligned, Is.EqualTo(0.760319f).Within(0.000001f),
-                "ERINN left arm twist ghost input is sign-flipped while the bounded manual reference has the same magnitude.");
-        }
-
-        [Test]
-        public void Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningRetargetInput_Then_KeepsLiveInput()
-        {
-            int leftArmTwistIndex = FindHumanMuscleIndex("Left Arm Twist In-Out");
-            Assert.That(leftArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the left arm twist muscle.");
-
-            float aligned = AlignRetargetPoseInputWithEditorReference(leftArmTwistIndex, -0.10761f, 2.917387f);
-
-            Assert.That(aligned, Is.EqualTo(-0.10761f).Within(0.000001f),
-                "tetoris left arm twist tail reference can over-rotate, so bounded sign alignment must not re-enable it.");
-        }
-
-        [Test]
-        public void Given_RightArmTwistInputSharesModerateOverrangeReferenceSign_When_AligningRetargetInput_Then_FlipsSignOnly()
-        {
-            int rightArmTwistIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
-            Assert.That(rightArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the right arm twist muscle.");
-
-            float aligned = AlignRetargetPoseInputWithEditorReference(rightArmTwistIndex, 0.852882f, 2.083053f);
-
-            Assert.That(aligned, Is.EqualTo(-0.852882f).Within(0.000001f),
-                "ERINN right arm twist has a moderately overrange same-sign reference; use it as a sign hint, not as a full override.");
-        }
-
-        [Test]
-        public void Given_RightArmTwistInputSharesLowerOverrangeReferenceSign_When_AligningRetargetInput_Then_KeepsLiveInput()
-        {
-            int rightArmTwistIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
-            Assert.That(rightArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the right arm twist muscle.");
-
-            float aligned = AlignRetargetPoseInputWithEditorReference(rightArmTwistIndex, 0.574437f, 1.862711f);
-
-            Assert.That(aligned, Is.EqualTo(0.574437f).Within(0.000001f),
-                "ERINN t30 is still aligned by keeping the live right arm twist input; sign flipping this lower overrange reference creates the residual.");
-        }
-
-        [Test]
-        public void Given_RightUpperArmTwistReferenceIsModeratelyOverrange_When_CheckingReferenceValueUse_Then_DoesNotUseReference()
-        {
-            int rightArmTwistIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
-            Assert.That(rightArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the right arm twist muscle.");
-
-            bool shouldUseReference = ShouldApplyEditorHumanoidMuscleReferenceValue(rightArmTwistIndex, 2.083053f);
-
-            Assert.That(shouldUseReference, Is.False,
-                "A moderate overrange right arm twist curve is useful as a sign hint but should not replace the live pose value.");
-        }
-
-        [Test]
-        public void Given_RightUpperArmTwistReferenceIsBounded_When_CheckingReferenceValueUse_Then_UsesReference()
-        {
-            int rightArmTwistIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
-            Assert.That(rightArmTwistIndex, Is.GreaterThanOrEqualTo(0), "Unity HumanTrait must expose the right arm twist muscle.");
-
-            bool shouldUseReference = ShouldApplyEditorHumanoidMuscleReferenceValue(rightArmTwistIndex, -0.568725f);
-
-            Assert.That(shouldUseReference, Is.True,
-                "tetoris right arm twist needs the bounded manual reference curve to correct ghost-pose drift.");
-        }
-
-        [Test]
         public void Given_FootHipsAlignedResidualYawCorrection_When_TargetDirectionDiffers_Then_LimitsYawOnlyRotation()
         {
             bool calculated = TryCalculateEditorFootHipsAlignedResidualYawReference(
@@ -572,31 +410,6 @@ namespace Tests.Editor.FBXImporter
             AssertReadableFloatProperty("LastRetargetEndpointFirstJumpDeltaX");
             AssertReadableFloatProperty("LastRetargetEndpointFirstJumpDeltaY");
             AssertReadableFloatProperty("LastRetargetEndpointFirstJumpDeltaZ");
-        }
-
-        [Test]
-        public void Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist()
-        {
-            var root = new GameObject("leg twist full body pose mask fixture");
-            try
-            {
-                var retargeter = root.AddComponent<PoseSpaceRetargeter>();
-                retargeter.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly = true;
-
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Left Upper Leg In-Out")), Is.True);
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Right Upper Leg Twist In-Out")), Is.True);
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Left Lower Leg Twist In-Out")), Is.True);
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Right Foot Twist In-Out")), Is.True);
-
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Left Upper Leg Front-Back")), Is.False);
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Right Lower Leg Stretch")), Is.False);
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Left Foot Up-Down")), Is.False);
-                Assert.That(ShouldApplyManualFullBodyPoseReferenceMuscle(retargeter, FindHumanMuscleIndex("Spine Twist Left-Right")), Is.False);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(root);
-            }
         }
 
         [Test]
@@ -836,23 +649,6 @@ namespace Tests.Editor.FBXImporter
             return clamped;
         }
 
-        private static bool ShouldUseEditorPoseReference(
-            bool enableFingerPoseReference,
-            bool enableFullBodyPoseReference,
-            int fingerReferenceMuscleCount)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ShouldUseEditorPoseReference",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: EditorPoseReferenceEnabledParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for editor pose reference enablement.");
-
-            return (bool)method.Invoke(null, new object[] { enableFingerPoseReference, enableFullBodyPoseReference, fingerReferenceMuscleCount });
-        }
-
         private static bool ShouldSmoothVisualPoseSpike(
             float maxMuscleDelta,
             float bodyPositionDelta,
@@ -929,7 +725,7 @@ namespace Tests.Editor.FBXImporter
 
             bool shouldPreserveCurrentValue = useEditorHumanoidMuscleReference &&
                 hasEditorHumanoidMuscleReferenceCurve &&
-                ShouldUseEditorHumanoidMuscleReference(muscleIndex);
+                ShouldUseHumanoidMuscleReference(muscleIndex);
             bool isForearmStretchMuscle = !shouldPreserveCurrentValue &&
                 forearmStretchClampMaxOffset > 0f &&
                 IsForearmStretchMuscle(muscleIndex);
@@ -943,6 +739,19 @@ namespace Tests.Editor.FBXImporter
                 isForearmStretchMuscle,
                 forearmStretchClampMaxOffset
             });
+        }
+
+        private static bool ShouldUseHumanoidMuscleReference(int muscleIndex)
+        {
+            MethodInfo method = RetargetingMuscleReferencePolicyType.GetMethod(
+                "ShouldUseHumanoidMuscleReference",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(int) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "RetargetingMuscleReferencePolicy should own muscle reference filtering.");
+            return (bool)method.Invoke(null, new object[] { muscleIndex });
         }
 
         private static bool IsForearmStretchMuscle(int muscleIndex)
@@ -965,20 +774,6 @@ namespace Tests.Editor.FBXImporter
             field.SetValue(target, value);
         }
 
-        private static bool ShouldApplyManualFullBodyPoseReferenceMuscle(PoseSpaceRetargeter retargeter, int muscleIndex)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ShouldApplyManualFullBodyPoseReferenceMuscle",
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(int) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter must expose the full-body pose mask predicate for focused diagnostics.");
-
-            return (bool)method.Invoke(retargeter, new object[] { muscleIndex });
-        }
-
         private static int FindHumanMuscleIndex(string muscleName)
         {
             for (int i = 0; i < HumanTrait.MuscleCount; i++)
@@ -990,62 +785,6 @@ namespace Tests.Editor.FBXImporter
             }
 
             return -1;
-        }
-
-        private static bool ShouldUseEditorHumanoidMuscleReference(int muscleIndex)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ShouldUseEditorHumanoidMuscleReference",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: EditorHumanoidMuscleReferenceParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should centralize editor Humanoid muscle reference filtering.");
-
-            return (bool)method.Invoke(null, new object[] { muscleIndex });
-        }
-
-        private static bool ShouldApplyEditorHumanoidMuscleReferenceValue(int muscleIndex, float referenceValue)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ShouldApplyEditorHumanoidMuscleReferenceValue",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: EditorHumanoidMuscleReferenceValueParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should filter editor Humanoid muscle references by evaluated value.");
-
-            return (bool)method.Invoke(null, new object[] { muscleIndex, referenceValue });
-        }
-
-        private static float TransformRetargetPoseInputMuscleValue(int muscleIndex, float value)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TransformRetargetPoseInputMuscleValue",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RetargetPoseInputMuscleTransformParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "TransformRetargetPoseInputMuscleValue must exist.");
-
-            return (float)method.Invoke(null, new object[] { muscleIndex, value });
-        }
-
-        private static float AlignRetargetPoseInputWithEditorReference(int muscleIndex, float value, float referenceValue)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "AlignRetargetPoseInputWithEditorReference",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RetargetPoseInputReferenceAlignmentParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a bounded editor-reference sign alignment helper.");
-
-            return (float)method.Invoke(null, new object[] { muscleIndex, value, referenceValue });
         }
 
         private static bool TryCalculateEditorFootHipsAlignedResidualYawReference(
