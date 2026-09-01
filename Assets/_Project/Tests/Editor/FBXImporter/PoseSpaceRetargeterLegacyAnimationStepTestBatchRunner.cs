@@ -117,6 +117,20 @@ namespace Tests.Editor.FBXImporter
                 manualPoseTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy);
             RunTest(results, nameof(manualPoseTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier),
                 manualPoseTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier);
+            RunTest(results, nameof(manualPoseTests.Given_LowerBodySegmentDirectionReference_When_CalculatingCorrection_Then_RotatesTowardReferenceDirection),
+                manualPoseTests.Given_LowerBodySegmentDirectionReference_When_CalculatingCorrection_Then_RotatesTowardReferenceDirection);
+            RunTest(results, nameof(manualPoseTests.Given_LowerBodySegmentDirectionMaxAngle_When_CalculatingCorrection_Then_ClampsBeforeWeight),
+                manualPoseTests.Given_LowerBodySegmentDirectionMaxAngle_When_CalculatingCorrection_Then_ClampsBeforeWeight);
+            RunTest(results, nameof(manualPoseTests.Given_LowerBodySegmentDirectionAxisScale_When_CalculatingCorrection_Then_RemovesXzAxisContribution),
+                manualPoseTests.Given_LowerBodySegmentDirectionAxisScale_When_CalculatingCorrection_Then_RemovesXzAxisContribution);
+            RunTest(results, nameof(manualPoseTests.Given_LowerBodySegmentDirectionAxisScaleRemovesCorrection_When_CalculatingCorrection_Then_KeepsRotation),
+                manualPoseTests.Given_LowerBodySegmentDirectionAxisScaleRemovesCorrection_When_CalculatingCorrection_Then_KeepsRotation);
+            RunTest(results, nameof(manualPoseTests.Given_ZeroSegmentDirectionWeight_When_CalculatingCorrection_Then_KeepsRotation),
+                manualPoseTests.Given_ZeroSegmentDirectionWeight_When_CalculatingCorrection_Then_KeepsRotation);
+            RunTest(results, nameof(manualPoseTests.Given_NonFiniteSegmentDirection_When_CalculatingCorrection_Then_KeepsRotation),
+                manualPoseTests.Given_NonFiniteSegmentDirection_When_CalculatingCorrection_Then_KeepsRotation);
+            RunTest(results, nameof(manualPoseTests.Given_SegmentDirectionCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier),
+                manualPoseTests.Given_SegmentDirectionCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier);
             RunTest(results, nameof(tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed),
                 tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed);
             RunTest(results, nameof(tests.Given_ZeroPlaybackSpeed_When_CalculatingManualLegacyTime_Then_UsesNormalPlaybackStep),
