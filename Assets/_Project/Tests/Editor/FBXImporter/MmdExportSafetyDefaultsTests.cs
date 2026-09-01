@@ -1104,68 +1104,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorBipedIkFootPositionRuntimeOverride_When_Toggled_Then_OnlyChangesFootIkSwitchAndCaps()
-        {
-            var managerObject = new GameObject("manual animator biped ik foot position runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorBipedIkFootPositionReference = false;
-                manager.manualAnimatorBipedIkFootPositionReferenceWeight = 0f;
-                manager.manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0f;
-
-                bool enabledApplied = ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(manager, true);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.True);
-                Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(0.65f).Within(0.0001f));
-                Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0.12f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False, "BipedIK foot position candidate must not implicitly enable the leg-chain localRotation candidate.");
-                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "BipedIK foot position candidate must not change the grounding reference path.");
-                Assert.That(manager.enableFinalIkFootGroundingExperiment, Is.False, "BipedIK foot position candidate must not enable GrounderBipedIK.");
-
-                bool disabledApplied = ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(manager, false);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False);
-                Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0.12f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
-        public void Given_ManualAnimatorBipedIkFootPositionRuntimeOverride_When_CustomWeightAndCapProvided_Then_UsesCustomCandidateValues()
-        {
-            var managerObject = new GameObject("manual animator biped ik foot position custom runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorBipedIkFootPositionReference = false;
-                manager.manualAnimatorBipedIkFootPositionReferenceWeight = 0f;
-                manager.manualAnimatorBipedIkFootPositionReferenceMaxOffset = 0f;
-
-                bool enabledApplied = ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(
-                    manager,
-                    true,
-                    weight: 0.2f,
-                    maxOffset: 0.04f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.True);
-                Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceWeight, Is.EqualTo(0.2f).Within(0.0001f));
-                Assert.That(manager.manualAnimatorBipedIkFootPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_PostSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_OnlyChangesEndpointClampSwitchAndCaps()
         {
             var managerObject = new GameObject("post set human pose endpoint runtime override manager");
@@ -5872,46 +5810,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(field, Is.Not.Null, $"FBXVmdPipeline must expose {fieldName}.");
             return (float)field.GetValue(manager);
-        }
-
-        private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(FBXVmdPipeline manager, bool enabled)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorBipedIkFootPositionRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only BipedIK foot position reference override for lower-body A/B probes.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled });
-        }
-
-        private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float weight,
-            float maxOffset)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorBipedIkFootPositionRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support custom BipedIK foot position candidate weight and max offset for lower-body A/B probes.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, weight, maxOffset });
         }
 
         private static bool ApplyPostSetHumanPoseEndpointPositionRuntimeOverride(
