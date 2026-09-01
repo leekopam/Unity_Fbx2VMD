@@ -7,6 +7,55 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal static class ManualPoseReferenceApplier
     {
+        internal static float CalculateBodyPositionXzFrameGateWeight(
+            float currentFrame,
+            float startFrame,
+            float endFrame,
+            float blendFrames)
+        {
+            float start = Mathf.Max(0f, Mathf.Round(startFrame));
+            float end = Mathf.Max(0f, Mathf.Round(endFrame));
+            if (start <= 0f && end <= 0f)
+            {
+                return 1f;
+            }
+
+            if (end < start || end <= 0f)
+            {
+                return 1f;
+            }
+
+            float blend = Mathf.Max(0f, blendFrames);
+            if (blend <= 0f)
+            {
+                return currentFrame >= start && currentFrame <= end ? 1f : 0f;
+            }
+
+            if (currentFrame >= start && currentFrame <= end)
+            {
+                return 1f;
+            }
+
+            if (currentFrame < start)
+            {
+                float fadeStart = start - blend;
+                if (currentFrame <= fadeStart)
+                {
+                    return 0f;
+                }
+
+                return Mathf.Clamp01((currentFrame - fadeStart) / blend);
+            }
+
+            float fadeEnd = end + blend;
+            if (currentFrame >= fadeEnd)
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp01((fadeEnd - currentFrame) / blend);
+        }
+
         internal static int ApplyExactLocalRotationReference(
             Animator referenceAnimator,
             Animator targetAnimator,

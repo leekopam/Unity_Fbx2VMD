@@ -3763,60 +3763,11 @@ namespace Fbx2Vmd.FBXImporter
             float end = Mathf.Max(0f, manualAnimatorBodyPositionXzReferenceFrameGateEnd);
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
             float currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
-            return CalculateManualAnimatorBodyPositionXzFrameGateWeight(
+            return ManualPoseReferenceApplier.CalculateBodyPositionXzFrameGateWeight(
                 currentFrame,
                 start,
                 end,
                 Mathf.Max(0f, manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames));
-        }
-
-        private static float CalculateManualAnimatorBodyPositionXzFrameGateWeight(
-            float currentFrame,
-            float startFrame,
-            float endFrame,
-            float blendFrames)
-        {
-            float start = Mathf.Max(0f, Mathf.Round(startFrame));
-            float end = Mathf.Max(0f, Mathf.Round(endFrame));
-            if (start <= 0f && end <= 0f)
-            {
-                return 1f;
-            }
-
-            if (end < start || end <= 0f)
-            {
-                return 1f;
-            }
-
-            float blend = Mathf.Max(0f, blendFrames);
-            if (blend <= 0f)
-            {
-                return currentFrame >= start && currentFrame <= end ? 1f : 0f;
-            }
-
-            if (currentFrame >= start && currentFrame <= end)
-            {
-                return 1f;
-            }
-
-            if (currentFrame < start)
-            {
-                float fadeStart = start - blend;
-                if (currentFrame <= fadeStart)
-                {
-                    return 0f;
-                }
-
-                return Mathf.Clamp01((currentFrame - fadeStart) / blend);
-            }
-
-            float fadeEnd = end + blend;
-            if (currentFrame >= fadeEnd)
-            {
-                return 0f;
-            }
-
-            return Mathf.Clamp01((fadeEnd - currentFrame) / blend);
         }
 
         private float ResolveManualAnimatorRightLowerLegToFootSegmentDirectionBlendWeight(float fallbackWeight)

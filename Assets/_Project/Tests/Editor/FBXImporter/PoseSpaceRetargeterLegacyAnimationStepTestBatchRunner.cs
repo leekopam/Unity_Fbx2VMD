@@ -20,6 +20,7 @@ namespace Tests.Editor.FBXImporter
             DateTimeOffset start = DateTimeOffset.UtcNow;
             var results = new List<TestResultRecord>();
             var tests = new PoseSpaceRetargeterLegacyAnimationStepTests();
+            var manualPoseTests = new PoseSpaceRetargeterHipsLocalPositionReferenceTests();
 
             RunTest(results, nameof(tests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference),
                 tests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference);
@@ -81,8 +82,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_LeftFootCurrentIsNegativeXPositiveZFromGhost_When_CalculatingSignCorrectedRowLocalBodyPosition_Then_MovesTowardGhost);
             RunTest(results, nameof(tests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput),
                 tests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput);
-            RunTest(results, nameof(tests.Given_ManualAnimatorBodyPositionXzFrameGateBlend_When_ResolvingWeight_Then_RampsAtEdges),
-                tests.Given_ManualAnimatorBodyPositionXzFrameGateBlend_When_ResolvingWeight_Then_RampsAtEdges);
+            RunTest(results, nameof(manualPoseTests.Given_BodyPositionXzFrameGate_When_CalculatingWeight_Then_BlendsAtBothEdges),
+                manualPoseTests.Given_BodyPositionXzFrameGate_When_CalculatingWeight_Then_BlendsAtBothEdges);
             RunTest(results, nameof(tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
                 tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
             RunTest(results, nameof(tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),

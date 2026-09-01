@@ -63,6 +63,14 @@ namespace Tests.Editor.FBXImporter
             typeof(Vector3).MakeByRefType()
         };
 
+        private static readonly Type[] BodyPositionXzFrameGateWeightParameterTypes =
+        {
+            typeof(float),
+            typeof(float),
+            typeof(float),
+            typeof(float)
+        };
+
         private static readonly Type[] HipsAlignedEndpointPositionReferenceParameterTypes =
         {
             typeof(Vector3),
@@ -264,6 +272,44 @@ namespace Tests.Editor.FBXImporter
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Empty,
                 "PoseSpaceRetargeter should delegate Hips localPosition calculation.");
+        }
+
+        [Test]
+        public void Given_BodyPositionXzFrameGate_When_CalculatingWeight_Then_BlendsAtBothEdges()
+        {
+            Assert.That(
+                CalculateBodyPositionXzFrameGateWeight(165f, 180f, 180f, 30f),
+                Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(
+                CalculateBodyPositionXzFrameGateWeight(180f, 180f, 180f, 30f),
+                Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(
+                CalculateBodyPositionXzFrameGateWeight(195f, 180f, 180f, 30f),
+                Is.EqualTo(0.5f).Within(0.0001f));
+            Assert.That(
+                CalculateBodyPositionXzFrameGateWeight(211f, 180f, 180f, 30f),
+                Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(
+                CalculateBodyPositionXzFrameGateWeight(240f, 0f, 0f, 30f),
+                Is.EqualTo(1f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_BodyPositionXzFrameGateCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier()
+        {
+            Assert.That(
+                ManualPoseReferenceApplierType.GetMethod(
+                    "CalculateBodyPositionXzFrameGateWeight",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: BodyPositionXzFrameGateWeightParameterTypes,
+                    modifiers: null),
+                Is.Not.Null);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMethod(
+                    "CalculateManualAnimatorBodyPositionXzFrameGateWeight",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Null);
         }
 
         [Test]
@@ -568,6 +614,30 @@ namespace Tests.Editor.FBXImporter
             bool calculated = (bool)method.Invoke(null, args);
             nextPosition = (Vector3)args[6];
             return calculated;
+        }
+
+        private static float CalculateBodyPositionXzFrameGateWeight(
+            float currentFrame,
+            float startFrame,
+            float endFrame,
+            float blendFrames)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "CalculateBodyPositionXzFrameGateWeight",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: BodyPositionXzFrameGateWeightParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should own the pure body position XZ frame gate calculation.");
+            return (float)method.Invoke(null, new object[]
+            {
+                currentFrame,
+                startFrame,
+                endFrame,
+                blendFrames
+            });
         }
 
         private static bool TryCalculateHipsAlignedEndpointPositionReference(
