@@ -1063,47 +1063,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorHandPalmFrameRuntimeOverride_When_CustomWeightProvided_Then_ClampsWeight()
-        {
-            var managerObject = new GameObject("manual animator palm frame runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorHandPalmFrameReference = false;
-                manager.manualAnimatorHandPalmFrameWeight = 0f;
-                manager.useManualAnimatorHandLocalRotationReference = false;
-                manager.useManualAnimatorThumbLocalRotationReference = false;
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.ShouldUseManualAnimatorFingerPoseReference = false;
-
-                bool enabledApplied = ApplyManualAnimatorHandPalmFrameRuntimeOverride(manager, true, 0.35f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorHandPalmFrameReference, Is.True);
-                Assert.That(manager.manualAnimatorHandPalmFrameWeight, Is.EqualTo(0.35f).Within(0.0001f));
-                Assert.That(manager.useManualAnimatorHandLocalRotationReference, Is.False, "Palm-frame candidate must not implicitly enable whole-hand local rotation reference.");
-                Assert.That(manager.useManualAnimatorThumbLocalRotationReference, Is.False, "Palm-frame candidate must not implicitly enable thumb local rotation reference.");
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Palm-frame candidate must not replace full-body muscles.");
-                Assert.That(manager.ShouldUseManualAnimatorFingerPoseReference, Is.False, "Palm-frame candidate must not enable finger curl copy.");
-
-                bool clampedApplied = ApplyManualAnimatorHandPalmFrameRuntimeOverride(manager, true, 2f);
-
-                Assert.That(clampedApplied, Is.True);
-                Assert.That(manager.manualAnimatorHandPalmFrameWeight, Is.EqualTo(1f).Within(0.0001f));
-
-                bool disabledApplied = ApplyManualAnimatorHandPalmFrameRuntimeOverride(manager, false, 0.35f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorHandPalmFrameReference, Is.False);
-                Assert.That(manager.manualAnimatorHandPalmFrameWeight, Is.EqualTo(0f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ArmDirectionGuardGhostAnimatorDestroyed_When_LateUpdateRuns_Then_DisablesWithoutMissingReference()
         {
             var ghostObject = new GameObject("destroyed ghost animator");
@@ -5913,27 +5872,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(field, Is.Not.Null, $"FBXVmdPipeline must expose {fieldName}.");
             return (float)field.GetValue(manager);
-        }
-
-        private static bool ApplyManualAnimatorHandPalmFrameRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float weight)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorHandPalmFrameRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a weighted runtime-only hand palm-frame reference override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, weight });
         }
 
         private static bool ApplyManualAnimatorBipedIkFootPositionRuntimeOverride(FBXVmdPipeline manager, bool enabled)

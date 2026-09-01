@@ -74,6 +74,49 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_GenericCharacterPipeline_When_ApplyingHandPalmFrame_Then_ClampsAndScopesSettings()
+        {
+            var pipelineObject = new GameObject("generic hand palm frame reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.useManualAnimatorHandPalmFrameReference = false;
+                pipeline.manualAnimatorHandPalmFrameWeight = 0f;
+                pipeline.useManualAnimatorHandLocalRotationReference = false;
+                pipeline.useManualAnimatorThumbLocalRotationReference = false;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.ShouldUseManualAnimatorFingerPoseReference = false;
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyHandPalmFrame", pipeline, true, 0.35f);
+
+                Assert.That(pipeline.useManualAnimatorHandPalmFrameReference, Is.True);
+                Assert.That(pipeline.manualAnimatorHandPalmFrameWeight, Is.EqualTo(0.35f).Within(0.0001f));
+                Assert.That(pipeline.useManualAnimatorHandLocalRotationReference, Is.False);
+                Assert.That(pipeline.useManualAnimatorThumbLocalRotationReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFingerPoseReference, Is.False);
+
+                InvokeApply(applierType, "ApplyHandPalmFrame", pipeline, true, 2f);
+
+                Assert.That(pipeline.manualAnimatorHandPalmFrameWeight, Is.EqualTo(1f).Within(0.0001f));
+
+                InvokeApply(applierType, "ApplyHandPalmFrame", pipeline, true, -1f);
+
+                Assert.That(pipeline.manualAnimatorHandPalmFrameWeight, Is.EqualTo(0f).Within(0.0001f));
+
+                InvokeApply(applierType, "ApplyHandPalmFrame", pipeline, false, 0.35f);
+
+                Assert.That(pipeline.useManualAnimatorHandPalmFrameReference, Is.False);
+                Assert.That(pipeline.manualAnimatorHandPalmFrameWeight, Is.EqualTo(0f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_GenericCharacterPipeline_When_ApplyingLowerBodyReferences_Then_ClampsSettings()
         {
             var pipelineObject = new GameObject("generic lower body reference pipeline");
