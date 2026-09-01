@@ -3,7 +3,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
-using static Tests.Editor.FBXImporter.VisualComparisonFrameRoleDiagnosticsTestSupport;
+using static Tests.Editor.FBXImporter.YybVisualComparisonFrameRoleDiagnosticsTestSupport;
 
 namespace Tests.Editor.FBXImporter
 {

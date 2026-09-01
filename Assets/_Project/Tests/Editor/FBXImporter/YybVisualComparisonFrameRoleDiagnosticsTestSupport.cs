@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
-    internal static class VisualComparisonFrameRoleDiagnosticsTestSupport
+    internal static class YybVisualComparisonFrameRoleDiagnosticsTestSupport
     {
         internal static object BuildSummaryFrameRoleDiagnostics(
             int referenceTargetFrameCount,
@@ -97,7 +97,7 @@ namespace Tests.Editor.FBXImporter
         {
             Assembly runtimeAssembly = typeof(FBXVmdPipeline).Assembly;
             Type requestType = runtimeAssembly.GetType(
-                "Fbx2Vmd.FBXImporter.VisualComparisonFrameRoleDiagnosticsBuildRequest",
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonFrameRoleDiagnosticsBuildRequest",
                 throwOnError: true);
             object request = Activator.CreateInstance(requestType, nonPublic: true);
             SetProperty(request, "ReferenceTargetFrameCount", referenceTargetFrameCount);
@@ -127,7 +127,7 @@ namespace Tests.Editor.FBXImporter
             SetProperty(request, "ReferenceVideoAnalysisMetricBasis", "MP4 analysis supplies visual bbox/framing context.");
 
             Type builderType = runtimeAssembly.GetType(
-                "Fbx2Vmd.FBXImporter.VisualComparisonFrameRoleDiagnosticsBuilder",
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonFrameRoleDiagnosticsBuilder",
                 throwOnError: true);
             MethodInfo buildMethod = builderType.GetMethod(
                 "Build",

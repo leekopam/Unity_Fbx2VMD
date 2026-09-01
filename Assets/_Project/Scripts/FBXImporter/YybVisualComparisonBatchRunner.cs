@@ -2123,8 +2123,8 @@ namespace Fbx2Vmd.FBXImporter
 
         private static VisualComparisonFrameRoleDiagnosticsData BuildCurrentSummaryFrameRoleDiagnostics()
         {
-            return VisualComparisonFrameRoleDiagnosticsBuilder.Build(
-                new VisualComparisonFrameRoleDiagnosticsBuildRequest
+            return YybVisualComparisonFrameRoleDiagnosticsBuilder.Build(
+                new YybVisualComparisonFrameRoleDiagnosticsBuildRequest
                 {
                     ReferenceTargetFrameCount = ResolveSummaryTargetFrameCount(),
                     BaselineRecordedFrameCount = ResolveFrameCount(CaptureMode.SubManualTestPrefab),

@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
 {
-    internal sealed class VisualComparisonFrameRoleDiagnosticsBuildRequest
+    internal sealed class YybVisualComparisonFrameRoleDiagnosticsBuildRequest
     {
         internal int ReferenceTargetFrameCount { get; set; }
         internal int BaselineRecordedFrameCount { get; set; }
@@ -27,10 +27,10 @@ namespace Fbx2Vmd.FBXImporter
         internal string ReferenceVideoAnalysisMetricBasis { get; set; } = string.Empty;
     }
 
-    internal static class VisualComparisonFrameRoleDiagnosticsBuilder
+    internal static class YybVisualComparisonFrameRoleDiagnosticsBuilder
     {
         internal static VisualComparisonFrameRoleDiagnosticsData Build(
-            VisualComparisonFrameRoleDiagnosticsBuildRequest request)
+            YybVisualComparisonFrameRoleDiagnosticsBuildRequest request)
         {
             if (request == null)
             {

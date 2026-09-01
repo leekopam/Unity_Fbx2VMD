@@ -147,30 +147,30 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport),
                 () => new MmdExportSafetyDefaultsTests().Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans());
-            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
-                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints),
-                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesBandedImageSpaceLimbSpans());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesSilhouetteProfileLimbSpans());
+            RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints),
+                () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateAndReferenceFrameImages_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesDeterministicImageSpaceKeypoints());
             RunTest(results, typeof(YybScreenshotNonHairDiagnosticsTests).FullName + "." +
                 nameof(YybScreenshotNonHairDiagnosticsTests.Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
                 () => new YybScreenshotNonHairDiagnosticsTests().Given_HairLikeSilhouetteExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
