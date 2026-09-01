@@ -72,10 +72,17 @@ namespace Tests.Editor.FBXImporter
                 binder: null,
                 types: EditorRootTranslationDeltaParameterTypes,
                 modifiers: null);
+            MethodInfo bodyPositionRootMotionSourceMethod = typeof(RootMotionGuard).GetMethod(
+                "SelectBodyPositionRootMotionSource",
+                BindingFlags.Static | BindingFlags.Public,
+                binder: null,
+                types: BodyPositionRootMotionSourceParameterTypes,
+                modifiers: null);
 
             Assert.That(rootDeltaMethod, Is.Not.Null);
             Assert.That(normalizeMethod, Is.Not.Null);
             Assert.That(editorRootTranslationDeltaMethod, Is.Not.Null);
+            Assert.That(bodyPositionRootMotionSourceMethod, Is.Not.Null);
             Assert.That(typeof(PoseSpaceRetargeter).GetMethod(
                 "CalculateRetargetRootDelta",
                 BindingFlags.Static | BindingFlags.NonPublic,
@@ -93,6 +100,12 @@ namespace Tests.Editor.FBXImporter
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: EditorRootTranslationDeltaParameterTypes,
+                modifiers: null), Is.Null);
+            Assert.That(typeof(PoseSpaceRetargeter).GetMethod(
+                "SelectBodyPositionRootMotionSource",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: BodyPositionRootMotionSourceParameterTypes,
                 modifiers: null), Is.Null);
         }
 
@@ -392,7 +405,7 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY()
+        public void Given_FinitePoseAndManualBodyReference_When_SelectingBodyRootMotionSource_Then_PrefersPosePosition()
         {
             Vector3 source = SelectBodyPositionRootMotionSource(
                 poseBodyPosition: new Vector3(0.1f, 1.2f, -0.2f),
@@ -406,9 +419,51 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualBodyReferenceUnavailable_When_SelectingBodyRootMotionSource_Then_KeepsPoseBodyPosition()
+        public void Given_NonFinitePoseAndFiniteManualReference_When_SelectingBodyRootMotionSource_Then_UsesManualReference()
         {
-            Vector3 poseBodyPosition = new Vector3(0.1f, 1.2f, -0.2f);
+            Vector3 manualReferenceBodyPosition = new Vector3(-0.4f, 0.9f, 0.35f);
+
+            Vector3 source = SelectBodyPositionRootMotionSource(
+                poseBodyPosition: new Vector3(float.NaN, 1.2f, -0.2f),
+                manualReferenceBodyPosition: manualReferenceBodyPosition,
+                hasManualReferenceBodyPosition: true,
+                preferManualReferenceXZ: true);
+
+            Assert.That(source, Is.EqualTo(manualReferenceBodyPosition));
+        }
+
+        [Test]
+        public void Given_NonFinitePoseAndManualReferencePreferenceDisabled_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback()
+        {
+            Vector3 source = SelectBodyPositionRootMotionSource(
+                poseBodyPosition: new Vector3(float.NaN, 1.2f, -0.2f),
+                manualReferenceBodyPosition: new Vector3(-0.4f, 0.9f, 0.35f),
+                hasManualReferenceBodyPosition: true,
+                preferManualReferenceXZ: false);
+
+            Assert.That(source.x, Is.NaN);
+            Assert.That(source.y, Is.EqualTo(1.2f).Within(0.0001f));
+            Assert.That(source.z, Is.EqualTo(-0.2f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_NonFinitePoseAndNonFiniteManualReference_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback()
+        {
+            Vector3 source = SelectBodyPositionRootMotionSource(
+                poseBodyPosition: new Vector3(float.NaN, 1.2f, -0.2f),
+                manualReferenceBodyPosition: new Vector3(-0.4f, 0.9f, float.NaN),
+                hasManualReferenceBodyPosition: true,
+                preferManualReferenceXZ: true);
+
+            Assert.That(source.x, Is.NaN);
+            Assert.That(source.y, Is.EqualTo(1.2f).Within(0.0001f));
+            Assert.That(source.z, Is.EqualTo(-0.2f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_NonFinitePoseAndUnavailableManualReference_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback()
+        {
+            Vector3 poseBodyPosition = new Vector3(float.NaN, 1.2f, -0.2f);
 
             Vector3 source = SelectBodyPositionRootMotionSource(
                 poseBodyPosition: poseBodyPosition,
@@ -416,7 +471,7 @@ namespace Tests.Editor.FBXImporter
                 hasManualReferenceBodyPosition: false,
                 preferManualReferenceXZ: true);
 
-            Assert.That(source.x, Is.EqualTo(poseBodyPosition.x).Within(0.0001f));
+            Assert.That(source.x, Is.NaN);
             Assert.That(source.y, Is.EqualTo(poseBodyPosition.y).Within(0.0001f));
             Assert.That(source.z, Is.EqualTo(poseBodyPosition.z).Within(0.0001f));
         }
@@ -484,14 +539,14 @@ namespace Tests.Editor.FBXImporter
             bool hasManualReferenceBodyPosition,
             bool preferManualReferenceXZ)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = typeof(RootMotionGuard).GetMethod(
                 "SelectBodyPositionRootMotionSource",
-                BindingFlags.Static | BindingFlags.NonPublic,
+                BindingFlags.Static | BindingFlags.Public,
                 binder: null,
                 types: BodyPositionRootMotionSourceParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure helper for choosing the bodyPosition X/Z root-motion source.");
+            Assert.That(method, Is.Not.Null, "RootMotionGuard should own the pure bodyPosition root-motion source policy.");
 
             return (Vector3)method.Invoke(null, new object[]
             {

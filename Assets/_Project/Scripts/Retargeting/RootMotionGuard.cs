@@ -100,6 +100,27 @@ namespace Fbx2Vmd.Retargeting
             return nextSmoothedEditorRootTranslationDelta;
         }
 
+        public static Vector3 SelectBodyPositionRootMotionSource(
+            Vector3 poseBodyPosition,
+            Vector3 manualReferenceBodyPosition,
+            bool hasManualReferenceBodyPosition,
+            bool preferManualReferenceXZ)
+        {
+            if (IsFinite(poseBodyPosition))
+            {
+                return poseBodyPosition;
+            }
+
+            if (preferManualReferenceXZ &&
+                hasManualReferenceBodyPosition &&
+                IsFinite(manualReferenceBodyPosition))
+            {
+                return manualReferenceBodyPosition;
+            }
+
+            return poseBodyPosition;
+        }
+
         /// <summary>
         /// Movement scale multiplier를 0.5~2.0 범위로 정규화.
         /// </summary>

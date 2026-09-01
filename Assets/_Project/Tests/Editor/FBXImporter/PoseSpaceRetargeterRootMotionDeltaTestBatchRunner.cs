@@ -49,10 +49,16 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_GhostAlreadyMovedInXZ_When_CalculatingReferenceDelta_Then_SkipsAndKeepsSmoothingState);
             RunTest(results, nameof(tests.Given_NonFiniteEditorDelta_When_CalculatingReferenceDelta_Then_SkipsAndKeepsSmoothingState),
                 tests.Given_NonFiniteEditorDelta_When_CalculatingReferenceDelta_Then_SkipsAndKeepsSmoothingState);
-            RunTest(results, nameof(tests.Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY),
-                tests.Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY);
-            RunTest(results, nameof(tests.Given_ManualBodyReferenceUnavailable_When_SelectingBodyRootMotionSource_Then_KeepsPoseBodyPosition),
-                tests.Given_ManualBodyReferenceUnavailable_When_SelectingBodyRootMotionSource_Then_KeepsPoseBodyPosition);
+            RunTest(results, nameof(tests.Given_FinitePoseAndManualBodyReference_When_SelectingBodyRootMotionSource_Then_PrefersPosePosition),
+                tests.Given_FinitePoseAndManualBodyReference_When_SelectingBodyRootMotionSource_Then_PrefersPosePosition);
+            RunTest(results, nameof(tests.Given_NonFinitePoseAndFiniteManualReference_When_SelectingBodyRootMotionSource_Then_UsesManualReference),
+                tests.Given_NonFinitePoseAndFiniteManualReference_When_SelectingBodyRootMotionSource_Then_UsesManualReference);
+            RunTest(results, nameof(tests.Given_NonFinitePoseAndManualReferencePreferenceDisabled_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback),
+                tests.Given_NonFinitePoseAndManualReferencePreferenceDisabled_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback);
+            RunTest(results, nameof(tests.Given_NonFinitePoseAndNonFiniteManualReference_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback),
+                tests.Given_NonFinitePoseAndNonFiniteManualReference_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback);
+            RunTest(results, nameof(tests.Given_NonFinitePoseAndUnavailableManualReference_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback),
+                tests.Given_NonFinitePoseAndUnavailableManualReference_When_SelectingBodyRootMotionSource_Then_KeepsPoseFallback);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);

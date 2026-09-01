@@ -2325,7 +2325,7 @@ namespace Fbx2Vmd.FBXImporter
             bodyPos.z *= _scaleRatio;
             Vector3 bodyRootMotionSource = bodyPos;
 #if UNITY_EDITOR
-            bodyRootMotionSource = SelectBodyPositionRootMotionSource(
+            bodyRootMotionSource = RootMotionGuard.SelectBodyPositionRootMotionSource(
                 bodyPos,
                 _editorReferenceBodyPosition,
                 _hasEditorReferenceBodyPosition,
@@ -6048,27 +6048,6 @@ namespace Fbx2Vmd.FBXImporter
 
             _targetReferenceBodyPosition = targetPose.bodyPosition;
             _hasTargetReferenceBodyPosition = true;
-        }
-
-        private static Vector3 SelectBodyPositionRootMotionSource(
-            Vector3 poseBodyPosition,
-            Vector3 manualReferenceBodyPosition,
-            bool hasManualReferenceBodyPosition,
-            bool preferManualReferenceXZ)
-        {
-            if (IsFinite(poseBodyPosition))
-            {
-                return poseBodyPosition;
-            }
-
-            if (preferManualReferenceXZ &&
-                hasManualReferenceBodyPosition &&
-                IsFinite(manualReferenceBodyPosition))
-            {
-                return manualReferenceBodyPosition;
-            }
-
-            return poseBodyPosition;
         }
 
         private Vector3 ExtractBodyPositionXZRootDelta(Vector3 bodyPosition)
