@@ -11,7 +11,7 @@ namespace Tests.Editor.FBXImporter
     {
         private const float GroundingDirectionReversalStepScale = 0.4f;
 
-        private static readonly Type[] EditorFootHeightGroundingReferenceParameterTypes =
+        private static readonly Type[] FootHeightReferenceTargetParameterTypes =
         {
             typeof(float),
             typeof(float),
@@ -179,6 +179,14 @@ namespace Tests.Editor.FBXImporter
             Assert.That(
                 typeof(GroundingStabilizer).GetMethod("ResolveGroundingContactBottomY", BindingFlags.Static | BindingFlags.Public),
                 Is.Not.Null);
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod(
+                    "TryCalculateFootHeightReferenceTarget",
+                    BindingFlags.Static | BindingFlags.Public,
+                    binder: null,
+                    types: FootHeightReferenceTargetParameterTypes,
+                    modifiers: null),
+                Is.Not.Null);
 
             const BindingFlags RetargeterCalculationFlags =
                 BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic;
@@ -207,6 +215,11 @@ namespace Tests.Editor.FBXImporter
                 typeof(PoseSpaceRetargeter).GetMember(
                     "ResolveGroundingContactBottomY",
                     BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateEditorFootHeightGroundingReferenceTarget",
+                    RetargeterCalculationFlags),
                 Is.Empty);
         }
 
@@ -246,7 +259,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_ManualReferenceFootLift_When_CalculatingGroundingTarget_Then_AddsPositiveLift()
         {
-            bool calculated = TryCalculateEditorFootHeightGroundingReferenceTarget(
+            bool calculated = TryCalculateFootHeightReferenceTarget(
                 baseTargetHeight: 0f,
                 referenceCurrentLowestFootY: -0.3259f,
                 referenceRestLowestFootY: -0.4245f,
@@ -261,7 +274,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_ManualReferenceFootDropsBelowRest_When_CalculatingGroundingTarget_Then_DoesNotPushBelowFloor()
         {
-            bool calculated = TryCalculateEditorFootHeightGroundingReferenceTarget(
+            bool calculated = TryCalculateFootHeightReferenceTarget(
                 baseTargetHeight: 0f,
                 referenceCurrentLowestFootY: -0.4305f,
                 referenceRestLowestFootY: -0.4245f,
@@ -276,7 +289,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_ManualReferenceFootLiftExceedsCap_When_CalculatingGroundingTarget_Then_ClampsLift()
         {
-            bool calculated = TryCalculateEditorFootHeightGroundingReferenceTarget(
+            bool calculated = TryCalculateFootHeightReferenceTarget(
                 baseTargetHeight: 0.01f,
                 referenceCurrentLowestFootY: 0.2f,
                 referenceRestLowestFootY: 0f,
@@ -291,7 +304,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_ManualReferenceFootLiftAndZeroMaxLift_When_CalculatingGroundingTarget_Then_TreatsLiftAsUnlimited()
         {
-            bool calculated = TryCalculateEditorFootHeightGroundingReferenceTarget(
+            bool calculated = TryCalculateFootHeightReferenceTarget(
                 baseTargetHeight: 0.01f,
                 referenceCurrentLowestFootY: 0.2f,
                 referenceRestLowestFootY: 0f,
@@ -301,6 +314,36 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(calculated, Is.True);
             Assert.That(targetHeight, Is.EqualTo(0.21f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ManualReferenceFootLiftAndWeightAboveOne_When_CalculatingGroundingTarget_Then_ClampsWeight()
+        {
+            bool calculated = TryCalculateFootHeightReferenceTarget(
+                baseTargetHeight: 0.01f,
+                referenceCurrentLowestFootY: 0.05f,
+                referenceRestLowestFootY: 0f,
+                weight: 2f,
+                maxLift: 0.08f,
+                out float targetHeight);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(targetHeight, Is.EqualTo(0.06f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_NonFiniteManualReferenceFootHeight_When_CalculatingGroundingTarget_Then_ReturnsBaseTarget()
+        {
+            bool calculated = TryCalculateFootHeightReferenceTarget(
+                baseTargetHeight: 0.01f,
+                referenceCurrentLowestFootY: float.NaN,
+                referenceRestLowestFootY: 0f,
+                weight: 1f,
+                maxLift: 0.08f,
+                out float targetHeight);
+
+            Assert.That(calculated, Is.False);
+            Assert.That(targetHeight, Is.EqualTo(0.01f).Within(0.0001f));
         }
 
         private static float CalculateGroundingVerticalStep(
@@ -342,7 +385,7 @@ namespace Tests.Editor.FBXImporter
                 out adjustment);
         }
 
-        private static bool TryCalculateEditorFootHeightGroundingReferenceTarget(
+        private static bool TryCalculateFootHeightReferenceTarget(
             float baseTargetHeight,
             float referenceCurrentLowestFootY,
             float referenceRestLowestFootY,
@@ -350,14 +393,14 @@ namespace Tests.Editor.FBXImporter
             float maxLift,
             out float targetHeight)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateEditorFootHeightGroundingReferenceTarget",
-                BindingFlags.Static | BindingFlags.NonPublic,
+            MethodInfo method = typeof(GroundingStabilizer).GetMethod(
+                "TryCalculateFootHeightReferenceTarget",
+                BindingFlags.Static | BindingFlags.Public,
                 binder: null,
-                types: EditorFootHeightGroundingReferenceParameterTypes,
+                types: FootHeightReferenceTargetParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for Manual Animator foot-height grounding reference calculation.");
+            Assert.That(method, Is.Not.Null, "GroundingStabilizer should own pure foot-height reference target calculation.");
 
             object[] args =
             {

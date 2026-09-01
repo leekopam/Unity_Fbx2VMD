@@ -8989,7 +8989,7 @@ namespace Fbx2Vmd.FBXImporter
                 return baseTargetHeight;
             }
 
-            if (TryCalculateEditorFootHeightGroundingReferenceTarget(
+            if (GroundingStabilizer.TryCalculateFootHeightReferenceTarget(
                     baseTargetHeight,
                     referenceCurrentLowestFootY,
                     _editorReferenceLowestFootRestY,
@@ -9006,46 +9006,6 @@ namespace Fbx2Vmd.FBXImporter
 #else
             return baseTargetHeight;
 #endif
-        }
-
-        private static bool TryCalculateEditorFootHeightGroundingReferenceTarget(
-            float baseTargetHeight,
-            float referenceCurrentLowestFootY,
-            float referenceRestLowestFootY,
-            float weight,
-            float maxLift,
-            out float targetHeight)
-        {
-            targetHeight = baseTargetHeight;
-            if (!IsFinite(baseTargetHeight) ||
-                !IsFinite(referenceCurrentLowestFootY) ||
-                !IsFinite(referenceRestLowestFootY) ||
-                !IsFinite(weight) ||
-                !IsFinite(maxLift))
-            {
-                return false;
-            }
-
-            float referenceLift = referenceCurrentLowestFootY - referenceRestLowestFootY;
-            if (referenceLift <= 0f)
-            {
-                return true;
-            }
-
-            float weightedLift = referenceLift * Mathf.Clamp01(weight);
-            if (maxLift > 0f)
-            {
-                weightedLift = Mathf.Min(weightedLift, maxLift);
-            }
-
-            targetHeight = baseTargetHeight + weightedLift;
-            if (!IsFinite(targetHeight))
-            {
-                targetHeight = baseTargetHeight;
-                return false;
-            }
-
-            return true;
         }
 
         public void ApplyLateVisualGroundingCorrection()
