@@ -177,24 +177,24 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints),
                 () => new MmdExportSafetyDefaultsTests().Given_DarkTealHairShadowExtendsCandidateBand_When_BuildingDiagnostics_Then_SeparatesNonHairBBoxNormalizedKeypoints());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw),
-                () => new MmdExportSafetyDefaultsTests().Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact),
-                () => new MmdExportSafetyDefaultsTests().Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CorrectedMetricsPassAndVmdIsRawCopy_When_BuildingCandidateArtifactSelection_Then_KeepsDiagnosticOnly),
-                () => new MmdExportSafetyDefaultsTests().Given_CorrectedMetricsPassAndVmdIsRawCopy_When_BuildingCandidateArtifactSelection_Then_KeepsDiagnosticOnly());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_SelectedCorrectedCandidateManifestIsMissing_When_BuildingCandidateArtifactSelection_Then_WritesManifestAndMarksAcceptanceArtifact),
-                () => new MmdExportSafetyDefaultsTests().Given_SelectedCorrectedCandidateManifestIsMissing_When_BuildingCandidateArtifactSelection_Then_WritesManifestAndMarksAcceptanceArtifact());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RawMainAutoCandidatePasses_When_BuildingCandidateArtifactSelection_Then_MarksRawExportAcceptanceArtifact),
-                () => new MmdExportSafetyDefaultsTests().Given_RawMainAutoCandidatePasses_When_BuildingCandidateArtifactSelection_Then_MarksRawExportAcceptanceArtifact());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact),
-                () => new MmdExportSafetyDefaultsTests().Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact());
+            RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
+                nameof(VisualComparisonCandidateArtifactSelectorTests.Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw),
+                () => new VisualComparisonCandidateArtifactSelectorTests().Given_RawCandidateFailsAndCorrectedCandidatePasses_When_BuildingCandidateArtifactSelection_Then_SelectsCorrectedWithoutHidingRaw());
+            RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
+                nameof(VisualComparisonCandidateArtifactSelectorTests.Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact),
+                () => new VisualComparisonCandidateArtifactSelectorTests().Given_SelectedCorrectedCandidateFilesExist_When_BuildingCandidateArtifactSelection_Then_MarksFinalExportAcceptanceArtifact());
+            RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
+                nameof(VisualComparisonCandidateArtifactSelectorTests.Given_CorrectedMetricsPassAndVmdIsRawCopy_When_BuildingCandidateArtifactSelection_Then_KeepsDiagnosticOnly),
+                () => new VisualComparisonCandidateArtifactSelectorTests().Given_CorrectedMetricsPassAndVmdIsRawCopy_When_BuildingCandidateArtifactSelection_Then_KeepsDiagnosticOnly());
+            RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
+                nameof(VisualComparisonCandidateArtifactSelectorTests.Given_SelectedCorrectedCandidateManifestIsMissing_When_BuildingCandidateArtifactSelection_Then_WritesManifestAndMarksAcceptanceArtifact),
+                () => new VisualComparisonCandidateArtifactSelectorTests().Given_SelectedCorrectedCandidateManifestIsMissing_When_BuildingCandidateArtifactSelection_Then_WritesManifestAndMarksAcceptanceArtifact());
+            RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
+                nameof(VisualComparisonCandidateArtifactSelectorTests.Given_RawMainAutoCandidatePasses_When_BuildingCandidateArtifactSelection_Then_MarksRawExportAcceptanceArtifact),
+                () => new VisualComparisonCandidateArtifactSelectorTests().Given_RawMainAutoCandidatePasses_When_BuildingCandidateArtifactSelection_Then_MarksRawExportAcceptanceArtifact());
+            RunTest(results, typeof(VisualComparisonCandidateArtifactSelectorTests).FullName + "." +
+                nameof(VisualComparisonCandidateArtifactSelectorTests.Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact),
+                () => new VisualComparisonCandidateArtifactSelectorTests().Given_MainRecordingAndMainAutoSummaries_When_BuildingCandidateArtifactSelection_Then_SelectsMainAutoAcceptanceArtifact());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure),
                 () => new MmdExportSafetyDefaultsTests().Given_FrameQualitySummaryFails_When_BuildingCompletionFailures_Then_PromotesToRunFailure());
