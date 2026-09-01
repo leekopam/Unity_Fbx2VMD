@@ -183,12 +183,12 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("lower-body-force-off-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFootLocalRotationRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorFootLocalRotationRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFootLocalRotationRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("disableManualAnimatorFootLocalRotationRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorLowerBodySegmentDirectionRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("disableManualAnimatorLowerBodySegmentDirectionRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("disableManualAnimatorFootHipsAlignedResidualYawRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False);
@@ -214,10 +214,10 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
 
             ClearYybVisualComparisonRunnerState("leg-chain-segment-detail-test");
-            SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle", 3f);
-            SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle", 2f);
+            SetYybVisualComparisonRunOption("disableManualAnimatorUpperLegToLowerLegSegmentDirectionRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle", 3f);
+            SetYybVisualComparisonRunOption("disableManualAnimatorLowerLegToFootSegmentDirectionRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle", 2f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
@@ -248,10 +248,10 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-force-off-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorBodyRotationRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_disableManualAnimatorBodyRotationRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("disableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorBodyRotationRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("disableManualAnimatorBodyRotationRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
@@ -288,8 +288,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-exclude-lower-body-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseExcludeLowerBodyMusclesRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -307,8 +307,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-lower-body-only-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseLowerBodyMusclesOnlyRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -325,8 +325,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-leg-twist-only-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseLegTwistMusclesOnlyRuntimeOverride", true);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -344,10 +344,10 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-right-arm-frame-gate-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateStart", 88f);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 92f);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseRightArmMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseReferenceFrameGateStart", 88f);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseReferenceFrameGateEnd", 92f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -365,10 +365,10 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-left-arm-frame-gate-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateStart", 396f);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 396f);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseLeftArmMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseReferenceFrameGateStart", 396f);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseReferenceFrameGateEnd", 396f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -386,10 +386,10 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
 
             ClearYybVisualComparisonRunnerState("full-body-mask-right-sleeve-chain-frame-gate-test");
-            SetYybVisualComparisonRunnerStaticField("_enableManualAnimatorFullBodyPoseRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateStart", 90f);
-            SetYybVisualComparisonRunnerStaticField("_manualAnimatorFullBodyPoseReferenceFrameGateEnd", 90f);
+            SetYybVisualComparisonRunOption("enableManualAnimatorFullBodyPoseRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseRightSleeveChainMusclesOnlyRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseReferenceFrameGateStart", 90f);
+            SetYybVisualComparisonRunOption("manualAnimatorFullBodyPoseReferenceFrameGateEnd", 90f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -520,9 +520,9 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta, Is.EqualTo(0.02f).Within(0.0001f));
 
             ClearYybVisualComparisonRunnerState("set-human-pose-right-leg-twist-output-test");
-            SetYybVisualComparisonRunnerStaticField("_enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride", true);
-            SetYybVisualComparisonRunnerStaticField("_setHumanPoseRightLegTwistOutputReferenceWeight", 0.5f);
-            SetYybVisualComparisonRunnerStaticField("_setHumanPoseRightLegTwistOutputReferenceMaxDelta", 0.01f);
+            SetYybVisualComparisonRunOption("enableSetHumanPoseRightLegTwistOutputReferenceRuntimeOverride", true);
+            SetYybVisualComparisonRunOption("setHumanPoseRightLegTwistOutputReferenceWeight", 0.5f);
+            SetYybVisualComparisonRunOption("setHumanPoseRightLegTwistOutputReferenceMaxDelta", 0.01f);
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference, Is.True);
@@ -826,8 +826,8 @@ namespace Tests.Editor.FBXImporter
             const float discoveredLegacyGateEnd = 3553f;
             string[] fieldNames =
             {
-                "postSetHumanPoseRightEndpointPositionReferenceFrameGateStart",
-                "postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd"
+                "_postSetHumanPoseRightEndpointPositionReferenceFrameGateStart",
+                "_postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd"
             };
 
             foreach (string fieldName in fieldNames)
@@ -3965,15 +3965,16 @@ namespace Tests.Editor.FBXImporter
 
         private static void InvokeFinalIkFootGroundingConfiguration(FBXVmdPipeline manager, GameObject targetObject)
         {
-            MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
+            var coordinator = new FBXConversionCoordinator(manager);
+            MethodInfo method = typeof(FBXConversionCoordinator).GetMethod(
                 "ConfigureFinalIkFootGroundingExperiment",
                 BindingFlags.Instance | BindingFlags.NonPublic,
                 binder: null,
                 types: new[] { typeof(GameObject) },
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "FBXVmdPipeline must expose a narrow Final IK foot grounding configuration seam.");
-            method.Invoke(manager, new object[] { targetObject });
+            Assert.That(method, Is.Not.Null, "변환 조정기는 Final IK 접지 구성 경계를 제공해야 합니다.");
+            method.Invoke(coordinator, new object[] { targetObject });
         }
 
         private static int ResolveReferenceMmdTargetFrameCount(
@@ -4625,10 +4626,10 @@ namespace Tests.Editor.FBXImporter
                 "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
-            Type diagnosticsType = runnerType.GetNestedType(
-                "SummaryFrameRoleDiagnostics",
-                BindingFlags.NonPublic);
-            Assert.That(diagnosticsType, Is.Not.Null, "YYB runner summary diagnostics type must remain available.");
+            Type diagnosticsType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.VisualComparisonFrameRoleDiagnosticsData",
+                throwOnError: false);
+            Assert.That(diagnosticsType, Is.Not.Null, "모델 중립 비교 프레임 진단 데이터 타입이 필요합니다.");
 
             object diagnostics = Activator.CreateInstance(diagnosticsType);
             SetDiagnosticsField(diagnostics, "reference_mp4_current_clip_sample_count", 7);
@@ -4689,17 +4690,24 @@ namespace Tests.Editor.FBXImporter
             return (bool)method.Invoke(null, new object[] { manager });
         }
 
-        private static void SetYybVisualComparisonRunnerStaticField<T>(string fieldName, T value)
+        private static void SetYybVisualComparisonRunOption<T>(string optionName, T value)
         {
             Type runnerType = Type.GetType(
                 "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
             Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
 
-            FieldInfo field = runnerType.GetField(
-                fieldName,
+            FieldInfo optionsField = runnerType.GetField(
+                "_currentRunOptions",
                 BindingFlags.Static | BindingFlags.NonPublic);
-            Assert.That(field, Is.Not.Null, $"YYB runner field {fieldName} must exist for runtime override tests.");
-            field.SetValue(null, value);
+            Assert.That(optionsField, Is.Not.Null, "비교 실행기의 현재 옵션 경계가 필요합니다.");
+
+            object options = optionsField.GetValue(null);
+            Assert.That(options, Is.Not.Null, "비교 실행기의 현재 옵션이 필요합니다.");
+            FieldInfo optionField = options.GetType().GetField(
+                optionName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(optionField, Is.Not.Null, $"비교 실행 옵션 {optionName}이 필요합니다.");
+            optionField.SetValue(options, value);
         }
 
         private static string[] BuildCaptureJobModes(bool enableVmdPlaybackProbeRuntimeOverride)
@@ -4863,9 +4871,16 @@ namespace Tests.Editor.FBXImporter
             FieldInfo field = instance.GetType().GetField(
                 fieldName,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}' to exist.");
+            if (field != null)
+            {
+                return (T)field.GetValue(instance);
+            }
 
-            return (T)field.GetValue(instance);
+            PropertyInfo property = instance.GetType().GetProperty(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(property, Is.Not.Null, $"Expected field or property '{fieldName}' to exist.");
+            return (T)property.GetValue(instance);
         }
 
         private static T GetProperty<T>(object instance, string propertyName)
@@ -4885,9 +4900,17 @@ namespace Tests.Editor.FBXImporter
             FieldInfo field = instance.GetType().GetField(
                 fieldName,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(field, Is.Not.Null, $"Expected field '{fieldName}' to exist.");
+            if (field != null)
+            {
+                field.SetValue(instance, value);
+                return;
+            }
 
-            field.SetValue(instance, value);
+            PropertyInfo property = instance.GetType().GetProperty(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(property, Is.Not.Null, $"Expected field or property '{fieldName}' to exist.");
+            property.SetValue(instance, value);
         }
 
         private static void AddArmDirectionRetargetSegment(
