@@ -3265,51 +3265,6 @@ namespace Fbx2Vmd.FBXImporter
             };
         }
 
-        private static bool TryFindFirstRetargetEndpointStageJump(
-            string[] stageNames,
-            Vector3[] positions,
-            float threshold,
-            out string stage,
-            out Vector3 delta,
-            out float magnitude)
-        {
-            stage = "";
-            delta = BuildNaNVector3();
-            magnitude = float.NaN;
-            if (stageNames == null ||
-                positions == null ||
-                stageNames.Length != positions.Length ||
-                positions.Length < 2)
-            {
-                return false;
-            }
-
-            float safeThreshold = Mathf.Max(0f, threshold);
-            for (int i = 1; i < positions.Length; i++)
-            {
-                Vector3 previous = positions[i - 1];
-                Vector3 current = positions[i];
-                if (!IsFinite(previous) || !IsFinite(current))
-                {
-                    continue;
-                }
-
-                Vector3 stageDelta = current - previous;
-                float stageMagnitude = stageDelta.magnitude;
-                if (!IsFinite(stageDelta) || !IsFinite(stageMagnitude) || stageMagnitude <= safeThreshold)
-                {
-                    continue;
-                }
-
-                stage = stageNames[i] ?? "";
-                delta = stageDelta;
-                magnitude = stageMagnitude;
-                return true;
-            }
-
-            return false;
-        }
-
         private static readonly string[] RetargetEndpointStageNames =
         {
             "ghost",
@@ -3374,7 +3329,7 @@ namespace Fbx2Vmd.FBXImporter
             ref bool hasBest,
             ref int bestStageIndex)
         {
-            if (!TryFindFirstRetargetEndpointStageJump(
+            if (!RetargetingEndpointDiagnostics.TryFindFirstStagePositionJump(
                     RetargetEndpointStageNames,
                     positions,
                     RetargetEndpointStageJumpAttributionThreshold,

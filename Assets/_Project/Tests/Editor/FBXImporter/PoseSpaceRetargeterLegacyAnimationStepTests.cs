@@ -122,16 +122,6 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
-        private static readonly Type[] RetargetEndpointStageJumpParameterTypes =
-        {
-            typeof(string[]),
-            typeof(Vector3[]),
-            typeof(float),
-            typeof(string).MakeByRefType(),
-            typeof(Vector3).MakeByRefType(),
-            typeof(float).MakeByRefType()
-        };
-
         [Test]
         public void Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference()
         {
@@ -574,55 +564,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta()
-        {
-            bool attributed = TryFindFirstRetargetEndpointStageJump(
-                new[] { "pre_set", "after_set_human_pose", "after_manual_reference", "after_root_restore" },
-                new[]
-                {
-                    new Vector3(0f, 0f, 0f),
-                    new Vector3(0.08f, 0f, -0.02f),
-                    new Vector3(0.20f, 0f, -0.02f),
-                    new Vector3(0.20f, 0f, -0.10f)
-                },
-                threshold: 0.05f,
-                out string stage,
-                out Vector3 delta,
-                out float magnitude);
-
-            Assert.That(attributed, Is.True);
-            Assert.That(stage, Is.EqualTo("after_set_human_pose"));
-            Assert.That(delta.x, Is.EqualTo(0.08f).Within(0.0001f));
-            Assert.That(delta.y, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(delta.z, Is.EqualTo(-0.02f).Within(0.0001f));
-            Assert.That(magnitude, Is.EqualTo(new Vector3(0.08f, 0f, -0.02f).magnitude).Within(0.0001f));
-        }
-
-        [Test]
-        public void Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution()
-        {
-            bool attributed = TryFindFirstRetargetEndpointStageJump(
-                new[] { "pre_set", "after_set_human_pose", "after_manual_reference" },
-                new[]
-                {
-                    new Vector3(0f, 0f, 0f),
-                    new Vector3(0.01f, 0f, 0f),
-                    new Vector3(0.02f, 0f, 0f)
-                },
-                threshold: 0.05f,
-                out string stage,
-                out Vector3 delta,
-                out float magnitude);
-
-            Assert.That(attributed, Is.False);
-            Assert.That(stage, Is.EqualTo(""));
-            Assert.That(delta.x, Is.NaN);
-            Assert.That(delta.y, Is.NaN);
-            Assert.That(delta.z, Is.NaN);
-            Assert.That(magnitude, Is.NaN);
-        }
-
-        [Test]
         public void Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties()
         {
             AssertReadableStringProperty("LastRetargetEndpointFirstJumpStage");
@@ -804,41 +745,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(property, Is.Not.Null, $"PoseSpaceRetargeter should expose {propertyName} for endpoint stage attribution diagnostics.");
             Assert.That(property.PropertyType, Is.EqualTo(typeof(string)));
             Assert.That(property.GetMethod, Is.Not.Null);
-        }
-
-        private static bool TryFindFirstRetargetEndpointStageJump(
-            string[] stageNames,
-            Vector3[] positions,
-            float threshold,
-            out string stage,
-            out Vector3 delta,
-            out float magnitude)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryFindFirstRetargetEndpointStageJump",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RetargetEndpointStageJumpParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null,
-                "PoseSpaceRetargeter should expose a pure static helper for first endpoint stage-jump attribution diagnostics.");
-
-            object[] args =
-            {
-                stageNames,
-                positions,
-                threshold,
-                "",
-                Vector3.zero,
-                0f
-            };
-
-            bool found = (bool)method.Invoke(null, args);
-            stage = (string)args[3];
-            delta = (Vector3)args[4];
-            magnitude = (float)args[5];
-            return found;
         }
 
         [Test]
