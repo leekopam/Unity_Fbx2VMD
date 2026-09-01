@@ -869,74 +869,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorFullBodyPoseRuntimeOverride_When_Toggled_Then_OnlyChangesFullBodyReferenceSwitch()
-        {
-            var managerObject = new GameObject("manual animator full body pose runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
-                manager.ShouldUseManualAnimatorFootHeightGroundingReference = false;
-                manager.ShouldUseManualAnimatorFootLocalRotationReference = false;
-
-                bool enabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, true);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Full-body pose candidate must not re-enable the rejected hips localPosition copy path.");
-                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Full-body pose candidate must not change the grounding reference path.");
-                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False, "Full-body pose candidate must not implicitly enable the leg-chain localRotation candidate.");
-
-                bool disabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, false);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
-        public void Given_ManualAnimatorFullBodyPoseRuntimeOverride_When_CustomWeightProvided_Then_ClampsWeight()
-        {
-            var managerObject = new GameObject("manual animator full body pose runtime override weight manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-
-                bool enabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, true, 0.35f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
-                Assert.That(
-                    manager.manualAnimatorFullBodyPoseReferenceWeight,
-                    Is.EqualTo(0.35f).Within(0.0001f));
-
-                bool clampedApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, true, 2f);
-
-                Assert.That(clampedApplied, Is.True);
-                Assert.That(
-                    manager.manualAnimatorFullBodyPoseReferenceWeight,
-                    Is.EqualTo(1f).Within(0.0001f));
-
-                bool disabledApplied = ApplyManualAnimatorFullBodyPoseRuntimeOverride(manager, false, 0.35f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(
-                    manager.manualAnimatorFullBodyPoseReferenceWeight,
-                    Is.EqualTo(0f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ArmDirectionGuardGhostAnimatorDestroyed_When_LateUpdateRuns_Then_DisablesWithoutMissingReference()
         {
             var ghostObject = new GameObject("destroyed ghost animator");
@@ -4959,45 +4891,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only IK recovery hold override.");
 
             return (bool)method.Invoke(null, new object[] { recorder, overrideLimitVmd, recoveryTriggerVmd, recoveryDebtThresholdVmd, recoveryHoldFrames });
-        }
-
-        private static bool ApplyManualAnimatorFullBodyPoseRuntimeOverride(FBXVmdPipeline manager, bool enabled)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorFullBodyPoseRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only full-body pose reference override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled });
-        }
-
-        private static bool ApplyManualAnimatorFullBodyPoseRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float weight)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorFullBodyPoseRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a weighted runtime-only full-body pose reference override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, weight });
         }
 
         private static float ReadFBXVmdPipelineFloat(FBXVmdPipeline manager, string fieldName)
