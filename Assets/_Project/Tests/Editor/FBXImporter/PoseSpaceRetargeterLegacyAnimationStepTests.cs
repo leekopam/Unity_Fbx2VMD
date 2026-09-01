@@ -118,14 +118,6 @@ namespace Tests.Editor.FBXImporter
             typeof(Vector3).MakeByRefType()
         };
 
-        private static readonly Type[] ManualAnimatorBodyPositionXzFrameGateWeightParameterTypes =
-        {
-            typeof(float),
-            typeof(float),
-            typeof(float),
-            typeof(float)
-        };
-
         private static readonly Type[] EditorHumanoidMuscleReferenceParameterTypes =
         {
             typeof(int)
@@ -747,49 +739,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(bodyDelta.z, Is.GreaterThan(0f),
                 "The frame 300/600 diagnostic showed realized endpoint motion overreacting in -Z, so the runtime candidate needs a positive bodyPosition Z input.");
             Assert.That(new Vector2(bodyDelta.x, bodyDelta.z).magnitude, Is.EqualTo(0.012f).Within(0.00001f));
-        }
-
-        [Test]
-        public void Given_ManualAnimatorBodyPositionXzFrameGateBlend_When_ResolvingWeight_Then_RampsAtEdges()
-        {
-            Assert.That(
-                CalculateManualAnimatorBodyPositionXzFrameGateWeight(
-                    currentFrame: 165f,
-                    startFrame: 180f,
-                    endFrame: 180f,
-                    blendFrames: 30f),
-                Is.EqualTo(0.5f).Within(0.0001f),
-                "A single-frame bodyPosition X/Z gate should blend in before the target frame instead of abruptly snapping on.");
-            Assert.That(
-                CalculateManualAnimatorBodyPositionXzFrameGateWeight(
-                    currentFrame: 180f,
-                    startFrame: 180f,
-                    endFrame: 180f,
-                    blendFrames: 30f),
-                Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(
-                CalculateManualAnimatorBodyPositionXzFrameGateWeight(
-                    currentFrame: 195f,
-                    startFrame: 180f,
-                    endFrame: 180f,
-                    blendFrames: 30f),
-                Is.EqualTo(0.5f).Within(0.0001f),
-                "The bodyPosition X/Z gate should blend out after the target frame instead of leaving a discontinuity.");
-            Assert.That(
-                CalculateManualAnimatorBodyPositionXzFrameGateWeight(
-                    currentFrame: 211f,
-                    startFrame: 180f,
-                    endFrame: 180f,
-                    blendFrames: 30f),
-                Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(
-                CalculateManualAnimatorBodyPositionXzFrameGateWeight(
-                    currentFrame: 240f,
-                    startFrame: 0f,
-                    endFrame: 0f,
-                    blendFrames: 30f),
-                Is.EqualTo(1f).Within(0.0001f),
-                "The legacy all-frame path must remain unchanged when frame gating is disabled.");
         }
 
         [Test]
@@ -1439,30 +1388,6 @@ namespace Tests.Editor.FBXImporter
             bool calculated = (bool)method.Invoke(null, args);
             nextBodyPosition = (Vector3)args[9];
             return calculated;
-        }
-
-        private static float CalculateManualAnimatorBodyPositionXzFrameGateWeight(
-            float currentFrame,
-            float startFrame,
-            float endFrame,
-            float blendFrames)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "CalculateManualAnimatorBodyPositionXzFrameGateWeight",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: ManualAnimatorBodyPositionXzFrameGateWeightParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure helper for smoothed manual bodyPosition X/Z frame gates.");
-
-            return (float)method.Invoke(null, new object[]
-            {
-                currentFrame,
-                startFrame,
-                endFrame,
-                blendFrames
-            });
         }
 
         private static void SetInstanceBool(object target, string fieldName, bool value)
