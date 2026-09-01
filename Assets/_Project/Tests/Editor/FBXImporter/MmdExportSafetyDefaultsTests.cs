@@ -869,41 +869,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline()
-        {
-            var managerObject = new GameObject("final ik runtime override manager");
-            var targetObject = new GameObject("final ik runtime override target");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.targetCharacter = targetObject;
-                var bipedIk = targetObject.AddComponent<BipedIK>();
-                var grounder = targetObject.AddComponent<GrounderBipedIK>();
-                grounder.ik = bipedIk;
-                grounder.weight = 0.15f;
-                bipedIk.enabled = true;
-                bipedIk.fixTransforms = true;
-                grounder.enabled = true;
-
-                bool enabledApplied = ApplyFinalIkFootGroundingRuntimeOverride(manager, true);
-                bool disabledApplied = ApplyFinalIkFootGroundingRuntimeOverride(manager, false);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.enableFinalIkFootGroundingExperiment, Is.False);
-                Assert.That(grounder.enabled, Is.False, "Explicit OFF runtime comparison must disable prior GrounderBipedIK state.");
-                Assert.That(grounder.weight, Is.EqualTo(0f).Within(0.0001f), "Explicit OFF runtime comparison must zero GrounderBipedIK influence.");
-                Assert.That(bipedIk.enabled, Is.False, "Explicit OFF runtime comparison must disable prior BipedIK state.");
-                Assert.That(bipedIk.fixTransforms, Is.False, "Explicit OFF runtime comparison must make BipedIK fixTransforms inert.");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-                UnityEngine.Object.DestroyImmediate(targetObject);
-            }
-        }
-
-        [Test]
         public void Given_ManualAnimatorFullBodyPoseRuntimeOverride_When_Toggled_Then_OnlyChangesFullBodyReferenceSwitch()
         {
             var managerObject = new GameObject("manual animator full body pose runtime override manager");
@@ -5055,24 +5020,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only IK recovery hold override.");
 
             return (bool)method.Invoke(null, new object[] { recorder, overrideLimitVmd, recoveryTriggerVmd, recoveryDebtThresholdVmd, recoveryHoldFrames });
-        }
-
-        private static bool ApplyFinalIkFootGroundingRuntimeOverride(FBXVmdPipeline manager, bool enabled)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyFinalIkFootGroundingRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only Final IK foot grounding override for OFF/ON visual comparisons.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled });
         }
 
         private static bool ApplyManualAnimatorFullBodyPoseRuntimeOverride(FBXVmdPipeline manager, bool enabled)

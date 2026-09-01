@@ -53,9 +53,9 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers),
                 () => new MmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline),
-                () => new MmdExportSafetyDefaultsTests().Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline());
+            RunTest(results, typeof(FinalIkFootGroundingRuntimeOverrideApplierTests).FullName + "." +
+                nameof(FinalIkFootGroundingRuntimeOverrideApplierTests.Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline),
+                () => new FinalIkFootGroundingRuntimeOverrideApplierTests().Given_FinalIkFootGroundingRuntimeOverride_When_Disabled_Then_CleansExistingFootSolversForBaseline());
             RunTest(results, typeof(ManualPoseReferenceRuntimeOverrideApplierTests).FullName + "." +
                 nameof(ManualPoseReferenceRuntimeOverrideApplierTests.Given_GenericCharacterPipeline_When_TogglingFootLocalRotation_Then_ChangesOnlyFootRotationSettings),
                 () => new ManualPoseReferenceRuntimeOverrideApplierTests().Given_GenericCharacterPipeline_When_TogglingFootLocalRotation_Then_ChangesOnlyFootRotationSettings());
