@@ -42,6 +42,38 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_GenericCharacterPipeline_When_TogglingThumbLocalRotation_Then_ChangesOnlyThumbSwitch()
+        {
+            var pipelineObject = new GameObject("generic thumb local rotation reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.useManualAnimatorThumbLocalRotationReference = false;
+                pipeline.useManualAnimatorHandLocalRotationReference = false;
+                pipeline.useManualAnimatorHandPalmFrameReference = false;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.ShouldUseManualAnimatorFingerPoseReference = false;
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyThumbLocalRotation", pipeline, true);
+
+                Assert.That(pipeline.useManualAnimatorThumbLocalRotationReference, Is.True);
+                Assert.That(pipeline.useManualAnimatorHandLocalRotationReference, Is.False);
+                Assert.That(pipeline.useManualAnimatorHandPalmFrameReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFingerPoseReference, Is.False);
+
+                InvokeApply(applierType, "ApplyThumbLocalRotation", pipeline, false);
+
+                Assert.That(pipeline.useManualAnimatorThumbLocalRotationReference, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_GenericCharacterPipeline_When_ApplyingLowerBodyReferences_Then_ClampsSettings()
         {
             var pipelineObject = new GameObject("generic lower body reference pipeline");
