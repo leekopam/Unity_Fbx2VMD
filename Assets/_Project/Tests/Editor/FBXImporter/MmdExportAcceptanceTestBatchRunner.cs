@@ -74,27 +74,27 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated),
                 () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments),
-                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorLegChainSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRequestedSegments),
-                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorLegChainSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRequestedSegments());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRightSide),
-                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRightSide());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootAxisAwareRuntimeOverride_When_Applied_Then_ScalesOnlyRightAxisXzContribution),
-                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootAxisAwareRuntimeOverride_When_Applied_Then_ScalesOnlyRightAxisXzContribution());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootSoftBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightCorrectionWeight),
-                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootSoftBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightCorrectionWeight());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootFrameGatedRuntimeOverride_When_Applied_Then_GatesOnlyRightCapWindow),
-                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootFrameGatedRuntimeOverride_When_Applied_Then_GatesOnlyRightCapWindow());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation),
-                () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation());
+            RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments),
+                () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments());
+            RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_ManualAnimatorLegChainSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRequestedSegments),
+                () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_ManualAnimatorLegChainSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRequestedSegments());
+            RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_RightLowerLegToFootSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRightSide),
+                () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_RightLowerLegToFootSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyRightSide());
+            RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_RightLowerLegToFootAxisAwareRuntimeOverride_When_Applied_Then_ScalesOnlyRightAxisXzContribution),
+                () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_RightLowerLegToFootAxisAwareRuntimeOverride_When_Applied_Then_ScalesOnlyRightAxisXzContribution());
+            RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_RightLowerLegToFootSoftBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightCorrectionWeight),
+                () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_RightLowerLegToFootSoftBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightCorrectionWeight());
+            RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_RightLowerLegToFootFrameGatedRuntimeOverride_When_Applied_Then_GatesOnlyRightCapWindow),
+                () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_RightLowerLegToFootFrameGatedRuntimeOverride_When_Applied_Then_GatesOnlyRightCapWindow());
+            RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation),
+                () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation());
             RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
                 nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PostSetEndpointSettings_When_Applied_Then_ClampsAndScopesValues),
                 () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PostSetEndpointSettings_When_Applied_Then_ClampsAndScopesValues());
