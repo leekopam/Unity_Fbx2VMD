@@ -163,16 +163,46 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_GenericCharacterPipeline_When_ApplyingLowerBodyReferences_Then_ClampsSettings()
+        public void Given_GenericCharacterPipeline_When_ApplyingBodyPositionXz_Then_ClampsAndScopesSettings()
         {
-            var pipelineObject = new GameObject("generic lower body reference pipeline");
+            var pipelineObject = new GameObject("generic body position XZ reference pipeline");
             try
             {
                 var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.usePreSetHumanPoseRightEndpointPositionReference = false;
+                pipeline.ShouldUseRetargetBodyPositionXZRootMotion = false;
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = true;
+                pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference = false;
                 Type applierType = FindApplierType();
 
-                InvokeApply(applierType, "ApplyFootHipsAlignedResidualYaw", pipeline, true, 2f, -1f);
-                InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, true, 2f, -1f);
+                InvokeApply(
+                    applierType,
+                    "ApplyBodyPositionXz",
+                    pipeline,
+                    true,
+                    0.45f,
+                    0.025f,
+                    300f,
+                    600f,
+                    30f,
+                    0.25f,
+                    0.75f);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyPositionXzReference, Is.True);
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceWeight, Is.EqualTo(0.45f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceMaxOffset, Is.EqualTo(0.025f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateStart, Is.EqualTo(300f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateEnd, Is.EqualTo(600f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames, Is.EqualTo(30f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisXScale, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisZScale, Is.EqualTo(0.75f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
+                Assert.That(pipeline.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False);
+
                 InvokeApply(
                     applierType,
                     "ApplyBodyPositionXz",
@@ -186,16 +216,65 @@ namespace Tests.Editor.FBXImporter
                     2f,
                     -1f);
 
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceWeight, Is.EqualTo(1f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceMaxOffset, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateStart, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateEnd, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisXScale, Is.EqualTo(1f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisZScale, Is.EqualTo(0f));
+
+                InvokeApply(
+                    applierType,
+                    "ApplyBodyPositionXz",
+                    pipeline,
+                    false,
+                    0.45f,
+                    0.025f,
+                    300f,
+                    600f,
+                    30f,
+                    0.25f,
+                    0.75f);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyPositionXzReference, Is.False);
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceWeight, Is.EqualTo(0f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceMaxOffset, Is.EqualTo(0.025f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateStart, Is.EqualTo(300f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateEnd, Is.EqualTo(600f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames, Is.EqualTo(30f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisXScale, Is.EqualTo(0.25f).Within(0.0001f));
+                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisZScale, Is.EqualTo(0.75f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
+                Assert.That(pipeline.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_GenericCharacterPipeline_When_ApplyingLowerBodyReferences_Then_ClampsSettings()
+        {
+            var pipelineObject = new GameObject("generic lower body reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyFootHipsAlignedResidualYaw", pipeline, true, 2f, -1f);
+                InvokeApply(applierType, "ApplyHipsLocalPosition", pipeline, true, 2f, -1f);
+
                 Assert.That(pipeline.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
                 Assert.That(pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f));
                 Assert.That(pipeline.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(0f));
                 Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
                 Assert.That(pipeline.manualAnimatorHipsLocalPositionWeight, Is.EqualTo(1f));
                 Assert.That(pipeline.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0f));
-                Assert.That(pipeline.ShouldUseManualAnimatorBodyPositionXzReference, Is.True);
-                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceWeight, Is.EqualTo(1f));
-                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisXScale, Is.EqualTo(1f));
-                Assert.That(pipeline.manualAnimatorBodyPositionXzReferenceAxisZScale, Is.EqualTo(0f));
             }
             finally
             {

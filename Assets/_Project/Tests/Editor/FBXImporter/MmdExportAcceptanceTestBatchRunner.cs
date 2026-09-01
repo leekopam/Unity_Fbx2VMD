@@ -122,9 +122,9 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(RetargetingRuntimeOverrideApplierTests).FullName + "." +
                 nameof(RetargetingRuntimeOverrideApplierTests.Given_TargetHumanoidBonePositionLock_When_Toggled_Then_ChangesOnlySkeletonBasisLock),
                 () => new RetargetingRuntimeOverrideApplierTests().Given_TargetHumanoidBonePositionLock_When_Toggled_Then_ChangesOnlySkeletonBasisLock());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorBodyPositionXzRuntimeOverride_When_Toggled_Then_OnlyChangesSolverBodyPositionBasis),
-                () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorBodyPositionXzRuntimeOverride_When_Toggled_Then_OnlyChangesSolverBodyPositionBasis());
+            RunTest(results, typeof(ManualPoseReferenceRuntimeOverrideApplierTests).FullName + "." +
+                nameof(ManualPoseReferenceRuntimeOverrideApplierTests.Given_GenericCharacterPipeline_When_ApplyingBodyPositionXz_Then_ClampsAndScopesSettings),
+                () => new ManualPoseReferenceRuntimeOverrideApplierTests().Given_GenericCharacterPipeline_When_ApplyingBodyPositionXz_Then_ClampsAndScopesSettings());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow),
                 () => new MmdExportSafetyDefaultsTests().Given_RuntimeMmdIkDeltaRecoveryDebtOverride_When_ApplyingToRecorder_Then_SetsDebtRecoveryWindow());
