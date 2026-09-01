@@ -59,7 +59,7 @@ namespace Tests.Editor.FBXImporter
                 "_Project",
                 "Scripts",
                 "FBXImporter",
-                "VisualComparisonFrameRoleDiagnosticsBuilder.cs");
+                "YybVisualComparisonFrameRoleDiagnosticsBuilder.cs");
             string source = File.ReadAllText(builderPath);
 
             Assert.That(Count(source, "ReferenceVideoFrameRoleDiagnosticsAttacher.Attach("), Is.EqualTo(1));
