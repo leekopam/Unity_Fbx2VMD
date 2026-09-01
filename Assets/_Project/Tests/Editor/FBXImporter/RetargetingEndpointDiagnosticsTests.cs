@@ -11,6 +11,16 @@ namespace Tests.Editor.FBXImporter
         private const BindingFlags StaticNonPublic = BindingFlags.Static | BindingFlags.NonPublic;
         private const BindingFlags InstanceNonPublic = BindingFlags.Instance | BindingFlags.NonPublic;
 
+        private static readonly Type[] StagePositionJumpParameterTypes =
+        {
+            typeof(string[]),
+            typeof(Vector3[]),
+            typeof(float),
+            typeof(string).MakeByRefType(),
+            typeof(Vector3).MakeByRefType(),
+            typeof(float).MakeByRefType()
+        };
+
         [Test]
         public void Given_FootAndToesReference_When_CalculatingPosition_Then_RecordsEachCorrectionStage()
         {
@@ -223,6 +233,121 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta()
+        {
+            bool attributed = TryFindFirstStagePositionJump(
+                new[] { "pre_set", "after_set_human_pose", "after_manual_reference", "after_root_restore" },
+                new[]
+                {
+                    new Vector3(0f, 0f, 0f),
+                    new Vector3(0.08f, 0f, -0.02f),
+                    new Vector3(0.20f, 0f, -0.02f),
+                    new Vector3(0.20f, 0f, -0.10f)
+                },
+                threshold: 0.05f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(attributed, Is.True);
+            Assert.That(stage, Is.EqualTo("after_set_human_pose"));
+            Assert.That(delta.x, Is.EqualTo(0.08f).Within(0.0001f));
+            Assert.That(delta.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(delta.z, Is.EqualTo(-0.02f).Within(0.0001f));
+            Assert.That(magnitude, Is.EqualTo(new Vector3(0.08f, 0f, -0.02f).magnitude).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution()
+        {
+            bool attributed = TryFindFirstStagePositionJump(
+                new[] { "pre_set", "after_set_human_pose", "after_manual_reference" },
+                new[]
+                {
+                    new Vector3(0f, 0f, 0f),
+                    new Vector3(0.01f, 0f, 0f),
+                    new Vector3(0.02f, 0f, 0f)
+                },
+                threshold: 0.05f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(attributed, Is.False);
+            AssertNoStageJump(stage, delta, magnitude);
+        }
+
+        [Test]
+        public void Given_StagePositionJumpAtThreshold_When_FindingFirstJump_Then_ReturnsNoJump()
+        {
+            bool found = TryFindFirstStagePositionJump(
+                new[] { "start", "at_threshold" },
+                new[] { Vector3.zero, new Vector3(0.05f, 0f, 0f) },
+                threshold: 0.05f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(found, Is.False);
+            AssertNoStageJump(stage, delta, magnitude);
+        }
+
+        [Test]
+        public void Given_NonFiniteStagePositionBeforeValidJump_When_FindingFirstJump_Then_SkipsInvalidPairs()
+        {
+            bool found = TryFindFirstStagePositionJump(
+                new[] { "start", "invalid", "recovered", "jump" },
+                new[]
+                {
+                    Vector3.zero,
+                    new Vector3(float.NaN, 0f, 0f),
+                    new Vector3(0.01f, 0f, 0f),
+                    new Vector3(0.08f, 0f, 0f)
+                },
+                threshold: 0.05f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(found, Is.True);
+            Assert.That(stage, Is.EqualTo("jump"));
+            AssertVector3(delta, new Vector3(0.07f, 0f, 0f));
+            Assert.That(magnitude, Is.EqualTo(0.07f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_NegativeStageJumpThreshold_When_FindingFirstJump_Then_ClampsThresholdToZero()
+        {
+            bool found = TryFindFirstStagePositionJump(
+                new[] { "start", "jump" },
+                new[] { Vector3.zero, new Vector3(0.001f, 0f, 0f) },
+                threshold: -1f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(found, Is.True);
+            Assert.That(stage, Is.EqualTo("jump"));
+            AssertVector3(delta, new Vector3(0.001f, 0f, 0f));
+            Assert.That(magnitude, Is.EqualTo(0.001f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_MismatchedStagePositionInputs_When_FindingFirstJump_Then_ReturnsNoJump()
+        {
+            bool found = TryFindFirstStagePositionJump(
+                new[] { "start", "jump" },
+                new[] { Vector3.zero },
+                threshold: 0f,
+                out string stage,
+                out Vector3 delta,
+                out float magnitude);
+
+            Assert.That(found, Is.False);
+            AssertNoStageJump(stage, delta, magnitude);
+        }
+
+        [Test]
         public void Given_EndpointDiagnosticCalculation_When_CheckingOwnership_Then_UsesDedicatedType()
         {
             Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
@@ -236,6 +361,9 @@ namespace Tests.Editor.FBXImporter
                 Is.Not.Empty);
             Assert.That(
                 diagnosticsType.GetMember("ShouldKeepHipsLocalPositionReferenceByTargetGap", StaticNonPublic),
+                Is.Not.Empty);
+            Assert.That(
+                diagnosticsType.GetMember("TryFindFirstStagePositionJump", StaticNonPublic),
                 Is.Not.Empty);
             Assert.That(snapshotType.GetField("Correction", InstanceNonPublic), Is.Not.Null);
 
@@ -264,6 +392,55 @@ namespace Tests.Editor.FBXImporter
                     "TryCalculateXzDistance",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryFindFirstRetargetEndpointStageJump",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
+        }
+
+        private static bool TryFindFirstStagePositionJump(
+            string[] stageNames,
+            Vector3[] positions,
+            float threshold,
+            out string stage,
+            out Vector3 delta,
+            out float magnitude)
+        {
+            Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
+            MethodInfo method = diagnosticsType.GetMethod(
+                "TryFindFirstStagePositionJump",
+                StaticNonPublic,
+                binder: null,
+                types: StagePositionJumpParameterTypes,
+                modifiers: null);
+            Assert.That(method, Is.Not.Null,
+                "RetargetingEndpointDiagnostics should own pure stage-position jump search.");
+
+            object[] args =
+            {
+                stageNames,
+                positions,
+                threshold,
+                "",
+                Vector3.zero,
+                0f
+            };
+
+            bool found = (bool)method.Invoke(null, args);
+            stage = (string)args[3];
+            delta = (Vector3)args[4];
+            magnitude = (float)args[5];
+            return found;
+        }
+
+        private static void AssertNoStageJump(string stage, Vector3 delta, float magnitude)
+        {
+            Assert.That(stage, Is.EqualTo(""));
+            Assert.That(delta.x, Is.NaN);
+            Assert.That(delta.y, Is.NaN);
+            Assert.That(delta.z, Is.NaN);
+            Assert.That(magnitude, Is.NaN);
         }
 
         private static bool ShouldKeepHipsLocalPositionReferenceByTargetGap(

@@ -103,10 +103,20 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
             RunTest(results, nameof(tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
                 tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
-            RunTest(results, nameof(tests.Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta),
-                tests.Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta);
-            RunTest(results, nameof(tests.Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution),
-                tests.Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution);
+            RunTest(results, nameof(endpointTests.Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta),
+                endpointTests.Given_RetargetEndpointStagesWithFirstJump_When_AttributingStage_Then_ReportsExactlyFirstStageDelta);
+            RunTest(results, nameof(endpointTests.Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution),
+                endpointTests.Given_RetargetEndpointStagesWithinTolerance_When_AttributingStage_Then_ReturnsNoAttribution);
+            RunTest(results, nameof(endpointTests.Given_StagePositionJumpAtThreshold_When_FindingFirstJump_Then_ReturnsNoJump),
+                endpointTests.Given_StagePositionJumpAtThreshold_When_FindingFirstJump_Then_ReturnsNoJump);
+            RunTest(results, nameof(endpointTests.Given_NonFiniteStagePositionBeforeValidJump_When_FindingFirstJump_Then_SkipsInvalidPairs),
+                endpointTests.Given_NonFiniteStagePositionBeforeValidJump_When_FindingFirstJump_Then_SkipsInvalidPairs);
+            RunTest(results, nameof(endpointTests.Given_NegativeStageJumpThreshold_When_FindingFirstJump_Then_ClampsThresholdToZero),
+                endpointTests.Given_NegativeStageJumpThreshold_When_FindingFirstJump_Then_ClampsThresholdToZero);
+            RunTest(results, nameof(endpointTests.Given_MismatchedStagePositionInputs_When_FindingFirstJump_Then_ReturnsNoJump),
+                endpointTests.Given_MismatchedStagePositionInputs_When_FindingFirstJump_Then_ReturnsNoJump);
+            RunTest(results, nameof(endpointTests.Given_EndpointDiagnosticCalculation_When_CheckingOwnership_Then_UsesDedicatedType),
+                endpointTests.Given_EndpointDiagnosticCalculation_When_CheckingOwnership_Then_UsesDedicatedType);
             RunTest(results, nameof(tests.Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
                 tests.Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
             RunTest(results, nameof(tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist),
