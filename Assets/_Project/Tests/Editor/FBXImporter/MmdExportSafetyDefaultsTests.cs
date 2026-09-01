@@ -1122,40 +1122,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_TargetHumanoidBonePositionLockRuntimeOverride_When_Toggled_Then_OnlyChangesSkeletonBasisLock()
-        {
-            var managerObject = new GameObject("target humanoid bone position lock runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldLockTargetHumanoidBonePositions = true;
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.ShouldUseManualAnimatorHipsLocalPositionReference = false;
-                manager.useManualAnimatorBipedIkFootPositionReference = false;
-
-                bool unlockedApplied = ApplyTargetHumanoidBonePositionLockRuntimeOverride(manager, false);
-
-                Assert.That(unlockedApplied, Is.True);
-                Assert.That(manager.ShouldLockTargetHumanoidBonePositions, Is.False);
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
-                Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False);
-
-                bool lockedApplied = ApplyTargetHumanoidBonePositionLockRuntimeOverride(manager, true);
-
-                Assert.That(lockedApplied, Is.True);
-                Assert.That(manager.ShouldLockTargetHumanoidBonePositions, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False);
-                Assert.That(manager.useManualAnimatorBipedIkFootPositionReference, Is.False);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_RetargetBodyPositionXzRootMotionRuntimeOverride_When_Toggled_Then_OnlyChangesSolverRootBasis()
         {
             var managerObject = new GameObject("retarget body position xz root motion runtime override manager");
@@ -5424,24 +5390,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(field, Is.Not.Null, $"FBXVmdPipeline must expose {fieldName}.");
             return (float)field.GetValue(manager);
-        }
-
-        private static bool ApplyTargetHumanoidBonePositionLockRuntimeOverride(FBXVmdPipeline manager, bool enabled)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyTargetHumanoidBonePositionLockRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support runtime-only target skeleton basis lock probes.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled });
         }
 
         private static bool ApplyRetargetBodyPositionXzRootMotionRuntimeOverride(FBXVmdPipeline manager, bool enabled)

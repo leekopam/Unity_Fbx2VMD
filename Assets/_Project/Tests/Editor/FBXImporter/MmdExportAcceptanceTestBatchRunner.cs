@@ -119,9 +119,9 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
                 nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PreSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps),
                 () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PreSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_TargetHumanoidBonePositionLockRuntimeOverride_When_Toggled_Then_OnlyChangesSkeletonBasisLock),
-                () => new MmdExportSafetyDefaultsTests().Given_TargetHumanoidBonePositionLockRuntimeOverride_When_Toggled_Then_OnlyChangesSkeletonBasisLock());
+            RunTest(results, typeof(RetargetingRuntimeOverrideApplierTests).FullName + "." +
+                nameof(RetargetingRuntimeOverrideApplierTests.Given_TargetHumanoidBonePositionLock_When_Toggled_Then_ChangesOnlySkeletonBasisLock),
+                () => new RetargetingRuntimeOverrideApplierTests().Given_TargetHumanoidBonePositionLock_When_Toggled_Then_ChangesOnlySkeletonBasisLock());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_ManualAnimatorBodyPositionXzRuntimeOverride_When_Toggled_Then_OnlyChangesSolverBodyPositionBasis),
                 () => new MmdExportSafetyDefaultsTests().Given_ManualAnimatorBodyPositionXzRuntimeOverride_When_Toggled_Then_OnlyChangesSolverBodyPositionBasis());
