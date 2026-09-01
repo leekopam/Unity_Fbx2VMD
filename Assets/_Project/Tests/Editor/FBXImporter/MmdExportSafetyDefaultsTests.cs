@@ -1063,40 +1063,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorHandLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesHandLocalSwitch()
-        {
-            var managerObject = new GameObject("manual animator hand local rotation runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.useManualAnimatorHandLocalRotationReference = false;
-                manager.useManualAnimatorThumbLocalRotationReference = false;
-                manager.useManualAnimatorHandPalmFrameReference = false;
-                manager.manualAnimatorHandPalmFrameWeight = 0f;
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.ShouldUseManualAnimatorFingerPoseReference = false;
-
-                bool enabledApplied = ApplyManualAnimatorHandLocalRotationRuntimeOverride(manager, true);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorHandLocalRotationReference, Is.True);
-                Assert.That(manager.useManualAnimatorThumbLocalRotationReference, Is.False, "Hand local candidate must not implicitly enable thumb local rotation reference.");
-                Assert.That(manager.useManualAnimatorHandPalmFrameReference, Is.False, "Hand local candidate must not implicitly enable palm-frame reference.");
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Hand local candidate must not replace full-body muscles.");
-                Assert.That(manager.ShouldUseManualAnimatorFingerPoseReference, Is.False, "Hand local candidate must not enable finger curl copy.");
-
-                bool disabledApplied = ApplyManualAnimatorHandLocalRotationRuntimeOverride(manager, false);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.useManualAnimatorHandLocalRotationReference, Is.False);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ManualAnimatorThumbLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesThumbLocalSwitch()
         {
             var managerObject = new GameObject("manual animator thumb local rotation runtime override manager");
@@ -5980,24 +5946,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(field, Is.Not.Null, $"FBXVmdPipeline must expose {fieldName}.");
             return (float)field.GetValue(manager);
-        }
-
-        private static bool ApplyManualAnimatorHandLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorHandLocalRotationRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a runtime-only hand local rotation reference override for Ref MP4 visual comparison candidates.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled });
         }
 
         private static bool ApplyManualAnimatorThumbLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)

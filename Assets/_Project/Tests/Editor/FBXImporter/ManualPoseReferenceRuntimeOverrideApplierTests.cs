@@ -9,6 +9,39 @@ namespace Tests.Editor.FBXImporter
     public class ManualPoseReferenceRuntimeOverrideApplierTests
     {
         [Test]
+        public void Given_GenericCharacterPipeline_When_TogglingHandLocalRotation_Then_ChangesOnlyHandSwitch()
+        {
+            var pipelineObject = new GameObject("generic hand local rotation reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.useManualAnimatorHandLocalRotationReference = false;
+                pipeline.useManualAnimatorThumbLocalRotationReference = false;
+                pipeline.useManualAnimatorHandPalmFrameReference = false;
+                pipeline.manualAnimatorHandPalmFrameWeight = 0f;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = false;
+                pipeline.ShouldUseManualAnimatorFingerPoseReference = false;
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyHandLocalRotation", pipeline, true);
+
+                Assert.That(pipeline.useManualAnimatorHandLocalRotationReference, Is.True);
+                Assert.That(pipeline.useManualAnimatorThumbLocalRotationReference, Is.False);
+                Assert.That(pipeline.useManualAnimatorHandPalmFrameReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
+                Assert.That(pipeline.ShouldUseManualAnimatorFingerPoseReference, Is.False);
+
+                InvokeApply(applierType, "ApplyHandLocalRotation", pipeline, false);
+
+                Assert.That(pipeline.useManualAnimatorHandLocalRotationReference, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_GenericCharacterPipeline_When_ApplyingLowerBodyReferences_Then_ClampsSettings()
         {
             var pipelineObject = new GameObject("generic lower body reference pipeline");
