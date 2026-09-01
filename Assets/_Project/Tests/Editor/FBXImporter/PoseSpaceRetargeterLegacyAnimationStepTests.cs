@@ -44,15 +44,6 @@ namespace Tests.Editor.FBXImporter
             typeof(int)
         };
 
-        private static readonly Type[] BoundedSetHumanPoseRightLegTwistParameterTypes =
-        {
-            typeof(float),
-            typeof(float),
-            typeof(float),
-            typeof(float),
-            typeof(float)
-        };
-
         private static readonly Type[] VisualPoseSpikeParameterTypes =
         {
             typeof(float),
@@ -711,40 +702,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_BoundedSetHumanPoseRightLegTwist_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit()
-        {
-            Assert.That(
-                CalculateBoundedSetHumanPoseRightLegTwistOutput(
-                    inputValue: 0.25f,
-                    outputValue: 0.33f,
-                    weight: 0f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.33f),
-                Is.EqualTo(0.33f).Within(0.0001f),
-                "Weight zero must keep the current SetHumanPose output unchanged.");
-
-            Assert.That(
-                CalculateBoundedSetHumanPoseRightLegTwistOutput(
-                    inputValue: 0.25f,
-                    outputValue: 0.33f,
-                    weight: 1f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.33f),
-                Is.EqualTo(0.31f).Within(0.0001f),
-                "The correction must be capped so the diagnostic cannot hard-snap a leg twist muscle.");
-
-            Assert.That(
-                CalculateBoundedSetHumanPoseRightLegTwistOutput(
-                    inputValue: 0.25f,
-                    outputValue: 0.33f,
-                    weight: 0.5f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.33f),
-                Is.EqualTo(0.32f).Within(0.0001f),
-                "Partial weight should apply a bounded fraction of the output-to-input correction.");
-        }
-
-        [Test]
         public void Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed()
         {
             bool advanced = TryCalculateManualLegacyAnimationTime(
@@ -1157,32 +1114,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter must expose the full-body pose mask predicate for focused diagnostics.");
 
             return (bool)method.Invoke(retargeter, new object[] { muscleIndex });
-        }
-
-        private static float CalculateBoundedSetHumanPoseRightLegTwistOutput(
-            float inputValue,
-            float outputValue,
-            float weight,
-            float maxDelta,
-            float fallbackValue)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "CalculateBoundedSetHumanPoseRightLegTwistOutput",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: BoundedSetHumanPoseRightLegTwistParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure helper for bounded right leg twist output preservation.");
-
-            return (float)method.Invoke(null, new object[]
-            {
-                inputValue,
-                outputValue,
-                weight,
-                maxDelta,
-                fallbackValue
-            });
         }
 
         private static int FindHumanMuscleIndex(string muscleName)

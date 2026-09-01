@@ -102,8 +102,12 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_RetargetEndpointStageAttributionDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
             RunTest(results, nameof(tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist),
                 tests.Given_LegTwistOnlyFullBodyPoseMask_When_CheckingReferenceMuscles_Then_AllowsOnlyLegInOutAndTwist);
-            RunTest(results, nameof(tests.Given_BoundedSetHumanPoseRightLegTwist_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit),
-                tests.Given_BoundedSetHumanPoseRightLegTwist_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit);
+            RunTest(results, nameof(manualPoseTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit),
+                manualPoseTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit);
+            RunTest(results, nameof(manualPoseTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy),
+                manualPoseTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy);
+            RunTest(results, nameof(manualPoseTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier),
+                manualPoseTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier);
             RunTest(results, nameof(tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed),
                 tests.Given_PlayModeAndStalledState_When_CalculatingManualLegacyTime_Then_AdvancesByDeltaTimeAndSpeed);
             RunTest(results, nameof(tests.Given_ZeroPlaybackSpeed_When_CalculatingManualLegacyTime_Then_UsesNormalPlaybackStep),

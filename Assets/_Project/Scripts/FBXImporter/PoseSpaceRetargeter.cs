@@ -7356,7 +7356,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float currentValue = outputPose.muscles[muscleIndex];
-            float nextValue = CalculateBoundedSetHumanPoseRightLegTwistOutput(
+            float nextValue = ManualPoseReferenceApplier.CalculateBoundedMuscleOutputReference(
                 inputPose.muscles[muscleIndex],
                 currentValue,
                 weight,
@@ -7369,27 +7369,6 @@ namespace Fbx2Vmd.FBXImporter
 
             outputPose.muscles[muscleIndex] = nextValue;
             return true;
-        }
-
-        private static float CalculateBoundedSetHumanPoseRightLegTwistOutput(
-            float inputValue,
-            float outputValue,
-            float weight,
-            float maxDelta,
-            float fallbackValue)
-        {
-            if (!IsFinite(outputValue))
-            {
-                return IsFinite(fallbackValue) ? fallbackValue : outputValue;
-            }
-
-            if (!IsFinite(inputValue))
-            {
-                return outputValue;
-            }
-
-            float clampedCorrection = Mathf.Clamp(inputValue - outputValue, -Mathf.Max(0f, maxDelta), Mathf.Max(0f, maxDelta));
-            return outputValue + clampedCorrection * Mathf.Clamp01(weight);
         }
 
         private void ApplyAnatomicalArmGuard(ref HumanPose pose)
