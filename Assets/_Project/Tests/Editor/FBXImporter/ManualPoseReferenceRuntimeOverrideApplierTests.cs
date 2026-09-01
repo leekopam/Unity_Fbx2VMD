@@ -48,6 +48,57 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_GenericCharacterPipeline_When_ApplyingBodyRotation_Then_ClampsAndScopesSettings()
+        {
+            var pipelineObject = new GameObject("generic body rotation reference pipeline");
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                pipeline.ShouldUseManualAnimatorBodyRotationReference = false;
+                pipeline.manualAnimatorBodyRotationReferenceWeight = 0f;
+                pipeline.ShouldUseManualAnimatorFullBodyPoseReference = true;
+                pipeline.ShouldUseManualAnimatorHipsLocalPositionReference = true;
+                pipeline.ShouldUseManualAnimatorFootHeightGroundingReference = true;
+                pipeline.ShouldUseManualAnimatorFootLocalRotationReference = true;
+                Type applierType = FindApplierType();
+
+                InvokeApply(applierType, "ApplyBodyRotation", pipeline, true, 1f);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+                Assert.That(pipeline.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
+
+                InvokeApply(applierType, "ApplyBodyRotation", pipeline, true, 0.35f);
+
+                Assert.That(pipeline.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0.35f).Within(0.0001f));
+
+                InvokeApply(applierType, "ApplyBodyRotation", pipeline, true, 2f);
+
+                Assert.That(pipeline.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
+
+                InvokeApply(applierType, "ApplyBodyRotation", pipeline, true, -1f);
+
+                Assert.That(pipeline.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
+
+                InvokeApply(applierType, "ApplyBodyRotation", pipeline, false, 0.35f);
+
+                Assert.That(pipeline.ShouldUseManualAnimatorBodyRotationReference, Is.False);
+                Assert.That(pipeline.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(pipeline.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorHipsLocalPositionReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootHeightGroundingReference, Is.True);
+                Assert.That(pipeline.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void Given_GenericCharacterPipeline_When_TogglingHandLocalRotation_Then_ChangesOnlyHandSwitch()
         {
             var pipelineObject = new GameObject("generic hand local rotation reference pipeline");
