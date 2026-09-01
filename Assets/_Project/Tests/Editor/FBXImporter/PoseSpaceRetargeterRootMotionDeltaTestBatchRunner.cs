@@ -21,12 +21,16 @@ namespace Tests.Editor.FBXImporter
             var results = new List<TestResultRecord>();
             var tests = new PoseSpaceRetargeterRootMotionDeltaTests();
 
+            RunTest(results, nameof(tests.Given_RootMotionGuardOwnsRootDelta_When_CheckingPoseSpaceRetargeterContract_Then_DoesNotKeepDuplicateHelpers),
+                tests.Given_RootMotionGuardOwnsRootDelta_When_CheckingPoseSpaceRetargeterContract_Then_DoesNotKeepDuplicateHelpers);
             RunTest(results, nameof(tests.Given_FiniteInputsWithoutBodyRootPolicy_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostAndEditorDelta),
                 tests.Given_FiniteInputsWithoutBodyRootPolicy_When_CalculatingRootMotionDelta_Then_CombinesScaledGhostAndEditorDelta);
             RunTest(results, nameof(tests.Given_ZeroMovementScale_When_CalculatingRootMotionDelta_Then_SuppressesGhostEditorAndBodyRootSources),
                 tests.Given_ZeroMovementScale_When_CalculatingRootMotionDelta_Then_SuppressesGhostEditorAndBodyRootSources);
             RunTest(results, nameof(tests.Given_MainRecordingMovingRootPolicy_When_CalculatingRootMotionDelta_Then_PreservesBodyRootSourceWithoutLegacyDoubleCount),
                 tests.Given_MainRecordingMovingRootPolicy_When_CalculatingRootMotionDelta_Then_PreservesBodyRootSourceWithoutLegacyDoubleCount);
+            RunTest(results, nameof(tests.Given_MainRecordingMovingRootPolicyAndMovementScale_When_CalculatingRootMotionDelta_Then_ScalesBodyRootSourceOnly),
+                tests.Given_MainRecordingMovingRootPolicyAndMovementScale_When_CalculatingRootMotionDelta_Then_ScalesBodyRootSourceOnly);
             RunTest(results, nameof(tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN),
                 tests.Given_NonFiniteInput_When_CalculatingRootMotionDelta_Then_ReturnsZeroAndReportsNaN);
             RunTest(results, nameof(tests.Given_DeltaExceedsLimitAndClampEnabled_When_CalculatingRootMotionDelta_Then_LimitsDeltaAndReportsSpike),
@@ -37,6 +41,14 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_DeltaExceedsLimitAndClampDisabled_When_CalculatingRootMotionDelta_Then_KeepsDelta);
             RunTest(results, nameof(tests.Given_ZeroMovementScaleMultiplier_When_Normalizing_Then_AllowsStationaryRootMotion),
                 tests.Given_ZeroMovementScaleMultiplier_When_Normalizing_Then_AllowsStationaryRootMotion);
+            RunTest(results, nameof(tests.Given_FirstEditorDelta_When_CalculatingReferenceDelta_Then_AppliesWeightAndStartsSmoothing),
+                tests.Given_FirstEditorDelta_When_CalculatingReferenceDelta_Then_AppliesWeightAndStartsSmoothing);
+            RunTest(results, nameof(tests.Given_PreviousSmoothedDelta_When_CalculatingReferenceDelta_Then_BlendsTowardWeightedDelta),
+                tests.Given_PreviousSmoothedDelta_When_CalculatingReferenceDelta_Then_BlendsTowardWeightedDelta);
+            RunTest(results, nameof(tests.Given_GhostAlreadyMovedInXZ_When_CalculatingReferenceDelta_Then_SkipsAndKeepsSmoothingState),
+                tests.Given_GhostAlreadyMovedInXZ_When_CalculatingReferenceDelta_Then_SkipsAndKeepsSmoothingState);
+            RunTest(results, nameof(tests.Given_NonFiniteEditorDelta_When_CalculatingReferenceDelta_Then_SkipsAndKeepsSmoothingState),
+                tests.Given_NonFiniteEditorDelta_When_CalculatingReferenceDelta_Then_SkipsAndKeepsSmoothingState);
             RunTest(results, nameof(tests.Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY),
                 tests.Given_ManualBodyReferenceAvailable_When_SelectingBodyRootMotionSource_Then_PreservesFbxXZAndKeepsPoseY);
             RunTest(results, nameof(tests.Given_ManualBodyReferenceUnavailable_When_SelectingBodyRootMotionSource_Then_KeepsPoseBodyPosition),

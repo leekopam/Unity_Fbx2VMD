@@ -6335,7 +6335,7 @@ namespace Fbx2Vmd.FBXImporter
 
             Vector3 delta = current - _previousEditorRootTranslation;
             _previousEditorRootTranslation = current;
-            Vector3 editorRootDelta = CalculateEditorRootTranslationReferenceDelta(
+            Vector3 editorRootDelta = RootMotionGuard.CalculateEditorRootTranslationReferenceDelta(
                 delta,
                 ghostDelta,
                 editorHumanoidRootTranslationWeight,
@@ -6361,52 +6361,6 @@ namespace Fbx2Vmd.FBXImporter
 #else
             return Vector3.zero;
 #endif
-        }
-
-        private static Vector3 CalculateEditorRootTranslationReferenceDelta(
-            Vector3 rawEditorDelta,
-            Vector3 ghostDelta,
-            float editorRootTranslationWeight,
-            float editorRootTranslationCurrentWeight,
-            bool hasSmoothedEditorRootTranslationDelta,
-            Vector3 previousSmoothedEditorRootTranslationDelta,
-            out Vector3 nextSmoothedEditorRootTranslationDelta,
-            out bool nextHasSmoothedEditorRootTranslationDelta,
-            out bool skippedByGhostDelta,
-            out bool skippedByNonFinite)
-        {
-            nextSmoothedEditorRootTranslationDelta = previousSmoothedEditorRootTranslationDelta;
-            nextHasSmoothedEditorRootTranslationDelta = hasSmoothedEditorRootTranslationDelta;
-            skippedByGhostDelta = false;
-            skippedByNonFinite = false;
-
-            if (!IsFinite(rawEditorDelta))
-            {
-                skippedByNonFinite = true;
-                return Vector3.zero;
-            }
-
-            if (FlattenXZ(ghostDelta).sqrMagnitude > 0.00000025f)
-            {
-                skippedByGhostDelta = true;
-                return Vector3.zero;
-            }
-
-            Vector3 weightedDelta = rawEditorDelta;
-            weightedDelta.y = 0f;
-            weightedDelta *= Mathf.Clamp01(editorRootTranslationWeight);
-
-            if (!hasSmoothedEditorRootTranslationDelta)
-            {
-                nextSmoothedEditorRootTranslationDelta = weightedDelta;
-                nextHasSmoothedEditorRootTranslationDelta = true;
-                return weightedDelta;
-            }
-
-            float currentWeight = Mathf.Clamp(editorRootTranslationCurrentWeight, 0.05f, 1f);
-            nextSmoothedEditorRootTranslationDelta = Vector3.Lerp(previousSmoothedEditorRootTranslationDelta, weightedDelta, currentWeight);
-            nextHasSmoothedEditorRootTranslationDelta = true;
-            return nextSmoothedEditorRootTranslationDelta;
         }
 
         private void ResetEditorHumanoidRootTranslationReferenceState()
