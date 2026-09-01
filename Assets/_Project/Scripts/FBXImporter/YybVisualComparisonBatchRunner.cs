@@ -2359,7 +2359,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static int ResolveSummaryTargetFrameCount()
         {
-            return ResolveSummaryTargetFrameCount(
+            return ReferenceFrameCountResolver.ResolveSummaryTarget(
                 ResolveReferenceMmdTargetFrameCount(
                     _currentRunOptions.fbxFileName,
                     _currentRunOptions.durationSeconds,
@@ -2367,13 +2367,6 @@ namespace Fbx2Vmd.FBXImporter
                     _referenceClip != null ? _referenceClip.length : 0f,
                     DefaultFrameRate),
                 ResolveFrameCount(CaptureMode.MainAuto));
-        }
-
-        private static int ResolveSummaryTargetFrameCount(int referenceTargetFrameCount, int mainAutoFrameCount)
-        {
-            return ReferenceFrameCountResolver.ResolveSummaryTarget(
-                referenceTargetFrameCount,
-                mainAutoFrameCount);
         }
 
         private static int ResolveReferenceMmdTargetFrameCount(

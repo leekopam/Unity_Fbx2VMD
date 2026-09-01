@@ -131,6 +131,19 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(VmdIkDeltaGuardRuntimeOverrideApplierTests).FullName + "." +
                 nameof(VmdIkDeltaGuardRuntimeOverrideApplierTests.Given_RecoveryHoldFrames_When_Applying_Then_SetsHoldWindow),
                 () => new VmdIkDeltaGuardRuntimeOverrideApplierTests().Given_RecoveryHoldFrames_When_Applying_Then_SetsHoldWindow());
+            var referenceFrameCountResolverTests = new ReferenceFrameCountResolverTests();
+            RunTest(results, typeof(ReferenceFrameCountResolverTests).FullName + "." +
+                nameof(ReferenceFrameCountResolverTests.Given_KnownReferenceProfile_When_ClipAndRequestCoverDuration_Then_UsesKnownFrameCount),
+                referenceFrameCountResolverTests.Given_KnownReferenceProfile_When_ClipAndRequestCoverDuration_Then_UsesKnownFrameCount);
+            RunTest(results, typeof(ReferenceFrameCountResolverTests).FullName + "." +
+                nameof(ReferenceFrameCountResolverTests.Given_CandidateFrameCountDiffersFromReference_When_ResolvingSummaryTarget_Then_KeepsReferenceTarget),
+                referenceFrameCountResolverTests.Given_CandidateFrameCountDiffersFromReference_When_ResolvingSummaryTarget_Then_KeepsReferenceTarget);
+            RunTest(results, typeof(ReferenceFrameCountResolverTests).FullName + "." +
+                nameof(ReferenceFrameCountResolverTests.Given_CandidateFrameCountIsUnavailable_When_ResolvingSummaryTarget_Then_KeepsReferenceTarget),
+                referenceFrameCountResolverTests.Given_CandidateFrameCountIsUnavailable_When_ResolvingSummaryTarget_Then_KeepsReferenceTarget);
+            RunTest(results, typeof(ReferenceFrameCountResolverTests).FullName + "." +
+                nameof(ReferenceFrameCountResolverTests.Given_SummaryTargetPolicy_When_InspectingRunner_Then_PureCalculationOverloadIsAbsent),
+                referenceFrameCountResolverTests.Given_SummaryTargetPolicy_When_InspectingRunner_Then_PureCalculationOverloadIsAbsent);
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport),
                 () => new MmdExportSafetyDefaultsTests().Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport());
