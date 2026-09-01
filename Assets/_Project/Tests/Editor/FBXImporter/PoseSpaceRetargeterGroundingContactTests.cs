@@ -1,33 +1,10 @@
-using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Retargeting;
 using NUnit.Framework;
-using System;
-using System.Reflection;
 
 namespace Tests.Editor.FBXImporter
 {
     public class PoseSpaceRetargeterGroundingContactTests
     {
-        private static readonly Type[] GroundingContactParameterTypes =
-        {
-            typeof(float),
-            typeof(bool),
-            typeof(float),
-            typeof(bool),
-            typeof(float),
-            typeof(bool).MakeByRefType()
-        };
-
-        private static readonly Type[] PrimaryGroundingContactParameterTypes =
-        {
-            typeof(float),
-            typeof(bool),
-            typeof(bool),
-            typeof(float),
-            typeof(bool),
-            typeof(float),
-            typeof(bool).MakeByRefType()
-        };
-
         [Test]
         public void Given_NoRendererBounds_When_ResolvingGroundingContact_Then_UsesFootBottom()
         {
@@ -91,9 +68,8 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_EstimatedFootRadiusAndRendererWithinLimit_When_ResolvingPrimaryGroundingContact_Then_UsesRendererBounds()
         {
-            float contactBottomY = ResolvePrimaryGroundingContactBottomY(
+            float contactBottomY = ResolveGroundingContactBottomY(
                 lowestFootBottomY: 0.064f,
-                hasEstimatedFootRadius: true,
                 hasRendererBounds: true,
                 rendererMinY: -0.009f,
                 rejectRendererGroundingOutliers: true,
@@ -112,62 +88,14 @@ namespace Tests.Editor.FBXImporter
             float maxRendererFootGroundingSeparation,
             out bool rendererGroundingOutlier)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ResolveGroundingContactBottomY",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: GroundingContactParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for grounding contact bottom selection.");
-
-            object[] args =
-            {
+            return GroundingStabilizer.ResolveGroundingContactBottomY(
                 lowestFootBottomY,
                 hasRendererBounds,
                 rendererMinY,
                 rejectRendererGroundingOutliers,
                 maxRendererFootGroundingSeparation,
-                false
-            };
-
-            float contactBottomY = (float)method.Invoke(null, args);
-            rendererGroundingOutlier = (bool)args[5];
-            return contactBottomY;
+                out rendererGroundingOutlier);
         }
 
-        private static float ResolvePrimaryGroundingContactBottomY(
-            float lowestFootBottomY,
-            bool hasEstimatedFootRadius,
-            bool hasRendererBounds,
-            float rendererMinY,
-            bool rejectRendererGroundingOutliers,
-            float maxRendererFootGroundingSeparation,
-            out bool rendererGroundingOutlier)
-        {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ResolvePrimaryGroundingContactBottomY",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: PrimaryGroundingContactParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for primary grounding contact selection.");
-
-            object[] args =
-            {
-                lowestFootBottomY,
-                hasEstimatedFootRadius,
-                hasRendererBounds,
-                rendererMinY,
-                rejectRendererGroundingOutliers,
-                maxRendererFootGroundingSeparation,
-                false
-            };
-
-            float contactBottomY = (float)method.Invoke(null, args);
-            rendererGroundingOutlier = (bool)args[6];
-            return contactBottomY;
-        }
     }
 }

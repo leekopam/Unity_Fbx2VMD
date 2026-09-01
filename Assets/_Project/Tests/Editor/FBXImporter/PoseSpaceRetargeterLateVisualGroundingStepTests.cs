@@ -1,47 +1,11 @@
-using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Retargeting;
 using NUnit.Framework;
-using System;
-using System.Reflection;
 using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
     public class PoseSpaceRetargeterLateVisualGroundingStepTests
     {
-        private static readonly Type[] LateVisualGroundingStepParameterTypes =
-        {
-            typeof(float),
-            typeof(bool),
-            typeof(bool),
-            typeof(float),
-            typeof(float),
-            typeof(float)
-        };
-
-        private static readonly Type[] LateVisualGroundingEffectiveResidualParameterTypes =
-        {
-            typeof(float),
-            typeof(bool),
-            typeof(float),
-            typeof(float),
-            typeof(float).MakeByRefType(),
-            typeof(bool).MakeByRefType()
-        };
-
-        private static readonly Type[] LateVisualGroundingAppliedPositionParameterTypes =
-        {
-            typeof(Vector3),
-            typeof(float),
-            typeof(Vector3).MakeByRefType()
-        };
-
-        private static readonly Type[] LateVisualGroundingActiveStepSkipParameterTypes =
-        {
-            typeof(float),
-            typeof(bool),
-            typeof(float)
-        };
-
         [Test]
         public void Given_SmoothingDisabled_When_CalculatingLateVisualGroundingStep_Then_ReturnsResidual()
         {
@@ -285,26 +249,13 @@ namespace Tests.Editor.FBXImporter
             float lateVisualGroundingSmoothing,
             float maxLateVisualGroundingStepPerFrame)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "CalculateLateVisualGroundingStep",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: LateVisualGroundingStepParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for late visual grounding step calculation.");
-
-            return (float)method.Invoke(
-                null,
-                new object[]
-                {
-                    residual,
-                    smoothLateVisualGroundingCorrection,
-                    lateVisualGroundingInitialized,
-                    lateVisualGroundingSnapThreshold,
-                    lateVisualGroundingSmoothing,
-                    maxLateVisualGroundingStepPerFrame
-                });
+            return GroundingStabilizer.CalculateLateVisualGroundingStep(
+                residual,
+                smoothLateVisualGroundingCorrection,
+                lateVisualGroundingInitialized,
+                lateVisualGroundingSnapThreshold,
+                lateVisualGroundingSmoothing,
+                maxLateVisualGroundingStepPerFrame);
         }
 
         private static bool TryCalculateLateVisualGroundingEffectiveResidual(
@@ -315,29 +266,13 @@ namespace Tests.Editor.FBXImporter
             out float effectiveResidual,
             out bool exceededMaxCorrection)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateLateVisualGroundingEffectiveResidual",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: LateVisualGroundingEffectiveResidualParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for late visual grounding residual filtering.");
-
-            object[] args =
-            {
+            return GroundingStabilizer.TryCalculateLateVisualGroundingEffectiveResidual(
                 residual,
                 smoothLateVisualGroundingCorrection,
                 groundingDeadZone,
                 maxLateVisualGroundingCorrection,
-                0f,
-                false
-            };
-
-            bool shouldApply = (bool)method.Invoke(null, args);
-            effectiveResidual = (float)args[4];
-            exceededMaxCorrection = (bool)args[5];
-            return shouldApply;
+                out effectiveResidual,
+                out exceededMaxCorrection);
         }
 
         private static bool TryCalculateLateVisualGroundingAppliedPosition(
@@ -345,25 +280,10 @@ namespace Tests.Editor.FBXImporter
             float appliedResidual,
             out Vector3 appliedPosition)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "TryCalculateLateVisualGroundingAppliedPosition",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: LateVisualGroundingAppliedPositionParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for late visual grounding position application.");
-
-            object[] args =
-            {
+            return GroundingStabilizer.TryCalculateLateVisualGroundingAppliedPosition(
                 currentPosition,
                 appliedResidual,
-                Vector3.zero
-            };
-
-            bool shouldApply = (bool)method.Invoke(null, args);
-            appliedPosition = (Vector3)args[2];
-            return shouldApply;
+                out appliedPosition);
         }
 
         private static bool ShouldSkipLateVisualGroundingForActiveVerticalStep(
@@ -371,23 +291,10 @@ namespace Tests.Editor.FBXImporter
             bool smoothLateVisualGroundingCorrection,
             float lastGroundingVerticalStep)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ShouldSkipLateVisualGroundingForActiveVerticalStep",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: LateVisualGroundingActiveStepSkipParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for late visual grounding active-step skip decisions.");
-
-            return (bool)method.Invoke(
-                null,
-                new object[]
-                {
-                    residual,
-                    smoothLateVisualGroundingCorrection,
-                    lastGroundingVerticalStep
-                });
+            return GroundingStabilizer.ShouldSkipLateVisualGroundingForActiveVerticalStep(
+                residual,
+                smoothLateVisualGroundingCorrection,
+                lastGroundingVerticalStep);
         }
     }
 }
