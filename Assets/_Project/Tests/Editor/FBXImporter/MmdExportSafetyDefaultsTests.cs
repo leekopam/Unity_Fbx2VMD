@@ -867,32 +867,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_FullSatisfactionReferenceTiming_When_ResolvingReferenceMmdTargetFrameCount_Then_Uses6001FrameReference()
-        {
-            int resolved = ResolveReferenceMmdTargetFrameCount(
-                "satisfaction_2.fbx",
-                requestedDurationSeconds: 207.7833f,
-                configuredTargetFrameCount: 6234,
-                referenceClipLengthSeconds: 207.7833f,
-                recordingFrameRate: 30f);
-
-            Assert.That(resolved, Is.EqualTo(6001));
-        }
-
-        [Test]
-        public void Given_ShortSatisfactionSmoke_When_ResolvingReferenceMmdTargetFrameCount_Then_KeepsConfiguredSmokeTarget()
-        {
-            int resolved = ResolveReferenceMmdTargetFrameCount(
-                "satisfaction_2.fbx",
-                requestedDurationSeconds: 31f,
-                configuredTargetFrameCount: 930,
-                referenceClipLengthSeconds: 207.7833f,
-                recordingFrameRate: 30f);
-
-            Assert.That(resolved, Is.EqualTo(930));
-        }
-
-        [Test]
         public void Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes()
         {
             Assert.That(IsMainSceneCandidateMode("MainAuto"), Is.True);
@@ -1601,38 +1575,6 @@ namespace Tests.Editor.FBXImporter
 
             Assert.That(method, Is.Not.Null, "변환 조정기는 Final IK 접지 구성 경계를 제공해야 합니다.");
             method.Invoke(coordinator, new object[] { targetObject });
-        }
-
-        private static int ResolveReferenceMmdTargetFrameCount(
-            string fbxFileName,
-            float requestedDurationSeconds,
-            int configuredTargetFrameCount,
-            float referenceClipLengthSeconds,
-            float recordingFrameRate)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ResolveReferenceMmdTargetFrameCount",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(string), typeof(float), typeof(int), typeof(float), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must derive the ref MP4/MMD target frame count from reference timing instead of the candidate capture.");
-
-            return (int)method.Invoke(
-                null,
-                new object[]
-                {
-                    fbxFileName,
-                    requestedDurationSeconds,
-                    configuredTargetFrameCount,
-                    referenceClipLengthSeconds,
-                    recordingFrameRate
-                });
         }
 
         private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)

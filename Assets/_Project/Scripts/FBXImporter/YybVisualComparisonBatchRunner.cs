@@ -2371,30 +2371,15 @@ namespace Fbx2Vmd.FBXImporter
         private static int ResolveSummaryTargetFrameCount()
         {
             return ReferenceFrameCountResolver.ResolveSummaryTarget(
-                ResolveReferenceMmdTargetFrameCount(
+                ReferenceFrameCountResolver.Resolve(
                     _currentRunOptions.fbxFileName,
                     _currentRunOptions.durationSeconds,
                     _currentRunOptions.targetFrameCount,
                     _referenceClip != null ? _referenceClip.length : 0f,
-                    DefaultFrameRate),
+                    DefaultFrameRate,
+                    SatisfactionReferenceOutputBaseName,
+                    SatisfactionReferenceMaxMmdFrame),
                 ResolveFrameCount(CaptureMode.MainAuto));
-        }
-
-        private static int ResolveReferenceMmdTargetFrameCount(
-            string fbxFileName,
-            float requestedDurationSeconds,
-            int configuredTargetFrameCount,
-            float referenceClipLengthSeconds,
-            float recordingFrameRate)
-        {
-            return ReferenceFrameCountResolver.Resolve(
-                fbxFileName,
-                requestedDurationSeconds,
-                configuredTargetFrameCount,
-                referenceClipLengthSeconds,
-                recordingFrameRate,
-                SatisfactionReferenceOutputBaseName,
-                SatisfactionReferenceMaxMmdFrame);
         }
 
         private static float ResolveReferenceMp4CurrentClipStartSeconds()
