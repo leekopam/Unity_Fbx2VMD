@@ -110,15 +110,15 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage),
                 () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PreSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_UsesSeparatePreSolveSwitchAndCaps),
-                () => new MmdExportSafetyDefaultsTests().Given_PreSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_UsesSeparatePreSolveSwitchAndCaps());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PreSetHumanPoseEndpointLeftSideRuntimeOverride_When_Applied_Then_PreservesPreSolveSideSwitch),
-                () => new MmdExportSafetyDefaultsTests().Given_PreSetHumanPoseEndpointLeftSideRuntimeOverride_When_Applied_Then_PreservesPreSolveSideSwitch());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PreSetHumanPoseEndpointBodyPositionInversionRuntimeOverride_When_Applied_Then_PreservesAxisFlags),
-                () => new MmdExportSafetyDefaultsTests().Given_PreSetHumanPoseEndpointBodyPositionInversionRuntimeOverride_When_Applied_Then_PreservesAxisFlags());
+            RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
+                nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PreSetEndpointSettings_When_Applied_Then_ClampsValuesAndScopesChanges),
+                () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PreSetEndpointSettings_When_Applied_Then_ClampsValuesAndScopesChanges());
+            RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
+                nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PreSetEndpointFlags_When_Applied_Then_PreservesIndependentMappings),
+                () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PreSetEndpointFlags_When_Applied_Then_PreservesIndependentMappings());
+            RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
+                nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PreSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps),
+                () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PreSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_TargetHumanoidBonePositionLockRuntimeOverride_When_Toggled_Then_OnlyChangesSkeletonBasisLock),
                 () => new MmdExportSafetyDefaultsTests().Given_TargetHumanoidBonePositionLockRuntimeOverride_When_Toggled_Then_OnlyChangesSkeletonBasisLock());
