@@ -164,6 +164,21 @@ namespace Tests.Editor.FBXImporter
             Assert.That(
                 typeof(GroundingStabilizer).GetMethod("TryCalculateAdjustment", BindingFlags.Static | BindingFlags.Public),
                 Is.Not.Null);
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod("CalculateLateVisualGroundingStep", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod("TryCalculateLateVisualGroundingEffectiveResidual", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod("ShouldSkipLateVisualGroundingForActiveVerticalStep", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod("TryCalculateLateVisualGroundingAppliedPosition", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(
+                typeof(GroundingStabilizer).GetMethod("ResolveGroundingContactBottomY", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
 
             const BindingFlags RetargeterCalculationFlags =
                 BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic;
@@ -175,6 +190,23 @@ namespace Tests.Editor.FBXImporter
                 Is.Empty);
             Assert.That(
                 typeof(PoseSpaceRetargeter).GetMember("IsGroundingDirectionReversal", RetargeterCalculationFlags),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember("CalculateLateVisualGroundingStep", RetargeterCalculationFlags),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember("TryCalculateLateVisualGroundingEffectiveResidual", RetargeterCalculationFlags),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember("ShouldSkipLateVisualGroundingForActiveVerticalStep", RetargeterCalculationFlags),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember("TryCalculateLateVisualGroundingAppliedPosition", RetargeterCalculationFlags),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "ResolveGroundingContactBottomY",
+                    BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Empty);
         }
 

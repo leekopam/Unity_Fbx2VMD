@@ -8,6 +8,8 @@ namespace Fbx2Vmd.Retargeting
     public static class GroundingStabilizer
     {
         private const float DirectionReversalNoiseThreshold = 0.0005f;
+        private const float LateVisualPenetrationRecoverySmoothing = 0.55f;
+        private const float LateVisualPenetrationRecoveryMaxStep = 0.1f;
 
         /// <summary>
         /// 발 접지 높이 보정값 계산. targetHeight - contactBottomY.
@@ -25,6 +27,39 @@ namespace Fbx2Vmd.Retargeting
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// 발 하단과 renderer 하단 중 접지 기준으로 사용할 값을 선택함.
+        /// </summary>
+        public static float ResolveGroundingContactBottomY(
+            float lowestFootBottomY,
+            bool hasRendererBounds,
+            float rendererMinY,
+            bool rejectRendererGroundingOutliers,
+            float maxRendererFootGroundingSeparation,
+            out bool rendererGroundingOutlier)
+        {
+            rendererGroundingOutlier = false;
+            if (!hasRendererBounds)
+            {
+                return lowestFootBottomY;
+            }
+
+            if (!rejectRendererGroundingOutliers)
+            {
+                return rendererMinY;
+            }
+
+            float separation = Mathf.Abs(rendererMinY - lowestFootBottomY);
+            float maxSeparation = Mathf.Max(0.02f, maxRendererFootGroundingSeparation);
+            if (separation <= maxSeparation)
+            {
+                return rendererMinY;
+            }
+
+            rendererGroundingOutlier = true;
+            return lowestFootBottomY;
         }
 
         /// <summary>
@@ -90,6 +125,147 @@ namespace Fbx2Vmd.Retargeting
         }
 
         /// <summary>
+        /// 최종 시각 접지 잔차에 초기화, 평활화와 프레임 이동 제한을 적용함.
+        /// </summary>
+        public static float CalculateLateVisualGroundingStep(
+            float residual,
+            bool smoothLateVisualGroundingCorrection,
+            bool lateVisualGroundingInitialized,
+            float lateVisualGroundingSnapThreshold,
+            float lateVisualGroundingSmoothing,
+            float maxLateVisualGroundingStepPerFrame)
+        {
+            if (!smoothLateVisualGroundingCorrection)
+            {
+                return residual;
+            }
+
+            if (!lateVisualGroundingInitialized)
+            {
+                return residual;
+            }
+
+            float snapThreshold = Mathf.Max(0.005f, lateVisualGroundingSnapThreshold);
+            if (residual > 0.0001f && residual <= snapThreshold)
+            {
+                return residual;
+            }
+
+            bool isFloorPenetration = residual > 0.0001f;
+            float smoothing = Mathf.Clamp01(lateVisualGroundingSmoothing);
+            if (isFloorPenetration)
+            {
+                smoothing = Mathf.Max(smoothing, LateVisualPenetrationRecoverySmoothing);
+            }
+
+            float step = Mathf.Abs(residual) > snapThreshold
+                ? residual * Mathf.Max(0.1f, smoothing)
+                : residual * smoothing;
+            float maxStep = Mathf.Max(0.001f, maxLateVisualGroundingStepPerFrame);
+            if (isFloorPenetration)
+            {
+                maxStep = Mathf.Max(maxStep, LateVisualPenetrationRecoveryMaxStep);
+            }
+
+            if (Mathf.Abs(step) > maxStep)
+            {
+                step = Mathf.Sign(step) * maxStep;
+            }
+
+            return step;
+        }
+
+        /// <summary>
+        /// 최종 시각 접지 잔차가 적용 가능한 범위인지 판정함.
+        /// </summary>
+        public static bool TryCalculateLateVisualGroundingEffectiveResidual(
+            float residual,
+            bool smoothLateVisualGroundingCorrection,
+            float groundingDeadZone,
+            float maxLateVisualGroundingCorrection,
+            out float effectiveResidual,
+            out bool exceededMaxCorrection)
+        {
+            effectiveResidual = 0f;
+            exceededMaxCorrection = false;
+
+            bool isPenetrationResidual = residual > 0.0001f;
+            bool isFloatingResidual = residual < -0.0001f;
+            bool isVisualFloorResidual = isPenetrationResidual || isFloatingResidual;
+            float deadZone = Mathf.Max(0.001f, groundingDeadZone);
+            float skipDeadZone = isVisualFloorResidual ? 0.001f : deadZone;
+            if (Mathf.Abs(residual) <= skipDeadZone)
+            {
+                return false;
+            }
+
+            float maxCorrection = Mathf.Max(0.001f, maxLateVisualGroundingCorrection);
+            if (Mathf.Abs(residual) > maxCorrection)
+            {
+                exceededMaxCorrection = true;
+                return false;
+            }
+
+            effectiveResidual = residual;
+            if (smoothLateVisualGroundingCorrection && deadZone > 0f && !isVisualFloorResidual)
+            {
+                effectiveResidual = Mathf.Sign(residual) * Mathf.Max(0f, Mathf.Abs(residual) - deadZone);
+                if (Mathf.Abs(effectiveResidual) <= 0.0001f)
+                {
+                    effectiveResidual = 0f;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 현재 접지 이동과 반대 방향인 최종 시각 보정을 건너뛸지 판정함.
+        /// </summary>
+        public static bool ShouldSkipLateVisualGroundingForActiveVerticalStep(
+            float residual,
+            bool smoothLateVisualGroundingCorrection,
+            float lastGroundingVerticalStep)
+        {
+            if (!smoothLateVisualGroundingCorrection ||
+                !IsFinite(residual) ||
+                !IsFinite(lastGroundingVerticalStep) ||
+                Mathf.Abs(residual) <= 0.0005f ||
+                Mathf.Abs(lastGroundingVerticalStep) <= 0.0005f)
+            {
+                return false;
+            }
+
+            return Mathf.Sign(residual) != Mathf.Sign(lastGroundingVerticalStep);
+        }
+
+        /// <summary>
+        /// 최종 시각 접지 이동을 적용한 유한 위치를 계산함.
+        /// </summary>
+        public static bool TryCalculateLateVisualGroundingAppliedPosition(
+            Vector3 currentPosition,
+            float appliedResidual,
+            out Vector3 appliedPosition)
+        {
+            appliedPosition = Vector3.zero;
+            if (!IsFinite(currentPosition))
+            {
+                return false;
+            }
+
+            appliedPosition = currentPosition;
+            appliedPosition.y += appliedResidual;
+            if (!IsFinite(appliedPosition))
+            {
+                appliedPosition = Vector3.zero;
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// 접지 방향이 반전되었는지 확인.
         /// </summary>
         public static bool IsDirectionReversal(float verticalStep, float previousGroundingVerticalStep)
@@ -108,6 +284,11 @@ namespace Fbx2Vmd.Retargeting
         private static bool IsFinite(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
         }
     }
 }
