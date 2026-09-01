@@ -2160,48 +2160,34 @@ namespace Fbx2Vmd.FBXImporter
             MotionComparisonFrameQualitySummary[] frameQualitySummaries,
             VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics = null)
         {
-            foreach (string failure in BuildFrameQualityFailureMessages(frameQualitySummaries, frameRoleDiagnostics))
+            if (frameRoleDiagnostics != null)
+            {
+                ApplyImportedFbxVisualEvidenceFrameQualityPolicy(
+                    frameQualitySummaries,
+                    frameRoleDiagnostics);
+            }
+
+            VisualComparisonCandidateArtifactSelectionData selection =
+                VisualComparisonCandidateArtifactSelector.Select(
+                    frameQualitySummaries,
+                    _projectRoot);
+            bool acceptedUserFacingArtifactPreservesRawDiagnostic =
+                selection != null &&
+                selection.selected_candidate_is_acceptance_artifact &&
+                selection.selected_candidate_preserves_raw_diagnostic &&
+                string.Equals(
+                    selection.selected_candidate_output_role,
+                    "user_facing_export_artifact",
+                    StringComparison.Ordinal);
+            foreach (string failure in VisualComparisonFrameQualityFailurePolicy.BuildFailureMessages(
+                frameQualitySummaries,
+                acceptedUserFacingArtifactPreservesRawDiagnostic))
             {
                 if (!Failures.Contains(failure))
                 {
                     Failures.Add(failure);
                 }
             }
-        }
-
-        private static string[] BuildFrameQualityFailureMessages(
-            MotionComparisonFrameQualitySummary[] frameQualitySummaries)
-        {
-            return BuildFrameQualityFailureMessages(frameQualitySummaries, null);
-        }
-
-        private static string[] BuildFrameQualityFailureMessages(
-            MotionComparisonFrameQualitySummary[] frameQualitySummaries,
-            VisualComparisonFrameRoleDiagnosticsData frameRoleDiagnostics)
-        {
-            if (frameRoleDiagnostics != null)
-            {
-                ApplyImportedFbxVisualEvidenceFrameQualityPolicy(frameQualitySummaries, frameRoleDiagnostics);
-            }
-
-            bool acceptedUserFacingArtifactPreservesRawDiagnostic =
-                HasAcceptedUserFacingArtifactPreservingRawDiagnostic(frameQualitySummaries);
-            return VisualComparisonFrameQualityFailurePolicy.BuildFailureMessages(
-                frameQualitySummaries,
-                acceptedUserFacingArtifactPreservesRawDiagnostic);
-        }
-
-        private static bool HasAcceptedUserFacingArtifactPreservingRawDiagnostic(
-            MotionComparisonFrameQualitySummary[] frameQualitySummaries)
-        {
-            VisualComparisonCandidateArtifactSelectionData selection =
-                VisualComparisonCandidateArtifactSelector.Select(
-                    frameQualitySummaries,
-                    _projectRoot);
-            return selection != null &&
-                selection.selected_candidate_is_acceptance_artifact &&
-                selection.selected_candidate_preserves_raw_diagnostic &&
-                string.Equals(selection.selected_candidate_output_role, "user_facing_export_artifact", StringComparison.Ordinal);
         }
 
         private static void ApplyImportedFbxVisualEvidenceFrameQualityPolicy(
