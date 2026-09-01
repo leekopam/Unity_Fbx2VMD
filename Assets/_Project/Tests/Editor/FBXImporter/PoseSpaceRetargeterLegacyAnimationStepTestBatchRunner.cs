@@ -84,6 +84,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_LeftFootRealizedZMovesOppositeIntended_When_InvertingBodyPositionZ_Then_FlipsOnlyZInput);
             RunTest(results, nameof(manualPoseTests.Given_BodyPositionXzFrameGate_When_CalculatingWeight_Then_BlendsAtBothEdges),
                 manualPoseTests.Given_BodyPositionXzFrameGate_When_CalculatingWeight_Then_BlendsAtBothEdges);
+            RunTest(results, nameof(manualPoseTests.Given_InclusiveFrameGate_When_CheckingFrame_Then_PreservesDisabledInvalidAndRoundedBounds),
+                manualPoseTests.Given_InclusiveFrameGate_When_CheckingFrame_Then_PreservesDisabledInvalidAndRoundedBounds);
             RunTest(results, nameof(tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),
                 tests.Given_LeftArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties);
             RunTest(results, nameof(tests.Given_RightArmTwistStageDiagnostics_When_InspectingRetargeter_Then_ExposesReadableProperties),

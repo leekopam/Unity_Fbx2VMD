@@ -3702,59 +3702,38 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool ShouldApplyManualAnimatorRightLowerLegToFootFrameGate()
         {
-            float start = Mathf.Max(0f, manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart);
-            float end = Mathf.Max(0f, manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
-            if (start <= 0f && end <= 0f)
-            {
-                return true;
-            }
-
-            if (end < start || end <= 0f)
-            {
-                return true;
-            }
-
-            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
-            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+            return ShouldApplyManualReferenceFrameGate(
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart,
+                manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd);
         }
 
         private bool ShouldApplyPostSetHumanPoseRightEndpointPositionFrameGate()
         {
-            float start = Mathf.Max(0f, postSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
-            float end = Mathf.Max(0f, postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            if (start <= 0f && end <= 0f)
-            {
-                return true;
-            }
-
-            if (end < start || end <= 0f)
-            {
-                return true;
-            }
-
-            float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
-            int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
-            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+            return ShouldApplyManualReferenceFrameGate(
+                postSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
+                postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
         }
 
         private bool ShouldApplyPreSetHumanPoseRightEndpointPositionFrameGate()
         {
-            float start = Mathf.Max(0f, preSetHumanPoseRightEndpointPositionReferenceFrameGateStart);
-            float end = Mathf.Max(0f, preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
-            if (start <= 0f && end <= 0f)
-            {
-                return true;
-            }
+            return ShouldApplyManualReferenceFrameGate(
+                preSetHumanPoseRightEndpointPositionReferenceFrameGateStart,
+                preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd);
+        }
 
-            if (end < start || end <= 0f)
+        private bool ShouldApplyManualReferenceFrameGate(float startFrame, float endFrame)
+        {
+            if (!ManualPoseReferenceApplier.HasActiveFrameGate(startFrame, endFrame))
             {
                 return true;
             }
 
             float frameRate = Mathf.Clamp(legacyAnimationVisualFrameRate, 15f, 120f);
             int currentFrame = Mathf.RoundToInt(_legacyAnimationDriver.CurrentTime * frameRate);
-            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+            return ManualPoseReferenceApplier.IsFrameWithinGate(
+                currentFrame,
+                startFrame,
+                endFrame);
         }
 
         private float ResolveManualAnimatorBodyPositionXzFrameGateWeight()

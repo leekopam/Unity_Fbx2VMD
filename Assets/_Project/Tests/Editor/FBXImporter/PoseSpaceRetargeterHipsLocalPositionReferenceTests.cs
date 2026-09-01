@@ -71,6 +71,19 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
+        private static readonly Type[] FrameWithinGateParameterTypes =
+        {
+            typeof(int),
+            typeof(float),
+            typeof(float)
+        };
+
+        private static readonly Type[] ActiveFrameGateParameterTypes =
+        {
+            typeof(float),
+            typeof(float)
+        };
+
         private static readonly Type[] HipsAlignedEndpointPositionReferenceParameterTypes =
         {
             typeof(Vector3),
@@ -310,6 +323,20 @@ namespace Tests.Editor.FBXImporter
                     "CalculateManualAnimatorBodyPositionXzFrameGateWeight",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Null);
+        }
+
+        [Test]
+        public void Given_InclusiveFrameGate_When_CheckingFrame_Then_PreservesDisabledInvalidAndRoundedBounds()
+        {
+            Assert.That(HasActiveFrameGate(0f, 0f), Is.False);
+            Assert.That(HasActiveFrameGate(300f, 180f), Is.False);
+            Assert.That(HasActiveFrameGate(-10f, 180f), Is.True);
+            Assert.That(HasActiveFrameGate(179.5f, 180.49f), Is.True);
+            Assert.That(IsFrameWithinGate(240, 0f, 0f), Is.True);
+            Assert.That(IsFrameWithinGate(240, 300f, 180f), Is.True);
+            Assert.That(IsFrameWithinGate(179, 179.5f, 180.49f), Is.False);
+            Assert.That(IsFrameWithinGate(180, 179.5f, 180.49f), Is.True);
+            Assert.That(IsFrameWithinGate(181, 179.5f, 180.49f), Is.False);
         }
 
         [Test]
@@ -638,6 +665,34 @@ namespace Tests.Editor.FBXImporter
                 endFrame,
                 blendFrames
             });
+        }
+
+        private static bool IsFrameWithinGate(int currentFrame, float startFrame, float endFrame)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "IsFrameWithinGate",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: FrameWithinGateParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should own the shared inclusive frame gate calculation.");
+            return (bool)method.Invoke(null, new object[] { currentFrame, startFrame, endFrame });
+        }
+
+        private static bool HasActiveFrameGate(float startFrame, float endFrame)
+        {
+            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
+                "HasActiveFrameGate",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: ActiveFrameGateParameterTypes,
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null,
+                "ManualPoseReferenceApplier should expose frame gate activation without reading animation time.");
+            return (bool)method.Invoke(null, new object[] { startFrame, endFrame });
         }
 
         private static bool TryCalculateHipsAlignedEndpointPositionReference(
