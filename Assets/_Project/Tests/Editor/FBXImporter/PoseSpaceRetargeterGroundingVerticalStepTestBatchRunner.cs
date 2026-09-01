@@ -33,6 +33,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_InitializedSmoothCorrection_When_CalculatingVerticalStep_Then_SubtractsDeadZoneAndClamps);
             RunTest(results, nameof(tests.Given_DirectionReversal_When_CalculatingVerticalStep_Then_UsesReducedClampLimit),
                 tests.Given_DirectionReversal_When_CalculatingVerticalStep_Then_UsesReducedClampLimit);
+            RunTest(results, nameof(tests.Given_GroundingCalculation_When_CheckingOwnership_Then_UsesGroundingStabilizer),
+                tests.Given_GroundingCalculation_When_CheckingOwnership_Then_UsesGroundingStabilizer);
             RunTest(results, nameof(tests.Given_PrewarmGroundingDiagnostics_When_ResettingPlaybackStabilityMetrics_Then_ResetsCountersWithoutClearingSettledState),
                 tests.Given_PrewarmGroundingDiagnostics_When_ResettingPlaybackStabilityMetrics_Then_ResetsCountersWithoutClearingSettledState);
             RunTest(results, nameof(tests.Given_ManualReferenceFootLift_When_CalculatingGroundingTarget_Then_AddsPositiveLift),
@@ -43,6 +45,10 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_ManualReferenceFootLiftExceedsCap_When_CalculatingGroundingTarget_Then_ClampsLift);
             RunTest(results, nameof(tests.Given_ManualReferenceFootLiftAndZeroMaxLift_When_CalculatingGroundingTarget_Then_TreatsLiftAsUnlimited),
                 tests.Given_ManualReferenceFootLiftAndZeroMaxLift_When_CalculatingGroundingTarget_Then_TreatsLiftAsUnlimited);
+            RunTest(results, nameof(tests.Given_ManualReferenceFootLiftAndWeightAboveOne_When_CalculatingGroundingTarget_Then_ClampsWeight),
+                tests.Given_ManualReferenceFootLiftAndWeightAboveOne_When_CalculatingGroundingTarget_Then_ClampsWeight);
+            RunTest(results, nameof(tests.Given_NonFiniteManualReferenceFootHeight_When_CalculatingGroundingTarget_Then_ReturnsBaseTarget),
+                tests.Given_NonFiniteManualReferenceFootHeight_When_CalculatingGroundingTarget_Then_ReturnsBaseTarget);
 
             double duration = Math.Max(0.001, (DateTimeOffset.UtcNow - start).TotalSeconds);
             string resultDirectory = Path.GetDirectoryName(resultPath);
