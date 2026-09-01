@@ -29,6 +29,142 @@ namespace Fbx2Vmd.Retargeting
             return true;
         }
 
+        public static bool TryCalculateEstimatedFootRadius(
+            float leftFootY,
+            float rightFootY,
+            float rendererMinY,
+            out float estimatedRadius)
+        {
+            float lowestFootY = Mathf.Min(leftFootY, rightFootY);
+            estimatedRadius = lowestFootY - rendererMinY;
+            if (!IsFinite(estimatedRadius))
+            {
+                return false;
+            }
+
+            estimatedRadius = Mathf.Clamp(estimatedRadius, 0.02f, 0.16f);
+            return true;
+        }
+
+        public static bool TryCalculateLowestFootBottomY(
+            float leftFootY,
+            float rightFootY,
+            float footRadius,
+            out float lowestFootBottomY)
+        {
+            lowestFootBottomY = 0f;
+            if (!TryCalculateFootBottomY(leftFootY, footRadius, out float leftBottom) ||
+                !TryCalculateFootBottomY(rightFootY, footRadius, out float rightBottom))
+            {
+                return false;
+            }
+
+            lowestFootBottomY = Mathf.Min(leftBottom, rightBottom);
+            return true;
+        }
+
+        public static bool TryCalculateFootBottomY(
+            float footY,
+            float footRadius,
+            out float footBottomY)
+        {
+            footBottomY = footY - footRadius;
+            if (!IsFinite(footBottomY))
+            {
+                footBottomY = 0f;
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryCalculateGroundedFootLockRootCorrection(
+            Vector3 correctionSum,
+            int correctionCount,
+            float groundedFootLockWeight,
+            float maxGroundedFootLockStep,
+            out Vector3 correction)
+        {
+            correction = Vector3.zero;
+            if (correctionCount <= 0)
+            {
+                return false;
+            }
+
+            correction = correctionSum / correctionCount;
+            correction.y = 0f;
+            correction *= Mathf.Clamp01(groundedFootLockWeight);
+
+            float maxStep = Mathf.Max(0.001f, maxGroundedFootLockStep);
+            if (correction.magnitude > maxStep)
+            {
+                correction = correction.normalized * maxStep;
+            }
+
+            return IsFinite(correction) && correction.sqrMagnitude > 0.00000001f;
+        }
+
+        public static bool TryCalculateFootLockCorrection(
+            float bottomY,
+            Vector3 footPosition,
+            float targetHeight,
+            bool locked,
+            Vector3 lockPosition,
+            out bool nextLocked,
+            out Vector3 nextLockPosition,
+            out Vector3 correction)
+        {
+            const float contactHeight = 0.08f;
+            const float releaseHeight = 0.14f;
+            const float resetDistance = 0.25f;
+
+            nextLocked = locked;
+            nextLockPosition = lockPosition;
+            correction = Vector3.zero;
+
+            if (!IsFinite(bottomY))
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            if (bottomY > targetHeight + releaseHeight)
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            footPosition.y = 0f;
+            if (!IsFinite(footPosition))
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            if (!locked || bottomY > targetHeight + contactHeight)
+            {
+                nextLockPosition = footPosition;
+                nextLocked = bottomY <= targetHeight + contactHeight;
+                return false;
+            }
+
+            correction = lockPosition - footPosition;
+            correction.y = 0f;
+            if (!IsFinite(correction))
+            {
+                nextLocked = false;
+                return false;
+            }
+
+            if (correction.magnitude > resetDistance)
+            {
+                nextLockPosition = footPosition;
+                correction = Vector3.zero;
+            }
+
+            return true;
+        }
+
         /// <summary>
         /// 발 하단과 renderer 하단 중 접지 기준으로 사용할 값을 선택함.
         /// </summary>
