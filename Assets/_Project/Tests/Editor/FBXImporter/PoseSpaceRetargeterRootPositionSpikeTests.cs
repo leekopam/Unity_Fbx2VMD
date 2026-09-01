@@ -8,6 +8,11 @@ namespace Tests.Editor.FBXImporter
 {
     public class PoseSpaceRetargeterRootPositionSpikeTests
     {
+        private static Type RetargetingPoseSmoothingType =>
+            typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.RetargetingPoseSmoothing",
+                throwOnError: true);
+
         private static readonly Type[] RootPositionSpikeClampParameterTypes =
         {
             typeof(Vector3),
@@ -112,6 +117,38 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ZeroRootDeltaLimit_When_CalculatingClamp_Then_ClampsToPositionBeforePose()
+        {
+            bool clamped = TryCalculateRootPositionSpikeClamp(
+                positionBeforePose: new Vector3(1f, 2f, 3f),
+                currentPosition: new Vector3(1.3f, 2f, 3f),
+                maxRootDeltaPerFrame: 0f,
+                out Vector3 clampedPosition,
+                out float deltaMagnitude);
+
+            Assert.That(clamped, Is.True);
+            Assert.That(deltaMagnitude, Is.EqualTo(0.3f).Within(0.0001f));
+            Assert.That(clampedPosition, Is.EqualTo(new Vector3(1f, 2f, 3f)));
+        }
+
+        [Test]
+        public void Given_NegativeRootDeltaLimit_When_CalculatingClamp_Then_PreservesRawClampMagnitudeBehavior()
+        {
+            bool clamped = TryCalculateRootPositionSpikeClamp(
+                positionBeforePose: Vector3.zero,
+                currentPosition: new Vector3(0.3f, 0f, 0f),
+                maxRootDeltaPerFrame: -0.1f,
+                out Vector3 clampedPosition,
+                out float deltaMagnitude);
+
+            Assert.That(clamped, Is.True);
+            Assert.That(deltaMagnitude, Is.EqualTo(0.3f).Within(0.0001f));
+            Assert.That(clampedPosition.x, Is.EqualTo(-0.1f).Within(0.0001f));
+            Assert.That(clampedPosition.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(clampedPosition.z, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
         public void Given_HipsLocalDeltaWithinLimit_When_CalculatingClamp_Then_KeepsCurrentPosition()
         {
             bool clamped = TryCalculateHipsLocalPositionSpikeClamp(
@@ -141,6 +178,69 @@ namespace Tests.Editor.FBXImporter
             Assert.That(clamped, Is.True);
             Assert.That(deltaMagnitude, Is.EqualTo(0.40912f).Within(0.0001f));
             Assert.That(Vector3.Distance(new Vector3(-0.005f, 1.026f, -0.023f), clampedPosition), Is.EqualTo(0.08f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ZeroHipsLocalDeltaLimit_When_CalculatingClamp_Then_KeepsCurrentPosition()
+        {
+            Vector3 currentPosition = new Vector3(0.3f, 1f, 0f);
+            bool clamped = TryCalculateHipsLocalPositionSpikeClamp(
+                previousLocalPosition: new Vector3(0f, 1f, 0f),
+                currentLocalPosition: currentPosition,
+                maxDeltaPerFrame: 0f,
+                out Vector3 clampedPosition,
+                out float deltaMagnitude);
+
+            Assert.That(clamped, Is.False);
+            Assert.That(deltaMagnitude, Is.EqualTo(0.3f).Within(0.0001f));
+            Assert.That(clampedPosition, Is.EqualTo(currentPosition));
+        }
+
+        [Test]
+        public void Given_NegativeHipsLocalDeltaLimit_When_CalculatingClamp_Then_KeepsCurrentPosition()
+        {
+            Vector3 currentPosition = new Vector3(0.3f, 1f, 0f);
+            bool clamped = TryCalculateHipsLocalPositionSpikeClamp(
+                previousLocalPosition: new Vector3(0f, 1f, 0f),
+                currentLocalPosition: currentPosition,
+                maxDeltaPerFrame: -0.1f,
+                out Vector3 clampedPosition,
+                out float deltaMagnitude);
+
+            Assert.That(clamped, Is.False);
+            Assert.That(deltaMagnitude, Is.EqualTo(0.3f).Within(0.0001f));
+            Assert.That(clampedPosition, Is.EqualTo(currentPosition));
+        }
+
+        [Test]
+        public void Given_PositionSpikeClampCalculation_When_CheckingOwnership_Then_UsesPoseSmoothing()
+        {
+            Assert.That(
+                RetargetingPoseSmoothingType.GetMethod(
+                    "TryCalculateRootPositionSpikeClamp",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: RootPositionSpikeClampParameterTypes,
+                    modifiers: null),
+                Is.Not.Null);
+            Assert.That(
+                RetargetingPoseSmoothingType.GetMethod(
+                    "TryCalculateHipsLocalPositionSpikeClamp",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    binder: null,
+                    types: HipsLocalPositionSpikeClampParameterTypes,
+                    modifiers: null),
+                Is.Not.Null);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateRootPositionSpikeClamp",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMember(
+                    "TryCalculateHipsLocalPositionSpikeClamp",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Empty);
         }
 
         [Test]
@@ -274,14 +374,15 @@ namespace Tests.Editor.FBXImporter
             out Vector3 clampedPosition,
             out float deltaMagnitude)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = RetargetingPoseSmoothingType.GetMethod(
                 "TryCalculateRootPositionSpikeClamp",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: RootPositionSpikeClampParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for root position spike clamp calculation.");
+            Assert.That(method, Is.Not.Null,
+                "RetargetingPoseSmoothing should own root position spike clamp calculation.");
 
             object[] args =
             {
@@ -305,14 +406,15 @@ namespace Tests.Editor.FBXImporter
             out Vector3 clampedPosition,
             out float deltaMagnitude)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
+            MethodInfo method = RetargetingPoseSmoothingType.GetMethod(
                 "TryCalculateHipsLocalPositionSpikeClamp",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: HipsLocalPositionSpikeClampParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for target Hips localPosition spike clamp calculation.");
+            Assert.That(method, Is.Not.Null,
+                "RetargetingPoseSmoothing should own target Hips localPosition spike clamp calculation.");
 
             object[] args =
             {

@@ -92,6 +92,57 @@ namespace Fbx2Vmd.FBXImporter
                 currentValue + safeOffset);
         }
 
+        internal static bool TryCalculateRootPositionSpikeClamp(
+            Vector3 positionBeforePose,
+            Vector3 currentPosition,
+            float maxRootDeltaPerFrame,
+            out Vector3 clampedPosition,
+            out float deltaMagnitude)
+        {
+            clampedPosition = currentPosition;
+            Vector3 poseDelta = currentPosition - positionBeforePose;
+            if (!IsFinite(poseDelta))
+            {
+                deltaMagnitude = float.NaN;
+                return false;
+            }
+
+            deltaMagnitude = poseDelta.magnitude;
+            if (deltaMagnitude <= maxRootDeltaPerFrame)
+            {
+                return false;
+            }
+
+            clampedPosition = positionBeforePose + Vector3.ClampMagnitude(poseDelta, maxRootDeltaPerFrame);
+            return true;
+        }
+
+        internal static bool TryCalculateHipsLocalPositionSpikeClamp(
+            Vector3 previousLocalPosition,
+            Vector3 currentLocalPosition,
+            float maxDeltaPerFrame,
+            out Vector3 clampedPosition,
+            out float deltaMagnitude)
+        {
+            clampedPosition = currentLocalPosition;
+            Vector3 delta = currentLocalPosition - previousLocalPosition;
+            if (!IsFinite(delta))
+            {
+                deltaMagnitude = float.NaN;
+                return false;
+            }
+
+            deltaMagnitude = delta.magnitude;
+            float clampedMaxDelta = Mathf.Max(0f, maxDeltaPerFrame);
+            if (clampedMaxDelta <= 0f || deltaMagnitude <= clampedMaxDelta)
+            {
+                return false;
+            }
+
+            clampedPosition = previousLocalPosition + Vector3.ClampMagnitude(delta, clampedMaxDelta);
+            return true;
+        }
+
         private static bool IsBodyPoseSpike(float bodyPositionDelta, float bodyRotationDelta)
         {
             return bodyPositionDelta > BodyPositionVisualSpikeThreshold ||
@@ -101,6 +152,11 @@ namespace Fbx2Vmd.FBXImporter
         private static bool IsFinite(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
         }
     }
 }
