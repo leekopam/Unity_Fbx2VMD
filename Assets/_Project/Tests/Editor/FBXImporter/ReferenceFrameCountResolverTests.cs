@@ -10,15 +10,15 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_KnownReferenceProfile_When_ClipAndRequestCoverDuration_Then_UsesKnownFrameCount()
         {
-            Type resolverType = typeof(FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.FBXImporter.ReferenceFrameCountResolver",
-                throwOnError: false);
-            Assert.That(resolverType, Is.Not.Null, "모델 중립 참조 프레임 수 결정기가 필요합니다.");
-
-            MethodInfo resolveMethod = resolverType.GetMethod(
+            MethodInfo resolveMethod = FindResolverMethod(
                 "Resolve",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(resolveMethod, Is.Not.Null);
+                typeof(string),
+                typeof(float),
+                typeof(int),
+                typeof(float),
+                typeof(float),
+                typeof(string),
+                typeof(int));
 
             int resolved = (int)resolveMethod.Invoke(
                 null,
@@ -34,6 +34,75 @@ namespace Tests.Editor.FBXImporter
                 });
 
             Assert.That(resolved, Is.EqualTo(301));
+        }
+
+        [Test]
+        public void Given_CandidateFrameCountDiffersFromReference_When_ResolvingSummaryTarget_Then_KeepsReferenceTarget()
+        {
+            int resolved = ResolveSummaryTarget(
+                referenceTargetFrameCount: 6001,
+                candidateFrameCount: 5900);
+
+            Assert.That(resolved, Is.EqualTo(6001));
+        }
+
+        [Test]
+        public void Given_CandidateFrameCountIsUnavailable_When_ResolvingSummaryTarget_Then_KeepsReferenceTarget()
+        {
+            int resolved = ResolveSummaryTarget(
+                referenceTargetFrameCount: 6234,
+                candidateFrameCount: 0);
+
+            Assert.That(resolved, Is.EqualTo(6234));
+        }
+
+        [Test]
+        public void Given_SummaryTargetPolicy_When_InspectingRunner_Then_PureCalculationOverloadIsAbsent()
+        {
+            Type runnerType = Type.GetType(
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
+            Assert.That(runnerType, Is.Not.Null, "시각 비교 배치 실행기 타입이 필요합니다.");
+
+            MethodInfo staleOverload = runnerType.GetMethod(
+                "ResolveSummaryTargetFrameCount",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(int), typeof(int) },
+                modifiers: null);
+
+            Assert.That(
+                staleOverload,
+                Is.Null,
+                "순수 요약 프레임 수 판정은 ReferenceFrameCountResolver만 소유해야 합니다.");
+        }
+
+        private static int ResolveSummaryTarget(int referenceTargetFrameCount, int candidateFrameCount)
+        {
+            MethodInfo method = FindResolverMethod(
+                "ResolveSummaryTarget",
+                typeof(int),
+                typeof(int));
+
+            return (int)method.Invoke(
+                null,
+                new object[] { referenceTargetFrameCount, candidateFrameCount });
+        }
+
+        private static MethodInfo FindResolverMethod(string methodName, params Type[] parameterTypes)
+        {
+            Type resolverType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.ReferenceFrameCountResolver",
+                throwOnError: false);
+            Assert.That(resolverType, Is.Not.Null, "모델 중립 참조 프레임 수 결정기가 필요합니다.");
+
+            MethodInfo method = resolverType.GetMethod(
+                methodName,
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: parameterTypes,
+                modifiers: null);
+            Assert.That(method, Is.Not.Null, $"{methodName} 메서드가 필요합니다.");
+            return method;
         }
     }
 }

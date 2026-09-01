@@ -965,26 +965,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_CandidateFrameCountDiffersFromReference_When_ResolvingSummaryTargetFrameCount_Then_KeepsReferenceTarget()
-        {
-            int resolved = ResolveSummaryTargetFrameCount(
-                referenceTargetFrameCount: 6001,
-                mainAutoFrameCount: 5900);
-
-            Assert.That(resolved, Is.EqualTo(6001));
-        }
-
-        [Test]
-        public void Given_MainAutoFrameCountIsUnavailable_When_ResolvingSummaryTargetFrameCount_Then_KeepsReferenceTarget()
-        {
-            int resolved = ResolveSummaryTargetFrameCount(
-                referenceTargetFrameCount: 6234,
-                mainAutoFrameCount: 0);
-
-            Assert.That(resolved, Is.EqualTo(6234));
-        }
-
-        [Test]
         public void Given_FullSatisfactionReferenceTiming_When_ResolvingReferenceMmdTargetFrameCount_Then_Uses6001FrameReference()
         {
             int resolved = ResolveReferenceMmdTargetFrameCount(
@@ -3765,24 +3745,6 @@ namespace Tests.Editor.FBXImporter
             var existing = new HashSet<string>(existingAssetPaths, StringComparer.OrdinalIgnoreCase);
             Func<string, bool> assetExists = existing.Contains;
             return (string)method.Invoke(null, new object[] { fbxFileName, assetExists });
-        }
-
-        private static int ResolveSummaryTargetFrameCount(int referenceTargetFrameCount, int mainAutoFrameCount)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ResolveSummaryTargetFrameCount",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(int), typeof(int) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must keep summary target frames independent from the Main_Auto candidate capture so frame-count regressions remain visible.");
-
-            return (int)method.Invoke(null, new object[] { referenceTargetFrameCount, mainAutoFrameCount });
         }
 
         private static void AssertRegressionSafeRetargetDefaults(string scenePath, float expectedMovementScaleMultiplier)
