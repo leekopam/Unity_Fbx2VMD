@@ -147,18 +147,18 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport),
                 () => new MmdExportSafetyDefaultsTests().Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines),
-                () => new MmdExportSafetyDefaultsTests().Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4),
-                () => new MmdExportSafetyDefaultsTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples),
-                () => new MmdExportSafetyDefaultsTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window),
-                () => new MmdExportSafetyDefaultsTests().Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesCandidateFramingToReferenceMp4());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ReportsCandidateTimingCoverageAgainstReferenceSamples());
+            RunTest(results, typeof(VisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
+                nameof(VisualComparisonFrameRoleDiagnosticsBuilderTests.Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window),
+                () => new VisualComparisonFrameRoleDiagnosticsBuilderTests().Given_TailSegmentStart_When_BuildingSummaryFrameRoleDiagnostics_Then_UsesMatchingReferenceMp4Window());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming),
                 () => new MmdExportSafetyDefaultsTests().Given_CandidateScreenshotIndex_When_BuildingSummaryFrameRoleDiagnostics_Then_ComparesTimeMatchedCandidateAndReferenceFraming());

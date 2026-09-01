@@ -2121,10 +2121,29 @@ namespace Fbx2Vmd.FBXImporter
 
         private static VisualComparisonFrameRoleDiagnosticsData BuildCurrentSummaryFrameRoleDiagnostics()
         {
-            return BuildSummaryFrameRoleDiagnostics(
-                ResolveSummaryTargetFrameCount(),
-                ResolveFrameCount(CaptureMode.SubManualTestPrefab),
-                ResolveFrameCount(CaptureMode.MainAuto));
+            return VisualComparisonFrameRoleDiagnosticsBuilder.Build(
+                new VisualComparisonFrameRoleDiagnosticsBuildRequest
+                {
+                    ReferenceTargetFrameCount = ResolveSummaryTargetFrameCount(),
+                    BaselineRecordedFrameCount = ResolveFrameCount(CaptureMode.SubManualTestPrefab),
+                    CandidateRecordedFrameCount = ResolveFrameCount(CaptureMode.MainAuto),
+                    RequestedDurationSeconds = _currentRunOptions.durationSeconds,
+                    ReferenceClipStartSeconds = ResolveReferenceMp4CurrentClipStartSeconds(),
+                    ReferenceVideoProvenanceEvidencePath = ReferenceMp4ProvenanceEvidenceRelativePath,
+                    ReferenceVideoAnalysisResultPath = ReferenceMp4AnalysisResultRelativePath,
+                    ReferenceVideoFrameMetricsPath = ReferenceMp4FrameMetricsRelativePath,
+                    ReferenceVideoContactSheetPath = ReferenceMp4ContactSheetRelativePath,
+                    CandidateFrameIndexPath = ResolveCandidateFrameIndexPathForDiagnostics(),
+                    ReferenceVideoProjectRoot = ResolveProjectRootForDiagnostics(),
+                    CandidateFrameProjectRoot = _projectRoot,
+                    TargetFrameCountRole = "ref_mmd_mp4 expected frame range for the full satisfaction_2 reference",
+                    BaselineRecordedFrameCountRole = "Sub_Manual recorded comparison baseline; reported separately and not used as target_frame_count",
+                    CandidateRecordedFrameCountRole = "Main_Auto candidate capture under test",
+                    FrameQualityMetricBasis = "Unity pose metrics compare Sub_Manual and Main_Auto rows by recorderFrame; the ref_mmd_mp4 count is only the frame-count target",
+                    VmdExportMetricBasis = "VMD export spike and floor metrics are evaluated on the Main_Auto candidate VMD",
+                    ReferenceVideoCanonicalContext = ReferenceMp4CanonicalContext,
+                    ReferenceVideoAnalysisMetricBasis = ReferenceMp4AnalysisMetricBasis
+                });
         }
 
         private static MotionComparisonFrameQualitySummary[] BuildFrameQualitySummaries(
@@ -2376,19 +2395,6 @@ namespace Fbx2Vmd.FBXImporter
                 SatisfactionReferenceMaxMmdFrame);
         }
 
-        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
-            int referenceTargetFrameCount,
-            int baselineRecordedFrameCount,
-            int candidateRecordedFrameCount)
-        {
-            return BuildSummaryFrameRoleDiagnostics(
-                referenceTargetFrameCount,
-                baselineRecordedFrameCount,
-                candidateRecordedFrameCount,
-                _currentRunOptions.durationSeconds,
-                ResolveReferenceMp4CurrentClipStartSeconds());
-        }
-
         private static float ResolveReferenceMp4CurrentClipStartSeconds()
         {
             float referenceClipLengthSeconds = _referenceClip != null ? _referenceClip.length : 0f;
@@ -2472,183 +2478,6 @@ namespace Fbx2Vmd.FBXImporter
                 requestedDurationSeconds);
         }
 
-        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
-            int referenceTargetFrameCount,
-            int baselineRecordedFrameCount,
-            int candidateRecordedFrameCount,
-            float requestedDurationSeconds)
-        {
-            return BuildSummaryFrameRoleDiagnostics(
-                referenceTargetFrameCount,
-                baselineRecordedFrameCount,
-                candidateRecordedFrameCount,
-                requestedDurationSeconds,
-                0f);
-        }
-
-        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
-            int referenceTargetFrameCount,
-            int baselineRecordedFrameCount,
-            int candidateRecordedFrameCount,
-            float requestedDurationSeconds,
-            float referenceClipStartSeconds)
-        {
-            return BuildSummaryFrameRoleDiagnostics(
-                referenceTargetFrameCount,
-                baselineRecordedFrameCount,
-                candidateRecordedFrameCount,
-                requestedDurationSeconds,
-                referenceClipStartSeconds,
-                ReferenceMp4ProvenanceEvidenceRelativePath,
-                ReferenceMp4AnalysisResultRelativePath,
-                ReferenceMp4FrameMetricsRelativePath,
-                ReferenceMp4ContactSheetRelativePath);
-        }
-
-        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
-            int referenceTargetFrameCount,
-            int baselineRecordedFrameCount,
-            int candidateRecordedFrameCount,
-            float requestedDurationSeconds,
-            string referenceMp4ProvenanceEvidencePath,
-            string referenceMp4AnalysisResultPath,
-            string referenceMp4FrameMetricsPath,
-            string referenceMp4ContactSheetPath)
-        {
-            return BuildSummaryFrameRoleDiagnostics(
-                referenceTargetFrameCount,
-                baselineRecordedFrameCount,
-                candidateRecordedFrameCount,
-                requestedDurationSeconds,
-                0f,
-                referenceMp4ProvenanceEvidencePath,
-                referenceMp4AnalysisResultPath,
-                referenceMp4FrameMetricsPath,
-                referenceMp4ContactSheetPath);
-        }
-
-        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
-            int referenceTargetFrameCount,
-            int baselineRecordedFrameCount,
-            int candidateRecordedFrameCount,
-            float requestedDurationSeconds,
-            float referenceClipStartSeconds,
-            string referenceMp4ProvenanceEvidencePath,
-            string referenceMp4AnalysisResultPath,
-            string referenceMp4FrameMetricsPath,
-            string referenceMp4ContactSheetPath)
-        {
-            return BuildSummaryFrameRoleDiagnostics(
-                referenceTargetFrameCount,
-                baselineRecordedFrameCount,
-                candidateRecordedFrameCount,
-                requestedDurationSeconds,
-                referenceClipStartSeconds,
-                referenceMp4ProvenanceEvidencePath,
-                referenceMp4AnalysisResultPath,
-                referenceMp4FrameMetricsPath,
-                referenceMp4ContactSheetPath,
-                ResolveCandidateFrameIndexPathForDiagnostics());
-        }
-
-        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
-            int referenceTargetFrameCount,
-            int baselineRecordedFrameCount,
-            int candidateRecordedFrameCount,
-            float requestedDurationSeconds,
-            string referenceMp4ProvenanceEvidencePath,
-            string referenceMp4AnalysisResultPath,
-            string referenceMp4FrameMetricsPath,
-            string referenceMp4ContactSheetPath,
-            string candidateFrameIndexPath)
-        {
-            return BuildSummaryFrameRoleDiagnostics(
-                referenceTargetFrameCount,
-                baselineRecordedFrameCount,
-                candidateRecordedFrameCount,
-                requestedDurationSeconds,
-                0f,
-                referenceMp4ProvenanceEvidencePath,
-                referenceMp4AnalysisResultPath,
-                referenceMp4FrameMetricsPath,
-                referenceMp4ContactSheetPath,
-                candidateFrameIndexPath);
-        }
-
-        private static VisualComparisonFrameRoleDiagnosticsData BuildSummaryFrameRoleDiagnostics(
-            int referenceTargetFrameCount,
-            int baselineRecordedFrameCount,
-            int candidateRecordedFrameCount,
-            float requestedDurationSeconds,
-            float referenceClipStartSeconds,
-            string referenceMp4ProvenanceEvidencePath,
-            string referenceMp4AnalysisResultPath,
-            string referenceMp4FrameMetricsPath,
-            string referenceMp4ContactSheetPath,
-            string candidateFrameIndexPath)
-        {
-            VisualComparisonFrameRoleDiagnosticsData diagnostics = new VisualComparisonFrameRoleDiagnosticsData
-            {
-                reference_target_frame_count = Mathf.Max(0, referenceTargetFrameCount),
-                baseline_recorded_frame_count = Mathf.Max(0, baselineRecordedFrameCount),
-                candidate_recorded_frame_count = Mathf.Max(0, candidateRecordedFrameCount),
-                baseline_frame_count_delta_from_reference_target = referenceTargetFrameCount > 0
-                    ? baselineRecordedFrameCount - referenceTargetFrameCount
-                    : 0,
-                candidate_frame_count_delta_from_reference_target = referenceTargetFrameCount > 0
-                    ? candidateRecordedFrameCount - referenceTargetFrameCount
-                    : 0,
-                target_frame_count_role = "ref_mmd_mp4 expected frame range for the full satisfaction_2 reference",
-                baseline_recorded_frame_count_role = "Sub_Manual recorded comparison baseline; reported separately and not used as target_frame_count",
-                candidate_recorded_frame_count_role = "Main_Auto candidate capture under test",
-                frame_quality_metric_basis = "Unity pose metrics compare Sub_Manual and Main_Auto rows by recorderFrame; the ref_mmd_mp4 count is only the frame-count target",
-                vmd_export_metric_basis = "VMD export spike and floor metrics are evaluated on the Main_Auto candidate VMD"
-            };
-            AttachReferenceMp4Diagnostics(
-                diagnostics,
-                requestedDurationSeconds,
-                referenceClipStartSeconds,
-                referenceMp4ProvenanceEvidencePath,
-                referenceMp4AnalysisResultPath,
-                referenceMp4FrameMetricsPath,
-                referenceMp4ContactSheetPath);
-            YybScreenshotDiagnosticAnalyzer.AttachCandidateScreenshotFrameDiagnostics(
-                diagnostics,
-                candidateFrameIndexPath,
-                _projectRoot);
-            return diagnostics;
-        }
-
-        private static void AttachReferenceMp4Diagnostics(
-            VisualComparisonFrameRoleDiagnosticsData diagnostics,
-            float requestedDurationSeconds,
-            float referenceClipStartSeconds,
-            string referenceMp4ProvenanceEvidencePath,
-            string referenceMp4AnalysisResultPath,
-            string referenceMp4FrameMetricsPath,
-            string referenceMp4ContactSheetPath)
-        {
-            if (diagnostics == null)
-            {
-                return;
-            }
-
-            ReferenceVideoClipCoverageData coverage = ReferenceVideoFrameRoleDiagnosticsAttacher.Attach(
-                diagnostics,
-                requestedDurationSeconds,
-                referenceClipStartSeconds,
-                referenceMp4ProvenanceEvidencePath,
-                referenceMp4AnalysisResultPath,
-                referenceMp4FrameMetricsPath,
-                referenceMp4ContactSheetPath,
-                ResolveProjectRootForDiagnostics(),
-                ReferenceMp4CanonicalContext,
-                ReferenceMp4AnalysisMetricBasis);
-            YybReferenceVideoFrameMetricAttacher.Attach(
-                diagnostics,
-                coverage,
-                ResolveProjectRootForDiagnostics());
-        }
         private static string ResolveCandidateFrameIndexPathForDiagnostics()
         {
             CaptureResult mainAuto = Results.FirstOrDefault(result =>
