@@ -95,15 +95,15 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation),
                 () => new MmdExportSafetyDefaultsTests().Given_RightLowerLegToFootEndpointBlendRuntimeOverride_When_Applied_Then_ScalesOnlyRightEndpointDriftCompensation());
+            RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
+                nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PostSetEndpointSettings_When_Applied_Then_ClampsAndScopesValues),
+                () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PostSetEndpointSettings_When_Applied_Then_ClampsAndScopesValues());
+            RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
+                nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PostSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps),
+                () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PostSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_OnlyChangesEndpointClampSwitchAndCaps),
-                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointRuntimeOverride_When_Applied_Then_OnlyChangesEndpointClampSwitchAndCaps());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointPositiveZScaleRuntimeOverride_When_Applied_Then_ScalesOnlyPositiveZCarrier),
-                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointPositiveZScaleRuntimeOverride_When_Applied_Then_ScalesOnlyPositiveZCarrier());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointFrameGatedRuntimeOverride_When_Applied_Then_PreservesDiagnosticWindow),
-                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointFrameGatedRuntimeOverride_When_Applied_Then_PreservesDiagnosticWindow());
+                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointPositiveZScale_When_CalculatingDesiredFootPosition_Then_ScalesOnlyPositiveZCarrier),
+                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointPositiveZScale_When_CalculatingDesiredFootPosition_Then_ScalesOnlyPositiveZCarrier());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX),
                 () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX());
