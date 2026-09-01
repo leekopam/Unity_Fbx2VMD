@@ -358,6 +358,64 @@ namespace Fbx2Vmd.FBXImporter
             return IsFinite(nextFootPosition);
         }
 
+        internal static bool ShouldKeepHipsLocalPositionReferenceByTargetGap(
+            Vector3 referenceFootPosition,
+            Vector3 referenceToesPosition,
+            Vector3 beforeFootPosition,
+            Vector3 beforeToesPosition,
+            Vector3 afterFootPosition,
+            Vector3 afterToesPosition,
+            float maxAllowedIncrease)
+        {
+            if (!TryCalculateEndpointTargetGap(
+                    referenceFootPosition,
+                    referenceToesPosition,
+                    beforeFootPosition,
+                    beforeToesPosition,
+                    out float beforeGap) ||
+                !TryCalculateEndpointTargetGap(
+                    referenceFootPosition,
+                    referenceToesPosition,
+                    afterFootPosition,
+                    afterToesPosition,
+                    out float afterGap))
+            {
+                return true;
+            }
+
+            return afterGap <= beforeGap + Mathf.Max(0f, maxAllowedIncrease);
+        }
+
+        private static bool TryCalculateEndpointTargetGap(
+            Vector3 referenceFootPosition,
+            Vector3 referenceToesPosition,
+            Vector3 targetFootPosition,
+            Vector3 targetToesPosition,
+            out float gap)
+        {
+            gap = float.NaN;
+            if (!TryCalculateXzDistance(referenceFootPosition, targetFootPosition, out float footGap) ||
+                !TryCalculateXzDistance(referenceToesPosition, targetToesPosition, out float toesGap))
+            {
+                return false;
+            }
+
+            gap = Mathf.Max(footGap, toesGap);
+            return IsFinite(gap);
+        }
+
+        private static bool TryCalculateXzDistance(Vector3 a, Vector3 b, out float distance)
+        {
+            distance = float.NaN;
+            if (!IsFinite(a) || !IsFinite(b))
+            {
+                return false;
+            }
+
+            distance = Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
+            return IsFinite(distance);
+        }
+
         private static Vector3 NaNVector3 => new Vector3(float.NaN, float.NaN, float.NaN);
 
         private static bool IsFinite(float value)

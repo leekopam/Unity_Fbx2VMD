@@ -21,6 +21,7 @@ namespace Tests.Editor.FBXImporter
             var results = new List<TestResultRecord>();
             var tests = new PoseSpaceRetargeterLegacyAnimationStepTests();
             var manualPoseTests = new PoseSpaceRetargeterHipsLocalPositionReferenceTests();
+            var endpointTests = new RetargetingEndpointDiagnosticsTests();
 
             RunTest(results, nameof(tests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference),
                 tests.Given_FullBodyReferenceEnabledWithoutFingerMuscles_When_DeterminingEditorPoseReferenceUse_Then_UsesReference);
@@ -70,10 +71,18 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_FootHipsAlignedResidualYawCorrection_When_TargetDirectionDiffers_Then_LimitsYawOnlyRotation);
             RunTest(results, nameof(tests.Given_OneFootResidualAlreadyInsideGate_When_ResolvingYawMaxAngle_Then_ProtectsPassingSide),
                 tests.Given_OneFootResidualAlreadyInsideGate_When_ResolvingYawMaxAngle_Then_ProtectsPassingSide);
-            RunTest(results, nameof(tests.Given_HipsLocalReferenceWouldIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate),
-                tests.Given_HipsLocalReferenceWouldIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate);
-            RunTest(results, nameof(tests.Given_HipsLocalReferenceDoesNotIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate),
-                tests.Given_HipsLocalReferenceDoesNotIncreaseRightEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate);
+            RunTest(results, nameof(endpointTests.Given_HipsLocalReferenceWouldIncreaseEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate),
+                endpointTests.Given_HipsLocalReferenceWouldIncreaseEndpointTargetGap_When_CheckingTargetGapGuard_Then_RejectsCandidate);
+            RunTest(results, nameof(endpointTests.Given_HipsLocalReferencePreservesEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate),
+                endpointTests.Given_HipsLocalReferencePreservesEndpointTargetGap_When_CheckingTargetGapGuard_Then_KeepsCandidate);
+            RunTest(results, nameof(endpointTests.Given_EndpointTargetGapAtAllowedIncrease_When_CheckingTargetGapGuard_Then_KeepsCandidate),
+                endpointTests.Given_EndpointTargetGapAtAllowedIncrease_When_CheckingTargetGapGuard_Then_KeepsCandidate);
+            RunTest(results, nameof(endpointTests.Given_NegativeAllowedIncrease_When_CheckingTargetGapGuard_Then_ClampsAllowanceToZero),
+                endpointTests.Given_NegativeAllowedIncrease_When_CheckingTargetGapGuard_Then_ClampsAllowanceToZero);
+            RunTest(results, nameof(endpointTests.Given_NonFiniteEndpointPosition_When_CheckingTargetGapGuard_Then_FailsOpen),
+                endpointTests.Given_NonFiniteEndpointPosition_When_CheckingTargetGapGuard_Then_FailsOpen);
+            RunTest(results, nameof(endpointTests.Given_OnlyEndpointHeightChanges_When_CheckingTargetGapGuard_Then_IgnoresY),
+                endpointTests.Given_OnlyEndpointHeightChanges_When_CheckingTargetGapGuard_Then_IgnoresY);
             RunTest(results, nameof(manualPoseTests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly),
                 manualPoseTests.Given_ManualAnimatorBodyPositionXzReference_When_CalculatingSolverInput_Then_ClampsXzOnly);
             RunTest(results, nameof(manualPoseTests.Given_ManualAnimatorBodyPositionXzAxisScale_When_CalculatingSolverInput_Then_ReducesOnlyRequestedAxis),
