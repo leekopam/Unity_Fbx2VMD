@@ -56,6 +56,25 @@ namespace Fbx2Vmd.FBXImporter
             return Mathf.Clamp01((fadeEnd - currentFrame) / blend);
         }
 
+        internal static bool HasActiveFrameGate(float startFrame, float endFrame)
+        {
+            float start = Mathf.Max(0f, startFrame);
+            float end = Mathf.Max(0f, endFrame);
+            return (start > 0f || end > 0f) && end >= start && end > 0f;
+        }
+
+        internal static bool IsFrameWithinGate(int currentFrame, float startFrame, float endFrame)
+        {
+            if (!HasActiveFrameGate(startFrame, endFrame))
+            {
+                return true;
+            }
+
+            float start = Mathf.Max(0f, startFrame);
+            float end = Mathf.Max(0f, endFrame);
+            return currentFrame >= Mathf.RoundToInt(start) && currentFrame <= Mathf.RoundToInt(end);
+        }
+
         internal static int ApplyExactLocalRotationReference(
             Animator referenceAnimator,
             Animator targetAnimator,
