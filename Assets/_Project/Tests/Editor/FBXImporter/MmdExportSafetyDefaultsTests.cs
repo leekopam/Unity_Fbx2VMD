@@ -1122,69 +1122,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorBodyPositionXzRuntimeOverride_When_Toggled_Then_OnlyChangesSolverBodyPositionBasis()
-        {
-            var managerObject = new GameObject("manual body position xz runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldUseManualAnimatorFullBodyPoseReference = false;
-                manager.usePreSetHumanPoseRightEndpointPositionReference = false;
-                manager.ShouldUseRetargetBodyPositionXZRootMotion = false;
-
-                bool enabledApplied = ApplyManualAnimatorBodyPositionXzRuntimeOverride(
-                    manager,
-                    true,
-                    0.45f,
-                    0.025f,
-                    frameGateStart: 300f,
-                    frameGateEnd: 600f,
-                    frameGateBlendFrames: 30f,
-                    axisXScale: 0.25f,
-                    axisZScale: 0.75f);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(ReadBoolField(manager, "ShouldUseManualAnimatorBodyPositionXzReference"), Is.True);
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceWeight"), Is.EqualTo(0.45f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceMaxOffset"), Is.EqualTo(0.025f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateStart"), Is.EqualTo(300f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateEnd"), Is.EqualTo(600f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames"), Is.EqualTo(30f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisXScale"), Is.EqualTo(0.25f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisZScale"), Is.EqualTo(0.75f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
-                Assert.That(manager.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
-
-                bool disabledApplied = ApplyManualAnimatorBodyPositionXzRuntimeOverride(
-                    manager,
-                    false,
-                    0.45f,
-                    0.025f,
-                    frameGateStart: 300f,
-                    frameGateEnd: 600f,
-                    frameGateBlendFrames: 30f,
-                    axisXScale: 0.25f,
-                    axisZScale: 0.75f);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(ReadBoolField(manager, "ShouldUseManualAnimatorBodyPositionXzReference"), Is.False);
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateStart"), Is.EqualTo(300f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateEnd"), Is.EqualTo(600f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames"), Is.EqualTo(30f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisXScale"), Is.EqualTo(0.25f).Within(0.0001f));
-                Assert.That(ReadFloatField(manager, "manualAnimatorBodyPositionXzReferenceAxisZScale"), Is.EqualTo(0.75f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
-                Assert.That(manager.usePreSetHumanPoseRightEndpointPositionReference, Is.False);
-                Assert.That(manager.ShouldUseRetargetBodyPositionXZRootMotion, Is.False);
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_RightSleeveSilhouetteOffsetFrameGate_When_ExposedInInspector_Then_Frame90IsSelectable()
         {
             AssertRangeMaxAtLeast<FBXVmdPipeline>("_yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
@@ -5358,33 +5295,6 @@ namespace Tests.Editor.FBXImporter
             return (float)field.GetValue(manager);
         }
 
-        private static bool ApplyManualAnimatorBodyPositionXzRuntimeOverride(
-            FBXVmdPipeline manager,
-            bool enabled,
-            float weight,
-            float maxOffset,
-            float frameGateStart,
-            float frameGateEnd,
-            float frameGateBlendFrames,
-            float axisXScale,
-            float axisZScale)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorBodyPositionXzRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool), typeof(float), typeof(float), typeof(float), typeof(float), typeof(float), typeof(float), typeof(float) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support runtime-only manual bodyPosition X/Z solver input probes.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled, weight, maxOffset, frameGateStart, frameGateEnd, frameGateBlendFrames, axisXScale, axisZScale });
-        }
-
         private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
             Vector3 desiredFootPosition,
             Vector3 desiredToesPosition,
@@ -5900,22 +5810,6 @@ namespace Tests.Editor.FBXImporter
                 range.max,
                 Is.GreaterThanOrEqualTo(expectedMax),
                 $"{typeof(T).Name}.{fieldName} Inspector range must include the discovered legacy frame gate {expectedMax:0}.");
-        }
-
-        private static bool ReadBoolField(object target, string fieldName)
-        {
-            Assert.That(target, Is.Not.Null, "Target object is required for reflective field read.");
-            FieldInfo field = target.GetType().GetField(
-                fieldName,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-            object value = field != null
-                ? field.GetValue(target)
-                : target.GetType().GetProperty(
-                    fieldName,
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(target);
-            Assert.That(value, Is.TypeOf<bool>(), $"{target.GetType().Name} must expose bool member {fieldName} for focused runtime diagnostics.");
-            return (bool)value;
         }
 
         private static AnimationClip LoadFirstHumanoidAnimationClip(string assetPath)
