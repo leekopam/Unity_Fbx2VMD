@@ -7,6 +7,13 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal static class ThumbPoseRiskCalculator
     {
+        private const float HelperDistanceDeltaWarning = 0.003f;
+        private const float HelperDistanceDeltaFullRisk = 0.008f;
+        private const float HelperRotationWarning = 28f;
+        private const float HelperRotationFullRisk = 70f;
+        private const float WebbingRotationWarning = 18f;
+        private const float WebbingRotationFullRisk = 45f;
+
         internal static float FindMaximumFinite(params float[] values)
         {
             if (values == null || values.Length == 0)
@@ -76,6 +83,50 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return 0f;
+        }
+
+        internal static bool TryCalculateHelperRelationshipRisk(
+            float currentDistance,
+            float initialDistance,
+            float rotationDelta,
+            float spreadRisk,
+            float projectionRisk,
+            out float helperDistanceRisk,
+            out float helperRotationRisk,
+            out float webbingRisk)
+        {
+            helperDistanceRisk = float.NaN;
+            helperRotationRisk = float.NaN;
+            webbingRisk = float.NaN;
+
+            if (IsFinite(currentDistance) && IsFinite(initialDistance))
+            {
+                helperDistanceRisk = CalculateAboveThreshold(
+                    Mathf.Abs(currentDistance - initialDistance),
+                    HelperDistanceDeltaWarning,
+                    HelperDistanceDeltaFullRisk);
+            }
+
+            if (IsFinite(rotationDelta))
+            {
+                helperRotationRisk = CalculateAboveThreshold(
+                    rotationDelta,
+                    HelperRotationWarning,
+                    HelperRotationFullRisk);
+                webbingRisk = FindMaximumFinite(
+                    spreadRisk,
+                    projectionRisk,
+                    helperDistanceRisk,
+                    CalculateAboveThreshold(
+                        rotationDelta,
+                        WebbingRotationWarning,
+                        WebbingRotationFullRisk));
+            }
+
+            return !float.IsNaN(FindMaximumFinite(
+                helperDistanceRisk,
+                helperRotationRisk,
+                webbingRisk));
         }
 
         private static bool IsFinite(float value)

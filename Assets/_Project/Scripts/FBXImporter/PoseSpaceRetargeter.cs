@@ -1355,12 +1355,6 @@ namespace Fbx2Vmd.FBXImporter
         private const float ManualThumbOverrideSpreadFullRiskAngle = 52f;
         private const float ManualThumbOverrideProjectionMin = 0.358f;
         private const float ManualThumbOverrideProjectionMax = 0.5f;
-        private const float ManualThumbHelperDistanceDeltaWarning = 0.003f;
-        private const float ManualThumbHelperDistanceDeltaFullRisk = 0.008f;
-        private const float ManualThumbHelperRotationWarning = 28f;
-        private const float ManualThumbHelperRotationFullRisk = 70f;
-        private const float ManualThumbWebbingRotationWarning = 18f;
-        private const float ManualThumbWebbingRotationFullRisk = 45f;
         private const float ManualThumbWorldRotationReferenceToleranceDegrees = 1.5f;
         private const float ManualThumbDetachedHelperPreserveCurrentReferenceAngleMax = 12f;
         private const float ManualThumbReferenceSpreadDeviationToleranceDegrees = 1.5f;
@@ -5246,12 +5240,12 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float spreadAngle = Vector3.Angle(thumbDirection, indexDirection);
-            float spreadRisk = RiskAbove(
+            float spreadRisk = ThumbPoseRiskCalculator.CalculateAboveThreshold(
                 spreadAngle,
                 ManualThumbOverrideSpreadWarningAngle,
                 ManualThumbOverrideSpreadFullRiskAngle);
             float projection = Vector3.Dot(thumbDirection, targetFrame.Normal);
-            float projectionRisk = RiskOutsideRange(
+            float projectionRisk = ThumbPoseRiskCalculator.CalculateOutsideRange(
                 projection,
                 ManualThumbOverrideProjectionMin,
                 ManualThumbOverrideProjectionMax,
@@ -5268,11 +5262,17 @@ namespace Fbx2Vmd.FBXImporter
                 out float helperRotationRisk,
                 out float helperWebbingRisk))
             {
-                helperSeparationRisk = MaxFinite(helperDistanceRisk, helperRotationRisk);
+                helperSeparationRisk = ThumbPoseRiskCalculator.FindMaximumFinite(
+                    helperDistanceRisk,
+                    helperRotationRisk);
                 webbingRisk = helperWebbingRisk;
             }
 
-            risk = MaxFinite(spreadRisk, projectionRisk, helperSeparationRisk, webbingRisk);
+            risk = ThumbPoseRiskCalculator.FindMaximumFinite(
+                spreadRisk,
+                projectionRisk,
+                helperSeparationRisk,
+                webbingRisk);
             return !float.IsNaN(risk) && !float.IsInfinity(risk);
         }
 
@@ -5314,7 +5314,7 @@ namespace Fbx2Vmd.FBXImporter
                 rotationDelta = Quaternion.Angle(initialRelativeRotation, relativeRotation);
             }
 
-            return TryCalculateThumbHelperRelationshipRisk(
+            return ThumbPoseRiskCalculator.TryCalculateHelperRelationshipRisk(
                 currentDistance,
                 initialDistance,
                 rotationDelta,
@@ -5323,47 +5323,6 @@ namespace Fbx2Vmd.FBXImporter
                 out helperDistanceRisk,
                 out helperRotationRisk,
                 out webbingRisk);
-        }
-
-        private static bool TryCalculateThumbHelperRelationshipRisk(
-            float currentDistance,
-            float initialDistance,
-            float rotationDelta,
-            float spreadRisk,
-            float projectionRisk,
-            out float helperDistanceRisk,
-            out float helperRotationRisk,
-            out float webbingRisk)
-        {
-            helperDistanceRisk = float.NaN;
-            helperRotationRisk = float.NaN;
-            webbingRisk = float.NaN;
-
-            if (IsFinite(currentDistance) && IsFinite(initialDistance))
-            {
-                helperDistanceRisk = RiskAbove(
-                    Mathf.Abs(currentDistance - initialDistance),
-                    ManualThumbHelperDistanceDeltaWarning,
-                    ManualThumbHelperDistanceDeltaFullRisk);
-            }
-
-            if (IsFinite(rotationDelta))
-            {
-                helperRotationRisk = RiskAbove(
-                    rotationDelta,
-                    ManualThumbHelperRotationWarning,
-                    ManualThumbHelperRotationFullRisk);
-                webbingRisk = MaxFinite(
-                    spreadRisk,
-                    projectionRisk,
-                    helperDistanceRisk,
-                    RiskAbove(
-                        rotationDelta,
-                        ManualThumbWebbingRotationWarning,
-                        ManualThumbWebbingRotationFullRisk));
-            }
-
-            return !float.IsNaN(MaxFinite(helperDistanceRisk, helperRotationRisk, webbingRisk));
         }
 
         private void EnsureThumbBaseHelperRelationshipBaseline(bool leftHand, Transform helperTransform, Transform sourceTransform)
@@ -5405,67 +5364,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return null;
-        }
-
-        private static float RiskAbove(float value, float warningThreshold, float fullRiskThreshold)
-        {
-            if (!IsFinite(value))
-            {
-                return float.NaN;
-            }
-
-            if (value <= warningThreshold)
-            {
-                return 0f;
-            }
-
-            if (fullRiskThreshold <= warningThreshold)
-            {
-                return 1f;
-            }
-
-            return Mathf.Clamp01((value - warningThreshold) / (fullRiskThreshold - warningThreshold));
-        }
-
-        private static float RiskOutsideRange(float value, float minValue, float maxValue, float fullRiskDistance)
-        {
-            if (!IsFinite(value))
-            {
-                return float.NaN;
-            }
-
-            if (value < minValue)
-            {
-                return RiskAbove(minValue - value, 0f, Mathf.Max(0.0001f, fullRiskDistance));
-            }
-
-            if (value > maxValue)
-            {
-                return RiskAbove(value - maxValue, 0f, Mathf.Max(0.0001f, fullRiskDistance));
-            }
-
-            return 0f;
-        }
-
-        private static float MaxFinite(params float[] values)
-        {
-            float max = float.NaN;
-            if (values == null)
-            {
-                return max;
-            }
-
-            foreach (float value in values)
-            {
-                if (float.IsNaN(value) || float.IsInfinity(value))
-                {
-                    continue;
-                }
-
-                max = float.IsNaN(max) ? value : Mathf.Max(max, value);
-            }
-
-            return max;
         }
 
         private int AlignEditorHumanoidHandPalmFrame(bool leftHand, float weight)
