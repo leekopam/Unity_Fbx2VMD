@@ -1692,10 +1692,6 @@ namespace Fbx2Vmd.FBXImporter
         private bool _hasEstimatedFootRadius;
         private float _estimatedFootRadius = DefaultFootRadius;
         private const float DefaultFootRadius = 0.04f;
-        private const float UpperArmTwistReferenceSignMagnitudeTolerance = 0.35f;
-        private const float UpperArmTwistOverrangeReferenceSignMagnitudeTolerance = 1.5f;
-        private const float UpperArmTwistReferenceSignMaxAbs = 2.25f;
-        private const float RightUpperArmTwistReferenceSignMinAbs = 2f;
         private const float GroundingDirectionReversalStepScale = 0.4f;
         private const float ThumbLocalRotationOvershootRatio = 0.35f;
         private const float ThumbLocalRotationHardOvershootDegrees = 8f;
@@ -2187,7 +2183,7 @@ namespace Fbx2Vmd.FBXImporter
 
             for (int i = 0; i < HumanTrait.MuscleCount; i++)
             {
-                if (IsFingerMuscle(HumanTrait.MuscleName[i]))
+                if (RetargetingMuscleReferencePolicy.IsFingerMuscle(HumanTrait.MuscleName[i]))
                 {
                     _editorFingerReferenceMuscleIndices.Add(i);
                 }
@@ -2205,7 +2201,7 @@ namespace Fbx2Vmd.FBXImporter
             manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly = fullBodyPoseRightSleeveChainMusclesOnly;
             manualAnimatorFullBodyPoseFrameGateStart = Mathf.Max(0f, fullBodyPoseFrameGateStart);
             manualAnimatorFullBodyPoseFrameGateEnd = Mathf.Max(0f, fullBodyPoseFrameGateEnd);
-            _useEditorFingerPoseReference = ShouldUseEditorPoseReference(
+            _useEditorFingerPoseReference = RetargetingMuscleReferencePolicy.ShouldUsePoseReference(
                 enableFingerPoseReference,
                 ShouldUseManualAnimatorFullBodyPoseReference,
                 _editorFingerReferenceMuscleIndices.Count);
@@ -2221,14 +2217,6 @@ namespace Fbx2Vmd.FBXImporter
                 _hasEditorReferenceHipsRestLocalPosition = true;
             }
             Debug.Log($"[PoseSpaceRetargeter] Manual Animator finger reference ready: prefab={referencePrefab.name}, controller={referenceController.name}, state={stateName}, clip={referenceClip.name}, muscles={_editorFingerReferenceMuscleIndices.Count}, hipsRest={(_hasEditorReferenceHipsRestLocalPosition ? _editorReferenceHipsRestLocalPosition.y.ToString("F4") : "N/A")}");
-        }
-
-        private static bool ShouldUseEditorPoseReference(
-            bool enableFingerPoseReference,
-            bool enableFullBodyPoseReference,
-            int fingerReferenceMuscleCount)
-        {
-            return enableFullBodyPoseReference || (enableFingerPoseReference && fingerReferenceMuscleCount > 0);
         }
 
         private static void DisableEditorReferenceRecordingComponents(GameObject referenceInstance)
@@ -2617,7 +2605,7 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
             return useEditorHumanoidMuscleReference &&
                 hasEditorHumanoidMuscleReferenceCurve &&
-                ShouldUseEditorHumanoidMuscleReference(muscleIndex);
+                RetargetingMuscleReferencePolicy.ShouldUseHumanoidMuscleReference(muscleIndex);
 #else
             return false;
 #endif
@@ -2630,7 +2618,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
+            string normalized = RetargetingMuscleReferencePolicy.NormalizeMuscleName(HumanTrait.MuscleName[muscleIndex]);
             return normalized.Contains("forearm") && normalized.Contains("stretch");
         }
 
@@ -2862,7 +2850,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 float referenceValue = pair.Value.Evaluate(time);
-                if (!ShouldApplyEditorHumanoidMuscleReferenceValue(pair.Key, referenceValue))
+                if (!RetargetingMuscleReferencePolicy.ShouldApplyHumanoidMuscleReferenceValue(pair.Key, referenceValue))
                 {
                     continue;
                 }
@@ -2916,7 +2904,14 @@ namespace Fbx2Vmd.FBXImporter
                 int count = Mathf.Min(pose.muscles.Length, _editorFingerReferencePose.muscles.Length);
                 for (int i = 0; i < count; i++)
                 {
-                    if (!ShouldApplyManualFullBodyPoseReferenceMuscle(i))
+                    if (!RetargetingMuscleReferencePolicy.ShouldApplyManualFullBodyMuscle(
+                        i,
+                        manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly,
+                        manualAnimatorFullBodyPoseRightArmMusclesOnly,
+                        manualAnimatorFullBodyPoseLeftArmMusclesOnly,
+                        ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly,
+                        ShouldApplyManualAnimatorFullBodyLowerMusclesOnly,
+                        ShouldExcludeManualAnimatorFullBodyLowerMuscles))
                     {
                         continue;
                     }
@@ -5519,58 +5514,6 @@ namespace Fbx2Vmd.FBXImporter
             return states != null && states.Length > 0 ? states[0].state.name : "";
         }
 
-        private static bool IsFingerMuscle(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(muscleName);
-            return normalized.Contains("thumb") ||
-                   normalized.Contains("index") ||
-                   normalized.Contains("middle") ||
-                   normalized.Contains("ring") ||
-                   normalized.Contains("little");
-        }
-
-        private bool ShouldApplyManualFullBodyPoseReferenceMuscle(int muscleIndex)
-        {
-            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
-            {
-                return true;
-            }
-
-            string muscleName = HumanTrait.MuscleName[muscleIndex];
-            if (manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly)
-            {
-                return IsRightSleeveChainPoseMuscle(muscleName);
-            }
-
-            if (manualAnimatorFullBodyPoseRightArmMusclesOnly)
-            {
-                return IsRightArmPoseMuscle(muscleName);
-            }
-
-            if (manualAnimatorFullBodyPoseLeftArmMusclesOnly)
-            {
-                return IsLeftArmPoseMuscle(muscleName);
-            }
-
-            bool isLowerBody = IsLowerBodyMuscle(muscleName);
-            if (ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly)
-            {
-                return IsLegTwistOrInOutMuscle(muscleName);
-            }
-
-            if (ShouldApplyManualAnimatorFullBodyLowerMusclesOnly)
-            {
-                return isLowerBody;
-            }
-
-            return !ShouldExcludeManualAnimatorFullBodyLowerMuscles || !isLowerBody;
-        }
-
         private bool ShouldApplyManualFullBodyPoseReferenceFrameGate()
         {
             return ShouldApplySingleFrameFallbackReferenceFrameGate(
@@ -5665,129 +5608,6 @@ namespace Fbx2Vmd.FBXImporter
             _rightSleeveSilhouetteLocalOffsetBaseLocalPositions.Clear();
         }
 
-        private static bool IsLowerBodyMuscle(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(muscleName);
-            return normalized.Contains("upperleg") ||
-                   normalized.Contains("lowerleg") ||
-                   normalized.Contains("foot") ||
-                   normalized.Contains("toes");
-        }
-
-        private static bool IsLegTwistOrInOutMuscle(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(muscleName);
-            bool isLeg = normalized.Contains("upperleg") ||
-                         normalized.Contains("lowerleg") ||
-                         normalized.Contains("foot");
-            if (!isLeg)
-            {
-                return false;
-            }
-
-            return normalized.Contains("inout") ||
-                   normalized.Contains("twist");
-        }
-
-        private static bool IsRightArmPoseMuscle(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(muscleName);
-            if (!normalized.Contains("right"))
-            {
-                return false;
-            }
-
-            if (normalized.Contains("thumb") ||
-                normalized.Contains("index") ||
-                normalized.Contains("middle") ||
-                normalized.Contains("ring") ||
-                normalized.Contains("little"))
-            {
-                return false;
-            }
-
-            return normalized.Contains("shoulder") ||
-                   normalized.Contains("arm") ||
-                   normalized.Contains("forearm");
-        }
-
-        private static bool IsLeftArmPoseMuscle(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(muscleName);
-            if (!normalized.Contains("left"))
-            {
-                return false;
-            }
-
-            if (normalized.Contains("thumb") ||
-                normalized.Contains("index") ||
-                normalized.Contains("middle") ||
-                normalized.Contains("ring") ||
-                normalized.Contains("little"))
-            {
-                return false;
-            }
-
-            return normalized.Contains("shoulder") ||
-                   normalized.Contains("arm") ||
-                   normalized.Contains("forearm");
-        }
-
-        private static bool IsRightSleeveChainPoseMuscle(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(muscleName);
-            if (normalized.Contains("spine") ||
-                normalized.Contains("chest") ||
-                normalized.Contains("upperchest"))
-            {
-                return true;
-            }
-
-            if (!normalized.Contains("right"))
-            {
-                return false;
-            }
-
-            if (normalized.Contains("thumb") ||
-                normalized.Contains("index") ||
-                normalized.Contains("middle") ||
-                normalized.Contains("ring") ||
-                normalized.Contains("little") ||
-                normalized.Contains("hand"))
-            {
-                return false;
-            }
-
-            return normalized.Contains("shoulder") ||
-                   normalized.Contains("arm") ||
-                   normalized.Contains("forearm");
-        }
-
         private void AlignRetargetPoseInputWithEditorHumanoidMuscleReference(ref HumanPose pose)
         {
             if (!_useEditorHumanoidMuscleReference || pose.muscles == null || _editorHumanoidMuscleCurves.Count == 0)
@@ -5804,56 +5624,11 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 float referenceValue = pair.Value.Evaluate(time);
-                pose.muscles[pair.Key] = AlignRetargetPoseInputWithEditorReference(
+                pose.muscles[pair.Key] = RetargetingMuscleReferencePolicy.AlignPoseInputWithReference(
                     pair.Key,
                     pose.muscles[pair.Key],
                     referenceValue);
             }
-        }
-
-        private static bool ShouldUseEditorHumanoidMuscleReference(int muscleIndex)
-        {
-            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
-            if (IsLeftUpperArmTwistMuscle(normalized))
-            {
-                return false;
-            }
-
-            if (normalized.Contains("forearm") && normalized.Contains("stretch"))
-            {
-                return false;
-            }
-
-            return normalized.Contains("shoulder") ||
-                   normalized.Contains("arm") ||
-                   normalized.Contains("forearm") ||
-                   normalized.Contains("hand") ||
-                   normalized.Contains("thumb") ||
-                   normalized.Contains("index") ||
-                   normalized.Contains("middle") ||
-                   normalized.Contains("ring") ||
-                   normalized.Contains("little");
-        }
-
-        private static bool ShouldApplyEditorHumanoidMuscleReferenceValue(int muscleIndex, float referenceValue)
-        {
-            if (!ShouldUseEditorHumanoidMuscleReference(muscleIndex) || !IsFinite(referenceValue))
-            {
-                return false;
-            }
-
-            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
-            if (IsRightUpperArmTwistMuscle(normalized) && Mathf.Abs(referenceValue) > 1f)
-            {
-                return false;
-            }
-
-            return true;
         }
 
         private static void TransformRetargetPoseInputMuscles(ref HumanPose pose)
@@ -5865,86 +5640,8 @@ namespace Fbx2Vmd.FBXImporter
 
             for (int i = 0; i < pose.muscles.Length; i++)
             {
-                pose.muscles[i] = TransformRetargetPoseInputMuscleValue(i, pose.muscles[i]);
+                pose.muscles[i] = RetargetingMuscleReferencePolicy.TransformPoseInputValue(i, pose.muscles[i]);
             }
-        }
-
-        private static float TransformRetargetPoseInputMuscleValue(int muscleIndex, float value)
-        {
-            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
-            {
-                return value;
-            }
-
-            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
-            if (IsLeftUpperArmTwistMuscle(normalized))
-            {
-                return -value;
-            }
-
-            return value;
-        }
-
-        private static float AlignRetargetPoseInputWithEditorReference(int muscleIndex, float value, float referenceValue)
-        {
-            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
-            {
-                return value;
-            }
-
-            string normalized = NormalizeEditorMuscleName(HumanTrait.MuscleName[muscleIndex]);
-            bool isLeftUpperArmTwist = IsLeftUpperArmTwistMuscle(normalized);
-            bool isRightUpperArmTwist = IsRightUpperArmTwistMuscle(normalized);
-            if ((!isLeftUpperArmTwist && !isRightUpperArmTwist) ||
-                !IsFinite(value) ||
-                !IsFinite(referenceValue) ||
-                Mathf.Approximately(value, 0f) ||
-                Mathf.Approximately(referenceValue, 0f))
-            {
-                return value;
-            }
-
-            float absReference = Mathf.Abs(referenceValue);
-            float magnitudeTolerance = absReference <= 1f
-                ? UpperArmTwistReferenceSignMagnitudeTolerance
-                : UpperArmTwistOverrangeReferenceSignMagnitudeTolerance;
-            if (absReference > UpperArmTwistReferenceSignMaxAbs ||
-                Mathf.Abs(Mathf.Abs(value) - absReference) > magnitudeTolerance)
-            {
-                return value;
-            }
-
-            if (isLeftUpperArmTwist && Mathf.Sign(value) != Mathf.Sign(referenceValue))
-            {
-                return -value;
-            }
-
-            if (isRightUpperArmTwist &&
-                absReference >= RightUpperArmTwistReferenceSignMinAbs &&
-                Mathf.Sign(value) == Mathf.Sign(referenceValue))
-            {
-                return -value;
-            }
-
-            return value;
-        }
-
-        private static bool IsLeftUpperArmTwistMuscle(string normalizedMuscleName)
-        {
-            return !string.IsNullOrEmpty(normalizedMuscleName) &&
-                normalizedMuscleName.Contains("left") &&
-                normalizedMuscleName.Contains("arm") &&
-                normalizedMuscleName.Contains("twist") &&
-                !normalizedMuscleName.Contains("forearm");
-        }
-
-        private static bool IsRightUpperArmTwistMuscle(string normalizedMuscleName)
-        {
-            return !string.IsNullOrEmpty(normalizedMuscleName) &&
-                normalizedMuscleName.Contains("right") &&
-                normalizedMuscleName.Contains("arm") &&
-                normalizedMuscleName.Contains("twist") &&
-                !normalizedMuscleName.Contains("forearm");
         }
 
         private static int FindHumanMuscleIndex(string muscleName)
@@ -5954,34 +5651,21 @@ namespace Fbx2Vmd.FBXImporter
                 return -1;
             }
 
-            string normalizedInput = NormalizeEditorMuscleName(muscleName);
+            string normalizedInput = RetargetingMuscleReferencePolicy.NormalizeMuscleName(muscleName);
             for (int i = 0; i < HumanTrait.MuscleCount; i++)
             {
                 string humanMuscleName = HumanTrait.MuscleName[i];
                 if (string.Equals(humanMuscleName, muscleName, StringComparison.Ordinal) ||
-                    string.Equals(NormalizeEditorMuscleName(humanMuscleName), normalizedInput, StringComparison.Ordinal))
+                    string.Equals(
+                        RetargetingMuscleReferencePolicy.NormalizeMuscleName(humanMuscleName),
+                        normalizedInput,
+                        StringComparison.Ordinal))
                 {
                     return i;
                 }
             }
 
             return -1;
-        }
-
-        private static string NormalizeEditorMuscleName(string muscleName)
-        {
-            string normalized = muscleName.Replace(" ", "").Replace(".", "").Replace("-", "").Replace("_", "").ToLowerInvariant();
-            normalized = normalized.Replace("lefthandthumb", "leftthumb")
-                .Replace("lefthandindex", "leftindex")
-                .Replace("lefthandmiddle", "leftmiddle")
-                .Replace("lefthandring", "leftring")
-                .Replace("lefthandlittle", "leftlittle")
-                .Replace("righthandthumb", "rightthumb")
-                .Replace("righthandindex", "rightindex")
-                .Replace("righthandmiddle", "rightmiddle")
-                .Replace("righthandring", "rightring")
-                .Replace("righthandlittle", "rightlittle");
-            return normalized;
         }
 #endif
 
