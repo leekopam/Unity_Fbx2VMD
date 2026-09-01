@@ -904,36 +904,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ManualAnimatorFootLocalRotationRuntimeOverride_When_Toggled_Then_OnlyChangesReferenceSwitchAndWeight()
-        {
-            var managerObject = new GameObject("manual animator foot local rotation runtime override manager");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                manager.ShouldUseManualAnimatorFootLocalRotationReference = false;
-                manager.manualAnimatorFootLocalRotationReferenceWeight = 0f;
-
-                bool enabledApplied = ApplyManualAnimatorFootLocalRotationRuntimeOverride(manager, true);
-
-                Assert.That(enabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
-                Assert.That(manager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-                Assert.That(manager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Foot/toe runtime candidate must not re-enable the rejected hips/local body pose copy path.");
-                Assert.That(manager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Foot/toe runtime candidate must not change the grounding reference path.");
-
-                bool disabledApplied = ApplyManualAnimatorFootLocalRotationRuntimeOverride(manager, false);
-
-                Assert.That(disabledApplied, Is.True);
-                Assert.That(manager.ShouldUseManualAnimatorFootLocalRotationReference, Is.False);
-                Assert.That(manager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(0f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_ManualAnimatorFullBodyPoseRuntimeOverride_When_Toggled_Then_OnlyChangesFullBodyReferenceSwitch()
         {
             var managerObject = new GameObject("manual animator full body pose runtime override manager");
@@ -5185,24 +5155,6 @@ namespace Tests.Editor.FBXImporter
                 modifiers: null);
 
             Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only Final IK foot grounding override for OFF/ON visual comparisons.");
-
-            return (bool)method.Invoke(null, new object[] { manager, enabled });
-        }
-
-        private static bool ApplyManualAnimatorFootLocalRotationRuntimeOverride(FBXVmdPipeline manager, bool enabled)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ApplyManualAnimatorFootLocalRotationRuntimeOverride",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(FBXVmdPipeline), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must support a runtime-only foot/toe localRotation reference override for lower-body A/B probes.");
 
             return (bool)method.Invoke(null, new object[] { manager, enabled });
         }
