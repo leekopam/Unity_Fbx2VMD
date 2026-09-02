@@ -74,7 +74,11 @@ namespace Tests.Editor.FBXImporter
                 "ResolveMainAutoFrameCount",
                 "BuildFrameQualityFailureMessages",
                 "HasAcceptedUserFacingArtifactPreservingRawDiagnostic",
-                "BuildManualAnimatorCapturePlan"
+                "BuildManualAnimatorCapturePlan",
+                "IsMainSceneCandidateMode",
+                "ShouldBuildFrameQualityDiagnostic",
+                "ResolveIntegratedVerticalSolveRole",
+                "ResolveIntegratedVerticalSolveBasis"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(

@@ -541,43 +541,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes()
-        {
-            Assert.That(IsMainSceneCandidateMode("MainAuto"), Is.True);
-            Assert.That(IsMainSceneCandidateMode("MainRecording"), Is.True);
-            Assert.That(IsMainSceneCandidateMode("MainRecordingVmdPlaybackProbe"), Is.True);
-            Assert.That(IsMainSceneCandidateMode("SubManualTestPrefab"), Is.False);
-            Assert.That(IsMainSceneCandidateMode("SubManualYyb"), Is.False);
-        }
-
-        [Test]
-        public void Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles()
-        {
-            Assert.That(
-                ResolveIntegratedVerticalSolveRole("MainAuto"),
-                Is.EqualTo("main_auto_integrated_vertical_solve_metrics"));
-            Assert.That(
-                ResolveIntegratedVerticalSolveRole("MainRecordingVmdPlaybackProbe"),
-                Is.EqualTo("vmd_replay_integrated_vertical_solve_metrics"));
-            Assert.That(ResolveIntegratedVerticalSolveRole("MainRecording"), Is.Empty);
-            Assert.That(ResolveIntegratedVerticalSolveRole("SubManualTestPrefab"), Is.Empty);
-        }
-
-        [Test]
-        public void Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate()
-        {
-            Assert.That(
-                ShouldBuildFrameQualityDiagnostic(success: false, metricsCsvPath: "failed.csv", vmdPath: "failed.vmd"),
-                Is.True);
-            Assert.That(
-                ShouldBuildFrameQualityDiagnostic(success: false, metricsCsvPath: "failed.csv", vmdPath: ""),
-                Is.False);
-            Assert.That(
-                ShouldBuildFrameQualityDiagnostic(success: true, metricsCsvPath: "", vmdPath: ""),
-                Is.True);
-        }
-
-        [Test]
         public void Given_MainRecordingStableCandidate_When_ExportIkSourceDiagnosticsExists_Then_CopiesDiagnosticsBesideStableVmd()
         {
             Type runnerType = Type.GetType(
@@ -1177,58 +1140,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(method, Is.Not.Null, "YYB runner must activate the selected Sub_Manual recorder before starting capture.");
 
             return (HumanoidSampleCode)method.Invoke(null, new object[] { targetNameToken });
-        }
-
-        private static bool IsMainSceneCandidateMode(string jobMode)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "IsMainSceneCandidateMode",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(string) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must expose the main-scene candidate predicate for summary coverage tests.");
-
-            return (bool)method.Invoke(null, new object[] { jobMode });
-        }
-
-        private static string ResolveIntegratedVerticalSolveRole(string jobMode)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ResolveIntegratedVerticalSolveRole",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(string) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must promote bounded vertical solve artifacts for Main_Auto and VMD replay with distinct roles.");
-
-            return (string)method.Invoke(null, new object[] { jobMode });
-        }
-
-        private static bool ShouldBuildFrameQualityDiagnostic(bool success, string metricsCsvPath, string vmdPath)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "ShouldBuildFrameQualityDiagnostic",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(bool), typeof(string), typeof(string) },
-                modifiers: null);
-            Assert.That(method, Is.Not.Null, "ShouldBuildFrameQualityDiagnostic must exist.");
-            return (bool)method.Invoke(null, new object[] { success, metricsCsvPath, vmdPath });
         }
 
         private static void ClearYybVisualComparisonRunnerState(string reason)

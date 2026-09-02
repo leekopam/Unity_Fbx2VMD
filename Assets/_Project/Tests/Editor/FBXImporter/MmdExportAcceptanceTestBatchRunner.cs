@@ -202,15 +202,15 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(YybVisualComparisonReferenceAlignmentPolicyTests).FullName + "." +
                 nameof(YybVisualComparisonReferenceAlignmentPolicyTests.Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly),
                 () => new YybVisualComparisonReferenceAlignmentPolicyTests().Given_RawVerticalResidualHasReferenceAlignedCorrectedPass_When_BuildingCompletionFailures_Then_KeepsRawDiagnosticOnly());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes),
-                () => new MmdExportSafetyDefaultsTests().Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles),
-                () => new MmdExportSafetyDefaultsTests().Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate),
-                () => new MmdExportSafetyDefaultsTests().Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate());
+            RunTest(results, typeof(VisualComparisonMainSceneDiagnosticPolicyTests).FullName + "." +
+                nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes),
+                () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes());
+            RunTest(results, typeof(VisualComparisonMainSceneDiagnosticPolicyTests).FullName + "." +
+                nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles),
+                () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles());
+            RunTest(results, typeof(VisualComparisonMainSceneDiagnosticPolicyTests).FullName + "." +
+                nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate),
+                () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure),
                 () => new MmdExportSafetyDefaultsTests().Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure());
