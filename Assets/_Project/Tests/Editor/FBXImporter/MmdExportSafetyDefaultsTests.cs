@@ -698,40 +698,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_SubManualYybRecorderIsInactive_When_SelectingManualRecorder_Then_ActivatesOnlyTargetRecorder()
-        {
-            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            GameObject testPrefab = null;
-            GameObject yyb = null;
-            try
-            {
-                testPrefab = new GameObject("testPrefab");
-                testPrefab.AddComponent<HumanoidSampleCode>();
-                yyb = new GameObject("YYB Hatsune Miku_default_1.0ver");
-                HumanoidSampleCode yybRecorder = yyb.AddComponent<HumanoidSampleCode>();
-                yyb.SetActive(false);
-
-                HumanoidSampleCode selected = SelectActiveManualRecorder("YYB Hatsune Miku_default_1.0ver");
-
-                Assert.That(selected, Is.SameAs(yybRecorder));
-                Assert.That(yyb.activeSelf, Is.True, "Sub_Manual YYB capture must enable the YYB recorder before StartAutoRecording starts coroutines.");
-                Assert.That(yyb.activeInHierarchy, Is.True, "The selected YYB recorder must be active in hierarchy.");
-                Assert.That(testPrefab.activeSelf, Is.False, "Sub_Manual capture must keep only one manual target visible.");
-            }
-            finally
-            {
-                if (testPrefab != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(testPrefab);
-                }
-                if (yyb != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(yyb);
-                }
-            }
-        }
-
-        [Test]
         public void Given_AutoRecordingWasStartedBeforeStart_When_HumanoidSampleCodeStartRuns_Then_DoesNotClearRecordingSession()
         {
             GameObject target = null;
@@ -1005,24 +971,6 @@ namespace Tests.Editor.FBXImporter
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(target);
             Assert.That(value, Is.TypeOf<float>(), $"{target.GetType().Name} must expose float member {fieldName} for focused runtime diagnostics.");
             return (float)value;
-        }
-
-        private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "SelectActiveManualRecorder",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(string) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must activate the selected Sub_Manual recorder before starting capture.");
-
-            return (HumanoidSampleCode)method.Invoke(null, new object[] { targetNameToken });
         }
 
         private static void ClearYybVisualComparisonRunnerState(string reason)
