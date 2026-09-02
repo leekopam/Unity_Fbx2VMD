@@ -101,15 +101,15 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
                 nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PostSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps),
                 () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PostSetEndpointSettings_When_Disabled_Then_ClearsConditionalValuesAndPreservesCaps());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointPositiveZScale_When_CalculatingDesiredFootPosition_Then_ScalesOnlyPositiveZCarrier),
-                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointPositiveZScale_When_CalculatingDesiredFootPosition_Then_ScalesOnlyPositiveZCarrier());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX),
-                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage),
-                () => new MmdExportSafetyDefaultsTests().Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage());
+            RunTest(results, typeof(RetargetingEndpointDiagnosticsTests).FullName + "." +
+                nameof(RetargetingEndpointDiagnosticsTests.Given_PostSetHumanPoseEndpointPositiveZScale_When_CalculatingDesiredFootPosition_Then_ScalesOnlyPositiveZCarrier),
+                () => new RetargetingEndpointDiagnosticsTests().Given_PostSetHumanPoseEndpointPositiveZScale_When_CalculatingDesiredFootPosition_Then_ScalesOnlyPositiveZCarrier());
+            RunTest(results, typeof(RetargetingEndpointDiagnosticsTests).FullName + "." +
+                nameof(RetargetingEndpointDiagnosticsTests.Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX),
+                () => new RetargetingEndpointDiagnosticsTests().Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX());
+            RunTest(results, typeof(RetargetingEndpointDiagnosticsTests).FullName + "." +
+                nameof(RetargetingEndpointDiagnosticsTests.Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage),
+                () => new RetargetingEndpointDiagnosticsTests().Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage());
             RunTest(results, typeof(HumanPoseEndpointRuntimeOverrideApplierTests).FullName + "." +
                 nameof(HumanPoseEndpointRuntimeOverrideApplierTests.Given_PreSetEndpointSettings_When_Applied_Then_ClampsValuesAndScopesChanges),
                 () => new HumanPoseEndpointRuntimeOverrideApplierTests().Given_PreSetEndpointSettings_When_Applied_Then_ClampsValuesAndScopesChanges());
