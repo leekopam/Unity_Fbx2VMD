@@ -1165,21 +1165,6 @@ namespace Fbx2Vmd.FBXImporter
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight,
                 DefaultManualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight);
         }
-        private static VisualComparisonManualCapturePlan BuildManualAnimatorCapturePlan(
-            string labelSuffix,
-            string fbxFileName,
-            float referenceClipLengthSeconds,
-            float requestedDurationSeconds,
-            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
-        {
-            return VisualComparisonCaptureSegmentPlanner.BuildManualCapturePlan(
-                labelSuffix,
-                fbxFileName,
-                referenceClipLengthSeconds,
-                requestedDurationSeconds,
-                DefaultFrameRate,
-                segment);
-        }
 
         private static void StartSubManualJob(string targetNameToken)
         {
@@ -1202,11 +1187,13 @@ namespace Fbx2Vmd.FBXImporter
             string labelSuffix = _activeJob.Mode == CaptureMode.SubManualTestPrefab
                 ? ManualTestPrefabLabelSuffix
                 : ManualYybLabelSuffix;
-            VisualComparisonManualCapturePlan capturePlan = BuildManualAnimatorCapturePlan(
+            VisualComparisonManualCapturePlan capturePlan =
+                VisualComparisonCaptureSegmentPlanner.BuildManualCapturePlan(
                 labelSuffix,
                 _currentRunOptions.fbxFileName,
                 _referenceClip.length,
                 _currentRunOptions.durationSeconds,
+                DefaultFrameRate,
                 _editorDiagnosticSmokeSegment);
             PrepareManualAnimator(animator, _referenceClip, capturePlan.StartTimeSeconds);
             UnityHumanoidVMDRecorder vmdRecorder = _activeRecorder.GetComponent<UnityHumanoidVMDRecorder>();

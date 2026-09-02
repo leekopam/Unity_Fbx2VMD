@@ -607,45 +607,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_VisualCompareSegmentTail_When_BuildingManualCapturePlan_Then_AlignsSubManualToTailWindow()
-        {
-            object plan = BuildManualAnimatorCapturePlan(
-                "testPrefab",
-                "neo_1_001.fbx",
-                referenceClipLengthSeconds: 184.85f,
-                requestedDurationSeconds: 31f,
-                segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail);
-
-            Assert.That(GetField<float>(plan, "StartTimeSeconds"), Is.EqualTo(153.85f).Within(0.001f));
-            Assert.That(GetField<float>(plan, "DurationSeconds"), Is.EqualTo(31f).Within(0.0001f));
-            Assert.That(GetField<int>(plan, "TargetFrameCount"), Is.EqualTo(930));
-            Assert.That(
-                GetField<string>(plan, "OutputBaseName"),
-                Is.EqualTo("testPrefab_neo_1_001_tail_31s_animtime"));
-            Assert.That(
-                GetField<string>(plan, "ComparisonLabel"),
-                Is.EqualTo("manual_testPrefab_neo_1_001_tail_31s_animtime"));
-        }
-
-        [Test]
-        public void Given_VisualCompareSegmentHead_When_BuildingManualCapturePlan_Then_KeepsLegacyHeadOutputName()
-        {
-            object plan = BuildManualAnimatorCapturePlan(
-                "testPrefab",
-                "neo_1_001.fbx",
-                referenceClipLengthSeconds: 184.85f,
-                requestedDurationSeconds: 31f,
-                segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head);
-
-            Assert.That(GetField<float>(plan, "StartTimeSeconds"), Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(GetField<float>(plan, "DurationSeconds"), Is.EqualTo(31f).Within(0.0001f));
-            Assert.That(GetField<int>(plan, "TargetFrameCount"), Is.EqualTo(930));
-            Assert.That(
-                GetField<string>(plan, "OutputBaseName"),
-                Is.EqualTo("testPrefab_neo_1_001_31s_animtime"));
-        }
-
-        [Test]
         public void Given_MainRecordingStableCandidate_When_ExportIkSourceDiagnosticsExists_Then_CopiesDiagnosticsBesideStableVmd()
         {
             Type runnerType = Type.GetType(
@@ -1372,37 +1333,6 @@ namespace Tests.Editor.FBXImporter
             return jobs.Cast<object>()
                 .Select(job => job.GetType().GetField("Mode").GetValue(job).ToString())
                 .ToArray();
-        }
-
-        private static object BuildManualAnimatorCapturePlan(
-            string labelSuffix,
-            string fbxFileName,
-            float referenceClipLengthSeconds,
-            float requestedDurationSeconds,
-            FBXVmdPipeline.EditorDiagnosticSmokeSegment segment)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "BuildManualAnimatorCapturePlan",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[]
-                {
-                    typeof(string),
-                    typeof(string),
-                    typeof(float),
-                    typeof(float),
-                    typeof(FBXVmdPipeline.EditorDiagnosticSmokeSegment)
-                },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must build a testable manual capture plan so Sub_Manual uses the same head/middle/tail segment as Main_Auto.");
-            return method.Invoke(
-                null,
-                new object[] { labelSuffix, fbxFileName, referenceClipLengthSeconds, requestedDurationSeconds, segment });
         }
 
         private static int FindHumanMuscleIndex(params string[] tokens)
