@@ -1357,8 +1357,6 @@ namespace Fbx2Vmd.FBXImporter
         private const float ManualThumbOverrideProjectionMax = 0.5f;
         private const float ManualThumbWorldRotationReferenceToleranceDegrees = 1.5f;
         private const float ManualThumbDetachedHelperPreserveCurrentReferenceAngleMax = 12f;
-        private const float ManualThumbReferenceSpreadDeviationToleranceDegrees = 1.5f;
-        private const float ManualThumbReferenceProjectionDeviationTolerance = 0.015f;
         private const float ManualThumbDetachedHelperOverrideKeepSpreadDeltaMax = 14f;
         private const float ManualThumbDetachedHelperOverrideKeepProjectionDeltaMax = 0.1f;
         private const float ManualThumbPoseShapingSuppressMaxRisk = 0.35f;
@@ -7637,7 +7635,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            currentDeviation = EvaluateThumbReferenceFrameDeviation(
+            currentDeviation = ThumbPoseRiskCalculator.CalculateReferenceFrameDeviation(
                 currentSpread,
                 currentProjection,
                 referenceSpread,
@@ -7652,7 +7650,7 @@ namespace Fbx2Vmd.FBXImporter
                     return false;
                 }
 
-                candidateDeviation = EvaluateThumbReferenceFrameDeviation(
+                candidateDeviation = ThumbPoseRiskCalculator.CalculateReferenceFrameDeviation(
                     candidateSpread,
                     candidateProjection,
                     referenceSpread,
@@ -7701,21 +7699,6 @@ namespace Fbx2Vmd.FBXImporter
             spreadAngle = Vector3.Angle(thumbDirection, indexDirection);
             projection = Vector3.Dot(thumbDirection, frame.Normal);
             return IsFinite(spreadAngle) && IsFinite(projection);
-        }
-
-        private static float EvaluateThumbReferenceFrameDeviation(
-            float spreadAngle,
-            float projection,
-            float referenceSpreadAngle,
-            float referenceProjection)
-        {
-            float spreadDeviation = Mathf.Max(
-                0f,
-                Mathf.Abs(spreadAngle - referenceSpreadAngle) - ManualThumbReferenceSpreadDeviationToleranceDegrees);
-            float projectionDeviation = Mathf.Max(
-                0f,
-                Mathf.Abs(projection - referenceProjection) - ManualThumbReferenceProjectionDeviationTolerance);
-            return spreadDeviation + projectionDeviation * 100f;
         }
 
         private bool TryEvaluateCurrentThumbReferenceFrameDeltaEditor(

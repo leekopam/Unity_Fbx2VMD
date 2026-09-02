@@ -13,6 +13,8 @@ namespace Fbx2Vmd.FBXImporter
         private const float HelperRotationFullRisk = 70f;
         private const float WebbingRotationWarning = 18f;
         private const float WebbingRotationFullRisk = 45f;
+        private const float ReferenceFrameSpreadDeviationToleranceDegrees = 1.5f;
+        private const float ReferenceFrameProjectionDeviationTolerance = 0.015f;
 
         internal static float FindMaximumFinite(params float[] values)
         {
@@ -83,6 +85,21 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return 0f;
+        }
+
+        internal static float CalculateReferenceFrameDeviation(
+            float spreadAngle,
+            float projection,
+            float referenceSpreadAngle,
+            float referenceProjection)
+        {
+            float spreadDeviation = Mathf.Max(
+                0f,
+                Mathf.Abs(spreadAngle - referenceSpreadAngle) - ReferenceFrameSpreadDeviationToleranceDegrees);
+            float projectionDeviation = Mathf.Max(
+                0f,
+                Mathf.Abs(projection - referenceProjection) - ReferenceFrameProjectionDeviationTolerance);
+            return spreadDeviation + projectionDeviation * 100f;
         }
 
         internal static bool TryCalculateHelperRelationshipRisk(
