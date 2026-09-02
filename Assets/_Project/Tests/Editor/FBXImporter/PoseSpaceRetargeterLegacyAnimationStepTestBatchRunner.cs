@@ -76,6 +76,10 @@ namespace Tests.Editor.FBXImporter
                 poseInputTransformerTests.Given_PoseInputMuscleValues_When_TransformingInPlace_Then_FlipsLeftTwistSignOnly);
             RunTest(results, nameof(poseInputTransformerTests.Given_MissingPoseInputMuscleValues_When_TransformingInPlace_Then_DoesNotThrow),
                 poseInputTransformerTests.Given_MissingPoseInputMuscleValues_When_TransformingInPlace_Then_DoesNotThrow);
+            RunTest(results, nameof(poseInputTransformerTests.Given_ReferenceCurves_When_AligningInPlace_Then_EvaluatesValidCurvesAndSkipsInvalidEntries),
+                poseInputTransformerTests.Given_ReferenceCurves_When_AligningInPlace_Then_EvaluatesValidCurvesAndSkipsInvalidEntries);
+            RunTest(results, nameof(poseInputTransformerTests.Given_MissingReferenceCurveInputs_When_AligningInPlace_Then_DoesNotThrowOrChangeValues),
+                poseInputTransformerTests.Given_MissingReferenceCurveInputs_When_AligningInPlace_Then_DoesNotThrowOrChangeValues);
             RunTest(results, nameof(muscleReferenceTests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningInput_Then_FlipsSignOnly),
                 muscleReferenceTests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningInput_Then_FlipsSignOnly);
             RunTest(results, nameof(muscleReferenceTests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningInput_Then_KeepsLiveInput),

@@ -2282,7 +2282,15 @@ namespace Fbx2Vmd.FBXImporter
 
             RetargetingPoseInputTransformer.TransformInPlace(_humanPose.muscles);
 #if UNITY_EDITOR
-            AlignRetargetPoseInputWithEditorHumanoidMuscleReference(ref _humanPose);
+            if (_useEditorHumanoidMuscleReference &&
+                _humanPose.muscles != null &&
+                _editorHumanoidMuscleCurves.Count > 0)
+            {
+                RetargetingPoseInputTransformer.AlignWithReferenceCurvesInPlace(
+                    _humanPose.muscles,
+                    _editorHumanoidMuscleCurves,
+                    _legacyAnimationDriver.CurrentTime);
+            }
 #endif
             CapturePoseInputDiagnostics(_humanPose);
             ApplyEditorHumanoidMuscleReference(ref _humanPose);
@@ -5577,29 +5585,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _rightSleeveSilhouetteLocalOffsetBaseLocalPositions.Clear();
-        }
-
-        private void AlignRetargetPoseInputWithEditorHumanoidMuscleReference(ref HumanPose pose)
-        {
-            if (!_useEditorHumanoidMuscleReference || pose.muscles == null || _editorHumanoidMuscleCurves.Count == 0)
-            {
-                return;
-            }
-
-            float time = _legacyAnimationDriver.CurrentTime;
-            foreach (KeyValuePair<int, AnimationCurve> pair in _editorHumanoidMuscleCurves)
-            {
-                if (pair.Key < 0 || pair.Key >= pose.muscles.Length || pair.Value == null)
-                {
-                    continue;
-                }
-
-                float referenceValue = pair.Value.Evaluate(time);
-                pose.muscles[pair.Key] = RetargetingMuscleReferencePolicy.AlignPoseInputWithReference(
-                    pair.Key,
-                    pose.muscles[pair.Key],
-                    referenceValue);
-            }
         }
 
 #endif
