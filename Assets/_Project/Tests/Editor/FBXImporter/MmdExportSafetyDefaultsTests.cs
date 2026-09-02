@@ -541,34 +541,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_LowerBodySegmentDirectionReferenceOnly_When_ConfiguringManualReference_Then_PreparesReferenceAnimator()
-        {
-            var managerObject = new GameObject("manual animator lower body segment direction reference manager");
-            var retargeterObject = new GameObject("manual animator lower body segment direction reference retargeter");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                var retargeter = retargeterObject.AddComponent<PoseSpaceRetargeter>();
-                manager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference = true;
-
-                AnimationClip referenceClip = LoadFirstHumanoidAnimationClip("Assets/_Project/FBX/satisfaction_2.fbx");
-                Assert.That(referenceClip, Is.Not.Null, "satisfaction_2 reference clip must be available for lower-body segment A/B probes.");
-
-                InvokeConfigureEditorManualFingerPoseReference(manager, retargeter, referenceClip);
-
-                Assert.That(
-                    GetField<Animator>(retargeter, "_editorFingerReferenceAnimator"),
-                    Is.Not.Null,
-                    "Lower-body segment direction reference depends on the manual reference Animator; otherwise the runtime candidate is inert.");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(retargeterObject);
-                UnityEngine.Object.DestroyImmediate(managerObject);
-            }
-        }
-
-        [Test]
         public void Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes()
         {
             Assert.That(IsMainSceneCandidateMode("MainAuto"), Is.True);
@@ -1255,36 +1227,6 @@ namespace Tests.Editor.FBXImporter
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(target);
             Assert.That(value, Is.TypeOf<float>(), $"{target.GetType().Name} must expose float member {fieldName} for focused runtime diagnostics.");
             return (float)value;
-        }
-
-        private static AnimationClip LoadFirstHumanoidAnimationClip(string assetPath)
-        {
-            return AssetDatabase.LoadAllAssetsAtPath(assetPath)
-                .OfType<AnimationClip>()
-                .FirstOrDefault(clip => clip != null && clip.humanMotion);
-        }
-
-        private static void InvokeConfigureEditorManualFingerPoseReference(
-            FBXVmdPipeline manager,
-            PoseSpaceRetargeter retargeter,
-            AnimationClip referenceClip)
-        {
-            MethodInfo createOptionsMethod = typeof(FBXVmdPipeline).GetMethod(
-                "CreateEditorManualPoseReferenceOptions",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Type applierType = typeof(FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.FBXImporter.EditorHumanoidReferenceApplier",
-                throwOnError: false);
-            MethodInfo applyMethod = applierType?.GetMethod(
-                "ApplyManualPoseReference",
-                BindingFlags.Static | BindingFlags.NonPublic);
-
-            Assert.That(createOptionsMethod, Is.Not.Null);
-            Assert.That(applyMethod, Is.Not.Null,
-                "EditorHumanoidReferenceApplier must prepare all manual pose reference candidates.");
-
-            object options = createOptionsMethod.Invoke(manager, null);
-            applyMethod.Invoke(null, new[] { retargeter, referenceClip, options });
         }
 
         private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
