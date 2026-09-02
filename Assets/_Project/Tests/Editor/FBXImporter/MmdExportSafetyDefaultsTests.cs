@@ -698,15 +698,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ActiveCaptureJobIsUnfinished_When_CheckingStartNextJobGate_Then_IgnoresDuplicateAdvance()
-        {
-            Assert.That(CanStartNextJob(isRunning: true, hasActiveJob: true, activeJobFinished: false), Is.False);
-            Assert.That(CanStartNextJob(isRunning: true, hasActiveJob: true, activeJobFinished: true), Is.True);
-            Assert.That(CanStartNextJob(isRunning: true, hasActiveJob: false, activeJobFinished: false), Is.True);
-            Assert.That(CanStartNextJob(isRunning: false, hasActiveJob: false, activeJobFinished: false), Is.False);
-        }
-
-        [Test]
         public void Given_SubManualYybRecorderIsInactive_When_SelectingManualRecorder_Then_ActivatesOnlyTargetRecorder()
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -988,24 +979,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(GetField<float>(fileManager, "finalIkFootGroundingWeight"), Is.LessThanOrEqualTo(0.25f), "Default experiment weight must remain low enough to avoid replacing PoseSpaceRetargeter output.");
             Assert.That(GetField<float>(fileManager, "finalIkFootGroundingMaxStep"), Is.LessThanOrEqualTo(0.08f), "Default max step must stay below the current A7 guard relaxation boundary.");
             Assert.That(GetField<float>(fileManager, "finalIkFootGroundingFootRotationWeight"), Is.EqualTo(0f).Within(0.0001f), "Initial experiment must not rotate feet until visual evidence proves it safe.");
-        }
-
-        private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)
-        {
-            Type runnerType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
-            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
-
-            MethodInfo method = runnerType.GetMethod(
-                "CanStartNextJob",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(bool), typeof(bool), typeof(bool) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "YYB runner must gate duplicate delayed StartNextJob calls while an active job is unfinished.");
-
-            return (bool)method.Invoke(null, new object[] { isRunning, hasActiveJob, activeJobFinished });
         }
 
         private static float ReadFBXVmdPipelineFloat(FBXVmdPipeline manager, string fieldName)

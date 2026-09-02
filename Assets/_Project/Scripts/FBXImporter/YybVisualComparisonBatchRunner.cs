@@ -961,7 +961,10 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void StartNextJob()
         {
-            if (!CanStartNextJob(_isRunning, _activeJob != null, _activeJobFinished))
+            if (!VisualComparisonCaptureJobAdvancePolicy.CanStartNextJob(
+                    _isRunning,
+                    _activeJob != null,
+                    _activeJobFinished))
             {
                 if (_isRunning)
                 {
@@ -1007,11 +1010,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             QueuePlayModeEntryForActiveJob("StartNextJob");
-        }
-
-        private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)
-        {
-            return isRunning && (!hasActiveJob || activeJobFinished);
         }
 
         private static void StartCurrentJobInPlayMode()
