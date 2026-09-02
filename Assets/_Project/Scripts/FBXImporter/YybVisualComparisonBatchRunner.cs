@@ -2211,22 +2211,11 @@ namespace Fbx2Vmd.FBXImporter
         {
             return Results.Where(result =>
                 result != null &&
-                IsMainSceneCandidateMode(result.jobMode) &&
-                ShouldBuildFrameQualityDiagnostic(result.success, result.comparisonMetricsCsvPath, result.vmdPath));
-        }
-
-        private static bool IsMainSceneCandidateMode(string jobMode)
-        {
-            return string.Equals(jobMode, CaptureMode.MainRecording.ToString(), StringComparison.Ordinal) ||
-                string.Equals(jobMode, CaptureMode.MainRecordingVmdPlaybackProbe.ToString(), StringComparison.Ordinal) ||
-                string.Equals(jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal);
-        }
-
-        private static bool ShouldBuildFrameQualityDiagnostic(bool success, string metricsCsvPath, string vmdPath)
-        {
-            return success ||
-                (!string.IsNullOrWhiteSpace(metricsCsvPath) &&
-                    !string.IsNullOrWhiteSpace(vmdPath));
+                VisualComparisonMainSceneDiagnosticPolicy.IsCandidateMode(result.jobMode) &&
+                VisualComparisonMainSceneDiagnosticPolicy.ShouldBuildFrameQualityDiagnostic(
+                    result.success,
+                    result.comparisonMetricsCsvPath,
+                    result.vmdPath));
         }
 
         private static MotionComparisonFrameQualitySummary[] BuildFrameQualitySummariesForCandidate(
@@ -2252,7 +2241,8 @@ namespace Fbx2Vmd.FBXImporter
                 baseline.frameCount,
                 candidate.frameCount,
                 ResolveSummaryTargetFrameCount());
-            string integratedVerticalSolveRole = ResolveIntegratedVerticalSolveRole(candidate.jobMode);
+            string integratedVerticalSolveRole =
+                VisualComparisonMainSceneDiagnosticPolicy.ResolveIntegratedVerticalSolveRole(candidate.jobMode);
             if (!string.IsNullOrEmpty(integratedVerticalSolveRole) &&
                 MotionComparisonProbeReportWriter.TryPromoteVerticalSolveCorrectedCandidateToPrimaryExport(
                     summary,
@@ -2273,7 +2263,8 @@ namespace Fbx2Vmd.FBXImporter
                     candidate.frameCount,
                     ResolveSummaryTargetFrameCount());
                 summary.frame_quality_evaluation_role = integratedVerticalSolveRole;
-                summary.frame_quality_evaluation_basis = ResolveIntegratedVerticalSolveBasis(candidate.jobMode);
+                summary.frame_quality_evaluation_basis =
+                    VisualComparisonMainSceneDiagnosticPolicy.ResolveIntegratedVerticalSolveBasis(candidate.jobMode);
                 summary.vertical_solve_corrected_candidate_manifest_path = promotion.integrated_manifest_path;
             }
             MotionComparisonFrameQualitySummary[] summaries =
@@ -2281,35 +2272,10 @@ namespace Fbx2Vmd.FBXImporter
             return summaries;
         }
 
-        private static string ResolveIntegratedVerticalSolveRole(string jobMode)
-        {
-            if (string.Equals(jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal))
-            {
-                return "main_auto_integrated_vertical_solve_metrics";
-            }
-
-            if (string.Equals(jobMode, CaptureMode.MainRecordingVmdPlaybackProbe.ToString(), StringComparison.Ordinal))
-            {
-                return "vmd_replay_integrated_vertical_solve_metrics";
-            }
-
-            return string.Empty;
-        }
-
-        private static string ResolveIntegratedVerticalSolveBasis(string jobMode)
-        {
-            if (string.Equals(jobMode, CaptureMode.MainRecordingVmdPlaybackProbe.ToString(), StringComparison.Ordinal))
-            {
-                return "primary VMD replay diagnostic output after bounded vertical solve promotion; raw replay metrics/VMD were preserved as raw_vertical_solve_diagnostic artifacts";
-            }
-
-            return "primary Main_Auto result paths after bounded vertical solve promotion; raw metrics/VMD were preserved as raw_vertical_solve_diagnostic artifacts";
-        }
-
         private static void ResolveShortCandidateVmdPath(CaptureResult candidate)
         {
             if (candidate == null ||
-                !IsMainSceneCandidateMode(candidate.jobMode) ||
+                !VisualComparisonMainSceneDiagnosticPolicy.IsCandidateMode(candidate.jobMode) ||
                 string.Equals(candidate.jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal) ||
                 string.IsNullOrWhiteSpace(_summaryDirectory))
             {
@@ -2441,7 +2407,7 @@ namespace Fbx2Vmd.FBXImporter
 
             CaptureResult fallback = Results.FirstOrDefault(result =>
                 result != null &&
-                IsMainSceneCandidateMode(result.jobMode) &&
+                VisualComparisonMainSceneDiagnosticPolicy.IsCandidateMode(result.jobMode) &&
                 !string.IsNullOrWhiteSpace(result.comparisonFrameIndexPath));
             return fallback != null
                 ? fallback.comparisonFrameIndexPath
