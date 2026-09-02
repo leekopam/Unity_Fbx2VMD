@@ -145,9 +145,9 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(ReferenceFrameCountResolverTests).FullName + "." +
                 nameof(ReferenceFrameCountResolverTests.Given_SummaryTargetPolicy_When_InspectingRunner_Then_PureCalculationOverloadIsAbsent),
                 referenceFrameCountResolverTests.Given_SummaryTargetPolicy_When_InspectingRunner_Then_PureCalculationOverloadIsAbsent);
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport),
-                () => new MmdExportSafetyDefaultsTests().Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport());
+            RunTest(results, typeof(FbxReferenceClipPathResolverTests).FullName + "." +
+                nameof(FbxReferenceClipPathResolverTests.Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport),
+                () => new FbxReferenceClipPathResolverTests().Given_ProjectFbxExists_When_ResolvingYybReferenceClipPath_Then_UsesProjectReferenceBeforeControlledImport());
             RunTest(results, typeof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests).FullName + "." +
                 nameof(YybVisualComparisonFrameRoleDiagnosticsBuilderTests.Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines),
                 () => new YybVisualComparisonFrameRoleDiagnosticsBuilderTests().Given_FrameCounts_When_BuildingSummaryFrameRoleDiagnostics_Then_SeparatesReferenceTargetFromRecordedBaselines());
