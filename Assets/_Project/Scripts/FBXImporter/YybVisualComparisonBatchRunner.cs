@@ -1166,7 +1166,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void StartSubManualJob(string targetNameToken)
         {
-            _activeRecorder = SelectActiveManualRecorder(targetNameToken);
+            _activeRecorder = VisualComparisonManualRecorderSelector.SelectAndActivate(targetNameToken);
             if (_activeRecorder == null)
             {
                 throw new InvalidOperationException($"Sub_Manual 수동 기준 대상을 찾지 못했습니다: {targetNameToken}");
@@ -1264,43 +1264,6 @@ namespace Fbx2Vmd.FBXImporter
                 : 0f;
             animator.Play(0, 0, normalizedStartTime);
             animator.Update(0f);
-        }
-
-        private static HumanoidSampleCode SelectActiveManualRecorder(string targetNameToken)
-        {
-            HumanoidSampleCode[] recorders = UnityEngine.Object.FindObjectsOfType<HumanoidSampleCode>(true);
-            HumanoidSampleCode selected = null;
-            foreach (HumanoidSampleCode recorder in recorders)
-            {
-                if (recorder == null)
-                {
-                    continue;
-                }
-
-                string hierarchyPath = GetHierarchyPath(recorder.transform);
-                if (hierarchyPath.IndexOf(targetNameToken, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    selected = recorder;
-                    break;
-                }
-            }
-
-            if (selected == null)
-            {
-                return null;
-            }
-
-            foreach (HumanoidSampleCode recorder in recorders)
-            {
-                if (recorder == null)
-                {
-                    continue;
-                }
-
-                recorder.gameObject.SetActive(ReferenceEquals(recorder, selected));
-            }
-
-            return selected;
         }
 
         private static void HandleMainSceneFinished(string fbxFileName, VmdSaveResult result)
