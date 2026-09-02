@@ -74,6 +74,56 @@ namespace Tests.Editor.FBXImporter
             Assert.That(ReadProperty(jobs[4], "Role").ToString(), Is.EqualTo("Automatic"));
         }
 
+        [Test]
+        public void Given_VmdPlaybackProbeDisabled_When_BuildingCaptureJobs_Then_KeepsExistingFourJobSession()
+        {
+            string[] modes = BuildCaptureJobModes(enableVmdPlaybackProbeRuntimeOverride: false);
+
+            Assert.That(modes, Is.EqualTo(new[]
+            {
+                "SubManualTestPrefab",
+                "SubManualYyb",
+                "MainRecording",
+                "MainAuto"
+            }));
+        }
+
+        [Test]
+        public void Given_VmdPlaybackProbeEnabled_When_BuildingCaptureJobs_Then_AddsReplayCandidateAfterMainRecording()
+        {
+            string[] modes = BuildCaptureJobModes(enableVmdPlaybackProbeRuntimeOverride: true);
+
+            Assert.That(modes, Is.EqualTo(new[]
+            {
+                "SubManualTestPrefab",
+                "SubManualYyb",
+                "MainRecording",
+                "MainRecordingVmdPlaybackProbe",
+                "MainAuto"
+            }));
+        }
+
+        private static string[] BuildCaptureJobModes(bool enableVmdPlaybackProbeRuntimeOverride)
+        {
+            Type runnerType = Type.GetType(
+                "Fbx2Vmd.FBXImporter.YybVisualComparisonBatchRunner, Assembly-CSharp");
+            Assert.That(runnerType, Is.Not.Null, "YYB visual comparison runner type must be available in editor tests.");
+
+            MethodInfo method = runnerType.GetMethod(
+                "BuildCaptureJobs",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(bool) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "YYB runner must build a testable same-session job list for VMD replay A/B probes.");
+
+            var jobs = (Array)method.Invoke(null, new object[] { enableVmdPlaybackProbeRuntimeOverride });
+            return jobs.Cast<object>()
+                .Select(job => job.GetType().GetField("Mode").GetValue(job).ToString())
+                .ToArray();
+        }
+
         private static object CreateProfile(
             string modelDisplayName,
             string manualReferenceDisplayName,
