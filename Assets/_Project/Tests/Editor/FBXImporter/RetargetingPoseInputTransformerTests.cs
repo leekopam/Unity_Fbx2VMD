@@ -1,6 +1,7 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
@@ -18,13 +19,27 @@ namespace Tests.Editor.FBXImporter
             typeof(HumanPose).MakeByRefType()
         };
 
+        private static readonly Type[] ReferenceCurveAlignmentParameterTypes =
+        {
+            typeof(float[]),
+            typeof(Dictionary<int, AnimationCurve>),
+            typeof(float)
+        };
+
         [Test]
         public void Given_PoseInputTransformer_When_CheckingOwnership_Then_OwnsArrayTransformation()
         {
             Type transformerType = ResolveTransformerType();
             Assert.That(FindTransformMethod(transformerType), Is.Not.Null);
+            Assert.That(FindReferenceCurveAlignmentMethod(transformerType), Is.Not.Null);
             Assert.That(typeof(PoseSpaceRetargeter).GetMethod(
                 "TransformRetargetPoseInputMuscles",
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: HumanPoseReferenceParameterTypes,
+                modifiers: null), Is.Null);
+            Assert.That(typeof(PoseSpaceRetargeter).GetMethod(
+                "AlignRetargetPoseInputWithEditorHumanoidMuscleReference",
                 BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: HumanPoseReferenceParameterTypes,
@@ -55,6 +70,45 @@ namespace Tests.Editor.FBXImporter
             Assert.DoesNotThrow(() => TransformInPlace(null));
         }
 
+        [Test]
+        public void Given_ReferenceCurves_When_AligningInPlace_Then_EvaluatesValidCurvesAndSkipsInvalidEntries()
+        {
+            int leftArmTwistIndex = FindHumanMuscleIndex("Left Arm Twist In-Out");
+            int leftShoulderFrontBackIndex = FindHumanMuscleIndex("Left Shoulder Front-Back");
+            var muscleValues = new float[HumanTrait.MuscleCount];
+            muscleValues[leftArmTwistIndex] = -0.760319f;
+            muscleValues[leftShoulderFrontBackIndex] = 0.25f;
+            var referenceCurves = new Dictionary<int, AnimationCurve>
+            {
+                [leftArmTwistIndex] = AnimationCurve.Linear(0f, -0.758726f, 1f, 0.758726f),
+                [leftShoulderFrontBackIndex] = null,
+                [-1] = AnimationCurve.Constant(0f, 1f, 1f),
+                [HumanTrait.MuscleCount] = AnimationCurve.Constant(0f, 1f, 1f)
+            };
+
+            AlignWithReferenceCurvesInPlace(muscleValues, referenceCurves, 1f);
+
+            Assert.That(muscleValues[leftArmTwistIndex], Is.EqualTo(0.760319f).Within(0.000001f));
+            Assert.That(muscleValues[leftShoulderFrontBackIndex], Is.EqualTo(0.25f).Within(0.000001f));
+        }
+
+        [Test]
+        public void Given_MissingReferenceCurveInputs_When_AligningInPlace_Then_DoesNotThrowOrChangeValues()
+        {
+            var muscleValues = new[] { 0.25f };
+
+            Assert.DoesNotThrow(() => AlignWithReferenceCurvesInPlace(
+                null,
+                new Dictionary<int, AnimationCurve>(),
+                0f));
+            Assert.DoesNotThrow(() => AlignWithReferenceCurvesInPlace(muscleValues, null, 0f));
+            Assert.DoesNotThrow(() => AlignWithReferenceCurvesInPlace(
+                muscleValues,
+                new Dictionary<int, AnimationCurve>(),
+                0f));
+            Assert.That(muscleValues[0], Is.EqualTo(0.25f).Within(0.000001f));
+        }
+
         private static void TransformInPlace(float[] muscleValues)
         {
             Type transformerType = ResolveTransformerType();
@@ -79,6 +133,27 @@ namespace Tests.Editor.FBXImporter
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
                 types: MuscleValuesParameterTypes,
+                modifiers: null);
+        }
+
+        private static void AlignWithReferenceCurvesInPlace(
+            float[] muscleValues,
+            Dictionary<int, AnimationCurve> referenceCurves,
+            float time)
+        {
+            Type transformerType = ResolveTransformerType();
+            MethodInfo method = FindReferenceCurveAlignmentMethod(transformerType);
+            Assert.That(method, Is.Not.Null);
+            method.Invoke(null, new object[] { muscleValues, referenceCurves, time });
+        }
+
+        private static MethodInfo FindReferenceCurveAlignmentMethod(Type transformerType)
+        {
+            return transformerType.GetMethod(
+                "AlignWithReferenceCurvesInPlace",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                binder: null,
+                types: ReferenceCurveAlignmentParameterTypes,
                 modifiers: null);
         }
 
