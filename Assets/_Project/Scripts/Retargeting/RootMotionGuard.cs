@@ -134,6 +134,84 @@ namespace Fbx2Vmd.Retargeting
             return Mathf.Clamp(value, 0f, 1.5f);
         }
 
+        public static Vector3 ApplyImplicitBodyPositionRootGuard(
+            Vector3 positionBeforePose,
+            Vector3 currentPosition,
+            bool allowBodyPositionXZRootMotion)
+        {
+            return ApplyImplicitBodyPositionRootGuard(
+                positionBeforePose,
+                currentPosition,
+                allowBodyPositionXZRootMotion,
+                Vector3.zero);
+        }
+
+        public static Vector3 ApplyImplicitBodyPositionRootGuard(
+            Vector3 positionBeforePose,
+            Vector3 currentPosition,
+            bool allowBodyPositionXZRootMotion,
+            Vector3 explicitBodyRootDelta)
+        {
+            bool hasExplicitBodyRootMotion =
+                IsFinite(explicitBodyRootDelta) &&
+                FlattenXZ(explicitBodyRootDelta).sqrMagnitude > 0.0000000001f;
+
+            if ((allowBodyPositionXZRootMotion && !hasExplicitBodyRootMotion) ||
+                !IsFinite(positionBeforePose) ||
+                !IsFinite(currentPosition))
+            {
+                return currentPosition;
+            }
+
+            return new Vector3(positionBeforePose.x, currentPosition.y, positionBeforePose.z);
+        }
+
+        public static Vector3 SelectImplicitRootGuardReference(
+            Vector3 rootAnchorPosition,
+            Vector3 positionBeforePose,
+            float movementScaleMultiplier)
+        {
+            if (movementScaleMultiplier <= 0f && IsFinite(rootAnchorPosition))
+            {
+                return rootAnchorPosition;
+            }
+
+            return positionBeforePose;
+        }
+
+        public static Vector3 SelectPoseSolveRootPosition(
+            Vector3 currentRootPosition,
+            Vector3 rootAnchorPosition,
+            bool isolateRootMotionFromPoseSolve)
+        {
+            if (!isolateRootMotionFromPoseSolve ||
+                !IsFinite(currentRootPosition) ||
+                !IsFinite(rootAnchorPosition))
+            {
+                return currentRootPosition;
+            }
+
+            return new Vector3(rootAnchorPosition.x, currentRootPosition.y, rootAnchorPosition.z);
+        }
+
+        public static Vector3 RestoreRootMotionCarrierPositionAfterPose(
+            Vector3 rootMotionCarrierPositionBeforePose,
+            Vector3 poseSolvedPosition,
+            bool isolateRootMotionFromPoseSolve)
+        {
+            if (!isolateRootMotionFromPoseSolve ||
+                !IsFinite(rootMotionCarrierPositionBeforePose) ||
+                !IsFinite(poseSolvedPosition))
+            {
+                return poseSolvedPosition;
+            }
+
+            return new Vector3(
+                rootMotionCarrierPositionBeforePose.x,
+                poseSolvedPosition.y,
+                rootMotionCarrierPositionBeforePose.z);
+        }
+
         /// <summary>
         /// Body position/rotation delta가 spike인지 판정.
         /// </summary>
@@ -154,6 +232,11 @@ namespace Fbx2Vmd.Retargeting
             return !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
                    !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
                    !float.IsNaN(value.z) && !float.IsInfinity(value.z);
+        }
+
+        private static Vector3 FlattenXZ(Vector3 value)
+        {
+            return new Vector3(value.x, 0f, value.z);
         }
     }
 }

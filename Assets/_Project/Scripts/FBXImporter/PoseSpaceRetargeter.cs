@@ -2371,7 +2371,7 @@ namespace Fbx2Vmd.FBXImporter
             _humanPose.bodyPosition = bodyPos;
 
             Vector3 rootMotionCarrierPositionBeforePose = targetAnimator.transform.position;
-            Vector3 poseSolveRootPosition = SelectPoseSolveRootPosition(
+            Vector3 poseSolveRootPosition = RootMotionGuard.SelectPoseSolveRootPosition(
                 rootMotionCarrierPositionBeforePose,
                 _hasTargetRootPoseGuardAnchorPosition ? _targetRootPoseGuardAnchorPosition : rootMotionCarrierPositionBeforePose,
                 useBodyPositionXZRootMotion);
@@ -2416,16 +2416,16 @@ namespace Fbx2Vmd.FBXImporter
             ApplyRightSleeveSilhouetteLocalOffsetReference();
 #endif
             ClampTargetRootPositionSpike(targetPositionBeforePose, "SetHumanPose");
-            Vector3 implicitRootGuardReference = SelectImplicitRootGuardReference(
+            Vector3 implicitRootGuardReference = RootMotionGuard.SelectImplicitRootGuardReference(
                 _hasTargetRootPoseGuardAnchorPosition ? _targetRootPoseGuardAnchorPosition : targetPositionBeforePose,
                 targetPositionBeforePose,
                 _movementScaleMultiplier);
-            targetAnimator.transform.position = ApplyImplicitBodyPositionRootGuard(
+            targetAnimator.transform.position = RootMotionGuard.ApplyImplicitBodyPositionRootGuard(
                 implicitRootGuardReference,
                 targetAnimator.transform.position,
                 useBodyPositionXZRootMotion,
                 bodyRootDelta);
-            targetAnimator.transform.position = RestoreRootMotionCarrierPositionAfterPose(
+            targetAnimator.transform.position = RootMotionGuard.RestoreRootMotionCarrierPositionAfterPose(
                 rootMotionCarrierPositionBeforePose,
                 targetAnimator.transform.position,
                 useBodyPositionXZRootMotion);
@@ -7846,84 +7846,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             targetAnimator.transform.position = clampedPosition;
-        }
-
-        private static Vector3 ApplyImplicitBodyPositionRootGuard(
-            Vector3 positionBeforePose,
-            Vector3 currentPosition,
-            bool allowBodyPositionXZRootMotion)
-        {
-            return ApplyImplicitBodyPositionRootGuard(
-                positionBeforePose,
-                currentPosition,
-                allowBodyPositionXZRootMotion,
-                Vector3.zero);
-        }
-
-        private static Vector3 ApplyImplicitBodyPositionRootGuard(
-            Vector3 positionBeforePose,
-            Vector3 currentPosition,
-            bool allowBodyPositionXZRootMotion,
-            Vector3 explicitBodyRootDelta)
-        {
-            bool hasExplicitBodyRootMotion =
-                IsFinite(explicitBodyRootDelta) &&
-                FlattenXZ(explicitBodyRootDelta).sqrMagnitude > 0.0000000001f;
-
-            if ((allowBodyPositionXZRootMotion && !hasExplicitBodyRootMotion) ||
-                !IsFinite(positionBeforePose) ||
-                !IsFinite(currentPosition))
-            {
-                return currentPosition;
-            }
-
-            return new Vector3(positionBeforePose.x, currentPosition.y, positionBeforePose.z);
-        }
-
-        private static Vector3 SelectImplicitRootGuardReference(
-            Vector3 rootAnchorPosition,
-            Vector3 positionBeforePose,
-            float movementScaleMultiplier)
-        {
-            if (movementScaleMultiplier <= 0f && IsFinite(rootAnchorPosition))
-            {
-                return rootAnchorPosition;
-            }
-
-            return positionBeforePose;
-        }
-
-        private static Vector3 SelectPoseSolveRootPosition(
-            Vector3 currentRootPosition,
-            Vector3 rootAnchorPosition,
-            bool isolateRootMotionFromPoseSolve)
-        {
-            if (!isolateRootMotionFromPoseSolve ||
-                !IsFinite(currentRootPosition) ||
-                !IsFinite(rootAnchorPosition))
-            {
-                return currentRootPosition;
-            }
-
-            return new Vector3(rootAnchorPosition.x, currentRootPosition.y, rootAnchorPosition.z);
-        }
-
-        private static Vector3 RestoreRootMotionCarrierPositionAfterPose(
-            Vector3 rootMotionCarrierPositionBeforePose,
-            Vector3 poseSolvedPosition,
-            bool isolateRootMotionFromPoseSolve)
-        {
-            if (!isolateRootMotionFromPoseSolve ||
-                !IsFinite(rootMotionCarrierPositionBeforePose) ||
-                !IsFinite(poseSolvedPosition))
-            {
-                return poseSolvedPosition;
-            }
-
-            return new Vector3(
-                rootMotionCarrierPositionBeforePose.x,
-                poseSolvedPosition.y,
-                rootMotionCarrierPositionBeforePose.z);
         }
 
         private void ClampTargetHipsLocalPositionSpike()

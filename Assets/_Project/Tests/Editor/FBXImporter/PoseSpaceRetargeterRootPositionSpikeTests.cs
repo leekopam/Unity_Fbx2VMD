@@ -1,4 +1,5 @@
 using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Retargeting;
 using NUnit.Framework;
 using System;
 using System.Reflection;
@@ -31,41 +32,31 @@ namespace Tests.Editor.FBXImporter
             typeof(float).MakeByRefType()
         };
 
-        private static readonly Type[] ImplicitBodyPositionRootGuardParameterTypes =
+        [Test]
+        public void Given_RootMotionGuardOwnsRootPositionPolicies_When_CheckingPoseSpaceRetargeterContract_Then_DoesNotKeepDuplicateHelpers()
         {
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(bool)
-        };
+            string[] methodNames =
+            {
+                "ApplyImplicitBodyPositionRootGuard",
+                "SelectImplicitRootGuardReference",
+                "SelectPoseSolveRootPosition",
+                "RestoreRootMotionCarrierPositionAfterPose"
+            };
 
-        private static readonly Type[] ExplicitBodyRootMotionGuardParameterTypes =
-        {
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(bool),
-            typeof(Vector3)
-        };
-
-        private static readonly Type[] ImplicitRootGuardReferenceParameterTypes =
-        {
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(float)
-        };
-
-        private static readonly Type[] PoseSolveRootPositionParameterTypes =
-        {
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(bool)
-        };
-
-        private static readonly Type[] RootMotionCarrierRestoreParameterTypes =
-        {
-            typeof(Vector3),
-            typeof(Vector3),
-            typeof(bool)
-        };
+            foreach (string methodName in methodNames)
+            {
+                Assert.That(
+                    Array.Exists(
+                        typeof(RootMotionGuard).GetMethods(BindingFlags.Static | BindingFlags.Public),
+                        method => method.Name == methodName),
+                    Is.True,
+                    $"RootMotionGuard should own {methodName}.");
+                Assert.That(
+                    typeof(PoseSpaceRetargeter).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic),
+                    Is.Null,
+                    $"PoseSpaceRetargeter should not keep duplicate root position policy {methodName}.");
+            }
+        }
 
         [Test]
         public void Given_RootDeltaWithinLimit_When_CalculatingClamp_Then_KeepsCurrentPosition()
@@ -436,23 +427,10 @@ namespace Tests.Editor.FBXImporter
             Vector3 currentPosition,
             bool allowBodyPositionXZRootMotion)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ApplyImplicitBodyPositionRootGuard",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: ImplicitBodyPositionRootGuardParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for implicit bodyPosition root guard calculation.");
-
-            object[] args =
-            {
+            return RootMotionGuard.ApplyImplicitBodyPositionRootGuard(
                 positionBeforePose,
                 currentPosition,
-                allowBodyPositionXZRootMotion
-            };
-
-            return (Vector3)method.Invoke(null, args);
+                allowBodyPositionXZRootMotion);
         }
 
         private static Vector3 SelectPoseSolveRootPosition(
@@ -460,23 +438,10 @@ namespace Tests.Editor.FBXImporter
             Vector3 rootAnchorPosition,
             bool isolateRootMotionFromPoseSolve)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "SelectPoseSolveRootPosition",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: PoseSolveRootPositionParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should isolate the moving root carrier from SetHumanPose root X/Z solve.");
-
-            object[] args =
-            {
+            return RootMotionGuard.SelectPoseSolveRootPosition(
                 currentRootPosition,
                 rootAnchorPosition,
-                isolateRootMotionFromPoseSolve
-            };
-
-            return (Vector3)method.Invoke(null, args);
+                isolateRootMotionFromPoseSolve);
         }
 
         private static Vector3 RestoreRootMotionCarrierPositionAfterPose(
@@ -484,23 +449,10 @@ namespace Tests.Editor.FBXImporter
             Vector3 poseSolvedPosition,
             bool isolateRootMotionFromPoseSolve)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "RestoreRootMotionCarrierPositionAfterPose",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: RootMotionCarrierRestoreParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should restore moving-root carrier X/Z after SetHumanPose before applying explicit root delta.");
-
-            object[] args =
-            {
+            return RootMotionGuard.RestoreRootMotionCarrierPositionAfterPose(
                 rootMotionCarrierPositionBeforePose,
                 poseSolvedPosition,
-                isolateRootMotionFromPoseSolve
-            };
-
-            return (Vector3)method.Invoke(null, args);
+                isolateRootMotionFromPoseSolve);
         }
 
         private static Vector3 SelectImplicitRootGuardReference(
@@ -508,23 +460,10 @@ namespace Tests.Editor.FBXImporter
             Vector3 positionBeforePose,
             float movementScaleMultiplier)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "SelectImplicitRootGuardReference",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: ImplicitRootGuardReferenceParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose a pure static helper for implicit root guard reference selection.");
-
-            object[] args =
-            {
+            return RootMotionGuard.SelectImplicitRootGuardReference(
                 rootAnchorPosition,
                 positionBeforePose,
-                movementScaleMultiplier
-            };
-
-            return (Vector3)method.Invoke(null, args);
+                movementScaleMultiplier);
         }
 
         private static Vector3 ApplyImplicitBodyPositionRootGuard(
@@ -533,24 +472,11 @@ namespace Tests.Editor.FBXImporter
             bool allowBodyPositionXZRootMotion,
             Vector3 explicitBodyRootDelta)
         {
-            MethodInfo method = typeof(PoseSpaceRetargeter).GetMethod(
-                "ApplyImplicitBodyPositionRootGuard",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: ExplicitBodyRootMotionGuardParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "PoseSpaceRetargeter should expose an explicit-body-root overload so SetHumanPose root X/Z and explicit body root motion are not applied in the same step.");
-
-            object[] args =
-            {
+            return RootMotionGuard.ApplyImplicitBodyPositionRootGuard(
                 positionBeforePose,
                 currentPosition,
                 allowBodyPositionXZRootMotion,
-                explicitBodyRootDelta
-            };
-
-            return (Vector3)method.Invoke(null, args);
+                explicitBodyRootDelta);
         }
 
     }
