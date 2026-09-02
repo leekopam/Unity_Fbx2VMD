@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using RootMotion.FinalIK;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -575,83 +574,6 @@ namespace Tests.Editor.FBXImporter
         {
             AssertFinalIkFootGroundingDefaults("Assets/_Project/Scene/Main_Auto.unity");
             AssertFinalIkFootGroundingDefaults("Assets/_Project/Scene/Main_Recoding.unity");
-        }
-
-        [Test]
-        public void Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik()
-        {
-            var managerObject = new GameObject("final ik foot grounding manager");
-            var targetObject = new GameObject("final ik foot grounding target");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                SetField(manager, "enableFinalIkFootGroundingExperiment", true);
-                SetField(manager, "finalIkFootGroundingWeight", 0.15f);
-                SetField(manager, "finalIkFootGroundingMaxStep", 0.05f);
-                SetField(manager, "finalIkFootGroundingFootRadius", 0.06f);
-                SetField(manager, "finalIkFootGroundingPrediction", 0f);
-                SetField(manager, "finalIkFootGroundingFootRotationWeight", 0f);
-                SetField(manager, "finalIkFootGroundingPelvisDamper", 0.1f);
-
-                InvokeFinalIkFootGroundingConfiguration(manager, targetObject);
-
-                var bipedIk = targetObject.GetComponent<BipedIK>();
-                var grounder = targetObject.GetComponent<GrounderBipedIK>();
-
-                Assert.That(bipedIk, Is.Not.Null, "Final IK foot grounding experiment must use BipedIK as the narrow foot solver.");
-                Assert.That(grounder, Is.Not.Null, "Final IK foot grounding experiment must add GrounderBipedIK for foot contact correction.");
-                Assert.That(targetObject.GetComponent<VRIK>(), Is.Null, "Foot grounding experiment must not install VRIK, which would replace the whole retargeting solve.");
-                Assert.That(grounder.ik, Is.SameAs(bipedIk));
-                Assert.That(grounder.weight, Is.EqualTo(0.15f).Within(0.0001f));
-                Assert.That(grounder.spineBend, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(grounder.solver.maxStep, Is.EqualTo(0.05f).Within(0.0001f));
-                Assert.That(grounder.solver.footRadius, Is.EqualTo(0.06f).Within(0.0001f));
-                Assert.That(grounder.solver.prediction, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(grounder.solver.footRotationWeight, Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(grounder.solver.pelvisDamper, Is.EqualTo(0.1f).Within(0.0001f));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-                UnityEngine.Object.DestroyImmediate(targetObject);
-            }
-        }
-
-        [Test]
-        public void Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers()
-        {
-            var managerObject = new GameObject("final ik foot grounding manager");
-            var targetObject = new GameObject("final ik foot grounding target");
-            try
-            {
-                var manager = managerObject.AddComponent<FBXVmdPipeline>();
-                SetField(manager, "enableFinalIkFootGroundingExperiment", true);
-                SetField(manager, "finalIkFootGroundingWeight", 0.15f);
-
-                InvokeFinalIkFootGroundingConfiguration(manager, targetObject);
-
-                var bipedIk = targetObject.GetComponent<BipedIK>();
-                var grounder = targetObject.GetComponent<GrounderBipedIK>();
-
-                Assert.That(bipedIk, Is.Not.Null, "The enabled experiment should add the BipedIK solver before the OFF regression path is exercised.");
-                Assert.That(grounder, Is.Not.Null, "The enabled experiment should add the GrounderBipedIK solver before the OFF regression path is exercised.");
-                Assert.That(bipedIk.enabled, Is.True);
-                Assert.That(grounder.enabled, Is.True);
-
-                SetField(manager, "enableFinalIkFootGroundingExperiment", false);
-
-                InvokeFinalIkFootGroundingConfiguration(manager, targetObject);
-
-                Assert.That(grounder.enabled, Is.False, "OFF reconfiguration must disable GrounderBipedIK so it cannot alter the visual A/B baseline.");
-                Assert.That(grounder.weight, Is.EqualTo(0f).Within(0.0001f), "OFF reconfiguration must zero the GrounderBipedIK master weight.");
-                Assert.That(bipedIk.enabled, Is.False, "OFF reconfiguration must disable BipedIK as well; leaving it enabled can keep SolverManager fixTransforms active.");
-                Assert.That(bipedIk.fixTransforms, Is.False, "OFF reconfiguration must make BipedIK transform fixing inert for clean OFF/ON A/B tests.");
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(managerObject);
-                UnityEngine.Object.DestroyImmediate(targetObject);
-            }
         }
 
         [Test]
@@ -1561,20 +1483,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(GetField<float>(fileManager, "finalIkFootGroundingWeight"), Is.LessThanOrEqualTo(0.25f), "Default experiment weight must remain low enough to avoid replacing PoseSpaceRetargeter output.");
             Assert.That(GetField<float>(fileManager, "finalIkFootGroundingMaxStep"), Is.LessThanOrEqualTo(0.08f), "Default max step must stay below the current A7 guard relaxation boundary.");
             Assert.That(GetField<float>(fileManager, "finalIkFootGroundingFootRotationWeight"), Is.EqualTo(0f).Within(0.0001f), "Initial experiment must not rotate feet until visual evidence proves it safe.");
-        }
-
-        private static void InvokeFinalIkFootGroundingConfiguration(FBXVmdPipeline manager, GameObject targetObject)
-        {
-            var coordinator = new FBXConversionCoordinator(manager);
-            MethodInfo method = typeof(FBXConversionCoordinator).GetMethod(
-                "ConfigureFinalIkFootGroundingExperiment",
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                binder: null,
-                types: new[] { typeof(GameObject) },
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null, "변환 조정기는 Final IK 접지 구성 경계를 제공해야 합니다.");
-            method.Invoke(coordinator, new object[] { targetObject });
         }
 
         private static bool CanStartNextJob(bool isRunning, bool hasActiveJob, bool activeJobFinished)
