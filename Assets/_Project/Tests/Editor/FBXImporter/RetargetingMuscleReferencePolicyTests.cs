@@ -31,6 +31,13 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
+        private static readonly Type[] VisualSmoothingMusclePreservationParameterTypes =
+        {
+            typeof(int),
+            typeof(bool),
+            typeof(bool)
+        };
+
         private static readonly Type[] PoseInputTransformParameterTypes =
         {
             typeof(int),
@@ -61,6 +68,8 @@ namespace Tests.Editor.FBXImporter
             AssertPolicyMethod("ShouldUsePoseReference", PoseReferenceParameterTypes);
             AssertPolicyMethod("ShouldUseHumanoidMuscleReference", MuscleReferenceParameterTypes);
             AssertPolicyMethod("ShouldApplyHumanoidMuscleReferenceValue", MuscleReferenceValueParameterTypes);
+            AssertPolicyMethod("ShouldPreserveHumanoidMuscleDuringVisualSmoothing", VisualSmoothingMusclePreservationParameterTypes);
+            AssertPolicyMethod("IsForearmStretchMuscle", MuscleReferenceParameterTypes);
             AssertPolicyMethod("TransformPoseInputValue", PoseInputTransformParameterTypes);
             AssertPolicyMethod("AlignPoseInputWithReference", PoseInputAlignmentParameterTypes);
             AssertPolicyMethod("ShouldApplyManualFullBodyMuscle", ManualFullBodyMuscleParameterTypes);
@@ -68,6 +77,8 @@ namespace Tests.Editor.FBXImporter
             AssertPoseSpaceMethodAbsent("ShouldUseEditorPoseReference", PoseReferenceParameterTypes);
             AssertPoseSpaceMethodAbsent("ShouldUseEditorHumanoidMuscleReference", MuscleReferenceParameterTypes);
             AssertPoseSpaceMethodAbsent("ShouldApplyEditorHumanoidMuscleReferenceValue", MuscleReferenceValueParameterTypes);
+            AssertPoseSpaceMethodAbsent("ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing", VisualSmoothingMusclePreservationParameterTypes);
+            AssertPoseSpaceMethodAbsent("IsForearmStretchMuscleIndex", MuscleReferenceParameterTypes);
             AssertPoseSpaceMethodAbsent("TransformRetargetPoseInputMuscleValue", PoseInputTransformParameterTypes);
             AssertPoseSpaceMethodAbsent("AlignRetargetPoseInputWithEditorReference", PoseInputAlignmentParameterTypes);
             AssertPoseSpaceMethodAbsent("ShouldApplyManualFullBodyPoseReferenceMuscle", MuscleReferenceParameterTypes);
@@ -112,6 +123,31 @@ namespace Tests.Editor.FBXImporter
             int muscleIndex = FindHumanMuscleIndex("Right Forearm Stretch");
 
             Assert.That(ShouldUseHumanoidMuscleReference(muscleIndex), Is.False);
+            Assert.That(IsForearmStretchMuscle(muscleIndex), Is.True);
+        }
+
+        [Test]
+        public void Given_EditorReferenceCurve_When_CheckingVisualSmoothingPreservation_Then_PreservesOnlyEligibleMuscle()
+        {
+            int shoulderIndex = FindHumanMuscleIndex("Right Shoulder Front-Back");
+            int forearmStretchIndex = FindHumanMuscleIndex("Right Forearm Stretch");
+
+            Assert.That(ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+                shoulderIndex,
+                useHumanoidMuscleReference: true,
+                hasHumanoidMuscleReferenceCurve: true), Is.True);
+            Assert.That(ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+                shoulderIndex,
+                useHumanoidMuscleReference: false,
+                hasHumanoidMuscleReferenceCurve: true), Is.False);
+            Assert.That(ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+                shoulderIndex,
+                useHumanoidMuscleReference: true,
+                hasHumanoidMuscleReferenceCurve: false), Is.False);
+            Assert.That(ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+                forearmStretchIndex,
+                useHumanoidMuscleReference: true,
+                hasHumanoidMuscleReferenceCurve: true), Is.False);
         }
 
         [Test]
@@ -256,6 +292,8 @@ namespace Tests.Editor.FBXImporter
         {
             Assert.That(ShouldUseHumanoidMuscleReference(-1), Is.False);
             Assert.That(ShouldApplyHumanoidMuscleReferenceValue(-1, 0.5f), Is.False);
+            Assert.That(ShouldPreserveHumanoidMuscleDuringVisualSmoothing(-1, true, true), Is.False);
+            Assert.That(IsForearmStretchMuscle(-1), Is.False);
             Assert.That(TransformPoseInputValue(-1, 0.25f), Is.EqualTo(0.25f));
             Assert.That(AlignPoseInputWithReference(-1, 0.25f, -0.25f), Is.EqualTo(0.25f));
             Assert.That(ShouldApplyManualFullBodyMuscle(-1), Is.True);
@@ -289,6 +327,27 @@ namespace Tests.Editor.FBXImporter
                 MuscleReferenceValueParameterTypes,
                 muscleIndex,
                 referenceValue);
+        }
+
+        private static bool ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+            int muscleIndex,
+            bool useHumanoidMuscleReference,
+            bool hasHumanoidMuscleReferenceCurve)
+        {
+            return InvokePolicy<bool>(
+                "ShouldPreserveHumanoidMuscleDuringVisualSmoothing",
+                VisualSmoothingMusclePreservationParameterTypes,
+                muscleIndex,
+                useHumanoidMuscleReference,
+                hasHumanoidMuscleReferenceCurve);
+        }
+
+        private static bool IsForearmStretchMuscle(int muscleIndex)
+        {
+            return InvokePolicy<bool>(
+                "IsForearmStretchMuscle",
+                MuscleReferenceParameterTypes,
+                muscleIndex);
         }
 
         private static float TransformPoseInputValue(int muscleIndex, float value)
