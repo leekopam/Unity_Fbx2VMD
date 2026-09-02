@@ -73,7 +73,8 @@ namespace Tests.Editor.FBXImporter
                 "RequestRuntimeDiagnosticScriptRefresh",
                 "ResolveMainAutoFrameCount",
                 "BuildFrameQualityFailureMessages",
-                "HasAcceptedUserFacingArtifactPreservingRawDiagnostic"
+                "HasAcceptedUserFacingArtifactPreservingRawDiagnostic",
+                "BuildManualAnimatorCapturePlan"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
