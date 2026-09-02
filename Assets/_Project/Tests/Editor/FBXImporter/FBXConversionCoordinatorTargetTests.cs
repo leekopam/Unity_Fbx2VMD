@@ -526,6 +526,82 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik()
+        {
+            var pipelineObject = new GameObject("final ik foot grounding pipeline");
+            var targetObject = new GameObject("final ik foot grounding target");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                SetField(pipeline, "enableFinalIkFootGroundingExperiment", true);
+                SetField(pipeline, "finalIkFootGroundingWeight", 0.15f);
+                SetField(pipeline, "finalIkFootGroundingMaxStep", 0.05f);
+                SetField(pipeline, "finalIkFootGroundingFootRadius", 0.06f);
+                SetField(pipeline, "finalIkFootGroundingPrediction", 0f);
+                SetField(pipeline, "finalIkFootGroundingFootRotationWeight", 0f);
+                SetField(pipeline, "finalIkFootGroundingPelvisDamper", 0.1f);
+
+                InvokeFinalIkFootGroundingConfiguration(pipeline, targetObject);
+
+                BipedIK bipedIk = targetObject.GetComponent<BipedIK>();
+                GrounderBipedIK grounder = targetObject.GetComponent<GrounderBipedIK>();
+
+                Assert.That(bipedIk, Is.Not.Null, "Final IK foot grounding experiment must use BipedIK as the narrow foot solver.");
+                Assert.That(grounder, Is.Not.Null, "Final IK foot grounding experiment must add GrounderBipedIK for foot contact correction.");
+                Assert.That(targetObject.GetComponent<VRIK>(), Is.Null, "Foot grounding experiment must not install VRIK, which would replace the whole retargeting solve.");
+                Assert.That(grounder.ik, Is.SameAs(bipedIk));
+                Assert.That(grounder.weight, Is.EqualTo(0.15f).Within(0.0001f));
+                Assert.That(grounder.spineBend, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(grounder.solver.maxStep, Is.EqualTo(0.05f).Within(0.0001f));
+                Assert.That(grounder.solver.footRadius, Is.EqualTo(0.06f).Within(0.0001f));
+                Assert.That(grounder.solver.prediction, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(grounder.solver.footRotationWeight, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(grounder.solver.pelvisDamper, Is.EqualTo(0.1f).Within(0.0001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(pipelineObject);
+                Object.DestroyImmediate(targetObject);
+            }
+        }
+
+        [Test]
+        public void Given_FinalIkFootGroundingExperimentWasEnabled_When_DisabledAndReconfigured_Then_DisablesAllFinalIkFootSolvers()
+        {
+            var pipelineObject = new GameObject("final ik foot grounding pipeline");
+            var targetObject = new GameObject("final ik foot grounding target");
+            try
+            {
+                FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                SetField(pipeline, "enableFinalIkFootGroundingExperiment", true);
+                SetField(pipeline, "finalIkFootGroundingWeight", 0.15f);
+
+                InvokeFinalIkFootGroundingConfiguration(pipeline, targetObject);
+
+                BipedIK bipedIk = targetObject.GetComponent<BipedIK>();
+                GrounderBipedIK grounder = targetObject.GetComponent<GrounderBipedIK>();
+
+                Assert.That(bipedIk, Is.Not.Null, "The enabled experiment should add the BipedIK solver before the OFF regression path is exercised.");
+                Assert.That(grounder, Is.Not.Null, "The enabled experiment should add the GrounderBipedIK solver before the OFF regression path is exercised.");
+                Assert.That(bipedIk.enabled, Is.True);
+                Assert.That(grounder.enabled, Is.True);
+
+                SetField(pipeline, "enableFinalIkFootGroundingExperiment", false);
+                InvokeFinalIkFootGroundingConfiguration(pipeline, targetObject);
+
+                Assert.That(grounder.enabled, Is.False, "OFF reconfiguration must disable GrounderBipedIK so it cannot alter the visual A/B baseline.");
+                Assert.That(grounder.weight, Is.EqualTo(0f).Within(0.0001f), "OFF reconfiguration must zero the GrounderBipedIK master weight.");
+                Assert.That(bipedIk.enabled, Is.False, "OFF reconfiguration must disable BipedIK as well; leaving it enabled can keep SolverManager fixTransforms active.");
+                Assert.That(bipedIk.fixTransforms, Is.False, "OFF reconfiguration must make BipedIK transform fixing inert for clean OFF/ON A/B tests.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(pipelineObject);
+                Object.DestroyImmediate(targetObject);
+            }
+        }
+
+        [Test]
         public void Given_TargetSessionReset_When_CheckingOwnership_Then_CoordinatorOwnsGuardBaselineRecapture()
         {
             MethodInfo coordinatorMethod = typeof(FBXConversionCoordinator).GetMethod(
@@ -558,6 +634,41 @@ namespace Tests.Editor.FBXImporter
             Assert.That(resetMethodSource, Does.Contain("FBXConversionCoordinator.RecaptureTargetGuardBaselines("));
             Assert.That(resetMethodSource, Does.Not.Contain("targetCharacter.GetComponent<HumanoidArmDeformationGuard>()"));
             Assert.That(resetMethodSource, Does.Not.Contain("targetCharacter.GetComponent<HumanoidThumbDeformationGuard>()"));
+        }
+
+        private static void InvokeFinalIkFootGroundingConfiguration(
+            FBXVmdPipeline pipeline,
+            GameObject targetObject)
+        {
+            var coordinator = new FBXConversionCoordinator(pipeline);
+            MethodInfo method = typeof(FBXConversionCoordinator).GetMethod(
+                "ConfigureFinalIkFootGroundingExperiment",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null,
+                types: new[] { typeof(GameObject) },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "변환 조정기는 Final IK 접지 구성 경계를 제공해야 합니다.");
+            method.Invoke(coordinator, new object[] { targetObject });
+        }
+
+        private static void SetField<T>(object instance, string fieldName, T value)
+        {
+            Assert.That(instance, Is.Not.Null);
+            FieldInfo field = instance.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (field != null)
+            {
+                field.SetValue(instance, value);
+                return;
+            }
+
+            PropertyInfo property = instance.GetType().GetProperty(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(property, Is.Not.Null, $"Expected field or property '{fieldName}' to exist.");
+            property.SetValue(instance, value);
         }
 
         [Test]
