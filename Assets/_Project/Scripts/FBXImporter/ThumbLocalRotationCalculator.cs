@@ -46,7 +46,7 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        private static Quaternion LimitLocalRotation(
+        internal static Quaternion LimitLocalRotation(
             Quaternion initialRotation,
             Quaternion currentRotation,
             float softLimit)

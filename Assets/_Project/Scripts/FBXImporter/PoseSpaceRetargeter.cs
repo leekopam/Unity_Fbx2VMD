@@ -1693,8 +1693,6 @@ namespace Fbx2Vmd.FBXImporter
         private float _estimatedFootRadius = DefaultFootRadius;
         private const float DefaultFootRadius = 0.04f;
         private const float GroundingDirectionReversalStepScale = 0.4f;
-        private const float ThumbLocalRotationOvershootRatio = 0.35f;
-        private const float ThumbLocalRotationHardOvershootDegrees = 8f;
         private static readonly HumanBodyBones[] ThumbRotationBones =
         {
             HumanBodyBones.LeftThumbProximal,
@@ -7091,7 +7089,10 @@ namespace Fbx2Vmd.FBXImporter
                     continue;
                 }
 
-                Quaternion limitedRotation = LimitThumbLocalRotation(initialRotation, currentRotation, limit);
+                Quaternion limitedRotation = ThumbLocalRotationCalculator.LimitLocalRotation(
+                    initialRotation,
+                    currentRotation,
+                    limit);
                 if (ShouldPreserveManualThumbLocalRotationReference(thumbBone, thumbTransform, currentRotation, limitedRotation))
                 {
                     continue;
@@ -7118,14 +7119,6 @@ namespace Fbx2Vmd.FBXImporter
 
             HumanoidThumbDeformationGuard guard = targetAnimator.GetComponent<HumanoidThumbDeformationGuard>();
             return guard != null && guard.enabled && guard.isActiveAndEnabled;
-        }
-
-        private static Quaternion LimitThumbLocalRotation(Quaternion initialRotation, Quaternion currentRotation, float softLimit)
-        {
-            float angle = Quaternion.Angle(initialRotation, currentRotation);
-            float hardLimit = softLimit + ThumbLocalRotationHardOvershootDegrees;
-            float targetAngle = Mathf.Min(hardLimit, softLimit + (angle - softLimit) * ThumbLocalRotationOvershootRatio);
-            return Quaternion.RotateTowards(initialRotation, currentRotation, targetAngle);
         }
 
         private void ResetThumbLocalRotationGuardDiagnostics()
