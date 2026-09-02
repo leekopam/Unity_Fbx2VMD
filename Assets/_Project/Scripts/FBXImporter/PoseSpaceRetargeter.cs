@@ -6670,7 +6670,8 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            int clampedCount = HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref pose);
+            int clampedCount =
+                HumanoidMuscleRangeLimiter.ClampNonFingerMusclesInPlace(pose.muscles);
 
             if (clampedCount > 0 && !_muscleClampWarningLogged)
             {
@@ -6758,7 +6759,8 @@ namespace Fbx2Vmd.FBXImporter
             int changed = 0;
             if (clampMusclesToHumanRange)
             {
-                changed += HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref _appliedTargetPose);
+                changed += HumanoidMuscleRangeLimiter.ClampNonFingerMusclesInPlace(
+                    _appliedTargetPose.muscles);
             }
 
             if (enableAnatomicalArmGuard)

@@ -1,20 +1,32 @@
+using System;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using Fbx2Vmd.FBXImporter;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class HumanoidArmDeformationGuardTests
+    public class HumanoidMuscleRangeLimiterTests
     {
-        // 손가락 muscle 이름 목록 (IsFingerMuscle과 동일 기준)
+        // Production 구현을 재사용해 항상 통과하지 않도록 기대값을 독립적으로 분류함.
         private static readonly string[] FingerKeywords = { "thumb", "index", "middle", "ring", "little" };
 
         private static bool IsFingerMuscleName(string name)
         {
-            if (string.IsNullOrEmpty(name)) return false;
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+
             string n = name.Replace(" ", "").ToLowerInvariant();
             foreach (string kw in FingerKeywords)
-                if (n.Contains(kw)) return true;
+            {
+                if (n.Contains(kw))
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -23,19 +35,27 @@ namespace Tests.Editor.FBXImporter
             int count = 0;
             int max = Mathf.Min(HumanTrait.MuscleCount, HumanTrait.MuscleName.Length);
             for (int i = 0; i < max; i++)
-                if (!IsFingerMuscleName(HumanTrait.MuscleName[i])) count++;
+            {
+                if (!IsFingerMuscleName(HumanTrait.MuscleName[i]))
+                {
+                    count++;
+                }
+            }
+
             return count;
         }
 
         [Test]
-        public void Given_MuscleValuesExceedRange_When_ClampMusclesToHumanRange_Then_AllNonFingerMusclesWithinNeg1To1()
+        public void Given_MuscleValuesExceedRange_When_ClampingNonFingerMuscles_Then_AllValuesWithinNeg1To1()
         {
             var pose = new HumanPose();
             pose.muscles = new float[HumanTrait.MuscleCount];
             for (int i = 0; i < pose.muscles.Length; i++)
+            {
                 pose.muscles[i] = 2.0f;
+            }
 
-            HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref pose);
+            ClampNonFingerMusclesInPlace(pose.muscles);
 
             int max = Mathf.Min(pose.muscles.Length, HumanTrait.MuscleCount);
             for (int i = 0; i < max; i++)
@@ -49,38 +69,44 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_MuscleValuesExceedRange_When_ClampMusclesToHumanRange_Then_ReturnCountEqualsClampedNonFingerMuscles()
+        public void Given_MuscleValuesExceedRange_When_ClampingNonFingerMuscles_Then_ReturnsChangedCount()
         {
             var pose = new HumanPose();
             pose.muscles = new float[HumanTrait.MuscleCount];
             for (int i = 0; i < pose.muscles.Length; i++)
+            {
                 pose.muscles[i] = 2.0f;
+            }
 
             int expectedCount = CountNonFingerMuscles();
-            int actualCount = HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref pose);
+            int actualCount = ClampNonFingerMusclesInPlace(pose.muscles);
 
             Assert.AreEqual(expectedCount, actualCount,
                 "클램핑된 muscle 수가 비손가락 muscle 수와 일치해야 한다");
         }
 
         [Test]
-        public void Given_AllMusclesInRange_When_ClampMusclesToHumanRange_Then_NoneModifiedAndReturnsZero()
+        public void Given_AllMusclesInRange_When_ClampingNonFingerMuscles_Then_ReturnsZeroWithoutChanges()
         {
             var pose = new HumanPose();
             pose.muscles = new float[HumanTrait.MuscleCount];
             for (int i = 0; i < pose.muscles.Length; i++)
+            {
                 pose.muscles[i] = 0.5f;
+            }
 
-            int clampedCount = HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref pose);
+            int clampedCount = ClampNonFingerMusclesInPlace(pose.muscles);
 
             Assert.AreEqual(0, clampedCount, "범위 내 muscle은 수정되지 않아야 한다");
             for (int i = 0; i < pose.muscles.Length; i++)
+            {
                 Assert.AreEqual(0.5f, pose.muscles[i], 1e-6f,
                     $"muscle[{i}] 값이 변경되지 않아야 한다");
+            }
         }
 
         [Test]
-        public void Given_NullMuscles_When_ClampMusclesToHumanRange_Then_ReturnsZeroWithoutException()
+        public void Given_NullMuscles_When_ClampingNonFingerMuscles_Then_ReturnsZeroWithoutException()
         {
             var pose = new HumanPose();
             pose.muscles = null;
@@ -88,34 +114,36 @@ namespace Tests.Editor.FBXImporter
             int result = 0;
             Assert.DoesNotThrow(() =>
             {
-                result = HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref pose);
+                result = ClampNonFingerMusclesInPlace(pose.muscles);
             });
             Assert.AreEqual(0, result, "muscles가 null이면 0을 반환해야 한다");
         }
 
         [Test]
-        public void Given_BoundaryMuscleValues_When_ClampMusclesToHumanRange_Then_BoundaryValuesUnchanged()
+        public void Given_BoundaryMuscleValues_When_ClampingNonFingerMuscles_Then_BoundaryValuesUnchanged()
         {
             var pose = new HumanPose();
             pose.muscles = new float[HumanTrait.MuscleCount];
             for (int i = 0; i < pose.muscles.Length; i++)
+            {
                 pose.muscles[i] = (i % 2 == 0) ? 1.0f : -1.0f;
+            }
 
-            int clampedCount = HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref pose);
+            int clampedCount = ClampNonFingerMusclesInPlace(pose.muscles);
 
             Assert.AreEqual(0, clampedCount, "정확히 ±1.0인 경계값은 클램핑 대상이 아니다");
         }
 
         [Test]
-        public void Given_MixedMuscleValues_When_ClampMusclesToHumanRange_Then_OnlyOutOfRangeMusclesModified()
+        public void Given_MixedMuscleValues_When_ClampingNonFingerMuscles_Then_OnlyOutOfRangeValuesChange()
         {
             var pose = new HumanPose();
             pose.muscles = new float[HumanTrait.MuscleCount];
-            // 모두 범위 내로 초기화
             for (int i = 0; i < pose.muscles.Length; i++)
+            {
                 pose.muscles[i] = 0.5f;
+            }
 
-            // 손가락이 아닌 첫 번째 muscle을 범위 초과로 설정
             int targetIdx = -1;
             for (int i = 0; i < Mathf.Min(pose.muscles.Length, HumanTrait.MuscleCount); i++)
             {
@@ -128,11 +156,42 @@ namespace Tests.Editor.FBXImporter
             Assume.That(targetIdx >= 0, "테스트 가능한 비손가락 muscle이 없다");
             pose.muscles[targetIdx] = 1.5f;
 
-            int clampedCount = HumanoidArmDeformationGuard.ClampMusclesToHumanRange(ref pose);
+            int clampedCount = ClampNonFingerMusclesInPlace(pose.muscles);
 
             Assert.AreEqual(1, clampedCount, "범위를 벗어난 muscle 1개만 클램핑되어야 한다");
             Assert.AreEqual(1.0f, pose.muscles[targetIdx], 1e-6f,
                 "클램핑된 muscle은 1.0으로 고정되어야 한다");
+        }
+
+        [Test]
+        public void Given_ModelNeutralLimiterOwner_When_InspectingArmGuard_Then_LegacyClampMethodIsAbsent()
+        {
+            MethodInfo legacyMethod = typeof(HumanoidArmDeformationGuard).GetMethod(
+                "ClampMusclesToHumanRange",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+            Assert.That(legacyMethod, Is.Null,
+                "모델 중립 muscle 범위 제한 책임을 팔 변형 가드에 다시 추가하면 안 된다.");
+        }
+
+        private static int ClampNonFingerMusclesInPlace(float[] muscles)
+        {
+            Type limiterType = GetLimiterType();
+
+            MethodInfo method = limiterType.GetMethod(
+                "ClampNonFingerMusclesInPlace",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+            return (int)method.Invoke(null, new object[] { muscles });
+        }
+
+        private static Type GetLimiterType()
+        {
+            Type limiterType = typeof(PoseSpaceRetargeter).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidMuscleRangeLimiter");
+            Assert.That(limiterType, Is.Not.Null,
+                "Humanoid muscle 범위 제한은 모델 중립 owner가 소유해야 한다.");
+            return limiterType;
         }
     }
 }

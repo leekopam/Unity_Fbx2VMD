@@ -177,7 +177,9 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            int rangeClampCount = clampMusclesToHumanRange ? ClampMusclesToHumanRange(ref _pose) : 0;
+            int rangeClampCount = clampMusclesToHumanRange
+                ? HumanoidMuscleRangeLimiter.ClampNonFingerMusclesInPlace(_pose.muscles)
+                : 0;
             int armClampCount = enableAnatomicalArmGuard
                 ? ClampAnatomicalArmMuscles(
                     ref _pose,
@@ -255,51 +257,6 @@ namespace Fbx2Vmd.FBXImporter
 
                 _limbChildRotationExclusions.Add(excludedTransform);
             }
-        }
-
-        public static int ClampMusclesToHumanRange(ref HumanPose pose)
-        {
-            if (pose.muscles == null)
-            {
-                return 0;
-            }
-
-            int changed = 0;
-            int count = Mathf.Min(pose.muscles.Length, HumanTrait.MuscleCount);
-            for (int i = 0; i < count; i++)
-            {
-                if (IsFingerMuscle(HumanTrait.MuscleName[i]))
-                {
-                    continue;
-                }
-
-                float before = pose.muscles[i];
-                float after = Mathf.Clamp(before, -1f, 1f);
-                if (Mathf.Approximately(before, after))
-                {
-                    continue;
-                }
-
-                pose.muscles[i] = after;
-                changed++;
-            }
-
-            return changed;
-        }
-
-        private static bool IsFingerMuscle(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return false;
-            }
-
-            string normalizedName = muscleName.Replace(" ", "").ToLowerInvariant();
-            return normalizedName.Contains("thumb")
-                || normalizedName.Contains("index")
-                || normalizedName.Contains("middle")
-                || normalizedName.Contains("ring")
-                || normalizedName.Contains("little");
         }
 
         public static int ClampAnatomicalArmMuscles(
