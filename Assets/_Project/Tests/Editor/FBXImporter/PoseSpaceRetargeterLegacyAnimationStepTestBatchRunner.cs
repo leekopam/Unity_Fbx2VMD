@@ -21,6 +21,7 @@ namespace Tests.Editor.FBXImporter
             var results = new List<TestResultRecord>();
             var tests = new PoseSpaceRetargeterLegacyAnimationStepTests();
             var manualPoseTests = new PoseSpaceRetargeterHipsLocalPositionReferenceTests();
+            var muscleOutputTests = new ManualPoseReferenceApplierMuscleOutputTests();
             var endpointTests = new RetargetingEndpointDiagnosticsTests();
             var muscleReferenceTests = new RetargetingMuscleReferencePolicyTests();
 
@@ -138,12 +139,16 @@ namespace Tests.Editor.FBXImporter
                 muscleReferenceTests.Given_LeftArmOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyLeftArmChain);
             RunTest(results, nameof(muscleReferenceTests.Given_RightSleeveChainOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsSpineAndRightSleeveChain),
                 muscleReferenceTests.Given_RightSleeveChainOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsSpineAndRightSleeveChain);
-            RunTest(results, nameof(manualPoseTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit),
-                manualPoseTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit);
-            RunTest(results, nameof(manualPoseTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy),
-                manualPoseTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy);
-            RunTest(results, nameof(manualPoseTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier),
-                manualPoseTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier);
+            RunTest(results, nameof(muscleOutputTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit),
+                muscleOutputTests.Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit);
+            RunTest(results, nameof(muscleOutputTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy),
+                muscleOutputTests.Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy);
+            RunTest(results, nameof(muscleOutputTests.Given_ValidMuscleIndex_When_ApplyingBoundedReference_Then_UpdatesOnlySelectedMuscle),
+                muscleOutputTests.Given_ValidMuscleIndex_When_ApplyingBoundedReference_Then_UpdatesOnlySelectedMuscle);
+            RunTest(results, nameof(muscleOutputTests.Given_InvalidOrUnchangedMuscle_When_ApplyingBoundedReference_Then_PreservesOutput),
+                muscleOutputTests.Given_InvalidOrUnchangedMuscle_When_ApplyingBoundedReference_Then_PreservesOutput);
+            RunTest(results, nameof(muscleOutputTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier),
+                muscleOutputTests.Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier);
             RunTest(results, nameof(manualPoseTests.Given_LowerBodySegmentDirectionReference_When_CalculatingCorrection_Then_RotatesTowardReferenceDirection),
                 manualPoseTests.Given_LowerBodySegmentDirectionReference_When_CalculatingCorrection_Then_RotatesTowardReferenceDirection);
             RunTest(results, nameof(manualPoseTests.Given_LowerBodySegmentDirectionMaxAngle_When_CalculatingCorrection_Then_ClampsBeforeWeight),
