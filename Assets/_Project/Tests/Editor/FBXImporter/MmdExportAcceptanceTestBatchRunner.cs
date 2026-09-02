@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security;
+using Tests.Editor.VMDRecorderSample;
 using UnityEditor;
 
 namespace Tests.Editor.FBXImporter
@@ -213,12 +214,12 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure),
                 () => new MmdExportSafetyDefaultsTests().Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock),
-                () => new MmdExportSafetyDefaultsTests().Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_NonZeroClipWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock),
-                () => new MmdExportSafetyDefaultsTests().Given_NonZeroClipWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock());
+            RunTest(results, typeof(MotionComparisonProbeSampleClockTests).FullName + "." +
+                nameof(MotionComparisonProbeSampleClockTests.Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock),
+                () => new MotionComparisonProbeSampleClockTests().Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock());
+            RunTest(results, typeof(MotionComparisonProbeSampleClockTests).FullName + "." +
+                nameof(MotionComparisonProbeSampleClockTests.Given_NonZeroClipWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock),
+                () => new MotionComparisonProbeSampleClockTests().Given_NonZeroClipWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock());
 
             var namingTests = new VmdNamingContractTests();
             RunTest(results, typeof(VmdNamingContractTests).FullName + "." +
