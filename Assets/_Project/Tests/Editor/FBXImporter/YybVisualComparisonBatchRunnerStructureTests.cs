@@ -78,7 +78,8 @@ namespace Tests.Editor.FBXImporter
                 "IsMainSceneCandidateMode",
                 "ShouldBuildFrameQualityDiagnostic",
                 "ResolveIntegratedVerticalSolveRole",
-                "ResolveIntegratedVerticalSolveBasis"
+                "ResolveIntegratedVerticalSolveBasis",
+                "CanStartNextJob"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(
