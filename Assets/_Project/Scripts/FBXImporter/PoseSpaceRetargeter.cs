@@ -2280,7 +2280,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            TransformRetargetPoseInputMuscles(ref _humanPose);
+            RetargetingPoseInputTransformer.TransformInPlace(_humanPose.muscles);
 #if UNITY_EDITOR
             AlignRetargetPoseInputWithEditorHumanoidMuscleReference(ref _humanPose);
 #endif
@@ -5599,19 +5599,6 @@ namespace Fbx2Vmd.FBXImporter
                     pair.Key,
                     pose.muscles[pair.Key],
                     referenceValue);
-            }
-        }
-
-        private static void TransformRetargetPoseInputMuscles(ref HumanPose pose)
-        {
-            if (pose.muscles == null)
-            {
-                return;
-            }
-
-            for (int i = 0; i < pose.muscles.Length; i++)
-            {
-                pose.muscles[i] = RetargetingMuscleReferencePolicy.TransformPoseInputValue(i, pose.muscles[i]);
             }
         }
 

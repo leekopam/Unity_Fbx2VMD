@@ -24,6 +24,7 @@ namespace Tests.Editor.FBXImporter
             var muscleOutputTests = new ManualPoseReferenceApplierMuscleOutputTests();
             var endpointTests = new RetargetingEndpointDiagnosticsTests();
             var muscleReferenceTests = new RetargetingMuscleReferencePolicyTests();
+            var poseInputTransformerTests = new RetargetingPoseInputTransformerTests();
 
             RunTest(results, nameof(muscleReferenceTests.Given_MuscleReferencePolicyOwner_When_InspectingResponsibilities_Then_OwnsPurePolicies),
                 muscleReferenceTests.Given_MuscleReferencePolicyOwner_When_InspectingResponsibilities_Then_OwnsPurePolicies);
@@ -69,6 +70,12 @@ namespace Tests.Editor.FBXImporter
                 muscleReferenceTests.Given_RightUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_UsesReference);
             RunTest(results, nameof(muscleReferenceTests.Given_UpperArmTwistPoseInput_When_TransformingInput_Then_FlipsLeftTwistSignOnly),
                 muscleReferenceTests.Given_UpperArmTwistPoseInput_When_TransformingInput_Then_FlipsLeftTwistSignOnly);
+            RunTest(results, nameof(poseInputTransformerTests.Given_PoseInputTransformer_When_CheckingOwnership_Then_OwnsArrayTransformation),
+                poseInputTransformerTests.Given_PoseInputTransformer_When_CheckingOwnership_Then_OwnsArrayTransformation);
+            RunTest(results, nameof(poseInputTransformerTests.Given_PoseInputMuscleValues_When_TransformingInPlace_Then_FlipsLeftTwistSignOnly),
+                poseInputTransformerTests.Given_PoseInputMuscleValues_When_TransformingInPlace_Then_FlipsLeftTwistSignOnly);
+            RunTest(results, nameof(poseInputTransformerTests.Given_MissingPoseInputMuscleValues_When_TransformingInPlace_Then_DoesNotThrow),
+                poseInputTransformerTests.Given_MissingPoseInputMuscleValues_When_TransformingInPlace_Then_DoesNotThrow);
             RunTest(results, nameof(muscleReferenceTests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningInput_Then_FlipsSignOnly),
                 muscleReferenceTests.Given_LeftArmTwistInputOpposesBoundedReference_When_AligningInput_Then_FlipsSignOnly);
             RunTest(results, nameof(muscleReferenceTests.Given_LeftArmTwistInputOpposesOverrangeReference_When_AligningInput_Then_KeepsLiveInput),
