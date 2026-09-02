@@ -3,7 +3,8 @@ using UnityEngine;
 
 namespace Fbx2Vmd.Settings
 {
-public sealed class GraphicMaterialShaderProfile
+    [Serializable]
+    public sealed class GraphicMaterialShaderProfile
     {
         [SerializeField] private bool applyOutline = true;
         [SerializeField, UnityEngine.Min(0f)] private float outlineScale = 0.0005f;

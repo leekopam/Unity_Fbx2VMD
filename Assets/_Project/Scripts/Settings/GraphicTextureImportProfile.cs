@@ -3,7 +3,8 @@ using UnityEngine;
 
 namespace Fbx2Vmd.Settings
 {
-public sealed class GraphicTextureImportProfile
+    [Serializable]
+    public sealed class GraphicTextureImportProfile
     {
         [SerializeField] private FilterMode filterMode = FilterMode.Trilinear;
         [SerializeField, Range(0, 16)] private int anisoLevel = 8;

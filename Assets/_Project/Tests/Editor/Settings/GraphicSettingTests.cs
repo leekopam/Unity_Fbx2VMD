@@ -1323,6 +1323,8 @@ namespace Tests.Editor.Settings
             AssertRecordingTargetQualitySources(component, fileManager);
 
             var serialized = new SerializedObject(component);
+            Assert.That(serialized.FindProperty("textureImportProfile"), Is.Not.Null,
+                "GraphicSetting inspector must expose the texture import profile on the selected Setting object.");
             Assert.That(serialized.FindProperty("materialShaderProfile"), Is.Not.Null,
                 "GraphicSetting inspector must expose the material shader profile on the selected Setting object.");
             Assert.That(serialized.FindProperty("captureQuality"), Is.Null,
