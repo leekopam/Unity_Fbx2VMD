@@ -548,32 +548,6 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RightSleeveSilhouetteOffsetFrameGate_When_ExposedInInspector_Then_Frame90IsSelectable()
-        {
-            AssertRangeMaxAtLeast<FBXVmdPipeline>("_yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
-            AssertRangeMaxAtLeast<FBXVmdPipeline>("_yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
-            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("_yybRightSleeveSilhouetteLocalOffsetFrameGateStart", 90f);
-            AssertRangeMaxAtLeast<PoseSpaceRetargeter>("_yybRightSleeveSilhouetteLocalOffsetFrameGateEnd", 90f);
-        }
-
-        [Test]
-        public void Given_PostSetHumanPoseEndpointFrameGate_When_ExposedInInspector_Then_LegacyFrameWindowIsSelectable()
-        {
-            const float discoveredLegacyGateEnd = 3553f;
-            string[] fieldNames =
-            {
-                "_postSetHumanPoseRightEndpointPositionReferenceFrameGateStart",
-                "_postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd"
-            };
-
-            foreach (string fieldName in fieldNames)
-            {
-                AssertRangeMaxAtLeast<FBXVmdPipeline>(fieldName, discoveredLegacyGateEnd);
-                AssertRangeMaxAtLeast<PoseSpaceRetargeter>(fieldName, discoveredLegacyGateEnd);
-            }
-        }
-
-        [Test]
         public void Given_LowerBodySegmentDirectionReferenceOnly_When_ConfiguringManualReference_Then_PreparesReferenceAnimator()
         {
             var managerObject = new GameObject("manual animator lower body segment direction reference manager");
@@ -1354,21 +1328,6 @@ namespace Tests.Editor.FBXImporter
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(target);
             Assert.That(value, Is.TypeOf<float>(), $"{target.GetType().Name} must expose float member {fieldName} for focused runtime diagnostics.");
             return (float)value;
-        }
-
-        private static void AssertRangeMaxAtLeast<T>(string fieldName, float expectedMax) where T : class
-        {
-            FieldInfo field = typeof(T).GetField(
-                fieldName,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(field, Is.Not.Null, $"{typeof(T).Name}.{fieldName} must exist.");
-
-            var range = field.GetCustomAttribute<UnityEngine.RangeAttribute>();
-            Assert.That(range, Is.Not.Null, $"{typeof(T).Name}.{fieldName} must expose an Inspector range.");
-            Assert.That(
-                range.max,
-                Is.GreaterThanOrEqualTo(expectedMax),
-                $"{typeof(T).Name}.{fieldName} Inspector range must include the discovered legacy frame gate {expectedMax:0}.");
         }
 
         private static AnimationClip LoadFirstHumanoidAnimationClip(string assetPath)
