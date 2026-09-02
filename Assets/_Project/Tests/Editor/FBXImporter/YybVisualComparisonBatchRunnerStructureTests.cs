@@ -80,7 +80,10 @@ namespace Tests.Editor.FBXImporter
                 "ResolveIntegratedVerticalSolveRole",
                 "ResolveIntegratedVerticalSolveBasis",
                 "CanStartNextJob",
-                "SelectActiveManualRecorder"
+                "SelectActiveManualRecorder",
+                "BuildStableCandidateResult",
+                "BuildCandidateVmdEvidencePath",
+                "SanitizeComparisonArtifactFileName"
             };
 
             MethodInfo[] privateStaticMethods = typeof(YybVisualComparisonBatchRunner).GetMethods(

@@ -211,9 +211,9 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(VisualComparisonMainSceneDiagnosticPolicyTests).FullName + "." +
                 nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate),
                 () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure),
-                () => new MmdExportSafetyDefaultsTests().Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure());
+            RunTest(results, typeof(VisualComparisonCandidateArtifactStoreTests).FullName + "." +
+                nameof(VisualComparisonCandidateArtifactStoreTests.Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure),
+                () => new VisualComparisonCandidateArtifactStoreTests().Given_MainRecordingSmokeFailedButVmdExists_When_BuildingStableCandidate_Then_CopiesVmdAndKeepsFailure());
             RunTest(results, typeof(MotionComparisonProbeSampleClockTests).FullName + "." +
                 nameof(MotionComparisonProbeSampleClockTests.Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock),
                 () => new MotionComparisonProbeSampleClockTests().Given_HeadWindowProbe_When_ResolvingSampleClock_Then_KeepsAnimationClipClock());
