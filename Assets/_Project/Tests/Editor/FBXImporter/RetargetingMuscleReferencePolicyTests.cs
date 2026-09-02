@@ -25,6 +25,11 @@ namespace Tests.Editor.FBXImporter
             typeof(int)
         };
 
+        private static readonly Type[] MuscleNameParameterTypes =
+        {
+            typeof(string)
+        };
+
         private static readonly Type[] MuscleReferenceValueParameterTypes =
         {
             typeof(int),
@@ -70,6 +75,7 @@ namespace Tests.Editor.FBXImporter
             AssertPolicyMethod("ShouldApplyHumanoidMuscleReferenceValue", MuscleReferenceValueParameterTypes);
             AssertPolicyMethod("ShouldPreserveHumanoidMuscleDuringVisualSmoothing", VisualSmoothingMusclePreservationParameterTypes);
             AssertPolicyMethod("IsForearmStretchMuscle", MuscleReferenceParameterTypes);
+            AssertPolicyMethod("FindHumanMuscleIndex", MuscleNameParameterTypes);
             AssertPolicyMethod("TransformPoseInputValue", PoseInputTransformParameterTypes);
             AssertPolicyMethod("AlignPoseInputWithReference", PoseInputAlignmentParameterTypes);
             AssertPolicyMethod("ShouldApplyManualFullBodyMuscle", ManualFullBodyMuscleParameterTypes);
@@ -79,6 +85,7 @@ namespace Tests.Editor.FBXImporter
             AssertPoseSpaceMethodAbsent("ShouldApplyEditorHumanoidMuscleReferenceValue", MuscleReferenceValueParameterTypes);
             AssertPoseSpaceMethodAbsent("ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing", VisualSmoothingMusclePreservationParameterTypes);
             AssertPoseSpaceMethodAbsent("IsForearmStretchMuscleIndex", MuscleReferenceParameterTypes);
+            AssertPoseSpaceMethodAbsent("FindHumanMuscleIndex", MuscleNameParameterTypes);
             AssertPoseSpaceMethodAbsent("TransformRetargetPoseInputMuscleValue", PoseInputTransformParameterTypes);
             AssertPoseSpaceMethodAbsent("AlignRetargetPoseInputWithEditorReference", PoseInputAlignmentParameterTypes);
             AssertPoseSpaceMethodAbsent("ShouldApplyManualFullBodyPoseReferenceMuscle", MuscleReferenceParameterTypes);
@@ -148,6 +155,23 @@ namespace Tests.Editor.FBXImporter
                 forearmStretchIndex,
                 useHumanoidMuscleReference: true,
                 hasHumanoidMuscleReferenceCurve: true), Is.False);
+        }
+
+        [Test]
+        public void Given_HumanMuscleNameVariant_When_FindingIndex_Then_UsesNormalizedExactMatch()
+        {
+            int expectedIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
+
+            Assert.That(FindHumanMuscleIndexByPolicy("Right Arm Twist In-Out"), Is.EqualTo(expectedIndex));
+            Assert.That(FindHumanMuscleIndexByPolicy("right_arm.twist-in_out"), Is.EqualTo(expectedIndex));
+        }
+
+        [Test]
+        public void Given_MissingHumanMuscleName_When_FindingIndex_Then_ReturnsMinusOne()
+        {
+            Assert.That(FindHumanMuscleIndexByPolicy(null), Is.EqualTo(-1));
+            Assert.That(FindHumanMuscleIndexByPolicy(string.Empty), Is.EqualTo(-1));
+            Assert.That(FindHumanMuscleIndexByPolicy("Unknown Humanoid Muscle"), Is.EqualTo(-1));
         }
 
         [Test]
@@ -348,6 +372,14 @@ namespace Tests.Editor.FBXImporter
                 "IsForearmStretchMuscle",
                 MuscleReferenceParameterTypes,
                 muscleIndex);
+        }
+
+        private static int FindHumanMuscleIndexByPolicy(string muscleName)
+        {
+            return InvokePolicy<int>(
+                "FindHumanMuscleIndex",
+                MuscleNameParameterTypes,
+                muscleName);
         }
 
         private static float TransformPoseInputValue(int muscleIndex, float value)

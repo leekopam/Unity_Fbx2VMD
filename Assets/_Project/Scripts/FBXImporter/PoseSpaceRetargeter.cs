@@ -2026,7 +2026,7 @@ namespace Fbx2Vmd.FBXImporter
                     continue;
                 }
 
-                int muscleIndex = FindHumanMuscleIndex(binding.propertyName);
+                int muscleIndex = RetargetingMuscleReferencePolicy.FindHumanMuscleIndex(binding.propertyName);
                 if (muscleIndex < 0)
                 {
                     continue;
@@ -5615,29 +5615,6 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private static int FindHumanMuscleIndex(string muscleName)
-        {
-            if (string.IsNullOrEmpty(muscleName))
-            {
-                return -1;
-            }
-
-            string normalizedInput = RetargetingMuscleReferencePolicy.NormalizeMuscleName(muscleName);
-            for (int i = 0; i < HumanTrait.MuscleCount; i++)
-            {
-                string humanMuscleName = HumanTrait.MuscleName[i];
-                if (string.Equals(humanMuscleName, muscleName, StringComparison.Ordinal) ||
-                    string.Equals(
-                        RetargetingMuscleReferencePolicy.NormalizeMuscleName(humanMuscleName),
-                        normalizedInput,
-                        StringComparison.Ordinal))
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
 #endif
 
         private float CalculateSafeScaleRatio(Transform ghostHip, Transform targetHip)
