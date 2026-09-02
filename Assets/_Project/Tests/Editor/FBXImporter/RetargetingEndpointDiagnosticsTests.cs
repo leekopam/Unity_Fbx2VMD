@@ -93,6 +93,88 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_PostSetHumanPoseEndpointPositiveZScale_When_CalculatingDesiredFootPosition_Then_ScalesOnlyPositiveZCarrier()
+        {
+            bool calculated = TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                desiredFootPosition: new Vector3(0.02f, 0f, 0.02f),
+                desiredToesPosition: new Vector3(0.02f, 0f, 0.02f),
+                currentFootPosition: Vector3.zero,
+                currentToesPosition: Vector3.zero,
+                weight: 1f,
+                maxOffset: 0.04f,
+                positiveZScale: 0f,
+                out Vector3 nextFootPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextFootPosition.x, Is.EqualTo(0.02f).Within(0.0001f));
+            Assert.That(nextFootPosition.z, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_PostSetHumanPoseEndpointPositiveZScale_When_CorrectionExceedsCap_Then_DoesNotIncreaseBaselineClampedX()
+        {
+            bool baselineCalculated = TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                desiredFootPosition: new Vector3(0.08f, 0f, 0.06f),
+                desiredToesPosition: new Vector3(0.08f, 0f, 0.06f),
+                currentFootPosition: Vector3.zero,
+                currentToesPosition: Vector3.zero,
+                weight: 1f,
+                maxOffset: 0.05f,
+                positiveZScale: 1f,
+                out Vector3 baselineFootPosition);
+
+            bool suppressedCalculated = TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                desiredFootPosition: new Vector3(0.08f, 0f, 0.06f),
+                desiredToesPosition: new Vector3(0.08f, 0f, 0.06f),
+                currentFootPosition: Vector3.zero,
+                currentToesPosition: Vector3.zero,
+                weight: 1f,
+                maxOffset: 0.05f,
+                positiveZScale: 0f,
+                out Vector3 suppressedFootPosition);
+
+            Assert.That(baselineCalculated, Is.True);
+            Assert.That(suppressedCalculated, Is.True);
+            Assert.That(baselineFootPosition.x, Is.EqualTo(0.04f).Within(0.0001f));
+            Assert.That(baselineFootPosition.z, Is.EqualTo(0.03f).Within(0.0001f));
+            Assert.That(suppressedFootPosition.x, Is.LessThanOrEqualTo(baselineFootPosition.x + 0.0001f));
+            Assert.That(suppressedFootPosition.z, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_PostSetHumanPoseEndpointToesBlend_When_RecalculatingDirection_Then_CanUseFootOnlyOrFootToesAverage()
+        {
+            bool averageCalculated = TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                desiredFootPosition: new Vector3(0.04f, 0f, 0f),
+                desiredToesPosition: new Vector3(0f, 0f, 0.04f),
+                currentFootPosition: Vector3.zero,
+                currentToesPosition: Vector3.zero,
+                weight: 1f,
+                maxOffset: 0.2f,
+                positiveZScale: 1f,
+                toesBlendWeight: 1f,
+                out Vector3 averageFootPosition);
+
+            bool footOnlyCalculated = TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+                desiredFootPosition: new Vector3(0.04f, 0f, 0f),
+                desiredToesPosition: new Vector3(0f, 0f, 0.04f),
+                currentFootPosition: Vector3.zero,
+                currentToesPosition: Vector3.zero,
+                weight: 1f,
+                maxOffset: 0.2f,
+                positiveZScale: 1f,
+                toesBlendWeight: 0f,
+                out Vector3 footOnlyPosition);
+
+            Assert.That(averageCalculated, Is.True);
+            Assert.That(footOnlyCalculated, Is.True);
+            Assert.That(averageFootPosition.x, Is.EqualTo(0.02f).Within(0.0001f));
+            Assert.That(averageFootPosition.z, Is.EqualTo(0.02f).Within(0.0001f));
+            Assert.That(footOnlyPosition.x, Is.EqualTo(0.04f).Within(0.0001f));
+            Assert.That(footOnlyPosition.z, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
         public void Given_EvaluatorXzReference_When_CalculatingPosition_Then_RecordsNormalizedCorrection()
         {
             Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
@@ -140,6 +222,27 @@ namespace Tests.Editor.FBXImporter
             AssertVector3(ReadVector3(snapshot, "EndpointDeltaAfterClamp"), new Vector3(-0.08f, 0f, -0.06f));
             AssertVector3(ReadVector3(snapshot, "Correction"), new Vector3(-0.04f, 0f, -0.03f));
             AssertVector3(nextFootPosition, new Vector3(1.46f, 1f, 1.37f));
+        }
+
+        [Test]
+        public void Given_PostSetHumanPoseEvaluatorXzReference_When_FirstOffsetDrifts_Then_ReducesToTargetMagnitude()
+        {
+            bool calculated = TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
+                referenceFootPosition: new Vector3(1.594633f, 0f, 0.070673f),
+                currentFootPosition: new Vector3(0.324088f, 0f, 0.020131f),
+                firstMatchedFootOffset: new Vector3(-1.375309f, 0f, 0.033983f),
+                targetMagnitude: 0.049f,
+                weight: 1f,
+                maxOffset: 0.2f,
+                out Vector3 nextFootPosition);
+
+            Assert.That(calculated, Is.True);
+            Assert.That(nextFootPosition.x, Is.EqualTo(0.25746f).Within(0.0001f));
+            Assert.That(nextFootPosition.z, Is.EqualTo(0.073888f).Within(0.0001f));
+
+            float remainingX = nextFootPosition.x - 1.594633f - (-1.375309f);
+            float remainingZ = nextFootPosition.z - 0.070673f - 0.033983f;
+            Assert.That(new Vector2(remainingX, remainingZ).magnitude, Is.EqualTo(0.049f).Within(0.0001f));
         }
 
         [Test]
@@ -397,6 +500,145 @@ namespace Tests.Editor.FBXImporter
                     "TryFindFirstRetargetEndpointStageJump",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Empty);
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+            Vector3 desiredFootPosition,
+            Vector3 desiredToesPosition,
+            Vector3 currentFootPosition,
+            Vector3 currentToesPosition,
+            float weight,
+            float maxOffset,
+            float positiveZScale,
+            out Vector3 nextFootPosition)
+        {
+            Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
+            MethodInfo method = diagnosticsType.GetMethod(
+                "TryCalculateReferencePosition",
+                StaticNonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(Vector3).MakeByRefType()
+                },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "Post-SetHumanPose endpoint candidate must expose positive-Z carrier scaling for middle-window probes.");
+
+            object[] args =
+            {
+                desiredFootPosition,
+                desiredToesPosition,
+                currentFootPosition,
+                currentToesPosition,
+                weight,
+                maxOffset,
+                positiveZScale,
+                Vector3.zero
+            };
+            bool result = (bool)method.Invoke(null, args);
+            nextFootPosition = (Vector3)args[7];
+            return result;
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEndpointDesiredFootPosition(
+            Vector3 desiredFootPosition,
+            Vector3 desiredToesPosition,
+            Vector3 currentFootPosition,
+            Vector3 currentToesPosition,
+            float weight,
+            float maxOffset,
+            float positiveZScale,
+            float toesBlendWeight,
+            out Vector3 nextFootPosition)
+        {
+            Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
+            MethodInfo method = diagnosticsType.GetMethod(
+                "TryCalculateReferencePosition",
+                StaticNonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(Vector3).MakeByRefType()
+                },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "Post-SetHumanPose endpoint candidate must expose a runtime-only foot/toes blend for direction recalculation probes.");
+
+            object[] args =
+            {
+                desiredFootPosition,
+                desiredToesPosition,
+                currentFootPosition,
+                currentToesPosition,
+                weight,
+                maxOffset,
+                positiveZScale,
+                toesBlendWeight,
+                Vector3.zero
+            };
+            bool result = (bool)method.Invoke(null, args);
+            nextFootPosition = (Vector3)args[8];
+            return result;
+        }
+
+        private static bool TryCalculatePostSetHumanPoseEvaluatorXzReferenceDesiredFootPosition(
+            Vector3 referenceFootPosition,
+            Vector3 currentFootPosition,
+            Vector3 firstMatchedFootOffset,
+            float targetMagnitude,
+            float weight,
+            float maxOffset,
+            out Vector3 nextFootPosition)
+        {
+            Type diagnosticsType = GetRequiredType("Fbx2Vmd.FBXImporter.RetargetingEndpointDiagnostics");
+            MethodInfo method = diagnosticsType.GetMethod(
+                "TryCalculateEvaluatorXzReferencePosition",
+                StaticNonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(Vector3),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(Vector3).MakeByRefType()
+                },
+                modifiers: null);
+
+            Assert.That(method, Is.Not.Null, "Post-SetHumanPose evaluator-basis candidate must expose first-offset X/Z correction for middle-window probes.");
+
+            object[] args =
+            {
+                referenceFootPosition,
+                currentFootPosition,
+                firstMatchedFootOffset,
+                targetMagnitude,
+                weight,
+                maxOffset,
+                Vector3.zero
+            };
+
+            bool result = (bool)method.Invoke(null, args);
+            nextFootPosition = (Vector3)args[6];
+            return result;
         }
 
         private static bool TryFindFirstStagePositionJump(
