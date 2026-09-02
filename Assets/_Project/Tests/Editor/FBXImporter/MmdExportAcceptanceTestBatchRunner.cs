@@ -41,12 +41,12 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback),
                 () => new MmdExportSafetyDefaultsTests().MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap),
-                () => new MmdExportSafetyDefaultsTests().Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve),
-                () => new MmdExportSafetyDefaultsTests().Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve());
+            RunTest(results, typeof(HumanoidThumbDeformationGuardSmokeRiskTests).FullName + "." +
+                nameof(HumanoidThumbDeformationGuardSmokeRiskTests.Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap),
+                () => new HumanoidThumbDeformationGuardSmokeRiskTests().Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap());
+            RunTest(results, typeof(HumanoidThumbDeformationGuardSmokeRiskTests).FullName + "." +
+                nameof(HumanoidThumbDeformationGuardSmokeRiskTests.Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve),
+                () => new HumanoidThumbDeformationGuardSmokeRiskTests().Given_ManualThumbProjectionRiskExceedsSmokeLimit_When_CheckingPreserveBypass_Then_BypassesManualReferencePreserve());
             RunTest(results, typeof(FBXConversionCoordinatorTargetTests).FullName + "." +
                 nameof(FBXConversionCoordinatorTargetTests.Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik),
                 () => new FBXConversionCoordinatorTargetTests().Given_FinalIkFootGroundingExperimentEnabled_When_ConfiguringTarget_Then_UsesBipedGrounderWithoutVrik());
