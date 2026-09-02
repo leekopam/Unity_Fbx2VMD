@@ -9,6 +9,24 @@ namespace Tests.Editor.FBXImporter
     public class ThumbLocalRotationCalculatorTests
     {
         [Test]
+        public void Given_LocalRotationLimitPolicy_When_CheckingOwnership_Then_CalculatorOwnsItWithoutRetargeterDuplicate()
+        {
+            Type calculatorType = typeof(HumanoidThumbDeformationGuard).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.ThumbLocalRotationCalculator",
+                throwOnError: true);
+            MethodInfo calculatorMethod = calculatorType.GetMethod(
+                "LimitLocalRotation",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            MethodInfo duplicateMethod = typeof(PoseSpaceRetargeter).GetMethod(
+                "LimitThumbLocalRotation",
+                BindingFlags.Static | BindingFlags.NonPublic);
+
+            Assert.That(calculatorMethod, Is.Not.Null);
+            Assert.That(calculatorMethod.IsAssembly, Is.True);
+            Assert.That(duplicateMethod, Is.Null);
+        }
+
+        [Test]
         public void Given_ZeroLimitAndChangedRotation_When_CalculatingCorrection_Then_RestoresInitialRotation()
         {
             Quaternion initialRotation = Quaternion.identity;
