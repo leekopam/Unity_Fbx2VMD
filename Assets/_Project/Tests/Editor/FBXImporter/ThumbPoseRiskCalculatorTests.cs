@@ -8,6 +8,48 @@ namespace Tests.Editor.FBXImporter
     public class ThumbPoseRiskCalculatorTests
     {
         [Test]
+        public void Given_ReferenceFrameWithinTolerance_When_CalculatingDeviation_Then_ReturnsZero()
+        {
+            float deviation = CalculateReferenceFrameDeviation(
+                spreadAngle: 11.5f,
+                projection: 0.015f,
+                referenceSpreadAngle: 10f,
+                referenceProjection: 0f);
+
+            Assert.That(deviation, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ReferenceFrameExceedsTolerance_When_CalculatingDeviation_Then_CombinesSpreadAndProjection()
+        {
+            float deviation = CalculateReferenceFrameDeviation(
+                spreadAngle: 14f,
+                projection: 0.05f,
+                referenceSpreadAngle: 10f,
+                referenceProjection: 0f);
+
+            Assert.That(deviation, Is.EqualTo(6f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_ReferenceFrameDeviationPolicy_When_CheckingOwnership_Then_CalculatorOwnsItWithoutRetargeterDuplicate()
+        {
+            Assert.That(
+                ResolveCalculatorMethod(
+                    "CalculateReferenceFrameDeviation",
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float)),
+                Is.Not.Null);
+            Assert.That(
+                typeof(PoseSpaceRetargeter).GetMethod(
+                    "EvaluateThumbReferenceFrameDeviation",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                Is.Null);
+        }
+
+        [Test]
         public void Given_ValueWithinWarning_When_CalculatingAboveThresholdRisk_Then_ReturnsZero()
         {
             Assert.That(CalculateAboveThreshold(0.003f, 0.003f, 0.008f), Is.EqualTo(0f));
@@ -105,6 +147,28 @@ namespace Tests.Editor.FBXImporter
                 typeof(float),
                 typeof(float),
                 typeof(float)).Invoke(null, new object[] { value, warningThreshold, fullRiskThreshold });
+        }
+
+        private static float CalculateReferenceFrameDeviation(
+            float spreadAngle,
+            float projection,
+            float referenceSpreadAngle,
+            float referenceProjection)
+        {
+            return (float)ResolveCalculatorMethod(
+                "CalculateReferenceFrameDeviation",
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(float)).Invoke(
+                null,
+                new object[]
+                {
+                    spreadAngle,
+                    projection,
+                    referenceSpreadAngle,
+                    referenceProjection
+                });
         }
 
         private static float CalculateOutsideRange(
