@@ -6777,13 +6777,13 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            bool changed = ApplyBoundedSetHumanPoseRightLegTwistOutput(
+            bool changed = ManualPoseReferenceApplier.TryApplyBoundedMuscleOutputReference(
                 ref _appliedTargetPose,
                 inputPose,
                 GetSetHumanPoseRightUpperLegTwistInOutMuscleIndex(),
                 weight,
                 maxDelta);
-            changed |= ApplyBoundedSetHumanPoseRightLegTwistOutput(
+            changed |= ManualPoseReferenceApplier.TryApplyBoundedMuscleOutputReference(
                 ref _appliedTargetPose,
                 inputPose,
                 GetSetHumanPoseRightLowerLegTwistInOutMuscleIndex(),
@@ -6794,38 +6794,6 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _targetHandler.SetHumanPose(ref _appliedTargetPose);
             }
-        }
-
-        private static bool ApplyBoundedSetHumanPoseRightLegTwistOutput(
-            ref HumanPose outputPose,
-            HumanPose inputPose,
-            int muscleIndex,
-            float weight,
-            float maxDelta)
-        {
-            if (muscleIndex < 0 ||
-                inputPose.muscles == null ||
-                outputPose.muscles == null ||
-                muscleIndex >= inputPose.muscles.Length ||
-                muscleIndex >= outputPose.muscles.Length)
-            {
-                return false;
-            }
-
-            float currentValue = outputPose.muscles[muscleIndex];
-            float nextValue = ManualPoseReferenceApplier.CalculateBoundedMuscleOutputReference(
-                inputPose.muscles[muscleIndex],
-                currentValue,
-                weight,
-                maxDelta,
-                currentValue);
-            if (!IsFinite(nextValue) || Mathf.Approximately(nextValue, currentValue))
-            {
-                return false;
-            }
-
-            outputPose.muscles[muscleIndex] = nextValue;
-            return true;
         }
 
         private void ApplyAnatomicalArmGuard(ref HumanPose pose)

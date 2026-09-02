@@ -184,6 +184,38 @@ namespace Fbx2Vmd.FBXImporter
             return outputValue + clampedCorrection * Mathf.Clamp01(weight);
         }
 
+        internal static bool TryApplyBoundedMuscleOutputReference(
+            ref HumanPose outputPose,
+            HumanPose inputPose,
+            int muscleIndex,
+            float weight,
+            float maxDelta)
+        {
+            if (muscleIndex < 0 ||
+                inputPose.muscles == null ||
+                outputPose.muscles == null ||
+                muscleIndex >= inputPose.muscles.Length ||
+                muscleIndex >= outputPose.muscles.Length)
+            {
+                return false;
+            }
+
+            float currentValue = outputPose.muscles[muscleIndex];
+            float nextValue = CalculateBoundedMuscleOutputReference(
+                inputPose.muscles[muscleIndex],
+                currentValue,
+                weight,
+                maxDelta,
+                currentValue);
+            if (!IsFinite(nextValue) || Mathf.Approximately(nextValue, currentValue))
+            {
+                return false;
+            }
+
+            outputPose.muscles[muscleIndex] = nextValue;
+            return true;
+        }
+
         internal static bool TryCalculateSegmentDirectionReference(
             Vector3 referenceSegmentDirection,
             Vector3 currentSegmentDirection,

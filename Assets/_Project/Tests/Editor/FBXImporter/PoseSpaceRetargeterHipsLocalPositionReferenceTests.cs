@@ -108,15 +108,6 @@ namespace Tests.Editor.FBXImporter
             typeof(Vector3).MakeByRefType()
         };
 
-        private static readonly Type[] BoundedMuscleOutputReferenceParameterTypes =
-        {
-            typeof(float),
-            typeof(float),
-            typeof(float),
-            typeof(float),
-            typeof(float)
-        };
-
         private static readonly Type[] FrameWithinGateParameterTypes =
         {
             typeof(int),
@@ -512,87 +503,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(
                 typeof(PoseSpaceRetargeter).GetMember(
                     "TryCalculateSignCorrectedRowLocalBodyPositionXzReference",
-                    BindingFlags.Static | BindingFlags.NonPublic),
-                Is.Empty);
-        }
-
-        [Test]
-        public void Given_BoundedMuscleOutputReference_When_OutputDriftsFromInput_Then_BlendsTowardInputWithinLimit()
-        {
-            Assert.That(
-                CalculateBoundedMuscleOutputReference(
-                    inputValue: 0.25f,
-                    outputValue: 0.33f,
-                    weight: 0f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.33f),
-                Is.EqualTo(0.33f).Within(0.0001f),
-                "Weight zero must keep the current SetHumanPose output unchanged.");
-
-            Assert.That(
-                CalculateBoundedMuscleOutputReference(
-                    inputValue: 0.25f,
-                    outputValue: 0.33f,
-                    weight: 1f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.33f),
-                Is.EqualTo(0.31f).Within(0.0001f),
-                "The correction must be capped so the diagnostic cannot hard-snap a muscle value.");
-
-            Assert.That(
-                CalculateBoundedMuscleOutputReference(
-                    inputValue: 0.25f,
-                    outputValue: 0.33f,
-                    weight: 0.5f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.33f),
-                Is.EqualTo(0.32f).Within(0.0001f),
-                "Partial weight should apply a bounded fraction of the output-to-input correction.");
-        }
-
-        [Test]
-        public void Given_NonFiniteMuscleValues_When_CalculatingBoundedOutputReference_Then_PreservesFallbackPolicy()
-        {
-            Assert.That(
-                CalculateBoundedMuscleOutputReference(
-                    inputValue: 0.25f,
-                    outputValue: float.NaN,
-                    weight: 1f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.12f),
-                Is.EqualTo(0.12f));
-            Assert.That(
-                CalculateBoundedMuscleOutputReference(
-                    inputValue: 0.25f,
-                    outputValue: float.NaN,
-                    weight: 1f,
-                    maxDelta: 0.02f,
-                    fallbackValue: float.NaN),
-                Is.NaN);
-            Assert.That(
-                CalculateBoundedMuscleOutputReference(
-                    inputValue: float.PositiveInfinity,
-                    outputValue: 0.33f,
-                    weight: 1f,
-                    maxDelta: 0.02f,
-                    fallbackValue: 0.12f),
-                Is.EqualTo(0.33f));
-        }
-
-        [Test]
-        public void Given_BoundedMuscleOutputCalculation_When_CheckingOwnership_Then_UsesDedicatedApplier()
-        {
-            Assert.That(
-                ManualPoseReferenceApplierType.GetMethod(
-                    "CalculateBoundedMuscleOutputReference",
-                    BindingFlags.Static | BindingFlags.NonPublic,
-                    binder: null,
-                    types: BoundedMuscleOutputReferenceParameterTypes,
-                    modifiers: null),
-                Is.Not.Null);
-            Assert.That(
-                typeof(PoseSpaceRetargeter).GetMember(
-                    "CalculateBoundedSetHumanPoseRightLegTwistOutput",
                     BindingFlags.Static | BindingFlags.NonPublic),
                 Is.Empty);
         }
@@ -1084,32 +994,6 @@ namespace Tests.Editor.FBXImporter
             bool calculated = (bool)method.Invoke(null, args);
             nextBodyPosition = (Vector3)args[6];
             return calculated;
-        }
-
-        private static float CalculateBoundedMuscleOutputReference(
-            float inputValue,
-            float outputValue,
-            float weight,
-            float maxDelta,
-            float fallbackValue)
-        {
-            MethodInfo method = ManualPoseReferenceApplierType.GetMethod(
-                "CalculateBoundedMuscleOutputReference",
-                BindingFlags.Static | BindingFlags.NonPublic,
-                binder: null,
-                types: BoundedMuscleOutputReferenceParameterTypes,
-                modifiers: null);
-
-            Assert.That(method, Is.Not.Null,
-                "ManualPoseReferenceApplier should own bounded muscle output reference calculation.");
-            return (float)method.Invoke(null, new object[]
-            {
-                inputValue,
-                outputValue,
-                weight,
-                maxDelta,
-                fallbackValue
-            });
         }
 
         private static bool TryCalculateSignCorrectedBodyPositionXzReference(
