@@ -57,6 +57,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_Frame49StyleForearmValue_When_BlendingVisualPoseSpikeWithClamp_Then_KeepsDefaultSmoothing);
             RunTest(results, nameof(muscleReferenceTests.Given_ForearmStretchMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference),
                 muscleReferenceTests.Given_ForearmStretchMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference);
+            RunTest(results, nameof(muscleReferenceTests.Given_EditorReferenceCurve_When_CheckingVisualSmoothingPreservation_Then_PreservesOnlyEligibleMuscle),
+                muscleReferenceTests.Given_EditorReferenceCurve_When_CheckingVisualSmoothingPreservation_Then_PreservesOnlyEligibleMuscle);
             RunTest(results, nameof(muscleReferenceTests.Given_LeftUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference),
                 muscleReferenceTests.Given_LeftUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_DoesNotUseReference);
             RunTest(results, nameof(muscleReferenceTests.Given_RightUpperArmTwistMuscle_When_CheckingHumanoidReferenceUse_Then_UsesReference),

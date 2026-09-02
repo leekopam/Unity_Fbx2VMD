@@ -33,7 +33,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            if (normalized.Contains("forearm") && normalized.Contains("stretch"))
+            if (IsForearmStretchMuscle(normalized))
             {
                 return false;
             }
@@ -47,6 +47,22 @@ namespace Fbx2Vmd.FBXImporter
                    normalized.Contains("middle") ||
                    normalized.Contains("ring") ||
                    normalized.Contains("little");
+        }
+
+        internal static bool ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+            int muscleIndex,
+            bool useHumanoidMuscleReference,
+            bool hasHumanoidMuscleReferenceCurve)
+        {
+            return useHumanoidMuscleReference &&
+                hasHumanoidMuscleReferenceCurve &&
+                ShouldUseHumanoidMuscleReference(muscleIndex);
+        }
+
+        internal static bool IsForearmStretchMuscle(int muscleIndex)
+        {
+            return TryGetNormalizedMuscleName(muscleIndex, out string normalized) &&
+                IsForearmStretchMuscle(normalized);
         }
 
         internal static bool ShouldApplyHumanoidMuscleReferenceValue(int muscleIndex, float referenceValue)
@@ -207,6 +223,12 @@ namespace Fbx2Vmd.FBXImporter
 
             normalized = NormalizeMuscleName(HumanTrait.MuscleName[muscleIndex]);
             return true;
+        }
+
+        private static bool IsForearmStretchMuscle(string normalizedMuscleName)
+        {
+            return normalizedMuscleName.Contains("forearm") &&
+                normalizedMuscleName.Contains("stretch");
         }
 
         private static bool IsLowerBodyMuscle(string muscleName)

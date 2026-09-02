@@ -2564,13 +2564,13 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
                     hasEditorHumanoidMuscleReferenceCurve = _editorHumanoidMuscleCurves.ContainsKey(i);
 #endif
-                    bool shouldPreserveCurrentValue = ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
+                    bool shouldPreserveCurrentValue = RetargetingMuscleReferencePolicy.ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
                         i,
                         useEditorHumanoidMuscleReference,
                         hasEditorHumanoidMuscleReferenceCurve);
                     bool isForearmStretchMuscle = !shouldPreserveCurrentValue &&
                         poseVisualSpikeForearmStretchClampMaxOffset > 0f &&
-                        IsForearmStretchMuscleIndex(i);
+                        RetargetingMuscleReferencePolicy.IsForearmStretchMuscle(i);
                     pose.muscles[i] = RetargetingPoseSmoothing.BlendVisualPoseSpikeMuscle(
                         _previousVisualPoseMuscles[i],
                         pose.muscles[i],
@@ -2591,31 +2591,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             RememberVisualPose(pose);
-        }
-
-        private static bool ShouldPreserveEditorHumanoidMuscleDuringVisualSmoothing(
-            int muscleIndex,
-            bool useEditorHumanoidMuscleReference,
-            bool hasEditorHumanoidMuscleReferenceCurve)
-        {
-#if UNITY_EDITOR
-            return useEditorHumanoidMuscleReference &&
-                hasEditorHumanoidMuscleReferenceCurve &&
-                RetargetingMuscleReferencePolicy.ShouldUseHumanoidMuscleReference(muscleIndex);
-#else
-            return false;
-#endif
-        }
-
-        private static bool IsForearmStretchMuscleIndex(int muscleIndex)
-        {
-            if (muscleIndex < 0 || muscleIndex >= HumanTrait.MuscleCount)
-            {
-                return false;
-            }
-
-            string normalized = RetargetingMuscleReferencePolicy.NormalizeMuscleName(HumanTrait.MuscleName[muscleIndex]);
-            return normalized.Contains("forearm") && normalized.Contains("stretch");
         }
 
         private void RememberVisualPose(HumanPose pose)
