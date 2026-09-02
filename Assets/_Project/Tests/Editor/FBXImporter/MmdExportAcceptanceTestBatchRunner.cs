@@ -60,21 +60,21 @@ namespace Tests.Editor.FBXImporter
             RunTest(results, typeof(ManualPoseReferenceRuntimeOverrideApplierTests).FullName + "." +
                 nameof(ManualPoseReferenceRuntimeOverrideApplierTests.Given_GenericCharacterPipeline_When_TogglingFootLocalRotation_Then_ChangesOnlyFootRotationSettings),
                 () => new ManualPoseReferenceRuntimeOverrideApplierTests().Given_GenericCharacterPipeline_When_TogglingFootLocalRotation_Then_ChangesOnlyFootRotationSettings());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults),
-                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_LegChainSegmentDetailOptionsPreservePromotedSceneDefaults),
-                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_LegChainSegmentDetailOptionsPreservePromotedSceneDefaults());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_FullBodyForceOffOptionsDisablePromotedSceneDefaults),
-                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_FullBodyForceOffOptionsDisablePromotedSceneDefaults());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated),
-                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated),
-                () => new MmdExportSafetyDefaultsTests().MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated());
+            RunTest(results, typeof(YybVisualComparisonRuntimeOverrideCoordinatorTests).FullName + "." +
+                nameof(YybVisualComparisonRuntimeOverrideCoordinatorTests.MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults),
+                () => new YybVisualComparisonRuntimeOverrideCoordinatorTests().MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults());
+            RunTest(results, typeof(YybVisualComparisonRuntimeOverrideCoordinatorTests).FullName + "." +
+                nameof(YybVisualComparisonRuntimeOverrideCoordinatorTests.MainSceneRuntimeOverrides_LegChainSegmentDetailOptionsPreservePromotedSceneDefaults),
+                () => new YybVisualComparisonRuntimeOverrideCoordinatorTests().MainSceneRuntimeOverrides_LegChainSegmentDetailOptionsPreservePromotedSceneDefaults());
+            RunTest(results, typeof(YybVisualComparisonRuntimeOverrideCoordinatorTests).FullName + "." +
+                nameof(YybVisualComparisonRuntimeOverrideCoordinatorTests.MainSceneRuntimeOverrides_FullBodyForceOffOptionsDisablePromotedSceneDefaults),
+                () => new YybVisualComparisonRuntimeOverrideCoordinatorTests().MainSceneRuntimeOverrides_FullBodyForceOffOptionsDisablePromotedSceneDefaults());
+            RunTest(results, typeof(YybVisualComparisonRuntimeOverrideCoordinatorTests).FullName + "." +
+                nameof(YybVisualComparisonRuntimeOverrideCoordinatorTests.MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated),
+                () => new YybVisualComparisonRuntimeOverrideCoordinatorTests().MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated());
+            RunTest(results, typeof(YybVisualComparisonRuntimeOverrideCoordinatorTests).FullName + "." +
+                nameof(YybVisualComparisonRuntimeOverrideCoordinatorTests.MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated),
+                () => new YybVisualComparisonRuntimeOverrideCoordinatorTests().MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated());
             RunTest(results, typeof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests).FullName + "." +
                 nameof(ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests.Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments),
                 () => new ManualLowerBodySegmentDirectionRuntimeOverrideApplierTests().Given_ManualAnimatorFootToToesSegmentDirectionRuntimeOverride_When_Applied_Then_LimitsOnlyToeSegments());
