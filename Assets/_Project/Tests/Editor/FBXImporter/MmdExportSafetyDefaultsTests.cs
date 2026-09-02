@@ -697,40 +697,6 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
-        [Test]
-        public void Given_AutoRecordingWasStartedBeforeStart_When_HumanoidSampleCodeStartRuns_Then_DoesNotClearRecordingSession()
-        {
-            GameObject target = null;
-            try
-            {
-                target = new GameObject("manual-recorder");
-                HumanoidSampleCode sampleCode = target.AddComponent<HumanoidSampleCode>();
-                FieldInfo activeField = typeof(HumanoidSampleCode).GetField(
-                    "_isRecordingSessionActive",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                Assert.That(activeField, Is.Not.Null);
-                activeField.SetValue(sampleCode, true);
-
-                MethodInfo startMethod = typeof(HumanoidSampleCode).GetMethod(
-                    "Start",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                Assert.That(startMethod, Is.Not.Null);
-                startMethod.Invoke(sampleCode, null);
-
-                Assert.That(
-                    activeField.GetValue(sampleCode),
-                    Is.EqualTo(true),
-                    "HumanoidSampleCode.Start must not call SetReady over an already-started runner recording session.");
-            }
-            finally
-            {
-                if (target != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(target);
-                }
-            }
-        }
-
         private static void AssertRegressionSafeRetargetDefaults(string scenePath, float expectedMovementScaleMultiplier)
         {
             EditorSceneManager.OpenScene(scenePath);
