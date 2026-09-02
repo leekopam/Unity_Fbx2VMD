@@ -1280,7 +1280,11 @@ namespace Fbx2Vmd.FBXImporter
             MotionComparisonProbe probe = _activeRecorder != null
                 ? _activeRecorder.GetComponent<MotionComparisonProbe>()
                 : null;
-            VmdSaveResult stableResult = BuildStableCandidateResult(result);
+            VmdSaveResult stableResult = VisualComparisonCandidateArtifactStore.CopyStableCandidate(
+                result,
+                _activeJob.Mode.ToString(),
+                _summaryDirectory,
+                ComparisonArtifactFallbackRole);
             if (_activeJob.Mode == CaptureMode.MainRecording &&
                 !string.IsNullOrWhiteSpace(stableResult.FilePath) &&
                 File.Exists(stableResult.FilePath))
@@ -1373,49 +1377,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             RequestPlayModeStop();
-        }
-
-        private static VmdSaveResult BuildStableCandidateResult(VmdSaveResult result)
-        {
-            if (_activeJob == null ||
-                _activeJob.Mode == CaptureMode.MainAuto ||
-                string.IsNullOrWhiteSpace(result.FilePath) ||
-                !File.Exists(result.FilePath))
-            {
-                return result;
-            }
-
-            string copyPath = BuildCandidateVmdEvidencePath(_activeJob, result.FilePath);
-            if (string.IsNullOrWhiteSpace(copyPath))
-            {
-                return result;
-            }
-
-            return VisualComparisonCandidateArtifactStore.Copy(
-                result,
-                copyPath,
-                _summaryDirectory,
-                SanitizeComparisonArtifactFileName);
-        }
-
-        private static string BuildCandidateVmdEvidencePath(CaptureJob job, string sourceVmdPath)
-        {
-            if (job == null || string.IsNullOrWhiteSpace(_summaryDirectory))
-            {
-                return string.Empty;
-            }
-
-            string sourceExtension = Path.GetExtension(sourceVmdPath);
-            if (string.IsNullOrWhiteSpace(sourceExtension))
-            {
-                sourceExtension = ".vmd";
-            }
-
-            string fileName = VisualComparisonArtifactNamePolicy.BuildCandidateVmdEvidenceFileName(
-                job.Mode.ToString(),
-                sourceExtension,
-                ComparisonArtifactFallbackRole);
-            return Path.Combine(_summaryDirectory, fileName);
         }
 
         private static void RequestPlayModeStop()
@@ -2457,13 +2418,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return string.Join("/", names.ToArray());
-        }
-
-        private static string SanitizeComparisonArtifactFileName(string fileName)
-        {
-            return VisualComparisonArtifactNamePolicy.SanitizeFileName(
-                fileName,
-                ComparisonArtifactFallbackRole);
         }
 
         [Serializable]

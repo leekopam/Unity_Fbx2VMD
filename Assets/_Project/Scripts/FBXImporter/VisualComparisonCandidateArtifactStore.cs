@@ -5,6 +5,38 @@ namespace Fbx2Vmd.FBXImporter
 {
     internal static class VisualComparisonCandidateArtifactStore
     {
+        internal static VmdSaveResult CopyStableCandidate(
+            VmdSaveResult result,
+            string captureMode,
+            string summaryDirectory,
+            string fallbackRole)
+        {
+            if (string.Equals(captureMode, "MainAuto", StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(result.FilePath) ||
+                !File.Exists(result.FilePath) ||
+                string.IsNullOrWhiteSpace(summaryDirectory))
+            {
+                return result;
+            }
+
+            string sourceExtension = Path.GetExtension(result.FilePath);
+            if (string.IsNullOrWhiteSpace(sourceExtension))
+            {
+                sourceExtension = ".vmd";
+            }
+
+            string destinationFileName = VisualComparisonArtifactNamePolicy.BuildCandidateVmdEvidenceFileName(
+                captureMode,
+                sourceExtension,
+                fallbackRole);
+            string destinationVmdPath = Path.Combine(summaryDirectory, destinationFileName);
+            return Copy(
+                result,
+                destinationVmdPath,
+                summaryDirectory,
+                fileName => VisualComparisonArtifactNamePolicy.SanitizeFileName(fileName, fallbackRole));
+        }
+
         internal static VmdSaveResult Copy(
             VmdSaveResult result,
             string destinationVmdPath,
