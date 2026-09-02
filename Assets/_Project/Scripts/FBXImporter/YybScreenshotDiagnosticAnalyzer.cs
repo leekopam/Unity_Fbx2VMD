@@ -182,7 +182,7 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-                CandidateScreenshotFrameMetrics metrics = BuildCandidateScreenshotFrameMetrics(
+                VisualComparisonCandidateFrameMetricSummary metrics = BuildCandidateScreenshotFrameMetrics(
                     resolvedIndexPath,
                     projectRoot);
                 diagnostics.candidate_screenshot_frame_metrics_sample_count = metrics.SampleCount;
@@ -238,7 +238,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void AttachCandidateScreenshotTimingDiagnostics(
             VisualComparisonFrameRoleDiagnosticsData diagnostics,
-            CandidateScreenshotFrameMetrics metrics)
+            VisualComparisonCandidateFrameMetricSummary metrics)
         {
             if (diagnostics == null || metrics == null || metrics.Samples.Count <= 0)
             {
@@ -964,15 +964,15 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private static CandidateScreenshotFrameMetrics BuildCandidateScreenshotFrameMetrics(
+        private static VisualComparisonCandidateFrameMetricSummary BuildCandidateScreenshotFrameMetrics(
             string frameIndexPath,
             string projectRoot)
         {
-            var metrics = new CandidateScreenshotFrameMetrics();
+            var accumulator = new VisualComparisonCandidateFrameMetricAccumulator();
             string[] lines = File.ReadAllLines(frameIndexPath, Encoding.UTF8);
             if (lines.Length <= 1)
             {
-                return metrics;
+                return accumulator.Build();
             }
 
             string[] headers = VisualComparisonCsvMetricReader.SplitLine(lines[0]);
@@ -981,20 +981,8 @@ namespace Fbx2Vmd.FBXImporter
             int recorderFrameIndex = VisualComparisonCsvMetricReader.FindHeaderIndex(headers, "recorderFrame");
             if (pathIndex < 0)
             {
-                return metrics;
+                return accumulator.Build();
             }
-
-            float sumHeight = 0f;
-            float sumWidth = 0f;
-            float sumUpperLimbSpan = 0f;
-            float sumLowerLimbSpan = 0f;
-            int limbSpanCount = 0;
-            float sumBrightArea = 0f;
-            float maxBottomGap = 0f;
-            float maxTopGap = 0f;
-            float minCenterX = float.PositiveInfinity;
-            float maxCenterX = float.NegativeInfinity;
-            var errors = new List<string>();
 
             for (int i = 1; i < lines.Length; i++)
             {
@@ -1019,66 +1007,21 @@ namespace Fbx2Vmd.FBXImporter
                 string screenshotPath = ResolveProjectRelativePath(cells[pathIndex], projectRoot);
                 if (!TryAnalyzeCandidateScreenshotFrame(screenshotPath, out VisualComparisonCandidateFrameMetric frameMetric, out string error))
                 {
-                    if (!string.IsNullOrWhiteSpace(error))
-                    {
-                        errors.Add(error);
-                    }
-
+                    accumulator.AddError(error);
                     continue;
                 }
 
-                metrics.SampleCount++;
                 int parsedRecorderFrame = -1;
                 if (recorderFrameIndex >= 0 &&
                     recorderFrameIndex < cells.Length &&
                     int.TryParse(cells[recorderFrameIndex], NumberStyles.Integer, CultureInfo.InvariantCulture, out int recorderFrame))
                 {
                     parsedRecorderFrame = recorderFrame;
-                    metrics.RecorderFrames.Add(parsedRecorderFrame);
                 }
-                metrics.Samples.Add(new VisualComparisonCandidateFrameSample(parsedRecorderFrame, frameMetric));
-
-                sumHeight += frameMetric.BBoxHeightRatio;
-                sumWidth += frameMetric.BBoxWidthRatio;
-                if (IsFiniteMetric(frameMetric.UpperLimbSpanRatio) &&
-                    IsFiniteMetric(frameMetric.LowerLimbSpanRatio))
-                {
-                    sumUpperLimbSpan += frameMetric.UpperLimbSpanRatio;
-                    sumLowerLimbSpan += frameMetric.LowerLimbSpanRatio;
-                    limbSpanCount++;
-                }
-                sumBrightArea += frameMetric.BrightAreaRatio;
-                maxBottomGap = Mathf.Max(maxBottomGap, frameMetric.BottomGapRatio);
-                maxTopGap = Mathf.Max(maxTopGap, frameMetric.TopGapRatio);
-                if (frameMetric.HasBrightPixels)
-                {
-                    metrics.NonblankCount++;
-                    minCenterX = Mathf.Min(minCenterX, frameMetric.CenterX);
-                    maxCenterX = Mathf.Max(maxCenterX, frameMetric.CenterX);
-                }
+                accumulator.AddFrame(parsedRecorderFrame, frameMetric);
             }
 
-            if (metrics.SampleCount <= 0)
-            {
-                metrics.Error = string.Join("; ", errors);
-                return metrics;
-            }
-
-            metrics.AvgBBoxHeightRatio = sumHeight / metrics.SampleCount;
-            metrics.AvgBBoxWidthRatio = sumWidth / metrics.SampleCount;
-            if (limbSpanCount > 0)
-            {
-                metrics.AvgUpperLimbSpanRatio = sumUpperLimbSpan / limbSpanCount;
-                metrics.AvgLowerLimbSpanRatio = sumLowerLimbSpan / limbSpanCount;
-            }
-            metrics.AvgBrightAreaRatio = sumBrightArea / metrics.SampleCount;
-            metrics.MaxBottomGapRatio = maxBottomGap;
-            metrics.MaxTopGapRatio = maxTopGap;
-            metrics.CenterXRangeRatio = metrics.NonblankCount > 0
-                ? maxCenterX - minCenterX
-                : float.NaN;
-            metrics.Error = string.Join("; ", errors);
-            return metrics;
+            return accumulator.Build();
         }
 
         internal static bool TryAnalyzeCandidateScreenshotFrame(
@@ -1272,24 +1215,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return Path.Combine(resolvedProjectRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        }
-
-        private sealed class CandidateScreenshotFrameMetrics
-        {
-            public int SampleCount;
-            public int NonblankCount;
-            public float AvgBBoxHeightRatio = float.NaN;
-            public float AvgBBoxWidthRatio = float.NaN;
-            public float AvgUpperLimbSpanRatio = float.NaN;
-            public float AvgLowerLimbSpanRatio = float.NaN;
-            public float CenterXRangeRatio = float.NaN;
-            public float MaxBottomGapRatio = float.NaN;
-            public float MaxTopGapRatio = float.NaN;
-            public float AvgBrightAreaRatio = float.NaN;
-            public readonly List<int> RecorderFrames = new List<int>();
-            public readonly List<VisualComparisonCandidateFrameSample> Samples =
-                new List<VisualComparisonCandidateFrameSample>();
-            public string Error = string.Empty;
         }
 
     }
