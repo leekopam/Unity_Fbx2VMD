@@ -213,6 +213,30 @@ namespace Fbx2Vmd.FBXImporter
                 .Replace("righthandlittle", "rightlittle");
         }
 
+        internal static int FindHumanMuscleIndex(string muscleName)
+        {
+            if (string.IsNullOrEmpty(muscleName))
+            {
+                return -1;
+            }
+
+            string normalizedInput = NormalizeMuscleName(muscleName);
+            for (int i = 0; i < HumanTrait.MuscleCount; i++)
+            {
+                string humanMuscleName = HumanTrait.MuscleName[i];
+                if (string.Equals(humanMuscleName, muscleName, System.StringComparison.Ordinal) ||
+                    string.Equals(
+                        NormalizeMuscleName(humanMuscleName),
+                        normalizedInput,
+                        System.StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
         private static bool TryGetNormalizedMuscleName(int muscleIndex, out string normalized)
         {
             normalized = string.Empty;
