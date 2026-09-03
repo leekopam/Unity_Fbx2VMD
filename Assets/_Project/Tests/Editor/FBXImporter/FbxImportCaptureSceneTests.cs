@@ -75,6 +75,24 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void NewFBXVmdPipeline_DefaultsVmdAutoConversionOff()
+        {
+            var root = new GameObject("New FBXVmdPipeline VMD Default Test");
+
+            try
+            {
+                FBXVmdPipeline fileManager = root.AddComponent<FBXVmdPipeline>();
+
+                Assert.That(fileManager.ShouldRecordVmdAfterImport, Is.False,
+                    "새 FBXVmdPipeline은 명시적으로 켜기 전까지 VMD 자동 변환을 시작하면 안 됩니다.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void MainImportScenes_DefaultGhostDisplayOff()
         {
             AssertSceneGhostDisplayOff(MainAutoScenePath, "Main_Auto");

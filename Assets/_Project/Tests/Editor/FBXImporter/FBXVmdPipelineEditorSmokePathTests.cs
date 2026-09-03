@@ -383,28 +383,55 @@ namespace Tests.Editor.FBXImporter
         public void Given_CaptureOnlyModeWithoutEditorSmoke_When_DecidingRecordingMode_Then_SkipsVmdRecording()
         {
             bool shouldRecord = VMDRecordingController.ShouldStartVmdRecording(
-                shouldRecordVmdAfterImport: false,
-                editorSmokeRecordingOverrideActive: false);
+                shouldRecordVmdAfterImport: false);
 
             Assert.That(shouldRecord, Is.False);
         }
 
         [Test]
-        public void Given_CaptureOnlyModeWithEditorSmoke_When_DecidingRecordingMode_Then_AllowsDiagnosticVmdRecording()
+        public void Given_VmdAutoConversionOffWithEditorSmoke_When_DecidingRecordingMode_Then_StillSkipsVmdRecording()
         {
             bool shouldRecord = VMDRecordingController.ShouldStartVmdRecording(
-                shouldRecordVmdAfterImport: false,
-                editorSmokeRecordingOverrideActive: true);
+                shouldRecordVmdAfterImport: false);
 
-            Assert.That(shouldRecord, Is.True);
+            Assert.That(shouldRecord, Is.False);
+        }
+
+        [Test]
+        public void Given_VmdAutoConversionOff_When_StartingEditorSmoke_Then_RejectsDiagnosticRecording()
+        {
+            var root = new GameObject("VMD Auto Conversion Off Smoke Test");
+
+            try
+            {
+                FBXVmdPipeline fileManager = root.AddComponent<FBXVmdPipeline>();
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "[FBXImport] VMD 자동 변환이 꺼져 있어 VMD 산출물이 필요한 smoke 진단을 시작하지 않았습니다. " +
+                    "FBXVmdPipeline 인스펙터의 VMD 녹화에서 자동 변환을 켜세요.");
+
+                bool started = fileManager.StartEditorDiagnosticSmoke(
+                    "unused.fbx",
+                    durationSeconds: 1f,
+                    targetFrameCount: 30,
+                    enableDiagnostics: true,
+                    enableFingerCloseups: false,
+                    useDeterministicCaptureFramerate: true,
+                    diagnosticStartDelay: 0f);
+
+                Assert.That(started, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         [Test]
         public void Given_VmdMode_When_DecidingRecordingMode_Then_StartsVmdRecording()
         {
             bool shouldRecord = VMDRecordingController.ShouldStartVmdRecording(
-                shouldRecordVmdAfterImport: true,
-                editorSmokeRecordingOverrideActive: false);
+                shouldRecordVmdAfterImport: true);
 
             Assert.That(shouldRecord, Is.True);
         }
