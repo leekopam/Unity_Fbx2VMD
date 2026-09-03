@@ -1703,7 +1703,11 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
         private readonly Dictionary<int, AnimationCurve> _editorHumanoidMuscleCurves = new Dictionary<int, AnimationCurve>();
         private bool _useEditorHumanoidMuscleReference;
+        private bool _useCompleteEditorHumanoidMuscleReference;
         private bool _editorHumanoidMuscleReferenceLogged;
+        private EditorHumanoidPoseReferencePlayer _editorHumanoidPoseReferencePlayer;
+        private HumanPose _editorHumanoidPoseReference;
+        private bool _hasEditorHumanoidPoseReferenceForFrame;
         private AnimationCurve _editorRootTranslationX;
         private AnimationCurve _editorRootTranslationZ;
         private Vector3 _previousEditorRootTranslation;
@@ -2000,6 +2004,7 @@ namespace Fbx2Vmd.FBXImporter
         private void OnDestroy()
         {
 #if UNITY_EDITOR
+            _editorHumanoidPoseReferencePlayer?.Dispose();
             DisposeEditorHumanoidFingerPoseReference();
 #endif
             _legacyAnimationDriver.Dispose();
@@ -2010,7 +2015,11 @@ namespace Fbx2Vmd.FBXImporter
         {
             _editorHumanoidMuscleCurves.Clear();
             _useEditorHumanoidMuscleReference = false;
+            _useCompleteEditorHumanoidMuscleReference = false;
             _editorHumanoidMuscleReferenceLogged = false;
+            _hasEditorHumanoidPoseReferenceForFrame = false;
+            _editorHumanoidPoseReferencePlayer?.Dispose();
+            _editorHumanoidPoseReferencePlayer = null;
 
             if (referenceClip == null || !referenceClip.humanMotion)
             {
@@ -2040,7 +2049,28 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _useEditorHumanoidMuscleReference = _editorHumanoidMuscleCurves.Count > 0;
-            Debug.Log($"[PoseSpaceRetargeter] Editor Humanoid muscle reference curves: {_editorHumanoidMuscleCurves.Count} from {referenceClip.name}");
+            _useCompleteEditorHumanoidMuscleReference =
+                _editorHumanoidMuscleCurves.Count == HumanTrait.MuscleCount;
+            if (_useCompleteEditorHumanoidMuscleReference && targetAnimator != null)
+            {
+                try
+                {
+                    _editorHumanoidPoseReferencePlayer =
+                        new EditorHumanoidPoseReferencePlayer();
+                    _editorHumanoidPoseReferencePlayer.Initialize(targetAnimator, referenceClip);
+                }
+                catch (Exception exception)
+                {
+                    _editorHumanoidPoseReferencePlayer?.Dispose();
+                    _editorHumanoidPoseReferencePlayer = null;
+                    Debug.LogWarning(
+                        $"[PoseSpaceRetargeter] Native Humanoid pose reference를 준비하지 못해 muscle curve 기준을 사용합니다: {exception.Message}");
+                }
+            }
+            Debug.Log(
+                $"[PoseSpaceRetargeter] Editor Humanoid muscle reference curves: " +
+                $"{_editorHumanoidMuscleCurves.Count} from {referenceClip.name}, " +
+                $"complete={_useCompleteEditorHumanoidMuscleReference}");
         }
 
         public void ConfigureEditorHumanoidRootTranslationReference(AnimationClip referenceClip)
@@ -2297,7 +2327,10 @@ namespace Fbx2Vmd.FBXImporter
             CaptureAfterEditorMuscleReferenceDiagnostics(_humanPose);
             ApplyEditorHumanoidFingerPoseReference(ref _humanPose);
             ApplyEditorHumanoidBodyRotationReference(ref _humanPose);
-            ApplyThumbAnatomicalGuard(ref _humanPose, ShouldApplyThumbStretchOffset());
+            if (ShouldApplyRetargetSafetyGuards())
+            {
+                ApplyThumbAnatomicalGuard(ref _humanPose, ShouldApplyThumbStretchOffset());
+            }
             ClampPoseMuscles(ref _humanPose);
             CaptureAfterClampPoseMusclesDiagnostics(_humanPose);
             ApplyAnatomicalArmGuard(ref _humanPose);
@@ -2563,8 +2596,13 @@ namespace Fbx2Vmd.FBXImporter
                     bodyRotationDelta,
                     _legacyAnimationDriver.StepSpikeThisFrame);
                 bool useEditorHumanoidMuscleReference = false;
+                bool useCompleteEditorHumanoidMuscleReference = false;
+                bool hasEditorHumanoidBodyRotationReference = false;
 #if UNITY_EDITOR
                 useEditorHumanoidMuscleReference = _useEditorHumanoidMuscleReference;
+                useCompleteEditorHumanoidMuscleReference = _useCompleteEditorHumanoidMuscleReference;
+                hasEditorHumanoidBodyRotationReference =
+                    _hasEditorHumanoidPoseReferenceForFrame;
 #endif
                 for (int i = 0; i < pose.muscles.Length; i++)
                 {
@@ -2575,7 +2613,8 @@ namespace Fbx2Vmd.FBXImporter
                     bool shouldPreserveCurrentValue = RetargetingMuscleReferencePolicy.ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
                         i,
                         useEditorHumanoidMuscleReference,
-                        hasEditorHumanoidMuscleReferenceCurve);
+                        hasEditorHumanoidMuscleReferenceCurve,
+                        useCompleteEditorHumanoidMuscleReference);
                     bool isForearmStretchMuscle = !shouldPreserveCurrentValue &&
                         poseVisualSpikeForearmStretchClampMaxOffset > 0f &&
                         RetargetingMuscleReferencePolicy.IsForearmStretchMuscle(i);
@@ -2589,7 +2628,14 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 pose.bodyPosition = Vector3.Lerp(_previousVisualPoseBodyPosition, pose.bodyPosition, currentWeight);
-                pose.bodyRotation = Quaternion.Slerp(_previousVisualPoseBodyRotation, pose.bodyRotation, currentWeight);
+                if (!RetargetingMuscleReferencePolicy.ShouldPreserveBodyRotationDuringVisualSmoothing(
+                    hasEditorHumanoidBodyRotationReference))
+                {
+                    pose.bodyRotation = Quaternion.Slerp(
+                        _previousVisualPoseBodyRotation,
+                        pose.bodyRotation,
+                        currentWeight);
+                }
                 _poseVisualSmoothingCount++;
             }
             else if (muscleDeltaOnlySpike)
@@ -2815,26 +2861,38 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
         private void ApplyEditorHumanoidMuscleReferenceEditor(ref HumanPose pose)
         {
+            _hasEditorHumanoidPoseReferenceForFrame = false;
             if (!_useEditorHumanoidMuscleReference || pose.muscles == null || _editorHumanoidMuscleCurves.Count == 0)
             {
                 return;
             }
 
             float time = _legacyAnimationDriver.CurrentTime;
-            foreach (KeyValuePair<int, AnimationCurve> pair in _editorHumanoidMuscleCurves)
+            if (_useCompleteEditorHumanoidMuscleReference &&
+                _editorHumanoidPoseReferencePlayer != null &&
+                _editorHumanoidPoseReferencePlayer.TryEvaluateAt(
+                    time,
+                    ref _editorHumanoidPoseReference))
             {
-                if (pair.Key < 0 || pair.Key >= pose.muscles.Length || pair.Value == null)
-                {
-                    continue;
-                }
-
-                float referenceValue = pair.Value.Evaluate(time);
-                if (!RetargetingMuscleReferencePolicy.ShouldApplyHumanoidMuscleReferenceValue(pair.Key, referenceValue))
-                {
-                    continue;
-                }
-
-                pose.muscles[pair.Key] = referenceValue;
+                int muscleCount = Mathf.Min(
+                    pose.muscles.Length,
+                    _editorHumanoidPoseReference.muscles.Length);
+                Array.Copy(
+                    _editorHumanoidPoseReference.muscles,
+                    pose.muscles,
+                    muscleCount);
+                pose.bodyRotation = _editorHumanoidPoseReference.bodyRotation;
+                _editorReferenceBodyPosition = _editorHumanoidPoseReference.bodyPosition;
+                _hasEditorReferenceBodyPosition = IsFinite(_editorReferenceBodyPosition);
+                _hasEditorHumanoidPoseReferenceForFrame = true;
+            }
+            else
+            {
+                RetargetingPoseInputTransformer.ApplyReferenceCurvesInPlace(
+                    pose.muscles,
+                    _editorHumanoidMuscleCurves,
+                    time,
+                    _useCompleteEditorHumanoidMuscleReference);
             }
 
             if (!_editorHumanoidMuscleReferenceLogged)
@@ -2926,6 +2984,11 @@ namespace Fbx2Vmd.FBXImporter
 
         private void ApplyEditorHumanoidBodyRotationReferenceEditor(ref HumanPose pose)
         {
+            if (_hasEditorHumanoidPoseReferenceForFrame)
+            {
+                return;
+            }
+
             if (!ShouldUseManualAnimatorBodyRotationReference ||
                 manualAnimatorBodyRotationReferenceWeight <= 0f ||
                 _editorFingerReferenceAnimator == null ||
@@ -6665,7 +6728,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private void ClampPoseMuscles(ref HumanPose pose)
         {
-            if (!clampMusclesToHumanRange || pose.muscles == null)
+            if (!ShouldApplyRetargetSafetyGuards() ||
+                !clampMusclesToHumanRange ||
+                pose.muscles == null)
             {
                 return;
             }
@@ -6723,7 +6788,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private void ApplyAnatomicalArmGuard(ref HumanPose pose)
         {
-            if (!enableAnatomicalArmGuard || pose.muscles == null)
+            if (!ShouldApplyRetargetSafetyGuards() ||
+                !enableAnatomicalArmGuard ||
+                pose.muscles == null)
             {
                 return;
             }
@@ -6744,7 +6811,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private void ClampAppliedTargetPose()
         {
-            if ((!clampMusclesToHumanRange && !enableAnatomicalArmGuard && !enableThumbAnatomicalGuard) || _targetHandler == null)
+            if (!ShouldApplyRetargetSafetyGuards() ||
+                (!clampMusclesToHumanRange && !enableAnatomicalArmGuard && !enableThumbAnatomicalGuard) ||
+                _targetHandler == null)
             {
                 return;
             }
@@ -6786,6 +6855,16 @@ namespace Fbx2Vmd.FBXImporter
                 Debug.LogWarning($"[PoseSpaceRetargeter] Target 적용 후 범위를 벗어난 Humanoid muscle {changed}개를 추가 보정했습니다.");
                 _appliedPoseClampWarningLogged = true;
             }
+        }
+
+        private bool ShouldApplyRetargetSafetyGuards()
+        {
+#if UNITY_EDITOR
+            return RetargetingMuscleReferencePolicy.ShouldApplyRetargetSafetyGuards(
+                _useCompleteEditorHumanoidMuscleReference);
+#else
+            return true;
+#endif
         }
 
         private bool ShouldApplyThumbStretchOffset()

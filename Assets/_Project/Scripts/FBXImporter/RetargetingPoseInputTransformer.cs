@@ -44,5 +44,36 @@ namespace Fbx2Vmd.FBXImporter
                     referenceValue);
             }
         }
+
+        internal static void ApplyReferenceCurvesInPlace(
+            float[] muscleValues,
+            Dictionary<int, AnimationCurve> referenceCurves,
+            float time,
+            bool useCompleteReference)
+        {
+            if (muscleValues == null || referenceCurves == null || referenceCurves.Count == 0)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<int, AnimationCurve> pair in referenceCurves)
+            {
+                if (pair.Key < 0 || pair.Key >= muscleValues.Length || pair.Value == null)
+                {
+                    continue;
+                }
+
+                float referenceValue = pair.Value.Evaluate(time);
+                if (!RetargetingMuscleReferencePolicy.ShouldApplyHumanoidMuscleReferenceValue(
+                    pair.Key,
+                    referenceValue,
+                    useCompleteReference))
+                {
+                    continue;
+                }
+
+                muscleValues[pair.Key] = referenceValue;
+            }
+        }
     }
 }

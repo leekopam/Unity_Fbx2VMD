@@ -36,10 +36,35 @@ namespace Tests.Editor.FBXImporter
             typeof(float)
         };
 
+        private static readonly Type[] CompleteMuscleReferenceValueParameterTypes =
+        {
+            typeof(int),
+            typeof(float),
+            typeof(bool)
+        };
+
         private static readonly Type[] VisualSmoothingMusclePreservationParameterTypes =
         {
             typeof(int),
             typeof(bool),
+            typeof(bool)
+        };
+
+        private static readonly Type[] CompleteVisualSmoothingMusclePreservationParameterTypes =
+        {
+            typeof(int),
+            typeof(bool),
+            typeof(bool),
+            typeof(bool)
+        };
+
+        private static readonly Type[] SafetyGuardParameterTypes =
+        {
+            typeof(bool)
+        };
+
+        private static readonly Type[] CompleteBodyRotationReferenceParameterTypes =
+        {
             typeof(bool)
         };
 
@@ -73,7 +98,13 @@ namespace Tests.Editor.FBXImporter
             AssertPolicyMethod("ShouldUsePoseReference", PoseReferenceParameterTypes);
             AssertPolicyMethod("ShouldUseHumanoidMuscleReference", MuscleReferenceParameterTypes);
             AssertPolicyMethod("ShouldApplyHumanoidMuscleReferenceValue", MuscleReferenceValueParameterTypes);
+            AssertPolicyMethod("ShouldApplyHumanoidMuscleReferenceValue", CompleteMuscleReferenceValueParameterTypes);
             AssertPolicyMethod("ShouldPreserveHumanoidMuscleDuringVisualSmoothing", VisualSmoothingMusclePreservationParameterTypes);
+            AssertPolicyMethod("ShouldPreserveHumanoidMuscleDuringVisualSmoothing", CompleteVisualSmoothingMusclePreservationParameterTypes);
+            AssertPolicyMethod("ShouldApplyRetargetSafetyGuards", SafetyGuardParameterTypes);
+            AssertPolicyMethod(
+                "ShouldPreserveBodyRotationDuringVisualSmoothing",
+                CompleteBodyRotationReferenceParameterTypes);
             AssertPolicyMethod("IsForearmStretchMuscle", MuscleReferenceParameterTypes);
             AssertPolicyMethod("FindHumanMuscleIndex", MuscleNameParameterTypes);
             AssertPolicyMethod("TransformPoseInputValue", PoseInputTransformParameterTypes);
@@ -267,6 +298,62 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_CompleteHumanoidReference_When_CheckingOverrangeTwist_Then_UsesFiniteNativeValue()
+        {
+            int leftArmTwistIndex = FindHumanMuscleIndex("Left Arm Twist In-Out");
+            int rightArmTwistIndex = FindHumanMuscleIndex("Right Arm Twist In-Out");
+
+            Assert.That(ShouldApplyHumanoidMuscleReferenceValue(
+                leftArmTwistIndex,
+                1.661389f,
+                useCompleteReference: true), Is.True);
+            Assert.That(ShouldApplyHumanoidMuscleReferenceValue(
+                rightArmTwistIndex,
+                1.902608f,
+                useCompleteReference: true), Is.True);
+            Assert.That(ShouldApplyHumanoidMuscleReferenceValue(
+                rightArmTwistIndex,
+                float.NaN,
+                useCompleteReference: true), Is.False);
+        }
+
+        [Test]
+        public void Given_CompleteHumanoidReference_When_CheckingVisualSmoothing_Then_PreservesExcludedTwistAndStretch()
+        {
+            int leftArmTwistIndex = FindHumanMuscleIndex("Left Arm Twist In-Out");
+            int forearmStretchIndex = FindHumanMuscleIndex("Right Forearm Stretch");
+
+            Assert.That(ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+                leftArmTwistIndex,
+                useHumanoidMuscleReference: true,
+                hasHumanoidMuscleReferenceCurve: true,
+                useCompleteReference: true), Is.True);
+            Assert.That(ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+                forearmStretchIndex,
+                useHumanoidMuscleReference: true,
+                hasHumanoidMuscleReferenceCurve: true,
+                useCompleteReference: true), Is.True);
+        }
+
+        [Test]
+        public void Given_CompleteHumanoidReference_When_CheckingSafetyGuards_Then_BypassesOnlyCompleteReference()
+        {
+            Assert.That(ShouldApplyRetargetSafetyGuards(useCompleteReference: true), Is.False);
+            Assert.That(ShouldApplyRetargetSafetyGuards(useCompleteReference: false), Is.True);
+        }
+
+        [Test]
+        public void Given_CompleteHumanoidReference_When_CheckingVisualSmoothing_Then_PreservesNativeBodyRotation()
+        {
+            Assert.That(
+                ShouldPreserveBodyRotationDuringVisualSmoothing(useCompleteReference: true),
+                Is.True);
+            Assert.That(
+                ShouldPreserveBodyRotationDuringVisualSmoothing(useCompleteReference: false),
+                Is.False);
+        }
+
+        [Test]
         public void Given_RightArmOnlyMask_When_CheckingManualFullBodyMuscles_Then_AllowsOnlyRightArmChain()
         {
             Assert.That(ShouldApplyManualFullBodyMuscle(FindHumanMuscleIndexContaining("Right", "Arm"), rightArmOnly: true), Is.True);
@@ -353,6 +440,19 @@ namespace Tests.Editor.FBXImporter
                 referenceValue);
         }
 
+        private static bool ShouldApplyHumanoidMuscleReferenceValue(
+            int muscleIndex,
+            float referenceValue,
+            bool useCompleteReference)
+        {
+            return InvokePolicy<bool>(
+                "ShouldApplyHumanoidMuscleReferenceValue",
+                CompleteMuscleReferenceValueParameterTypes,
+                muscleIndex,
+                referenceValue,
+                useCompleteReference);
+        }
+
         private static bool ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
             int muscleIndex,
             bool useHumanoidMuscleReference,
@@ -364,6 +464,38 @@ namespace Tests.Editor.FBXImporter
                 muscleIndex,
                 useHumanoidMuscleReference,
                 hasHumanoidMuscleReferenceCurve);
+        }
+
+        private static bool ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+            int muscleIndex,
+            bool useHumanoidMuscleReference,
+            bool hasHumanoidMuscleReferenceCurve,
+            bool useCompleteReference)
+        {
+            return InvokePolicy<bool>(
+                "ShouldPreserveHumanoidMuscleDuringVisualSmoothing",
+                CompleteVisualSmoothingMusclePreservationParameterTypes,
+                muscleIndex,
+                useHumanoidMuscleReference,
+                hasHumanoidMuscleReferenceCurve,
+                useCompleteReference);
+        }
+
+        private static bool ShouldApplyRetargetSafetyGuards(bool useCompleteReference)
+        {
+            return InvokePolicy<bool>(
+                "ShouldApplyRetargetSafetyGuards",
+                SafetyGuardParameterTypes,
+                useCompleteReference);
+        }
+
+        private static bool ShouldPreserveBodyRotationDuringVisualSmoothing(
+            bool useCompleteReference)
+        {
+            return InvokePolicy<bool>(
+                "ShouldPreserveBodyRotationDuringVisualSmoothing",
+                CompleteBodyRotationReferenceParameterTypes,
+                useCompleteReference);
         }
 
         private static bool IsForearmStretchMuscle(int muscleIndex)
