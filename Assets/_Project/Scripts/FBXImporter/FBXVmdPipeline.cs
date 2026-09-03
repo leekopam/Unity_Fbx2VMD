@@ -1705,12 +1705,19 @@ namespace Fbx2Vmd.FBXImporter
         {
             EnsureServicesInitialized();
             DisableIndependentRecorderAutoStart();
+            EnsureIdlePoseGuardInitialized();
+        }
+
+        private void EnsureIdlePoseGuardInitialized()
+        {
             _idlePoseGuard = GetComponent<TargetIdlePoseGuard>();
-            if (_idlePoseGuard != null)
+            if (_idlePoseGuard == null)
             {
-                _idlePoseGuard.SetTargetCharacter(targetCharacter);
-                _idlePoseGuard.Initialize();
+                _idlePoseGuard = gameObject.AddComponent<TargetIdlePoseGuard>();
             }
+
+            _idlePoseGuard.SetTargetCharacter(targetCharacter);
+            _idlePoseGuard.Initialize();
         }
 
         private void LateUpdate()
