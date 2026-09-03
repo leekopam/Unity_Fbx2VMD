@@ -93,6 +93,30 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void AssigningPipelineTarget_DisablesIndependentRecorderAutoStart()
+        {
+            var pipelineObject = new GameObject("Pipeline Recorder Ownership Test");
+            var targetObject = new GameObject("Pipeline Recorder Target");
+
+            try
+            {
+                FBXVmdPipeline fileManager = pipelineObject.AddComponent<FBXVmdPipeline>();
+                HumanoidSampleCode recorder = targetObject.AddComponent<HumanoidSampleCode>();
+                recorder.AutoStartRecording = true;
+
+                fileManager.targetCharacter = targetObject;
+
+                Assert.That(recorder.AutoStartRecording, Is.False,
+                    "FBXVmdPipeline 대상은 Play 시작 독립 녹화를 끄고 FBX 이후 녹화 경로만 사용해야 합니다.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void MainImportScenes_DefaultGhostDisplayOff()
         {
             AssertSceneGhostDisplayOff(MainAutoScenePath, "Main_Auto");
