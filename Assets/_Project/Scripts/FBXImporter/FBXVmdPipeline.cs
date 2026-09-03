@@ -56,7 +56,15 @@ namespace Fbx2Vmd.FBXImporter
         [Tooltip("애니메이션을 적용할 대상 캐릭터 (Humanoid Avatar 필요)")]
         [FormerlySerializedAs("targetCharacter")]
         [SerializeField] private GameObject _targetCharacter;
-        public GameObject targetCharacter { get => _targetCharacter; set => _targetCharacter = value; }
+        public GameObject targetCharacter
+        {
+            get => _targetCharacter;
+            set
+            {
+                _targetCharacter = value;
+                DisableIndependentRecorderAutoStart();
+            }
+        }
 
         [Tooltip("이전 수동 프로젝트와 같은 180도 PoseSpace 방향 보정을 사용합니다. 현재 씬에서는 카메라 정면 조건을 깨므로 비교/롤백용으로만 켭니다.")]
         [FormerlySerializedAs("useLegacyPoseSpaceFacingCorrection")] [SerializeField] private bool _shouldUseLegacyPoseSpaceFacingCorrection = false;
@@ -1696,6 +1704,7 @@ namespace Fbx2Vmd.FBXImporter
         private void Awake()
         {
             EnsureServicesInitialized();
+            DisableIndependentRecorderAutoStart();
             _idlePoseGuard = GetComponent<TargetIdlePoseGuard>();
             if (_idlePoseGuard != null)
             {
@@ -2155,6 +2164,16 @@ namespace Fbx2Vmd.FBXImporter
         private HumanoidSampleCode GetRecorderController()
         {
             return targetCharacter != null ? targetCharacter.GetComponent<HumanoidSampleCode>() : null;
+        }
+
+        private void DisableIndependentRecorderAutoStart()
+        {
+            // 파이프라인이 자동 녹화 수명주기를 소유하므로 recorder의 독립 Start() 녹화를 차단함.
+            HumanoidSampleCode recorder = GetRecorderController();
+            if (recorder != null)
+            {
+                recorder.AutoStartRecording = false;
+            }
         }
 
         internal void CleanupActiveGhost()
