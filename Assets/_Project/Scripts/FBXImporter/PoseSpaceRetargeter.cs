@@ -2055,7 +2055,9 @@ namespace Fbx2Vmd.FBXImporter
         }
 
 #if UNITY_EDITOR
-        public void ConfigureEditorHumanoidMuscleReference(AnimationClip referenceClip)
+        public void ConfigureEditorHumanoidMuscleReference(
+            AnimationClip referenceClip,
+            bool shouldUseCompletePoseReference = false)
         {
             _editorHumanoidMuscleCurves.Clear();
             _useEditorHumanoidMuscleReference = false;
@@ -2094,6 +2096,7 @@ namespace Fbx2Vmd.FBXImporter
 
             _useEditorHumanoidMuscleReference = _editorHumanoidMuscleCurves.Count > 0;
             _useCompleteEditorHumanoidMuscleReference =
+                shouldUseCompletePoseReference &&
                 _editorHumanoidMuscleCurves.Count == HumanTrait.MuscleCount;
             if (_useCompleteEditorHumanoidMuscleReference && targetAnimator != null)
             {
