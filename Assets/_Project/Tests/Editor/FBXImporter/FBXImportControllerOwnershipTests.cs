@@ -249,7 +249,7 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RuntimeAnimationPreparation_When_CheckingOwnership_Then_ControllerPreservesAvatarClipSequence()
+        public void Given_RuntimeAnimationPreparation_When_CheckingOwnership_Then_ControllerAppliesReferencePoseBeforeAvatar()
         {
             MethodInfo preparationMethod = typeof(FBXImportController).GetMethod(
                 "TryPrepareRuntimeAnimation",
@@ -275,15 +275,21 @@ namespace Tests.Editor.FBXImporter
                 "Scripts",
                 "FBXImporter",
                 "FBXImportController.cs"));
-            int avatarIndex = controllerSource.IndexOf("TryPrepareRuntimeAvatar(");
-            int avatarReadyIndex = avatarIndex >= 0
-                ? controllerSource.IndexOf("FBXSessionState.AvatarReady", avatarIndex)
-                : -1;
-            int animationIndex = avatarReadyIndex >= 0
-                ? controllerSource.IndexOf("GetComponent<Animation>()", avatarReadyIndex)
+            int preparationIndex = controllerSource.IndexOf("TryPrepareRuntimeAnimation(");
+            int animationIndex = preparationIndex >= 0
+                ? controllerSource.IndexOf("GetComponent<Animation>()", preparationIndex)
                 : -1;
             int clipIndex = animationIndex >= 0
                 ? controllerSource.IndexOf("ExtractPrimaryClip(", animationIndex)
+                : -1;
+            int referencePoseIndex = clipIndex >= 0
+                ? controllerSource.IndexOf("RuntimeHumanoidReferencePoseApplier.TryApply(", clipIndex)
+                : -1;
+            int avatarIndex = referencePoseIndex >= 0
+                ? controllerSource.IndexOf("TryPrepareRuntimeAvatar(", referencePoseIndex)
+                : -1;
+            int avatarReadyIndex = avatarIndex >= 0
+                ? controllerSource.IndexOf("FBXSessionState.AvatarReady", avatarIndex)
                 : -1;
 
             Assert.That(preparationMethod, Is.Not.Null);
@@ -291,9 +297,11 @@ namespace Tests.Editor.FBXImporter
             Assert.That(pipelineSource, Does.Not.Contain("_importController.TryPrepareRuntimeAnimation("));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.TryPrepareRuntimeAvatar("));
             Assert.That(pipelineSource, Does.Not.Contain("FBXImportController.ExtractPrimaryClip("));
-            Assert.That(avatarIndex, Is.LessThan(avatarReadyIndex));
-            Assert.That(avatarReadyIndex, Is.LessThan(animationIndex));
+            Assert.That(preparationIndex, Is.LessThan(animationIndex));
             Assert.That(animationIndex, Is.LessThan(clipIndex));
+            Assert.That(clipIndex, Is.LessThan(referencePoseIndex));
+            Assert.That(referencePoseIndex, Is.LessThan(avatarIndex));
+            Assert.That(avatarIndex, Is.LessThan(avatarReadyIndex));
         }
 
         [Test]

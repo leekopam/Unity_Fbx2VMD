@@ -239,6 +239,22 @@ namespace Fbx2Vmd.FBXImporter
         {
             ghostAnimation = null;
             targetClip = null;
+            boneMapping = null;
+
+            ghostAnimation = importedModel.GetComponent<Animation>();
+            targetClip = ExtractPrimaryClip(ghostAnimation, shouldLogRuntimeAnimation);
+            if (targetClip == null)
+            {
+                errorMessage = "FBX에서 유효한 애니메이션 클립을 찾지 못했습니다.";
+                return false;
+            }
+
+            if (!RuntimeHumanoidReferencePoseApplier.TryApply(importedModel, targetClip))
+            {
+                errorMessage = "FBX 기준 자세를 준비하지 못했습니다.";
+                return false;
+            }
+
             if (!TryPrepareRuntimeAvatar(importedModel, out boneMapping, out errorMessage))
             {
                 return false;
@@ -248,14 +264,6 @@ namespace Fbx2Vmd.FBXImporter
                 FBXVmdPipeline.FBXSessionState.AvatarReady,
                 "Humanoid Avatar 준비 완료",
                 0.45f);
-
-            ghostAnimation = importedModel.GetComponent<Animation>();
-            targetClip = ExtractPrimaryClip(ghostAnimation, shouldLogRuntimeAnimation);
-            if (targetClip == null)
-            {
-                errorMessage = "FBX에서 유효한 애니메이션 클립을 찾지 못했습니다.";
-                return false;
-            }
 
             errorMessage = string.Empty;
             return true;

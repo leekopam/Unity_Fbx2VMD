@@ -54,9 +54,35 @@ namespace Fbx2Vmd.FBXImporter
             bool useHumanoidMuscleReference,
             bool hasHumanoidMuscleReferenceCurve)
         {
+            return ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+                muscleIndex,
+                useHumanoidMuscleReference,
+                hasHumanoidMuscleReferenceCurve,
+                useCompleteReference: false);
+        }
+
+        internal static bool ShouldPreserveHumanoidMuscleDuringVisualSmoothing(
+            int muscleIndex,
+            bool useHumanoidMuscleReference,
+            bool hasHumanoidMuscleReferenceCurve,
+            bool useCompleteReference)
+        {
             return useHumanoidMuscleReference &&
                 hasHumanoidMuscleReferenceCurve &&
-                ShouldUseHumanoidMuscleReference(muscleIndex);
+                (useCompleteReference
+                    ? TryGetNormalizedMuscleName(muscleIndex, out _)
+                    : ShouldUseHumanoidMuscleReference(muscleIndex));
+        }
+
+        internal static bool ShouldApplyRetargetSafetyGuards(bool useCompleteReference)
+        {
+            return !useCompleteReference;
+        }
+
+        internal static bool ShouldPreserveBodyRotationDuringVisualSmoothing(
+            bool hasNativeBodyRotationReference)
+        {
+            return hasNativeBodyRotationReference;
         }
 
         internal static bool IsForearmStretchMuscle(int muscleIndex)
@@ -67,12 +93,33 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static bool ShouldApplyHumanoidMuscleReferenceValue(int muscleIndex, float referenceValue)
         {
-            if (!ShouldUseHumanoidMuscleReference(muscleIndex) || !IsFinite(referenceValue))
+            return ShouldApplyHumanoidMuscleReferenceValue(
+                muscleIndex,
+                referenceValue,
+                useCompleteReference: false);
+        }
+
+        internal static bool ShouldApplyHumanoidMuscleReferenceValue(
+            int muscleIndex,
+            float referenceValue,
+            bool useCompleteReference)
+        {
+            if (!TryGetNormalizedMuscleName(muscleIndex, out string normalized) ||
+                !IsFinite(referenceValue))
             {
                 return false;
             }
 
-            string normalized = NormalizeMuscleName(HumanTrait.MuscleName[muscleIndex]);
+            if (useCompleteReference)
+            {
+                return true;
+            }
+
+            if (!ShouldUseHumanoidMuscleReference(muscleIndex))
+            {
+                return false;
+            }
+
             return !IsRightUpperArmTwistMuscle(normalized) || Mathf.Abs(referenceValue) <= 1f;
         }
 

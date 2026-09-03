@@ -147,6 +147,51 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_TargetAnimatorAndHumanoidClip_When_SamplingEditorReference_Then_MatchesNativeBodyRotation()
+        {
+            GameObject target = InstantiateTarget();
+            GameObject baselineTarget = InstantiateTarget();
+            object referencePlayer = CreateEditorReferencePlayer();
+            object baselinePlayer = CreatePlayer();
+
+            try
+            {
+                Animator targetAnimator = RequireHumanoidAnimator(target);
+                Animator baselineAnimator = RequireHumanoidAnimator(baselineTarget);
+                AnimationClip clip = LoadHumanoidClip();
+                const float sampleTime = 31.1675f;
+
+                Invoke(referencePlayer, "Initialize", targetAnimator, clip);
+                HumanPose referencePose = SampleReferencePose(referencePlayer, sampleTime);
+
+                Invoke(baselinePlayer, "Initialize", baselineAnimator, clip);
+                Invoke(baselinePlayer, "EvaluateAt", sampleTime);
+                using (var baselineHandler = new HumanPoseHandler(
+                    baselineAnimator.avatar,
+                    baselineAnimator.transform))
+                {
+                    var baselinePose = new HumanPose();
+                    baselineHandler.GetHumanPose(ref baselinePose);
+
+                    Assert.That(
+                        Quaternion.Angle(referencePose.bodyRotation, baselinePose.bodyRotation),
+                        Is.LessThanOrEqualTo(TransformTolerance),
+                        "Editor reference는 RootQ raw curve가 아니라 Native Humanoid가 해석한 bodyRotation을 제공해야 합니다.");
+                    Assert.That(
+                        CalculateAverageMuscleDelta(referencePose, baselinePose),
+                        Is.LessThanOrEqualTo(TransformTolerance));
+                }
+            }
+            finally
+            {
+                DisposePlayer(referencePlayer);
+                DisposePlayer(baselinePlayer);
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(baselineTarget);
+            }
+        }
+
         private static object CreatePlayer()
         {
             Type playerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
@@ -155,6 +200,44 @@ namespace Tests.Editor.FBXImporter
             Assert.That(playerType, Is.Not.Null,
                 "모델 중립 Unity Native Humanoid 재생기 타입이 필요합니다.");
             return Activator.CreateInstance(playerType, nonPublic: true);
+        }
+
+        private static object CreateEditorReferencePlayer()
+        {
+            Type playerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorHumanoidPoseReferencePlayer",
+                throwOnError: false);
+            Assert.That(playerType, Is.Not.Null,
+                "기존 Native Humanoid 재생기를 재사용하는 Editor pose reference player가 필요합니다.");
+            return Activator.CreateInstance(playerType, nonPublic: true);
+        }
+
+        private static HumanPose SampleReferencePose(object player, float timeSeconds)
+        {
+            MethodInfo method = player.GetType().GetMethod(
+                "TryEvaluateAt",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, "TryEvaluateAt 메서드가 필요합니다.");
+
+            object[] arguments = { timeSeconds, new HumanPose() };
+            bool sampled = (bool)method.Invoke(player, arguments);
+            Assert.That(sampled, Is.True);
+            return (HumanPose)arguments[1];
+        }
+
+        private static float CalculateAverageMuscleDelta(HumanPose left, HumanPose right)
+        {
+            Assert.That(left.muscles, Is.Not.Null);
+            Assert.That(right.muscles, Is.Not.Null);
+            Assert.That(left.muscles.Length, Is.EqualTo(right.muscles.Length));
+
+            float sum = 0f;
+            for (int i = 0; i < left.muscles.Length; i++)
+            {
+                sum += Mathf.Abs(left.muscles[i] - right.muscles[i]);
+            }
+
+            return left.muscles.Length > 0 ? sum / left.muscles.Length : 0f;
         }
 
         private static object Invoke(object target, string methodName, params object[] arguments)
