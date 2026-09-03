@@ -43,7 +43,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             EditorDrawUtility.DrawProperty(serializedObject, "_targetCharacter", "대상 캐릭터", showWarningOnNull: true);
-            EditorDrawUtility.DrawProperty(serializedObject, "_shouldRecordVmdAfterImport", "FBX 임포트 후 VMD 자동 녹화", showWarningOnNull: true);
             DrawRequiredSettingsValidation();
 
             EndFoldout(true);
@@ -804,6 +803,20 @@ namespace Fbx2Vmd.FBXImporter
                 EndFoldout(false);
                 return;
             }
+
+            EditorDrawUtility.DrawProperty(
+                serializedObject,
+                "_shouldRecordVmdAfterImport",
+                "FBX 재생 후 VMD 자동 변환",
+                showWarningOnNull: true);
+            bool shouldRecordVmdAfterImport = EditorDrawUtility.GetBool(
+                serializedObject,
+                "_shouldRecordVmdAfterImport");
+            EditorGUILayout.HelpBox(
+                shouldRecordVmdAfterImport
+                    ? "켜짐: FBX 재생 뒤 VMD 녹화와 저장을 자동 실행합니다."
+                    : "꺼짐: FBX 리타게팅과 재생만 수행하며 VMD 파일을 만들지 않습니다. VMD 산출물이 필요한 진단 실행도 시작하지 않습니다.",
+                shouldRecordVmdAfterImport ? MessageType.Info : MessageType.None);
 
             EditorDrawUtility.DrawProperty(serializedObject, "_startDelay", "VMD 녹화 시작 대기 시간", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_vmdRecordingPlaybackSpeed", "VMD 녹화 배속", showWarningOnNull: true);

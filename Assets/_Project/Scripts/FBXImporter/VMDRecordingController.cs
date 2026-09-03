@@ -35,14 +35,9 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
             FBXEditorDiagnosticSession editorDiagnosticSession =
                 _pipeline.EditorDiagnosticSession;
-            bool earlyEditorSmokeRecordingOverrideActive =
-                editorDiagnosticSession.IsRecordingOverrideActive;
-#else
-            bool earlyEditorSmokeRecordingOverrideActive = false;
 #endif
             bool earlyShouldStartVmdRecording = ShouldStartVmdRecording(
-                _pipeline.ShouldRecordVmdAfterImport,
-                earlyEditorSmokeRecordingOverrideActive);
+                _pipeline.ShouldRecordVmdAfterImport);
             float resolvedStartDelay = VMDRecordingController.ResolveStartDelay(_pipeline.startDelay, earlyShouldStartVmdRecording);
             _pipeline.SetSessionState(FBXVmdPipeline.FBXSessionState.Retargeting, $"녹화 시작 전 {resolvedStartDelay:F1}초 대기", 0.7f);
             if (resolvedStartDelay > 0f)
@@ -64,16 +59,12 @@ namespace Fbx2Vmd.FBXImporter
             string comparisonLabel = $"auto_{recordingOutputBaseName}";
 
 #if UNITY_EDITOR
-            bool editorSmokeRecordingOverrideActive =
-                editorDiagnosticSession.IsRecordingOverrideActive;
             float[] diagnosticSampleTimesOverride = editorDiagnosticSession.SampleTimesOverride;
 #else
-            bool editorSmokeRecordingOverrideActive = false;
             float[] diagnosticSampleTimesOverride = null;
 #endif
             bool shouldStartVmdRecording = ShouldStartVmdRecording(
-                _pipeline.ShouldRecordVmdAfterImport,
-                editorSmokeRecordingOverrideActive);
+                _pipeline.ShouldRecordVmdAfterImport);
 
             HumanoidSampleCode recorderController = null;
             if (shouldStartVmdRecording)
@@ -588,11 +579,9 @@ namespace Fbx2Vmd.FBXImporter
             return prewarmFrames > 0 ? prewarmFrames : 1;
         }
 
-        public static bool ShouldStartVmdRecording(
-            bool shouldRecordVmdAfterImport,
-            bool editorSmokeRecordingOverrideActive)
+        public static bool ShouldStartVmdRecording(bool shouldRecordVmdAfterImport)
         {
-            return shouldRecordVmdAfterImport || editorSmokeRecordingOverrideActive;
+            return shouldRecordVmdAfterImport;
         }
 
         /// <summary>

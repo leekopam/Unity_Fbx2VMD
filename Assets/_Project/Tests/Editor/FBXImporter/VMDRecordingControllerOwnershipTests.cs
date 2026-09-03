@@ -257,7 +257,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_RecordingModePolicies_When_CheckingOwnership_Then_ControllerOwnsPureCalculations()
         {
-            Type[] recordingModeParameterTypes = { typeof(bool), typeof(bool) };
+            Type[] recordingModeParameterTypes = { typeof(bool) };
             Type[] prewarmModeParameterTypes = { typeof(int), typeof(bool) };
             MethodInfo controllerRecordingDecisionMethod = typeof(VMDRecordingController).GetMethod(
                 "ShouldStartVmdRecording",

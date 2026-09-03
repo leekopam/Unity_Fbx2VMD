@@ -49,8 +49,8 @@ namespace Fbx2Vmd.FBXImporter
         [Tooltip("체크 시 선택한 FBX 파일을 Import_FBX 폴더에 복사하여 저장")]
         [FormerlySerializedAs("saveToImportFolder")] [SerializeField] private bool _shouldSaveToImportFolder = false;
 
-        [Tooltip("체크 시 FBX 임포트 후 VMD 녹화를 자동 시작합니다. 끄면 Unity 재생/촬영 준비까지만 수행합니다.")]
-        [FormerlySerializedAs("recordVmdAfterImport")] [SerializeField] private bool _shouldRecordVmdAfterImport = true;
+        [Tooltip("체크 시 FBX 임포트 후 VMD 녹화와 저장을 자동 실행합니다. 끄면 진단 실행을 포함해 Unity 재생/촬영 준비까지만 수행합니다.")]
+        [FormerlySerializedAs("recordVmdAfterImport")] [SerializeField] private bool _shouldRecordVmdAfterImport;
 
         [Header("Ghost Retargeting 설정")]
         [Tooltip("애니메이션을 적용할 대상 캐릭터 (Humanoid Avatar 필요)")]
@@ -1427,7 +1427,11 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         public bool ShouldSaveToImportFolder => _shouldSaveToImportFolder;
-        public bool ShouldRecordVmdAfterImport => _shouldRecordVmdAfterImport;
+        public bool ShouldRecordVmdAfterImport
+        {
+            get => _shouldRecordVmdAfterImport;
+            set => _shouldRecordVmdAfterImport = value;
+        }
         internal FBXImportController ImportController => _importController;
         internal FBXConversionCoordinator ConversionCoordinator => _conversionCoordinator;
         internal bool ShouldFaceTargetToCameraOnIdle =>
@@ -1516,6 +1520,14 @@ namespace Fbx2Vmd.FBXImporter
             if (_isProcessing)
             {
                 Debug.LogWarning("[FBXImport] 다른 FBX 처리가 진행 중이라 smoke 진단을 시작하지 않았습니다.");
+                return false;
+            }
+
+            if (!ShouldRecordVmdAfterImport)
+            {
+                Debug.LogWarning(
+                    "[FBXImport] VMD 자동 변환이 꺼져 있어 VMD 산출물이 필요한 smoke 진단을 시작하지 않았습니다. " +
+                    "FBXVmdPipeline 인스펙터의 VMD 녹화에서 자동 변환을 켜세요.");
                 return false;
             }
 
