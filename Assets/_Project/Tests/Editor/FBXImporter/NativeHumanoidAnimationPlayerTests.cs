@@ -39,6 +39,54 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_CompleteHumanoidCurves_When_ConfiguringDefaultReference_Then_UsesSelectivePolicy()
+        {
+            var retargeterObject = new GameObject("Selective Humanoid Reference Policy Test");
+
+            try
+            {
+                var retargeter = retargeterObject.AddComponent<Fbx2Vmd.FBXImporter.PoseSpaceRetargeter>();
+                retargeter.ConfigureEditorHumanoidMuscleReference(LoadHumanoidClip());
+
+                Assert.That(
+                    ReadField<bool>(retargeter, "_useEditorHumanoidMuscleReference"),
+                    Is.True,
+                    "Humanoid 근육 곡선 기준은 활성화되어야 합니다.");
+                Assert.That(
+                    ReadField<bool>(retargeter, "_useCompleteEditorHumanoidMuscleReference"),
+                    Is.False,
+                    "기본 경로가 전체 Native 포즈 덮어쓰기로 자동 승격되면 안 됩니다.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(retargeterObject);
+            }
+        }
+
+        [Test]
+        public void Given_CompleteHumanoidCurves_When_RequestingCompleteReference_Then_UsesCompletePolicy()
+        {
+            var retargeterObject = new GameObject("Complete Humanoid Reference Policy Test");
+
+            try
+            {
+                var retargeter = retargeterObject.AddComponent<Fbx2Vmd.FBXImporter.PoseSpaceRetargeter>();
+                retargeter.ConfigureEditorHumanoidMuscleReference(
+                    LoadHumanoidClip(),
+                    shouldUseCompletePoseReference: true);
+
+                Assert.That(
+                    ReadField<bool>(retargeter, "_useCompleteEditorHumanoidMuscleReference"),
+                    Is.True,
+                    "명시적으로 요청한 진단 경로는 전체 Native 포즈 기준을 사용할 수 있어야 합니다.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(retargeterObject);
+            }
+        }
+
+        [Test]
         public void Given_MissingAnimator_When_Initializing_Then_RejectsRequest()
         {
             object player = CreatePlayer();
