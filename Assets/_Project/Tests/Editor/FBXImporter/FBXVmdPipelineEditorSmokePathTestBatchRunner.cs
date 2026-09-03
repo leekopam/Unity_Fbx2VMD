@@ -95,6 +95,8 @@ namespace Tests.Editor.FBXImporter
                 tests.Given_MainRecordingFullRegressionEvidenceCommand_When_InspectingRunnerPlan_Then_UsesSatisfaction2Fbx);
             RunTest(results, nameof(tests.Given_EditorSmokeSettingsSnapshot_When_CapturingAndClearing_Then_RestoresAllRuntimeSettings),
                 tests.Given_EditorSmokeSettingsSnapshot_When_CapturingAndClearing_Then_RestoresAllRuntimeSettings);
+            RunTest(results, nameof(tests.Given_RendererIsolationFailure_When_ApplyingEditorSmokeResult_Then_ConvertsSuccessToFailure),
+                tests.Given_RendererIsolationFailure_When_ApplyingEditorSmokeResult_Then_ConvertsSuccessToFailure);
             RunTest(results, nameof(tests.Given_EditorSmokeSettingsSnapshot_When_StartDelayIsNaN_Then_RestoresNaNExactly),
                 tests.Given_EditorSmokeSettingsSnapshot_When_StartDelayIsNaN_Then_RestoresNaNExactly);
             RunTest(results, nameof(tests.Given_EditorSmokeSettingsSnapshot_When_ClearRunsWithoutActiveSnapshot_Then_DoesNotChangeSettings),

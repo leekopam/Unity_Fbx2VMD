@@ -37,6 +37,7 @@ namespace Fbx2Vmd.FBXImporter
         private const float SmokeFrameRate = 30f;
         private const float SmokeStartDelaySeconds = 0.2f;
         private const float SatisfactionFullRegressionEvidenceDurationSeconds = 207.7833f;
+        private const float FullRegressionEvidenceRecordingStartTimeOverrideSeconds = 0f;
         private const int FullRegressionEvidenceCaptureWidth = 3840;
         private const int FullRegressionEvidenceCaptureHeight = 2160;
         private const float SatisfactionSmokeMidPeakTimeSeconds = 16.9f;
@@ -238,7 +239,8 @@ namespace Fbx2Vmd.FBXImporter
                 mode: "full-regression-evidence",
                 segment: FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
                 captureWidthOverride: FullRegressionEvidenceCaptureWidth,
-                captureHeightOverride: FullRegressionEvidenceCaptureHeight);
+                captureHeightOverride: FullRegressionEvidenceCaptureHeight,
+                recordingStartTimeOverrideSeconds: FullRegressionEvidenceRecordingStartTimeOverrideSeconds);
         }
 
         [MenuItem(MenuRoot + "Capture satisfaction_2 Middle Helper Evidence 102.125s", false, 2107)]
@@ -495,7 +497,8 @@ namespace Fbx2Vmd.FBXImporter
                         FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
                         out message,
                         FullRegressionEvidenceCaptureWidth,
-                        FullRegressionEvidenceCaptureHeight);
+                        FullRegressionEvidenceCaptureHeight,
+                        FullRegressionEvidenceRecordingStartTimeOverrideSeconds);
                 case CaptureAntennaTailHelperEvidenceCommand:
                     return TryStartAutomationSingleSmoke(
                         "Antenna39 try_006 g.fbx",
@@ -584,7 +587,8 @@ namespace Fbx2Vmd.FBXImporter
             FBXVmdPipeline.EditorDiagnosticSmokeSegment segment,
             out string message,
             int captureWidthOverride = 0,
-            int captureHeightOverride = 0)
+            int captureHeightOverride = 0,
+            float recordingStartTimeOverrideSeconds = float.NaN)
         {
             message = string.Empty;
             if (!TryGetFBXVmdPipeline(fbxFileName, out FBXVmdPipeline fileManager, interactive: false, out message))
@@ -592,7 +596,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride))
+            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride, recordingStartTimeOverrideSeconds))
             {
                 message = $"smoke start failed: {fbxFileName}";
                 return false;
@@ -629,7 +633,8 @@ namespace Fbx2Vmd.FBXImporter
             string mode = "single",
             FBXVmdPipeline.EditorDiagnosticSmokeSegment segment = FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
             int captureWidthOverride = 0,
-            int captureHeightOverride = 0)
+            int captureHeightOverride = 0,
+            float recordingStartTimeOverrideSeconds = float.NaN)
         {
             if (IsBatchRunning())
             {
@@ -642,7 +647,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            if (StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride))
+            if (StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride, recordingStartTimeOverrideSeconds))
             {
                 TrackSingleSmoke(fileManager, fbxFileName, mode);
             }
@@ -733,7 +738,8 @@ namespace Fbx2Vmd.FBXImporter
             bool enableFingerCloseups = false,
             float[] sampleTimesOverride = null,
             int captureWidthOverride = 0,
-            int captureHeightOverride = 0)
+            int captureHeightOverride = 0,
+            float recordingStartTimeOverrideSeconds = float.NaN)
         {
             if (fileManager == null)
             {
@@ -760,7 +766,8 @@ namespace Fbx2Vmd.FBXImporter
                 segment: segment,
                 sampleTimesOverride: sampleTimesOverride,
                 captureWidthOverride: captureWidthOverride,
-                captureHeightOverride: captureHeightOverride);
+                captureHeightOverride: captureHeightOverride,
+                recordingStartTimeOverrideSeconds: recordingStartTimeOverrideSeconds);
 
             if (started)
             {
@@ -782,6 +789,11 @@ namespace Fbx2Vmd.FBXImporter
         private static float GetFullRegressionEvidenceDurationSecondsForTest()
         {
             return SatisfactionFullRegressionEvidenceDurationSeconds;
+        }
+
+        private static float GetFullRegressionEvidenceRecordingStartTimeOverrideSecondsForTest()
+        {
+            return FullRegressionEvidenceRecordingStartTimeOverrideSeconds;
         }
 
         private static string GetFullRegressionEvidenceFbxFileNameForTest()

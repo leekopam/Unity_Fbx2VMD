@@ -29,6 +29,22 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         public bool IsPlaying => _animation != null && _animation.isPlaying;
+        public float CurrentClipLength
+        {
+            get
+            {
+                AnimationState state = GetState();
+                return state != null
+                    ? Mathf.Max(0f, state.length)
+                    : Mathf.Max(0f, _animation != null && _animation.clip != null
+                        ? _animation.clip.length
+                        : 0f);
+            }
+        }
+        public string CurrentClipName =>
+            _animation != null && _animation.clip != null
+                ? _animation.clip.name
+                : string.Empty;
         public bool StepSpikeThisFrame => _stepSpikeThisFrame;
         public float LastStep => _lastStep;
         public float MaxStep => _maxStep;

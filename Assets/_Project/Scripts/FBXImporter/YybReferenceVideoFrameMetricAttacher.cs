@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 namespace Fbx2Vmd.FBXImporter
 {
     internal static class YybReferenceVideoFrameMetricAttacher
@@ -63,3 +64,4 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
+#endif

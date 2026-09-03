@@ -131,6 +131,7 @@ namespace Fbx2Vmd.FBXImporter
             HumanBodyBones.RightToes
         };
         private Animator _animator;
+        private PoseSpaceRetargeter _linkedRetargeter;
         private Avatar _cachedAvatar;
         private Transform _cachedRoot;
         private HumanPoseHandler _poseHandler;
@@ -163,6 +164,15 @@ namespace Fbx2Vmd.FBXImporter
 
             if (_poseHandler == null)
             {
+                return;
+            }
+
+            if (ShouldPreserveCompleteEditorHumanoidPoseReference())
+            {
+                RestoreHumanoidLocalPositions();
+                RestoreLimbChildLocalPositions();
+                RestoreLimbChildLocalRotations();
+                RestoreLocalScales();
                 return;
             }
 
@@ -227,6 +237,11 @@ namespace Fbx2Vmd.FBXImporter
             lockLimbChildLocalPositions = settings.LockLimbChildLocalPositions;
             lockLimbChildLocalRotations = settings.LockLimbChildLocalRotations;
             logCorrections = settings.LogCorrections;
+        }
+
+        internal void BindRetargeter(PoseSpaceRetargeter retargeter)
+        {
+            _linkedRetargeter = retargeter;
         }
 
         public void RecaptureBaseline()
@@ -348,6 +363,13 @@ namespace Fbx2Vmd.FBXImporter
             _initialized = true;
             CaptureBaseline();
             return true;
+        }
+
+        private bool ShouldPreserveCompleteEditorHumanoidPoseReference()
+        {
+            return _linkedRetargeter != null &&
+                _linkedRetargeter.targetAnimator == _animator &&
+                _linkedRetargeter.IsCompleteEditorHumanoidPoseReferenceActive;
         }
 
         private void CaptureBaseline()

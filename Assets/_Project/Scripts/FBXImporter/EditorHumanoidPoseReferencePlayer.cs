@@ -14,10 +14,12 @@ namespace Fbx2Vmd.FBXImporter
             new NativeHumanoidAnimationPlayer();
 
         private GameObject _referenceInstance;
+        private Animator _referenceAnimator;
         private HumanPoseHandler _poseHandler;
 
         internal bool IsInitialized =>
             _referenceInstance != null &&
+            _referenceAnimator != null &&
             _poseHandler != null &&
             _animationPlayer.IsInitialized;
 
@@ -41,21 +43,21 @@ namespace Fbx2Vmd.FBXImporter
             DisableRuntimeComponents(_referenceInstance);
             _referenceInstance.SetActive(true);
 
-            Animator referenceAnimator =
+            _referenceAnimator =
                 _referenceInstance.GetComponent<Animator>() ??
                 _referenceInstance.GetComponentInChildren<Animator>(true);
-            if (referenceAnimator == null)
+            if (_referenceAnimator == null)
             {
                 throw new InvalidOperationException(
                     "Native Humanoid 기준 모델에 Animator가 없습니다.");
             }
 
-            referenceAnimator.runtimeAnimatorController = null;
-            referenceAnimator.enabled = true;
-            _animationPlayer.Initialize(referenceAnimator, clip);
+            _referenceAnimator.runtimeAnimatorController = null;
+            _referenceAnimator.enabled = true;
+            _animationPlayer.Initialize(_referenceAnimator, clip);
             _poseHandler = new HumanPoseHandler(
-                referenceAnimator.avatar,
-                referenceAnimator.transform);
+                _referenceAnimator.avatar,
+                _referenceAnimator.transform);
         }
 
         internal bool TryEvaluateAt(float timeSeconds, ref HumanPose pose)
@@ -70,11 +72,44 @@ namespace Fbx2Vmd.FBXImporter
             return IsFinite(pose);
         }
 
+        internal bool TryApplyHumanoidBoneLocalRotationsTo(Animator targetAnimator)
+        {
+            if (!IsInitialized ||
+                targetAnimator == null ||
+                targetAnimator.avatar == null ||
+                !targetAnimator.avatar.isValid ||
+                !targetAnimator.avatar.isHuman)
+            {
+                return false;
+            }
+
+            bool applied = false;
+            for (HumanBodyBones bone = HumanBodyBones.Hips;
+                 bone < HumanBodyBones.LastBone;
+                 bone++)
+            {
+                Transform referenceBone = _referenceAnimator.GetBoneTransform(bone);
+                Transform targetBone = targetAnimator.GetBoneTransform(bone);
+                if (referenceBone == null ||
+                    targetBone == null ||
+                    !IsFinite(referenceBone.localRotation))
+                {
+                    continue;
+                }
+
+                targetBone.localRotation = referenceBone.localRotation;
+                applied = true;
+            }
+
+            return applied;
+        }
+
         public void Dispose()
         {
             _animationPlayer.Dispose();
             _poseHandler?.Dispose();
             _poseHandler = null;
+            _referenceAnimator = null;
 
             if (_referenceInstance != null)
             {
@@ -93,6 +128,11 @@ namespace Fbx2Vmd.FBXImporter
             foreach (Animation animation in root.GetComponentsInChildren<Animation>(true))
             {
                 animation.enabled = false;
+            }
+
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                renderer.enabled = false;
             }
         }
 

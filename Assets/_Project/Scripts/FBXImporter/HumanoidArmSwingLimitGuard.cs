@@ -96,6 +96,7 @@ namespace Fbx2Vmd.FBXImporter
         public bool logCorrections { get => _logCorrections; private set => _logCorrections = value; }
 
         private Animator _animator;
+        private PoseSpaceRetargeter _linkedRetargeter;
         private bool _warningLogged;
         private HumanPoseHandler _diagnosticPoseHandler;
         private HumanPose _diagnosticPose;
@@ -128,7 +129,10 @@ namespace Fbx2Vmd.FBXImporter
         private void LateUpdate()
         {
             ResetDiagnostics();
-            if (!enableSwingLimit || correctionWeight <= 0f || !InitializeIfNeeded())
+            if (!enableSwingLimit ||
+                correctionWeight <= 0f ||
+                !InitializeIfNeeded() ||
+                ShouldPreserveCompleteEditorHumanoidPoseReference())
             {
                 return;
             }
@@ -197,6 +201,11 @@ namespace Fbx2Vmd.FBXImporter
             this.enabled = enableSwingLimit;
         }
 
+        internal void BindRetargeter(PoseSpaceRetargeter retargeter)
+        {
+            _linkedRetargeter = retargeter;
+        }
+
         private bool InitializeIfNeeded()
         {
             if (_animator == null)
@@ -208,6 +217,13 @@ namespace Fbx2Vmd.FBXImporter
                    _animator.avatar != null &&
                    _animator.avatar.isValid &&
                    _animator.avatar.isHuman;
+        }
+
+        private bool ShouldPreserveCompleteEditorHumanoidPoseReference()
+        {
+            return _linkedRetargeter != null &&
+                _linkedRetargeter.targetAnimator == _animator &&
+                _linkedRetargeter.IsCompleteEditorHumanoidPoseReferenceActive;
         }
 
         private void ApplyArmLimit(

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -1082,6 +1083,7 @@ namespace Tests.Editor.FBXImporter
         {
             Assert.That(GetRunnerFullRegressionCommand(), Is.EqualTo("capture_satisfaction_full_regression_evidence_208s_4k"));
             Assert.That(GetRunnerFullRegressionDurationSeconds(), Is.EqualTo(207.7833f).Within(0.0001f));
+            Assert.That(GetRunnerFullRegressionRecordingStartTimeOverrideSeconds(), Is.EqualTo(0f));
 
             int[] resolution = GetRunnerFullRegressionCaptureResolution();
             Assert.That(resolution, Is.EqualTo(new[] { 3840, 2160 }));
@@ -1121,6 +1123,7 @@ namespace Tests.Editor.FBXImporter
                 fileManager.enableDiagnosticFingerCloseups = true;
                 fileManager.useDeterministicCaptureFramerateForDiagnostics = false;
                 fileManager.startDelay = 1.25f;
+                SetPrivateField(fileManager, "_showGhostModel", true);
                 BeginEditorDiagnosticSession(
                     fileManager,
                     "snapshot.fbx",
@@ -1131,12 +1134,14 @@ namespace Tests.Editor.FBXImporter
                 fileManager.enableDiagnosticFingerCloseups = false;
                 fileManager.useDeterministicCaptureFramerateForDiagnostics = true;
                 fileManager.startDelay = 9.5f;
+                SetPrivateField(fileManager, "_showGhostModel", false);
                 InvokeInstance(fileManager, "ClearEditorSmokeOverride");
 
                 Assert.That(fileManager.enableRecordingDiagnostics, Is.False);
                 Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.True);
                 Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.False);
                 Assert.That(fileManager.startDelay, Is.EqualTo(1.25f));
+                Assert.That(fileManager.showGhostModel, Is.True);
                 AssertEditorSmokeCoreCleanupState(fileManager);
                 AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
 
@@ -1146,6 +1151,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(fileManager.enableDiagnosticFingerCloseups, Is.True);
                 Assert.That(fileManager.useDeterministicCaptureFramerateForDiagnostics, Is.False);
                 Assert.That(fileManager.startDelay, Is.EqualTo(1.25f));
+                Assert.That(fileManager.showGhostModel, Is.True);
                 AssertEditorSmokeCoreCleanupState(fileManager);
                 AssertEditorSmokeSettingsSnapshotIsDefault(fileManager);
             }
@@ -1428,6 +1434,12 @@ namespace Tests.Editor.FBXImporter
             return (float)method.Invoke(null, Array.Empty<object>());
         }
 
+        private static float GetRunnerFullRegressionRecordingStartTimeOverrideSeconds()
+        {
+            MethodInfo method = GetSmokeRunnerMethod("GetFullRegressionEvidenceRecordingStartTimeOverrideSecondsForTest", Type.EmptyTypes);
+            return (float)method.Invoke(null, Array.Empty<object>());
+        }
+
         private static string GetRunnerFullRegressionFbxFileName()
         {
             MethodInfo method = GetSmokeRunnerMethod("GetFullRegressionEvidenceFbxFileNameForTest", Type.EmptyTypes);
@@ -1544,6 +1556,62 @@ namespace Tests.Editor.FBXImporter
             Assert.That(field, Is.Not.Null, $"{target.GetType().Name} must keep a private {fieldName} field for this visibility regression test.");
 
             return (T)field.GetValue(target);
+        }
+
+        [Test]
+        public void Given_RendererIsolationFailure_When_ApplyingEditorSmokeResult_Then_ConvertsSuccessToFailure()
+        {
+            var root = new GameObject("EditorSmokeRendererIsolationFailureTest");
+            FBXVmdPipeline fileManager = root.AddComponent<FBXVmdPipeline>();
+            MotionComparisonProbe probe = root.AddComponent<MotionComparisonProbe>();
+            const string failureMessage =
+                "Editor smoke Renderer 격리 실패: 대상 외 활성 Renderer가 있습니다.";
+
+            try
+            {
+                BeginEditorDiagnosticSession(
+                    fileManager,
+                    "renderer-isolation.fbx",
+                    hasExtendedOverrides: false);
+                SetPrivateField(probe, "_rendererIsolationFailureMessage", failureMessage);
+                var successfulResult = new VmdSaveResult
+                {
+                    Success = true,
+                    FilePath = "renderer-isolation.vmd",
+                    FrameCount = 10,
+                    FileSizeBytes = 100
+                };
+
+                MethodInfo method = typeof(FBXVmdPipeline).GetMethod(
+                    "ApplyEditorSmokeThumbRiskFailure",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(method, Is.Not.Null);
+                LogAssert.Expect(LogType.Warning, $"[FBXImport] {failureMessage}");
+
+                VmdSaveResult result = (VmdSaveResult)method.Invoke(
+                    fileManager,
+                    new object[] { successfulResult, probe });
+
+                Assert.That(result.Success, Is.False);
+                Assert.That(result.ErrorMessage, Is.EqualTo(failureMessage));
+                Assert.That(result.FrameCount, Is.EqualTo(successfulResult.FrameCount));
+                Assert.That(result.FileSizeBytes, Is.EqualTo(successfulResult.FileSizeBytes));
+            }
+            finally
+            {
+                InvokeInstance(fileManager, "ClearEditorSmokeOverride");
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        private static void SetPrivateField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null,
+                $"{target.GetType().Name}에 {fieldName} 필드가 필요합니다.");
+            field.SetValue(target, value);
         }
 
         private static void AssertEditorSmokeCoreCleanupState(FBXVmdPipeline fileManager)
