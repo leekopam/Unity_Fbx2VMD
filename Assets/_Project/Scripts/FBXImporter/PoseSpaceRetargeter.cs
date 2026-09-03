@@ -859,6 +859,23 @@ namespace Fbx2Vmd.FBXImporter
         public float LastLegacyAnimationStep => _legacyAnimationDriver.LastStep;
         public float MaxLegacyAnimationStep => _legacyAnimationDriver.MaxStep;
         public int LegacyAnimationStepSpikeCount => _legacyAnimationDriver.StepSpikeCount;
+        public float CurrentLegacyAnimationTime => _legacyAnimationDriver.CurrentTime;
+        public float CurrentLegacyAnimationClipLength => _legacyAnimationDriver.CurrentClipLength;
+        public string CurrentLegacyAnimationClipName => _legacyAnimationDriver.CurrentClipName;
+        public bool IsCompleteEditorHumanoidPoseReferenceActive
+        {
+            get
+            {
+#if UNITY_EDITOR
+                return _useCompleteEditorHumanoidMuscleReference &&
+                    _hasEditorHumanoidPoseReferenceForFrame &&
+                    _editorHumanoidPoseReferencePlayer != null &&
+                    _editorHumanoidPoseReferencePlayer.IsInitialized;
+#else
+                return false;
+#endif
+            }
+        }
         public int PoseVisualSmoothingCount => _poseVisualSmoothingCount;
         public int PoseVisualMuscleDeltaOnlySkippedCount => _poseVisualMuscleDeltaOnlySkippedCount;
         public float LastPoseVisualMaxMuscleDelta => _lastPoseVisualMaxMuscleDelta;
@@ -1657,6 +1674,33 @@ namespace Fbx2Vmd.FBXImporter
         private string _lastRetargetEndpointFirstJumpEndpoint = "";
         private Vector3 _lastRetargetEndpointFirstJumpDelta = BuildNaNVector3();
         private float _lastRetargetEndpointFirstJumpMagnitude = float.NaN;
+
+        private struct RetargetEndpointStageWorldPositions
+        {
+            public Vector3 LeftFoot;
+            public Vector3 LeftToes;
+            public Vector3 RightFoot;
+            public Vector3 RightToes;
+
+            public static RetargetEndpointStageWorldPositions Empty => new RetargetEndpointStageWorldPositions
+            {
+                LeftFoot = BuildNaNVector3(),
+                LeftToes = BuildNaNVector3(),
+                RightFoot = BuildNaNVector3(),
+                RightToes = BuildNaNVector3()
+            };
+        }
+
+        private static Vector3 BuildNaNVector3()
+        {
+            return new Vector3(float.NaN, float.NaN, float.NaN);
+        }
+
+        private static Quaternion BuildNaNQuaternion()
+        {
+            return new Quaternion(float.NaN, float.NaN, float.NaN, float.NaN);
+        }
+
         private int _setHumanPoseLeftShoulderFrontBackMuscleIndex = UnresolvedHumanMuscleIndex;
         private int _setHumanPoseLeftArmTwistMuscleIndex = UnresolvedHumanMuscleIndex;
         private int _setHumanPoseLeftForearmStretchMuscleIndex = UnresolvedHumanMuscleIndex;
@@ -2302,7 +2346,9 @@ namespace Fbx2Vmd.FBXImporter
             // 포즈(근육) 동기화
             ResetRetargetPoseStageDiagnostics();
             _ghostHandler.GetHumanPose(ref _humanPose);
+#if UNITY_EDITOR
             _lastRetargetStageGhostEndpointPositions = CaptureEndpointStageWorldPositions(ghostAnimator);
+#endif
             if (!IsFinite(_humanPose))
             {
                 LogPoseWarning("Ghost HumanPose contains non-finite values. Skipping this retarget frame.");
@@ -2418,8 +2464,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             Vector3 targetPositionBeforePose = targetAnimator.transform.position;
-            _lastSetHumanPosePreSolveCurrentEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
 #if UNITY_EDITOR
+            _lastSetHumanPosePreSolveCurrentEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
             ApplyPreSetHumanPoseSignCorrectedRowLocalBodyPositionReference(ref _humanPose);
             if (!preSetHumanPoseEndpointPositionUseGhostCurrentBasis)
             {
@@ -2430,8 +2476,13 @@ namespace Fbx2Vmd.FBXImporter
             _targetHandler.SetHumanPose(ref _humanPose);
             ApplySetHumanPoseRightLegTwistOutputReference(_humanPose);
             CaptureSetHumanPoseOutputDiagnostics();
+#if UNITY_EDITOR
             _lastRetargetStageAfterSetHumanPoseEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+#endif
             ClampAppliedTargetPose();
+#if UNITY_EDITOR
+            ApplyEditorHumanoidBoneLocalRotationReference();
+#endif
             RestoreTargetHumanoidLocalPositions();
 #if UNITY_EDITOR
             ApplyEditorHumanoidHipsLocalPositionReference();
@@ -2441,7 +2492,9 @@ namespace Fbx2Vmd.FBXImporter
             ApplyPostSetHumanPoseRightEndpointPositionReference();
             ApplyEditorHumanoidThumbBasePositionReference();
 #endif
+#if UNITY_EDITOR
             _lastRetargetStageAfterManualReferencesEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+#endif
             ClampTargetHipsLocalPositionSpike();
             ClampTargetThumbLocalRotations();
 #if UNITY_EDITOR
@@ -2466,7 +2519,9 @@ namespace Fbx2Vmd.FBXImporter
                 rootMotionCarrierPositionBeforePose,
                 targetAnimator.transform.position,
                 useBodyPositionXZRootMotion);
+#if UNITY_EDITOR
             _lastRetargetStageAfterRootRestoreEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+#endif
 
             // 월드 회전 동기화 (180도 문제 해결)
             if (ShouldPreserveFbxRootRotation && _hasPoseRootRotationCorrection && IsFinite(poseRootRotation))
@@ -2529,7 +2584,9 @@ namespace Fbx2Vmd.FBXImporter
 
             // 이동 적용
             targetAnimator.transform.position += targetDelta;
+#if UNITY_EDITOR
             _lastRetargetStageAfterRootDeltaEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+#endif
 
             // 위치 갱신
             _prevGhostPos = ghostAnimator.transform.position;
@@ -2539,14 +2596,16 @@ namespace Fbx2Vmd.FBXImporter
             {
                 ApplyRaycastGrounding();
             }
+#if UNITY_EDITOR
             _lastRetargetStageAfterGroundingEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+#endif
 
             RestoreTargetLocalScales();
 #if UNITY_EDITOR
             ApplyEditorHumanoidBipedIkFootPositionReference();
-#endif
             _lastRetargetStageAfterBipedIKEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
             CaptureRetargetEndpointStageAttributionDiagnostics();
+#endif
         }
 
         private void SmoothPoseOnVisualSpike(ref HumanPose pose)
@@ -3434,32 +3493,6 @@ namespace Fbx2Vmd.FBXImporter
             Vector2 beforeXz = new Vector2(beforePosition.x, beforePosition.z);
             Vector2 afterXz = new Vector2(afterPosition.x, afterPosition.z);
             return Vector2.Distance(beforeXz, afterXz);
-        }
-
-        private struct RetargetEndpointStageWorldPositions
-        {
-            public Vector3 LeftFoot;
-            public Vector3 LeftToes;
-            public Vector3 RightFoot;
-            public Vector3 RightToes;
-
-            public static RetargetEndpointStageWorldPositions Empty => new RetargetEndpointStageWorldPositions
-            {
-                LeftFoot = BuildNaNVector3(),
-                LeftToes = BuildNaNVector3(),
-                RightFoot = BuildNaNVector3(),
-                RightToes = BuildNaNVector3()
-            };
-        }
-
-        private static Vector3 BuildNaNVector3()
-        {
-            return new Vector3(float.NaN, float.NaN, float.NaN);
-        }
-
-        private static Quaternion BuildNaNQuaternion()
-        {
-            return new Quaternion(float.NaN, float.NaN, float.NaN, float.NaN);
         }
 
         private void ResetPostSetHumanPoseRightEndpointPositionDiagnostics()
@@ -5943,10 +5976,14 @@ namespace Fbx2Vmd.FBXImporter
             _lastEditorFootLocalRotationRightFootXzDelta = float.NaN;
             _lastEditorLowerBodySegmentDirectionLeftFootXzDelta = float.NaN;
             _lastEditorLowerBodySegmentDirectionRightFootXzDelta = float.NaN;
+#if UNITY_EDITOR
             ResetEditorLowerBodySegmentDirectionDetailedDiagnostics();
+#endif
             _lastEditorFootHipsAlignedResidualYawLeftFootXzDelta = float.NaN;
             _lastEditorFootHipsAlignedResidualYawRightFootXzDelta = float.NaN;
+#if UNITY_EDITOR
             ResetPostSetHumanPoseRightEndpointPositionDiagnostics();
+#endif
             _lastRetargetStageGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastSetHumanPosePreSolveGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastSetHumanPosePreSolveTargetEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
@@ -5957,7 +5994,9 @@ namespace Fbx2Vmd.FBXImporter
             _lastRetargetStageAfterGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastRetargetStageAfterBipedIKEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastRetargetStageAfterLateVisualGroundingEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+#if UNITY_EDITOR
             ResetRetargetEndpointStageAttributionDiagnostics();
+#endif
         }
 
         private void CapturePoseInputDiagnostics(HumanPose pose)
@@ -6050,11 +6089,14 @@ namespace Fbx2Vmd.FBXImporter
             _lastSetHumanPosePreSolveGhostEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastSetHumanPosePreSolveCurrentEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
             _lastSetHumanPosePreSolveTargetEndpointPositions = RetargetEndpointStageWorldPositions.Empty;
+#if UNITY_EDITOR
             ResetPreSetHumanPoseEndpointBodyPositionDiagnostics();
+#endif
         }
 
         private void CaptureSetHumanPosePreSolveBasisDiagnostics(HumanPose pose)
         {
+#if UNITY_EDITOR
             _lastSetHumanPosePreSolveGhostRootWorldPosition = ReadAnimatorRootWorldPosition(ghostAnimator);
             _lastSetHumanPosePreSolveGhostRootWorldRotation = ReadAnimatorRootWorldRotation(ghostAnimator);
             _lastSetHumanPosePreSolveTargetRootWorldPosition = ReadAnimatorRootWorldPosition(targetAnimator);
@@ -6065,6 +6107,7 @@ namespace Fbx2Vmd.FBXImporter
             _lastSetHumanPosePreSolveBodyRotation = IsFinite(pose.bodyRotation) ? pose.bodyRotation : BuildNaNQuaternion();
             _lastSetHumanPosePreSolveGhostEndpointPositions = CaptureEndpointStageWorldPositions(ghostAnimator);
             _lastSetHumanPosePreSolveTargetEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
+#endif
         }
 
         private void ResetSetHumanPoseExtendedInputDiagnostics()
@@ -6784,6 +6827,20 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _targetHandler.SetHumanPose(ref _appliedTargetPose);
             }
+        }
+
+        private void ApplyEditorHumanoidBoneLocalRotationReference()
+        {
+#if UNITY_EDITOR
+            if (!IsCompleteEditorHumanoidPoseReferenceActive)
+            {
+                return;
+            }
+
+            // 완전한 Native 기준 포즈는 HumanPose 재해석 과정에서 범위를 벗어난 muscle이 손실될 수 있음.
+            // 동일 모델의 Humanoid 본 회전만 복구하고 root 이동, 본 위치와 scale은 기존 경로가 소유함.
+            _editorHumanoidPoseReferencePlayer.TryApplyHumanoidBoneLocalRotationsTo(targetAnimator);
+#endif
         }
 
         private void ApplyAnatomicalArmGuard(ref HumanPose pose)
@@ -8615,8 +8672,10 @@ namespace Fbx2Vmd.FBXImporter
             {
                 if (targetAnimator != null)
                 {
+#if UNITY_EDITOR
                     _lastRetargetStageAfterLateVisualGroundingEndpointPositions = CaptureEndpointStageWorldPositions(targetAnimator);
                     CaptureRetargetEndpointStageAttributionDiagnostics();
+#endif
                 }
             }
         }

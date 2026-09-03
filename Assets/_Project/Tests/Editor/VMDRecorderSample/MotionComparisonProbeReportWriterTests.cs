@@ -5,11 +5,128 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.Editor.VMDRecorderSample
 {
     public class MotionComparisonProbeReportWriterTests
     {
+        [Test]
+        public void Given_EnabledRendererOutsideTarget_When_StartingProbe_Then_StopsWithIsolationFailure()
+        {
+            var target = new GameObject("캡처 대상");
+            var offender = new GameObject("외부 Renderer");
+            target.AddComponent<SkinnedMeshRenderer>();
+            offender.AddComponent<SkinnedMeshRenderer>();
+            target.AddComponent<Animator>();
+            var probe = target.AddComponent<MotionComparisonProbe>();
+
+            try
+            {
+                LogAssert.Expect(
+                    LogType.Error,
+                    new System.Text.RegularExpressions.Regex(
+                        "\\[MotionComparisonProbe\\] Editor smoke Renderer 격리 실패:.*외부 Renderer"));
+
+                probe.StartSampling("renderer-isolation-test");
+
+                Assert.That(probe.IsSampling, Is.False);
+                Assert.That(probe.HasRendererIsolationFailure, Is.True);
+                Assert.That(probe.RendererIsolationFailureMessage, Does.Contain(offender.name));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(offender);
+            }
+        }
+
+        [Test]
+        public void Given_InitializedRetargeterDriver_When_CapturingAnimationTime_Then_UsesCurrentDriverState()
+        {
+            var target = new GameObject("진단 시계 대상");
+            var retargeterObject = new GameObject("진단 시계 Retargeter");
+            var ghost = new GameObject("진단 시계 Ghost");
+            var clip = new AnimationClip
+            {
+                name = "diagnostic-clock",
+                legacy = true,
+                wrapMode = WrapMode.Once
+            };
+            clip.SetCurve(
+                string.Empty,
+                typeof(Transform),
+                "localPosition.x",
+                AnimationCurve.Linear(0f, 0f, 2f, 1f));
+
+            object driver = null;
+            try
+            {
+                Animator animator = target.AddComponent<Animator>();
+                var probe = target.AddComponent<MotionComparisonProbe>();
+                var retargeter = retargeterObject.AddComponent<Fbx2Vmd.FBXImporter.PoseSpaceRetargeter>();
+                retargeter.targetAnimator = animator;
+
+                FieldInfo driverField = typeof(Fbx2Vmd.FBXImporter.PoseSpaceRetargeter).GetField(
+                    "_legacyAnimationDriver",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(driverField, Is.Not.Null);
+                driver = driverField.GetValue(retargeter);
+                Assert.That(driver, Is.Not.Null);
+
+                MethodInfo initializeMethod = driver.GetType().GetMethod(
+                    "Initialize",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                MethodInfo prepareMethod = driver.GetType().GetMethod(
+                    "TryPrepareRecordingStartPose",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                Assert.That(initializeMethod, Is.Not.Null);
+                Assert.That(prepareMethod, Is.Not.Null);
+                initializeMethod.Invoke(driver, new object[] { ghost, null, clip });
+                Assert.That(
+                    (bool)prepareMethod.Invoke(driver, new object[] { 1.25f, 1f, true }),
+                    Is.True);
+
+                MethodInfo captureMethod = typeof(MotionComparisonProbe).GetMethod(
+                    "TryCaptureRetargeterAnimationTime",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(captureMethod, Is.Not.Null);
+                object[] arguments = { null };
+
+                bool captured = (bool)captureMethod.Invoke(probe, arguments);
+
+                Assert.That(captured, Is.True,
+                    "진단 probe가 분리된 LegacyAnimationDriver의 현재 시각을 읽어야 합니다.");
+                object metrics = arguments[0];
+                Assert.That(metrics, Is.Not.Null);
+                Type metricsType = metrics.GetType();
+                Assert.That(
+                    (float)metricsType.GetField("ClipTime", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(metrics),
+                    Is.EqualTo(1.25f).Within(0.0001f));
+                Assert.That(
+                    (float)metricsType.GetField("ClipLength", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(metrics),
+                    Is.EqualTo(2f).Within(0.0001f));
+                Assert.That(
+                    (string)metricsType.GetField("ClipName", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(metrics),
+                    Is.EqualTo("diagnostic-clock"));
+            }
+            finally
+            {
+                if (driver != null)
+                {
+                    MethodInfo disposeMethod = driver.GetType().GetMethod(
+                        "Dispose",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    disposeMethod?.Invoke(driver, null);
+                }
+
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(retargeterObject);
+                UnityEngine.Object.DestroyImmediate(ghost);
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
+        }
+
         [Test]
         public void Given_ScreenshotIndexRow_When_BuildCsvLine_Then_EscapesQuotesAndCommas()
         {

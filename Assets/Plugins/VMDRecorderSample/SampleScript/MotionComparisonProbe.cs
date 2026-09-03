@@ -9,7 +9,6 @@ using UnityEngine.SceneManagement;
 public class MotionComparisonProbe : MonoBehaviour
 {
     private static readonly float[] DefaultSampleTimes = { 0f, 3f, 6f, 10f, 13.2f, 20f, 30f, 60f, 120f };
-    private const string PoseSpaceRetargeterLegacyClipStateName = "__PoseSpaceRetargeter_GhostClip";
     private const int MinScreenshotWidth = 128;
     private const int MinScreenshotHeight = 128;
     private const int MaxScreenshotWidth = 7680;
@@ -135,6 +134,7 @@ public class MotionComparisonProbe : MonoBehaviour
     private int _rightHelperRelationshipFrameCount;
     private bool _leftHelperCoverageRequired;
     private bool _rightHelperCoverageRequired;
+    private string _rendererIsolationFailureMessage = "";
 
     public string LastCsvPath => _csvPath;
     public string LastScreenshotFolder => _screenshotFolder;
@@ -162,6 +162,8 @@ public class MotionComparisonProbe : MonoBehaviour
     public bool LeftThumbHelperCoverageSatisfied => !_leftHelperCoverageRequired || _leftHelperRelationshipFrameCount > 0;
     public bool RightThumbHelperCoverageSatisfied => !_rightHelperCoverageRequired || _rightHelperRelationshipFrameCount > 0;
     public bool HasResolvedThumbHelperCoverage => LeftThumbHelperCoverageSatisfied && RightThumbHelperCoverageSatisfied;
+    public bool HasRendererIsolationFailure => !string.IsNullOrEmpty(_rendererIsolationFailureMessage);
+    public string RendererIsolationFailureMessage => _rendererIsolationFailureMessage;
 
     public void SetFingerCloseups(bool enabled) => captureFingerCloseups = enabled;
     public void ResetSampleTimesToDefault() => sampleTimes = (float[])DefaultSampleTimes.Clone();
@@ -264,6 +266,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
     public void StartSampling(string labelOverride = "")
     {
+        _rendererIsolationFailureMessage = "";
         _animator = GetComponent<Animator>();
         _recorder = GetComponent<UnityHumanoidVMDRecorder>();
         _camera = Camera.main;
@@ -272,6 +275,14 @@ public class MotionComparisonProbe : MonoBehaviour
         if (_animator == null)
         {
             Debug.LogWarning(MotionComparisonProbeReportWriter.BuildAnimatorMissingWarningMessage());
+            return;
+        }
+
+        if (!TargetRendererIsolationValidator.TryValidateLoadedObjects(
+                gameObject,
+                out _rendererIsolationFailureMessage))
+        {
+            Debug.LogError($"[MotionComparisonProbe] {_rendererIsolationFailureMessage}");
             return;
         }
 
@@ -667,22 +678,31 @@ public class MotionComparisonProbe : MonoBehaviour
             return false;
         }
 
-        FieldInfo legacyAnimationField = retargeter.GetType().GetField("_legacyAnim", BindingFlags.Instance | BindingFlags.NonPublic);
-        Animation legacyAnimation = legacyAnimationField != null ? legacyAnimationField.GetValue(retargeter) as Animation : null;
-        if (legacyAnimation == null || legacyAnimation.clip == null)
+        Type retargeterType = retargeter.GetType();
+        PropertyInfo clipTimeProperty = retargeterType.GetProperty(
+            "CurrentLegacyAnimationTime",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        PropertyInfo clipLengthProperty = retargeterType.GetProperty(
+            "CurrentLegacyAnimationClipLength",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        PropertyInfo clipNameProperty = retargeterType.GetProperty(
+            "CurrentLegacyAnimationClipName",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (clipTimeProperty == null ||
+            clipLengthProperty == null ||
+            clipNameProperty == null ||
+            !(clipTimeProperty.GetValue(retargeter) is float clipTime) ||
+            !(clipLengthProperty.GetValue(retargeter) is float clipLength) ||
+            !(clipNameProperty.GetValue(retargeter) is string clipName))
         {
             return false;
         }
 
-        AnimationClip clip = legacyAnimation.clip;
-        AnimationState state = legacyAnimation[PoseSpaceRetargeterLegacyClipStateName] ?? legacyAnimation[clip.name];
-        float clipLength = state != null ? state.length : clip.length;
         if (clipLength <= 0f || float.IsNaN(clipLength) || float.IsInfinity(clipLength))
         {
             return false;
         }
 
-        float clipTime = state != null ? state.time : 0f;
         string source = MotionComparisonProbeReportWriter.BuildRetargeterLegacyAnimationTimeSourceLabel();
         if (clipTime <= 0.0001f && _recorder != null && _recorder.FrameNumber > 0)
         {
@@ -695,7 +715,7 @@ public class MotionComparisonProbe : MonoBehaviour
         metrics = new AnimationTimeMetrics
         {
             Source = source,
-            ClipName = clip.name,
+            ClipName = clipName,
             ClipTime = clipTime,
             ClipLength = clipLength,
             NormalizedTime = clipLength > 0f ? clipTime / clipLength : float.NaN

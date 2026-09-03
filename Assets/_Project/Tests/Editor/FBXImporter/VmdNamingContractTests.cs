@@ -150,7 +150,7 @@ namespace Tests.Editor.FBXImporter
                 }
             }
 
-            Assert.That(maxFrame, Is.EqualTo(6000), "Full Satisfaction VMD must match the 0..6000 MMD reference frame range.");
+            Assert.That(maxFrame, Is.EqualTo(6233), "Full Satisfaction VMD must match the complete 0..6233 clip range (6,234 frames).");
             int expectedFrameCount = checked((int)maxFrame + 1);
             Assert.That(centerKeyCount, Is.EqualTo(expectedFrameCount), "MMD center translation must be dense across the full recording.");
             Assert.That(centerFrames.Count, Is.EqualTo(expectedFrameCount), "MMD center translation must not contain skipped or duplicate frames.");

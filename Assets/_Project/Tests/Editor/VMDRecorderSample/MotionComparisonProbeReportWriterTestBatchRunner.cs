@@ -21,6 +21,9 @@ namespace Tests.Editor.VMDRecorderSample
             var results = new List<TestResultRecord>();
             var tests = new MotionComparisonProbeReportWriterTests();
 
+            RunTest(results, nameof(tests.Given_EnabledRendererOutsideTarget_When_StartingProbe_Then_StopsWithIsolationFailure),
+                tests.Given_EnabledRendererOutsideTarget_When_StartingProbe_Then_StopsWithIsolationFailure);
+
             RunTest(results, nameof(tests.Given_ScreenshotIndexRow_When_BuildCsvLine_Then_EscapesQuotesAndCommas),
                 tests.Given_ScreenshotIndexRow_When_BuildCsvLine_Then_EscapesQuotesAndCommas);
             RunTest(results, nameof(tests.Given_NewMotionComparisonProbe_When_InspectingFullBodyScreenshotPadding_Then_MatchesReferenceMp4LongShotFraming),

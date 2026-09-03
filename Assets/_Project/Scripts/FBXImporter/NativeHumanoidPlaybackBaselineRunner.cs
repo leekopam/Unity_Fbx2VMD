@@ -121,6 +121,7 @@ namespace Fbx2Vmd.FBXImporter
             Scene baselineScene = EditorSceneManager.NewScene(
                 NewSceneSetup.EmptyScene,
                 NewSceneMode.Additive);
+            GameObject target = null;
             if (originalActiveScene.IsValid() && originalActiveScene.isLoaded)
             {
                 SceneManager.SetActiveScene(originalActiveScene);
@@ -128,7 +129,7 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-                GameObject target = UnityEngine.Object.Instantiate(targetAsset);
+                target = UnityEngine.Object.Instantiate(targetAsset);
                 target.name = "Native Humanoid Baseline Target";
                 target.hideFlags = HideFlags.HideAndDontSave;
                 SceneManager.MoveGameObjectToScene(target, baselineScene);
@@ -257,6 +258,8 @@ namespace Fbx2Vmd.FBXImporter
             }
             finally
             {
+                DestroyTemporaryTarget(target);
+
                 if (baselineScene.IsValid() && baselineScene.isLoaded)
                 {
                     EditorSceneManager.CloseScene(baselineScene, removeScene: true);
@@ -266,6 +269,14 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     SceneManager.SetActiveScene(originalActiveScene);
                 }
+            }
+        }
+
+        private static void DestroyTemporaryTarget(GameObject target)
+        {
+            if (target != null)
+            {
+                UnityEngine.Object.DestroyImmediate(target);
             }
         }
 

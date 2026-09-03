@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -13,6 +14,13 @@ namespace Tests.Editor.FBXImporter
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const float TransformTolerance = 0.0001f;
+        private static readonly HumanBodyBones[] ArmBones =
+        {
+            HumanBodyBones.LeftUpperArm,
+            HumanBodyBones.LeftLowerArm,
+            HumanBodyBones.RightUpperArm,
+            HumanBodyBones.RightLowerArm
+        };
 
         [OneTimeSetUp]
         public void EnsureHumanoidClipImport()
@@ -192,6 +200,369 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_RareHumanoidArmFrames_When_ApplyingEditorReferenceRotations_Then_MatchesNativeContinuityWithoutDimensionChanges()
+        {
+            GameObject target = InstantiateTarget();
+            GameObject baselineTarget = InstantiateTarget();
+            object referencePlayer = CreateEditorReferencePlayer();
+            object baselinePlayer = CreatePlayer();
+
+            try
+            {
+                Animator targetAnimator = RequireHumanoidAnimator(target);
+                Animator baselineAnimator = RequireHumanoidAnimator(baselineTarget);
+                AnimationClip clip = LoadHumanoidClip();
+                int[][] criticalFramePairs =
+                {
+                    new[] { 1164, 1165 },
+                    new[] { 1283, 1284 },
+                    new[] { 2887, 2888 },
+                    new[] { 2934, 2935 },
+                    new[] { 3357, 3358 }
+                };
+
+                Invoke(referencePlayer, "Initialize", targetAnimator, clip);
+                Invoke(baselinePlayer, "Initialize", baselineAnimator, clip);
+
+                MethodInfo applyRotationsMethod = referencePlayer.GetType().GetMethod(
+                    "TryApplyHumanoidBoneLocalRotationsTo",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                Assert.That(applyRotationsMethod, Is.Not.Null,
+                    "Native reference가 HumanPose 재해석 뒤 Humanoid 본 회전을 직접 복구해야 합니다.");
+
+                using (var targetHandler = new HumanPoseHandler(
+                    targetAnimator.avatar,
+                    targetAnimator.transform))
+                {
+                    foreach (int[] framePair in criticalFramePairs)
+                    {
+                        Dictionary<HumanBodyBones, Vector3> previousTargetDirections = null;
+                        Dictionary<HumanBodyBones, Vector3> previousBaselineDirections = null;
+
+                        foreach (int frame in framePair)
+                        {
+                            float sampleTime = frame / 30f;
+                            HumanPose referencePose = SampleReferencePose(referencePlayer, sampleTime);
+                            Invoke(baselinePlayer, "EvaluateAt", sampleTime);
+
+                            targetHandler.SetHumanPose(ref referencePose);
+                            Dictionary<HumanBodyBones, BoneSnapshot> beforeApply =
+                                CaptureHumanoidBoneSnapshots(targetAnimator);
+
+                            bool applied = (bool)applyRotationsMethod.Invoke(
+                                referencePlayer,
+                                new object[] { targetAnimator });
+
+                            Assert.That(applied, Is.True,
+                                $"frame {frame}에서 Native Humanoid 본 회전 복구가 적용되어야 합니다.");
+                            Dictionary<HumanBodyBones, BoneSnapshot> afterApply =
+                                CaptureHumanoidBoneSnapshots(targetAnimator);
+                            Dictionary<HumanBodyBones, BoneSnapshot> baseline =
+                                CaptureHumanoidBoneSnapshots(baselineAnimator);
+                            AssertBoneDimensionsUnchanged(beforeApply, afterApply);
+
+                            foreach (HumanBodyBones bone in ArmBones)
+                            {
+                                Assert.That(afterApply.ContainsKey(bone), Is.True);
+                                Assert.That(baseline.ContainsKey(bone), Is.True);
+                                Assert.That(
+                                    Quaternion.Angle(
+                                        afterApply[bone].LocalRotation,
+                                        baseline[bone].LocalRotation),
+                                    Is.LessThanOrEqualTo(0.01f),
+                                    $"frame {frame}의 {bone} 회전은 Native 기준과 같아야 합니다.");
+                            }
+
+                            Dictionary<HumanBodyBones, Vector3> currentTargetDirections =
+                                CaptureArmSegmentDirections(targetAnimator);
+                            Dictionary<HumanBodyBones, Vector3> currentBaselineDirections =
+                                CaptureArmSegmentDirections(baselineAnimator);
+                            if (previousTargetDirections != null)
+                            {
+                                foreach (HumanBodyBones bone in ArmBones)
+                                {
+                                    float targetStep = Vector3.Angle(
+                                        previousTargetDirections[bone],
+                                        currentTargetDirections[bone]);
+                                    float baselineStep = Vector3.Angle(
+                                        previousBaselineDirections[bone],
+                                        currentBaselineDirections[bone]);
+                                    Assert.That(targetStep, Is.EqualTo(baselineStep).Within(0.02f),
+                                        $"frame {framePair[0]}->{framePair[1]}의 {bone} 분절 방향 변화량은 Native 기준과 같아야 합니다.");
+                                    Assert.That(targetStep, Is.LessThan(90f),
+                                        $"frame {framePair[0]}->{framePair[1]}에서 {bone}이 한 프레임에 반전되면 안 됩니다.");
+                                }
+                            }
+
+                            previousTargetDirections = currentTargetDirections;
+                            previousBaselineDirections = currentBaselineDirections;
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                DisposePlayer(referencePlayer);
+                DisposePlayer(baselinePlayer);
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(baselineTarget);
+            }
+        }
+
+        [Test]
+        public void Given_CompleteEditorReferenceFrame_When_RunningArmDeformationGuard_Then_PreservesNativeArmRotations()
+        {
+            GameObject target = InstantiateTarget();
+            var retargeterObject = new GameObject("Editor reference arm guard test");
+            object referencePlayer = CreateEditorReferencePlayer();
+
+            try
+            {
+                Animator targetAnimator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                Invoke(referencePlayer, "Initialize", targetAnimator, clip);
+
+                HumanPose referencePose = SampleReferencePose(referencePlayer, 1164 / 30f);
+                using (var targetHandler = new HumanPoseHandler(
+                    targetAnimator.avatar,
+                    targetAnimator.transform))
+                {
+                    targetHandler.SetHumanPose(ref referencePose);
+                }
+
+                Invoke(
+                    referencePlayer,
+                    "TryApplyHumanoidBoneLocalRotationsTo",
+                    targetAnimator);
+
+                var retargeter = retargeterObject.AddComponent<Fbx2Vmd.FBXImporter.PoseSpaceRetargeter>();
+                retargeter.targetAnimator = targetAnimator;
+                WriteField(retargeter, "_useCompleteEditorHumanoidMuscleReference", true);
+                WriteField(retargeter, "_hasEditorHumanoidPoseReferenceForFrame", true);
+                WriteField(retargeter, "_editorHumanoidPoseReferencePlayer", referencePlayer);
+                Assert.That(retargeter.IsCompleteEditorHumanoidPoseReferenceActive, Is.True);
+
+                var guard = target.AddComponent<Fbx2Vmd.FBXImporter.HumanoidArmDeformationGuard>();
+                guard.Configure(new Fbx2Vmd.FBXImporter.ArmDeformationSettings(
+                    clampMusclesToHumanRange: false,
+                    enableAnatomicalArmGuard: true,
+                    stretchMuscleLimit: 0f,
+                    upperArmTwistMuscleLimit: 0.75f,
+                    lowerArmTwistMuscleLimit: 0.65f,
+                    lockHumanoidBonePositions: true,
+                    logCorrections: false,
+                    clampArmStretchMuscles: false,
+                    lockLimbChildLocalPositions: true,
+                    lockLimbChildLocalRotations: false));
+
+                MethodInfo bindMethod = guard.GetType().GetMethod(
+                    "BindRetargeter",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                Assert.That(bindMethod, Is.Not.Null,
+                    "대상 arm guard가 현재 세션 retargeter를 명시적으로 연결받아야 합니다.");
+                bindMethod.Invoke(guard, new object[] { retargeter });
+
+                Dictionary<HumanBodyBones, BoneSnapshot> beforeGuard =
+                    CaptureHumanoidBoneSnapshots(targetAnimator);
+                Invoke(guard, "LateUpdate");
+                Dictionary<HumanBodyBones, BoneSnapshot> afterGuard =
+                    CaptureHumanoidBoneSnapshots(targetAnimator);
+
+                foreach (HumanBodyBones bone in ArmBones)
+                {
+                    Assert.That(
+                        Quaternion.Angle(
+                            beforeGuard[bone].LocalRotation,
+                            afterGuard[bone].LocalRotation),
+                        Is.LessThanOrEqualTo(0.01f),
+                        $"완전한 Editor Native 기준이 적용된 프레임에서 {bone} 회전을 guard가 다시 바꾸면 안 됩니다.");
+                }
+
+                AssertBoneDimensionsUnchanged(beforeGuard, afterGuard);
+            }
+            finally
+            {
+                DisposePlayer(referencePlayer);
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(retargeterObject);
+            }
+        }
+
+        [Test]
+        public void Given_CompleteEditorReferenceFrame_When_RunningArmSwingLimitGuard_Then_PreservesNativeArmRotations()
+        {
+            GameObject target = InstantiateTarget();
+            var retargeterObject = new GameObject("Editor reference arm swing guard test");
+            object referencePlayer = CreateEditorReferencePlayer();
+
+            try
+            {
+                Animator targetAnimator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                Invoke(referencePlayer, "Initialize", targetAnimator, clip);
+
+                HumanPose referencePose = SampleReferencePose(referencePlayer, 2935 / 30f);
+                using (var targetHandler = new HumanPoseHandler(
+                    targetAnimator.avatar,
+                    targetAnimator.transform))
+                {
+                    targetHandler.SetHumanPose(ref referencePose);
+                }
+
+                Invoke(
+                    referencePlayer,
+                    "TryApplyHumanoidBoneLocalRotationsTo",
+                    targetAnimator);
+
+                var retargeter = retargeterObject.AddComponent<Fbx2Vmd.FBXImporter.PoseSpaceRetargeter>();
+                retargeter.targetAnimator = targetAnimator;
+                WriteField(retargeter, "_useCompleteEditorHumanoidMuscleReference", true);
+                WriteField(retargeter, "_hasEditorHumanoidPoseReferenceForFrame", true);
+                WriteField(retargeter, "_editorHumanoidPoseReferencePlayer", referencePlayer);
+                Assert.That(retargeter.IsCompleteEditorHumanoidPoseReferenceActive, Is.True);
+
+                var guard = target.AddComponent<Fbx2Vmd.FBXImporter.HumanoidArmSwingLimitGuard>();
+                guard.Configure(
+                    targetAnimator,
+                    enabled: true,
+                    weight: 0.6f,
+                    upperArmDownDot: 0.75f,
+                    handHorizontalRatio: 0.05f,
+                    handBelowShoulderRatio: 1.5f,
+                    reachLimitWeight: 1f,
+                    handHorizontalReachRatio: 0.06f,
+                    reachMaxHandBelowShoulderRatio: 0f,
+                    reachMinElbowAngleAfterApply: 0f,
+                    raisedReachLimitWeight: 0f,
+                    raisedMinUpperArmDownDot: 0.55f,
+                    raisedMaxHandBelowShoulderRatio: 0.05f,
+                    raisedMaxHandHorizontalReachRatio: 0f,
+                    logCorrectionMessages: false);
+
+                Dictionary<HumanBodyBones, BoneSnapshot> beforeUnboundGuard =
+                    CaptureHumanoidBoneSnapshots(targetAnimator);
+                Invoke(guard, "LateUpdate");
+                Dictionary<HumanBodyBones, BoneSnapshot> afterUnboundGuard =
+                    CaptureHumanoidBoneSnapshots(targetAnimator);
+                Assert.That(guard.LastLeftHorizontalReachApplied, Is.EqualTo(1),
+                    "실제 실패 프레임과 씬 설정에서 수평 도달 보정이 재현되어야 합니다.");
+                Assert.That(
+                    Quaternion.Angle(
+                        beforeUnboundGuard[HumanBodyBones.LeftLowerArm].LocalRotation,
+                        afterUnboundGuard[HumanBodyBones.LeftLowerArm].LocalRotation),
+                    Is.GreaterThan(1f),
+                    "회귀 테스트는 기존 보정이 Native 왼쪽 전완 회전을 덮어쓰는 상황을 재현해야 합니다.");
+
+                using (var targetHandler = new HumanPoseHandler(
+                    targetAnimator.avatar,
+                    targetAnimator.transform))
+                {
+                    targetHandler.SetHumanPose(ref referencePose);
+                }
+
+                Invoke(
+                    referencePlayer,
+                    "TryApplyHumanoidBoneLocalRotationsTo",
+                    targetAnimator);
+
+                MethodInfo bindMethod = guard.GetType().GetMethod(
+                    "BindRetargeter",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                Assert.That(bindMethod, Is.Not.Null,
+                    "팔 스윙 guard가 현재 세션 retargeter를 명시적으로 연결받아야 합니다.");
+                bindMethod.Invoke(guard, new object[] { retargeter });
+
+                Dictionary<HumanBodyBones, BoneSnapshot> beforeBoundGuard =
+                    CaptureHumanoidBoneSnapshots(targetAnimator);
+                Invoke(guard, "LateUpdate");
+                Dictionary<HumanBodyBones, BoneSnapshot> afterBoundGuard =
+                    CaptureHumanoidBoneSnapshots(targetAnimator);
+
+                Assert.That(guard.LastLeftApplied, Is.Zero);
+                foreach (HumanBodyBones bone in ArmBones)
+                {
+                    Assert.That(
+                        Quaternion.Angle(
+                            beforeBoundGuard[bone].LocalRotation,
+                            afterBoundGuard[bone].LocalRotation),
+                        Is.LessThanOrEqualTo(0.01f),
+                        $"완전한 Editor Native 기준이 적용된 프레임에서 {bone} 회전을 swing guard가 다시 바꾸면 안 됩니다.");
+                }
+            }
+            finally
+            {
+                DisposePlayer(referencePlayer);
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(retargeterObject);
+            }
+        }
+
+        [Test]
+        public void Given_VisibleTargetRenderers_When_InitializingEditorReference_Then_DisablesReferenceRenderers()
+        {
+            GameObject target = InstantiateTarget();
+            object referencePlayer = CreateEditorReferencePlayer();
+
+            try
+            {
+                Invoke(
+                    referencePlayer,
+                    "Initialize",
+                    RequireHumanoidAnimator(target),
+                    LoadHumanoidClip());
+
+                GameObject referenceInstance = ReadField<GameObject>(
+                    referencePlayer,
+                    "_referenceInstance");
+                Renderer[] renderers =
+                    referenceInstance.GetComponentsInChildren<Renderer>(true);
+
+                Assert.That(renderers, Is.Not.Empty,
+                    "Editor pose reference가 실제 Renderer를 가진 모델로 검증되어야 합니다.");
+                Assert.That(renderers.All(renderer => !renderer.enabled), Is.True,
+                    "숨김 pose reference의 Renderer는 캡처에 섞이지 않도록 모두 비활성화되어야 합니다.");
+            }
+            finally
+            {
+                DisposePlayer(referencePlayer);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_NativeBaselineTemporaryTarget_When_CleaningUp_Then_DestroysObjectImmediately()
+        {
+            var target = new GameObject("Native Humanoid Baseline Target");
+
+            try
+            {
+                Type runnerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.NativeHumanoidPlaybackBaselineRunner",
+                    throwOnError: false);
+                Assert.That(runnerType, Is.Not.Null,
+                    "Native Humanoid 기준선 runner가 필요합니다.");
+
+                MethodInfo cleanupMethod = runnerType.GetMethod(
+                    "DestroyTemporaryTarget",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                Assert.That(cleanupMethod, Is.Not.Null,
+                    "기준선 임시 대상을 명시적으로 정리하는 메서드가 필요합니다.");
+
+                cleanupMethod.Invoke(null, new object[] { target });
+
+                Assert.That(target == null, Is.True,
+                    "기준선 임시 대상은 실행 종료 시 즉시 파괴되어야 합니다.");
+            }
+            finally
+            {
+                if (target != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(target);
+                }
+            }
+        }
+
         private static object CreatePlayer()
         {
             Type playerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
@@ -256,6 +627,24 @@ namespace Tests.Editor.FBXImporter
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(property, Is.Not.Null, $"{propertyName} 속성이 필요합니다.");
             return (T)property.GetValue(target);
+        }
+
+        private static T ReadField<T>(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{fieldName} 필드가 필요합니다.");
+            return (T)field.GetValue(target);
+        }
+
+        private static void WriteField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{fieldName} 필드가 필요합니다.");
+            field.SetValue(target, value);
         }
 
         private static void DisposePlayer(object player)
@@ -356,6 +745,47 @@ namespace Tests.Editor.FBXImporter
             }
 
             return count;
+        }
+
+        private static Dictionary<HumanBodyBones, Vector3> CaptureArmSegmentDirections(
+            Animator animator)
+        {
+            var directions = new Dictionary<HumanBodyBones, Vector3>
+            {
+                [HumanBodyBones.LeftUpperArm] = ResolveSegmentDirection(
+                    animator,
+                    HumanBodyBones.LeftUpperArm,
+                    HumanBodyBones.LeftLowerArm),
+                [HumanBodyBones.LeftLowerArm] = ResolveSegmentDirection(
+                    animator,
+                    HumanBodyBones.LeftLowerArm,
+                    HumanBodyBones.LeftHand),
+                [HumanBodyBones.RightUpperArm] = ResolveSegmentDirection(
+                    animator,
+                    HumanBodyBones.RightUpperArm,
+                    HumanBodyBones.RightLowerArm),
+                [HumanBodyBones.RightLowerArm] = ResolveSegmentDirection(
+                    animator,
+                    HumanBodyBones.RightLowerArm,
+                    HumanBodyBones.RightHand)
+            };
+
+            return directions;
+        }
+
+        private static Vector3 ResolveSegmentDirection(
+            Animator animator,
+            HumanBodyBones startBone,
+            HumanBodyBones endBone)
+        {
+            Transform start = animator.GetBoneTransform(startBone);
+            Transform end = animator.GetBoneTransform(endBone);
+            Assert.That(start, Is.Not.Null);
+            Assert.That(end, Is.Not.Null);
+
+            Vector3 direction = end.position - start.position;
+            Assert.That(direction.sqrMagnitude, Is.GreaterThan(0.000001f));
+            return direction.normalized;
         }
 
         private static void AssertBoneDimensionsUnchanged(

@@ -1536,6 +1536,14 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+            if (!TargetRendererIsolationValidator.TryValidateLoadedObjects(
+                    targetCharacter,
+                    out string rendererIsolationFailure))
+            {
+                Debug.LogError($"[FBXImport] {rendererIsolationFailure}");
+                return false;
+            }
+
             float safeDuration = Mathf.Max(0.1f, durationSeconds);
             int safeTargetFrameCount = targetFrameCount > 0
                 ? targetFrameCount
@@ -1546,6 +1554,7 @@ namespace Fbx2Vmd.FBXImporter
             enableDiagnosticFingerCloseups = enableFingerCloseups;
             useDeterministicCaptureFramerateForDiagnostics = useDeterministicCaptureFramerate;
             startDelay = Mathf.Clamp(diagnosticStartDelay, 0f, 10f);
+            showGhostModel = false;
 
             float[] clonedSampleTimes =
                 FBXEditorDiagnosticPlanner.CloneSampleTimes(sampleTimesOverride);
@@ -1615,7 +1624,8 @@ namespace Fbx2Vmd.FBXImporter
                     enableRecordingDiagnostics,
                     enableDiagnosticFingerCloseups,
                     useDeterministicCaptureFramerateForDiagnostics,
-                    startDelay));
+                    startDelay,
+                    showGhostModel));
         }
 
         internal void ClearEditorSmokeOverride()
@@ -1628,6 +1638,7 @@ namespace Fbx2Vmd.FBXImporter
                 useDeterministicCaptureFramerateForDiagnostics =
                     settingsSnapshot.UseDeterministicCaptureFramerateForDiagnostics;
                 startDelay = settingsSnapshot.StartDelay;
+                showGhostModel = settingsSnapshot.ShowGhostModel;
             }
         }
 
@@ -1812,6 +1823,16 @@ namespace Fbx2Vmd.FBXImporter
             string sourceFilePath)
         {
             _activeRetargeter = retargeter;
+            HumanoidArmDeformationGuard armDeformationGuard =
+                targetObject != null
+                    ? targetObject.GetComponent<HumanoidArmDeformationGuard>()
+                    : null;
+            armDeformationGuard?.BindRetargeter(retargeter);
+            HumanoidArmSwingLimitGuard armSwingLimitGuard =
+                targetObject != null
+                    ? targetObject.GetComponent<HumanoidArmSwingLimitGuard>()
+                    : null;
+            armSwingLimitGuard?.BindRetargeter(retargeter);
 #if UNITY_EDITOR
             bool thumbGuardApplied =
 #endif
@@ -1881,8 +1902,19 @@ namespace Fbx2Vmd.FBXImporter
         {
 #if UNITY_EDITOR
             if (!EditorDiagnosticSession.IsRecordingOverrideActive ||
-                !result.Success ||
-                !failEditorSmokeOnThumbRisk)
+                !result.Success)
+            {
+                return result;
+            }
+
+            if (probe != null && probe.HasRendererIsolationFailure)
+            {
+                return BuildEditorSmokeFailureResult(
+                    result,
+                    probe.RendererIsolationFailureMessage);
+            }
+
+            if (!failEditorSmokeOnThumbRisk)
             {
                 return result;
             }
