@@ -117,6 +117,37 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void PipelineAwake_WhenIdlePoseGuardIsMissing_AddsAndInitializesGuard()
+        {
+            var pipelineObject = new GameObject("Pipeline Idle Pose Guard Test");
+            var targetObject = new GameObject("Pipeline Idle Pose Target");
+
+            try
+            {
+                FBXVmdPipeline fileManager = pipelineObject.AddComponent<FBXVmdPipeline>();
+                fileManager.targetCharacter = targetObject;
+
+                MethodInfo awakeMethod = typeof(FBXVmdPipeline).GetMethod(
+                    "Awake",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(awakeMethod, Is.Not.Null, "FBXVmdPipeline must keep its Unity Awake lifecycle entry point.");
+
+                awakeMethod.Invoke(fileManager, null);
+
+                TargetIdlePoseGuard idlePoseGuard = pipelineObject.GetComponent<TargetIdlePoseGuard>();
+                Assert.That(idlePoseGuard, Is.Not.Null,
+                    "FBXVmdPipeline must provide its idle pose guard even when the scene omitted the component.");
+                Assert.That(idlePoseGuard.TryApply(isProcessing: false, hasActiveRetargeter: false), Is.True,
+                    "The runtime-provided idle pose guard must be initialized for the assigned target.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
         public void MainImportScenes_DefaultGhostDisplayOff()
         {
             AssertSceneGhostDisplayOff(MainAutoScenePath, "Main_Auto");
