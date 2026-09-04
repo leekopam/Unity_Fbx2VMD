@@ -20,6 +20,7 @@ namespace Fbx2Vmd.FBXImporter
             new NativeHumanoidAnimationPlayer();
         private readonly HumanoidPoseFrameEditor _poseFrameEditor =
             new HumanoidPoseFrameEditor();
+        private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
             HumanoidMotionPlaybackState.Empty;
@@ -80,9 +81,9 @@ namespace Fbx2Vmd.FBXImporter
             if (CurrentTimeSeconds >= ClipLengthSeconds)
             {
                 CurrentTimeSeconds = 0f;
-                _player.EvaluateAt(CurrentTimeSeconds);
             }
 
+            EvaluateCurrentPoseWithCorrection();
             State = HumanoidMotionPlaybackState.Playing;
             return true;
         }
@@ -106,7 +107,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             CurrentTimeSeconds = 0f;
-            _player.EvaluateAt(CurrentTimeSeconds);
+            EvaluateCurrentPoseWithCorrection();
             State = HumanoidMotionPlaybackState.Ready;
             return true;
         }
@@ -120,7 +121,7 @@ namespace Fbx2Vmd.FBXImporter
 
             ValidateTime(timeSeconds, nameof(timeSeconds));
             CurrentTimeSeconds = Mathf.Clamp(timeSeconds, 0f, ClipLengthSeconds);
-            _player.EvaluateAt(CurrentTimeSeconds);
+            EvaluateCurrentPoseWithCorrection();
             return true;
         }
 
@@ -151,9 +152,8 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            // 기존 clip 자세를 다시 평가한 뒤 delta를 한 번만 더해 누적 오차를 방지함.
-            _player.EvaluateAt(CurrentTimeSeconds);
-            return _poseFrameEditor.TryApply(document, CurrentFrameIndex);
+            _poseCorrectionDocument = document;
+            return EvaluateCurrentPoseWithCorrection();
         }
 
         internal bool RestoreCurrentPose()
@@ -178,7 +178,7 @@ namespace Fbx2Vmd.FBXImporter
             CurrentTimeSeconds = Mathf.Min(
                 CurrentTimeSeconds + deltaTimeSeconds,
                 ClipLengthSeconds);
-            _player.EvaluateAt(CurrentTimeSeconds);
+            EvaluateCurrentPoseWithCorrection();
 
             if (CurrentTimeSeconds >= ClipLengthSeconds)
             {
@@ -193,7 +193,20 @@ namespace Fbx2Vmd.FBXImporter
             CurrentTimeSeconds = 0f;
             ClipLengthSeconds = 0f;
             ClipFrameRate = 0f;
+            _poseCorrectionDocument = null;
             State = HumanoidMotionPlaybackState.Empty;
+        }
+
+        private bool EvaluateCurrentPoseWithCorrection()
+        {
+            // 원본 clip을 먼저 평가한 뒤 현재 프레임 delta를 한 번만 적용함.
+            _player.EvaluateAt(CurrentTimeSeconds);
+            int frameIndex = CurrentFrameIndex;
+            return _poseCorrectionDocument == null ||
+                !_poseCorrectionDocument.HasFrameCorrection(frameIndex) ||
+                _poseFrameEditor.TryApply(
+                    _poseCorrectionDocument,
+                    frameIndex);
         }
 
         private static void ValidateTime(float timeSeconds, string parameterName)
