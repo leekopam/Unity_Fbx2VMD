@@ -1,13 +1,26 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
     public class HumanoidPoseFrameEditingTests
     {
+        private const string TargetAssetPath =
+            "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
+        private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const float ValueTolerance = 0.0001f;
+
+        [OneTimeSetUp]
+        public void EnsureHumanoidClipImport()
+        {
+            Type configuratorType = RequireType(
+                "Fbx2Vmd.FBXImporter.EditorHumanoidClipImportConfigurator");
+            InvokeStatic(configuratorType, "EnsureHumanoid", ClipAssetPath);
+        }
 
         [Test]
         public void Given_ClipTiming_When_ConvertingFrameAndTime_Then_UsesStableRoundedFrame()
@@ -92,6 +105,210 @@ namespace Tests.Editor.FBXImporter
                 (bool)Invoke(document, "TrySetMuscleDelta", 1, HumanTrait.MuscleName[0], float.NaN),
                 Is.False);
             Assert.That((int)ReadProperty(document, "FrameCount"), Is.Zero);
+        }
+
+        [Test]
+        public void Given_FrameMuscleDelta_When_ApplyingAndRemoving_Then_ChangesOnlyRequestedFrame()
+        {
+            object document = CreateDocument("motion", 30f);
+            string muscleName = HumanTrait.MuscleName[0];
+            float[] muscles = new float[HumanTrait.MuscleCount];
+            muscles[0] = 0.9f;
+
+            Assert.That(
+                (bool)Invoke(document, "TrySetMuscleDelta", 45, muscleName, 0.2f),
+                Is.True);
+            Assert.That(
+                (bool)Invoke(document, "TryApplyMuscleDeltas", 44, muscles),
+                Is.False);
+            Assert.That(muscles[0], Is.EqualTo(0.9f).Within(ValueTolerance));
+            Assert.That(
+                (bool)Invoke(document, "TryApplyMuscleDeltas", 45, muscles),
+                Is.True);
+            Assert.That(muscles[0], Is.EqualTo(1f).Within(ValueTolerance),
+                "보정된 Humanoid muscle 값은 유효 범위 안에 있어야 합니다.");
+            Assert.That((bool)Invoke(document, "TryRemoveFrame", 45), Is.True);
+            Assert.That((int)ReadProperty(document, "FrameCount"), Is.Zero);
+        }
+
+        [Test]
+        public void Given_SelectedFrame_When_ApplyingSameDeltaTwiceAndRestoring_Then_DoesNotAccumulateOrChangeGeometry()
+        {
+            GameObject target = InstantiateTarget();
+            var pipelineObject = new GameObject("Humanoid Pose Frame Editing Pipeline");
+            pipelineObject.SetActive(false);
+            var pipeline = pipelineObject.AddComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
+            object controller = CreatePlaybackController();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "Prepare", animator, LoadHumanoidClip());
+                SetField(pipeline, "_humanoidMotionPlaybackController", controller);
+                SetField(pipeline, "_preparedMotionName", "motion");
+                Assert.That(pipeline.TrySeekImportedMotionFrame(30), Is.True);
+                Assert.That(pipeline.TryCaptureImportedMotionPose(out HumanPose originalPose),
+                    Is.True);
+
+                int muscleIndex = FindEditableMuscleIndex(originalPose.muscles);
+                string muscleName = HumanTrait.MuscleName[muscleIndex];
+                float delta = originalPose.muscles[muscleIndex] >= 0f ? -0.1f : 0.1f;
+                Transform[] bones = CaptureHumanoidBones(animator);
+                Vector3[] originalLocalPositions = bones
+                    .Select(bone => bone.localPosition)
+                    .ToArray();
+                Vector3[] originalLocalScales = bones
+                    .Select(bone => bone.localScale)
+                    .ToArray();
+
+                Assert.That(
+                    pipeline.TryApplyImportedMotionMuscleDelta(muscleName, delta),
+                    Is.True);
+                Assert.That(pipeline.TryCaptureImportedMotionPose(out HumanPose firstPose),
+                    Is.True);
+                AssertGeometryUnchanged(
+                    bones,
+                    originalLocalPositions,
+                    originalLocalScales);
+
+                Assert.That(
+                    pipeline.TryApplyImportedMotionMuscleDelta(muscleName, delta),
+                    Is.True);
+                Assert.That(pipeline.TryCaptureImportedMotionPose(out HumanPose secondPose),
+                    Is.True);
+                float expectedValue = Mathf.Clamp(
+                    originalPose.muscles[muscleIndex] + delta,
+                    -1f,
+                    1f);
+                Assert.That(firstPose.muscles[muscleIndex],
+                    Is.EqualTo(expectedValue).Within(ValueTolerance));
+                Assert.That(secondPose.muscles[muscleIndex],
+                    Is.EqualTo(firstPose.muscles[muscleIndex]).Within(ValueTolerance),
+                    "같은 delta를 다시 미리보기해도 누적 적용되면 안 됩니다.");
+                Assert.That(pipeline.ImportedMotionPoseCorrectionFrameCount, Is.EqualTo(1));
+
+                Assert.That(pipeline.TryRestoreImportedMotionPoseFrame(), Is.True);
+                Assert.That(pipeline.TryCaptureImportedMotionPose(out HumanPose restoredPose),
+                    Is.True);
+                Assert.That(restoredPose.muscles[muscleIndex],
+                    Is.EqualTo(originalPose.muscles[muscleIndex]).Within(ValueTolerance));
+                Assert.That(pipeline.ImportedMotionPoseCorrectionFrameCount, Is.Zero);
+                AssertGeometryUnchanged(
+                    bones,
+                    originalLocalPositions,
+                    originalLocalScales);
+            }
+            finally
+            {
+                SetField(pipeline, "_humanoidMotionPlaybackController", null);
+                Invoke(controller, "Dispose");
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        private static object CreateDocument(string motionName, float frameRate)
+        {
+            Type documentType = RequireType(
+                "Fbx2Vmd.FBXImporter.HumanoidPoseCorrectionDocument");
+            return Activator.CreateInstance(
+                documentType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { motionName, frameRate },
+                culture: null);
+        }
+
+        private static object CreatePlaybackController()
+        {
+            return Activator.CreateInstance(
+                RequireType("Fbx2Vmd.FBXImporter.HumanoidMotionPlaybackController"),
+                nonPublic: true);
+        }
+
+        private static GameObject InstantiateTarget()
+        {
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(TargetAssetPath);
+            Assert.That(source, Is.Not.Null, $"기준 모델을 찾을 수 없습니다: {TargetAssetPath}");
+            GameObject target = UnityEngine.Object.Instantiate(source);
+            target.name = "Humanoid Pose Frame Editing Target";
+            target.hideFlags = HideFlags.HideAndDontSave;
+            target.SetActive(true);
+            return target;
+        }
+
+        private static Animator RequireHumanoidAnimator(GameObject target)
+        {
+            Animator animator = target.GetComponentInChildren<Animator>(true);
+            Assert.That(animator, Is.Not.Null);
+            Assert.That(animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman,
+                Is.True);
+            return animator;
+        }
+
+        private static AnimationClip LoadHumanoidClip()
+        {
+            AnimationClip clip = AssetDatabase
+                .LoadAllAssetsAtPath(ClipAssetPath)
+                .OfType<AnimationClip>()
+                .FirstOrDefault(candidate =>
+                    !candidate.name.StartsWith("__", StringComparison.Ordinal) &&
+                    candidate.humanMotion);
+            Assert.That(clip, Is.Not.Null, $"Humanoid 클립을 찾을 수 없습니다: {ClipAssetPath}");
+            return clip;
+        }
+
+        private static int FindEditableMuscleIndex(float[] muscles)
+        {
+            Assert.That(muscles, Is.Not.Null);
+            for (int index = 0; index < muscles.Length; index++)
+            {
+                if (!float.IsNaN(muscles[index]) &&
+                    !float.IsInfinity(muscles[index]) &&
+                    Mathf.Abs(muscles[index]) < 0.75f)
+                {
+                    return index;
+                }
+            }
+
+            Assert.Fail("안전하게 delta를 적용할 Humanoid muscle을 찾지 못했습니다.");
+            return -1;
+        }
+
+        private static Transform[] CaptureHumanoidBones(Animator animator)
+        {
+            return Enumerable.Range(0, (int)HumanBodyBones.LastBone)
+                .Select(index => animator.GetBoneTransform((HumanBodyBones)index))
+                .Where(bone => bone != null)
+                .Distinct()
+                .ToArray();
+        }
+
+        private static void AssertGeometryUnchanged(
+            Transform[] bones,
+            Vector3[] expectedLocalPositions,
+            Vector3[] expectedLocalScales)
+        {
+            for (int index = 0; index < bones.Length; index++)
+            {
+                Assert.That(
+                    Vector3.Distance(bones[index].localPosition, expectedLocalPositions[index]),
+                    Is.LessThanOrEqualTo(ValueTolerance),
+                    $"{bones[index].name} localPosition이 pose 수정으로 바뀌면 안 됩니다.");
+                Assert.That(
+                    Vector3.Distance(bones[index].localScale, expectedLocalScales[index]),
+                    Is.LessThanOrEqualTo(ValueTolerance),
+                    $"{bones[index].name} localScale이 pose 수정으로 바뀌면 안 됩니다.");
+            }
+        }
+
+        private static void SetField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{fieldName} 필드가 필요합니다.");
+            field.SetValue(target, value);
         }
 
         private static Type RequireType(string fullName)
