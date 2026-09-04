@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using System.IO;
@@ -397,6 +396,12 @@ namespace Fbx2Vmd.FBXImporter
             Debug.Log($"  - 현재 Import Animation: {importer.importAnimation}");
             Debug.Log($"  - 현재 Optimize Bones: {importer.optimizeBones}");
 
+            importer = ResetExistingHumanoidDescription(importer, relativePath);
+            if (importer == null)
+            {
+                return;
+            }
+
             Debug.Log("[3단계] Rig 설정 적용 중...");
             importer.importAnimation = true;
             importer.animationCompression = UnityEditor.ModelImporterAnimationCompression.Off;
@@ -466,29 +471,6 @@ namespace Fbx2Vmd.FBXImporter
 
                     description.human = humanBones.ToArray();
 
-                    List<SkeletonBone> skeletonBones = new List<SkeletonBone>();
-                    IEnumerable<Transform> allTransforms = UnityEditor.AssetDatabase.LoadAllAssetsAtPath(relativePath)
-                        .OfType<Transform>();
-                    foreach (Transform transform in allTransforms)
-                    {
-                        if (transform != null)
-                        {
-                            skeletonBones.Add(new SkeletonBone
-                            {
-                                name = transform.name,
-                                position = transform.localPosition,
-                                rotation = transform.localRotation,
-                                scale = transform.localScale
-                            });
-                        }
-                    }
-
-                    if (skeletonBones.Count > 0)
-                    {
-                        description.skeleton = skeletonBones.ToArray();
-                        Debug.Log($"[3단계] Skeleton 배열 설정: {skeletonBones.Count}개 본");
-                    }
-
                     importer.humanDescription = description;
                     Debug.Log($"[3단계] Bone Mapping 적용: {humanBones.Count}개 본");
                 }
@@ -532,6 +514,35 @@ namespace Fbx2Vmd.FBXImporter
 
             Debug.Log("[3단계] 최종 Reimport 완료");
             Debug.Log("===========================================");
+        }
+
+        private static UnityEditor.ModelImporter ResetExistingHumanoidDescription(
+            UnityEditor.ModelImporter importer,
+            string relativePath)
+        {
+            HumanDescription description = importer.humanDescription;
+            bool hasHumanMapping = description.human != null && description.human.Length > 0;
+            bool hasSkeleton = description.skeleton != null && description.skeleton.Length > 0;
+            if (!hasHumanMapping && !hasSkeleton)
+            {
+                return importer;
+            }
+
+            // 이전 자동 임포트가 부모 없는 skeleton을 저장했을 수 있으므로
+            // FBX 원본 계층에서 description을 다시 생성한 뒤 Human mapping을 적용함.
+            Debug.Log("[2단계] 기존 Humanoid description 초기화 중...");
+            importer.animationType = UnityEditor.ModelImporterAnimationType.Generic;
+            importer.humanDescription = new HumanDescription();
+            importer.SaveAndReimport();
+
+            UnityEditor.ModelImporter resetImporter =
+                UnityEditor.AssetImporter.GetAtPath(relativePath) as UnityEditor.ModelImporter;
+            if (resetImporter == null)
+            {
+                Debug.LogError($"[2단계 실패] Humanoid description 초기화 후 ModelImporter를 찾을 수 없습니다: {relativePath}");
+            }
+
+            return resetImporter;
         }
 
         private static Dictionary<string, string> ParseBoneMappingFile(string path)
