@@ -38,6 +38,12 @@ namespace Fbx2Vmd.FBXImporter
 
         internal int FrameCount => Frames.Count;
 
+        internal bool HasFrameCorrection(int frameIndex)
+        {
+            return frameIndex >= 0 && Frames.Exists(
+                candidate => candidate.FrameIndex == frameIndex);
+        }
+
         internal bool TrySetMuscleDelta(
             int frameIndex,
             string muscleName,

@@ -119,6 +119,12 @@ namespace Tests.Editor.FBXImporter
                 (bool)Invoke(document, "TrySetMuscleDelta", 45, muscleName, 0.2f),
                 Is.True);
             Assert.That(
+                (bool)Invoke(document, "HasFrameCorrection", 44),
+                Is.False);
+            Assert.That(
+                (bool)Invoke(document, "HasFrameCorrection", 45),
+                Is.True);
+            Assert.That(
                 (bool)Invoke(document, "TryApplyMuscleDeltas", 44, muscles),
                 Is.False);
             Assert.That(muscles[0], Is.EqualTo(0.9f).Within(ValueTolerance));
@@ -128,6 +134,9 @@ namespace Tests.Editor.FBXImporter
             Assert.That(muscles[0], Is.EqualTo(1f).Within(ValueTolerance),
                 "보정된 Humanoid muscle 값은 유효 범위 안에 있어야 합니다.");
             Assert.That((bool)Invoke(document, "TryRemoveFrame", 45), Is.True);
+            Assert.That(
+                (bool)Invoke(document, "HasFrameCorrection", 45),
+                Is.False);
             Assert.That((int)ReadProperty(document, "FrameCount"), Is.Zero);
         }
 
@@ -203,6 +212,159 @@ namespace Tests.Editor.FBXImporter
                 SetField(pipeline, "_humanoidMotionPlaybackController", null);
                 Invoke(controller, "Dispose");
                 UnityEngine.Object.DestroyImmediate(pipelineObject);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_FrameCorrections_When_PlayingToNextFrame_Then_AppliesCurrentFrameOnce()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreatePlaybackController();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "Prepare", animator, LoadHumanoidClip());
+                float frameRate = (float)ReadProperty(controller, "ClipFrameRate");
+                int correctedFrameIndex = Math.Min(
+                    31,
+                    (int)ReadProperty(controller, "LastFrameIndex"));
+                int previousFrameIndex = Math.Max(0, correctedFrameIndex - 1);
+
+                Assert.That(
+                    (bool)Invoke(controller, "SeekFrame", correctedFrameIndex),
+                    Is.True);
+                object[] originalPoseArguments = { null };
+                Assert.That(
+                    (bool)Invoke(controller, "TryCaptureCurrentPose", originalPoseArguments),
+                    Is.True);
+                HumanPose originalPose = (HumanPose)originalPoseArguments[0];
+                int muscleIndex = FindEditableMuscleIndex(originalPose.muscles);
+                string muscleName = HumanTrait.MuscleName[muscleIndex];
+                float delta = originalPose.muscles[muscleIndex] >= 0f ? -0.1f : 0.1f;
+                Transform[] bones = CaptureHumanoidBones(animator);
+                Vector3[] originalLocalPositions = bones
+                    .Select(bone => bone.localPosition)
+                    .ToArray();
+                Vector3[] originalLocalScales = bones
+                    .Select(bone => bone.localScale)
+                    .ToArray();
+                object document = CreateDocument("motion", frameRate);
+
+                Assert.That(
+                    (bool)Invoke(
+                        document,
+                        "TrySetMuscleDelta",
+                        previousFrameIndex,
+                        muscleName,
+                        delta),
+                    Is.True);
+                Assert.That(
+                    (bool)Invoke(
+                        document,
+                        "TrySetMuscleDelta",
+                        correctedFrameIndex,
+                        muscleName,
+                        delta),
+                    Is.True);
+                Assert.That(
+                    (bool)Invoke(controller, "SeekFrame", previousFrameIndex),
+                    Is.True);
+                Assert.That(
+                    (bool)Invoke(controller, "TryPreviewPoseCorrection", document),
+                    Is.True);
+                Assert.That((bool)Invoke(controller, "Play"), Is.True);
+
+                Invoke(controller, "Tick", 1f / frameRate);
+                object[] correctedPoseArguments = { null };
+                Assert.That(
+                    (bool)Invoke(controller, "TryCaptureCurrentPose", correctedPoseArguments),
+                    Is.True);
+                HumanPose correctedPose = (HumanPose)correctedPoseArguments[0];
+                float expectedValue = Mathf.Clamp(
+                    originalPose.muscles[muscleIndex] + delta,
+                    -1f,
+                    1f);
+
+                Assert.That(
+                    (int)ReadProperty(controller, "CurrentFrameIndex"),
+                    Is.EqualTo(correctedFrameIndex));
+                Assert.That(
+                    correctedPose.muscles[muscleIndex],
+                    Is.EqualTo(expectedValue).Within(ValueTolerance),
+                    "연속 재생도 현재 프레임의 저장된 muscle delta를 적용해야 합니다.");
+
+                Invoke(controller, "Tick", 0f);
+                object[] repeatedPoseArguments = { null };
+                Assert.That(
+                    (bool)Invoke(controller, "TryCaptureCurrentPose", repeatedPoseArguments),
+                    Is.True);
+                HumanPose repeatedPose = (HumanPose)repeatedPoseArguments[0];
+                Assert.That(
+                    repeatedPose.muscles[muscleIndex],
+                    Is.EqualTo(expectedValue).Within(ValueTolerance),
+                    "동일 프레임 재평가에서 muscle delta가 누적되면 안 됩니다.");
+                AssertGeometryUnchanged(
+                    bones,
+                    originalLocalPositions,
+                    originalLocalScales);
+            }
+            finally
+            {
+                Invoke(controller, "Dispose");
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_FirstFrameCorrection_When_StoppingAndPlaying_Then_AppliesBeforeFirstTick()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreatePlaybackController();
+
+            try
+            {
+                Invoke(controller, "Prepare", RequireHumanoidAnimator(target), LoadHumanoidClip());
+                object[] originalPoseArguments = { null };
+                Assert.That(
+                    (bool)Invoke(controller, "TryCaptureCurrentPose", originalPoseArguments),
+                    Is.True);
+                HumanPose originalPose = (HumanPose)originalPoseArguments[0];
+                int muscleIndex = FindEditableMuscleIndex(originalPose.muscles);
+                string muscleName = HumanTrait.MuscleName[muscleIndex];
+                float delta = originalPose.muscles[muscleIndex] >= 0f ? -0.1f : 0.1f;
+                object document = CreateDocument(
+                    "motion",
+                    (float)ReadProperty(controller, "ClipFrameRate"));
+
+                Assert.That(
+                    (bool)Invoke(document, "TrySetMuscleDelta", 0, muscleName, delta),
+                    Is.True);
+                Assert.That(
+                    (bool)Invoke(controller, "TryPreviewPoseCorrection", document),
+                    Is.True);
+                Assert.That((bool)Invoke(controller, "Stop"), Is.True);
+                Assert.That((bool)Invoke(controller, "Play"), Is.True);
+
+                object[] correctedPoseArguments = { null };
+                Assert.That(
+                    (bool)Invoke(controller, "TryCaptureCurrentPose", correctedPoseArguments),
+                    Is.True);
+                HumanPose correctedPose = (HumanPose)correctedPoseArguments[0];
+                float expectedValue = Mathf.Clamp(
+                    originalPose.muscles[muscleIndex] + delta,
+                    -1f,
+                    1f);
+
+                Assert.That(
+                    correctedPose.muscles[muscleIndex],
+                    Is.EqualTo(expectedValue).Within(ValueTolerance),
+                    "녹화 시작의 Stop→Play 경계에서도 0프레임 보정이 빠지면 안 됩니다.");
+            }
+            finally
+            {
+                Invoke(controller, "Dispose");
                 UnityEngine.Object.DestroyImmediate(target);
             }
         }
