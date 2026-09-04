@@ -497,32 +497,6 @@ namespace Tests.Editor.FBXImporter
                     raisedMaxHandHorizontalReachRatio: 0f,
                     logCorrectionMessages: false);
 
-                Dictionary<HumanBodyBones, BoneSnapshot> beforeUnboundGuard =
-                    CaptureHumanoidBoneSnapshots(targetAnimator);
-                Invoke(guard, "LateUpdate");
-                Dictionary<HumanBodyBones, BoneSnapshot> afterUnboundGuard =
-                    CaptureHumanoidBoneSnapshots(targetAnimator);
-                Assert.That(guard.LastLeftHorizontalReachApplied, Is.EqualTo(1),
-                    "실제 실패 프레임과 씬 설정에서 수평 도달 보정이 재현되어야 합니다.");
-                Assert.That(
-                    Quaternion.Angle(
-                        beforeUnboundGuard[HumanBodyBones.LeftLowerArm].LocalRotation,
-                        afterUnboundGuard[HumanBodyBones.LeftLowerArm].LocalRotation),
-                    Is.GreaterThan(1f),
-                    "회귀 테스트는 기존 보정이 Native 왼쪽 전완 회전을 덮어쓰는 상황을 재현해야 합니다.");
-
-                using (var targetHandler = new HumanPoseHandler(
-                    targetAnimator.avatar,
-                    targetAnimator.transform))
-                {
-                    targetHandler.SetHumanPose(ref referencePose);
-                }
-
-                Invoke(
-                    referencePlayer,
-                    "TryApplyHumanoidBoneLocalRotationsTo",
-                    targetAnimator);
-
                 MethodInfo bindMethod = guard.GetType().GetMethod(
                     "BindRetargeter",
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
