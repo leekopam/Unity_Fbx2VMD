@@ -28,6 +28,7 @@ namespace Tests.Editor.Settings
             try
             {
                 Button template = CreateButtonTemplate(canvasObject.transform);
+                Button legacyRecordButton = CreateLegacyRecordButton(canvasObject.transform);
                 int importInvocationCount = 0;
                 template.onClick.AddListener(() => importInvocationCount++);
                 FBXVmdPipeline pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
@@ -48,11 +49,17 @@ namespace Tests.Editor.Settings
                 Button playPauseButton = FindButton(
                     canvasObject,
                     "FBX_PlayPause_Button");
+                Button recordButton = FindButton(canvasObject, "FBX_Record_Button");
                 Button stopButton = FindButton(canvasObject, "FBX_Stop_Button");
                 Assert.That(ReadLabel(playPauseButton), Is.EqualTo("재생"));
+                Assert.That(ReadLabel(recordButton), Is.EqualTo("녹화"));
                 Assert.That(ReadLabel(stopButton), Is.EqualTo("정지"));
+                Assert.That(recordButton.interactable, Is.False);
+                Assert.That(legacyRecordButton.gameObject.activeSelf, Is.False,
+                    "에디터 직접 재생에서는 기존 VMD 녹화 버튼이 중복 노출되면 안 됩니다.");
 
                 playPauseButton.onClick.Invoke();
+                recordButton.onClick.Invoke();
                 stopButton.onClick.Invoke();
                 Assert.That(importInvocationCount, Is.Zero,
                     "복제한 재생 제어가 FBX 임포트 콜백을 함께 실행하면 안 됩니다.");
@@ -126,6 +133,20 @@ namespace Tests.Editor.Settings
             var labelObject = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
             labelObject.transform.SetParent(buttonObject.transform, false);
             labelObject.GetComponent<TextMeshProUGUI>().text = "FBX 임포트";
+            return buttonObject.GetComponent<Button>();
+        }
+
+        private static Button CreateLegacyRecordButton(Transform parent)
+        {
+            var buttonObject = new GameObject(
+                "MMD_Record_Button",
+                typeof(RectTransform),
+                typeof(Image),
+                typeof(Button));
+            buttonObject.transform.SetParent(parent, false);
+            var labelObject = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+            labelObject.transform.SetParent(buttonObject.transform, false);
+            labelObject.GetComponent<TextMeshProUGUI>().text = "MMD_Record";
             return buttonObject.GetComponent<Button>();
         }
 
