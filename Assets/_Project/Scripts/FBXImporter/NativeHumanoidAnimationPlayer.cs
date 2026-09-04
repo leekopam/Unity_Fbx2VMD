@@ -17,6 +17,7 @@ namespace Fbx2Vmd.FBXImporter
         private Animator _targetAnimator;
         private bool _originalApplyRootMotion;
         private AnimatorCullingMode _originalCullingMode;
+        private RuntimeAnimatorController _originalAnimatorController;
 
         internal bool IsInitialized => _graph.IsValid();
 
@@ -36,11 +37,13 @@ namespace Fbx2Vmd.FBXImporter
             _targetAnimator = targetAnimator;
             _originalApplyRootMotion = targetAnimator.applyRootMotion;
             _originalCullingMode = targetAnimator.cullingMode;
+            _originalAnimatorController = targetAnimator.runtimeAnimatorController;
 
             try
             {
                 targetAnimator.applyRootMotion = false;
                 targetAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                targetAnimator.runtimeAnimatorController = null;
 
                 _graph = PlayableGraph.Create(nameof(NativeHumanoidAnimationPlayer));
                 _graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
@@ -93,10 +96,12 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _targetAnimator.applyRootMotion = _originalApplyRootMotion;
                 _targetAnimator.cullingMode = _originalCullingMode;
+                _targetAnimator.runtimeAnimatorController = _originalAnimatorController;
             }
 
             _clipPlayable = default;
             _targetAnimator = null;
+            _originalAnimatorController = null;
         }
 
         private static void ValidateTarget(Animator targetAnimator)
