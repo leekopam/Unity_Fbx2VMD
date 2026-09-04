@@ -26,6 +26,19 @@ namespace Fbx2Vmd.FBXImporter
 
         internal float ClipLengthSeconds { get; private set; }
 
+        internal float ClipFrameRate { get; private set; }
+
+        internal int CurrentFrameIndex =>
+            HumanoidMotionFrameCalculator.CalculateFrameIndex(
+                CurrentTimeSeconds,
+                ClipLengthSeconds,
+                ClipFrameRate);
+
+        internal int LastFrameIndex =>
+            HumanoidMotionFrameCalculator.CalculateLastFrameIndex(
+                ClipLengthSeconds,
+                ClipFrameRate);
+
         internal bool IsPrepared => State != HumanoidMotionPlaybackState.Empty;
 
         internal void Prepare(Animator targetAnimator, AnimationClip clip)
@@ -41,6 +54,8 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _player.Initialize(targetAnimator, clip);
                 ClipLengthSeconds = Mathf.Max(0f, clip.length);
+                ClipFrameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(
+                    clip.frameRate);
                 CurrentTimeSeconds = 0f;
                 _player.EvaluateAt(CurrentTimeSeconds);
                 State = HumanoidMotionPlaybackState.Ready;
@@ -106,6 +121,19 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal bool SeekFrame(int frameIndex)
+        {
+            if (!IsPrepared)
+            {
+                return false;
+            }
+
+            return Seek(HumanoidMotionFrameCalculator.CalculateTimeSeconds(
+                frameIndex,
+                ClipLengthSeconds,
+                ClipFrameRate));
+        }
+
         internal void Tick(float deltaTimeSeconds)
         {
             ValidateTime(deltaTimeSeconds, nameof(deltaTimeSeconds));
@@ -130,6 +158,7 @@ namespace Fbx2Vmd.FBXImporter
             _player.Dispose();
             CurrentTimeSeconds = 0f;
             ClipLengthSeconds = 0f;
+            ClipFrameRate = 0f;
             State = HumanoidMotionPlaybackState.Empty;
         }
 
