@@ -55,6 +55,11 @@ namespace Tests.Editor.Settings
                 Assert.That(ReadLabel(playPauseButton), Is.EqualTo("재생"));
                 Assert.That(ReadLabel(recordButton), Is.EqualTo("녹화"));
                 Assert.That(ReadLabel(stopButton), Is.EqualTo("정지"));
+                AssertReadableKoreanLabel(playPauseButton.GetComponentInChildren<TextMeshProUGUI>(true));
+                AssertReadableKoreanLabel(recordButton.GetComponentInChildren<TextMeshProUGUI>(true));
+                AssertReadableKoreanLabel(stopButton.GetComponentInChildren<TextMeshProUGUI>(true));
+                AssertReadableKoreanLabel(
+                    timelineSlider.GetComponentInChildren<TextMeshProUGUI>(true));
                 Assert.That(recordButton.interactable, Is.False);
                 Assert.That(timelineSlider.wholeNumbers, Is.True);
                 Assert.That(timelineSlider.interactable, Is.False);
@@ -114,6 +119,8 @@ namespace Tests.Editor.Settings
 
                 ensureMethod.Invoke(null, new object[] { pipeline, template });
                 Assert.That(timelineSlider.interactable, Is.True);
+                AssertTimelineLabelSupportsLongText(
+                    timelineSlider.GetComponentInChildren<TextMeshProUGUI>(true));
                 int requestedFrameIndex = Math.Min(30, pipeline.ImportedMotionLastFrameIndex);
                 timelineSlider.value = requestedFrameIndex;
                 Assert.That(pipeline.ImportedMotionCurrentFrameIndex,
@@ -184,6 +191,38 @@ namespace Tests.Editor.Settings
             TMP_Text label = button.GetComponentInChildren<TMP_Text>(true);
             Assert.That(label, Is.Not.Null, $"{button.name}에 TMP 라벨이 필요합니다.");
             return label.text;
+        }
+
+        private static void AssertReadableKoreanLabel(TextMeshProUGUI label)
+        {
+            Assert.That(label, Is.Not.Null, "한글 표시를 검증할 TMP 라벨이 필요합니다.");
+            Type fallbackType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.Settings.KoreanUiTextFallback",
+                throwOnError: true);
+            MethodInfo isReadableMethod = fallbackType.GetMethod(
+                "IsReadable",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(isReadableMethod, Is.Not.Null);
+            Assert.That(
+                (bool)isReadableMethod.Invoke(null, new object[] { label }),
+                Is.True,
+                $"{label.transform.parent.name}의 한글 라벨이 실제 글리프로 표시되어야 합니다.");
+        }
+
+        private static void AssertTimelineLabelSupportsLongText(TextMeshProUGUI label)
+        {
+            Assert.That(label, Is.Not.Null, "타임라인 TMP 라벨이 필요합니다.");
+            if (label.enabled)
+            {
+                Assert.That(label.enableAutoSizing, Is.True,
+                    "긴 타임라인 문구는 표시 영역에 맞춰 자동 축소되어야 합니다.");
+                return;
+            }
+
+            Text fallbackText = label.GetComponentInChildren<Text>(true);
+            Assert.That(fallbackText, Is.Not.Null, "한글 대체 라벨이 필요합니다.");
+            Assert.That(fallbackText.resizeTextForBestFit, Is.True,
+                "한글 대체 타임라인 문구도 표시 영역에 맞춰 자동 축소되어야 합니다.");
         }
 
         private static GameObject InstantiateTarget()
