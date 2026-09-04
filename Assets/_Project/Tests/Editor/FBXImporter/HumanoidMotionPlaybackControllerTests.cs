@@ -141,6 +141,35 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_PreparedClip_When_SeekingFrame_Then_EvaluatesExactFrameWithoutPlaying()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+
+            try
+            {
+                Invoke(controller, "Prepare", RequireHumanoidAnimator(target), LoadHumanoidClip());
+                float frameRate = ReadProperty<float>(controller, "ClipFrameRate");
+                int lastFrameIndex = ReadProperty<int>(controller, "LastFrameIndex");
+                int requestedFrameIndex = Math.Min(30, lastFrameIndex);
+
+                Assert.That(frameRate, Is.GreaterThan(0f));
+                Assert.That((bool)Invoke(controller, "SeekFrame", requestedFrameIndex), Is.True);
+                Assert.That(ReadProperty<int>(controller, "CurrentFrameIndex"),
+                    Is.EqualTo(requestedFrameIndex));
+                Assert.That(ReadProperty<float>(controller, "CurrentTimeSeconds"),
+                    Is.EqualTo(requestedFrameIndex / frameRate).Within(TimeTolerance));
+                Assert.That(ReadProperty(controller, "State").ToString(), Is.EqualTo("Ready"),
+                    "프레임 이동만으로 모션이 자동 재생되면 안 됩니다.");
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
         private static object CreateController()
         {
             Type controllerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(

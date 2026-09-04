@@ -51,10 +51,13 @@ namespace Tests.Editor.Settings
                     "FBX_PlayPause_Button");
                 Button recordButton = FindButton(canvasObject, "FBX_Record_Button");
                 Button stopButton = FindButton(canvasObject, "FBX_Stop_Button");
+                Slider timelineSlider = FindSlider(canvasObject, "FBX_Timeline_Slider");
                 Assert.That(ReadLabel(playPauseButton), Is.EqualTo("재생"));
                 Assert.That(ReadLabel(recordButton), Is.EqualTo("녹화"));
                 Assert.That(ReadLabel(stopButton), Is.EqualTo("정지"));
                 Assert.That(recordButton.interactable, Is.False);
+                Assert.That(timelineSlider.wholeNumbers, Is.True);
+                Assert.That(timelineSlider.interactable, Is.False);
                 Assert.That(legacyRecordButton.gameObject.activeSelf, Is.False,
                     "에디터 직접 재생에서는 기존 VMD 녹화 버튼이 중복 노출되면 안 됩니다.");
 
@@ -106,9 +109,17 @@ namespace Tests.Editor.Settings
                 Button playPauseButton = FindButton(
                     canvasObject,
                     "FBX_PlayPause_Button");
+                Slider timelineSlider = FindSlider(canvasObject, "FBX_Timeline_Slider");
                 playPauseButton.onClick = new Button.ButtonClickedEvent();
 
                 ensureMethod.Invoke(null, new object[] { pipeline, template });
+                Assert.That(timelineSlider.interactable, Is.True);
+                int requestedFrameIndex = Math.Min(30, pipeline.ImportedMotionLastFrameIndex);
+                timelineSlider.value = requestedFrameIndex;
+                Assert.That(pipeline.ImportedMotionCurrentFrameIndex,
+                    Is.EqualTo(requestedFrameIndex));
+                Assert.That(pipeline.IsImportedMotionPlaying, Is.False,
+                    "프레임 탐색은 자세 검토를 위해 정지 상태를 유지해야 합니다.");
                 playPauseButton.onClick.Invoke();
 
                 Assert.That(pipeline.IsImportedMotionPlaying, Is.True,
@@ -157,6 +168,15 @@ namespace Tests.Editor.Settings
                 .FirstOrDefault(candidate => candidate.name == name);
             Assert.That(button, Is.Not.Null, $"{name} 버튼이 필요합니다.");
             return button;
+        }
+
+        private static Slider FindSlider(GameObject root, string name)
+        {
+            Slider slider = root
+                .GetComponentsInChildren<Slider>(true)
+                .FirstOrDefault(candidate => candidate.name == name);
+            Assert.That(slider, Is.Not.Null, $"{name} 슬라이더가 필요합니다.");
+            return slider;
         }
 
         private static string ReadLabel(Button button)

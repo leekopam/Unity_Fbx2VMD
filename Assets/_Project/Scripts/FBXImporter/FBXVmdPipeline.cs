@@ -1458,6 +1458,14 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidMotionPlaybackState.Playing;
         public bool IsImportedMotionRecording =>
             _humanoidMotionRecordingController?.IsRecording ?? false;
+        public int ImportedMotionCurrentFrameIndex =>
+            _humanoidMotionPlaybackController?.CurrentFrameIndex ?? 0;
+        public int ImportedMotionLastFrameIndex =>
+            _humanoidMotionPlaybackController?.LastFrameIndex ?? 0;
+        public float ImportedMotionCurrentTimeSeconds =>
+            _humanoidMotionPlaybackController?.CurrentTimeSeconds ?? 0f;
+        public float ImportedMotionClipLengthSeconds =>
+            _humanoidMotionPlaybackController?.ClipLengthSeconds ?? 0f;
 #if UNITY_EDITOR
         internal bool ShouldUseEditorHumanoidPlaybackSession =>
             Application.isPlaying && !EditorDiagnosticSession.IsRecordingOverrideActive;
@@ -1896,6 +1904,32 @@ namespace Fbx2Vmd.FBXImporter
                     ? FBXSessionState.PreviewPlaying
                     : FBXSessionState.PreviewPaused,
                 $"FBX 모션 위치: {_humanoidMotionPlaybackController.CurrentTimeSeconds:F2}초",
+                ResolveHumanoidPlaybackProgress());
+            return true;
+        }
+
+        public bool TrySeekImportedMotionFrame(int frameIndex)
+        {
+            if (IsImportedMotionRecording ||
+                _humanoidMotionPlaybackController == null)
+            {
+                return false;
+            }
+
+            if (_humanoidMotionPlaybackController.State ==
+                HumanoidMotionPlaybackState.Playing)
+            {
+                _humanoidMotionPlaybackController.Pause();
+            }
+
+            if (!_humanoidMotionPlaybackController.SeekFrame(frameIndex))
+            {
+                return false;
+            }
+
+            SetSessionState(
+                FBXSessionState.PreviewPaused,
+                $"FBX 모션 프레임: {_humanoidMotionPlaybackController.CurrentFrameIndex}",
                 ResolveHumanoidPlaybackProgress());
             return true;
         }
