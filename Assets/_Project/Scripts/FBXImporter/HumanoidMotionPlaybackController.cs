@@ -18,6 +18,8 @@ namespace Fbx2Vmd.FBXImporter
     {
         private readonly NativeHumanoidAnimationPlayer _player =
             new NativeHumanoidAnimationPlayer();
+        private readonly HumanoidPoseFrameEditor _poseFrameEditor =
+            new HumanoidPoseFrameEditor();
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
             HumanoidMotionPlaybackState.Empty;
@@ -58,6 +60,7 @@ namespace Fbx2Vmd.FBXImporter
                     clip.frameRate);
                 CurrentTimeSeconds = 0f;
                 _player.EvaluateAt(CurrentTimeSeconds);
+                _poseFrameEditor.Initialize(targetAnimator);
                 State = HumanoidMotionPlaybackState.Ready;
             }
             catch
@@ -134,6 +137,36 @@ namespace Fbx2Vmd.FBXImporter
                 ClipFrameRate));
         }
 
+        internal bool TryCaptureCurrentPose(out HumanPose pose)
+        {
+            pose = default;
+            return IsPrepared && _poseFrameEditor.TryCapture(out pose);
+        }
+
+        internal bool TryPreviewPoseCorrection(
+            HumanoidPoseCorrectionDocument document)
+        {
+            if (!IsPrepared || document == null)
+            {
+                return false;
+            }
+
+            // 기존 clip 자세를 다시 평가한 뒤 delta를 한 번만 더해 누적 오차를 방지함.
+            _player.EvaluateAt(CurrentTimeSeconds);
+            return _poseFrameEditor.TryApply(document, CurrentFrameIndex);
+        }
+
+        internal bool RestoreCurrentPose()
+        {
+            if (!IsPrepared)
+            {
+                return false;
+            }
+
+            _player.EvaluateAt(CurrentTimeSeconds);
+            return true;
+        }
+
         internal void Tick(float deltaTimeSeconds)
         {
             ValidateTime(deltaTimeSeconds, nameof(deltaTimeSeconds));
@@ -155,6 +188,7 @@ namespace Fbx2Vmd.FBXImporter
 
         public void Dispose()
         {
+            _poseFrameEditor.Dispose();
             _player.Dispose();
             CurrentTimeSeconds = 0f;
             ClipLengthSeconds = 0f;

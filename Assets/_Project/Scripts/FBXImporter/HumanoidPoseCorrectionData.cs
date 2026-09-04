@@ -88,6 +88,38 @@ namespace Fbx2Vmd.FBXImporter
                 out delta);
         }
 
+        internal bool TryApplyMuscleDeltas(int frameIndex, float[] muscles)
+        {
+            if (frameIndex < 0 ||
+                muscles == null ||
+                muscles.Length < HumanTrait.MuscleCount)
+            {
+                return false;
+            }
+
+            HumanoidPoseCorrectionFrame frame = Frames.Find(
+                candidate => candidate.FrameIndex == frameIndex);
+            return frame != null && frame.TryApplyMuscleDeltas(muscles);
+        }
+
+        internal bool TryRemoveFrame(int frameIndex)
+        {
+            if (frameIndex < 0)
+            {
+                return false;
+            }
+
+            int frameListIndex = Frames.FindIndex(
+                candidate => candidate.FrameIndex == frameIndex);
+            if (frameListIndex < 0)
+            {
+                return false;
+            }
+
+            Frames.RemoveAt(frameListIndex);
+            return true;
+        }
+
         private List<HumanoidPoseCorrectionFrame> Frames =>
             _frames ??= new List<HumanoidPoseCorrectionFrame>();
 
@@ -153,8 +185,51 @@ namespace Fbx2Vmd.FBXImporter
             return false;
         }
 
+        internal bool TryApplyMuscleDeltas(float[] muscles)
+        {
+            if (muscles == null ||
+                muscles.Length < HumanTrait.MuscleCount ||
+                MuscleCorrections.Count == 0)
+            {
+                return false;
+            }
+
+            var muscleIndices = new int[MuscleCorrections.Count];
+            for (int index = 0; index < MuscleCorrections.Count; index++)
+            {
+                HumanoidMuscleCorrection correction = MuscleCorrections[index];
+                int muscleIndex = RetargetingMuscleReferencePolicy.FindHumanMuscleIndex(
+                    correction.MuscleName);
+                if (muscleIndex < 0 ||
+                    muscleIndex >= HumanTrait.MuscleCount ||
+                    !IsFinite(correction.Delta) ||
+                    !IsFinite(muscles[muscleIndex]))
+                {
+                    return false;
+                }
+
+                muscleIndices[index] = muscleIndex;
+            }
+
+            for (int index = 0; index < MuscleCorrections.Count; index++)
+            {
+                int muscleIndex = muscleIndices[index];
+                muscles[muscleIndex] = Mathf.Clamp(
+                    muscles[muscleIndex] + MuscleCorrections[index].Delta,
+                    -1f,
+                    1f);
+            }
+
+            return true;
+        }
+
         private List<HumanoidMuscleCorrection> MuscleCorrections =>
             _muscleCorrections ??= new List<HumanoidMuscleCorrection>();
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
     }
 
     [Serializable]
