@@ -99,6 +99,13 @@ namespace Fbx2Vmd.Settings
             fallbackText.text = label.text;
             fallbackText.font = legacyFont;
             fallbackText.fontSize = Mathf.Max(1, Mathf.RoundToInt(label.fontSize));
+            fallbackText.resizeTextForBestFit = label.enableAutoSizing;
+            fallbackText.resizeTextMinSize = Mathf.Max(
+                1,
+                Mathf.RoundToInt(label.fontSizeMin));
+            fallbackText.resizeTextMaxSize = Mathf.Max(
+                fallbackText.resizeTextMinSize,
+                Mathf.RoundToInt(label.fontSizeMax));
             fallbackText.fontStyle = (label.fontStyle & FontStyles.Bold) == FontStyles.Bold
                 ? FontStyle.Bold
                 : FontStyle.Normal;

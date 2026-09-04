@@ -21,6 +21,7 @@ namespace Fbx2Vmd.Settings
         private const string TimelineLabelName = "FBX_Timeline_Label";
         private const float ButtonVerticalSpacing = 110f;
         private const float TimelineHeight = 36f;
+        private const float MinimumTimelineFontSize = 12f;
 
         private FBXVmdPipeline _pipeline;
         private Button _legacyRecordButton;
@@ -272,10 +273,15 @@ namespace Fbx2Vmd.Settings
             if (_timelineLabel != null)
             {
                 _timelineLabel.text = label;
+                if (_timelineLabel is TextMeshProUGUI timelineLabel)
+                {
+                    KoreanUiTextFallback.Apply(timelineLabel);
+                }
             }
             else if (_legacyTimelineLabel != null)
             {
                 _legacyTimelineLabel.text = label;
+                ApplyLegacyKoreanFont(_legacyTimelineLabel);
             }
         }
 
@@ -435,6 +441,26 @@ namespace Fbx2Vmd.Settings
             labelRect.pivot = new Vector2(0.5f, 0f);
             labelRect.anchoredPosition = new Vector2(0f, 8f);
             labelRect.sizeDelta = new Vector2(0f, TimelineHeight);
+
+            TMP_Text tmpLabel = labelRect.GetComponent<TMP_Text>();
+            if (tmpLabel != null)
+            {
+                tmpLabel.enableAutoSizing = true;
+                tmpLabel.fontSizeMin = MinimumTimelineFontSize;
+                tmpLabel.fontSizeMax = Mathf.Max(
+                    MinimumTimelineFontSize,
+                    tmpLabel.fontSize);
+            }
+
+            Text legacyLabel = labelRect.GetComponent<Text>();
+            if (legacyLabel != null)
+            {
+                legacyLabel.resizeTextForBestFit = true;
+                legacyLabel.resizeTextMinSize = Mathf.RoundToInt(MinimumTimelineFontSize);
+                legacyLabel.resizeTextMaxSize = Mathf.Max(
+                    legacyLabel.resizeTextMinSize,
+                    legacyLabel.fontSize);
+            }
         }
 
         private static void SetLabel(Button button, string label)
@@ -443,6 +469,10 @@ namespace Fbx2Vmd.Settings
             if (tmpLabel != null)
             {
                 tmpLabel.text = label;
+                if (tmpLabel is TextMeshProUGUI tmpLabelUi)
+                {
+                    KoreanUiTextFallback.Apply(tmpLabelUi);
+                }
                 return;
             }
 
@@ -450,6 +480,17 @@ namespace Fbx2Vmd.Settings
             if (legacyLabel != null)
             {
                 legacyLabel.text = label;
+                ApplyLegacyKoreanFont(legacyLabel);
+            }
+        }
+
+        private static void ApplyLegacyKoreanFont(Text label)
+        {
+            if (label != null &&
+                KoreanUiFontResolver.ContainsKorean(label.text) &&
+                KoreanUiFontResolver.TryGetLegacyFont(out Font koreanFont))
+            {
+                label.font = koreanFont;
             }
         }
 
