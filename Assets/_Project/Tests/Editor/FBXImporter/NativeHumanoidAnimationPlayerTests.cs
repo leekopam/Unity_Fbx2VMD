@@ -13,6 +13,8 @@ namespace Tests.Editor.FBXImporter
         private const string TargetAssetPath =
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+        private const string AnimatorControllerAssetPath =
+            "Assets/Plugins/VMDRecorderSample/SampleAnimation/TestAnimator1.controller";
         private const float TransformTolerance = 0.0001f;
         private static readonly HumanBodyBones[] ArmBones =
         {
@@ -186,9 +188,16 @@ namespace Tests.Editor.FBXImporter
                 AnimationClip clip = LoadHumanoidClip();
                 animator.applyRootMotion = true;
                 animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
-                RuntimeAnimatorController originalController = animator.runtimeAnimatorController;
+                RuntimeAnimatorController originalController =
+                    AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
+                        AnimatorControllerAssetPath);
+                Assert.That(originalController, Is.Not.Null,
+                    $"AnimatorController를 찾을 수 없습니다: {AnimatorControllerAssetPath}");
+                animator.runtimeAnimatorController = originalController;
 
                 Invoke(player, "Initialize", animator, clip);
+                Assert.That(animator.runtimeAnimatorController, Is.Null,
+                    "Native Playable과 AnimatorController가 같은 본을 동시에 쓰면 안 됩니다.");
                 DisposePlayer(player);
 
                 Assert.That(ReadProperty<bool>(player, "IsInitialized"), Is.False);

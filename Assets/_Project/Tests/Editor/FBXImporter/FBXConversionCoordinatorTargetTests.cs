@@ -824,6 +824,51 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_EditorInteractiveImport_When_CheckingFlow_Then_PreparesNativePlaybackBeforeGhostPath()
+        {
+            string coordinatorSource = File.ReadAllText(Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "_Project",
+                "Scripts",
+                "FBXImporter",
+                "FBXConversionCoordinator.cs"));
+            int sessionStart = coordinatorSource.IndexOf(
+                "public async Task<FBXConversionResult> RunSessionAsync(FBXConversionRequest request)",
+                System.StringComparison.Ordinal);
+            int runtimeImportStart = coordinatorSource.IndexOf(
+                "ImportRuntimeModelAsync(",
+                sessionStart,
+                System.StringComparison.Ordinal);
+            string editorEntrySource = coordinatorSource.Substring(
+                sessionStart,
+                runtimeImportStart - sessionStart);
+
+            Assert.That(editorEntrySource,
+                Does.Contain("_pipeline.ShouldUseEditorHumanoidPlaybackSession"));
+            Assert.That(editorEntrySource,
+                Does.Contain("RunEditorHumanoidPlaybackSession("));
+
+            int editorMethodStart = coordinatorSource.IndexOf(
+                "private FBXConversionResult RunEditorHumanoidPlaybackSession(",
+                System.StringComparison.Ordinal);
+            int editorMethodEnd = coordinatorSource.IndexOf(
+                "public async Task<FBXConversionResult> RunSessionAsync",
+                editorMethodStart,
+                System.StringComparison.Ordinal);
+            string editorMethodSource = coordinatorSource.Substring(
+                editorMethodStart,
+                editorMethodEnd - editorMethodStart);
+
+            Assert.That(editorMethodSource,
+                Does.Contain("EditorHumanoidMotionImportController"));
+            Assert.That(editorMethodSource,
+                Does.Contain("_pipeline.PrepareEditorHumanoidPlayback("));
+            Assert.That(editorMethodSource, Does.Not.Contain("PrepareGhostModel("));
+            Assert.That(editorMethodSource, Does.Not.Contain("DispatchRecording("));
+        }
+
+        [Test]
         public async Task Given_StandaloneCoordinator_When_RunningMissingFileSession_Then_DelegatesToPipelineOwner()
         {
             GameObject pipelineObject = new GameObject("Pipeline");
