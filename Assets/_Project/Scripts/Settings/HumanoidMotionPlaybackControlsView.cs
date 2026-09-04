@@ -12,11 +12,16 @@ namespace Fbx2Vmd.Settings
     internal sealed class HumanoidMotionPlaybackControlsView : MonoBehaviour
     {
         private const string ImportButtonName = "FBX_Button";
+        private const string LegacyRecordButtonName = "MMD_Record_Button";
+        private const string RecordButtonName = "FBX_Record_Button";
         private const string PlayPauseButtonName = "FBX_PlayPause_Button";
         private const string StopButtonName = "FBX_Stop_Button";
         private const float ButtonVerticalSpacing = 110f;
 
         private FBXVmdPipeline _pipeline;
+        private Button _legacyRecordButton;
+        private bool _wasLegacyRecordButtonActive;
+        private Button _recordButton;
         private Button _playPauseButton;
         private Button _stopButton;
 
@@ -59,12 +64,30 @@ namespace Fbx2Vmd.Settings
         private void OnDestroy()
         {
             DestroyControlButton(_playPauseButton);
+            DestroyControlButton(_recordButton);
             DestroyControlButton(_stopButton);
+            if (_legacyRecordButton != null)
+            {
+                _legacyRecordButton.gameObject.SetActive(_wasLegacyRecordButtonActive);
+            }
         }
 
         private void Build(FBXVmdPipeline pipeline, Button template)
         {
             Bind(pipeline);
+            _legacyRecordButton = ResolveButton(LegacyRecordButtonName);
+            if (_legacyRecordButton != null)
+            {
+                _wasLegacyRecordButtonActive = _legacyRecordButton.gameObject.activeSelf;
+                _legacyRecordButton.gameObject.SetActive(false);
+            }
+
+            _recordButton = CreateControlButton(
+                template,
+                RecordButtonName,
+                "녹화",
+                ButtonVerticalSpacing,
+                HandleRecordClick);
             _playPauseButton = CreateControlButton(
                 template,
                 PlayPauseButtonName,
@@ -93,6 +116,7 @@ namespace Fbx2Vmd.Settings
                     ? _playPauseButton.transform.parent
                     : ResolveImportButton()?.transform.parent;
             _playPauseButton ??= FindButton(parent, PlayPauseButtonName);
+            _recordButton ??= FindButton(parent, RecordButtonName);
             _stopButton ??= FindButton(parent, StopButtonName);
 
             if (_playPauseButton != null)
@@ -105,6 +129,12 @@ namespace Fbx2Vmd.Settings
             {
                 _stopButton.onClick = new Button.ButtonClickedEvent();
                 _stopButton.onClick.AddListener(HandleStopClick);
+            }
+
+            if (_recordButton != null)
+            {
+                _recordButton.onClick = new Button.ButtonClickedEvent();
+                _recordButton.onClick.AddListener(HandleRecordClick);
             }
 
             Refresh();
@@ -135,13 +165,34 @@ namespace Fbx2Vmd.Settings
             Refresh();
         }
 
+        private void HandleRecordClick()
+        {
+            if (_pipeline == null)
+            {
+                return;
+            }
+
+            if (_pipeline.IsImportedMotionRecording)
+            {
+                _pipeline.TryStopImportedMotionRecording();
+            }
+            else
+            {
+                _pipeline.TryStartImportedMotionRecording();
+            }
+
+            Refresh();
+        }
+
         private void Refresh()
         {
             bool hasPreparedMotion =
                 _pipeline != null && _pipeline.HasPreparedImportedMotion;
+            bool isRecording =
+                _pipeline != null && _pipeline.IsImportedMotionRecording;
             if (_playPauseButton != null)
             {
-                _playPauseButton.interactable = hasPreparedMotion;
+                _playPauseButton.interactable = hasPreparedMotion && !isRecording;
                 SetLabel(
                     _playPauseButton,
                     _pipeline != null && _pipeline.IsImportedMotionPlaying
@@ -152,6 +203,11 @@ namespace Fbx2Vmd.Settings
             if (_stopButton != null)
             {
                 _stopButton.interactable = hasPreparedMotion;
+            }
+            if (_recordButton != null)
+            {
+                _recordButton.interactable = hasPreparedMotion;
+                SetLabel(_recordButton, isRecording ? "녹화 중지" : "녹화");
             }
         }
 
@@ -199,6 +255,12 @@ namespace Fbx2Vmd.Settings
         private static Button ResolveImportButton()
         {
             GameObject buttonObject = GameObject.Find(ImportButtonName);
+            return buttonObject != null ? buttonObject.GetComponent<Button>() : null;
+        }
+
+        private static Button ResolveButton(string objectName)
+        {
+            GameObject buttonObject = GameObject.Find(objectName);
             return buttonObject != null ? buttonObject.GetComponent<Button>() : null;
         }
 

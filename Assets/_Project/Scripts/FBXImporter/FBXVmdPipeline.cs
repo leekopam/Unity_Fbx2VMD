@@ -23,6 +23,7 @@ namespace Fbx2Vmd.FBXImporter
         internal const int MAX_RETARGET_PREWARM_FRAME_COUNT = 120;
 #if UNITY_EDITOR
         internal const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
+        private const float EDITOR_MOTION_VIDEO_FRAME_RATE = 60f;
 #endif
         private static Func<IFileBrowserService> fileBrowserServiceFactory = () => new FileBrowserService();
         private static Func<AssimpFBXImporter> fbxImporterFactory = () => new AssimpFBXImporter();
@@ -1345,6 +1346,8 @@ namespace Fbx2Vmd.FBXImporter
         private FBXConversionCoordinator _conversionCoordinator;
         private VMDRecordingController _recordingController;
         private HumanoidMotionPlaybackController _humanoidMotionPlaybackController;
+        private HumanoidMotionRecordingController _humanoidMotionRecordingController;
+        private string _preparedMotionName = string.Empty;
         private FBXSessionState _sessionState = FBXSessionState.Idle;
         internal bool _isProcessing;
         private GameObject _activeGhostContainer;
@@ -1453,6 +1456,8 @@ namespace Fbx2Vmd.FBXImporter
         public bool IsImportedMotionPlaying =>
             _humanoidMotionPlaybackController?.State ==
             HumanoidMotionPlaybackState.Playing;
+        public bool IsImportedMotionRecording =>
+            _humanoidMotionRecordingController?.IsRecording ?? false;
 #if UNITY_EDITOR
         internal bool ShouldUseEditorHumanoidPlaybackSession =>
             Application.isPlaying && !EditorDiagnosticSession.IsRecordingOverrideActive;
@@ -1830,7 +1835,8 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool TryPlayImportedMotion()
         {
-            if (_humanoidMotionPlaybackController == null ||
+            if (IsImportedMotionRecording ||
+                _humanoidMotionPlaybackController == null ||
                 !_humanoidMotionPlaybackController.Play())
             {
                 return false;
@@ -1845,7 +1851,8 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool TryPauseImportedMotion()
         {
-            if (_humanoidMotionPlaybackController == null ||
+            if (IsImportedMotionRecording ||
+                _humanoidMotionPlaybackController == null ||
                 !_humanoidMotionPlaybackController.Pause())
             {
                 return false;
@@ -1860,6 +1867,11 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool TryStopImportedMotion()
         {
+            if (IsImportedMotionRecording)
+            {
+                return TryStopImportedMotionRecording();
+            }
+
             if (_humanoidMotionPlaybackController == null ||
                 !_humanoidMotionPlaybackController.Stop())
             {
@@ -1872,7 +1884,8 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool TrySeekImportedMotion(float timeSeconds)
         {
-            if (_humanoidMotionPlaybackController == null ||
+            if (IsImportedMotionRecording ||
+                _humanoidMotionPlaybackController == null ||
                 !_humanoidMotionPlaybackController.Seek(timeSeconds))
             {
                 return false;
@@ -1887,8 +1900,57 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        public bool TryStartImportedMotionRecording()
+        {
+#if UNITY_EDITOR
+            if (_humanoidMotionRecordingController == null)
+            {
+                return false;
+            }
 
+            RecordingCaptureResolutionPlan resolution =
+                DiagnosticsSettings.CreateCaptureResolutionPlan();
+            var settings = new MotionVideoRecordingSettings(
+                _preparedMotionName,
+                resolution.Width,
+                resolution.Height,
+                EDITOR_MOTION_VIDEO_FRAME_RATE);
+            if (!_humanoidMotionRecordingController.TryStart(
+                    settings,
+                    out string errorMessage))
+            {
+                Debug.LogWarning($"[FBXImport] {errorMessage}");
+                SetSessionState(FBXSessionState.Ready, errorMessage, 1f);
+                return false;
+            }
 
+            SetSessionState(
+                FBXSessionState.Recording,
+                "FBX 모션 영상 녹화 중",
+                0f);
+            return true;
+#else
+            return false;
+#endif
+        }
+
+        public bool TryStopImportedMotionRecording()
+        {
+            if (_humanoidMotionRecordingController == null ||
+                !_humanoidMotionRecordingController.Stop())
+            {
+                return false;
+            }
+
+            string outputPath = _humanoidMotionRecordingController.OutputFilePath;
+            SetSessionState(
+                FBXSessionState.Ready,
+                string.IsNullOrWhiteSpace(outputPath)
+                    ? "FBX 모션 영상 녹화 종료"
+                    : $"FBX 모션 영상 저장 완료: {outputPath}",
+                1f);
+            return true;
+        }
         #endregion
 
         #region 파일 처리 로직
@@ -1924,6 +1986,11 @@ namespace Fbx2Vmd.FBXImporter
             _humanoidMotionPlaybackController ??=
                 new HumanoidMotionPlaybackController();
             _humanoidMotionPlaybackController.Prepare(targetAnimator, clip);
+            _humanoidMotionRecordingController?.Dispose();
+            _humanoidMotionRecordingController = new HumanoidMotionRecordingController(
+                _humanoidMotionPlaybackController,
+                new EditorMotionVideoRecorder());
+            _preparedMotionName = motionName;
             _isProcessing = false;
             SetSessionState(
                 FBXSessionState.Ready,
@@ -2290,7 +2357,15 @@ namespace Fbx2Vmd.FBXImporter
             if (previousState == HumanoidMotionPlaybackState.Playing &&
                 _humanoidMotionPlaybackController.State == HumanoidMotionPlaybackState.Ready)
             {
-                SetSessionState(FBXSessionState.Ready, "FBX 모션 재생 완료", 1f);
+                bool completedRecording =
+                    _humanoidMotionRecordingController?.StopWhenPlaybackCompletes() ?? false;
+                string outputPath = _humanoidMotionRecordingController?.OutputFilePath;
+                SetSessionState(
+                    FBXSessionState.Ready,
+                    completedRecording && !string.IsNullOrWhiteSpace(outputPath)
+                        ? $"FBX 모션 영상 저장 완료: {outputPath}"
+                        : "FBX 모션 재생 완료",
+                    1f);
             }
         }
 
@@ -2309,7 +2384,10 @@ namespace Fbx2Vmd.FBXImporter
 
         private void CleanupHumanoidMotionPlayback()
         {
+            _humanoidMotionRecordingController?.Dispose();
+            _humanoidMotionRecordingController = null;
             _humanoidMotionPlaybackController?.Dispose();
+            _preparedMotionName = string.Empty;
         }
 
         private void DisableIndependentRecorderAutoStart()
