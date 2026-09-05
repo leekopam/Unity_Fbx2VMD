@@ -22,9 +22,8 @@ namespace Fbx2Vmd.FBXImporter
             new HumanoidPoseFrameEditor();
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
 #if UNITY_EDITOR
-        private readonly EditorHumanoidPoseReferencePlayer _canonicalPoseReferencePlayer =
+        private readonly EditorHumanoidPoseReferencePlayer _poseReferencePlayer =
             new EditorHumanoidPoseReferencePlayer();
-        private HumanPose _canonicalSourcePose;
 #endif
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
@@ -55,7 +54,7 @@ namespace Fbx2Vmd.FBXImporter
         }
 
 #if UNITY_EDITOR
-        internal void PrepareWithCanonicalPoseReference(
+        internal void PrepareWithArmDirectionReference(
             Animator targetAnimator,
             AnimationClip clip,
             GameObject sourceModelAsset)
@@ -68,7 +67,7 @@ namespace Fbx2Vmd.FBXImporter
             PrepareCore(
                 targetAnimator,
                 clip,
-                () => _canonicalPoseReferencePlayer.InitializeFromSourceModel(
+                () => _poseReferencePlayer.InitializeFromSourceModel(
                     sourceModelAsset,
                     clip));
         }
@@ -198,7 +197,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _player.EvaluateAt(CurrentTimeSeconds);
-            return TryApplyCanonicalArmCorrection();
+            return TryApplyArmDirectionCorrection();
         }
 
         internal void Tick(float deltaTimeSeconds)
@@ -223,8 +222,7 @@ namespace Fbx2Vmd.FBXImporter
         public void Dispose()
         {
 #if UNITY_EDITOR
-            _canonicalPoseReferencePlayer.Dispose();
-            _canonicalSourcePose = default;
+            _poseReferencePlayer.Dispose();
 #endif
             _poseFrameEditor.Dispose();
             _player.Dispose();
@@ -237,9 +235,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool EvaluateCurrentPoseWithCorrection()
         {
-            // 원본 clip, 표준 팔 보정, 사용자 frame delta 순서를 유지함.
+            // 원본 clip, 팔 방향 보정, 사용자 frame delta 순서를 유지함.
             _player.EvaluateAt(CurrentTimeSeconds);
-            if (!TryApplyCanonicalArmCorrection())
+            if (!TryApplyArmDirectionCorrection())
             {
                 return false;
             }
@@ -252,24 +250,23 @@ namespace Fbx2Vmd.FBXImporter
                     frameIndex);
         }
 
-        private bool TryApplyCanonicalArmCorrection()
+        private bool TryApplyArmDirectionCorrection()
         {
 #if UNITY_EDITOR
-            if (!_canonicalPoseReferencePlayer.IsInitialized)
+            if (!_poseReferencePlayer.IsInitialized)
             {
                 return true;
             }
 
-            if (!_canonicalPoseReferencePlayer.TryEvaluateAt(
+            if (!_poseReferencePlayer.TryEvaluateArmDirectionsAt(
                     CurrentTimeSeconds,
-                    ref _canonicalSourcePose))
+                    out HumanoidArmDirectionReference reference))
             {
                 return false;
             }
 
-            return _poseFrameEditor.TryApplyCanonicalArmCorrection(
-                _canonicalSourcePose,
-                out _,
+            return _poseFrameEditor.TryApplyArmDirectionReference(
+                reference,
                 out _);
 #else
             return true;

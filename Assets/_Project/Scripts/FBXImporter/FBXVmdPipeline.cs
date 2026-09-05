@@ -2177,7 +2177,7 @@ namespace Fbx2Vmd.FBXImporter
             }
             else
             {
-                _humanoidMotionPlaybackController.PrepareWithCanonicalPoseReference(
+                _humanoidMotionPlaybackController.PrepareWithArmDirectionReference(
                     targetAnimator,
                     clip,
                     sourceModelAsset);

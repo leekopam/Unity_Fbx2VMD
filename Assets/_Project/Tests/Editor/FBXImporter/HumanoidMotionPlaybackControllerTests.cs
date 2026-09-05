@@ -171,13 +171,14 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_SourceHumanoidPose_When_PreparingCorrection_Then_ReducesArmErrorWithoutGeometryChanges()
+        public void Given_SourceArmDirections_When_PreparingCorrection_Then_AlignsWithoutGeometryChanges()
         {
+            GameObject sourceTarget = InstantiateSourceModel();
             GameObject baselineTarget = InstantiateTarget();
             GameObject correctedTarget = InstantiateTarget();
+            object sourceController = CreateController();
             object baselineController = CreateController();
             object correctedController = CreateController();
-            object referencePlayer = CreateEditorReferencePlayer();
 
             try
             {
@@ -185,37 +186,43 @@ namespace Tests.Editor.FBXImporter
                 GameObject sourceModel = LoadSourceModel();
                 const float sampleTime = 31.1675f;
 
-                Invoke(referencePlayer, "InitializeFromSourceModel", sourceModel, clip);
-                HumanPose sourcePose = SampleReferencePose(referencePlayer, sampleTime);
+                Animator sourceAnimator = RequireHumanoidAnimator(sourceTarget);
+                Invoke(sourceController, "Prepare", sourceAnimator, clip);
+                Invoke(sourceController, "Seek", sampleTime);
 
                 Animator baselineAnimator = RequireHumanoidAnimator(baselineTarget);
                 Invoke(baselineController, "Prepare", baselineAnimator, clip);
                 Invoke(baselineController, "Seek", sampleTime);
-                HumanPose baselinePose = CaptureCurrentPose(baselineController);
                 Transform[] baselineBones = CaptureHumanoidBones(baselineAnimator);
 
                 Animator correctedAnimator = RequireHumanoidAnimator(correctedTarget);
                 Invoke(
                     correctedController,
-                    "PrepareWithCanonicalPoseReference",
+                    "PrepareWithArmDirectionReference",
                     correctedAnimator,
                     clip,
                     sourceModel);
                 Invoke(correctedController, "Seek", sampleTime);
-                HumanPose correctedPose = CaptureCurrentPose(correctedController);
                 Transform[] correctedBones = CaptureHumanoidBones(correctedAnimator);
 
-                float baselineError = CalculateArmMuscleMeanError(sourcePose, baselinePose);
-                float correctedError = CalculateArmMuscleMeanError(sourcePose, correctedPose);
-                Assert.That(correctedError, Is.LessThan(baselineError * 0.8f),
-                    "표준 자세 보정은 직접 Humanoid 재생보다 팔 muscle 오차를 줄여야 합니다.");
+                float baselineError = CalculateArmDirectionMeanError(
+                    sourceAnimator,
+                    baselineAnimator);
+                float correctedError = CalculateArmDirectionMeanError(
+                    sourceAnimator,
+                    correctedAnimator);
+                Assert.That(correctedError, Is.LessThan(baselineError * 0.05f),
+                    "Swing 보정은 직접 Humanoid 재생의 팔 방향 오차를 줄여야 합니다.");
+                Assert.That(correctedError, Is.LessThan(0.1f),
+                    "보정된 상완·전완 방향은 원본 FBX와 0.1도 안에서 일치해야 합니다.");
                 AssertEquivalentGeometry(baselineBones, correctedBones);
             }
             finally
             {
+                DisposeController(sourceController);
                 DisposeController(baselineController);
                 DisposeController(correctedController);
-                DisposeController(referencePlayer);
+                UnityEngine.Object.DestroyImmediate(sourceTarget);
                 UnityEngine.Object.DestroyImmediate(baselineTarget);
                 UnityEngine.Object.DestroyImmediate(correctedTarget);
             }
@@ -229,16 +236,6 @@ namespace Tests.Editor.FBXImporter
             Assert.That(controllerType, Is.Not.Null,
                 "명시적 재생 상태를 관리하는 모델 중립 컨트롤러가 필요합니다.");
             return Activator.CreateInstance(controllerType, nonPublic: true);
-        }
-
-        private static object CreateEditorReferencePlayer()
-        {
-            Type playerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.FBXImporter.EditorHumanoidPoseReferencePlayer",
-                throwOnError: false);
-            Assert.That(playerType, Is.Not.Null,
-                "에디터 Humanoid 기준 자세 재생기가 필요합니다.");
-            return Activator.CreateInstance(playerType, nonPublic: true);
         }
 
         private static object Invoke(object target, string methodName, params object[] arguments)
@@ -281,28 +278,40 @@ namespace Tests.Editor.FBXImporter
             return (HumanPose)arguments[0];
         }
 
-        private static HumanPose SampleReferencePose(object referencePlayer, float timeSeconds)
+        private static float CalculateArmDirectionMeanError(
+            Animator sourceAnimator,
+            Animator targetAnimator)
         {
-            var pose = new HumanPose();
-            object[] arguments = { timeSeconds, pose };
-            Assert.That(
-                (bool)Invoke(referencePlayer, "TryEvaluateAt", arguments),
-                Is.True);
-            return (HumanPose)arguments[1];
+            (HumanBodyBones Start, HumanBodyBones End)[] segments =
+            {
+                (HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm),
+                (HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand),
+                (HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm),
+                (HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand)
+            };
+
+            return segments.Average(segment => Vector3.Angle(
+                CalculateRootSpaceDirection(
+                    sourceAnimator,
+                    segment.Start,
+                    segment.End),
+                CalculateRootSpaceDirection(
+                    targetAnimator,
+                    segment.Start,
+                    segment.End)));
         }
 
-        private static float CalculateArmMuscleMeanError(
-            HumanPose sourcePose,
-            HumanPose targetPose)
+        private static Vector3 CalculateRootSpaceDirection(
+            Animator animator,
+            HumanBodyBones startBone,
+            HumanBodyBones endBone)
         {
-            int[] armIndices = Enumerable.Range(0, HumanTrait.MuscleCount)
-                .Where(index =>
-                    HumanTrait.MuscleName[index].Contains("Arm") ||
-                    HumanTrait.MuscleName[index].Contains("Forearm"))
-                .ToArray();
-            return armIndices.Average(index => Mathf.Abs(
-                Mathf.Clamp(sourcePose.muscles[index], -1f, 1f) -
-                targetPose.muscles[index]));
+            Transform start = animator.GetBoneTransform(startBone);
+            Transform end = animator.GetBoneTransform(endBone);
+            Assert.That(start, Is.Not.Null, $"{startBone} 본이 필요합니다.");
+            Assert.That(end, Is.Not.Null, $"{endBone} 본이 필요합니다.");
+            return animator.transform.InverseTransformDirection(
+                end.position - start.position).normalized;
         }
 
         private static Transform[] CaptureHumanoidBones(Animator animator)
@@ -342,6 +351,15 @@ namespace Tests.Editor.FBXImporter
 
             GameObject target = UnityEngine.Object.Instantiate(source);
             target.name = "Humanoid Motion Playback Controller Target";
+            target.hideFlags = HideFlags.HideAndDontSave;
+            target.SetActive(true);
+            return target;
+        }
+
+        private static GameObject InstantiateSourceModel()
+        {
+            GameObject target = UnityEngine.Object.Instantiate(LoadSourceModel());
+            target.name = "Humanoid Motion Source Reference";
             target.hideFlags = HideFlags.HideAndDontSave;
             target.SetActive(true);
             return target;
