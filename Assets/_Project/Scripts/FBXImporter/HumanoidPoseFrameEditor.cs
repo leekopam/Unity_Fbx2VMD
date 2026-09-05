@@ -73,16 +73,36 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            CaptureBoneGeometry();
-            try
+            ApplyPosePreservingGeometry(ref pose);
+            return true;
+        }
+
+        internal bool TryApplyCanonicalArmCorrection(
+            HumanPose sourcePose,
+            out float meanError,
+            out float blendWeight)
+        {
+            meanError = 0f;
+            blendWeight = 0f;
+            if (!TryCapture(out HumanPose targetPose) ||
+                !HumanoidCanonicalArmPoseCorrectionPolicy.TryBlend(
+                    sourcePose.muscles,
+                    targetPose.muscles,
+                    out float[] blendedMuscles,
+                    out meanError,
+                    out blendWeight))
             {
-                _poseHandler.SetHumanPose(ref pose);
-            }
-            finally
-            {
-                RestoreBoneGeometry();
+                return false;
             }
 
+            // 임계값 아래의 정상 프레임은 SetHumanPose 재해석 오차도 만들지 않음.
+            if (blendWeight <= 0f)
+            {
+                return true;
+            }
+
+            targetPose.muscles = blendedMuscles;
+            ApplyPosePreservingGeometry(ref targetPose);
             return true;
         }
 
@@ -134,6 +154,19 @@ namespace Fbx2Vmd.FBXImporter
                 Transform bone = _humanoidBones[index];
                 bone.localPosition = _boneLocalPositions[index];
                 bone.localScale = _boneLocalScales[index];
+            }
+        }
+
+        private void ApplyPosePreservingGeometry(ref HumanPose pose)
+        {
+            CaptureBoneGeometry();
+            try
+            {
+                _poseHandler.SetHumanPose(ref pose);
+            }
+            finally
+            {
+                RestoreBoneGeometry();
             }
         }
 

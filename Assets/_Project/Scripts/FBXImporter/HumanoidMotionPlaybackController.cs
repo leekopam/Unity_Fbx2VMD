@@ -21,6 +21,11 @@ namespace Fbx2Vmd.FBXImporter
         private readonly HumanoidPoseFrameEditor _poseFrameEditor =
             new HumanoidPoseFrameEditor();
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
+#if UNITY_EDITOR
+        private readonly EditorHumanoidPoseReferencePlayer _canonicalPoseReferencePlayer =
+            new EditorHumanoidPoseReferencePlayer();
+        private HumanPose _canonicalSourcePose;
+#endif
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
             HumanoidMotionPlaybackState.Empty;
@@ -46,6 +51,34 @@ namespace Fbx2Vmd.FBXImporter
 
         internal void Prepare(Animator targetAnimator, AnimationClip clip)
         {
+            PrepareCore(targetAnimator, clip, null);
+        }
+
+#if UNITY_EDITOR
+        internal void PrepareWithCanonicalPoseReference(
+            Animator targetAnimator,
+            AnimationClip clip,
+            GameObject sourceModelAsset)
+        {
+            if (sourceModelAsset == null)
+            {
+                throw new ArgumentNullException(nameof(sourceModelAsset));
+            }
+
+            PrepareCore(
+                targetAnimator,
+                clip,
+                () => _canonicalPoseReferencePlayer.InitializeFromSourceModel(
+                    sourceModelAsset,
+                    clip));
+        }
+#endif
+
+        private void PrepareCore(
+            Animator targetAnimator,
+            AnimationClip clip,
+            Action initializeCanonicalPoseReference)
+        {
             if (clip == null)
             {
                 throw new ArgumentNullException(nameof(clip));
@@ -62,6 +95,7 @@ namespace Fbx2Vmd.FBXImporter
                 CurrentTimeSeconds = 0f;
                 _player.EvaluateAt(CurrentTimeSeconds);
                 _poseFrameEditor.Initialize(targetAnimator);
+                initializeCanonicalPoseReference?.Invoke();
                 State = HumanoidMotionPlaybackState.Ready;
             }
             catch
@@ -164,7 +198,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _player.EvaluateAt(CurrentTimeSeconds);
-            return true;
+            return TryApplyCanonicalArmCorrection();
         }
 
         internal void Tick(float deltaTimeSeconds)
@@ -188,6 +222,10 @@ namespace Fbx2Vmd.FBXImporter
 
         public void Dispose()
         {
+#if UNITY_EDITOR
+            _canonicalPoseReferencePlayer.Dispose();
+            _canonicalSourcePose = default;
+#endif
             _poseFrameEditor.Dispose();
             _player.Dispose();
             CurrentTimeSeconds = 0f;
@@ -199,14 +237,43 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool EvaluateCurrentPoseWithCorrection()
         {
-            // 원본 clip을 먼저 평가한 뒤 현재 프레임 delta를 한 번만 적용함.
+            // 원본 clip, 표준 팔 보정, 사용자 frame delta 순서를 유지함.
             _player.EvaluateAt(CurrentTimeSeconds);
+            if (!TryApplyCanonicalArmCorrection())
+            {
+                return false;
+            }
+
             int frameIndex = CurrentFrameIndex;
             return _poseCorrectionDocument == null ||
                 !_poseCorrectionDocument.HasFrameCorrection(frameIndex) ||
                 _poseFrameEditor.TryApply(
                     _poseCorrectionDocument,
                     frameIndex);
+        }
+
+        private bool TryApplyCanonicalArmCorrection()
+        {
+#if UNITY_EDITOR
+            if (!_canonicalPoseReferencePlayer.IsInitialized)
+            {
+                return true;
+            }
+
+            if (!_canonicalPoseReferencePlayer.TryEvaluateAt(
+                    CurrentTimeSeconds,
+                    ref _canonicalSourcePose))
+            {
+                return false;
+            }
+
+            return _poseFrameEditor.TryApplyCanonicalArmCorrection(
+                _canonicalSourcePose,
+                out _,
+                out _);
+#else
+            return true;
+#endif
         }
 
         private static void ValidateTime(float timeSeconds, string parameterName)

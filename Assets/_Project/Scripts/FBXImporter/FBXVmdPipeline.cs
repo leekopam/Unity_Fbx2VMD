@@ -2165,12 +2165,23 @@ namespace Fbx2Vmd.FBXImporter
         internal void PrepareEditorHumanoidPlayback(
             Animator targetAnimator,
             AnimationClip clip,
-            string motionName)
+            string motionName,
+            GameObject sourceModelAsset)
         {
             CleanupActiveGhost();
             _humanoidMotionPlaybackController ??=
                 new HumanoidMotionPlaybackController();
-            _humanoidMotionPlaybackController.Prepare(targetAnimator, clip);
+            if (sourceModelAsset == null)
+            {
+                _humanoidMotionPlaybackController.Prepare(targetAnimator, clip);
+            }
+            else
+            {
+                _humanoidMotionPlaybackController.PrepareWithCanonicalPoseReference(
+                    targetAnimator,
+                    clip,
+                    sourceModelAsset);
+            }
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);

@@ -30,11 +30,23 @@ namespace Fbx2Vmd.FBXImporter
                 throw new ArgumentNullException(nameof(targetAnimator));
             }
 
-            Dispose();
-
             GameObject referenceSource =
                 PrefabUtility.GetCorrespondingObjectFromOriginalSource(targetAnimator.gameObject) ??
                 targetAnimator.gameObject;
+            InitializeFromSourceModel(referenceSource, clip);
+        }
+
+        internal void InitializeFromSourceModel(
+            GameObject referenceSource,
+            AnimationClip clip)
+        {
+            if (referenceSource == null)
+            {
+                throw new ArgumentNullException(nameof(referenceSource));
+            }
+
+            Dispose();
+
             _referenceInstance = UnityEngine.Object.Instantiate(referenceSource);
             _referenceInstance.name = $"EditorHumanoidPoseReference_{referenceSource.name}";
             _referenceInstance.hideFlags = HideFlags.HideAndDontSave;

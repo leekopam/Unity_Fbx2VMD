@@ -109,7 +109,13 @@ namespace Tests.Editor.Settings
                 Assert.That(prepareMethod, Is.Not.Null);
                 prepareMethod.Invoke(
                     pipeline,
-                    new object[] { RequireHumanoidAnimator(target), LoadHumanoidClip(), "satisfaction_2" });
+                    new object[]
+                    {
+                        RequireHumanoidAnimator(target),
+                        LoadHumanoidClip(),
+                        "satisfaction_2",
+                        null
+                    });
 
                 Button playPauseButton = FindButton(
                     canvasObject,

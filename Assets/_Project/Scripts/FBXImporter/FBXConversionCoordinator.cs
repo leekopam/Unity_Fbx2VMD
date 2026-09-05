@@ -717,7 +717,8 @@ namespace Fbx2Vmd.FBXImporter
             _pipeline.PrepareEditorHumanoidPlayback(
                 targetAnimator,
                 importResult.Clip,
-                importResult.OutputBaseName);
+                importResult.OutputBaseName,
+                importResult.SourceModelAsset);
             return FBXConversionResult.Succeed(importResult.OutputBaseName);
         }
 #endif

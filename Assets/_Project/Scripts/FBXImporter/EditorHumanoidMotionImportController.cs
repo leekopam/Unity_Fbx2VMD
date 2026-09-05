@@ -59,10 +59,14 @@ namespace Fbx2Vmd.FBXImporter
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
             EditorHumanoidClipImportConfigurator.EnsureHumanoid(assetPath);
             AnimationClip clip = EditorAnimationClipAssetLoader.LoadFirst(assetPath);
-            if (clip == null || !clip.humanMotion || clip.length <= 0f)
+            GameObject sourceModelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (clip == null ||
+                !clip.humanMotion ||
+                clip.length <= 0f ||
+                sourceModelAsset == null)
             {
                 return EditorHumanoidMotionImportResult.Fail(
-                    $"유효한 Humanoid AnimationClip을 찾을 수 없습니다: {assetPath}");
+                    $"유효한 Humanoid 모델과 AnimationClip을 찾을 수 없습니다: {assetPath}");
             }
 
             _pipeline.SetSessionState(
@@ -72,6 +76,7 @@ namespace Fbx2Vmd.FBXImporter
 
             return EditorHumanoidMotionImportResult.Succeed(
                 clip,
+                sourceModelAsset,
                 Path.GetFileNameWithoutExtension(controlledPath));
         }
     }
@@ -81,27 +86,32 @@ namespace Fbx2Vmd.FBXImporter
         private EditorHumanoidMotionImportResult(
             bool isSuccess,
             AnimationClip clip,
+            GameObject sourceModelAsset,
             string outputBaseName,
             string errorMessage)
         {
             IsSuccess = isSuccess;
             Clip = clip;
+            SourceModelAsset = sourceModelAsset;
             OutputBaseName = outputBaseName;
             ErrorMessage = errorMessage;
         }
 
         internal bool IsSuccess { get; }
         internal AnimationClip Clip { get; }
+        internal GameObject SourceModelAsset { get; }
         internal string OutputBaseName { get; }
         internal string ErrorMessage { get; }
 
         internal static EditorHumanoidMotionImportResult Succeed(
             AnimationClip clip,
+            GameObject sourceModelAsset,
             string outputBaseName)
         {
             return new EditorHumanoidMotionImportResult(
                 true,
                 clip,
+                sourceModelAsset,
                 outputBaseName,
                 string.Empty);
         }
@@ -110,6 +120,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             return new EditorHumanoidMotionImportResult(
                 false,
+                null,
                 null,
                 string.Empty,
                 errorMessage);

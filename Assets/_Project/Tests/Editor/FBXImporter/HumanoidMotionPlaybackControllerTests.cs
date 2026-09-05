@@ -170,6 +170,57 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_SourceHumanoidPose_When_PreparingCorrection_Then_ReducesArmErrorWithoutGeometryChanges()
+        {
+            GameObject baselineTarget = InstantiateTarget();
+            GameObject correctedTarget = InstantiateTarget();
+            object baselineController = CreateController();
+            object correctedController = CreateController();
+            object referencePlayer = CreateEditorReferencePlayer();
+
+            try
+            {
+                AnimationClip clip = LoadHumanoidClip();
+                GameObject sourceModel = LoadSourceModel();
+                const float sampleTime = 31.1675f;
+
+                Invoke(referencePlayer, "InitializeFromSourceModel", sourceModel, clip);
+                HumanPose sourcePose = SampleReferencePose(referencePlayer, sampleTime);
+
+                Animator baselineAnimator = RequireHumanoidAnimator(baselineTarget);
+                Invoke(baselineController, "Prepare", baselineAnimator, clip);
+                Invoke(baselineController, "Seek", sampleTime);
+                HumanPose baselinePose = CaptureCurrentPose(baselineController);
+                Transform[] baselineBones = CaptureHumanoidBones(baselineAnimator);
+
+                Animator correctedAnimator = RequireHumanoidAnimator(correctedTarget);
+                Invoke(
+                    correctedController,
+                    "PrepareWithCanonicalPoseReference",
+                    correctedAnimator,
+                    clip,
+                    sourceModel);
+                Invoke(correctedController, "Seek", sampleTime);
+                HumanPose correctedPose = CaptureCurrentPose(correctedController);
+                Transform[] correctedBones = CaptureHumanoidBones(correctedAnimator);
+
+                float baselineError = CalculateArmMuscleMeanError(sourcePose, baselinePose);
+                float correctedError = CalculateArmMuscleMeanError(sourcePose, correctedPose);
+                Assert.That(correctedError, Is.LessThan(baselineError * 0.8f),
+                    "표준 자세 보정은 직접 Humanoid 재생보다 팔 muscle 오차를 줄여야 합니다.");
+                AssertEquivalentGeometry(baselineBones, correctedBones);
+            }
+            finally
+            {
+                DisposeController(baselineController);
+                DisposeController(correctedController);
+                DisposeController(referencePlayer);
+                UnityEngine.Object.DestroyImmediate(baselineTarget);
+                UnityEngine.Object.DestroyImmediate(correctedTarget);
+            }
+        }
+
         private static object CreateController()
         {
             Type controllerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
@@ -178,6 +229,16 @@ namespace Tests.Editor.FBXImporter
             Assert.That(controllerType, Is.Not.Null,
                 "명시적 재생 상태를 관리하는 모델 중립 컨트롤러가 필요합니다.");
             return Activator.CreateInstance(controllerType, nonPublic: true);
+        }
+
+        private static object CreateEditorReferencePlayer()
+        {
+            Type playerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorHumanoidPoseReferencePlayer",
+                throwOnError: false);
+            Assert.That(playerType, Is.Not.Null,
+                "에디터 Humanoid 기준 자세 재생기가 필요합니다.");
+            return Activator.CreateInstance(playerType, nonPublic: true);
         }
 
         private static object Invoke(object target, string methodName, params object[] arguments)
@@ -208,6 +269,69 @@ namespace Tests.Editor.FBXImporter
             if (controller != null)
             {
                 Invoke(controller, "Dispose");
+            }
+        }
+
+        private static HumanPose CaptureCurrentPose(object controller)
+        {
+            object[] arguments = { null };
+            Assert.That(
+                (bool)Invoke(controller, "TryCaptureCurrentPose", arguments),
+                Is.True);
+            return (HumanPose)arguments[0];
+        }
+
+        private static HumanPose SampleReferencePose(object referencePlayer, float timeSeconds)
+        {
+            var pose = new HumanPose();
+            object[] arguments = { timeSeconds, pose };
+            Assert.That(
+                (bool)Invoke(referencePlayer, "TryEvaluateAt", arguments),
+                Is.True);
+            return (HumanPose)arguments[1];
+        }
+
+        private static float CalculateArmMuscleMeanError(
+            HumanPose sourcePose,
+            HumanPose targetPose)
+        {
+            int[] armIndices = Enumerable.Range(0, HumanTrait.MuscleCount)
+                .Where(index =>
+                    HumanTrait.MuscleName[index].Contains("Arm") ||
+                    HumanTrait.MuscleName[index].Contains("Forearm"))
+                .ToArray();
+            return armIndices.Average(index => Mathf.Abs(
+                Mathf.Clamp(sourcePose.muscles[index], -1f, 1f) -
+                targetPose.muscles[index]));
+        }
+
+        private static Transform[] CaptureHumanoidBones(Animator animator)
+        {
+            return Enumerable.Range(0, (int)HumanBodyBones.LastBone)
+                .Select(index => animator.GetBoneTransform((HumanBodyBones)index))
+                .Where(bone => bone != null)
+                .ToArray();
+        }
+
+        private static void AssertEquivalentGeometry(
+            Transform[] expectedBones,
+            Transform[] actualBones)
+        {
+            Assert.That(actualBones.Length, Is.EqualTo(expectedBones.Length));
+            for (int index = 0; index < expectedBones.Length; index++)
+            {
+                Assert.That(
+                    Vector3.Distance(
+                        actualBones[index].localPosition,
+                        expectedBones[index].localPosition),
+                    Is.LessThanOrEqualTo(TimeTolerance),
+                    $"{actualBones[index].name} localPosition이 보정으로 바뀌면 안 됩니다.");
+                Assert.That(
+                    Vector3.Distance(
+                        actualBones[index].localScale,
+                        expectedBones[index].localScale),
+                    Is.LessThanOrEqualTo(TimeTolerance),
+                    $"{actualBones[index].name} localScale이 보정으로 바뀌면 안 됩니다.");
             }
         }
 
@@ -243,6 +367,14 @@ namespace Tests.Editor.FBXImporter
                     candidate.humanMotion);
             Assert.That(clip, Is.Not.Null, $"Humanoid 클립을 찾을 수 없습니다: {ClipAssetPath}");
             return clip;
+        }
+
+        private static GameObject LoadSourceModel()
+        {
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath);
+            Assert.That(source, Is.Not.Null,
+                $"Humanoid 기준 모델을 찾을 수 없습니다: {ClipAssetPath}");
+            return source;
         }
     }
 }
