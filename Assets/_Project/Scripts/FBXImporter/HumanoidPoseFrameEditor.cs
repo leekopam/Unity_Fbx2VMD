@@ -10,6 +10,7 @@ namespace Fbx2Vmd.FBXImporter
     {
         private HumanPoseHandler _poseHandler;
         private HumanPose _workingPose;
+        private Animator _targetAnimator;
         private Transform[] _humanoidBones = Array.Empty<Transform>();
         private Vector3[] _boneLocalPositions = Array.Empty<Vector3>();
         private Vector3[] _boneLocalScales = Array.Empty<Vector3>();
@@ -31,6 +32,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             Dispose();
+            _targetAnimator = targetAnimator;
             _poseHandler = new HumanPoseHandler(avatar, targetAnimator.transform);
             _workingPose = new HumanPose();
             CacheHumanoidBones(targetAnimator);
@@ -77,33 +79,58 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        internal bool TryApplyCanonicalArmCorrection(
-            HumanPose sourcePose,
-            out float meanError,
-            out float blendWeight)
+        internal bool TryApplyArmDirectionReference(
+            HumanoidArmDirectionReference reference,
+            out float maxDirectionErrorDegrees)
         {
-            meanError = 0f;
-            blendWeight = 0f;
-            if (!TryCapture(out HumanPose targetPose) ||
-                !HumanoidCanonicalArmPoseCorrectionPolicy.TryBlend(
-                    sourcePose.muscles,
-                    targetPose.muscles,
-                    out float[] blendedMuscles,
-                    out meanError,
-                    out blendWeight))
+            maxDirectionErrorDegrees = 0f;
+            if (!TryGetArmBones(
+                    out Transform leftUpperArm,
+                    out Transform leftLowerArm,
+                    out Transform leftHand,
+                    out Transform rightUpperArm,
+                    out Transform rightLowerArm,
+                    out Transform rightHand))
             {
                 return false;
             }
 
-            // 임계값 아래의 정상 프레임은 SetHumanPose 재해석 오차도 만들지 않음.
-            if (blendWeight <= 0f)
+            Quaternion leftUpperRotation = leftUpperArm.localRotation;
+            Quaternion leftLowerRotation = leftLowerArm.localRotation;
+            Quaternion rightUpperRotation = rightUpperArm.localRotation;
+            Quaternion rightLowerRotation = rightLowerArm.localRotation;
+
+            if (TryApplyArmSegment(
+                    leftUpperArm,
+                    leftLowerArm,
+                    reference.LeftUpperArm,
+                    ref maxDirectionErrorDegrees) &&
+                TryApplyArmSegment(
+                    leftLowerArm,
+                    leftHand,
+                    reference.LeftForearm,
+                    ref maxDirectionErrorDegrees) &&
+                TryApplyArmSegment(
+                    rightUpperArm,
+                    rightLowerArm,
+                    reference.RightUpperArm,
+                    ref maxDirectionErrorDegrees) &&
+                TryApplyArmSegment(
+                    rightLowerArm,
+                    rightHand,
+                    reference.RightForearm,
+                    ref maxDirectionErrorDegrees))
             {
                 return true;
             }
 
-            targetPose.muscles = blendedMuscles;
-            ApplyPosePreservingGeometry(ref targetPose);
-            return true;
+            // 일부 구간만 적용된 자세를 남기지 않도록 실패 시 팔 회전을 원복함.
+            leftUpperArm.localRotation = leftUpperRotation;
+            leftLowerArm.localRotation = leftLowerRotation;
+            rightUpperArm.localRotation = rightUpperRotation;
+            rightLowerArm.localRotation = rightLowerRotation;
+            maxDirectionErrorDegrees = 0f;
+            return false;
         }
 
         public void Dispose()
@@ -111,9 +138,64 @@ namespace Fbx2Vmd.FBXImporter
             _poseHandler?.Dispose();
             _poseHandler = null;
             _workingPose = default;
+            _targetAnimator = null;
             _humanoidBones = Array.Empty<Transform>();
             _boneLocalPositions = Array.Empty<Vector3>();
             _boneLocalScales = Array.Empty<Vector3>();
+        }
+
+        private bool TryGetArmBones(
+            out Transform leftUpperArm,
+            out Transform leftLowerArm,
+            out Transform leftHand,
+            out Transform rightUpperArm,
+            out Transform rightLowerArm,
+            out Transform rightHand)
+        {
+            leftUpperArm = _targetAnimator?.GetBoneTransform(
+                HumanBodyBones.LeftUpperArm);
+            leftLowerArm = _targetAnimator?.GetBoneTransform(
+                HumanBodyBones.LeftLowerArm);
+            leftHand = _targetAnimator?.GetBoneTransform(HumanBodyBones.LeftHand);
+            rightUpperArm = _targetAnimator?.GetBoneTransform(
+                HumanBodyBones.RightUpperArm);
+            rightLowerArm = _targetAnimator?.GetBoneTransform(
+                HumanBodyBones.RightLowerArm);
+            rightHand = _targetAnimator?.GetBoneTransform(HumanBodyBones.RightHand);
+            return IsInitialized &&
+                leftUpperArm != null &&
+                leftLowerArm != null &&
+                leftHand != null &&
+                rightUpperArm != null &&
+                rightLowerArm != null &&
+                rightHand != null;
+        }
+
+        private bool TryApplyArmSegment(
+            Transform start,
+            Transform end,
+            Vector3 referenceDirection,
+            ref float maxDirectionErrorDegrees)
+        {
+            Vector3 targetDirection = _targetAnimator.transform.InverseTransformDirection(
+                end.position - start.position);
+            if (!HumanoidArmSwingCorrectionCalculator.TryCalculate(
+                    targetDirection,
+                    referenceDirection,
+                    out Quaternion rootSpaceCorrection,
+                    out float errorDegrees))
+            {
+                return false;
+            }
+
+            Quaternion rootRotation = _targetAnimator.transform.rotation;
+            Quaternion worldCorrection =
+                rootRotation * rootSpaceCorrection * Quaternion.Inverse(rootRotation);
+            start.rotation = worldCorrection * start.rotation;
+            maxDirectionErrorDegrees = Mathf.Max(
+                maxDirectionErrorDegrees,
+                errorDegrees);
+            return true;
         }
 
         private void CacheHumanoidBones(Animator targetAnimator)

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
-    /// 대상 모델의 원본 프리팹에서 Native Humanoid 기준 포즈를 샘플링함.
+    /// 기준 Humanoid 모델에서 같은 시간의 원본 자세를 샘플링함.
     /// </summary>
     internal sealed class EditorHumanoidPoseReferencePlayer : IDisposable
     {
@@ -84,6 +84,20 @@ namespace Fbx2Vmd.FBXImporter
             return IsFinite(pose);
         }
 
+        internal bool TryEvaluateArmDirectionsAt(
+            float timeSeconds,
+            out HumanoidArmDirectionReference reference)
+        {
+            reference = default;
+            if (!IsInitialized)
+            {
+                return false;
+            }
+
+            _animationPlayer.EvaluateAt(timeSeconds);
+            return TryCaptureArmDirectionReference(_referenceAnimator, out reference);
+        }
+
         internal bool TryApplyHumanoidBoneLocalRotationsTo(Animator targetAnimator)
         {
             if (!IsInitialized ||
@@ -146,6 +160,74 @@ namespace Fbx2Vmd.FBXImporter
             {
                 renderer.enabled = false;
             }
+        }
+
+        private static bool TryCaptureArmDirectionReference(
+            Animator animator,
+            out HumanoidArmDirectionReference reference)
+        {
+            reference = default;
+            if (!TryGetDirection(
+                    animator,
+                    HumanBodyBones.LeftUpperArm,
+                    HumanBodyBones.LeftLowerArm,
+                    out Vector3 leftUpperArm) ||
+                !TryGetDirection(
+                    animator,
+                    HumanBodyBones.LeftLowerArm,
+                    HumanBodyBones.LeftHand,
+                    out Vector3 leftForearm) ||
+                !TryGetDirection(
+                    animator,
+                    HumanBodyBones.RightUpperArm,
+                    HumanBodyBones.RightLowerArm,
+                    out Vector3 rightUpperArm) ||
+                !TryGetDirection(
+                    animator,
+                    HumanBodyBones.RightLowerArm,
+                    HumanBodyBones.RightHand,
+                    out Vector3 rightForearm))
+            {
+                return false;
+            }
+
+            reference = new HumanoidArmDirectionReference(
+                leftUpperArm,
+                leftForearm,
+                rightUpperArm,
+                rightForearm);
+            return true;
+        }
+
+        private static bool TryGetDirection(
+            Animator animator,
+            HumanBodyBones startBone,
+            HumanBodyBones endBone,
+            out Vector3 direction)
+        {
+            direction = Vector3.zero;
+            if (animator == null)
+            {
+                return false;
+            }
+
+            Transform start = animator.GetBoneTransform(startBone);
+            Transform end = animator.GetBoneTransform(endBone);
+            if (start == null || end == null)
+            {
+                return false;
+            }
+
+            direction = animator.transform.InverseTransformDirection(
+                end.position - start.position);
+            if (!IsFinite(direction) || direction.sqrMagnitude <= 0.000001f)
+            {
+                direction = Vector3.zero;
+                return false;
+            }
+
+            direction.Normalize();
+            return true;
         }
 
         private static bool IsFinite(HumanPose pose)
