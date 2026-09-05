@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -366,6 +367,111 @@ namespace Tests.Editor.FBXImporter
             {
                 Invoke(controller, "Dispose");
                 UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_SavedCorrections_When_LoadingMatchingMotion_Then_AppliesAndRejectsMismatch()
+        {
+            string directoryPath = Path.Combine(
+                Path.GetTempPath(),
+                "Fbx2VmdPoseCorrectionPipelineTests",
+                Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directoryPath);
+            GameObject target = InstantiateTarget();
+            var pipelineObject = new GameObject("Pose Correction Persistence Pipeline");
+            pipelineObject.SetActive(false);
+            var pipeline = pipelineObject.AddComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                Invoke(pipeline, "PrepareEditorHumanoidPlayback", animator, clip, "motion");
+                int frameIndex = Math.Min(30, pipeline.ImportedMotionLastFrameIndex);
+                Assert.That(pipeline.TrySeekImportedMotionFrame(frameIndex), Is.True);
+                Assert.That(pipeline.TryCaptureImportedMotionPose(out HumanPose originalPose),
+                    Is.True);
+                int muscleIndex = FindEditableMuscleIndex(originalPose.muscles);
+                string muscleName = HumanTrait.MuscleName[muscleIndex];
+                float delta = originalPose.muscles[muscleIndex] >= 0f ? -0.1f : 0.1f;
+                Assert.That(
+                    pipeline.TryApplyImportedMotionMuscleDelta(muscleName, delta),
+                    Is.True);
+
+                string matchingPath = Path.Combine(
+                    directoryPath,
+                    "motion.pose-corrections.json");
+                object[] saveArguments = { matchingPath, null };
+                Assert.That(
+                    (bool)Invoke(
+                        pipeline,
+                        "TrySaveImportedMotionPoseCorrections",
+                        saveArguments),
+                    Is.True);
+                Assert.That(saveArguments[1], Is.EqualTo(string.Empty));
+                Assert.That(pipeline.TryRestoreImportedMotionPoseFrame(), Is.True);
+                Assert.That(pipeline.ImportedMotionPoseCorrectionFrameCount, Is.Zero);
+
+                object[] loadArguments = { matchingPath, null };
+                Assert.That(
+                    (bool)Invoke(
+                        pipeline,
+                        "TryLoadImportedMotionPoseCorrections",
+                        loadArguments),
+                    Is.True);
+                Assert.That(loadArguments[1], Is.EqualTo(string.Empty));
+                Assert.That(pipeline.ImportedMotionPoseCorrectionFrameCount, Is.EqualTo(1));
+                Assert.That(pipeline.TryCaptureImportedMotionPose(out HumanPose loadedPose),
+                    Is.True);
+                Assert.That(
+                    loadedPose.muscles[muscleIndex],
+                    Is.EqualTo(Mathf.Clamp(
+                        originalPose.muscles[muscleIndex] + delta,
+                        -1f,
+                        1f)).Within(ValueTolerance));
+
+                object mismatchedDocument = CreateDocument("different-motion", clip.frameRate);
+                Assert.That(
+                    (bool)Invoke(
+                        mismatchedDocument,
+                        "TrySetMuscleDelta",
+                        frameIndex,
+                        muscleName,
+                        delta),
+                    Is.True);
+                string mismatchedPath = Path.Combine(
+                    directoryPath,
+                    "different.pose-corrections.json");
+                object[] mismatchedSaveArguments =
+                {
+                    mismatchedPath,
+                    mismatchedDocument,
+                    null
+                };
+                Assert.That(
+                    (bool)InvokeStatic(
+                        RequireType("Fbx2Vmd.FBXImporter.HumanoidPoseCorrectionFileStore"),
+                        "TrySave",
+                        mismatchedSaveArguments),
+                    Is.True);
+
+                object[] mismatchedLoadArguments = { mismatchedPath, null };
+                Assert.That(
+                    (bool)Invoke(
+                        pipeline,
+                        "TryLoadImportedMotionPoseCorrections",
+                        mismatchedLoadArguments),
+                    Is.False);
+                Assert.That((string)mismatchedLoadArguments[1], Does.Contain("모션"));
+                Assert.That(pipeline.ImportedMotionPoseCorrectionFrameCount, Is.EqualTo(1),
+                    "호환되지 않는 문서가 현재 보정 데이터를 덮어쓰면 안 됩니다.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+                UnityEngine.Object.DestroyImmediate(target);
+                Directory.Delete(directoryPath, recursive: true);
             }
         }
 

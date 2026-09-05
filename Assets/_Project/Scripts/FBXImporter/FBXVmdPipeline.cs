@@ -2017,6 +2017,74 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        public bool TrySaveImportedMotionPoseCorrections(
+            string filePath,
+            out string errorMessage)
+        {
+            if (IsImportedMotionRecording)
+            {
+                errorMessage = "녹화 중에는 Humanoid 보정 문서를 저장할 수 없습니다.";
+                return false;
+            }
+
+            if (_humanoidMotionPlaybackController == null ||
+                !_humanoidMotionPlaybackController.IsPrepared ||
+                _poseCorrectionDocument == null)
+            {
+                errorMessage = "저장할 Humanoid 보정 문서가 없습니다.";
+                return false;
+            }
+
+            return HumanoidPoseCorrectionFileStore.TrySave(
+                filePath,
+                _poseCorrectionDocument,
+                out errorMessage);
+        }
+
+        public bool TryLoadImportedMotionPoseCorrections(
+            string filePath,
+            out string errorMessage)
+        {
+            if (IsImportedMotionRecording)
+            {
+                errorMessage = "녹화 중에는 Humanoid 보정 문서를 불러올 수 없습니다.";
+                return false;
+            }
+
+            if (_humanoidMotionPlaybackController == null ||
+                !_humanoidMotionPlaybackController.IsPrepared)
+            {
+                errorMessage = "보정 문서를 적용할 Humanoid 모션이 준비되지 않았습니다.";
+                return false;
+            }
+
+            if (!HumanoidPoseCorrectionFileStore.TryLoad(
+                    filePath,
+                    out HumanoidPoseCorrectionDocument loadedDocument,
+                    out errorMessage) ||
+                !TryValidateImportedMotionPoseCorrectionCompatibility(
+                    loadedDocument,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            if (!_humanoidMotionPlaybackController.TryPreviewPoseCorrection(
+                    loadedDocument))
+            {
+                errorMessage = "현재 프레임에 Humanoid 보정 문서를 적용하지 못했습니다.";
+                return false;
+            }
+
+            _poseCorrectionDocument = loadedDocument;
+            SetSessionState(
+                FBXSessionState.PreviewPaused,
+                $"FBX 자세 수정 문서 불러오기: {loadedDocument.FrameCount} 프레임",
+                ResolveHumanoidPlaybackProgress());
+            errorMessage = string.Empty;
+            return true;
+        }
+
         public bool TryStartImportedMotionRecording()
         {
 #if UNITY_EDITOR
@@ -2500,6 +2568,52 @@ namespace Fbx2Vmd.FBXImporter
             return Mathf.Clamp01(
                 _humanoidMotionPlaybackController.CurrentTimeSeconds /
                 _humanoidMotionPlaybackController.ClipLengthSeconds);
+        }
+
+        private bool TryValidateImportedMotionPoseCorrectionCompatibility(
+            HumanoidPoseCorrectionDocument document,
+            out string errorMessage)
+        {
+            if (document == null)
+            {
+                errorMessage = "불러온 Humanoid 보정 문서가 없습니다.";
+                return false;
+            }
+
+            if (!string.Equals(
+                    document.MotionName,
+                    _preparedMotionName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage =
+                    $"현재 모션과 보정 문서의 모션 이름이 다릅니다: " +
+                    $"{_preparedMotionName} / {document.MotionName}";
+                return false;
+            }
+
+            if (Mathf.Abs(
+                    document.SourceFrameRate -
+                    _humanoidMotionPlaybackController.ClipFrameRate) > 0.001f)
+            {
+                errorMessage =
+                    $"현재 모션과 보정 문서의 프레임률이 다릅니다: " +
+                    $"{_humanoidMotionPlaybackController.ClipFrameRate:F3} / " +
+                    $"{document.SourceFrameRate:F3}";
+                return false;
+            }
+
+            if (document.LastCorrectionFrameIndex >
+                _humanoidMotionPlaybackController.LastFrameIndex)
+            {
+                errorMessage =
+                    $"보정 문서의 마지막 프레임이 현재 모션 범위를 벗어납니다: " +
+                    $"{document.LastCorrectionFrameIndex} / " +
+                    $"{_humanoidMotionPlaybackController.LastFrameIndex}";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
         }
 
         private void CleanupHumanoidMotionPlayback()
