@@ -387,7 +387,13 @@ namespace Tests.Editor.FBXImporter
             {
                 Animator animator = RequireHumanoidAnimator(target);
                 AnimationClip clip = LoadHumanoidClip();
-                Invoke(pipeline, "PrepareEditorHumanoidPlayback", animator, clip, "motion");
+                Invoke(
+                    pipeline,
+                    "PrepareEditorHumanoidPlayback",
+                    animator,
+                    clip,
+                    "motion",
+                    null);
                 int frameIndex = Math.Min(30, pipeline.ImportedMotionLastFrameIndex);
                 Assert.That(pipeline.TrySeekImportedMotionFrame(frameIndex), Is.True);
                 Assert.That(pipeline.TryCaptureImportedMotionPose(out HumanPose originalPose),
