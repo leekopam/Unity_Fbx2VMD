@@ -20,6 +20,8 @@ namespace Fbx2Vmd.FBXImporter
             new NativeHumanoidAnimationPlayer();
         private readonly HumanoidPoseFrameEditor _poseFrameEditor =
             new HumanoidPoseFrameEditor();
+        private readonly HumanoidArmSupportPoseApplier _armSupportPoseApplier =
+            new HumanoidArmSupportPoseApplier();
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
 #if UNITY_EDITOR
         private readonly EditorHumanoidPoseReferencePlayer _poseReferencePlayer =
@@ -87,6 +89,7 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
+                _armSupportPoseApplier.Initialize(targetAnimator, clip);
                 _player.Initialize(targetAnimator, clip);
                 ClipLengthSeconds = Mathf.Max(0f, clip.length);
                 ClipFrameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(
@@ -95,6 +98,10 @@ namespace Fbx2Vmd.FBXImporter
                 _player.EvaluateAt(CurrentTimeSeconds);
                 _poseFrameEditor.Initialize(targetAnimator);
                 initializeCanonicalPoseReference?.Invoke();
+                if (!EvaluateCurrentPoseWithCorrection())
+                {
+                    throw new InvalidOperationException("Humanoid 첫 프레임 보정을 적용하지 못했습니다.");
+                }
                 State = HumanoidMotionPlaybackState.Ready;
             }
             catch
@@ -197,7 +204,9 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _player.EvaluateAt(CurrentTimeSeconds);
-            return TryApplyArmDirectionCorrection();
+            bool isApplied = TryApplyArmDirectionCorrection();
+            _armSupportPoseApplier.Apply();
+            return isApplied;
         }
 
         internal void Tick(float deltaTimeSeconds)
@@ -226,6 +235,7 @@ namespace Fbx2Vmd.FBXImporter
 #endif
             _poseFrameEditor.Dispose();
             _player.Dispose();
+            _armSupportPoseApplier.Dispose();
             CurrentTimeSeconds = 0f;
             ClipLengthSeconds = 0f;
             ClipFrameRate = 0f;
@@ -235,7 +245,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool EvaluateCurrentPoseWithCorrection()
         {
-            // 원본 clip, 팔 방향 보정, 사용자 frame delta 순서를 유지함.
+            // 원본 clip, 팔 방향, 사용자 frame delta 뒤에 비Humanoid 보조 본만 추종함.
             _player.EvaluateAt(CurrentTimeSeconds);
             if (!TryApplyArmDirectionCorrection())
             {
@@ -243,11 +253,13 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             int frameIndex = CurrentFrameIndex;
-            return _poseCorrectionDocument == null ||
+            bool isApplied = _poseCorrectionDocument == null ||
                 !_poseCorrectionDocument.HasFrameCorrection(frameIndex) ||
                 _poseFrameEditor.TryApply(
                     _poseCorrectionDocument,
                     frameIndex);
+            _armSupportPoseApplier.Apply();
+            return isApplied;
         }
 
         private bool TryApplyArmDirectionCorrection()
