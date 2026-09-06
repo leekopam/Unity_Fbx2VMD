@@ -44,6 +44,35 @@ namespace Fbx2Vmd.FBXImporter
 
         public IReadOnlyList<Transform> ControlledTransforms => _controlledTransforms;
 
+        internal static Transform FindLegacyArmAnchor(Animator animator, HumanBodyBones upperArm)
+        {
+            string anchorName;
+            switch (upperArm)
+            {
+                case HumanBodyBones.LeftUpperArm:
+                    anchorName = "joint_LeftArmM";
+                    break;
+                case HumanBodyBones.RightUpperArm:
+                    anchorName = "joint_RightArmM";
+                    break;
+                default:
+                    return null;
+            }
+
+            // 기존 리그의 명시적 이름만 해석하며 미지 모델의 weighted sibling을 추측하지 않음.
+            Transform match = null;
+            foreach (Transform candidate in animator.GetComponentsInChildren<Transform>(true))
+            {
+                if (candidate.name != anchorName &&
+                    !candidate.name.EndsWith("." + anchorName, System.StringComparison.Ordinal))
+                    continue;
+                if (match != null)
+                    return null;
+                match = candidate;
+            }
+            return match;
+        }
+
         private struct AnchorCorrection
         {
             public Transform Source;

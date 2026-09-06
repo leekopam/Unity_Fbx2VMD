@@ -14,6 +14,70 @@ namespace Tests.Editor.FBXImporter
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const float TimeTolerance = 0.0001f;
 
+        [TestCase(0f)]
+        [TestCase(22.116667f)]
+        [TestCase(31.1675f)]
+        public void Given_RecognizedSleeveBinding_When_SeekingOrRestoring_Then_FollowsFinalUpperArmPose(float time)
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+            Animator animator = RequireHumanoidAnimator(target);
+            Transform[] supports = new[] { "joint_LeftArmM", "joint_RightArmM" }
+                .Select(name => target.GetComponentsInChildren<Transform>(true)
+                    .Single(bone => bone.name.EndsWith("." + name, StringComparison.Ordinal)))
+                .ToArray();
+            Quaternion[] originalRotations = supports.Select(bone => bone.localRotation).ToArray();
+            Vector3[] originalPositions = supports.Select(bone => bone.localPosition).ToArray();
+            Vector3[] originalScales = supports.Select(bone => bone.localScale).ToArray();
+            Transform[] drivers = new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm }
+                .Select(animator.GetBoneTransform).ToArray();
+            SkinnedMeshRenderer skin = target.GetComponentsInChildren<SkinnedMeshRenderer>()
+                .Single(renderer => renderer.name == "U_Char_2");
+            Quaternion[] offsets = supports.Select((support, index) =>
+                (skin.sharedMesh.bindposes[Array.IndexOf(skin.bones, drivers[index])] *
+                 skin.sharedMesh.bindposes[Array.IndexOf(skin.bones, support)].inverse).rotation).ToArray();
+
+            try
+            {
+                Invoke(controller, "PrepareWithArmDirectionReference", animator, LoadHumanoidClip(), LoadSourceModel());
+                AssertSupportFollows(drivers, supports, offsets);
+                for (int repeat = 0; repeat < 3; repeat++)
+                {
+                    Invoke(controller, "Seek", time);
+                    AssertSupportFollows(drivers, supports, offsets);
+                    Invoke(controller, "RestoreCurrentPose");
+                    AssertSupportFollows(drivers, supports, offsets);
+                    for (int index = 0; index < supports.Length; index++)
+                    {
+                        Assert.That(Quaternion.Angle(supports[index].localRotation,
+                            drivers[index].localRotation * offsets[index]), Is.LessThan(0.05f),
+                            "소매 보조 본이 최종 상완 자세를 따라야 하며 반복 탐색 시 기준 회전이 누적되면 안 됩니다.");
+                        Assert.That(supports[index].localPosition, Is.EqualTo(originalPositions[index]));
+                        Assert.That(supports[index].localScale, Is.EqualTo(originalScales[index]));
+                    }
+                }
+                DisposeController(controller);
+                for (int index = 0; index < supports.Length; index++)
+                    Assert.That(Quaternion.Angle(supports[index].localRotation, originalRotations[index]),
+                        Is.LessThan(0.05f), "세션 종료 시 보조 본의 기존 회전을 복원해야 합니다.");
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        private static void AssertSupportFollows(Transform[] drivers, Transform[] supports, Quaternion[] offsets)
+        {
+            for (int index = 0; index < supports.Length; index++)
+            {
+                Assert.That(Quaternion.Angle(supports[index].localRotation,
+                    drivers[index].localRotation * offsets[index]), Is.LessThan(0.05f),
+                    "Prepare, Seek, Restore 각 경로에서 최종 상완 추종이 필요합니다.");
+            }
+        }
+
         [OneTimeSetUp]
         public void EnsureHumanoidClipImport()
         {
