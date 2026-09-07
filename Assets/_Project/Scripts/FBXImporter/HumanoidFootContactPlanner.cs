@@ -209,17 +209,108 @@ namespace Fbx2Vmd.FBXImporter
             float contactHeight,
             float contactSpeedLimit)
         {
-            var result = new bool[points.Count];
+            var contactCandidates = new bool[points.Count];
+            var stableFrames = new bool[points.Count];
             for (int index = 0; index < points.Count; index++)
             {
-                float speed = index == 0
+                float horizontalSpeed = index == 0
                     ? 0f
                     : HorizontalDistance(points[index - 1], points[index]) * frameRate;
-                result[index] = points[index].y <= contactHeight &&
-                    speed <= contactSpeedLimit;
+                contactCandidates[index] = points[index].y <= contactHeight &&
+                    horizontalSpeed <= contactSpeedLimit;
+                stableFrames[index] = contactCandidates[index] &&
+                    CalculateCenteredSpeed(points, index, frameRate) <=
+                    contactSpeedLimit;
+            }
+
+            // 낮은 발이 계속 상승·하강하는 통과 구간은 접촉으로 보지 않되,
+            // 안정 프레임 사이의 발 롤링은 하나의 접촉 구간으로 보존함.
+            var result = new bool[points.Count];
+            int candidateStart = -1;
+            for (int index = 0; index <= contactCandidates.Length; index++)
+            {
+                bool isCandidate = index < contactCandidates.Length &&
+                    contactCandidates[index];
+                if (isCandidate && candidateStart < 0)
+                {
+                    candidateStart = index;
+                    continue;
+                }
+
+                if (isCandidate || candidateStart < 0)
+                {
+                    continue;
+                }
+
+                MarkStableContactSpan(
+                    stableFrames,
+                    result,
+                    candidateStart,
+                    index - 1);
+                candidateStart = -1;
             }
 
             return result;
+        }
+
+        private static void MarkStableContactSpan(
+            IReadOnlyList<bool> stableFrames,
+            bool[] contactFrames,
+            int candidateStart,
+            int candidateEnd)
+        {
+            int firstStable = -1;
+            int lastStable = -1;
+            for (int index = candidateStart; index <= candidateEnd; index++)
+            {
+                if (!stableFrames[index])
+                {
+                    continue;
+                }
+
+                if (firstStable < 0)
+                {
+                    firstStable = index;
+                }
+
+                lastStable = index;
+            }
+
+            if (firstStable < 0)
+            {
+                return;
+            }
+
+            int contactStart = Mathf.Max(candidateStart, firstStable - 1);
+            int contactEnd = Mathf.Min(candidateEnd, lastStable + 1);
+            for (int index = contactStart; index <= contactEnd; index++)
+            {
+                contactFrames[index] = true;
+            }
+        }
+
+        private static float CalculateCenteredSpeed(
+            IReadOnlyList<Vector3> points,
+            int index,
+            float frameRate)
+        {
+            if (points.Count <= 1)
+            {
+                return 0f;
+            }
+
+            if (index == 0)
+            {
+                return Vector3.Distance(points[0], points[1]) * frameRate;
+            }
+
+            if (index == points.Count - 1)
+            {
+                return Vector3.Distance(points[index - 1], points[index]) * frameRate;
+            }
+
+            return Vector3.Distance(points[index - 1], points[index + 1]) *
+                frameRate * 0.5f;
         }
 
         private static float CalculatePercentileHeight(
