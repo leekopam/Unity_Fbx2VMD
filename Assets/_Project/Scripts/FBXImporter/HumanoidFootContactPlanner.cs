@@ -10,14 +10,33 @@ namespace Fbx2Vmd.FBXImporter
     internal readonly struct HumanoidFootContactSample
     {
         internal HumanoidFootContactSample(Vector3 left, Vector3 right)
+            : this(left, left, right, right)
         {
-            Left = left;
-            Right = right;
         }
 
-        internal Vector3 Left { get; }
+        internal HumanoidFootContactSample(
+            Vector3 leftFoot,
+            Vector3 leftToes,
+            Vector3 rightFoot,
+            Vector3 rightToes)
+        {
+            LeftFoot = leftFoot;
+            LeftToes = leftToes;
+            RightFoot = rightFoot;
+            RightToes = rightToes;
+        }
 
-        internal Vector3 Right { get; }
+        internal Vector3 LeftFoot { get; }
+
+        internal Vector3 LeftToes { get; }
+
+        internal Vector3 RightFoot { get; }
+
+        internal Vector3 RightToes { get; }
+
+        internal Vector3 Left => (LeftFoot + LeftToes) * 0.5f;
+
+        internal Vector3 Right => (RightFoot + RightToes) * 0.5f;
     }
 
     /// <summary>
@@ -30,20 +49,28 @@ namespace Fbx2Vmd.FBXImporter
         private const float MinimumContactDurationSeconds = 0.1f;
         private const float ReleaseDurationSeconds = 0.1f;
         private const float MinimumQuaternionMagnitude = 0.000001f;
+        private const float MinimumSegmentLength = 0.000001f;
+        private const float MinimumHeightCorrectionPerHumanScale = 1f / 1000f;
+        private const float ToeHeightWeight = 2f;
 
         internal static HumanoidFootContactPlan Build(
             IReadOnlyList<HumanoidFootContactSample> sourceSamples,
             IReadOnlyList<HumanoidFootContactSample> targetSamples,
             float frameRate,
             float sourceHumanScale,
-            Quaternion sourceToTargetRotation)
+            Quaternion sourceToTargetRotation,
+            float targetHumanScale = float.NaN)
         {
             ValidateSamples(sourceSamples, targetSamples, frameRate);
 
-            float normalizedHumanScale = IsFinite(sourceHumanScale) &&
+            float normalizedSourceHumanScale = IsFinite(sourceHumanScale) &&
                 sourceHumanScale > 0f
                     ? sourceHumanScale
                     : 1f;
+            float normalizedTargetHumanScale = IsFinite(targetHumanScale) &&
+                targetHumanScale > 0f
+                    ? targetHumanScale
+                    : normalizedSourceHumanScale;
             Quaternion normalizedRotation = NormalizeRotation(sourceToTargetRotation);
             int minimumContactFrames = Mathf.Max(
                 1,
@@ -56,6 +83,14 @@ namespace Fbx2Vmd.FBXImporter
             var sourceRight = new Vector3[sourceSamples.Count];
             var targetLeft = new Vector3[targetSamples.Count];
             var targetRight = new Vector3[targetSamples.Count];
+            var sourceLeftFeet = new Vector3[sourceSamples.Count];
+            var sourceLeftToes = new Vector3[sourceSamples.Count];
+            var sourceRightFeet = new Vector3[sourceSamples.Count];
+            var sourceRightToes = new Vector3[sourceSamples.Count];
+            var targetLeftFeet = new Vector3[targetSamples.Count];
+            var targetLeftToes = new Vector3[targetSamples.Count];
+            var targetRightFeet = new Vector3[targetSamples.Count];
+            var targetRightToes = new Vector3[targetSamples.Count];
             for (int index = 0; index < sourceSamples.Count; index++)
             {
                 HumanoidFootContactSample source = sourceSamples[index];
@@ -63,7 +98,15 @@ namespace Fbx2Vmd.FBXImporter
                 if (!IsFinite(source.Left) ||
                     !IsFinite(source.Right) ||
                     !IsFinite(target.Left) ||
-                    !IsFinite(target.Right))
+                    !IsFinite(target.Right) ||
+                    !IsFinite(source.LeftFoot) ||
+                    !IsFinite(source.LeftToes) ||
+                    !IsFinite(source.RightFoot) ||
+                    !IsFinite(source.RightToes) ||
+                    !IsFinite(target.LeftFoot) ||
+                    !IsFinite(target.LeftToes) ||
+                    !IsFinite(target.RightFoot) ||
+                    !IsFinite(target.RightToes))
                 {
                     throw new ArgumentException("발 접촉 표본은 유한한 값이어야 합니다.");
                 }
@@ -72,13 +115,21 @@ namespace Fbx2Vmd.FBXImporter
                 sourceRight[index] = source.Right;
                 targetLeft[index] = target.Left;
                 targetRight[index] = target.Right;
+                sourceLeftFeet[index] = source.LeftFoot;
+                sourceLeftToes[index] = source.LeftToes;
+                sourceRightFeet[index] = source.RightFoot;
+                sourceRightToes[index] = source.RightToes;
+                targetLeftFeet[index] = target.LeftFoot;
+                targetLeftToes[index] = target.LeftToes;
+                targetRightFeet[index] = target.RightFoot;
+                targetRightToes[index] = target.RightToes;
             }
 
             Vector3[] leftCorrections = BuildFootCorrections(
                 sourceLeft,
                 targetLeft,
                 frameRate,
-                normalizedHumanScale,
+                normalizedSourceHumanScale,
                 normalizedRotation,
                 minimumContactFrames,
                 releaseFrames,
@@ -87,17 +138,126 @@ namespace Fbx2Vmd.FBXImporter
                 sourceRight,
                 targetRight,
                 frameRate,
-                normalizedHumanScale,
+                normalizedSourceHumanScale,
                 normalizedRotation,
                 minimumContactFrames,
                 releaseFrames,
                 out int rightRunCount);
+            Vector3[] leftToeDirections = ApplySupportPoseCorrections(
+                sourceLeftFeet,
+                sourceLeftToes,
+                targetLeftFeet,
+                targetLeftToes,
+                leftCorrections,
+                normalizedSourceHumanScale,
+                normalizedTargetHumanScale,
+                normalizedRotation);
+            Vector3[] rightToeDirections = ApplySupportPoseCorrections(
+                sourceRightFeet,
+                sourceRightToes,
+                targetRightFeet,
+                targetRightToes,
+                rightCorrections,
+                normalizedSourceHumanScale,
+                normalizedTargetHumanScale,
+                normalizedRotation);
             return new HumanoidFootContactPlan(
                 leftCorrections,
                 rightCorrections,
+                leftToeDirections,
+                rightToeDirections,
                 frameRate,
                 leftRunCount,
                 rightRunCount);
+        }
+
+        private static Vector3[] ApplySupportPoseCorrections(
+            IReadOnlyList<Vector3> sourceFeet,
+            IReadOnlyList<Vector3> sourceToes,
+            IReadOnlyList<Vector3> targetFeet,
+            IReadOnlyList<Vector3> targetToes,
+            Vector3[] rootSpaceCorrections,
+            float sourceHumanScale,
+            float targetHumanScale,
+            Quaternion sourceToTargetRotation)
+        {
+            float scaleRatio = targetHumanScale / sourceHumanScale;
+            float sourceFootBaseline = CalculatePercentileHeight(sourceFeet, 0.02f);
+            float sourceToesBaseline = CalculatePercentileHeight(sourceToes, 0.02f);
+            float targetFootBaseline = CalculatePercentileHeight(targetFeet, 0.02f);
+            float targetToesBaseline = CalculatePercentileHeight(targetToes, 0.02f);
+            Quaternion targetToSourceRotation = Quaternion.Inverse(sourceToTargetRotation);
+            var rootSpaceToeDirections = new Vector3[sourceFeet.Count];
+
+            for (int index = 0; index < sourceFeet.Count; index++)
+            {
+                Vector3 targetSegment = targetToes[index] - targetFeet[index];
+                float targetSegmentLength = targetSegment.magnitude;
+                float desiredFootHeight = targetFootBaseline +
+                    (sourceFeet[index].y - sourceFootBaseline) * scaleRatio;
+                float desiredToesHeight = targetToesBaseline +
+                    (sourceToes[index].y - sourceToesBaseline) * scaleRatio;
+                if (targetSegmentLength <= MinimumSegmentLength)
+                {
+                    float footOnlyHeightCorrection =
+                        desiredFootHeight - targetFeet[index].y;
+                    if (Mathf.Abs(footOnlyHeightCorrection) >=
+                        targetHumanScale * MinimumHeightCorrectionPerHumanScale)
+                    {
+                        rootSpaceCorrections[index] += targetToSourceRotation *
+                            (Vector3.up * footOnlyHeightCorrection);
+                    }
+                    continue;
+                }
+
+                float desiredVerticalSeparation = Mathf.Clamp(
+                    desiredToesHeight - desiredFootHeight,
+                    -targetSegmentLength,
+                    targetSegmentLength);
+
+                // 발끝은 실제 지지점이고 Foot 본은 발목에 가까운 대리점이므로
+                // 길이 제약이 충돌할 때 발끝 높이에 더 큰 가중치를 둠.
+                float correctedFootHeight =
+                    (desiredFootHeight +
+                     ToeHeightWeight *
+                     (desiredToesHeight - desiredVerticalSeparation)) /
+                    (1f + ToeHeightWeight);
+                float heightCorrection =
+                    correctedFootHeight - targetFeet[index].y;
+                if (Mathf.Abs(heightCorrection) >=
+                    targetHumanScale * MinimumHeightCorrectionPerHumanScale)
+                {
+                    rootSpaceCorrections[index] += targetToSourceRotation *
+                        (Vector3.up * heightCorrection);
+                }
+
+                Vector3 sourceSegment = sourceToes[index] - sourceFeet[index];
+                Vector3 mappedSourceDirection =
+                    sourceToTargetRotation * sourceSegment.normalized;
+                Vector2 horizontalDirection = new Vector2(
+                    mappedSourceDirection.x,
+                    mappedSourceDirection.z);
+                if (horizontalDirection.sqrMagnitude <= MinimumSegmentLength)
+                {
+                    horizontalDirection = new Vector2(
+                        targetSegment.x,
+                        targetSegment.z);
+                }
+
+                horizontalDirection.Normalize();
+                float horizontalLength = Mathf.Sqrt(Mathf.Max(
+                    0f,
+                    targetSegmentLength * targetSegmentLength -
+                    desiredVerticalSeparation * desiredVerticalSeparation));
+                Vector3 desiredWorldDirection = new Vector3(
+                    horizontalDirection.x * horizontalLength,
+                    desiredVerticalSeparation,
+                    horizontalDirection.y * horizontalLength);
+                rootSpaceToeDirections[index] =
+                    targetToSourceRotation * desiredWorldDirection;
+            }
+
+            return rootSpaceToeDirections;
         }
 
         private static Vector3[] BuildFootCorrections(

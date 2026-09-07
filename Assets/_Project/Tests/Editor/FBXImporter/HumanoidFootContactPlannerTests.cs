@@ -54,7 +54,8 @@ namespace Tests.Editor.FBXImporter
             object plan = BuildPlan(source, target, Quaternion.identity);
 
             Assert.That(TryEvaluate(plan, 5f / FrameRate, out Vector3 correction), Is.True);
-            Assert.That(correction, Is.EqualTo(Vector3.zero));
+            Assert.That(correction.x, Is.EqualTo(0f).Within(0.000001f));
+            Assert.That(correction.z, Is.EqualTo(0f).Within(0.000001f));
             Assert.That(GetIntProperty(plan, "LeftContactRunCount"), Is.Zero);
         }
 
@@ -86,10 +87,11 @@ namespace Tests.Editor.FBXImporter
             TryEvaluate(plan, 5f / FrameRate, out Vector3 contactCorrection);
             TryEvaluate(plan, 6f / FrameRate, out Vector3 firstReleaseCorrection);
             TryEvaluate(plan, 12f / FrameRate, out Vector3 releasedCorrection);
-            Assert.That(firstReleaseCorrection.magnitude,
-                Is.LessThan(contactCorrection.magnitude));
-            Assert.That(firstReleaseCorrection.magnitude, Is.GreaterThan(0f));
-            Assert.That(releasedCorrection, Is.EqualTo(Vector3.zero));
+            Assert.That(Mathf.Abs(firstReleaseCorrection.x),
+                Is.LessThan(Mathf.Abs(contactCorrection.x)));
+            Assert.That(Mathf.Abs(firstReleaseCorrection.x), Is.GreaterThan(0f));
+            Assert.That(releasedCorrection.x, Is.EqualTo(0f).Within(0.000001f));
+            Assert.That(releasedCorrection.z, Is.EqualTo(0f).Within(0.000001f));
         }
 
         [Test]
@@ -121,6 +123,19 @@ namespace Tests.Editor.FBXImporter
             Assert.That(correction.x, Is.EqualTo(-0.025f).Within(0.000001f));
         }
 
+        [Test]
+        public void Given_SourceFootHeightChange_When_Building_Then_TransfersVerticalMotion()
+        {
+            Vector3[] source = CreatePoints(8, index =>
+                new Vector3(0f, index < 4 ? 0f : 0.02f, 0f));
+            Vector3[] target = CreatePoints(8, _ => Vector3.zero);
+
+            object plan = BuildPlan(source, target, Quaternion.identity);
+
+            Assert.That(TryEvaluate(plan, 7f / FrameRate, out Vector3 correction), Is.True);
+            Assert.That(correction.y, Is.EqualTo(0.02f).Within(0.000001f));
+        }
+
         private static object BuildPlan(
             Vector3[] source,
             Vector3[] target,
@@ -137,7 +152,18 @@ namespace Tests.Editor.FBXImporter
             Array targetSamples = CreateSamples(sampleType, target);
             MethodInfo build = plannerType.GetMethod(
                 "Build",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: new[]
+                {
+                    sourceSamples.GetType(),
+                    targetSamples.GetType(),
+                    typeof(float),
+                    typeof(float),
+                    typeof(Quaternion),
+                    typeof(float)
+                },
+                modifiers: null);
             Assert.That(build, Is.Not.Null);
             return build.Invoke(
                 null,
@@ -147,7 +173,8 @@ namespace Tests.Editor.FBXImporter
                     targetSamples,
                     FrameRate,
                     HumanScale,
-                    rotation
+                    rotation,
+                    HumanScale
                 });
         }
 

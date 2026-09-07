@@ -10,10 +10,14 @@ namespace Fbx2Vmd.FBXImporter
     {
         private readonly Vector3[] _leftRootSpaceCorrections;
         private readonly Vector3[] _rightRootSpaceCorrections;
+        private readonly Vector3[] _leftRootSpaceToeDirections;
+        private readonly Vector3[] _rightRootSpaceToeDirections;
 
         internal HumanoidFootContactPlan(
             Vector3[] leftRootSpaceCorrections,
             Vector3[] rightRootSpaceCorrections,
+            Vector3[] leftRootSpaceToeDirections,
+            Vector3[] rightRootSpaceToeDirections,
             float frameRate,
             int leftContactRunCount,
             int rightContactRunCount)
@@ -28,10 +32,26 @@ namespace Fbx2Vmd.FBXImporter
                 throw new ArgumentNullException(nameof(rightRootSpaceCorrections));
             }
 
+            if (leftRootSpaceToeDirections == null)
+            {
+                throw new ArgumentNullException(nameof(leftRootSpaceToeDirections));
+            }
+
+            if (rightRootSpaceToeDirections == null)
+            {
+                throw new ArgumentNullException(nameof(rightRootSpaceToeDirections));
+            }
+
             if (leftRootSpaceCorrections.Length == 0 ||
                 leftRootSpaceCorrections.Length != rightRootSpaceCorrections.Length)
             {
                 throw new ArgumentException("발 접촉 보정 배열 길이가 일치해야 합니다.");
+            }
+
+            if (leftRootSpaceToeDirections.Length != leftRootSpaceCorrections.Length ||
+                rightRootSpaceToeDirections.Length != rightRootSpaceCorrections.Length)
+            {
+                throw new ArgumentException("발 접촉 보정과 발끝 방향 배열 길이가 일치해야 합니다.");
             }
 
             if (!IsFinite(frameRate) || frameRate <= 0f)
@@ -41,6 +61,8 @@ namespace Fbx2Vmd.FBXImporter
 
             _leftRootSpaceCorrections = leftRootSpaceCorrections;
             _rightRootSpaceCorrections = rightRootSpaceCorrections;
+            _leftRootSpaceToeDirections = leftRootSpaceToeDirections;
+            _rightRootSpaceToeDirections = rightRootSpaceToeDirections;
             FrameRate = frameRate;
             LeftContactRunCount = Mathf.Max(0, leftContactRunCount);
             RightContactRunCount = Mathf.Max(0, rightContactRunCount);
@@ -83,6 +105,42 @@ namespace Fbx2Vmd.FBXImporter
                 interpolation);
             return IsFinite(leftRootSpaceCorrection) &&
                 IsFinite(rightRootSpaceCorrection);
+        }
+
+        internal bool TryEvaluateSupportPose(
+            float timeSeconds,
+            out Vector3 leftRootSpaceCorrection,
+            out Vector3 rightRootSpaceCorrection,
+            out Vector3 leftRootSpaceToeDirection,
+            out Vector3 rightRootSpaceToeDirection)
+        {
+            leftRootSpaceToeDirection = Vector3.zero;
+            rightRootSpaceToeDirection = Vector3.zero;
+            if (!TryEvaluate(
+                    timeSeconds,
+                    out leftRootSpaceCorrection,
+                    out rightRootSpaceCorrection))
+            {
+                return false;
+            }
+
+            float frame = Mathf.Clamp(
+                timeSeconds * FrameRate,
+                0f,
+                FrameCount - 1);
+            int firstFrame = Mathf.FloorToInt(frame);
+            int secondFrame = Mathf.Min(firstFrame + 1, FrameCount - 1);
+            float interpolation = frame - firstFrame;
+            leftRootSpaceToeDirection = Vector3.LerpUnclamped(
+                _leftRootSpaceToeDirections[firstFrame],
+                _leftRootSpaceToeDirections[secondFrame],
+                interpolation);
+            rightRootSpaceToeDirection = Vector3.LerpUnclamped(
+                _rightRootSpaceToeDirections[firstFrame],
+                _rightRootSpaceToeDirections[secondFrame],
+                interpolation);
+            return IsFinite(leftRootSpaceToeDirection) &&
+                IsFinite(rightRootSpaceToeDirection);
         }
 
         private static bool IsFinite(Vector3 value)
