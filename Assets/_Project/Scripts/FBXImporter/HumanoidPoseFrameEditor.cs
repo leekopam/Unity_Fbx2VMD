@@ -12,8 +12,12 @@ namespace Fbx2Vmd.FBXImporter
         private HumanPose _workingPose;
         private Animator _targetAnimator;
         private Transform[] _humanoidBones = Array.Empty<Transform>();
+        private int[] _humanoidBoneIndexes = Array.Empty<int>();
+        private Quaternion[] _boneLocalRotations = Array.Empty<Quaternion>();
         private Vector3[] _boneLocalPositions = Array.Empty<Vector3>();
         private Vector3[] _boneLocalScales = Array.Empty<Vector3>();
+        private bool[] _affectedBoneRotations = Array.Empty<bool>();
+        private float[] _originalMuscles = Array.Empty<float>();
 
         internal bool IsInitialized => _poseHandler != null;
 
@@ -70,12 +74,13 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+            CaptureOriginalMuscles(pose.muscles);
             if (!document.TryApplyMuscleDeltas(frameIndex, pose.muscles))
             {
                 return false;
             }
 
-            ApplyPosePreservingGeometry(ref pose);
+            ApplyPosePreservingGeometry(ref pose, _originalMuscles);
             return true;
         }
 
@@ -144,8 +149,12 @@ namespace Fbx2Vmd.FBXImporter
             _workingPose = default;
             _targetAnimator = null;
             _humanoidBones = Array.Empty<Transform>();
+            _humanoidBoneIndexes = Array.Empty<int>();
+            _boneLocalRotations = Array.Empty<Quaternion>();
             _boneLocalPositions = Array.Empty<Vector3>();
             _boneLocalScales = Array.Empty<Vector3>();
+            _affectedBoneRotations = Array.Empty<bool>();
+            _originalMuscles = Array.Empty<float>();
         }
 
         private bool TryGetArmBones(
@@ -213,6 +222,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             int boneCapacity = (int)HumanBodyBones.LastBone;
             Transform[] bones = new Transform[boneCapacity];
+            int[] boneIndexes = new int[boneCapacity];
             int boneCount = 0;
 
             for (int index = 0; index < boneCapacity; index++)
@@ -220,14 +230,20 @@ namespace Fbx2Vmd.FBXImporter
                 Transform bone = targetAnimator.GetBoneTransform((HumanBodyBones)index);
                 if (bone != null)
                 {
-                    bones[boneCount++] = bone;
+                    bones[boneCount] = bone;
+                    boneIndexes[boneCount] = index;
+                    boneCount++;
                 }
             }
 
             _humanoidBones = new Transform[boneCount];
             Array.Copy(bones, _humanoidBones, boneCount);
+            _humanoidBoneIndexes = new int[boneCount];
+            Array.Copy(boneIndexes, _humanoidBoneIndexes, boneCount);
+            _boneLocalRotations = new Quaternion[boneCount];
             _boneLocalPositions = new Vector3[boneCount];
             _boneLocalScales = new Vector3[boneCount];
+            _affectedBoneRotations = new bool[boneCapacity];
         }
 
         private void CaptureBoneGeometry()
@@ -235,32 +251,92 @@ namespace Fbx2Vmd.FBXImporter
             for (int index = 0; index < _humanoidBones.Length; index++)
             {
                 Transform bone = _humanoidBones[index];
+                _boneLocalRotations[index] = bone.localRotation;
                 _boneLocalPositions[index] = bone.localPosition;
                 _boneLocalScales[index] = bone.localScale;
             }
         }
 
-        private void RestoreBoneGeometry()
+        private void CaptureOriginalMuscles(float[] muscles)
+        {
+            if (_originalMuscles.Length != muscles.Length)
+            {
+                _originalMuscles = new float[muscles.Length];
+            }
+
+            Array.Copy(muscles, _originalMuscles, muscles.Length);
+        }
+
+        private void RestoreBoneGeometry(bool preserveUnaffectedRotations)
         {
             for (int index = 0; index < _humanoidBones.Length; index++)
             {
                 Transform bone = _humanoidBones[index];
+                if (preserveUnaffectedRotations &&
+                    !_affectedBoneRotations[_humanoidBoneIndexes[index]])
+                {
+                    bone.localRotation = _boneLocalRotations[index];
+                }
+
                 bone.localPosition = _boneLocalPositions[index];
                 bone.localScale = _boneLocalScales[index];
             }
         }
 
-        private void ApplyPosePreservingGeometry(ref HumanPose pose)
+        private void ApplyPosePreservingGeometry(
+            ref HumanPose pose,
+            float[] originalMuscles)
         {
             CaptureBoneGeometry();
+            bool canPreserveUnaffectedRotations = TryMarkAffectedBoneRotations(
+                originalMuscles,
+                pose.muscles);
             try
             {
                 _poseHandler.SetHumanPose(ref pose);
             }
             finally
             {
-                RestoreBoneGeometry();
+                RestoreBoneGeometry(canPreserveUnaffectedRotations);
             }
+        }
+
+        private bool TryMarkAffectedBoneRotations(
+            float[] originalMuscles,
+            float[] correctedMuscles)
+        {
+            if (originalMuscles == null ||
+                correctedMuscles == null ||
+                originalMuscles.Length < HumanTrait.MuscleCount ||
+                correctedMuscles.Length < HumanTrait.MuscleCount ||
+                _affectedBoneRotations.Length < (int)HumanBodyBones.LastBone)
+            {
+                return false;
+            }
+
+            Array.Clear(
+                _affectedBoneRotations,
+                0,
+                _affectedBoneRotations.Length);
+            for (int muscleIndex = 0;
+                 muscleIndex < HumanTrait.MuscleCount;
+                 muscleIndex++)
+            {
+                if (originalMuscles[muscleIndex] == correctedMuscles[muscleIndex])
+                {
+                    continue;
+                }
+
+                int boneIndex = HumanTrait.BoneFromMuscle(muscleIndex);
+                if (boneIndex < 0 || boneIndex >= _affectedBoneRotations.Length)
+                {
+                    return false;
+                }
+
+                _affectedBoneRotations[boneIndex] = true;
+            }
+
+            return true;
         }
 
         private static bool IsFinite(HumanPose pose)
