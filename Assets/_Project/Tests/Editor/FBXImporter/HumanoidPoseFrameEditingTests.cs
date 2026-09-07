@@ -14,6 +14,7 @@ namespace Tests.Editor.FBXImporter
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const float ValueTolerance = 0.0001f;
+        private const float MuscleProjectionTolerance = 0.001f;
 
         [OneTimeSetUp]
         public void EnsureHumanoidClipImport()
@@ -371,6 +372,122 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_UpperBodyMuscleCorrection_When_PreviewingFrame_Then_PreservesLowerBodyAndRoot()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreatePlaybackController();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "Prepare", animator, LoadHumanoidClip());
+                int frameIndex = Math.Min(
+                    900,
+                    (int)ReadProperty(controller, "LastFrameIndex"));
+                Assert.That((bool)Invoke(controller, "SeekFrame", frameIndex), Is.True);
+                object[] poseArguments = { null };
+                Assert.That(
+                    (bool)Invoke(controller, "TryCaptureCurrentPose", poseArguments),
+                    Is.True);
+                HumanPose originalPose = (HumanPose)poseArguments[0];
+                int muscleIndex = FindEditableUpperBodyMuscleIndex(originalPose.muscles);
+                string muscleName = HumanTrait.MuscleName[muscleIndex];
+                float delta = originalPose.muscles[muscleIndex] >= 0f ? -0.05f : 0.05f;
+                HumanBodyBones[] lowerBodyBoneIds =
+                {
+                    HumanBodyBones.Hips,
+                    HumanBodyBones.LeftUpperLeg,
+                    HumanBodyBones.LeftLowerLeg,
+                    HumanBodyBones.LeftFoot,
+                    HumanBodyBones.LeftToes,
+                    HumanBodyBones.RightUpperLeg,
+                    HumanBodyBones.RightLowerLeg,
+                    HumanBodyBones.RightFoot,
+                    HumanBodyBones.RightToes
+                };
+                Transform[] lowerBodyBones = lowerBodyBoneIds
+                    .Select(animator.GetBoneTransform)
+                    .Where(bone => bone != null)
+                    .ToArray();
+                Quaternion[] originalLocalRotations = lowerBodyBones
+                    .Select(bone => bone.localRotation)
+                    .ToArray();
+                Vector3[] originalLocalPositions = lowerBodyBones
+                    .Select(bone => bone.localPosition)
+                    .ToArray();
+                Vector3[] originalLocalScales = lowerBodyBones
+                    .Select(bone => bone.localScale)
+                    .ToArray();
+                Vector3 originalRootPosition = animator.transform.position;
+                Quaternion originalRootRotation = animator.transform.rotation;
+                object document = CreateDocument(
+                    "motion",
+                    (float)ReadProperty(controller, "ClipFrameRate"));
+
+                Assert.That(
+                    (bool)Invoke(
+                        document,
+                        "TrySetMuscleDelta",
+                        frameIndex,
+                        muscleName,
+                        delta),
+                    Is.True);
+                Assert.That(
+                    (bool)Invoke(controller, "TryPreviewPoseCorrection", document),
+                    Is.True);
+                object[] correctedPoseArguments = { null };
+                Assert.That(
+                    (bool)Invoke(
+                        controller,
+                        "TryCaptureCurrentPose",
+                        correctedPoseArguments),
+                    Is.True);
+                HumanPose correctedPose = (HumanPose)correctedPoseArguments[0];
+                float expectedValue = Mathf.Clamp(
+                    originalPose.muscles[muscleIndex] + delta,
+                    -1f,
+                    1f);
+
+                Assert.That(
+                    correctedPose.muscles[muscleIndex],
+                    Is.EqualTo(expectedValue).Within(MuscleProjectionTolerance));
+                for (int index = 0; index < lowerBodyBones.Length; index++)
+                {
+                    Assert.That(
+                        Quaternion.Angle(
+                            lowerBodyBones[index].localRotation,
+                            originalLocalRotations[index]),
+                        Is.LessThanOrEqualTo(ValueTolerance),
+                        $"{lowerBodyBones[index].name} 회전이 상체 보정으로 바뀌면 안 됩니다.");
+                    Assert.That(
+                        Vector3.Distance(
+                            lowerBodyBones[index].localPosition,
+                            originalLocalPositions[index]),
+                        Is.LessThanOrEqualTo(ValueTolerance),
+                        $"{lowerBodyBones[index].name} 위치가 상체 보정으로 바뀌면 안 됩니다.");
+                    Assert.That(
+                        Vector3.Distance(
+                            lowerBodyBones[index].localScale,
+                            originalLocalScales[index]),
+                        Is.LessThanOrEqualTo(ValueTolerance),
+                        $"{lowerBodyBones[index].name} 스케일이 상체 보정으로 바뀌면 안 됩니다.");
+                }
+
+                Assert.That(
+                    Vector3.Distance(animator.transform.position, originalRootPosition),
+                    Is.LessThanOrEqualTo(ValueTolerance));
+                Assert.That(
+                    Quaternion.Angle(animator.transform.rotation, originalRootRotation),
+                    Is.LessThanOrEqualTo(ValueTolerance));
+            }
+            finally
+            {
+                Invoke(controller, "Dispose");
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
         public void Given_SavedCorrections_When_LoadingMatchingMotion_Then_AppliesAndRejectsMismatch()
         {
             string directoryPath = Path.Combine(
@@ -546,6 +663,25 @@ namespace Tests.Editor.FBXImporter
             }
 
             Assert.Fail("안전하게 delta를 적용할 Humanoid muscle을 찾지 못했습니다.");
+            return -1;
+        }
+
+        private static int FindEditableUpperBodyMuscleIndex(float[] muscles)
+        {
+            Assert.That(muscles, Is.Not.Null);
+            for (int index = 0; index < muscles.Length; index++)
+            {
+                string muscleName = HumanTrait.MuscleName[index];
+                if (muscleName.StartsWith("Left Arm ", StringComparison.Ordinal) &&
+                    !float.IsNaN(muscles[index]) &&
+                    !float.IsInfinity(muscles[index]) &&
+                    Mathf.Abs(muscles[index]) < 0.75f)
+                {
+                    return index;
+                }
+            }
+
+            Assert.Fail("상체 격리 검증에 사용할 왼팔 muscle을 찾지 못했습니다.");
             return -1;
         }
 
