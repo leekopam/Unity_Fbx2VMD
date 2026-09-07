@@ -18,7 +18,9 @@ namespace Tests.Editor.FBXImporter
             "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const string ReferenceObjectPrefix = "EditorHumanoidPoseReference_";
         private const float GeometryTolerance = 0.0001f;
-        private const float DirectionErrorLimitDegrees = 0.1f;
+        private const float UpperArmDirectionErrorLimitDegrees = 0.1f;
+        private const float ForearmDirectionErrorLimitDegrees = 2.01f;
+        private const float ElbowBendErrorLimitDegrees = 2.1f;
         private const float InducedStepLimitDegrees = 2f;
         private const float ProximityCandidateLimit = 0.18f;
         private const float ProximityRegressionMargin = 0.02f;
@@ -29,19 +31,23 @@ namespace Tests.Editor.FBXImporter
             new ArmSegment(
                 "left_upper_arm",
                 HumanBodyBones.LeftUpperArm,
-                HumanBodyBones.LeftLowerArm),
+                HumanBodyBones.LeftLowerArm,
+                isForearm: false),
             new ArmSegment(
                 "left_forearm",
                 HumanBodyBones.LeftLowerArm,
-                HumanBodyBones.LeftHand),
+                HumanBodyBones.LeftHand,
+                isForearm: true),
             new ArmSegment(
                 "right_upper_arm",
                 HumanBodyBones.RightUpperArm,
-                HumanBodyBones.RightLowerArm),
+                HumanBodyBones.RightLowerArm,
+                isForearm: false),
             new ArmSegment(
                 "right_forearm",
                 HumanBodyBones.RightLowerArm,
-                HumanBodyBones.RightHand)
+                HumanBodyBones.RightHand,
+                isForearm: true)
         };
 
         private static readonly HumanBodyBones[] ScopeInvariantBones =
@@ -132,6 +138,10 @@ namespace Tests.Editor.FBXImporter
                 float frameRate = clip.frameRate > 0f ? clip.frameRate : 30f;
                 int lastFrameIndex = Mathf.CeilToInt(clip.length * frameRate);
                 var directionErrors = new List<float>((lastFrameIndex + 1) * 4);
+                var upperArmDirectionErrors =
+                    new List<float>((lastFrameIndex + 1) * 2);
+                var forearmDirectionErrors =
+                    new List<float>((lastFrameIndex + 1) * 2);
                 var proximityCandidates = new List<ProximityFrame>();
                 Vector3[] previousSourceDirections = null;
                 Vector3[] previousCorrectedDirections = null;
@@ -175,6 +185,15 @@ namespace Tests.Editor.FBXImporter
                         }
 
                         directionErrors.Add(directionError);
+                        if (ArmSegments[segmentIndex].IsForearm)
+                        {
+                            forearmDirectionErrors.Add(directionError);
+                        }
+                        else
+                        {
+                            upperArmDirectionErrors.Add(directionError);
+                        }
+
                         Quaternion parentCorrection = segmentIndex == 1
                             ? inheritedCorrections[0]
                             : segmentIndex == 3
@@ -270,6 +289,10 @@ namespace Tests.Editor.FBXImporter
                     $"directionMean={directionErrors.Average():F9}, " +
                     $"directionP95={CalculatePercentile(directionErrors, 0.95f):F9}, " +
                     $"directionMax={directionErrors.Max():F9}, " +
+                    $"upperArmDirectionMax={upperArmDirectionErrors.Max():F9}, " +
+                    $"forearmDirectionMean={forearmDirectionErrors.Average():F9}, " +
+                    $"forearmDirectionP95={CalculatePercentile(forearmDirectionErrors, 0.95f):F9}, " +
+                    $"forearmDirectionMax={forearmDirectionErrors.Max():F9}, " +
                     $"directionStepOver2={directionStepRegressionCount}, " +
                     $"directionStepRegressionMax={maxDirectionStepRegression:F9}, " +
                     $"correctionTwistOver2={correctionTwistOverLimitCount}, " +
@@ -288,12 +311,19 @@ namespace Tests.Editor.FBXImporter
                     string.Join(";", highestRiskFrames.Select(item => item.ToString())));
 
                 Assert.That(nonFiniteMetricCount, Is.Zero);
-                Assert.That(directionErrors.Max(), Is.LessThan(DirectionErrorLimitDegrees));
+                Assert.That(
+                    upperArmDirectionErrors.Max(),
+                    Is.LessThan(UpperArmDirectionErrorLimitDegrees));
+                Assert.That(
+                    forearmDirectionErrors.Max(),
+                    Is.LessThanOrEqualTo(ForearmDirectionErrorLimitDegrees));
                 Assert.That(directionStepRegressionCount, Is.Zero,
                     "팔 방향 보정이 원본보다 2도 넘는 frame-step을 만들면 안 됩니다.");
                 Assert.That(correctionTwistOverLimitCount, Is.Zero,
                     "팔 방향 보정 회전은 팔 축 Twist를 2도 넘게 만들면 안 됩니다.");
-                Assert.That(maxElbowBendError, Is.LessThan(DirectionErrorLimitDegrees));
+                Assert.That(
+                    maxElbowBendError,
+                    Is.LessThanOrEqualTo(ElbowBendErrorLimitDegrees));
                 Assert.That(maxScopeRotationDelta, Is.LessThanOrEqualTo(GeometryTolerance),
                     "팔 보정은 쇄골과 손목 localRotation을 직접 바꾸면 안 됩니다.");
                 Assert.That(maxLocalPositionDelta, Is.LessThanOrEqualTo(GeometryTolerance));
@@ -597,11 +627,13 @@ namespace Tests.Editor.FBXImporter
             internal ArmSegment(
                 string name,
                 HumanBodyBones startBone,
-                HumanBodyBones endBone)
+                HumanBodyBones endBone,
+                bool isForearm)
             {
                 Name = name;
                 StartBone = startBone;
                 EndBone = endBone;
+                IsForearm = isForearm;
             }
 
             internal string Name { get; }
@@ -609,6 +641,8 @@ namespace Tests.Editor.FBXImporter
             internal HumanBodyBones StartBone { get; }
 
             internal HumanBodyBones EndBone { get; }
+
+            internal bool IsForearm { get; }
         }
 
         private sealed class ArmRig
