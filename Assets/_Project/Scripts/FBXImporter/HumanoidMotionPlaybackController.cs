@@ -207,9 +207,18 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _player.EvaluateAt(CurrentTimeSeconds);
+            if (!TryCaptureFootBendNormals(
+                    out Vector3 leftBendNormal,
+                    out Vector3 rightBendNormal))
+            {
+                return false;
+            }
+
             bool isApplied = TryApplyArmDirectionCorrection();
             _armSupportPoseApplier.Apply();
-            return isApplied && TryApplyFootContactStabilization();
+            return isApplied && TryApplyFootContactStabilization(
+                leftBendNormal,
+                rightBendNormal);
         }
 
         internal void Tick(float deltaTimeSeconds)
@@ -251,6 +260,13 @@ namespace Fbx2Vmd.FBXImporter
         {
             // 원본 자세와 상체 보정 뒤에 발 접촉을 마지막으로 고정함.
             _player.EvaluateAt(CurrentTimeSeconds);
+            if (!TryCaptureFootBendNormals(
+                    out Vector3 leftBendNormal,
+                    out Vector3 rightBendNormal))
+            {
+                return false;
+            }
+
             if (!TryApplyArmDirectionCorrection())
             {
                 return false;
@@ -263,7 +279,9 @@ namespace Fbx2Vmd.FBXImporter
                     _poseCorrectionDocument,
                     frameIndex);
             _armSupportPoseApplier.Apply();
-            return isApplied && TryApplyFootContactStabilization();
+            return isApplied && TryApplyFootContactStabilization(
+                leftBendNormal,
+                rightBendNormal);
         }
 
         private bool TryApplyArmDirectionCorrection()
@@ -289,10 +307,30 @@ namespace Fbx2Vmd.FBXImporter
 #endif
         }
 
-        private bool TryApplyFootContactStabilization()
+        private bool TryCaptureFootBendNormals(
+            out Vector3 leftBendNormal,
+            out Vector3 rightBendNormal)
         {
 #if UNITY_EDITOR
-            return _footContactStabilizer.TryApply(CurrentTimeSeconds);
+            return _footContactStabilizer.TryCaptureBendNormals(
+                out leftBendNormal,
+                out rightBendNormal);
+#else
+            leftBendNormal = Vector3.zero;
+            rightBendNormal = Vector3.zero;
+            return true;
+#endif
+        }
+
+        private bool TryApplyFootContactStabilization(
+            Vector3 leftBendNormal,
+            Vector3 rightBendNormal)
+        {
+#if UNITY_EDITOR
+            return _footContactStabilizer.TryApply(
+                CurrentTimeSeconds,
+                leftBendNormal,
+                rightBendNormal);
 #else
             return true;
 #endif
