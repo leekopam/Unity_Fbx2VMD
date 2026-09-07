@@ -26,6 +26,8 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
         private readonly EditorHumanoidPoseReferencePlayer _poseReferencePlayer =
             new EditorHumanoidPoseReferencePlayer();
+        private readonly EditorHumanoidFootContactStabilizer _footContactStabilizer =
+            new EditorHumanoidFootContactStabilizer();
 #endif
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
@@ -69,9 +71,10 @@ namespace Fbx2Vmd.FBXImporter
             PrepareCore(
                 targetAnimator,
                 clip,
-                () => _poseReferencePlayer.InitializeFromSourceModel(
-                    sourceModelAsset,
-                    clip));
+                () => InitializeEditorReferenceCorrections(
+                    targetAnimator,
+                    clip,
+                    sourceModelAsset));
         }
 #endif
 
@@ -206,7 +209,7 @@ namespace Fbx2Vmd.FBXImporter
             _player.EvaluateAt(CurrentTimeSeconds);
             bool isApplied = TryApplyArmDirectionCorrection();
             _armSupportPoseApplier.Apply();
-            return isApplied;
+            return isApplied && TryApplyFootContactStabilization();
         }
 
         internal void Tick(float deltaTimeSeconds)
@@ -231,6 +234,7 @@ namespace Fbx2Vmd.FBXImporter
         public void Dispose()
         {
 #if UNITY_EDITOR
+            _footContactStabilizer.Clear();
             _poseReferencePlayer.Dispose();
 #endif
             _poseFrameEditor.Dispose();
@@ -245,7 +249,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool EvaluateCurrentPoseWithCorrection()
         {
-            // 원본 clip, 팔 방향, 사용자 frame delta 뒤에 비Humanoid 보조 본만 추종함.
+            // 원본 자세와 상체 보정 뒤에 발 접촉을 마지막으로 고정함.
             _player.EvaluateAt(CurrentTimeSeconds);
             if (!TryApplyArmDirectionCorrection())
             {
@@ -259,7 +263,7 @@ namespace Fbx2Vmd.FBXImporter
                     _poseCorrectionDocument,
                     frameIndex);
             _armSupportPoseApplier.Apply();
-            return isApplied;
+            return isApplied && TryApplyFootContactStabilization();
         }
 
         private bool TryApplyArmDirectionCorrection()
@@ -284,6 +288,30 @@ namespace Fbx2Vmd.FBXImporter
             return true;
 #endif
         }
+
+        private bool TryApplyFootContactStabilization()
+        {
+#if UNITY_EDITOR
+            return _footContactStabilizer.TryApply(CurrentTimeSeconds);
+#else
+            return true;
+#endif
+        }
+
+#if UNITY_EDITOR
+        private void InitializeEditorReferenceCorrections(
+            Animator targetAnimator,
+            AnimationClip clip,
+            GameObject sourceModelAsset)
+        {
+            _poseReferencePlayer.InitializeFromSourceModel(sourceModelAsset, clip);
+            _footContactStabilizer.Initialize(
+                targetAnimator,
+                clip,
+                _player.EvaluateAt,
+                _poseReferencePlayer);
+        }
+#endif
 
         private static void ValidateTime(float timeSeconds, string parameterName)
         {

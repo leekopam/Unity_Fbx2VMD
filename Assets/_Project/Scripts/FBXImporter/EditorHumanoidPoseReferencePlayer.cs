@@ -16,12 +16,19 @@ namespace Fbx2Vmd.FBXImporter
         private GameObject _referenceInstance;
         private Animator _referenceAnimator;
         private HumanPoseHandler _poseHandler;
+        private Transform _leftFoot;
+        private Transform _leftToes;
+        private Transform _rightFoot;
+        private Transform _rightToes;
 
         internal bool IsInitialized =>
             _referenceInstance != null &&
             _referenceAnimator != null &&
             _poseHandler != null &&
             _animationPlayer.IsInitialized;
+
+        internal float SourceHumanScale =>
+            IsInitialized ? _referenceAnimator.humanScale : 0f;
 
         internal void Initialize(Animator targetAnimator, AnimationClip clip)
         {
@@ -70,6 +77,15 @@ namespace Fbx2Vmd.FBXImporter
             _poseHandler = new HumanPoseHandler(
                 _referenceAnimator.avatar,
                 _referenceAnimator.transform);
+            _leftFoot = _referenceAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            _leftToes = _referenceAnimator.GetBoneTransform(HumanBodyBones.LeftToes);
+            _rightFoot = _referenceAnimator.GetBoneTransform(HumanBodyBones.RightFoot);
+            _rightToes = _referenceAnimator.GetBoneTransform(HumanBodyBones.RightToes);
+            if (_leftFoot == null || _rightFoot == null)
+            {
+                throw new InvalidOperationException(
+                    "Native Humanoid 기준 모델에 양발 본이 필요합니다.");
+            }
         }
 
         internal bool TryEvaluateAt(float timeSeconds, ref HumanPose pose)
@@ -96,6 +112,24 @@ namespace Fbx2Vmd.FBXImporter
 
             _animationPlayer.EvaluateAt(timeSeconds);
             return TryCaptureArmDirectionReference(_referenceAnimator, out reference);
+        }
+
+        internal bool TryEvaluateFootContactPointsAt(
+            float timeSeconds,
+            out Vector3 left,
+            out Vector3 right)
+        {
+            left = Vector3.zero;
+            right = Vector3.zero;
+            if (!IsInitialized || _leftFoot == null || _rightFoot == null)
+            {
+                return false;
+            }
+
+            _animationPlayer.EvaluateAt(timeSeconds);
+            left = CaptureFootContactPoint(_leftFoot, _leftToes);
+            right = CaptureFootContactPoint(_rightFoot, _rightToes);
+            return IsFinite(left) && IsFinite(right);
         }
 
         internal bool TryApplyHumanoidBoneLocalRotationsTo(Animator targetAnimator)
@@ -136,6 +170,10 @@ namespace Fbx2Vmd.FBXImporter
             _poseHandler?.Dispose();
             _poseHandler = null;
             _referenceAnimator = null;
+            _leftFoot = null;
+            _leftToes = null;
+            _rightFoot = null;
+            _rightToes = null;
 
             if (_referenceInstance != null)
             {
@@ -160,6 +198,13 @@ namespace Fbx2Vmd.FBXImporter
             {
                 renderer.enabled = false;
             }
+        }
+
+        private static Vector3 CaptureFootContactPoint(Transform foot, Transform toes)
+        {
+            return toes == null
+                ? foot.position
+                : (foot.position + toes.position) * 0.5f;
         }
 
         private static bool TryCaptureArmDirectionReference(
