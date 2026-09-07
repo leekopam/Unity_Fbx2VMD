@@ -17,6 +17,11 @@ namespace Fbx2Vmd.FBXImporter
         private readonly LegChain _rightLeg = new LegChain();
         private Transform _targetRoot;
         private HumanoidFootContactPlan _plan;
+        private Vector3[] _leftBaseRootSpaceFootPositions = Array.Empty<Vector3>();
+        private Vector3[] _rightBaseRootSpaceFootPositions = Array.Empty<Vector3>();
+        private Vector3[] _leftBaseRootSpaceBendNormals = Array.Empty<Vector3>();
+        private Vector3[] _rightBaseRootSpaceBendNormals = Array.Empty<Vector3>();
+        private float _frameRate;
 
         internal bool IsInitialized =>
             _targetRoot != null &&
@@ -75,6 +80,11 @@ namespace Fbx2Vmd.FBXImporter
             int frameCount = Mathf.CeilToInt(clip.length * frameRate) + 1;
             var sourceSamples = new HumanoidFootContactSample[frameCount];
             var targetSamples = new HumanoidFootContactSample[frameCount];
+            _leftBaseRootSpaceFootPositions = new Vector3[frameCount];
+            _rightBaseRootSpaceFootPositions = new Vector3[frameCount];
+            _leftBaseRootSpaceBendNormals = new Vector3[frameCount];
+            _rightBaseRootSpaceBendNormals = new Vector3[frameCount];
+            _frameRate = frameRate;
             Quaternion sourceToTargetRotation = _targetRoot.rotation;
 
             try
@@ -82,22 +92,36 @@ namespace Fbx2Vmd.FBXImporter
                 for (int frameIndex = 0; frameIndex < frameCount; frameIndex++)
                 {
                     float timeSeconds = Mathf.Min(frameIndex / frameRate, clip.length);
-                    if (!sourceReference.TryEvaluateFootContactPointsAt(
+                    if (!sourceReference.TryEvaluateFootSupportPointsAt(
                             timeSeconds,
-                            out Vector3 sourceLeft,
-                            out Vector3 sourceRight))
+                            out Vector3 sourceLeftFoot,
+                            out Vector3 sourceLeftToes,
+                            out Vector3 sourceRightFoot,
+                            out Vector3 sourceRightToes))
                     {
                         throw new InvalidOperationException(
                             "원본 Humanoid 발 접촉점을 샘플링하지 못했습니다.");
                     }
 
                     evaluateTarget(timeSeconds);
+                    _leftBaseRootSpaceFootPositions[frameIndex] =
+                        CaptureRootSpacePosition(_leftLeg.CaptureFootPosition());
+                    _rightBaseRootSpaceFootPositions[frameIndex] =
+                        CaptureRootSpacePosition(_rightLeg.CaptureFootPosition());
+                    _leftBaseRootSpaceBendNormals[frameIndex] =
+                        CaptureRootSpaceDirection(_leftLeg.CaptureBendNormal());
+                    _rightBaseRootSpaceBendNormals[frameIndex] =
+                        CaptureRootSpaceDirection(_rightLeg.CaptureBendNormal());
                     sourceSamples[frameIndex] = new HumanoidFootContactSample(
-                        sourceLeft,
-                        sourceRight);
+                        sourceLeftFoot,
+                        sourceLeftToes,
+                        sourceRightFoot,
+                        sourceRightToes);
                     targetSamples[frameIndex] = new HumanoidFootContactSample(
-                        _leftLeg.CaptureContactPoint(),
-                        _rightLeg.CaptureContactPoint());
+                        _leftLeg.CaptureFootPosition(),
+                        _leftLeg.CaptureToesPosition(),
+                        _rightLeg.CaptureFootPosition(),
+                        _rightLeg.CaptureToesPosition());
                 }
 
                 _plan = HumanoidFootContactPlanner.Build(
@@ -105,7 +129,8 @@ namespace Fbx2Vmd.FBXImporter
                     targetSamples,
                     frameRate,
                     sourceReference.SourceHumanScale,
-                    sourceToTargetRotation);
+                    sourceToTargetRotation,
+                    targetAnimator.humanScale);
             }
             finally
             {
@@ -139,25 +164,66 @@ namespace Fbx2Vmd.FBXImporter
                 return true;
             }
 
-            if (!_plan.TryEvaluate(
+            if (!_plan.TryEvaluateSupportPose(
                     timeSeconds,
                     out Vector3 leftRootSpaceCorrection,
-                    out Vector3 rightRootSpaceCorrection))
+                    out Vector3 rightRootSpaceCorrection,
+                    out Vector3 leftRootSpaceToeDirection,
+                    out Vector3 rightRootSpaceToeDirection))
             {
                 return false;
             }
 
-            Vector3 leftWorldCorrection =
-                _targetRoot.TransformDirection(leftRootSpaceCorrection);
-            Vector3 rightWorldCorrection =
-                _targetRoot.TransformDirection(rightRootSpaceCorrection);
-            if (!IsFinite(leftWorldCorrection) || !IsFinite(rightWorldCorrection))
+            if (!TryEvaluateBaseFootPositions(
+                    timeSeconds,
+                    out Vector3 leftBaseRootSpacePosition,
+                    out Vector3 rightBaseRootSpacePosition,
+                    out Vector3 leftBaseRootSpaceBendNormal,
+                    out Vector3 rightBaseRootSpaceBendNormal))
             {
                 return false;
             }
 
-            _leftLeg.Apply(leftWorldCorrection, leftBendNormal);
-            _rightLeg.Apply(rightWorldCorrection, rightBendNormal);
+            Vector3 leftCurrentRootSpacePosition =
+                CaptureRootSpacePosition(_leftLeg.CaptureFootPosition());
+            Vector3 rightCurrentRootSpacePosition =
+                CaptureRootSpacePosition(_rightLeg.CaptureFootPosition());
+            Vector3 leftWorldCorrection = _targetRoot.TransformDirection(
+                leftBaseRootSpacePosition + leftRootSpaceCorrection -
+                leftCurrentRootSpacePosition);
+            Vector3 rightWorldCorrection = _targetRoot.TransformDirection(
+                rightBaseRootSpacePosition + rightRootSpaceCorrection -
+                rightCurrentRootSpacePosition);
+            Vector3 leftWorldToeDirection =
+                _targetRoot.TransformDirection(leftRootSpaceToeDirection);
+            Vector3 rightWorldToeDirection =
+                _targetRoot.TransformDirection(rightRootSpaceToeDirection);
+            Vector3 leftWorldBendNormal = _targetRoot.TransformDirection(
+                leftBaseRootSpaceBendNormal);
+            Vector3 rightWorldBendNormal = _targetRoot.TransformDirection(
+                rightBaseRootSpaceBendNormal);
+            if (!IsFinite(leftWorldCorrection) ||
+                !IsFinite(rightWorldCorrection) ||
+                !IsFinite(leftWorldToeDirection) ||
+                !IsFinite(rightWorldToeDirection))
+            {
+                return false;
+            }
+
+            _leftLeg.Apply(
+                leftWorldCorrection,
+                leftWorldToeDirection,
+                leftWorldBendNormal.sqrMagnitude >
+                    MinimumBendNormalSquaredMagnitude
+                        ? leftWorldBendNormal
+                        : leftBendNormal);
+            _rightLeg.Apply(
+                rightWorldCorrection,
+                rightWorldToeDirection,
+                rightWorldBendNormal.sqrMagnitude >
+                    MinimumBendNormalSquaredMagnitude
+                        ? rightWorldBendNormal
+                        : rightBendNormal);
             return true;
         }
 
@@ -165,8 +231,80 @@ namespace Fbx2Vmd.FBXImporter
         {
             _plan = null;
             _targetRoot = null;
+            _leftBaseRootSpaceFootPositions = Array.Empty<Vector3>();
+            _rightBaseRootSpaceFootPositions = Array.Empty<Vector3>();
+            _leftBaseRootSpaceBendNormals = Array.Empty<Vector3>();
+            _rightBaseRootSpaceBendNormals = Array.Empty<Vector3>();
+            _frameRate = 0f;
             _leftLeg.Clear();
             _rightLeg.Clear();
+        }
+
+        private Vector3 CaptureRootSpacePosition(Vector3 worldPosition)
+        {
+            return Quaternion.Inverse(_targetRoot.rotation) *
+                (worldPosition - _targetRoot.position);
+        }
+
+        private Vector3 CaptureRootSpaceDirection(Vector3 worldDirection)
+        {
+            return Quaternion.Inverse(_targetRoot.rotation) * worldDirection;
+        }
+
+        private bool TryEvaluateBaseFootPositions(
+            float timeSeconds,
+            out Vector3 leftRootSpacePosition,
+            out Vector3 rightRootSpacePosition,
+            out Vector3 leftRootSpaceBendNormal,
+            out Vector3 rightRootSpaceBendNormal)
+        {
+            leftRootSpacePosition = Vector3.zero;
+            rightRootSpacePosition = Vector3.zero;
+            leftRootSpaceBendNormal = Vector3.zero;
+            rightRootSpaceBendNormal = Vector3.zero;
+            if (!IsFinite(timeSeconds) ||
+                timeSeconds < 0f ||
+                _frameRate <= 0f ||
+                _leftBaseRootSpaceFootPositions.Length == 0 ||
+                _leftBaseRootSpaceFootPositions.Length !=
+                _rightBaseRootSpaceFootPositions.Length ||
+                _leftBaseRootSpaceBendNormals.Length !=
+                _leftBaseRootSpaceFootPositions.Length ||
+                _rightBaseRootSpaceBendNormals.Length !=
+                _rightBaseRootSpaceFootPositions.Length)
+            {
+                return false;
+            }
+
+            float frame = Mathf.Clamp(
+                timeSeconds * _frameRate,
+                0f,
+                _leftBaseRootSpaceFootPositions.Length - 1);
+            int firstFrame = Mathf.FloorToInt(frame);
+            int secondFrame = Mathf.Min(
+                firstFrame + 1,
+                _leftBaseRootSpaceFootPositions.Length - 1);
+            float interpolation = frame - firstFrame;
+            leftRootSpacePosition = Vector3.LerpUnclamped(
+                _leftBaseRootSpaceFootPositions[firstFrame],
+                _leftBaseRootSpaceFootPositions[secondFrame],
+                interpolation);
+            rightRootSpacePosition = Vector3.LerpUnclamped(
+                _rightBaseRootSpaceFootPositions[firstFrame],
+                _rightBaseRootSpaceFootPositions[secondFrame],
+                interpolation);
+            leftRootSpaceBendNormal = Vector3.LerpUnclamped(
+                _leftBaseRootSpaceBendNormals[firstFrame],
+                _leftBaseRootSpaceBendNormals[secondFrame],
+                interpolation).normalized;
+            rightRootSpaceBendNormal = Vector3.LerpUnclamped(
+                _rightBaseRootSpaceBendNormals[firstFrame],
+                _rightBaseRootSpaceBendNormals[secondFrame],
+                interpolation).normalized;
+            return IsFinite(leftRootSpacePosition) &&
+                IsFinite(rightRootSpacePosition) &&
+                IsFinite(leftRootSpaceBendNormal) &&
+                IsFinite(rightRootSpaceBendNormal);
         }
 
         private static bool IsFinite(Vector3 value)
@@ -174,6 +312,11 @@ namespace Fbx2Vmd.FBXImporter
             return !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
                 !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
                 !float.IsNaN(value.z) && !float.IsInfinity(value.z);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private sealed class LegChain
@@ -212,11 +355,14 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
 
-            internal Vector3 CaptureContactPoint()
+            internal Vector3 CaptureFootPosition()
             {
-                return _toes == null
-                    ? _foot.position
-                    : (_foot.position + _toes.position) * 0.5f;
+                return _foot.position;
+            }
+
+            internal Vector3 CaptureToesPosition()
+            {
+                return _toes == null ? _foot.position : _toes.position;
             }
 
             internal Vector3 CaptureBendNormal()
@@ -224,29 +370,51 @@ namespace Fbx2Vmd.FBXImporter
                 return CalculateBendNormal();
             }
 
-            internal void Apply(Vector3 worldCorrection, Vector3 bendNormal)
+            internal void Apply(
+                Vector3 worldCorrection,
+                Vector3 worldToeDirection,
+                Vector3 bendNormal)
             {
-                if (!IsValid ||
-                    worldCorrection.sqrMagnitude <=
-                    MinimumCorrectionSquaredMagnitude)
+                if (!IsValid)
                 {
                     return;
                 }
 
                 Quaternion footRotation = _foot.rotation;
-                if (bendNormal.sqrMagnitude <= MinimumBendNormalSquaredMagnitude)
+                if (worldCorrection.sqrMagnitude > MinimumCorrectionSquaredMagnitude)
                 {
-                    bendNormal = _fallbackBendNormal;
+                    if (bendNormal.sqrMagnitude <= MinimumBendNormalSquaredMagnitude)
+                    {
+                        bendNormal = _fallbackBendNormal;
+                    }
+
+                    IKSolverTrigonometric.Solve(
+                        _upperLeg,
+                        _lowerLeg,
+                        _foot,
+                        _foot.position + worldCorrection,
+                        bendNormal,
+                        1f);
+                    _foot.rotation = footRotation;
                 }
 
-                IKSolverTrigonometric.Solve(
-                    _upperLeg,
-                    _lowerLeg,
-                    _foot,
-                    _foot.position + worldCorrection,
-                    bendNormal,
-                    1f);
-                _foot.rotation = footRotation;
+                if (_toes == null ||
+                    worldToeDirection.sqrMagnitude <=
+                    MinimumCorrectionSquaredMagnitude)
+                {
+                    return;
+                }
+
+                Vector3 currentToeDirection = _toes.position - _foot.position;
+                if (currentToeDirection.sqrMagnitude <=
+                    MinimumCorrectionSquaredMagnitude)
+                {
+                    return;
+                }
+
+                _foot.rotation = Quaternion.FromToRotation(
+                    currentToeDirection,
+                    worldToeDirection) * _foot.rotation;
             }
 
             internal void Clear()

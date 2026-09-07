@@ -126,10 +126,44 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            _animationPlayer.EvaluateAt(timeSeconds);
-            left = CaptureFootContactPoint(_leftFoot, _leftToes);
-            right = CaptureFootContactPoint(_rightFoot, _rightToes);
+            if (!TryEvaluateFootSupportPointsAt(
+                    timeSeconds,
+                    out Vector3 leftFoot,
+                    out Vector3 leftToes,
+                    out Vector3 rightFoot,
+                    out Vector3 rightToes))
+            {
+                return false;
+            }
+
+            left = (leftFoot + leftToes) * 0.5f;
+            right = (rightFoot + rightToes) * 0.5f;
             return IsFinite(left) && IsFinite(right);
+        }
+
+        internal bool TryEvaluateFootSupportPointsAt(
+            float timeSeconds,
+            out Vector3 leftFoot,
+            out Vector3 leftToes,
+            out Vector3 rightFoot,
+            out Vector3 rightToes)
+        {
+            leftFoot = Vector3.zero;
+            leftToes = Vector3.zero;
+            rightFoot = Vector3.zero;
+            rightToes = Vector3.zero;
+            if (!IsInitialized || _leftFoot == null || _rightFoot == null)
+            {
+                return false;
+            }
+
+            _animationPlayer.EvaluateAt(timeSeconds);
+            leftFoot = _leftFoot.position;
+            leftToes = _leftToes == null ? leftFoot : _leftToes.position;
+            rightFoot = _rightFoot.position;
+            rightToes = _rightToes == null ? rightFoot : _rightToes.position;
+            return IsFinite(leftFoot) && IsFinite(leftToes) &&
+                IsFinite(rightFoot) && IsFinite(rightToes);
         }
 
         internal bool TryApplyHumanoidBoneLocalRotationsTo(Animator targetAnimator)
@@ -198,13 +232,6 @@ namespace Fbx2Vmd.FBXImporter
             {
                 renderer.enabled = false;
             }
-        }
-
-        private static Vector3 CaptureFootContactPoint(Transform foot, Transform toes)
-        {
-            return toes == null
-                ? foot.position
-                : (foot.position + toes.position) * 0.5f;
         }
 
         private static bool TryCaptureArmDirectionReference(

@@ -20,6 +20,7 @@ namespace Tests.Editor.FBXImporter
         private const float MaximumAdditionalContactDriftMeters = 0.01f;
         private const float ContactHeightMarginMeters = 0.03f;
         private const float ContactSpeedLimitMetersPerSecond = 0.15f;
+        private const float MinimumSupportContactF1 = 0.7f;
         private const int MinimumContactFrameCount = 6;
 
         private static readonly HumanBodyBones[] LowerBodyBones =
@@ -86,6 +87,14 @@ namespace Tests.Editor.FBXImporter
                 var sourceRightContacts = new List<Vector3>(lastFrameIndex + 1);
                 var targetLeftContacts = new List<Vector3>(lastFrameIndex + 1);
                 var targetRightContacts = new List<Vector3>(lastFrameIndex + 1);
+                var sourceLeftFeet = new List<Vector3>(lastFrameIndex + 1);
+                var sourceLeftToes = new List<Vector3>(lastFrameIndex + 1);
+                var sourceRightFeet = new List<Vector3>(lastFrameIndex + 1);
+                var sourceRightToes = new List<Vector3>(lastFrameIndex + 1);
+                var targetLeftFeet = new List<Vector3>(lastFrameIndex + 1);
+                var targetLeftToes = new List<Vector3>(lastFrameIndex + 1);
+                var targetRightFeet = new List<Vector3>(lastFrameIndex + 1);
+                var targetRightToes = new List<Vector3>(lastFrameIndex + 1);
                 Vector3[] previousDirections = null;
                 float maximumRootPathError = 0f;
                 float maximumBoneLengthDelta = 0f;
@@ -145,6 +154,30 @@ namespace Tests.Editor.FBXImporter
                     sourceRightContacts.Add(sourceRig.CaptureFootContactPoint(isLeft: false));
                     targetLeftContacts.Add(correctedRig.CaptureFootContactPoint(isLeft: true));
                     targetRightContacts.Add(correctedRig.CaptureFootContactPoint(isLeft: false));
+                    sourceRig.CaptureFootSupportPoints(
+                        isLeft: true,
+                        out Vector3 sourceLeftFoot,
+                        out Vector3 sourceLeftToesPoint);
+                    sourceRig.CaptureFootSupportPoints(
+                        isLeft: false,
+                        out Vector3 sourceRightFoot,
+                        out Vector3 sourceRightToesPoint);
+                    correctedRig.CaptureFootSupportPoints(
+                        isLeft: true,
+                        out Vector3 targetLeftFoot,
+                        out Vector3 targetLeftToesPoint);
+                    correctedRig.CaptureFootSupportPoints(
+                        isLeft: false,
+                        out Vector3 targetRightFoot,
+                        out Vector3 targetRightToesPoint);
+                    sourceLeftFeet.Add(sourceLeftFoot);
+                    sourceLeftToes.Add(sourceLeftToesPoint);
+                    sourceRightFeet.Add(sourceRightFoot);
+                    sourceRightToes.Add(sourceRightToesPoint);
+                    targetLeftFeet.Add(targetLeftFoot);
+                    targetLeftToes.Add(targetLeftToesPoint);
+                    targetRightFeet.Add(targetRightFoot);
+                    targetRightToes.Add(targetRightToesPoint);
                 }
 
                 FootContactMetrics leftContact = FootContactMetrics.Calculate(
@@ -155,6 +188,34 @@ namespace Tests.Editor.FBXImporter
                     sourceRightContacts,
                     targetRightContacts,
                     frameRate);
+                FootSupportContactAgreement leftFootAgreement =
+                    FootSupportContactAgreement.Calculate(
+                        sourceLeftFeet,
+                        targetLeftFeet,
+                        frameRate,
+                        sourceRig.Animator.humanScale,
+                        correctedRig.Animator.humanScale);
+                FootSupportContactAgreement leftToesAgreement =
+                    FootSupportContactAgreement.Calculate(
+                        sourceLeftToes,
+                        targetLeftToes,
+                        frameRate,
+                        sourceRig.Animator.humanScale,
+                        correctedRig.Animator.humanScale);
+                FootSupportContactAgreement rightFootAgreement =
+                    FootSupportContactAgreement.Calculate(
+                        sourceRightFeet,
+                        targetRightFeet,
+                        frameRate,
+                        sourceRig.Animator.humanScale,
+                        correctedRig.Animator.humanScale);
+                FootSupportContactAgreement rightToesAgreement =
+                    FootSupportContactAgreement.Calculate(
+                        sourceRightToes,
+                        targetRightToes,
+                        frameRate,
+                        sourceRig.Animator.humanScale,
+                        correctedRig.Animator.humanScale);
                 UpperBodyCorrectionMetrics armCorrection =
                     MeasureArmDirectionCorrectionIsolation(
                         directController,
@@ -184,6 +245,10 @@ namespace Tests.Editor.FBXImporter
                     $"leftAdditionalDriftMax={leftContact.MaximumAdditionalDriftMeters:F9}, " +
                     $"rightContactRuns={rightContact.RunCount}, " +
                     $"rightAdditionalDriftMax={rightContact.MaximumAdditionalDriftMeters:F9}, " +
+                    $"leftFootContactF1={leftFootAgreement.F1:F6}, " +
+                    $"leftToesContactF1={leftToesAgreement.F1:F6}, " +
+                    $"rightFootContactF1={rightFootAgreement.F1:F6}, " +
+                    $"rightToesContactF1={rightToesAgreement.F1:F6}, " +
                     $"armIsolationFrames={armCorrection.SampleCount}, " +
                     $"armCorrectionLowerRotationMax={armCorrection.LowerRotation:F9}, " +
                     $"frameIsolationFrames={frameCorrection.SampleCount}, " +
@@ -206,6 +271,10 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(
                     rightContact.MaximumAdditionalDriftMeters,
                     Is.LessThanOrEqualTo(MaximumAdditionalContactDriftMeters));
+                AssertSupportContactAgreement(leftFootAgreement, "왼발 Foot");
+                AssertSupportContactAgreement(leftToesAgreement, "왼발 Toes");
+                AssertSupportContactAgreement(rightFootAgreement, "오른발 Foot");
+                AssertSupportContactAgreement(rightToesAgreement, "오른발 Toes");
                 AssertGeometryWithinTolerance(
                     maximumPostProcessPosition,
                     maximumPostProcessScale,
@@ -382,6 +451,20 @@ namespace Tests.Editor.FBXImporter
                 $"{source}이 FBX XZ 루트 궤적을 바꾸면 안 됩니다.");
             Assert.That(hipsPosition, Is.LessThanOrEqualTo(TransformTolerance),
                 $"{source}이 골반 위치를 바꾸면 안 됩니다.");
+        }
+
+        private static void AssertSupportContactAgreement(
+            FootSupportContactAgreement agreement,
+            string supportPoint)
+        {
+            Assert.That(
+                agreement.F1,
+                Is.GreaterThanOrEqualTo(MinimumSupportContactF1),
+                $"{supportPoint} 접촉 시점이 원본과 지나치게 다릅니다. " +
+                $"source={agreement.SourceContactFrameCount}, " +
+                $"target={agreement.TargetContactFrameCount}, " +
+                $"falseNegative={agreement.FalseNegativeCount}, " +
+                $"falsePositive={agreement.FalsePositiveCount}");
         }
 
         private static void AssertIsolationWithinTolerance(
@@ -622,6 +705,17 @@ namespace Tests.Editor.FBXImporter
                 return (foot.position + toes.position) * 0.5f;
             }
 
+            internal void CaptureFootSupportPoints(
+                bool isLeft,
+                out Vector3 footPosition,
+                out Vector3 toesPosition)
+            {
+                Transform foot = isLeft ? _leftFoot : _rightFoot;
+                Transform toes = isLeft ? _leftToes : _rightToes;
+                footPosition = foot.position;
+                toesPosition = toes.position;
+            }
+
             internal void AccumulateDimensionDeltas(
                 ref float maximumBoneLengthDelta,
                 ref float maximumScaleDelta,
@@ -774,7 +868,8 @@ namespace Tests.Editor.FBXImporter
                 bool[] contactFrames = DetectStableContactFrames(
                     sourcePoints,
                     frameRate,
-                    contactHeight);
+                    contactHeight,
+                    ContactSpeedLimitMetersPerSecond);
 
                 int runCount = 0;
                 float maximumAdditionalDrift = 0f;
@@ -817,7 +912,8 @@ namespace Tests.Editor.FBXImporter
             private static bool[] DetectStableContactFrames(
                 IReadOnlyList<Vector3> points,
                 float frameRate,
-                float contactHeight)
+                float contactHeight,
+                float contactSpeedLimit)
             {
                 var candidates = new bool[points.Count];
                 var stableFrames = new bool[points.Count];
@@ -828,10 +924,10 @@ namespace Tests.Editor.FBXImporter
                         : HorizontalDistance(points[index - 1], points[index]) *
                             frameRate;
                     candidates[index] = points[index].y <= contactHeight &&
-                        horizontalSpeed <= ContactSpeedLimitMetersPerSecond;
+                        horizontalSpeed <= contactSpeedLimit;
                     stableFrames[index] = candidates[index] &&
                         CalculateCenteredSpeed(points, index, frameRate) <=
-                        ContactSpeedLimitMetersPerSecond;
+                        contactSpeedLimit;
                 }
 
                 var result = new bool[points.Count];
@@ -927,6 +1023,116 @@ namespace Tests.Editor.FBXImporter
                 return Vector2.Distance(
                     new Vector2(first.x, first.z),
                     new Vector2(second.x, second.z));
+            }
+
+            internal static bool[] DetectSupportContacts(
+                IReadOnlyList<Vector3> points,
+                float frameRate,
+                float humanScale)
+            {
+                float[] sortedHeights = points
+                    .Select(point => point.y)
+                    .OrderBy(value => value)
+                    .ToArray();
+                int percentileIndex = Mathf.Clamp(
+                    Mathf.CeilToInt(sortedHeights.Length * 0.02f) - 1,
+                    0,
+                    sortedHeights.Length - 1);
+                float scale = Mathf.Max(humanScale, 0.0001f);
+                return DetectStableContactFrames(
+                    points,
+                    frameRate,
+                    sortedHeights[percentileIndex] + scale / 30f,
+                    scale / 6f);
+            }
+        }
+
+        private sealed class FootSupportContactAgreement
+        {
+            private FootSupportContactAgreement(
+                int sourceContactFrameCount,
+                int targetContactFrameCount,
+                int falseNegativeCount,
+                int falsePositiveCount,
+                float f1)
+            {
+                SourceContactFrameCount = sourceContactFrameCount;
+                TargetContactFrameCount = targetContactFrameCount;
+                FalseNegativeCount = falseNegativeCount;
+                FalsePositiveCount = falsePositiveCount;
+                F1 = f1;
+            }
+
+            internal int SourceContactFrameCount { get; }
+            internal int TargetContactFrameCount { get; }
+            internal int FalseNegativeCount { get; }
+            internal int FalsePositiveCount { get; }
+            internal float F1 { get; }
+
+            internal static FootSupportContactAgreement Calculate(
+                IReadOnlyList<Vector3> sourcePoints,
+                IReadOnlyList<Vector3> targetPoints,
+                float frameRate,
+                float sourceHumanScale,
+                float targetHumanScale)
+            {
+                bool[] sourceContacts = FootContactMetrics.DetectSupportContacts(
+                    sourcePoints,
+                    frameRate,
+                    sourceHumanScale);
+                bool[] targetContacts = FootContactMetrics.DetectSupportContacts(
+                    targetPoints,
+                    frameRate,
+                    targetHumanScale);
+                int sourceCount = 0;
+                int targetCount = 0;
+                int truePositive = 0;
+                int falseNegative = 0;
+                int falsePositive = 0;
+
+                for (int index = 0; index < sourceContacts.Length; index++)
+                {
+                    bool sourceContact = sourceContacts[index];
+                    bool targetContact = targetContacts[index];
+                    if (sourceContact)
+                    {
+                        sourceCount++;
+                    }
+
+                    if (targetContact)
+                    {
+                        targetCount++;
+                    }
+
+                    if (sourceContact && targetContact)
+                    {
+                        truePositive++;
+                    }
+                    else if (sourceContact)
+                    {
+                        falseNegative++;
+                    }
+                    else if (targetContact)
+                    {
+                        falsePositive++;
+                    }
+                }
+
+                float precision = truePositive + falsePositive > 0
+                    ? truePositive / (float)(truePositive + falsePositive)
+                    : 1f;
+                float recall = truePositive + falseNegative > 0
+                    ? truePositive / (float)(truePositive + falseNegative)
+                    : 1f;
+                float f1 = precision + recall > 0f
+                    ? 2f * precision * recall / (precision + recall)
+                    : 0f;
+                return new FootSupportContactAgreement(
+                    sourceCount,
+                    targetCount,
+                    falseNegative,
+                    falsePositive,
+                    f1);
             }
         }
     }
