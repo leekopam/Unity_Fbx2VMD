@@ -113,7 +113,26 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        internal bool TryApply(float timeSeconds)
+        internal bool TryCaptureBendNormals(
+            out Vector3 leftBendNormal,
+            out Vector3 rightBendNormal)
+        {
+            leftBendNormal = Vector3.zero;
+            rightBendNormal = Vector3.zero;
+            if (!IsInitialized)
+            {
+                return true;
+            }
+
+            leftBendNormal = _leftLeg.CaptureBendNormal();
+            rightBendNormal = _rightLeg.CaptureBendNormal();
+            return IsFinite(leftBendNormal) && IsFinite(rightBendNormal);
+        }
+
+        internal bool TryApply(
+            float timeSeconds,
+            Vector3 leftBendNormal,
+            Vector3 rightBendNormal)
         {
             if (!IsInitialized)
             {
@@ -137,8 +156,8 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            _leftLeg.Apply(leftWorldCorrection);
-            _rightLeg.Apply(rightWorldCorrection);
+            _leftLeg.Apply(leftWorldCorrection, leftBendNormal);
+            _rightLeg.Apply(rightWorldCorrection, rightBendNormal);
             return true;
         }
 
@@ -200,7 +219,12 @@ namespace Fbx2Vmd.FBXImporter
                     : (_foot.position + _toes.position) * 0.5f;
             }
 
-            internal void Apply(Vector3 worldCorrection)
+            internal Vector3 CaptureBendNormal()
+            {
+                return CalculateBendNormal();
+            }
+
+            internal void Apply(Vector3 worldCorrection, Vector3 bendNormal)
             {
                 if (!IsValid ||
                     worldCorrection.sqrMagnitude <=
@@ -210,7 +234,6 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 Quaternion footRotation = _foot.rotation;
-                Vector3 bendNormal = CalculateBendNormal();
                 if (bendNormal.sqrMagnitude <= MinimumBendNormalSquaredMagnitude)
                 {
                     bendNormal = _fallbackBendNormal;

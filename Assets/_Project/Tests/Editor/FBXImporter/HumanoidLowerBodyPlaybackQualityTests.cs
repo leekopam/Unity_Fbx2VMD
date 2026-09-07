@@ -184,8 +184,12 @@ namespace Tests.Editor.FBXImporter
                     $"leftAdditionalDriftMax={leftContact.MaximumAdditionalDriftMeters:F9}, " +
                     $"rightContactRuns={rightContact.RunCount}, " +
                     $"rightAdditionalDriftMax={rightContact.MaximumAdditionalDriftMeters:F9}, " +
+                    $"armIsolationFrames={armCorrection.SampleCount}, " +
                     $"armCorrectionLowerRotationMax={armCorrection.LowerRotation:F9}, " +
+                    $"frameIsolationFrames={frameCorrection.SampleCount}, " +
                     $"frameCorrectionLowerRotationMax={frameCorrection.LowerRotation:F9}, " +
+                    $"frameCorrectionLowerRotationFrame={frameCorrection.LowerRotationFrame}, " +
+                    $"frameCorrectionLowerRotationBone={frameCorrection.LowerRotationBone}, " +
                     $"nonFinite={nonFiniteValueCount}");
 
                 Assert.That(nonFiniteValueCount, Is.Zero);
@@ -214,14 +218,16 @@ namespace Tests.Editor.FBXImporter
                     armCorrection.LowerScale,
                     armCorrection.RootPosition,
                     armCorrection.HipsPosition,
-                    "팔 방향 보정");
+                    $"팔 방향 보정(frame={armCorrection.LowerRotationFrame}, " +
+                    $"bone={armCorrection.LowerRotationBone})");
                 AssertIsolationWithinTolerance(
                     frameCorrection.LowerRotation,
                     frameCorrection.LowerPosition,
                     frameCorrection.LowerScale,
                     frameCorrection.RootPosition,
                     frameCorrection.HipsPosition,
-                    "상체 프레임 보정");
+                    $"상체 프레임 보정(frame={frameCorrection.LowerRotationFrame}, " +
+                    $"bone={frameCorrection.LowerRotationBone})");
                 Assert.That(frameCorrection.ChangedMuscleCount, Is.GreaterThan(0));
             }
             finally
@@ -263,7 +269,10 @@ namespace Tests.Editor.FBXImporter
             foreach (int frameIndex in sampleFrames)
             {
                 Assert.That(seek(frameIndex / frameRate), Is.True);
-                result.Accumulate(nativeSnapshots[frameIndex], rig.CaptureSnapshot());
+                result.Accumulate(
+                    frameIndex,
+                    nativeSnapshots[frameIndex],
+                    rig.CaptureSnapshot());
             }
 
             return result;
@@ -306,7 +315,7 @@ namespace Tests.Editor.FBXImporter
             {
                 Assert.That(seek(frameIndex / frameRate), Is.True);
                 LowerBodySnapshot after = rig.CaptureSnapshot();
-                result.Accumulate(snapshots[frameIndex], after);
+                result.Accumulate(frameIndex, snapshots[frameIndex], after);
                 if (TryCapturePose(controller, out HumanPose pose) &&
                     Mathf.Abs(
                         pose.muscles[muscleIndex] - muscleValues[frameIndex]) >
@@ -321,15 +330,7 @@ namespace Tests.Editor.FBXImporter
 
         private static int[] BuildIsolationSampleFrames(int lastFrameIndex)
         {
-            return new[]
-            {
-                0,
-                Mathf.Min(900, lastFrameIndex),
-                Mathf.Min(1871, lastFrameIndex),
-                lastFrameIndex / 2,
-                Mathf.Min(9974, lastFrameIndex),
-                lastFrameIndex
-            }.Distinct().OrderBy(value => value).ToArray();
+            return Enumerable.Range(0, lastFrameIndex + 1).ToArray();
         }
 
         private static void AccumulateGeometryDeltas(
@@ -700,19 +701,33 @@ namespace Tests.Editor.FBXImporter
         private sealed class UpperBodyCorrectionMetrics
         {
             internal float LowerRotation { get; private set; }
+            internal int LowerRotationFrame { get; private set; } = -1;
+            internal HumanBodyBones LowerRotationBone { get; private set; } =
+                HumanBodyBones.LastBone;
             internal float LowerPosition { get; private set; }
             internal float LowerScale { get; private set; }
             internal float RootPosition { get; private set; }
             internal float HipsPosition { get; private set; }
             internal int ChangedMuscleCount { get; set; }
+            internal int SampleCount { get; private set; }
 
-            internal void Accumulate(LowerBodySnapshot before, LowerBodySnapshot after)
+            internal void Accumulate(
+                int frameIndex,
+                LowerBodySnapshot before,
+                LowerBodySnapshot after)
             {
+                SampleCount++;
                 for (int index = 0; index < before.Rotations.Length; index++)
                 {
-                    LowerRotation = Mathf.Max(
-                        LowerRotation,
-                        Quaternion.Angle(before.Rotations[index], after.Rotations[index]));
+                    float lowerRotation = Quaternion.Angle(
+                        before.Rotations[index],
+                        after.Rotations[index]);
+                    if (lowerRotation > LowerRotation)
+                    {
+                        LowerRotation = lowerRotation;
+                        LowerRotationFrame = frameIndex;
+                        LowerRotationBone = LowerBodyBones[index];
+                    }
                     LowerPosition = Mathf.Max(
                         LowerPosition,
                         Vector3.Distance(before.Positions[index], after.Positions[index]));

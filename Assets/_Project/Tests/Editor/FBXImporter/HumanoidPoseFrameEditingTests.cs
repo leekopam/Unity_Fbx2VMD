@@ -15,6 +15,7 @@ namespace Tests.Editor.FBXImporter
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const float ValueTolerance = 0.0001f;
         private const float MuscleProjectionTolerance = 0.001f;
+        private const float NearLimitMuscleProjectionTolerance = 0.005f;
 
         [OneTimeSetUp]
         public void EnsureHumanoidClipImport()
@@ -371,8 +372,11 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
-        [Test]
-        public void Given_UpperBodyMuscleCorrection_When_PreviewingFrame_Then_PreservesLowerBodyAndRoot()
+        [TestCase(900, MuscleProjectionTolerance)]
+        [TestCase(9407, NearLimitMuscleProjectionTolerance)]
+        public void Given_UpperBodyMuscleCorrection_When_PreviewingFrame_Then_PreservesLowerBodyAndRoot(
+            int requestedFrameIndex,
+            float muscleProjectionTolerance)
         {
             GameObject target = InstantiateTarget();
             object controller = CreatePlaybackController();
@@ -382,7 +386,7 @@ namespace Tests.Editor.FBXImporter
                 Animator animator = RequireHumanoidAnimator(target);
                 Invoke(controller, "Prepare", animator, LoadHumanoidClip());
                 int frameIndex = Math.Min(
-                    900,
+                    requestedFrameIndex,
                     (int)ReadProperty(controller, "LastFrameIndex"));
                 Assert.That((bool)Invoke(controller, "SeekFrame", frameIndex), Is.True);
                 object[] poseArguments = { null };
@@ -450,7 +454,7 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That(
                     correctedPose.muscles[muscleIndex],
-                    Is.EqualTo(expectedValue).Within(MuscleProjectionTolerance));
+                    Is.EqualTo(expectedValue).Within(muscleProjectionTolerance));
                 for (int index = 0; index < lowerBodyBones.Length; index++)
                 {
                     Assert.That(
