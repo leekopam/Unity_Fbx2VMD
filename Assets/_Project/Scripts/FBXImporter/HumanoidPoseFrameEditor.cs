@@ -104,21 +104,25 @@ namespace Fbx2Vmd.FBXImporter
                     leftUpperArm,
                     leftLowerArm,
                     reference.LeftUpperArm,
+                    isForearm: false,
                     ref maxDirectionErrorDegrees) &&
                 TryApplyArmSegment(
                     leftLowerArm,
                     leftHand,
                     reference.LeftForearm,
+                    isForearm: true,
                     ref maxDirectionErrorDegrees) &&
                 TryApplyArmSegment(
                     rightUpperArm,
                     rightLowerArm,
                     reference.RightUpperArm,
+                    isForearm: false,
                     ref maxDirectionErrorDegrees) &&
                 TryApplyArmSegment(
                     rightLowerArm,
                     rightHand,
                     reference.RightForearm,
+                    isForearm: true,
                     ref maxDirectionErrorDegrees))
             {
                 return true;
@@ -175,6 +179,7 @@ namespace Fbx2Vmd.FBXImporter
             Transform start,
             Transform end,
             Vector3 referenceDirection,
+            bool isForearm,
             ref float maxDirectionErrorDegrees)
         {
             Vector3 targetDirection = _targetAnimator.transform.InverseTransformDirection(
@@ -188,10 +193,16 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            Quaternion rootRotation = _targetAnimator.transform.rotation;
-            Quaternion worldCorrection =
-                rootRotation * rootSpaceCorrection * Quaternion.Inverse(rootRotation);
-            start.rotation = worldCorrection * start.rotation;
+            if (!isForearm ||
+                HumanoidArmDirectionCorrectionPolicy.ShouldApplyForearmCorrection(
+                    errorDegrees))
+            {
+                Quaternion rootRotation = _targetAnimator.transform.rotation;
+                Quaternion worldCorrection =
+                    rootRotation * rootSpaceCorrection * Quaternion.Inverse(rootRotation);
+                start.rotation = worldCorrection * start.rotation;
+            }
+
             maxDirectionErrorDegrees = Mathf.Max(
                 maxDirectionErrorDegrees,
                 errorDegrees);
