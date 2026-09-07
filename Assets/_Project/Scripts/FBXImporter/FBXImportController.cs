@@ -304,6 +304,13 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
+            if (TryEnsureHumanoidClipRootRotationContract(targetPath))
+            {
+                Debug.Log(
+                    $"[FBXImport] 기존 Humanoid clip의 원본 root 회전을 본 자세에 반영함. 경로={targetPath}");
+                return;
+            }
+
             Debug.Log($"[FBXImport] 제어된 Import_FBX 가져오기 설정 유지됨. 경로={targetPath}");
         }
 
@@ -365,6 +372,38 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
             }
+        }
+
+        private static bool TryEnsureHumanoidClipRootRotationContract(
+            string filePath)
+        {
+            string relativePath = ToAssetRelativePath(filePath, Application.dataPath);
+            UnityEditor.ModelImporter importer =
+                UnityEditor.AssetImporter.GetAtPath(relativePath) as UnityEditor.ModelImporter;
+            if (importer == null ||
+                importer.animationType != UnityEditor.ModelImporterAnimationType.Human)
+            {
+                return false;
+            }
+
+            UnityEditor.ModelImporterClipAnimation[] clipAnimations =
+                importer.clipAnimations;
+            if (clipAnimations == null || clipAnimations.Length == 0)
+            {
+                clipAnimations = importer.defaultClipAnimations;
+            }
+
+            if (clipAnimations == null ||
+                clipAnimations.Length == 0 ||
+                HumanoidClipImportPolicy.HasRootRotationContract(clipAnimations))
+            {
+                return false;
+            }
+
+            HumanoidClipImportPolicy.ApplyRootRotationContract(clipAnimations);
+            importer.clipAnimations = clipAnimations;
+            importer.SaveAndReimport();
+            return true;
         }
 
         private static void ConfigureImportSettings(string filePath)
@@ -487,10 +526,13 @@ namespace Fbx2Vmd.FBXImporter
             Debug.Log("[3단계] Animation Clip 추출 시작");
             if (importer.defaultClipAnimations != null && importer.defaultClipAnimations.Length > 0)
             {
-                importer.clipAnimations = Array.Empty<UnityEditor.ModelImporterClipAnimation>();
-                Debug.Log($"[3단계] Animation Clip 추출: {importer.defaultClipAnimations.Length}개");
+                UnityEditor.ModelImporterClipAnimation[] clipAnimations =
+                    importer.defaultClipAnimations;
+                HumanoidClipImportPolicy.ApplyRootRotationContract(clipAnimations);
+                importer.clipAnimations = clipAnimations;
+                Debug.Log($"[3단계] Animation Clip 추출: {clipAnimations.Length}개");
 
-                foreach (UnityEditor.ModelImporterClipAnimation clip in importer.defaultClipAnimations)
+                foreach (UnityEditor.ModelImporterClipAnimation clip in clipAnimations)
                 {
                     Debug.Log($"  - Clip: {clip.name} (Start: {clip.firstFrame}, End: {clip.lastFrame})");
                 }
