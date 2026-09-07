@@ -188,6 +188,7 @@ namespace Tests.Editor.FBXImporter
                 AnimationClip clip = LoadHumanoidClip();
                 animator.applyRootMotion = true;
                 animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+                Vector3 originalPosition = animator.transform.position;
                 RuntimeAnimatorController originalController =
                     AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
                         AnimatorControllerAssetPath);
@@ -198,12 +199,24 @@ namespace Tests.Editor.FBXImporter
                 Invoke(player, "Initialize", animator, clip);
                 Assert.That(animator.runtimeAnimatorController, Is.Null,
                     "Native Playable과 AnimatorController가 같은 본을 동시에 쓰면 안 됩니다.");
+                Invoke(player, "EvaluateAt", 31.1675f);
+                Assert.That(
+                    Vector2.Distance(
+                        new Vector2(originalPosition.x, originalPosition.z),
+                        new Vector2(animator.transform.position.x, animator.transform.position.z)),
+                    Is.GreaterThan(0.1f),
+                    "재생 중에는 클립의 RootT XZ 이동이 적용되어야 합니다.");
                 DisposePlayer(player);
 
                 Assert.That(ReadProperty<bool>(player, "IsInitialized"), Is.False);
                 Assert.That(animator.applyRootMotion, Is.True);
                 Assert.That(animator.cullingMode, Is.EqualTo(AnimatorCullingMode.CullUpdateTransforms));
                 Assert.That(animator.runtimeAnimatorController, Is.SameAs(originalController));
+                Assert.That(animator.transform.position.x,
+                    Is.EqualTo(originalPosition.x).Within(TransformTolerance));
+                Assert.That(animator.transform.position.z,
+                    Is.EqualTo(originalPosition.z).Within(TransformTolerance),
+                    "재생기 해제 시 대상 루트의 시작 XZ 위치를 복원해야 합니다.");
             }
             finally
             {

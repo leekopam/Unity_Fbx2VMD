@@ -206,6 +206,64 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RootTranslationClip_When_SeekingRepeatedly_Then_AppliesDeterministicXZPosition()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                animator.transform.rotation = Quaternion.Euler(0f, 37f, 0f);
+                Vector3 rootAnchor = animator.transform.position;
+                Quaternion rootAnchorRotation = animator.transform.rotation;
+                const float movementSampleTime = 31.1675f;
+
+                Invoke(controller, "Prepare", animator, LoadHumanoidClip());
+                Invoke(controller, "Seek", movementSampleTime);
+                Vector3 firstMovementPosition = animator.transform.position;
+                Vector3 expectedMovementPosition = CalculateExpectedRootPosition(
+                    LoadHumanoidClip(),
+                    rootAnchor,
+                    rootAnchorRotation,
+                    movementSampleTime);
+
+                Assert.That(
+                    Vector2.Distance(
+                        new Vector2(rootAnchor.x, rootAnchor.z),
+                        new Vector2(firstMovementPosition.x, firstMovementPosition.z)),
+                    Is.GreaterThan(0.1f),
+                    "RootT XZ 이동이 대상 모델의 월드 위치에 반영되어야 합니다.");
+                Assert.That(
+                    firstMovementPosition.x,
+                    Is.EqualTo(expectedMovementPosition.x).Within(TimeTolerance));
+                Assert.That(
+                    firstMovementPosition.z,
+                    Is.EqualTo(expectedMovementPosition.z).Within(TimeTolerance),
+                    "배치 회전을 반영한 RootT 궤적과 대상 루트 위치가 일치해야 합니다.");
+                Assert.That(
+                    firstMovementPosition.y,
+                    Is.EqualTo(rootAnchor.y).Within(TimeTolerance),
+                    "XZ 루트 이동이 접지용 Y 위치를 변경하면 안 됩니다.");
+
+                Invoke(controller, "Seek", 0f);
+                Assert.That(animator.transform.position.x, Is.EqualTo(rootAnchor.x).Within(TimeTolerance));
+                Assert.That(animator.transform.position.z, Is.EqualTo(rootAnchor.z).Within(TimeTolerance));
+
+                Invoke(controller, "Seek", movementSampleTime);
+                Assert.That(
+                    Vector3.Distance(animator.transform.position, firstMovementPosition),
+                    Is.LessThanOrEqualTo(TimeTolerance),
+                    "동일 시점 재탐색에서 root 위치가 누적되면 안 됩니다.");
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
         public void Given_PreparedClip_When_SeekingFrame_Then_EvaluatesExactFrameWithoutPlaying()
         {
             GameObject target = InstantiateTarget();
@@ -300,6 +358,37 @@ namespace Tests.Editor.FBXImporter
             Assert.That(controllerType, Is.Not.Null,
                 "명시적 재생 상태를 관리하는 모델 중립 컨트롤러가 필요합니다.");
             return Activator.CreateInstance(controllerType, nonPublic: true);
+        }
+
+        private static Vector3 CalculateExpectedRootPosition(
+            AnimationClip clip,
+            Vector3 anchorPosition,
+            Quaternion anchorRotation,
+            float timeSeconds)
+        {
+            AnimationCurve rootX = LoadRootTranslationCurve(clip, "RootT.x");
+            AnimationCurve rootZ = LoadRootTranslationCurve(clip, "RootT.z");
+            Assert.That(rootX, Is.Not.Null, "RootT.x 곡선이 필요합니다.");
+            Assert.That(rootZ, Is.Not.Null, "RootT.z 곡선이 필요합니다.");
+
+            Vector3 clipSpaceOffset = new Vector3(
+                rootX.Evaluate(timeSeconds) - rootX.Evaluate(0f),
+                0f,
+                rootZ.Evaluate(timeSeconds) - rootZ.Evaluate(0f));
+            return anchorPosition + anchorRotation * clipSpaceOffset;
+        }
+
+        private static AnimationCurve LoadRootTranslationCurve(
+            AnimationClip clip,
+            string propertyName)
+        {
+            return AnimationUtility.GetCurveBindings(clip)
+                .Where(binding =>
+                    binding.type == typeof(Animator) &&
+                    string.IsNullOrEmpty(binding.path) &&
+                    binding.propertyName == propertyName)
+                .Select(binding => AnimationUtility.GetEditorCurve(clip, binding))
+                .FirstOrDefault();
         }
 
         private static object Invoke(object target, string methodName, params object[] arguments)
