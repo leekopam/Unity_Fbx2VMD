@@ -771,16 +771,10 @@ namespace Tests.Editor.FBXImporter
                     sortedHeights.Length - 1);
                 float contactHeight = sortedHeights[percentileIndex] +
                     ContactHeightMarginMeters;
-                var contactFrames = new bool[sourcePoints.Count];
-                for (int index = 0; index < sourcePoints.Count; index++)
-                {
-                    float speed = index == 0
-                        ? 0f
-                        : HorizontalDistance(sourcePoints[index - 1], sourcePoints[index]) *
-                            frameRate;
-                    contactFrames[index] = sourcePoints[index].y <= contactHeight &&
-                        speed <= ContactSpeedLimitMetersPerSecond;
-                }
+                bool[] contactFrames = DetectStableContactFrames(
+                    sourcePoints,
+                    frameRate,
+                    contactHeight);
 
                 int runCount = 0;
                 float maximumAdditionalDrift = 0f;
@@ -818,6 +812,114 @@ namespace Tests.Editor.FBXImporter
                 }
 
                 return new FootContactMetrics(runCount, maximumAdditionalDrift);
+            }
+
+            private static bool[] DetectStableContactFrames(
+                IReadOnlyList<Vector3> points,
+                float frameRate,
+                float contactHeight)
+            {
+                var candidates = new bool[points.Count];
+                var stableFrames = new bool[points.Count];
+                for (int index = 0; index < points.Count; index++)
+                {
+                    float horizontalSpeed = index == 0
+                        ? 0f
+                        : HorizontalDistance(points[index - 1], points[index]) *
+                            frameRate;
+                    candidates[index] = points[index].y <= contactHeight &&
+                        horizontalSpeed <= ContactSpeedLimitMetersPerSecond;
+                    stableFrames[index] = candidates[index] &&
+                        CalculateCenteredSpeed(points, index, frameRate) <=
+                        ContactSpeedLimitMetersPerSecond;
+                }
+
+                var result = new bool[points.Count];
+                int candidateStart = -1;
+                for (int index = 0; index <= candidates.Length; index++)
+                {
+                    bool isCandidate = index < candidates.Length && candidates[index];
+                    if (isCandidate && candidateStart < 0)
+                    {
+                        candidateStart = index;
+                        continue;
+                    }
+
+                    if (isCandidate || candidateStart < 0)
+                    {
+                        continue;
+                    }
+
+                    MarkStableSpan(
+                        stableFrames,
+                        result,
+                        candidateStart,
+                        index - 1);
+                    candidateStart = -1;
+                }
+
+                return result;
+            }
+
+            private static void MarkStableSpan(
+                IReadOnlyList<bool> stableFrames,
+                bool[] contactFrames,
+                int candidateStart,
+                int candidateEnd)
+            {
+                int firstStable = -1;
+                int lastStable = -1;
+                for (int index = candidateStart; index <= candidateEnd; index++)
+                {
+                    if (!stableFrames[index])
+                    {
+                        continue;
+                    }
+
+                    if (firstStable < 0)
+                    {
+                        firstStable = index;
+                    }
+
+                    lastStable = index;
+                }
+
+                if (firstStable < 0)
+                {
+                    return;
+                }
+
+                int contactStart = Mathf.Max(candidateStart, firstStable - 1);
+                int contactEnd = Mathf.Min(candidateEnd, lastStable + 1);
+                for (int index = contactStart; index <= contactEnd; index++)
+                {
+                    contactFrames[index] = true;
+                }
+            }
+
+            private static float CalculateCenteredSpeed(
+                IReadOnlyList<Vector3> points,
+                int index,
+                float frameRate)
+            {
+                if (points.Count <= 1)
+                {
+                    return 0f;
+                }
+
+                if (index == 0)
+                {
+                    return Vector3.Distance(points[0], points[1]) * frameRate;
+                }
+
+                if (index == points.Count - 1)
+                {
+                    return Vector3.Distance(points[index - 1], points[index]) *
+                        frameRate;
+                }
+
+                return Vector3.Distance(points[index - 1], points[index + 1]) *
+                    frameRate * 0.5f;
             }
 
             private static float HorizontalDistance(Vector3 first, Vector3 second)

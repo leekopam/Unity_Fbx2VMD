@@ -44,6 +44,36 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_LowFootMovingVertically_When_Building_Then_DoesNotTreatAsContact()
+        {
+            Vector3[] source = CreatePoints(8, index =>
+                new Vector3(0f, index * 0.003f, 0f));
+            Vector3[] target = CreatePoints(8, index =>
+                new Vector3(index * 0.01f, 0f, 0f));
+
+            object plan = BuildPlan(source, target, Quaternion.identity);
+
+            Assert.That(TryEvaluate(plan, 5f / FrameRate, out Vector3 correction), Is.True);
+            Assert.That(correction, Is.EqualTo(Vector3.zero));
+            Assert.That(GetIntProperty(plan, "LeftContactRunCount"), Is.Zero);
+        }
+
+        [Test]
+        public void Given_StableContactWithVerticalRoll_When_Building_Then_KeepsContactRun()
+        {
+            Vector3[] source = CreatePoints(8, index =>
+                new Vector3(0f, index >= 3 ? 0.004f : 0f, 0f));
+            Vector3[] target = CreatePoints(8, index =>
+                new Vector3(index * 0.01f, 0f, 0f));
+
+            object plan = BuildPlan(source, target, Quaternion.identity);
+
+            Assert.That(TryEvaluate(plan, 7f / FrameRate, out Vector3 correction), Is.True);
+            Assert.That(correction.x, Is.EqualTo(-0.07f).Within(0.0001f));
+            Assert.That(GetIntProperty(plan, "LeftContactRunCount"), Is.EqualTo(1));
+        }
+
+        [Test]
         public void Given_ContactEnds_When_EvaluatingRelease_Then_FadesWithoutSnap()
         {
             Vector3[] source = CreatePoints(14, index =>
