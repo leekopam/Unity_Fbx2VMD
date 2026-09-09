@@ -226,12 +226,18 @@ namespace Fbx2Vmd.Settings
                 _pipeline != null && _pipeline.HasPreparedImportedMotion;
             bool isRecording =
                 _pipeline != null && _pipeline.IsImportedMotionRecording;
+            bool isPreparingCorrection =
+                _pipeline != null &&
+                _pipeline.IsPreparingImportedMotionCorrection;
             if (_playPauseButton != null)
             {
-                _playPauseButton.interactable = hasPreparedMotion && !isRecording;
+                _playPauseButton.interactable =
+                    hasPreparedMotion && !isRecording && !isPreparingCorrection;
                 SetLabel(
                     _playPauseButton,
-                    _pipeline != null && _pipeline.IsImportedMotionPlaying
+                    isPreparingCorrection
+                        ? "보정 준비 중"
+                        : _pipeline != null && _pipeline.IsImportedMotionPlaying
                         ? "일시정지"
                         : "재생");
             }
@@ -242,12 +248,14 @@ namespace Fbx2Vmd.Settings
             }
             if (_recordButton != null)
             {
-                _recordButton.interactable = hasPreparedMotion;
+                _recordButton.interactable =
+                    hasPreparedMotion && !isPreparingCorrection;
                 SetLabel(_recordButton, isRecording ? "녹화 중지" : "녹화");
             }
             if (_timelineSlider != null)
             {
-                _timelineSlider.interactable = hasPreparedMotion && !isRecording;
+                _timelineSlider.interactable =
+                    hasPreparedMotion && !isRecording && !isPreparingCorrection;
                 _timelineSlider.minValue = 0f;
                 _timelineSlider.maxValue = hasPreparedMotion
                     ? _pipeline.ImportedMotionLastFrameIndex
@@ -258,12 +266,19 @@ namespace Fbx2Vmd.Settings
                         : 0f);
             }
 
-            SetTimelineLabel(hasPreparedMotion);
+            SetTimelineLabel(hasPreparedMotion, isPreparingCorrection);
         }
 
-        private void SetTimelineLabel(bool hasPreparedMotion)
+        private void SetTimelineLabel(
+            bool hasPreparedMotion,
+            bool isPreparingCorrection)
         {
-            string label = hasPreparedMotion
+            string label = isPreparingCorrection
+                ? $"표면 보정 준비 " +
+                  $"{_pipeline.ImportedMotionCorrectionProcessedFrameCount} / " +
+                  $"{_pipeline.ImportedMotionCorrectionTotalFrameCount} · " +
+                  $"{_pipeline.ImportedMotionCorrectionPreparationProgress:P0}"
+                : hasPreparedMotion
                 ? $"프레임 {_pipeline.ImportedMotionCurrentFrameIndex} / " +
                   $"{_pipeline.ImportedMotionLastFrameIndex} · " +
                   $"{FormatTime(_pipeline.ImportedMotionCurrentTimeSeconds)} / " +

@@ -47,6 +47,13 @@ namespace Fbx2Vmd.FBXImporter
             Cancelled
         }
 
+        private enum NativeSkinningPendingPlaybackRequest
+        {
+            None,
+            Play,
+            Record
+        }
+
 
         #region Public 필드
         [Header("FBX 임포트 설정")]
@@ -1347,6 +1354,11 @@ namespace Fbx2Vmd.FBXImporter
         private VMDRecordingController _recordingController;
         private HumanoidMotionPlaybackController _humanoidMotionPlaybackController;
         private HumanoidMotionRecordingController _humanoidMotionRecordingController;
+        private NativeSkinningCorrectionPlaybackDriver
+            _nativeSkinningCorrectionPlaybackDriver;
+        private NativeSkinningPendingPlaybackRequest
+            _pendingNativeSkinningPlaybackRequest;
+        private string _nativeSkinningCorrectionSetupError = string.Empty;
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
         private string _preparedMotionName = string.Empty;
         private FBXSessionState _sessionState = FBXSessionState.Idle;
@@ -1459,6 +1471,14 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidMotionPlaybackState.Playing;
         public bool IsImportedMotionRecording =>
             _humanoidMotionRecordingController?.IsRecording ?? false;
+        public bool IsPreparingImportedMotionCorrection =>
+            _nativeSkinningCorrectionPlaybackDriver?.IsPreparing ?? false;
+        public float ImportedMotionCorrectionPreparationProgress =>
+            _nativeSkinningCorrectionPlaybackDriver?.Progress ?? 1f;
+        public int ImportedMotionCorrectionProcessedFrameCount =>
+            _nativeSkinningCorrectionPlaybackDriver?.ProcessedFrameCount ?? 0;
+        public int ImportedMotionCorrectionTotalFrameCount =>
+            _nativeSkinningCorrectionPlaybackDriver?.TotalFrameCount ?? 0;
         public int ImportedMotionCurrentFrameIndex =>
             _humanoidMotionPlaybackController?.CurrentFrameIndex ?? 0;
         public int ImportedMotionLastFrameIndex =>
@@ -1754,7 +1774,10 @@ namespace Fbx2Vmd.FBXImporter
 
         private void LateUpdate()
         {
-            TickHumanoidMotionPlayback(Time.unscaledDeltaTime);
+            if (!TickNativeSkinningCorrectionPreparation())
+            {
+                TickHumanoidMotionPlayback(Time.unscaledDeltaTime);
+            }
             bool hasActiveMotion =
                 _activeRetargeter != null ||
                 (_humanoidMotionPlaybackController?.IsPrepared ?? false);
@@ -1848,7 +1871,20 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (IsImportedMotionRecording ||
                 _humanoidMotionPlaybackController == null ||
-                !_humanoidMotionPlaybackController.Play())
+                !TryPrepareNativeSkinningCorrection(
+                    NativeSkinningPendingPlaybackRequest.Play,
+                    out bool shouldStartImmediately))
+            {
+                return false;
+            }
+
+            return !shouldStartImmediately ||
+                TryStartImportedMotionPlaybackNow();
+        }
+
+        private bool TryStartImportedMotionPlaybackNow()
+        {
+            if (!_humanoidMotionPlaybackController.Play())
             {
                 return false;
             }
@@ -1863,6 +1899,7 @@ namespace Fbx2Vmd.FBXImporter
         public bool TryPauseImportedMotion()
         {
             if (IsImportedMotionRecording ||
+                IsPreparingImportedMotionCorrection ||
                 _humanoidMotionPlaybackController == null ||
                 !_humanoidMotionPlaybackController.Pause())
             {
@@ -1878,6 +1915,28 @@ namespace Fbx2Vmd.FBXImporter
 
         public bool TryStopImportedMotion()
         {
+            if (_pendingNativeSkinningPlaybackRequest !=
+                    NativeSkinningPendingPlaybackRequest.None)
+            {
+                _pendingNativeSkinningPlaybackRequest =
+                    NativeSkinningPendingPlaybackRequest.None;
+                if (IsPreparingImportedMotionCorrection)
+                {
+                    _nativeSkinningCorrectionPlaybackDriver.CancelPreparation();
+                }
+                else if (_nativeSkinningCorrectionPlaybackDriver?.IsFaulted ?? false)
+                {
+                    _nativeSkinningCorrectionPlaybackDriver.Invalidate();
+                }
+
+                _humanoidMotionPlaybackController?.Stop();
+                SetSessionState(
+                    FBXSessionState.Ready,
+                    "FBX 표면 보정 준비 취소 · 재생 대기",
+                    1f);
+                return true;
+            }
+
             if (IsImportedMotionRecording)
             {
                 return TryStopImportedMotionRecording();
@@ -1896,6 +1955,7 @@ namespace Fbx2Vmd.FBXImporter
         public bool TrySeekImportedMotion(float timeSeconds)
         {
             if (IsImportedMotionRecording ||
+                IsPreparingImportedMotionCorrection ||
                 _humanoidMotionPlaybackController == null ||
                 !_humanoidMotionPlaybackController.Seek(timeSeconds))
             {
@@ -1914,6 +1974,7 @@ namespace Fbx2Vmd.FBXImporter
         public bool TrySeekImportedMotionFrame(int frameIndex)
         {
             if (IsImportedMotionRecording ||
+                IsPreparingImportedMotionCorrection ||
                 _humanoidMotionPlaybackController == null)
             {
                 return false;
@@ -1947,6 +2008,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             pose = default;
             return !IsImportedMotionRecording &&
+                !IsPreparingImportedMotionCorrection &&
                 _humanoidMotionPlaybackController != null &&
                 _humanoidMotionPlaybackController.TryCaptureCurrentPose(out pose);
         }
@@ -1956,6 +2018,7 @@ namespace Fbx2Vmd.FBXImporter
             float delta)
         {
             if (IsImportedMotionRecording ||
+                IsPreparingImportedMotionCorrection ||
                 _humanoidMotionPlaybackController == null ||
                 !_humanoidMotionPlaybackController.TryCaptureCurrentPose(out _))
             {
@@ -1982,6 +2045,8 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+            _nativeSkinningCorrectionPlaybackDriver?.Invalidate();
+
             SetSessionState(
                 FBXSessionState.PreviewPaused,
                 $"FBX 자세 수정 미리보기: {frameIndex} 프레임",
@@ -1992,6 +2057,7 @@ namespace Fbx2Vmd.FBXImporter
         public bool TryRestoreImportedMotionPoseFrame()
         {
             if (IsImportedMotionRecording ||
+                IsPreparingImportedMotionCorrection ||
                 _humanoidMotionPlaybackController == null)
             {
                 return false;
@@ -2010,6 +2076,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _poseCorrectionDocument?.TryRemoveFrame(frameIndex);
+            _nativeSkinningCorrectionPlaybackDriver?.Invalidate();
             SetSessionState(
                 FBXSessionState.PreviewPaused,
                 $"FBX 원본 자세 복원: {frameIndex} 프레임",
@@ -2045,9 +2112,10 @@ namespace Fbx2Vmd.FBXImporter
             string filePath,
             out string errorMessage)
         {
-            if (IsImportedMotionRecording)
+            if (IsImportedMotionRecording ||
+                IsPreparingImportedMotionCorrection)
             {
-                errorMessage = "녹화 중에는 Humanoid 보정 문서를 불러올 수 없습니다.";
+                errorMessage = "재생 준비 또는 녹화 중에는 Humanoid 보정 문서를 불러올 수 없습니다.";
                 return false;
             }
 
@@ -2077,6 +2145,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _poseCorrectionDocument = loadedDocument;
+            _nativeSkinningCorrectionPlaybackDriver?.Invalidate();
             SetSessionState(
                 FBXSessionState.PreviewPaused,
                 $"FBX 자세 수정 문서 불러오기: {loadedDocument.FrameCount} 프레임",
@@ -2088,10 +2157,24 @@ namespace Fbx2Vmd.FBXImporter
         public bool TryStartImportedMotionRecording()
         {
 #if UNITY_EDITOR
-            if (_humanoidMotionRecordingController == null)
+            if (_humanoidMotionRecordingController == null ||
+                !TryPrepareNativeSkinningCorrection(
+                    NativeSkinningPendingPlaybackRequest.Record,
+                    out bool shouldStartImmediately))
             {
                 return false;
             }
+
+            return !shouldStartImmediately ||
+                TryStartImportedMotionRecordingNow();
+#else
+            return false;
+#endif
+        }
+
+#if UNITY_EDITOR
+        private bool TryStartImportedMotionRecordingNow()
+        {
 
             RecordingCaptureResolutionPlan resolution =
                 DiagnosticsSettings.CreateCaptureResolutionPlan();
@@ -2114,10 +2197,8 @@ namespace Fbx2Vmd.FBXImporter
                 "FBX 모션 영상 녹화 중",
                 0f);
             return true;
-#else
-            return false;
-#endif
         }
+#endif
 
         public bool TryStopImportedMotionRecording()
         {
@@ -2169,6 +2250,10 @@ namespace Fbx2Vmd.FBXImporter
             GameObject sourceModelAsset)
         {
             CleanupActiveGhost();
+            _nativeSkinningCorrectionPlaybackDriver?.Release();
+            _pendingNativeSkinningPlaybackRequest =
+                NativeSkinningPendingPlaybackRequest.None;
+            _nativeSkinningCorrectionSetupError = string.Empty;
             _humanoidMotionPlaybackController ??=
                 new HumanoidMotionPlaybackController();
             if (sourceModelAsset == null)
@@ -2191,6 +2276,20 @@ namespace Fbx2Vmd.FBXImporter
                 new EditorMotionVideoRecorder());
             _preparedMotionName = motionName;
             _isProcessing = false;
+            if (!NativeSkinningCorrectionPlaybackDriver.TryAttach(
+                    gameObject,
+                    targetAnimator,
+                    _humanoidMotionPlaybackController,
+                    out _nativeSkinningCorrectionPlaybackDriver,
+                    out _nativeSkinningCorrectionSetupError))
+            {
+                SetSessionState(
+                    FBXSessionState.Failed,
+                    _nativeSkinningCorrectionSetupError,
+                    0f);
+                HumanoidMotionPlaybackControlsView.Ensure(this);
+                return;
+            }
             SetSessionState(
                 FBXSessionState.Ready,
                 $"FBX 임포트 완료 · 재생 대기: {motionName}",
@@ -2568,6 +2667,111 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
+        private bool TryPrepareNativeSkinningCorrection(
+            NativeSkinningPendingPlaybackRequest request,
+            out bool shouldStartImmediately)
+        {
+            shouldStartImmediately = false;
+            if (!string.IsNullOrWhiteSpace(_nativeSkinningCorrectionSetupError))
+            {
+                SetSessionState(
+                    FBXSessionState.Failed,
+                    _nativeSkinningCorrectionSetupError,
+                    0f);
+                return false;
+            }
+            if (_nativeSkinningCorrectionPlaybackDriver == null ||
+                _nativeSkinningCorrectionPlaybackDriver.IsReady)
+            {
+                shouldStartImmediately = true;
+                return true;
+            }
+            if (_nativeSkinningCorrectionPlaybackDriver.IsFaulted)
+            {
+                SetSessionState(
+                    FBXSessionState.Failed,
+                    _nativeSkinningCorrectionPlaybackDriver.FailureMessage,
+                    0f);
+                return false;
+            }
+            if (_nativeSkinningCorrectionPlaybackDriver.IsPreparing)
+            {
+                return _pendingNativeSkinningPlaybackRequest == request;
+            }
+            if (!_nativeSkinningCorrectionPlaybackDriver.BeginPreparation())
+            {
+                SetSessionState(
+                    FBXSessionState.Failed,
+                    _nativeSkinningCorrectionPlaybackDriver.FailureMessage,
+                    0f);
+                return false;
+            }
+
+            _pendingNativeSkinningPlaybackRequest = request;
+            SetSessionState(
+                FBXSessionState.Retargeting,
+                "FBX 팔 표면 보정 준비 중",
+                0f);
+            return true;
+        }
+
+        private bool TickNativeSkinningCorrectionPreparation()
+        {
+            if (_nativeSkinningCorrectionPlaybackDriver == null)
+            {
+                return false;
+            }
+            if (_nativeSkinningCorrectionPlaybackDriver.IsPreparing)
+            {
+                SetSessionState(
+                    FBXSessionState.Retargeting,
+                    $"FBX 팔 표면 보정 준비 중: " +
+                    $"{ImportedMotionCorrectionProcessedFrameCount} / " +
+                    $"{ImportedMotionCorrectionTotalFrameCount}",
+                    ImportedMotionCorrectionPreparationProgress,
+                    shouldLog: false);
+                return true;
+            }
+            if (_pendingNativeSkinningPlaybackRequest ==
+                NativeSkinningPendingPlaybackRequest.None)
+            {
+                return false;
+            }
+            if (_nativeSkinningCorrectionPlaybackDriver.IsFaulted)
+            {
+                string failureMessage =
+                    _nativeSkinningCorrectionPlaybackDriver.FailureMessage;
+                _pendingNativeSkinningPlaybackRequest =
+                    NativeSkinningPendingPlaybackRequest.None;
+                SetSessionState(FBXSessionState.Failed, failureMessage, 0f);
+                return true;
+            }
+            if (!_nativeSkinningCorrectionPlaybackDriver.IsReady)
+            {
+                return true;
+            }
+
+            NativeSkinningPendingPlaybackRequest request =
+                _pendingNativeSkinningPlaybackRequest;
+            _pendingNativeSkinningPlaybackRequest =
+                NativeSkinningPendingPlaybackRequest.None;
+            bool started = request == NativeSkinningPendingPlaybackRequest.Record
+#if UNITY_EDITOR
+                ? TryStartImportedMotionRecordingNow()
+#else
+                ? false
+#endif
+                : TryStartImportedMotionPlaybackNow();
+            if (!started)
+            {
+                SetSessionState(
+                    FBXSessionState.Failed,
+                    "표면 보정 완료 후 FBX 모션을 시작하지 못했습니다.",
+                    0f);
+            }
+            return true;
+        }
+
         private float ResolveHumanoidPlaybackProgress()
         {
             if (_humanoidMotionPlaybackController == null ||
@@ -2629,6 +2833,11 @@ namespace Fbx2Vmd.FBXImporter
 
         private void CleanupHumanoidMotionPlayback()
         {
+            _nativeSkinningCorrectionPlaybackDriver?.Release();
+            _nativeSkinningCorrectionPlaybackDriver = null;
+            _pendingNativeSkinningPlaybackRequest =
+                NativeSkinningPendingPlaybackRequest.None;
+            _nativeSkinningCorrectionSetupError = string.Empty;
             _humanoidMotionRecordingController?.Dispose();
             _humanoidMotionRecordingController = null;
             _humanoidMotionPlaybackController?.Dispose();
