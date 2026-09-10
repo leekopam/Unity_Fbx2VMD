@@ -19,6 +19,7 @@ namespace Fbx2Vmd.FBXImporter
             int connectedVertexCount,
             int mixedWeightVertexCount,
             int[] evaluatedVertexIndices,
+            int lowerArmBoneIndex,
             float armChainLength)
         {
             Renderer = renderer;
@@ -26,6 +27,7 @@ namespace Fbx2Vmd.FBXImporter
             ConnectedVertexCount = connectedVertexCount;
             MixedWeightVertexCount = mixedWeightVertexCount;
             EvaluatedVertexIndices = evaluatedVertexIndices;
+            LowerArmBoneIndex = lowerArmBoneIndex;
             ArmChainLength = armChainLength;
         }
 
@@ -38,6 +40,8 @@ namespace Fbx2Vmd.FBXImporter
         internal int MixedWeightVertexCount { get; }
 
         internal int[] EvaluatedVertexIndices { get; }
+
+        internal int LowerArmBoneIndex { get; }
 
         internal float ArmChainLength { get; }
     }
@@ -205,6 +209,7 @@ namespace Fbx2Vmd.FBXImporter
                     componentVertices.Length,
                     candidate.Value,
                     evaluatedVertices,
+                    lowerArmIndex,
                     armChainLength));
             }
         }

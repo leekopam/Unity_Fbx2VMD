@@ -15,6 +15,7 @@ namespace Tests.Editor.FBXImporter
         private const string ClipAssetPath =
             "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const int FixtureSleeveVertexIndex = 17178;
+        private const int VisibleCollapseFrame = 1327;
         private const int CounterexampleFrame = 4476;
 
         [OneTimeSetUp]
@@ -94,6 +95,78 @@ namespace Tests.Editor.FBXImporter
                 object[] applyArguments = { 0, correctedVertices, 0 };
                 Assert.That((bool)Invoke(cache, "TryApply", applyArguments), Is.True);
                 Assert.That(applyArguments[2], Is.EqualTo(74));
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(bakedMesh);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_VisibleCollapseFrame_When_Preprocessing_Then_CachesAdaptiveVolumeCorrection()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+            var bakedMesh = new Mesh();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", VisibleCollapseFrame / clip.frameRate),
+                    Is.True);
+                renderer.BakeMesh(bakedMesh, false);
+                Vector3[] baselineVertices = bakedMesh.vertices;
+                Array contracts = CreateContractArray(contract);
+                Func<int, SkinnedMeshRenderer, Vector3[]> frameReader =
+                    (_, requestedRenderer) =>
+                    {
+                        Assert.That(requestedRenderer, Is.SameAs(renderer));
+                        return baselineVertices.ToArray();
+                    };
+
+                MethodInfo buildMethod = RequireProductType(
+                        "NativeSkinningCorrectionPreprocessor")
+                    .GetMethod(
+                        "TryBuild",
+                        BindingFlags.Static | BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                object[] arguments = { 1, contracts, frameReader, null, null };
+
+                Assert.That((bool)buildMethod.Invoke(null, arguments), Is.True);
+                object result = arguments[4];
+                object rendererCorrection = ReadProperty<Array>(
+                    result,
+                    "RendererCorrections").GetValue(0);
+                object cache = ReadProperty<object>(rendererCorrection, "Cache");
+                var correctedVertices = baselineVertices.ToList();
+                object[] applyArguments = { 0, correctedVertices, 0 };
+
+                Assert.That((bool)Invoke(cache, "TryApply", applyArguments), Is.True);
+                int appliedCorrectionCount = (int)applyArguments[2];
+                Assert.That(appliedCorrectionCount, Is.GreaterThan(100));
+                float maximumDisplacement = Enumerable.Range(0, baselineVertices.Length)
+                    .Max(index => Vector3.Distance(
+                        baselineVertices[index],
+                        correctedVertices[index]));
+                Assert.That(maximumDisplacement, Is.GreaterThan(0.0002f));
+                TestContext.WriteLine(
+                    $"frame={VisibleCollapseFrame}, entries={appliedCorrectionCount}, " +
+                    $"maxDisplacementMm={maximumDisplacement * 1000f:F6}");
             }
             finally
             {
@@ -303,15 +376,15 @@ namespace Tests.Editor.FBXImporter
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "CorrectedFrameCount"),
-                    Is.EqualTo(6044),
+                    Is.EqualTo(7224),
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "FallbackFrameCount"),
-                    Is.EqualTo(40),
+                    Is.EqualTo(20),
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "CorrectionEntryCount"),
-                    Is.EqualTo(277660),
+                    Is.EqualTo(1250973),
                     message);
             }
             finally

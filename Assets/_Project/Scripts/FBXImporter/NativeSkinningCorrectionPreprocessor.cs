@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -206,58 +207,154 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             var deltaByVertex = new Dictionary<int, Vector3>();
-            foreach (NativeSkinningSurfaceContract contract in work.Contracts)
+            NativeSkinningDualQuaternionTransform[] boneTransforms = null;
+            if (!TryCalculateSurfaceCorrections(
+                    frameIndex,
+                    baselineVertices,
+                    work.Contracts,
+                    out NativeSkinningSurfaceCorrectionResult[] surfaceCorrections,
+                    out bool surfaceUsedFallback,
+                    out errorMessage))
             {
-                if (!NativeSkinningSurfaceCorrectionCalculator
-                        .TryCalculateFastValidatedFrame(
-                        baselineVertices,
-                        contract,
-                        out NativeSkinningSurfaceCorrectionResult correction))
+                return false;
+            }
+            usedFallback |= surfaceUsedFallback;
+            for (int contractIndex = 0;
+                 contractIndex < work.Contracts.Length;
+                 contractIndex++)
+            {
+                NativeSkinningSurfaceContract contract =
+                    work.Contracts[contractIndex];
+                NativeSkinningSurfaceCorrectionResult correction =
+                    surfaceCorrections[contractIndex];
+                IReadOnlyList<Vector3> correctedVertices =
+                    correction.CorrectedVertices;
+                IReadOnlyCollection<int> correctedVertexIndices =
+                    correction.CorrectedVertexIndices;
+
+                if (correction.UsedRestShapeRecovery)
                 {
-                    errorMessage =
-                        $"frame {frameIndex}의 빠른 표면 보정을 계산하지 못했습니다.";
-                    return false;
-                }
-                if (!NativeSkinningSurfaceCorrectionCalculator
-                        .IsWithinFastQuality(correction, contract))
-                {
-                    usedFallback = true;
-                    if (!NativeSkinningSurfaceCorrectionCalculator
-                            .TryCalculateStrongValidatedFrame(
-                            baselineVertices,
-                            contract,
-                            out correction))
+                    if (boneTransforms == null &&
+                        (!NativeSkinningBoneTransformSampler.TrySample(
+                             work.Renderer,
+                             out Matrix4x4[] skinningMatrices) ||
+                         !NativeSkinningDualQuaternionVertexCalculator
+                             .TryBuildTransforms(
+                                 skinningMatrices,
+                                 out boneTransforms)))
                     {
                         errorMessage =
-                            $"frame {frameIndex}의 강한 표면 보정을 계산하지 못했습니다.";
+                            $"frame {frameIndex}의 Native 스키닝 본 자세를 변환하지 못했습니다.";
                         return false;
                     }
-                }
-                if (!NativeSkinningSurfaceCorrectionCalculator
-                        .IsWithinStrongQuality(correction, contract))
-                {
-                    errorMessage =
-                        $"frame {frameIndex}의 Native 보정이 품질 계약을 통과하지 못했습니다.";
-                    return false;
+
+                    if (!NativeSkinningDualQuaternionBlendCalculator
+                            .TryCalculateWithPreparedTransforms(
+                                correctedVertices,
+                                work.RestVertices,
+                                boneTransforms,
+                                work.BlendContracts[contractIndex],
+                                out NativeSkinningDualQuaternionBlendResult
+                                    volumeCorrection))
+                    {
+                        errorMessage =
+                            $"frame {frameIndex}의 Native 체적 보정을 계산하지 못했습니다.";
+                        return false;
+                    }
+                    correctedVertices = volumeCorrection.BlendedVertices;
+                    correctedVertexIndices = correctedVertexIndices
+                        .Concat(volumeCorrection.ChangedVertexIndices)
+                        .Distinct()
+                        .ToArray();
                 }
                 AddSparseCorrections(
                     baselineVertices,
-                    correction,
+                    correctedVertices,
+                    correctedVertexIndices,
                     deltaByVertex);
             }
 
-            if (deltaByVertex.Count == 0)
-            {
-                return true;
-            }
             NativeSkinningVertexCorrection[] corrections = deltaByVertex
                 .OrderBy(entry => entry.Key)
                 .Select(entry => new NativeSkinningVertexCorrection(
                     entry.Key,
                     entry.Value))
+                .Where(correction =>
+                    correction.Delta.sqrMagnitude > MinimumCorrectionSquaredMagnitude)
                 .ToArray();
+            if (corrections.Length == 0)
+            {
+                return true;
+            }
             frame = new NativeSkinningCorrectionFrame(frameIndex, corrections);
             return true;
+        }
+
+        private static bool TryCalculateSurfaceCorrections(
+            int frameIndex,
+            IReadOnlyList<Vector3> vertices,
+            NativeSkinningSurfaceContract[] contracts,
+            out NativeSkinningSurfaceCorrectionResult[] corrections,
+            out bool usedFallback,
+            out string errorMessage)
+        {
+            var calculatedCorrections =
+                new NativeSkinningSurfaceCorrectionResult[contracts.Length];
+            corrections = calculatedCorrections;
+            var successByContract = new bool[contracts.Length];
+            var fallbackByContract = new bool[contracts.Length];
+            var errorByContract = new string[contracts.Length];
+            if (contracts.Length == 1)
+            {
+                bool fallback = false;
+                bool success = TryCalculateValidatedSurfaceCorrection(
+                    frameIndex,
+                    vertices,
+                    contracts[0],
+                    ref fallback,
+                    out calculatedCorrections[0],
+                    out errorByContract[0]);
+                successByContract[0] = success;
+                fallbackByContract[0] = fallback;
+                if (!success)
+                {
+                    usedFallback = fallback;
+                    errorMessage = errorByContract[0];
+                    return false;
+                }
+            }
+            else
+            {
+                Parallel.For(0, contracts.Length, contractIndex =>
+                {
+                    bool fallback = false;
+                    successByContract[contractIndex] =
+                        TryCalculateValidatedSurfaceCorrection(
+                            frameIndex,
+                            vertices,
+                            contracts[contractIndex],
+                            ref fallback,
+                            out calculatedCorrections[contractIndex],
+                            out errorByContract[contractIndex]);
+                    fallbackByContract[contractIndex] = fallback;
+                });
+            }
+
+            usedFallback = fallbackByContract.Any(value => value);
+            int failedContractIndex = Array.FindIndex(
+                successByContract,
+                success => !success);
+            if (failedContractIndex < 0)
+            {
+                errorMessage = string.Empty;
+                return true;
+            }
+
+            errorMessage = string.IsNullOrWhiteSpace(
+                    errorByContract[failedContractIndex])
+                ? $"frame {frameIndex}의 Native 표면 보정을 계산하지 못했습니다."
+                : errorByContract[failedContractIndex];
+            return false;
         }
 
         private void Complete()
@@ -299,18 +396,61 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
+        private static bool TryCalculateValidatedSurfaceCorrection(
+            int frameIndex,
+            IReadOnlyList<Vector3> vertices,
+            NativeSkinningSurfaceContract contract,
+            ref bool usedFallback,
+            out NativeSkinningSurfaceCorrectionResult correction,
+            out string errorMessage)
+        {
+            correction = null;
+            errorMessage = string.Empty;
+            if (!NativeSkinningSurfaceCorrectionCalculator
+                    .TryCalculateFastValidatedFrame(
+                        vertices,
+                        contract,
+                        out correction))
+            {
+                errorMessage =
+                    $"frame {frameIndex}의 빠른 표면 보정을 계산하지 못했습니다.";
+                return false;
+            }
+            if (!NativeSkinningSurfaceCorrectionCalculator
+                    .IsWithinFastQuality(correction, contract))
+            {
+                usedFallback = true;
+                if (!NativeSkinningSurfaceCorrectionCalculator
+                        .TryCalculateStrongValidatedFrame(
+                            vertices,
+                            contract,
+                            out correction))
+                {
+                    errorMessage =
+                        $"frame {frameIndex}의 강한 표면 보정을 계산하지 못했습니다.";
+                    return false;
+                }
+            }
+            if (NativeSkinningSurfaceCorrectionCalculator
+                    .IsWithinStrongQuality(correction, contract))
+            {
+                return true;
+            }
+
+            errorMessage =
+                $"frame {frameIndex}의 Native 보정이 품질 계약을 통과하지 못했습니다.";
+            return false;
+        }
+
         private static void AddSparseCorrections(
             IReadOnlyList<Vector3> baselineVertices,
-            NativeSkinningSurfaceCorrectionResult correction,
+            IReadOnlyList<Vector3> correctedVertices,
+            IEnumerable<int> correctedVertexIndices,
             IDictionary<int, Vector3> deltaByVertex)
         {
-            if (correction.InitialSharpFoldCount == 0)
+            foreach (int vertexIndex in correctedVertexIndices)
             {
-                return;
-            }
-            foreach (int vertexIndex in correction.CorrectedVertexIndices)
-            {
-                Vector3 delta = correction.CorrectedVertices[vertexIndex] -
+                Vector3 delta = correctedVertices[vertexIndex] -
                     baselineVertices[vertexIndex];
                 if (delta.sqrMagnitude <= MinimumCorrectionSquaredMagnitude)
                 {
@@ -325,21 +465,77 @@ namespace Fbx2Vmd.FBXImporter
 
         internal sealed class RendererWork
         {
-            internal RendererWork(
+            private RendererWork(
                 SkinnedMeshRenderer renderer,
-                NativeSkinningSurfaceContract[] contracts)
+                NativeSkinningSurfaceContract[] contracts,
+                NativeSkinningDualQuaternionBlendContract[] blendContracts,
+                Vector3[] restVertices)
             {
                 Renderer = renderer;
                 Contracts = contracts;
-                VertexCount = renderer.sharedMesh.vertexCount;
+                BlendContracts = blendContracts;
+                VertexCount = restVertices.Length;
+                RestVertices = restVertices;
                 Frames = new List<NativeSkinningCorrectionFrame>();
+            }
+
+            internal static bool TryCreate(
+                SkinnedMeshRenderer renderer,
+                NativeSkinningSurfaceContract[] contracts,
+                out RendererWork work)
+            {
+                work = null;
+                if (renderer == null ||
+                    renderer.sharedMesh == null ||
+                    contracts == null ||
+                    contracts.Length == 0)
+                {
+                    return false;
+                }
+
+                Mesh mesh = renderer.sharedMesh;
+                Vector3[] restVertices = mesh.vertices;
+                BoneWeight[] boneWeights = mesh.boneWeights;
+                if (restVertices.Length != mesh.vertexCount ||
+                    boneWeights.Length != mesh.vertexCount ||
+                    !NativeSkinningSurfaceCorrectionCalculator.AreVerticesFinite(
+                        restVertices))
+                {
+                    return false;
+                }
+
+                var blendContracts = new NativeSkinningDualQuaternionBlendContract[
+                    contracts.Length];
+                for (int contractIndex = 0;
+                     contractIndex < contracts.Length;
+                     contractIndex++)
+                {
+                    if (!NativeSkinningDualQuaternionBlendContractBuilder.TryBuild(
+                            boneWeights,
+                            contracts[contractIndex],
+                            out blendContracts[contractIndex]))
+                    {
+                        return false;
+                    }
+                }
+
+                work = new RendererWork(
+                    renderer,
+                    contracts,
+                    blendContracts,
+                    restVertices);
+                return true;
             }
 
             internal SkinnedMeshRenderer Renderer { get; }
 
             internal NativeSkinningSurfaceContract[] Contracts { get; }
 
+            internal NativeSkinningDualQuaternionBlendContract[] BlendContracts { get; }
+
             internal int VertexCount { get; }
+
+            internal Vector3[] RestVertices { get; }
 
             internal List<NativeSkinningCorrectionFrame> Frames { get; }
         }
@@ -382,19 +578,26 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            NativeSkinningCorrectionPreprocessSession.RendererWork[] works =
-                contracts
-                    .GroupBy(contract => contract.Renderer)
-                    .Where(group => group.Key != null &&
-                        group.Key.sharedMesh != null &&
-                        group.All(contract =>
-                            contract.VertexCount == group.Key.sharedMesh.vertexCount))
-                    .Select(group =>
-                        new NativeSkinningCorrectionPreprocessSession.RendererWork(
-                            group.Key,
-                            group.ToArray()))
-                    .ToArray();
-            if (works.Length == 0 ||
+            var works = new List<
+                NativeSkinningCorrectionPreprocessSession.RendererWork>();
+            foreach (IGrouping<SkinnedMeshRenderer, NativeSkinningSurfaceContract>
+                     group in contracts.GroupBy(contract => contract.Renderer))
+            {
+                NativeSkinningSurfaceContract[] rendererContracts = group.ToArray();
+                if (group.Key == null ||
+                    group.Key.sharedMesh == null ||
+                    rendererContracts.Any(contract =>
+                        contract.VertexCount != group.Key.sharedMesh.vertexCount) ||
+                    !NativeSkinningCorrectionPreprocessSession.RendererWork.TryCreate(
+                        group.Key,
+                        rendererContracts,
+                        out NativeSkinningCorrectionPreprocessSession.RendererWork work))
+                {
+                    return false;
+                }
+                works.Add(work);
+            }
+            if (works.Count == 0 ||
                 works.Sum(work => work.Contracts.Length) != contracts.Length)
             {
                 return false;
@@ -402,7 +605,7 @@ namespace Fbx2Vmd.FBXImporter
 
             session = new NativeSkinningCorrectionPreprocessSession(
                 frameCount,
-                works,
+                works.ToArray(),
                 readFrameVertices,
                 reportProgress);
             return true;
