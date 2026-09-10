@@ -86,8 +86,10 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal static class NativeSkinningSurfaceCorrectionCalculator
     {
-        private const float RestSmoothAngleDegrees = 30f;
-        private const float SharpFoldAngleDegrees = 150f;
+        private const float RestSmoothAngleDegrees =
+            NativeSkinningSurfaceDefectDetector.MaximumCorrectableRestAngleDegrees;
+        private const float SharpFoldAngleDegrees =
+            NativeSkinningSurfaceDefectDetector.MinimumSharpFoldAngleDegrees;
         private const float ProjectionAngleDegrees = 145f;
         private const float RestShapeRecoveryAngleDegrees = 140f;
         private const float RestShapeMinimumAngleImprovementDegrees = 5f;
@@ -584,6 +586,9 @@ namespace Fbx2Vmd.FBXImporter
                    contract.RestVertices != null &&
                    contract.RestVertices.Length == contract.VertexCount &&
                    contract.FacePairs.Length > 0 &&
+                   contract.RestShapeRecoveryMaximumCosines != null &&
+                   contract.RestShapeRecoveryMaximumCosines.Length ==
+                       contract.FacePairs.Length &&
                    contract.FacePairRestLengths != null &&
                    contract.FacePairRestLengths.Length == contract.FacePairs.Length &&
                    contract.AffectedFaceIndices.Length > 0 &&
@@ -2119,24 +2124,12 @@ namespace Fbx2Vmd.FBXImporter
         {
             foreach (int pairIndex in facePairIndices)
             {
-                float restAngleDegrees = contract.RestAnglesDegrees[pairIndex];
-                NativeSkinningFacePair pair = contract.FacePairs[pairIndex];
-                if (restAngleDegrees > RestSmoothAngleDegrees ||
-                    !NativeSkinningSurfaceContractBuilder.TryMeasureAngle(
+                if (NativeSkinningSurfaceDefectDetector.IsCorrectable(
                         vertices,
-                        pair,
-                        out float angleDegrees))
-                {
-                    continue;
-                }
-
-                if (angleDegrees > SharpFoldAngleDegrees ||
-                    NativeSkinningRestShapeCollapseDetector.IsSeverelyCollapsed(
-                        vertices,
-                        pair,
+                        contract.FacePairs[pairIndex],
                         contract.FacePairRestLengths[pairIndex],
-                        restAngleDegrees,
-                        angleDegrees))
+                        contract.RestAnglesDegrees[pairIndex],
+                        contract.RestShapeRecoveryMaximumCosines[pairIndex]))
                 {
                     activePairIndices.Add(pairIndex);
                 }

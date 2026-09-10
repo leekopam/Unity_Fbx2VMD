@@ -109,9 +109,11 @@ namespace Fbx2Vmd.FBXImporter
             int[] affectedFaceIndices,
             NativeSkinningFacePair[] facePairs,
             float[] restAnglesDegrees,
+            float[] restShapeRecoveryMaximumCosines,
             NativeSkinningFacePairRestLengths[] facePairRestLengths,
             int[] evaluatedVertexIndices,
             int connectedVertexCount,
+            int lowerArmBoneIndex,
             int[][] facePairIndicesByVertex,
             int[][] affectedFaceIndicesByVertex,
             float armChainLength)
@@ -124,9 +126,12 @@ namespace Fbx2Vmd.FBXImporter
             AffectedFaceIndices = affectedFaceIndices;
             FacePairs = facePairs;
             RestAnglesDegrees = restAnglesDegrees;
+            RestShapeRecoveryMaximumCosines =
+                restShapeRecoveryMaximumCosines;
             FacePairRestLengths = facePairRestLengths;
             EvaluatedVertexIndices = evaluatedVertexIndices;
             ConnectedVertexCount = connectedVertexCount;
+            LowerArmBoneIndex = lowerArmBoneIndex;
             FacePairIndicesByVertex = facePairIndicesByVertex;
             AffectedFaceIndicesByVertex = affectedFaceIndicesByVertex;
             ArmChainLength = armChainLength;
@@ -148,11 +153,15 @@ namespace Fbx2Vmd.FBXImporter
 
         internal float[] RestAnglesDegrees { get; }
 
+        internal float[] RestShapeRecoveryMaximumCosines { get; }
+
         internal NativeSkinningFacePairRestLengths[] FacePairRestLengths { get; }
 
         internal int[] EvaluatedVertexIndices { get; }
 
         internal int ConnectedVertexCount { get; }
+
+        internal int LowerArmBoneIndex { get; }
 
         internal int[][] FacePairIndicesByVertex { get; }
 
@@ -193,6 +202,7 @@ namespace Fbx2Vmd.FBXImporter
             if (restVertices.Length != mesh.vertexCount ||
                 triangles.Length < 3 ||
                 evaluatedVertices.Length < 4 ||
+                selection.ConnectedVertexCount < evaluatedVertices.Length ||
                 evaluatedVertices.Any(index => index < 0 || index >= mesh.vertexCount))
             {
                 return false;
@@ -242,6 +252,10 @@ namespace Fbx2Vmd.FBXImporter
                         ? angleDegrees
                         : 180f)
                 .ToArray();
+            float[] restShapeRecoveryMaximumCosines = restAngles
+                .Select(angleDegrees => Mathf.Cos(
+                    (angleDegrees + 90f) * Mathf.Deg2Rad))
+                .ToArray();
             NativeSkinningFacePairRestLengths[] facePairRestLengths = facePairs
                 .Select(pair => NativeSkinningRestShapeCollapseDetector
                     .MeasureRestLengths(restVertices, pair))
@@ -258,9 +272,11 @@ namespace Fbx2Vmd.FBXImporter
                 orderedAffectedFaces,
                 facePairs,
                 restAngles,
+                restShapeRecoveryMaximumCosines,
                 facePairRestLengths,
                 evaluatedVertices,
                 selection.ConnectedVertexCount,
+                selection.LowerArmBoneIndex,
                 BuildFacePairIndicesByVertex(mesh.vertexCount, facePairs),
                 BuildFaceIndicesByVertex(
                     mesh.vertexCount,

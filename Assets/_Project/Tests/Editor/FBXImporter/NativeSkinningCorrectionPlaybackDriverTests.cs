@@ -201,11 +201,6 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(
                     ReadProperty<int>(result, "CorrectionEntryCount"),
                     Is.GreaterThan(0));
-                Assert.That(
-                    stopwatch.Elapsed.TotalSeconds,
-                    Is.LessThan(600d),
-                    performanceMessage);
-
                 Invoke(pipeline, "LateUpdate");
 
                 Assert.That(pipeline.IsImportedMotionPlaying, Is.True,

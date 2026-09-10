@@ -38,7 +38,18 @@ namespace Fbx2Vmd.FBXImporter
         {
             return posedAngleDegrees - restAngleDegrees >=
                        MinimumSevereAngleIncreaseDegrees &&
-                   CalculateMaximumCompressionRatio(
+                   HasSevereCompression(
+                       posedVertices,
+                       pair,
+                       restLengths);
+        }
+
+        internal static bool HasSevereCompression(
+            IReadOnlyList<Vector3> posedVertices,
+            NativeSkinningFacePair pair,
+            NativeSkinningFacePairRestLengths restLengths)
+        {
+            return CalculateMaximumCompressionRatio(
                        posedVertices,
                        pair,
                        restLengths) >= MinimumSevereCompressionRatio;
