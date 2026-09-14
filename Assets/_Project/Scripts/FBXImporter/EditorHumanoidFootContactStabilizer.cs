@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using RootMotion.FinalIK;
 using UnityEngine;
 
@@ -32,6 +33,11 @@ namespace Fbx2Vmd.FBXImporter
         internal int LeftContactRunCount => _plan?.LeftContactRunCount ?? 0;
 
         internal int RightContactRunCount => _plan?.RightContactRunCount ?? 0;
+
+        internal IReadOnlyList<HumanoidFootContactSample> SourceSamples { get; private set; } =
+            Array.Empty<HumanoidFootContactSample>();
+
+        internal float SourceHumanScale { get; private set; }
 
         internal void Initialize(
             Animator targetAnimator,
@@ -103,6 +109,18 @@ namespace Fbx2Vmd.FBXImporter
                             "원본 Humanoid 발 접촉점을 샘플링하지 못했습니다.");
                     }
 
+                    Vector2? relativeFootHeights = null;
+                    Quaternion? leftFootFrame = null, rightFootFrame = null;
+                    if (sourceReference.HasFootRotationReference)
+                    {
+                        if (!sourceReference.TryCaptureFootSupportReference(out Vector2 heights,
+                                out Quaternion leftFrame, out Quaternion rightFrame))
+                            throw new InvalidOperationException("원본 Humanoid 발 지지 방향을 샘플링하지 못했습니다.");
+                        relativeFootHeights = heights;
+                        leftFootFrame = leftFrame;
+                        rightFootFrame = rightFrame;
+                    }
+
                     evaluateTarget(timeSeconds);
                     _leftBaseRootSpaceFootPositions[frameIndex] =
                         CaptureRootSpacePosition(_leftLeg.CaptureFootPosition());
@@ -116,7 +134,10 @@ namespace Fbx2Vmd.FBXImporter
                         sourceLeftFoot,
                         sourceLeftToes,
                         sourceRightFoot,
-                        sourceRightToes);
+                        sourceRightToes,
+                        relativeFootHeights,
+                        leftFootFrame,
+                        rightFootFrame);
                     targetSamples[frameIndex] = new HumanoidFootContactSample(
                         _leftLeg.CaptureFootPosition(),
                         _leftLeg.CaptureToesPosition(),
@@ -131,6 +152,9 @@ namespace Fbx2Vmd.FBXImporter
                     sourceReference.SourceHumanScale,
                     sourceToTargetRotation,
                     targetAnimator.humanScale);
+                // 이미 평가한 원본 궤적을 정밀 밑창 접지에서도 재사용함.
+                SourceSamples = Array.AsReadOnly(sourceSamples);
+                SourceHumanScale = sourceReference.SourceHumanScale;
             }
             finally
             {
@@ -230,6 +254,8 @@ namespace Fbx2Vmd.FBXImporter
         internal void Clear()
         {
             _plan = null;
+            SourceSamples = Array.Empty<HumanoidFootContactSample>();
+            SourceHumanScale = 0f;
             _targetRoot = null;
             _leftBaseRootSpaceFootPositions = Array.Empty<Vector3>();
             _rightBaseRootSpaceFootPositions = Array.Empty<Vector3>();

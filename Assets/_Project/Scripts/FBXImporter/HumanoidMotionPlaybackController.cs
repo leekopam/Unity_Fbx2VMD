@@ -28,6 +28,17 @@ namespace Fbx2Vmd.FBXImporter
             new EditorHumanoidPoseReferencePlayer();
         private readonly EditorHumanoidFootContactStabilizer _footContactStabilizer =
             new EditorHumanoidFootContactStabilizer();
+        private readonly EditorHumanoidGroundResponse _groundResponse =
+            new EditorHumanoidGroundResponse();
+        private bool _isGroundResponseEnabled;
+        private EditorHumanoidFootGrounding _footGrounding;
+        private HumanoidFootRotationBinding _leftFootRotation;
+        private HumanoidFootRotationBinding _rightFootRotation;
+        private Quaternion _sourceToTargetRotation = Quaternion.identity;
+        internal bool HasFootRotationReference => _leftFootRotation != null &&
+            _rightFootRotation != null && _poseReferencePlayer.HasFootRotationReference;
+        internal HumanoidFootGroundingStatus LastGroundingStatus { get; private set; } =
+            HumanoidFootGroundingStatus.Disabled;
 #endif
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
@@ -58,6 +69,13 @@ namespace Fbx2Vmd.FBXImporter
         }
 
 #if UNITY_EDITOR
+        internal void SetGroundResponseEnabled(bool isEnabled)
+        {
+            _isGroundResponseEnabled = isEnabled;
+            if (IsPrepared)
+                EvaluateCurrentPoseWithCorrection();
+        }
+
         internal void PrepareWithArmDirectionReference(
             Animator targetAnimator,
             AnimationClip clip,
@@ -92,8 +110,19 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
+#if UNITY_EDITOR
+                // 최초 원본 평가 전에 기준 밑창과 Avatar 굽힘 방향을 확보함.
+                if (initializeCanonicalPoseReference != null)
+                {
+                    InitializeFootRotationBindings(targetAnimator);
+                    EditorHumanoidFootGrounding.TryCreate(targetAnimator, out _footGrounding);
+                }
+#endif
                 _armSupportPoseApplier.Initialize(targetAnimator, clip);
                 _player.Initialize(targetAnimator, clip);
+#if UNITY_EDITOR
+                _groundResponse.Initialize(targetAnimator);
+#endif
                 ClipLengthSeconds = Mathf.Max(0f, clip.length);
                 ClipFrameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(
                     clip.frameRate);
@@ -206,6 +235,10 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+#if UNITY_EDITOR
+            _footGrounding?.RestoreAppliedPose();
+            RestoreFootRotationBindings();
+#endif
             _player.EvaluateAt(CurrentTimeSeconds);
             if (!TryCaptureFootBendNormals(
                     out Vector3 leftBendNormal,
@@ -215,6 +248,9 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             bool isApplied = TryApplyArmDirectionCorrection();
+#if UNITY_EDITOR
+            ApplyFootRotationReference(CurrentTimeSeconds);
+#endif
             _armSupportPoseApplier.Apply();
             return isApplied && TryApplyFootContactStabilization(
                 leftBendNormal,
@@ -243,6 +279,14 @@ namespace Fbx2Vmd.FBXImporter
         public void Dispose()
         {
 #if UNITY_EDITOR
+            _isGroundResponseEnabled = false;
+            LastGroundingStatus = HumanoidFootGroundingStatus.Disabled;
+            _footGrounding?.Dispose();
+            _footGrounding = null;
+            RestoreFootRotationBindings();
+            _leftFootRotation = _rightFootRotation = null;
+            _sourceToTargetRotation = Quaternion.identity;
+            _groundResponse.Clear();
             _footContactStabilizer.Clear();
             _poseReferencePlayer.Dispose();
 #endif
@@ -259,6 +303,10 @@ namespace Fbx2Vmd.FBXImporter
         private bool EvaluateCurrentPoseWithCorrection()
         {
             // 원본 자세와 상체 보정 뒤에 발 접촉을 마지막으로 고정함.
+#if UNITY_EDITOR
+            _footGrounding?.RestoreAppliedPose();
+            RestoreFootRotationBindings();
+#endif
             _player.EvaluateAt(CurrentTimeSeconds);
             if (!TryCaptureFootBendNormals(
                     out Vector3 leftBendNormal,
@@ -273,6 +321,9 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             int frameIndex = CurrentFrameIndex;
+#if UNITY_EDITOR
+            ApplyFootRotationReference(CurrentTimeSeconds);
+#endif
             bool isApplied = _poseCorrectionDocument == null ||
                 !_poseCorrectionDocument.HasFrameCorrection(frameIndex) ||
                 _poseFrameEditor.TryApply(
@@ -327,27 +378,87 @@ namespace Fbx2Vmd.FBXImporter
             Vector3 rightBendNormal)
         {
 #if UNITY_EDITOR
-            return _footContactStabilizer.TryApply(
+            LastGroundingStatus = _isGroundResponseEnabled
+                ? HumanoidFootGroundingStatus.Unavailable : HumanoidFootGroundingStatus.Disabled;
+            if (_isGroundResponseEnabled && _footGrounding != null && _footGrounding.IsPrepared)
+            {
+                if (_footGrounding.TryApply(CurrentTimeSeconds, _groundResponse))
+                {
+                    LastGroundingStatus = _footGrounding.HasGround
+                        ? HumanoidFootGroundingStatus.Applied : HumanoidFootGroundingStatus.NoGround;
+                    return true;
+                }
+                LastGroundingStatus = HumanoidFootGroundingStatus.Fallback;
+            }
+            bool isApplied = _footContactStabilizer.TryApply(
                 CurrentTimeSeconds,
                 leftBendNormal,
                 rightBendNormal);
+            if (isApplied && _isGroundResponseEnabled)
+                _groundResponse.Apply(leftBendNormal, rightBendNormal);
+            return isApplied;
 #else
             return true;
 #endif
         }
 
 #if UNITY_EDITOR
+        private void InitializeFootRotationBindings(Animator animator)
+        {
+            if (animator == null || !animator.isHuman)
+                return;
+            _sourceToTargetRotation = animator.transform.rotation;
+            HumanoidFootRotationBinding.TryCreate(animator.GetBoneTransform(HumanBodyBones.LeftFoot),
+                animator.GetBoneTransform(HumanBodyBones.LeftToes), animator.transform.up, out _leftFootRotation);
+            HumanoidFootRotationBinding.TryCreate(animator.GetBoneTransform(HumanBodyBones.RightFoot),
+                animator.GetBoneTransform(HumanBodyBones.RightToes), animator.transform.up, out _rightFootRotation);
+        }
+
+        private void RestoreFootRotationBindings()
+        {
+            _leftFootRotation?.RestoreAppliedRotation();
+            _rightFootRotation?.RestoreAppliedRotation();
+        }
+
+        private void ApplyFootRotationReference(float timeSeconds)
+        {
+            if (!HasFootRotationReference)
+                return;
+            if (_poseReferencePlayer.TryEvaluateFootFramesAt(timeSeconds, out var left, out var right) &&
+                _leftFootRotation.TryApplyWorldFrame(_sourceToTargetRotation * left) &&
+                _rightFootRotation.TryApplyWorldFrame(_sourceToTargetRotation * right))
+                return;
+            RestoreFootRotationBindings();
+            throw new InvalidOperationException("준비된 발 회전 기준을 적용하지 못했습니다.");
+        }
+
         private void InitializeEditorReferenceCorrections(
             Animator targetAnimator,
             AnimationClip clip,
             GameObject sourceModelAsset)
         {
             _poseReferencePlayer.InitializeFromSourceModel(sourceModelAsset, clip);
+            _sourceToTargetRotation *= Quaternion.Inverse(_poseReferencePlayer.InitialRootRotation);
             _footContactStabilizer.Initialize(
                 targetAnimator,
                 clip,
                 _player.EvaluateAt,
                 _poseReferencePlayer);
+            if (_footGrounding != null)
+                _footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
+                    _footContactStabilizer.SourceHumanScale, clip, EvaluateEditorContactReference);
+        }
+
+        private void EvaluateEditorContactReference(float timeSeconds)
+        {
+            _footGrounding?.RestoreAppliedPose();
+            RestoreFootRotationBindings();
+            _player.EvaluateAt(timeSeconds);
+            if (!_poseReferencePlayer.TryEvaluateArmDirectionsAt(timeSeconds, out var reference) ||
+                !_poseFrameEditor.TryApplyArmDirectionReference(reference, out _))
+                throw new InvalidOperationException("접지 시작 자세의 상체 기준을 평가하지 못했습니다.");
+            ApplyFootRotationReference(timeSeconds);
+            _armSupportPoseApplier.Apply();
         }
 #endif
 
