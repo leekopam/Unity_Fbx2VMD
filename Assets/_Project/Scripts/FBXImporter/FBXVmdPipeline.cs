@@ -2267,6 +2267,7 @@ namespace Fbx2Vmd.FBXImporter
                     clip,
                     sourceModelAsset);
             }
+            _humanoidMotionPlaybackController.SetGroundResponseEnabled(true);
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);

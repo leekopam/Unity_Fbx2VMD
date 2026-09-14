@@ -20,6 +20,12 @@ namespace Fbx2Vmd.FBXImporter
         private Transform _leftToes;
         private Transform _rightFoot;
         private Transform _rightToes;
+        private HumanoidFootRotationBinding _leftFootRotation;
+        private HumanoidFootRotationBinding _rightFootRotation;
+        private Vector2 _footForwardLengths;
+
+        internal bool HasFootRotationReference => _leftFootRotation != null && _rightFootRotation != null;
+        internal Quaternion InitialRootRotation { get; private set; } = Quaternion.identity;
 
         internal bool IsInitialized =>
             _referenceInstance != null &&
@@ -73,10 +79,6 @@ namespace Fbx2Vmd.FBXImporter
 
             _referenceAnimator.runtimeAnimatorController = null;
             _referenceAnimator.enabled = true;
-            _animationPlayer.Initialize(_referenceAnimator, clip);
-            _poseHandler = new HumanPoseHandler(
-                _referenceAnimator.avatar,
-                _referenceAnimator.transform);
             _leftFoot = _referenceAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
             _leftToes = _referenceAnimator.GetBoneTransform(HumanBodyBones.LeftToes);
             _rightFoot = _referenceAnimator.GetBoneTransform(HumanBodyBones.RightFoot);
@@ -86,6 +88,50 @@ namespace Fbx2Vmd.FBXImporter
                 throw new InvalidOperationException(
                     "Native Humanoid 기준 모델에 양발 본이 필요합니다.");
             }
+            InitialRootRotation = _referenceAnimator.transform.rotation;
+            HumanoidFootRotationBinding.TryCreate(_leftFoot, _leftToes,
+                _referenceAnimator.transform.up, out _leftFootRotation);
+            HumanoidFootRotationBinding.TryCreate(_rightFoot, _rightToes,
+                _referenceAnimator.transform.up, out _rightFootRotation);
+            if (HasFootRotationReference)
+            {
+                Vector3 referenceUp = InitialRootRotation * Vector3.up;
+                _footForwardLengths = new Vector2(
+                    Vector3.ProjectOnPlane(_leftToes.position - _leftFoot.position, referenceUp).magnitude,
+                    Vector3.ProjectOnPlane(_rightToes.position - _rightFoot.position, referenceUp).magnitude);
+            }
+            _animationPlayer.Initialize(_referenceAnimator, clip);
+            _poseHandler = new HumanPoseHandler(
+                _referenceAnimator.avatar,
+                _referenceAnimator.transform);
+        }
+
+        internal bool TryEvaluateFootFramesAt(float timeSeconds,
+            out Quaternion leftFrame, out Quaternion rightFrame)
+        {
+            leftFrame = rightFrame = Quaternion.identity;
+            if (!IsInitialized || !HasFootRotationReference)
+                return false;
+            _animationPlayer.EvaluateAt(timeSeconds);
+            return _leftFootRotation.TryCaptureWorldFrame(out leftFrame) &&
+                _rightFootRotation.TryCaptureWorldFrame(out rightFrame);
+        }
+
+        internal bool TryCaptureFootSupportReference(out Vector2 heights,
+            out Quaternion leftFrame, out Quaternion rightFrame)
+        {
+            heights = Vector2.zero;
+            leftFrame = rightFrame = Quaternion.identity;
+            if (!IsInitialized || !HasFootRotationReference ||
+                !_leftFootRotation.TryCaptureWorldFrame(out leftFrame) ||
+                !_rightFootRotation.TryCaptureWorldFrame(out rightFrame))
+                return false;
+            // 재평가 없이 같은 원본 표본을 읽고, 기준 평면은 초기 자세에 고정함.
+            Vector3 referenceUp = InitialRootRotation * Vector3.up;
+            heights = new Vector2(
+                Vector3.Dot(leftFrame * Vector3.forward, referenceUp) * _footForwardLengths.x,
+                Vector3.Dot(rightFrame * Vector3.forward, referenceUp) * _footForwardLengths.y);
+            return IsFinite(heights.x) && IsFinite(heights.y);
         }
 
         internal bool TryEvaluateAt(float timeSeconds, ref HumanPose pose)
@@ -208,6 +254,9 @@ namespace Fbx2Vmd.FBXImporter
             _leftToes = null;
             _rightFoot = null;
             _rightToes = null;
+            _leftFootRotation = _rightFootRotation = null;
+            _footForwardLengths = Vector2.zero;
+            InitialRootRotation = Quaternion.identity;
 
             if (_referenceInstance != null)
             {

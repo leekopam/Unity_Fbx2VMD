@@ -14,6 +14,145 @@ namespace Tests.Editor.FBXImporter
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const float TimeTolerance = 0.0001f;
 
+        [TestCase(10366, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot)]
+        [TestCase(10220, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot)]
+        public void Given_NearlyExtendedLeg_When_GroundIsApplied_Then_PreservesBendContinuity(
+            int frame, HumanBodyBones lowerBone, HumanBodyBones footBone)
+        {
+            GameObject target = InstantiateTarget();
+            GameObject floor = new GameObject("무릎 방향 연속성 검증 바닥");
+            object controller = CreateController();
+            target.transform.position = new Vector3(1000f, 0f, 1000f);
+            floor.hideFlags = HideFlags.HideAndDontSave;
+            floor.transform.position = new Vector3(1000f, -0.05f, 1000f);
+            floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator,
+                    LoadHumanoidClip(), LoadSourceModel());
+                Transform lower = animator.GetBoneTransform(lowerBone);
+                Transform foot = animator.GetBoneTransform(footBone);
+                Invoke(controller, "SeekFrame", frame - 1);
+                Vector3 baseline = foot.position - lower.position;
+                Invoke(controller, "SeekFrame", frame);
+                float baselineStep = Vector3.Angle(baseline, foot.position - lower.position);
+
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Invoke(controller, "SeekFrame", frame - 1);
+                Vector3 corrected = foot.position - lower.position;
+                Invoke(controller, "SeekFrame", frame);
+                float correctedStep = Vector3.Angle(corrected, foot.position - lower.position);
+                // 보정 후 거의 일직선인 본에서 굽힘 평면을 다시 구하면 이 재현쌍에서 약20도 급변이 추가됨.
+                Assert.That(correctedStep, Is.LessThan(baselineStep + 5f),
+                    "기존 발 IK 직전의 굽힘 방향을 유지해 평면 전환에 의한 추가 급변을 막아야 합니다.");
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(floor);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [TestCase(false)]
+        // 원본 기준 경로는 Avatar 하단 상향 계약을 유지하며 정밀 경로는 실제 밑창 테스트로 검증함.
+        public void Given_GroundCollider_When_Seeking_Then_RaisesFeetAndReleasesWithoutChangingGeometry(
+            bool useSourceReference)
+        {
+            GameObject target = InstantiateTarget();
+            GameObject floor = new GameObject("발 지면 반응 검증 바닥");
+            object controller = CreateController();
+            target.transform.position = new Vector3(1000f, 0f, 1000f);
+            floor.hideFlags = HideFlags.HideAndDontSave;
+            BoxCollider ground = floor.AddComponent<BoxCollider>();
+            ground.size = new Vector3(4f, 0.1f, 4f);
+            floor.SetActive(false);
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                if (useSourceReference)
+                    Invoke(controller, "PrepareWithArmDirectionReference",
+                        animator, LoadHumanoidClip(), LoadSourceModel());
+                else
+                    Invoke(controller, "Prepare", animator, LoadHumanoidClip());
+                const float time = 58f / 60f;
+                Invoke(controller, "Seek", time);
+                Transform foot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                Transform toes = animator.GetBoneTransform(HumanBodyBones.RightToes);
+                Transform upper = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+                Transform lower = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
+                Transform[] bones = CaptureHumanoidBones(animator);
+                Vector3[] positions = bones.Select(bone => bone.position).ToArray();
+                Vector3[] localPositions = bones.Select(bone => bone.localPosition).ToArray();
+                Vector3[] scales = bones.Select(bone => bone.localScale).ToArray();
+                Quaternion footRotation = foot.rotation;
+                Quaternion toeRotation = toes.rotation;
+                float upperLength = Vector3.Distance(upper.position, lower.position);
+                float lowerLength = Vector3.Distance(lower.position, foot.position);
+                Vector3 baselineFoot = foot.position;
+                Invoke(controller, "SetGroundResponseEnabled", true);
+
+                // 자기 Collider가 바닥보다 위에 있어도 지면으로 선택하면 안 됨.
+                BoxCollider self = target.AddComponent<BoxCollider>();
+                self.center = new Vector3(0f, 0.35f, 0f);
+                self.size = new Vector3(1f, 0.05f, 1f);
+                floor.transform.position = new Vector3(1000f, 0.15f, 1000f);
+                floor.SetActive(true);
+                Physics.SyncTransforms();
+                for (int repeat = 0; repeat < 3; repeat++)
+                {
+                    Invoke(controller, "Seek", time);
+                    Assert.That(foot.position.y - animator.rightFeetBottomHeight,
+                        Is.EqualTo(0.2f).Within(0.001f), "실제 바닥 높이가 발 하단 기준점에 반영되어야 합니다.");
+                    Assert.That(Quaternion.Angle(foot.rotation, footRotation), Is.LessThan(0.1f));
+                    Assert.That(Quaternion.Angle(toes.rotation, toeRotation), Is.LessThan(0.1f));
+                    Assert.That(Vector3.Distance(upper.position, lower.position),
+                        Is.EqualTo(upperLength).Within(0.0002f));
+                    Assert.That(Vector3.Distance(lower.position, foot.position),
+                        Is.EqualTo(lowerLength).Within(0.0002f));
+                    for (int index = 0; index < bones.Length; index++)
+                    {
+                        Assert.That(Vector3.Distance(bones[index].localPosition, localPositions[index]),
+                            Is.LessThan(0.00001f));
+                        Assert.That(bones[index].localScale, Is.EqualTo(scales[index]));
+                    }
+                    Vector3 raised = foot.position;
+                    Invoke(controller, "RestoreCurrentPose");
+                    Assert.That(Vector3.Distance(foot.position, raised), Is.LessThan(0.0002f));
+                }
+
+                foreach (string condition in new[] { "lowered", "trigger", "absent", "disabled" })
+                {
+                    floor.transform.position = new Vector3(1000f, condition == "lowered" ? -0.25f : 0.15f, 1000f);
+                    ground.isTrigger = condition == "trigger";
+                    floor.SetActive(condition != "absent");
+                    Invoke(controller, "SetGroundResponseEnabled", condition != "disabled");
+                    Physics.SyncTransforms();
+                    Invoke(controller, "Seek", time);
+                    for (int index = 0; index < bones.Length; index++)
+                        Assert.That(Vector3.Distance(bones[index].position, positions[index]),
+                            Is.LessThan(0.0002f), $"{condition}: 지면 보정이 남거나 누적되면 안 됩니다.");
+                }
+
+                // 발 아래에 공간이 있으면 지면 쪽으로 끌어내리지 않음.
+                ground.isTrigger = false;
+                floor.transform.position = new Vector3(1000f,
+                    baselineFoot.y - animator.rightFeetBottomHeight - 0.1f, 1000f);
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Physics.SyncTransforms();
+                Invoke(controller, "Seek", time);
+                Assert.That(Vector3.Distance(foot.position, baselineFoot), Is.LessThan(0.0002f));
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(floor);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
         [TestCase(0f)]
         [TestCase(22.116667f)]
         [TestCase(31.1675f)]

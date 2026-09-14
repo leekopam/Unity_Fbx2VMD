@@ -19,12 +19,36 @@ namespace Fbx2Vmd.FBXImporter
             Vector3 leftToes,
             Vector3 rightFoot,
             Vector3 rightToes)
+            : this(leftFoot, leftToes, rightFoot, rightToes, null)
+        {
+        }
+
+        internal HumanoidFootContactSample(
+            Vector3 leftFoot, Vector3 leftToes, Vector3 rightFoot, Vector3 rightToes,
+            Vector2? relativeFootHeights)
+            : this(leftFoot, leftToes, rightFoot, rightToes, relativeFootHeights, null, null)
+        {
+        }
+
+        internal HumanoidFootContactSample(
+            Vector3 leftFoot, Vector3 leftToes, Vector3 rightFoot, Vector3 rightToes,
+            Vector2? relativeFootHeights, Quaternion? leftFootFrame, Quaternion? rightFootFrame)
         {
             LeftFoot = leftFoot;
             LeftToes = leftToes;
             RightFoot = rightFoot;
             RightToes = rightToes;
+            RelativeFootHeights = relativeFootHeights;
+            LeftFootFrame = leftFootFrame;
+            RightFootFrame = rightFootFrame;
         }
+
+        // 기준축이 없는 표본과 평평한 발(0)을 구분함.
+        internal Vector2? RelativeFootHeights { get; }
+
+        internal Quaternion? LeftFootFrame { get; }
+
+        internal Quaternion? RightFootFrame { get; }
 
         internal Vector3 LeftFoot { get; }
 
