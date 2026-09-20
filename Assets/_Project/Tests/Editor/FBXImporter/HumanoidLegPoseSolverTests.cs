@@ -30,7 +30,7 @@ namespace Tests.Editor.FBXImporter
             Vector3 original = Vector3.Cross(upper, lower).normalized;
             foreach (float distanceScale in new[] { 1f, 1.02f })
             {
-                object[] args = { upper, lower, (upper + lower) * distanceScale, -original, Vector3.zero, 0f };
+                object[] args = { upper, lower, (upper + lower) * distanceScale, original, Vector3.zero, 0f };
                 Assert.That(CalculateDirection(args), Is.True);
                 Assert.That((float)args[5], Is.EqualTo(0f).Within(0.000001f));
                 Assert.That(Vector3.Distance((Vector3)args[4], original), Is.LessThan(0.000001f));
@@ -70,13 +70,63 @@ namespace Tests.Editor.FBXImporter
                 Assert.That((float)invalid[5], Is.EqualTo(0f));
             }
             Vector3 lower = Quaternion.AngleAxis(3f, Vector3.right) * upper;
-            object[] opposite = { upper, lower, (upper + lower).normalized * 0.8f, Vector3.left, Vector3.one, 1f };
-            Assert.That(CalculateDirection(opposite), Is.False);
-            Assert.That((Vector3)opposite[4], Is.EqualTo(Vector3.zero));
             object[] lostPlane = { upper, lower, Vector3.right * 0.8f, Vector3.forward, Vector3.one, 1f };
             Assert.That(CalculateDirection(lostPlane), Is.False);
             Assert.That((Vector3)lostPlane[4], Is.EqualTo(Vector3.zero));
             Assert.That((float)lostPlane[5], Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Given_ReversingBendPlane_When_CalculatingDirection_Then_KeepsCalibratedSideContinuously()
+        {
+            Vector3 upper = Vector3.down * 0.5f;
+            Vector3 lower = Quaternion.AngleAxis(20f, Vector3.right) * upper;
+            Vector3 axis = (upper + lower).normalized;
+            foreach (float distanceScale in new[] { 1f, 0.95f })
+            {
+                Vector3 previous = Vector3.right;
+                for (int angle = 0; angle <= 180; angle++)
+                {
+                    Quaternion rotation = Quaternion.AngleAxis(angle, axis);
+                    object[] args = { rotation * upper, rotation * lower,
+                        (upper + lower) * distanceScale, Vector3.right, Vector3.zero, 0f };
+                    Assert.That(CalculateDirection(args), Is.True, $"굽힘 방향 {angle}도");
+                    Vector3 normal = (Vector3)args[4];
+                    Assert.That(Vector3.Dot(normal, Vector3.right), Is.GreaterThanOrEqualTo(0f));
+                    Assert.That(Vector3.Angle(previous, normal), Is.LessThan(2f),
+                        "반대 굽힘과 직교 경계에서 무릎 방향이 갑자기 바뀌면 안 됨");
+                    Assert.That(Mathf.Abs(Vector3.Dot(normal, axis)), Is.LessThan(0.000001f));
+                    previous = normal;
+                }
+            }
+        }
+
+        [Test]
+        public void Given_StraightLegAtTarget_When_Solving_Then_PreservesPose()
+        {
+            var upper = new GameObject("직선 허벅지");
+            var lower = new GameObject("직선 종아리");
+            var foot = new GameObject("직선 발");
+            try
+            {
+                lower.transform.SetParent(upper.transform, false);
+                foot.transform.SetParent(lower.transform, false);
+                lower.transform.localPosition = foot.transform.localPosition = Vector3.down * 0.5f;
+                object[] direction = { Vector3.down * 0.5f, Vector3.down * 0.5f,
+                    Vector3.down, Vector3.right, Vector3.zero, 0f };
+                Assert.That(CalculateDirection(direction), Is.True);
+                object[] args = { upper.transform, lower.transform, foot.transform,
+                    Vector3.down, (Vector3)direction[4], 0f };
+                Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidLegPoseSolver");
+                Assert.That((bool)type.GetMethod("TrySolve", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, args), Is.True);
+                Assert.That((float)args[5], Is.LessThan(0.000001f));
+                Assert.That(lower.transform.position, Is.EqualTo(Vector3.down * 0.5f));
+                Assert.That(foot.transform.position, Is.EqualTo(Vector3.down));
+                Assert.That(lower.transform.localScale, Is.EqualTo(Vector3.one));
+                Assert.That(foot.transform.localScale, Is.EqualTo(Vector3.one));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(upper); }
         }
 
         private static bool CalculateDirection(object[] args)
@@ -140,6 +190,34 @@ namespace Tests.Editor.FBXImporter
             {
                 UnityEngine.Object.DestroyImmediate(upper);
             }
+        }
+
+        [Test]
+        public void Given_TranslatedLeg_When_AdjustingSmallBendPlane_Then_PreservesFootTarget()
+        {
+            var upper = new GameObject("이동한 허벅지");
+            var lower = new GameObject("이동한 종아리");
+            var foot = new GameObject("이동한 발");
+            try
+            {
+                lower.transform.SetParent(upper.transform, false);
+                foot.transform.SetParent(lower.transform, false);
+                upper.transform.position = new Vector3(29.9010258f, 0.886193752f, 30.1044083f);
+                lower.transform.localPosition = new Vector3(0.148433685f, -0.4074751f, 0.07011032f);
+                foot.transform.localPosition = new Vector3(-0.209541321f, -0.282833934f, -0.205053329f);
+                Vector3 goal = new Vector3(29.8399181f, 0.1958847f, 29.9694653f);
+                Vector3 originalLower = lower.transform.localPosition, originalFoot = foot.transform.localPosition;
+                Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidLegPoseSolver");
+                Vector3 normal = new Vector3(0.627801f, 0.0954357758f, -0.772501051f);
+                object[] args = { upper.transform, lower.transform, foot.transform, goal, normal, 0f };
+                Assert.That((bool)type.GetMethod("TrySolve", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, args), Is.True);
+                Assert.That(Vector3.Distance(foot.transform.position, goal), Is.LessThan(0.00001f),
+                    "30m 좌표의 float 해상도를 고려해도 접지 목표에서 0.01mm 이상 벗어나면 안 됨");
+                Assert.That(lower.transform.localPosition, Is.EqualTo(originalLower));
+                Assert.That(foot.transform.localPosition, Is.EqualTo(originalFoot));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(upper); }
         }
     }
 }

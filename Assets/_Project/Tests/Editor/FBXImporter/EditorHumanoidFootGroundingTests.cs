@@ -24,7 +24,7 @@ namespace Tests.Editor.FBXImporter
                 .First(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal));
             Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidMotionPlaybackController", true);
             var floor = new GameObject("중첩 지지 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
-            floor.transform.position = new Vector3(30f, -0.05f, 30f);
+            floor.transform.position = new Vector3(0f, 2.95f, 0f);
             floor.AddComponent<BoxCollider>().size = new Vector3(40f, 0.1f, 40f);
             try
             {
@@ -34,7 +34,7 @@ namespace Tests.Editor.FBXImporter
                 {
                     GameObject model = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(path));
                     model.hideFlags = HideFlags.HideAndDontSave;
-                    model.transform.position = new Vector3(30f, 0f, 30f);
+                    model.transform.position = new Vector3(0f, 3f, 0f);
                     foreach (MonoBehaviour script in model.GetComponentsInChildren<MonoBehaviour>(true)) script.enabled = false;
                     object controller = Activator.CreateInstance(type, true);
                     try
@@ -109,7 +109,7 @@ namespace Tests.Editor.FBXImporter
             var floor = new GameObject("접지 통합 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
             BoxCollider collider = floor.AddComponent<BoxCollider>();
             collider.size = new Vector3(40f, 0.1f, 40f);
-            floor.transform.position = new Vector3(30f, -0.05f, 30f);
+            floor.transform.position = new Vector3(0f, 2.95f, 0f);
             try
             {
                 foreach (string modelPath in new[] {
@@ -120,7 +120,7 @@ namespace Tests.Editor.FBXImporter
                     Assert.That(asset, Is.Not.Null, modelPath);
                     GameObject model = UnityEngine.Object.Instantiate(asset);
                     model.hideFlags = HideFlags.HideAndDontSave;
-                    model.transform.position = new Vector3(30f, 0f, 30f);
+                    model.transform.position = new Vector3(0f, 3f, 0f);
                     foreach (MonoBehaviour script in model.GetComponentsInChildren<MonoBehaviour>(true))
                         script.enabled = false;
                     try
@@ -137,7 +137,8 @@ namespace Tests.Editor.FBXImporter
                         var rotations = new Dictionary<float, Quaternion[]>();
                         int physicalReachCount = 0;
                         float maximumTargetError = 0f, minimumSoleClearance = 0f, maximumContactError = 0f;
-                        float[] frames = { 58f, 92f, 1172f, 1173f, 1268f, 1269f, 1276f, 58.5f };
+                        float[] frames = { 58f, 92f, 1080f, 1084f, 1089f, 1104f, 9810f,
+                            1172f, 1173f, 1268f, 1269f, 1276f, 58.5f };
                         foreach (float frame in frames.Concat(frames.Reverse()))
                         {
                             floor.SetActive(false);
@@ -146,7 +147,10 @@ namespace Tests.Editor.FBXImporter
                             Vector3[] ungrounded = bones.Select(t => t.position).ToArray();
                             Quaternion[] ungroundedRotations = bones.Select(t => t.rotation).ToArray();
                             Invoke(controller, "EvaluateEditorContactReference", frame / clip.frameRate);
+                            AssertUngroundedTargets(animator, bones, ungrounded, ungroundedRotations);
+                            Invoke(controller, "Seek", frame / clip.frameRate);
                             AssertPose(bones, ungrounded, ungroundedRotations);
+                            Invoke(controller, "EvaluateEditorContactReference", frame / clip.frameRate);
                             Vector3[] positions = bones.Select(t => t.localPosition).ToArray();
                             Vector3[] scales = bones.Select(t => t.localScale).ToArray();
                             floor.SetActive(true);
@@ -217,7 +221,7 @@ namespace Tests.Editor.FBXImporter
                         Invoke(controller, "Seek", 0f);
                         AssertPose(bones, stopped, stoppedRotations);
                         AssertDisposeRestoresAndReleases(controller, grounding, hips);
-                        TestContext.WriteLine($"{modelPath}: evaluations=16, physicalReach={physicalReachCount}, " +
+                        TestContext.WriteLine($"{modelPath}: evaluations={frames.Length * 2}, physicalReach={physicalReachCount}, " +
                             $"targetError={maximumTargetError:R}, soleMinimum={minimumSoleClearance:R}, " +
                             $"supportedContactError={maximumContactError:R}");
                     }
@@ -331,6 +335,9 @@ namespace Tests.Editor.FBXImporter
             Quaternion upperRotation = upper.localRotation, lowerRotation = lower.localRotation;
             Quaternion footRotation = foot.localRotation, toeRotation = toes.localRotation;
             Quaternion target = Quaternion.AngleAxis(5f, Vector3.up) * foot.rotation;
+            Vector3 originalPosition = foot.position;
+            float upperLength = Vector3.Distance(upper.position, lower.position);
+            float lowerLength = Vector3.Distance(lower.position, foot.position);
             Invoke(leg, "CapturePose");
             leg.GetType().GetField("_target", Flags).SetValue(leg, foot.position);
             leg.GetType().GetField("_targetFootRotation", Flags).SetValue(leg, target);
@@ -339,12 +346,33 @@ namespace Tests.Editor.FBXImporter
                 object[] args = { 0f, 0f };
                 Assert.That((bool)Invoke(leg, "TrySolve", args), Is.True);
                 Assert.That(Quaternion.Angle(foot.rotation, target), Is.LessThan(0.06f));
-                Assert.That(upper.localRotation, Is.EqualTo(upperRotation));
-                Assert.That(lower.localRotation, Is.EqualTo(lowerRotation));
+                Assert.That(Vector3.Distance(foot.position, originalPosition), Is.LessThan(0.000001f));
+                Assert.That(Vector3.Distance(upper.position, lower.position), Is.EqualTo(upperLength).Within(0.000001f));
+                Assert.That(Vector3.Distance(lower.position, foot.position), Is.EqualTo(lowerLength).Within(0.000001f));
                 Assert.That(toes.localRotation, Is.EqualTo(toeRotation));
             }
             finally { Invoke(leg, "RestorePose"); }
+            Assert.That(upper.localRotation, Is.EqualTo(upperRotation));
+            Assert.That(lower.localRotation, Is.EqualTo(lowerRotation));
             Assert.That(Quaternion.Angle(foot.localRotation, footRotation), Is.LessThan(0.06f));
+        }
+
+        private static void AssertUngroundedTargets(Animator animator, Transform[] bones,
+            Vector3[] positions, Quaternion[] rotations)
+        {
+            Transform left = animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+            Transform right = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            for (int i = 0; i < bones.Length; i++)
+            {
+                // 무릎 방향은 교정하되 발·발끝과 상체의 원래 세계 자세는 보존해야 함.
+                bool isLeg = bones[i].IsChildOf(left) || bones[i].IsChildOf(right);
+                bool isFoot = bones[i].IsChildOf(leftFoot) || bones[i].IsChildOf(rightFoot);
+                if (isLeg && !isFoot) continue;
+                Assert.That(Vector3.Distance(bones[i].position, positions[i]), Is.LessThan(0.00003f), bones[i].name);
+                Assert.That(Quaternion.Angle(bones[i].rotation, rotations[i]), Is.LessThan(0.06f), bones[i].name);
+            }
         }
 
         private static void AssertPartialFootFramesRejected(object controller, object grounding, AnimationClip clip)
