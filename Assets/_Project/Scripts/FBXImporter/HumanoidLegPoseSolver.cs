@@ -87,13 +87,33 @@ namespace Fbx2Vmd.FBXImporter
                 !IsPositive((target - upperLeg.position).sqrMagnitude))
                 return false;
 
-            IKSolverTrigonometric.Solve(upperLeg, lowerLeg, foot, target, bendNormal.normalized, 1f);
-            Vector3 current = foot.position - lowerLeg.position;
-            Vector3 desired = target - lowerLeg.position;
+            Vector3 unitBendNormal = bendNormal.normalized;
+            IKSolverTrigonometric.Solve(upperLeg, lowerLeg, foot, target, unitBendNormal, 1f);
+
+            // 허벅지의 미세 회전도 누락되면 무릎 위치가 틀어져 종아리 보완의 도달 반경 검사를 통과하지 못함.
+            Vector3 direction = target - upperLeg.position;
+            double distance = direction.magnitude;
+            double along = (distance * distance + upperLength * (double)upperLength -
+                lowerLength * (double)lowerLength) / (2d * distance);
+            double radius = Math.Sqrt(Math.Max(0d, upperLength * (double)upperLength - along * along));
+            Vector3 desiredKnee = direction.normalized * (float)along +
+                Vector3.Cross(direction, unitBendNormal).normalized * (float)radius;
+            ApplyResidualRotation(upperLeg, lowerLeg.position - upperLeg.position, desiredKnee, upperLength);
+            // 무릎 위치가 바뀌면 종아리의 필요 회전은 미세각 범위를 넘을 수 있으므로 목표 방향부터 다시 맞춤.
+            lowerLeg.rotation = Quaternion.FromToRotation(foot.position - lowerLeg.position,
+                target - lowerLeg.position) * lowerLeg.rotation;
+            ApplyResidualRotation(lowerLeg, foot.position - lowerLeg.position, target - lowerLeg.position, lowerLength);
+
+            targetError = Vector3.Distance(foot.position, target);
+            return IsFinite(targetError);
+        }
+
+        private static void ApplyResidualRotation(Transform bone, Vector3 current, Vector3 desired, float boneLength)
+        {
             float currentLength = current.magnitude;
             float desiredLength = desired.magnitude;
             if (IsPositive(currentLength) && IsPositive(desiredLength) &&
-                Mathf.Abs(desiredLength - currentLength) <= lowerLength * 0.000001f)
+                Mathf.Abs(desiredLength - currentLength) <= boneLength * 0.000001f)
             {
                 current /= currentLength;
                 desired /= desiredLength;
@@ -102,11 +122,8 @@ namespace Fbx2Vmd.FBXImporter
                 float angle = Mathf.Atan2(crossLength, Vector3.Dot(current, desired)) * Mathf.Rad2Deg;
                 // 도달 반경이 맞는 근평행 잔여에만 작은 보완각을 허용하여 다른 IK 실패를 덮지 않음.
                 if (crossLength > 0f && angle > 0f && angle <= 0.1f)
-                    lowerLeg.rotation = Quaternion.AngleAxis(angle, cross / crossLength) * lowerLeg.rotation;
+                    bone.rotation = Quaternion.AngleAxis(angle, cross / crossLength) * bone.rotation;
             }
-
-            targetError = Vector3.Distance(foot.position, target);
-            return IsFinite(targetError);
         }
 
         private static bool IsPositive(float value) => IsFinite(value) && value > 0f;
