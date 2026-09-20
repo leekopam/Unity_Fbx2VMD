@@ -87,8 +87,12 @@ namespace Tests.Editor.FBXImporter
             return (bool)method.Invoke(null, args);
         }
 
-        [Test]
-        public void Given_SubDegreeResidual_When_Solving_Then_ReachesTargetWithoutStretch()
+        [TestCase(3.2f, 0.079f, false, 1f, false, 0f)]
+        [TestCase(30f, 0.03f, true, 1f, false, 0f)]
+        [TestCase(30f, 0.03f, true, 2.5f, true, 0f)]
+        [TestCase(30f, 0f, true, 1f, false, 0.3f)]
+        public void Given_SubDegreeResidual_When_Solving_Then_ReachesTargetWithoutStretch(
+            float kneeAngle, float targetAngle, bool rotateWholeLeg, float scale, bool isRotated, float planeAngle)
         {
             var upper = new GameObject("허벅지");
             var lower = new GameObject("종아리");
@@ -97,26 +101,36 @@ namespace Tests.Editor.FBXImporter
             {
                 lower.transform.SetParent(upper.transform, false);
                 foot.transform.SetParent(lower.transform, false);
+                Quaternion originalRotation = isRotated ? Quaternion.Euler(25f, 60f, -15f) : Quaternion.identity;
+                upper.transform.rotation = originalRotation;
+                upper.transform.localScale = Vector3.one * scale;
                 lower.transform.localPosition = new Vector3(0f, -0.445f, 0f);
-                foot.transform.localPosition = Quaternion.Euler(3.2f, 0f, 0f) * new Vector3(0f, -0.445f, 0f);
+                foot.transform.localPosition = Quaternion.Euler(kneeAngle, 0f, 0f) * new Vector3(0f, -0.445f, 0f);
                 Vector3 originalLower = lower.transform.localPosition;
                 Vector3 originalFoot = foot.transform.localPosition;
                 Vector3 direction = foot.transform.position - lower.transform.position;
-                Vector3 target = lower.transform.position + Quaternion.AngleAxis(0.079f, Vector3.right) * direction;
+                Vector3 pivot = rotateWholeLeg ? upper.transform.position : lower.transform.position;
+                Vector3 target = pivot + Quaternion.AngleAxis(targetAngle, upper.transform.right) *
+                    (foot.transform.position - pivot);
                 Vector3 bend = Vector3.Cross(lower.transform.position - upper.transform.position, direction);
+                bend = Quaternion.AngleAxis(planeAngle, target - upper.transform.position) * bend;
                 RootMotion.FinalIK.IKSolverTrigonometric.Solve(upper.transform, lower.transform,
                     foot.transform, target, bend, 1f);
-                Assert.That(Vector3.Distance(foot.transform.position, target), Is.GreaterThan(0.0001f),
-                    "기존 계산에서 미세 회전 누락이 재현되어야 함");
-                upper.transform.localRotation = Quaternion.identity;
+                if (targetAngle > 0f)
+                    Assert.That(Vector3.Distance(foot.transform.position, target), Is.GreaterThan(0.0001f),
+                        "기존 계산에서 미세 회전 누락이 재현되어야 함");
+                else
+                    Assert.That(Vector3.Distance(foot.transform.position, target), Is.LessThan(0.000001f * scale),
+                        "이미 도달한 목표를 굽힘 평면 보완으로 놓치지 않아야 함");
+                upper.transform.localRotation = originalRotation;
                 lower.transform.localRotation = Quaternion.identity;
                 Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidLegPoseSolver");
                 Assert.That(type, Is.Not.Null, "미세 회전 누락을 보완하는 다리 계산 필요");
                 object[] args = { upper.transform, lower.transform, foot.transform, target, bend, 0f };
                 bool success = (bool)type.GetMethod("TrySolve", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, args);
                 Assert.That(success, Is.True);
-                Assert.That((float)args[5], Is.LessThan(0.000001f));
-                Assert.That(Vector3.Distance(foot.transform.position, target), Is.LessThan(0.000001f));
+                Assert.That((float)args[5], Is.LessThan(0.000001f * scale));
+                Assert.That(Vector3.Distance(foot.transform.position, target), Is.LessThan(0.000001f * scale));
                 Assert.That(lower.transform.localPosition, Is.EqualTo(originalLower));
                 Assert.That(foot.transform.localPosition, Is.EqualTo(originalFoot));
                 Assert.That(lower.transform.localScale, Is.EqualTo(Vector3.one));
