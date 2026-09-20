@@ -616,6 +616,32 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal static bool TryFindUniqueMappedTransform(Transform[] bones, string targetName,
+            out Transform foundBone)
+        {
+            foundBone = null;
+            if (bones == null || string.IsNullOrWhiteSpace(targetName))
+                return false;
+
+            Transform[] matches = bones.Where(bone => bone.name == targetName).Take(2).ToArray();
+            string normalized = NormalizeBoneName(targetName);
+            // 비라틴 이름을 정규화한 빈 문자열끼리는 같은 본으로 취급하지 않음.
+            if (matches.Length == 0 && !string.IsNullOrEmpty(normalized))
+                matches = bones.Where(bone => NormalizeBoneName(bone.name) == normalized).Take(2).ToArray();
+            if (matches.Length == 0)
+            {
+                var aliases = new HashSet<string>(BuildBoneNameAliases(targetName));
+                matches = bones.Where(bone => aliases.Overlaps(BuildBoneNameAliases(bone.name)))
+                    .Take(2).ToArray();
+            }
+
+            // 임포터에 저장할 이름은 순회 순서와 관계없이 하나로 결정될 때만 허용함.
+            if (matches.Length != 1)
+                return false;
+            foundBone = matches[0];
+            return true;
+        }
+
         private sealed class TransformNameLookup
         {
             public Dictionary<string, Transform> ExactNameMap = new Dictionary<string, Transform>();
