@@ -4,11 +4,11 @@ using UnityEditor;
 namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
-    /// 에디터 Humanoid 모션이 원본 root 회전을 보존하도록 clip 임포트 계약을 적용함.
+    /// 에디터 Humanoid 모션의 루트 회전과 높이 이동을 본 자세에 보존함.
     /// </summary>
     internal static class HumanoidClipImportPolicy
     {
-        internal static bool HasRootRotationContract(
+        internal static bool HasRootPoseContract(
             ModelImporterClipAnimation[] clips)
         {
             if (clips == null || clips.Length == 0)
@@ -20,7 +20,8 @@ namespace Fbx2Vmd.FBXImporter
             {
                 if (clip == null ||
                     !clip.lockRootRotation ||
-                    !clip.keepOriginalOrientation)
+                    !clip.keepOriginalOrientation ||
+                    !clip.lockRootHeightY)
                 {
                     return false;
                 }
@@ -29,7 +30,7 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        internal static void ApplyRootRotationContract(
+        internal static void ApplyRootPoseContract(
             ModelImporterClipAnimation[] clips)
         {
             if (clips == null)
@@ -44,9 +45,10 @@ namespace Fbx2Vmd.FBXImporter
                     continue;
                 }
 
-                // 재생기가 root motion을 쓰지 않으므로 원본 회전을 본 자세에 보존함.
+                // 재생기가 XZ만 직접 복원하므로 회전과 Y 이동은 본 자세에 보존함.
                 clip.lockRootRotation = true;
                 clip.keepOriginalOrientation = true;
+                clip.lockRootHeightY = true;
             }
         }
     }

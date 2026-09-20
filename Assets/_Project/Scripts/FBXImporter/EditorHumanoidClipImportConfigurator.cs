@@ -68,6 +68,20 @@ namespace Fbx2Vmd.FBXImporter
                 shouldReimport = true;
             }
 
+            ModelImporterClipAnimation[] clips = importer.clipAnimations;
+            if (clips == null || clips.Length == 0)
+            {
+                clips = importer.defaultClipAnimations;
+            }
+
+            if (clips != null && clips.Length > 0 &&
+                !HumanoidClipImportPolicy.HasRootPoseContract(clips))
+            {
+                HumanoidClipImportPolicy.ApplyRootPoseContract(clips);
+                importer.clipAnimations = clips;
+                shouldReimport = true;
+            }
+
             if (shouldReimport)
             {
                 importer.SaveAndReimport();

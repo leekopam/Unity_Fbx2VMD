@@ -304,10 +304,10 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
 
-            if (TryEnsureHumanoidClipRootRotationContract(targetPath))
+            if (TryEnsureHumanoidClipRootPoseContract(targetPath))
             {
                 Debug.Log(
-                    $"[FBXImport] 기존 Humanoid clip의 원본 root 회전을 본 자세에 반영함. 경로={targetPath}");
+                    $"[FBXImport] 기존 Humanoid clip의 루트 회전과 Y 이동을 본 자세에 반영함. 경로={targetPath}");
                 return;
             }
 
@@ -374,7 +374,7 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private static bool TryEnsureHumanoidClipRootRotationContract(
+        private static bool TryEnsureHumanoidClipRootPoseContract(
             string filePath)
         {
             string relativePath = ToAssetRelativePath(filePath, Application.dataPath);
@@ -395,12 +395,12 @@ namespace Fbx2Vmd.FBXImporter
 
             if (clipAnimations == null ||
                 clipAnimations.Length == 0 ||
-                HumanoidClipImportPolicy.HasRootRotationContract(clipAnimations))
+                HumanoidClipImportPolicy.HasRootPoseContract(clipAnimations))
             {
                 return false;
             }
 
-            HumanoidClipImportPolicy.ApplyRootRotationContract(clipAnimations);
+            HumanoidClipImportPolicy.ApplyRootPoseContract(clipAnimations);
             importer.clipAnimations = clipAnimations;
             importer.SaveAndReimport();
             return true;
@@ -528,7 +528,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 UnityEditor.ModelImporterClipAnimation[] clipAnimations =
                     importer.defaultClipAnimations;
-                HumanoidClipImportPolicy.ApplyRootRotationContract(clipAnimations);
+                HumanoidClipImportPolicy.ApplyRootPoseContract(clipAnimations);
                 importer.clipAnimations = clipAnimations;
                 Debug.Log($"[3단계] Animation Clip 추출: {clipAnimations.Length}개");
 

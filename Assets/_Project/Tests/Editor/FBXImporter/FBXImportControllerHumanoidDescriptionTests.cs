@@ -51,7 +51,7 @@ namespace Tests.Editor.FBXImporter
             Type policyType = typeof(FBXImportController).Assembly.GetType(
                 "Fbx2Vmd.FBXImporter.HumanoidClipImportPolicy");
             MethodInfo applyMethod = policyType?.GetMethod(
-                "ApplyRootRotationContract",
+                "ApplyRootPoseContract",
                 BindingFlags.Static | BindingFlags.NonPublic);
             Assert.That(applyMethod, Is.Not.Null);
 
@@ -74,7 +74,7 @@ namespace Tests.Editor.FBXImporter
                     keepOriginalOrientation = true
                 }
             };
-            MethodInfo contractMethod = FindPolicyMethod("HasRootRotationContract");
+            MethodInfo contractMethod = FindPolicyMethod("HasRootPoseContract");
 
             bool hasContract = (bool)contractMethod.Invoke(null, new object[] { clips });
 
@@ -82,14 +82,54 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_ControlledImportWithLegacyClipSettings_When_PreparingImport_Then_MigratesRootRotationContract()
+        public void Given_ControlledImportWithLegacyClipSettings_When_PreparingImport_Then_MigratesRootPoseContract()
         {
             string source = ReadControllerSource();
 
             Assert.That(
                 source,
-                Does.Contain("TryEnsureHumanoidClipRootRotationContract(targetPath)"),
+                Does.Contain("TryEnsureHumanoidClipRootPoseContract(targetPath)"),
                 "제어 폴더에 이미 있는 FBX도 이전 clip 설정이면 1회 마이그레이션해야 합니다.");
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Given_RotationBakedClip_When_ApplyingRootPoseContract_Then_PreservesHeightMotionAndOtherSettings(bool bakeXZ)
+        {
+            var clips = new[]
+            {
+                new ModelImporterClipAnimation
+                {
+                    name = "높이 이동 검증",
+                    lockRootRotation = true,
+                    keepOriginalOrientation = true,
+                    lockRootHeightY = false,
+                    lockRootPositionXZ = bakeXZ,
+                    keepOriginalPositionXZ = true,
+                    keepOriginalPositionY = true,
+                    heightFromFeet = false,
+                    heightOffset = 0.125f,
+                    firstFrame = 12f,
+                    lastFrame = 240f
+                }
+            };
+            MethodInfo check = FindPolicyMethod("HasRootPoseContract");
+            MethodInfo apply = FindPolicyMethod("ApplyRootPoseContract");
+
+            Assert.That((bool)check.Invoke(null, new object[] { clips }), Is.False,
+                "회전 설정이 맞아도 Y 이동이 분리된 기존 캐시는 보정해야 합니다.");
+            apply.Invoke(null, new object[] { clips });
+
+            Assert.That(clips[0].lockRootHeightY, Is.True);
+            Assert.That((bool)check.Invoke(null, new object[] { clips }), Is.True,
+                "적용 후 같은 캐시를 다시 임포트하지 않아야 합니다.");
+            Assert.That(clips[0].lockRootPositionXZ, Is.EqualTo(bakeXZ));
+            Assert.That(clips[0].keepOriginalPositionXZ, Is.True);
+            Assert.That(clips[0].keepOriginalPositionY, Is.True);
+            Assert.That(clips[0].heightFromFeet, Is.False);
+            Assert.That(clips[0].heightOffset, Is.EqualTo(0.125f));
+            Assert.That(clips[0].firstFrame, Is.EqualTo(12f));
+            Assert.That(clips[0].lastFrame, Is.EqualTo(240f));
         }
 
         private static MethodInfo FindPolicyMethod(string methodName)
