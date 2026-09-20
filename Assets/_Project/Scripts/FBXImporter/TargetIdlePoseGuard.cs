@@ -20,6 +20,9 @@ namespace Fbx2Vmd.FBXImporter
         [Tooltip("FBX가 들어오기 전 타깃 캐릭터의 시작 자세를 매 프레임 복구합니다.")]
         [SerializeField] private bool _lockTargetPoseUntilImport = true;
 
+        [Tooltip("대기 자세를 처음 준비할 때 실제 밑창을 바닥에 맞춥니다.")]
+        [SerializeField] private bool _placeTargetOnFloorOnInitialize = true;
+
         [Tooltip("Idle 자세를 유지할 대상 캐릭터")]
         [SerializeField] private GameObject _targetCharacter;
 
@@ -52,6 +55,9 @@ namespace Fbx2Vmd.FBXImporter
             {
                 FaceToCamera();
             }
+
+            if (_placeTargetOnFloorOnInitialize)
+                HumanoidFloorPlacement.TryPlace(_targetCharacter.GetComponent<Animator>());
 
             CaptureBaseline();
             Apply();
