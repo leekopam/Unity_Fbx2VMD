@@ -96,6 +96,67 @@ namespace Tests.Editor.FBXImporter
             Assert.That(GetTypeUnderTest().GetMethod("TryCreate", Flags).Invoke(null, args), Is.EqualTo(false));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Given_LowerMiddleSole_When_SelectingContact_Then_IncludesWholeSupportRegion(bool isFront)
+        {
+            _mesh.vertices = new[]
+            {
+                new Vector3(-0.05f, 0f, -0.1f), new Vector3(0.05f, 0f, -0.1f),
+                new Vector3(-0.05f, 0f, 0.3f), new Vector3(0.05f, 0f, 0.3f),
+                new Vector3(0f, -0.01f, 0.08f), new Vector3(0f, -0.01f, 0.12f)
+            };
+            var weights = new BoneWeight[6];
+            for (int i = 0; i < weights.Length; i++)
+                weights[i] = new BoneWeight { boneIndex0 = 0, weight0 = 1f };
+            _mesh.boneWeights = weights;
+            CreateSampler();
+
+            object[] select = { isFront, Vector3.up, -1, Vector3.zero };
+            Assert.That(Call("TrySelectContact", select), Is.True);
+            Assert.That(((Vector3)select[3]).y, Is.EqualTo(-0.01f).Within(0.000001f),
+                "관통 검사에 포함된 중앙 밑창을 앞·뒤 접촉 후보에서 빠뜨리면 안 됨");
+        }
+
+        [TestCase(0f)]
+        [TestCase(5f)]
+        public void Given_AlignedHeading_When_FindingSupportPose_Then_PreservesReferenceYaw(float pitch)
+        {
+            CreateSampler();
+            Quaternion heading = Quaternion.AngleAxis(30f, Vector3.up);
+            Quaternion reference = heading * Quaternion.AngleAxis(pitch, Vector3.right);
+            Type plan = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+            object[] args = { _foot, _sampler, heading * Vector3.right, reference, Vector3.up,
+                Quaternion.identity, -1, -1 };
+            Assert.That(plan.GetMethod("TryFindSupportPose", Flags).Invoke(null, args), Is.True);
+            Assert.That(Quaternion.Angle((Quaternion)args[5], heading), Is.LessThan(0.05f),
+                "현재 정렬한 방향을 샘플링 당시 원본 방향으로 되돌리면 안 됨");
+        }
+
+        [TestCase(1f, 0.001f, 0f)]
+        [TestCase(1f, 0.0001f, 0f)]
+        [TestCase(1f, 0f, 0f)]
+        [TestCase(0f, 1f, 20f)]
+        public void Given_LowerContactRelease_When_AligningSupport_Then_PreservesRemainingContact(
+            float rearWeight, float frontWeight, float expectedPitch)
+        {
+            CreateSampler();
+            Type grounding = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootGrounding", true);
+            Type legType = grounding.GetNestedType("Leg", BindingFlags.NonPublic);
+            object leg = Activator.CreateInstance(legType, Flags, null,
+                new object[] { _root.transform, _root.transform, _foot, _toes, _sampler,
+                    Vector3.forward, Quaternion.identity }, null);
+            legType.GetField("_ground", Flags).SetValue(leg, new RaycastHit { normal = Vector3.up });
+            legType.GetField("_originalFootRotation", Flags).SetValue(leg, Quaternion.identity);
+            legType.GetField("_targetFootRotation", Flags).SetValue(leg, Quaternion.AngleAxis(20f, Vector3.right));
+            legType.GetField("_activeWeights", Flags).SetValue(leg, new Vector2(rearWeight, frontWeight));
+
+            Assert.That(legType.GetMethod("TryAlignSupportSurface", Flags).Invoke(leg, null), Is.True);
+            var result = (Quaternion)legType.GetField("_targetFootRotation", Flags).GetValue(leg);
+            Assert.That(Quaternion.Angle(result, Quaternion.AngleAxis(expectedPitch, Vector3.right)), Is.LessThan(0.05f),
+                "반대쪽 지지 해제 여부로 남은 지지점 보정이 끊기거나 정상 발 구르기가 사라지면 안 됨");
+        }
+
         private const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
 
         private void CreateSampler()

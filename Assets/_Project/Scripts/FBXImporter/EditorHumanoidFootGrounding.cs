@@ -374,6 +374,7 @@ namespace Fbx2Vmd.FBXImporter
                         Quaternion.FromToRotation(current, desired) * _originalFootRotation,
                         Mathf.Min(_activeWeights.x, _activeWeights.y));
                 }
+                if (!TryAlignSupportSurface()) return false;
                 Vector3 weightedTarget = Vector3.zero;
                 float totalWeight = 0f;
                 for (int channel = 0; channel < 2; channel++)
@@ -398,6 +399,31 @@ namespace Fbx2Vmd.FBXImporter
                 return HumanoidPelvisReachCalculator.TryCalculateExtensionReach(
                     _upperToKnee.magnitude, _kneeToFoot.magnitude, originalAngle,
                     Vector3.Distance(Upper.position, _target), _support, 2.8f, out _maximumReach);
+            }
+
+            private bool TryAlignSupportSurface()
+            {
+                if ((_activeWeights.x <= 0f && _activeWeights.y <= 0f) || !_localFootFrame.HasValue)
+                    return true;
+                Vector3 queryNormal = _originalFootRotation *
+                    (Quaternion.Inverse(_targetFootRotation) * _ground.normal);
+                if (!Sampler.TrySelectContact(false, queryNormal.normalized, out int rear, out _) ||
+                    !Sampler.TrySelectContact(true, queryNormal.normalized, out int front, out _) ||
+                    !Sampler.TryGetLocalPoint(rear, out Vector3 rearPoint) ||
+                    !Sampler.TryGetLocalPoint(front, out Vector3 frontPoint)) return false;
+
+                float difference = Vector3.Dot(_targetFootRotation * (rearPoint - frontPoint), _ground.normal);
+                float weight = difference > 0f ? _activeWeights.x : _activeWeights.y;
+                if (weight <= 0f) return true;
+                Vector3 axis = Vector3.Cross(_ground.normal,
+                    _targetFootRotation * (_localFootFrame.Value * Vector3.forward)).normalized;
+                if (axis.sqrMagnitude < 0.5f) return true;
+                if (!EditorHumanoidFootContactPlan.TryFindSupportPose(Foot, Sampler, axis,
+                        _targetFootRotation, _ground.normal, out Quaternion rotation, out _, out _)) return true;
+
+                // 들리는 영역의 지지 강도만 반영하여 해제 중인 발을 수평으로 강제하지 않음.
+                _targetFootRotation = Quaternion.Slerp(_targetFootRotation, rotation, weight);
+                return true;
             }
 
             internal HumanoidPelvisReachCalculator.Leg BuildReach(bool dampExtension) =>

@@ -178,7 +178,7 @@ namespace Fbx2Vmd.FBXImporter
                 !sampler.TryGetLocalPoint(states[0].Point, out Vector3 originalRear) ||
                 !sampler.TryGetLocalPoint(states[1].Point, out Vector3 originalFront)) return false;
             Vector3 axis = Vector3.Cross(Vector3.up, foot.TransformVector(originalFront - originalRear)).normalized;
-            if (axis.sqrMagnitude < 0.5f || !TryFindSupportPose(foot, sampler, axis,
+            if (axis.sqrMagnitude < 0.5f || !TryFindSupportPose(foot, sampler, axis, foot.rotation, Vector3.up,
                     out Quaternion rotation, out int rear, out int front)) return false;
             if (!sampler.TryGetLocalPoint(rear, out Vector3 newRear) ||
                 !sampler.TryGetLocalPoint(front, out Vector3 newFront)) return false;
@@ -193,22 +193,23 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        private static bool TryFindSupportPose(Transform foot, EditorHumanoidFootSoleSampler sampler, Vector3 axis,
+        internal static bool TryFindSupportPose(Transform foot, EditorHumanoidFootSoleSampler sampler, Vector3 axis,
+            Quaternion referenceRotation, Vector3 groundNormal,
             out Quaternion rotation, out int rear, out int front)
         {
-            rotation = foot.rotation;
+            rotation = referenceRotation;
             rear = front = -1;
             Quaternion original = rotation;
             float Evaluate(float angle, out int rearPoint, out int frontPoint)
             {
                 rearPoint = frontPoint = -1;
                 Quaternion candidate = Quaternion.AngleAxis(angle, axis) * original;
-                Vector3 normal = original * (Quaternion.Inverse(candidate) * Vector3.up);
+                Vector3 normal = foot.rotation * (Quaternion.Inverse(candidate) * groundNormal);
                 if (!sampler.TrySelectContact(false, normal.normalized, out rearPoint, out _) ||
                     !sampler.TrySelectContact(true, normal.normalized, out frontPoint, out _) ||
                     !sampler.TryGetLocalPoint(rearPoint, out Vector3 rearLocal) ||
                     !sampler.TryGetLocalPoint(frontPoint, out Vector3 frontLocal)) return float.NaN;
-                return (candidate * ((rearLocal - frontLocal) * foot.lossyScale.x)).y;
+                return Vector3.Dot(candidate * ((rearLocal - frontLocal) * foot.lossyScale.x), groundNormal);
             }
             float best = float.PositiveInfinity;
             float leftValue = Evaluate(-45f, out _, out _);
