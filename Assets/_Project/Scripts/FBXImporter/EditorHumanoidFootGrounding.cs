@@ -139,7 +139,8 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
 
             HasGround = _left.HasGround || _right.HasGround;
-            float maximumOffset = _humanScale * 0.025f;
+            // 고정 신장 비율로 도달 가능한 지지를 포기하지 않도록 실제 다리 크기 안에서 최소 이동을 찾음.
+            float maximumOffset = Mathf.Max(_left.TotalBoneLength, _right.TotalBoneLength);
             // 무지면에는 원래 발 목표와 골반 높이를 유지하되 무릎 방향 정책은 계속 적용함.
             float offset = 0f;
             Vector2 footOffsets = Vector2.zero;
@@ -430,6 +431,8 @@ namespace Fbx2Vmd.FBXImporter
                 new HumanoidPelvisReachCalculator.Leg(Upper.position - _target,
                     _upperToKnee.magnitude, _kneeToFoot.magnitude, _support, _clearance,
                     dampExtension ? _maximumReach : (double)_upperToKnee.magnitude + _kneeToFoot.magnitude);
+
+            internal float TotalBoneLength => _upperToKnee.magnitude + _kneeToFoot.magnitude;
 
             internal bool TrySolve(float footOffset, out float error)
             {
