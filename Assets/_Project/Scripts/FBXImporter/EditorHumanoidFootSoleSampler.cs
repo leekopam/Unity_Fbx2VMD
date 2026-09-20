@@ -204,8 +204,10 @@ namespace Fbx2Vmd.FBXImporter
             for (int i = 0; i < _points.Length; i++)
             {
                 float progress = Vector3.Dot(_points[i].Surface.GetWorldPoint(_points[i].Vertex), forward);
-                _points[i].IsRear = progress <= back + (front - back) * 0.25f;
-                _points[i].IsFront = progress >= back + (front - back) * 0.75f;
+                // 비관통 검사에 쓰는 중앙 밑창도 지지 후보에 포함함.
+                float middle = (back + front) * 0.5f;
+                _points[i].IsRear = progress <= middle;
+                _points[i].IsFront = progress > middle;
             }
             _localPoints = new Vector3[_points.Length];
             _worldPoints = new Vector3[_points.Length];
