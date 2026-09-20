@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -56,6 +57,17 @@ namespace Fbx2Vmd.FBXImporter
                 shouldReimport = true;
             }
 
+            HumanDescription description = importer.humanDescription;
+            GameObject model = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (TryResolveHumanBoneNames(model, description.human, out HumanBone[] resolved) &&
+                !ReferenceEquals(description.human, resolved))
+            {
+                // 다른 리그의 템플릿 이름만 실제 본 이름으로 연결하고 기존 제한값과 골격은 보존함.
+                description.human = resolved;
+                importer.humanDescription = description;
+                shouldReimport = true;
+            }
+
             if (shouldReimport)
             {
                 importer.SaveAndReimport();
@@ -69,6 +81,35 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return shouldReimport;
+        }
+
+        internal static bool TryResolveHumanBoneNames(GameObject model, HumanBone[] source,
+            out HumanBone[] resolved)
+        {
+            resolved = source;
+            if (model == null || source == null || source.Length == 0)
+                return false;
+
+            Transform[] bones = model.GetComponentsInChildren<Transform>(true);
+            var roles = new HashSet<string>(StringComparer.Ordinal);
+            var used = new HashSet<Transform>();
+            var candidate = (HumanBone[])source.Clone();
+            bool changed = false;
+            for (int i = 0; i < candidate.Length; i++)
+            {
+                HumanBone bone = candidate[i];
+                if (string.IsNullOrWhiteSpace(bone.humanName) || !roles.Add(bone.humanName) ||
+                    !HumanoidAvatarBuilder.TryFindUniqueMappedTransform(bones, bone.boneName, out Transform match) ||
+                    !used.Add(match))
+                    return false;
+                string name = match.name;
+                changed |= !string.Equals(candidate[i].boneName, name, StringComparison.Ordinal);
+                candidate[i].boneName = name;
+            }
+
+            // 일부 항목만 바뀌지 않도록 모든 이름을 확인한 뒤 결과를 반환함.
+            resolved = changed ? candidate : source;
+            return true;
         }
     }
 }
