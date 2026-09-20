@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Fbx2Vmd.FBXImporter;
@@ -87,7 +88,8 @@ namespace Tests.Editor.FBXImporter
                 .First(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal));
             GameObject model = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(modelPath));
             model.hideFlags = HideFlags.HideAndDontSave;
-            model.transform.SetPositionAndRotation(new Vector3(5000f, 0f, 5000f), Quaternion.Euler(0f, 90f, 0f));
+            // 무지면 발 방향 검증이 대규모 좌표 정밀도나 열린 씬의 바닥에 영향을 받지 않도록 배치함.
+            model.transform.SetPositionAndRotation(new Vector3(30f, 3f, 30f), Quaternion.Euler(0f, 90f, 0f));
             foreach (MonoBehaviour script in model.GetComponentsInChildren<MonoBehaviour>(true)) script.enabled = false;
             object controller = Activator.CreateInstance(FindType("HumanoidMotionPlaybackController"), true);
             object reference = Activator.CreateInstance(FindType("EditorHumanoidPoseReferencePlayer"), true);
@@ -103,7 +105,7 @@ namespace Tests.Editor.FBXImporter
                 Animator sourceAnimator = (Animator)Field(reference, "_referenceAnimator");
                 Transform[] sourceFeet = { sourceAnimator.GetBoneTransform(HumanBodyBones.LeftFoot), sourceAnimator.GetBoneTransform(HumanBodyBones.RightFoot) };
                 Transform[] sourceToes = { sourceAnimator.GetBoneTransform(HumanBodyBones.LeftToes), sourceAnimator.GetBoneTransform(HumanBodyBones.RightToes) };
-                Quaternion[] sourceBases = sourceFeet.Select((f, i) => CaptureLocalFrame(f, sourceToes[i], sourceAnimator.transform.up)).ToArray();
+                Quaternion[] sourceBases = CaptureAvatarLocalFrames(sourceAnimator, sourceFeet, sourceToes, out _);
                 placement *= Quaternion.Inverse(sourceAnimator.transform.rotation);
                 Invoke(controller, "PrepareWithArmDirectionReference", target, clip, source);
                 Assert.That(Property(controller, "HasFootRotationReference"), Is.True);
@@ -142,6 +144,122 @@ namespace Tests.Editor.FBXImporter
                 ((IDisposable)reference).Dispose();
                 UnityEngine.Object.DestroyImmediate(model);
             }
+        }
+
+        [TestCase(0f)]
+        [TestCase(30f)]
+        public void Given_DifferentInitialFootPose_When_CalibratingReference_Then_UsesAvatarBasisAndRestoresTransforms(float initialPitch)
+        {
+            const string path = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset == null) Assert.Ignore("로컬 원본 FBX가 없는 환경에서는 실제 모델 검증을 생략함");
+            AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>()
+                .First(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal));
+            GameObject source = UnityEngine.Object.Instantiate(asset);
+            source.hideFlags = HideFlags.HideAndDontSave;
+            source.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            object reference = Activator.CreateInstance(FindType("EditorHumanoidPoseReferencePlayer"), true);
+            try
+            {
+                Animator animator = source.GetComponent<Animator>();
+                animator.GetBoneTransform(HumanBodyBones.LeftFoot).localRotation *= Quaternion.Euler(initialPitch, 0f, 0f);
+                animator.GetBoneTransform(HumanBodyBones.RightFoot).localRotation *= Quaternion.Euler(-initialPitch, 0f, 0f);
+                var original = source.GetComponentsInChildren<Transform>(true).Where(t => t != source.transform)
+                    .ToDictionary(t => t.name, t => new SkeletonBone { position = t.localPosition, rotation = t.localRotation, scale = t.localScale });
+                Invoke(reference, "InitializeFromSourceModel", source, clip);
+                Animator sampled = (Animator)Field(reference, "_referenceAnimator");
+                foreach (Transform bone in sampled.GetComponentsInChildren<Transform>(true).Where(t => t != sampled.transform))
+                {
+                    Assert.That(bone.localPosition, Is.EqualTo(original[bone.name].position), bone.name);
+                    Assert.That(bone.localRotation, Is.EqualTo(original[bone.name].rotation), bone.name);
+                    Assert.That(bone.localScale, Is.EqualTo(original[bone.name].scale), bone.name);
+                }
+                Transform[] feet = { sampled.GetBoneTransform(HumanBodyBones.LeftFoot), sampled.GetBoneTransform(HumanBodyBones.RightFoot) };
+                Transform[] toes = { sampled.GetBoneTransform(HumanBodyBones.LeftToes), sampled.GetBoneTransform(HumanBodyBones.RightToes) };
+                Quaternion[] bases = CaptureAvatarLocalFrames(sampled, feet, toes, out Vector2 lengths);
+                foreach (float frame in new[] { 0f, 58f, 3759f })
+                {
+                    object[] args = { frame / clip.frameRate, Quaternion.identity, Quaternion.identity };
+                    Assert.That(Invoke(reference, "TryEvaluateFootFramesAt", args), Is.True);
+                    for (int side = 0; side < 2; side++) AssertAxes((Quaternion)args[side + 1], feet[side].rotation * bases[side]);
+                    object[] support = { Vector2.zero, Quaternion.identity, Quaternion.identity };
+                    Assert.That(Invoke(reference, "TryCaptureFootSupportReference", support), Is.True);
+                    for (int side = 0; side < 2; side++)
+                    {
+                        float expectedHeight = Vector3.Dot((Quaternion)args[side + 1] * Vector3.forward, sampled.transform.up) * lengths[side];
+                        Assert.That(((Vector2)support[0])[side], Is.EqualTo(expectedHeight).Within(0.000001f));
+                    }
+                }
+            }
+            finally
+            {
+                ((IDisposable)reference).Dispose();
+                UnityEngine.Object.DestroyImmediate(source);
+            }
+        }
+
+        [TestCase("missing")]
+        [TestCase("duplicate")]
+        [TestCase("invalid")]
+        [TestCase("unsupportedScale")]
+        public void Given_IncompleteAvatarFootBasis_When_Calibrating_Then_PreservesBothBindingsAndTransforms(string failure)
+        {
+            const string path = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (source == null) Assert.Ignore("로컬 원본 FBX가 없는 환경에서는 실제 모델 검증을 생략함");
+            AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>()
+                .First(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal));
+            object reference = Activator.CreateInstance(FindType("EditorHumanoidPoseReferencePlayer"), true);
+            try
+            {
+                Invoke(reference, "InitializeFromSourceModel", source, clip);
+                Animator animator = (Animator)Field(reference, "_referenceAnimator");
+                string footName = animator.GetBoneTransform(HumanBodyBones.RightFoot).name;
+                SkeletonBone[] skeleton = animator.avatar.humanDescription.skeleton;
+                int index = Array.FindIndex(skeleton, b => b.name == footName);
+                if (failure == "missing") skeleton = skeleton.Where(b => b.name != footName).ToArray();
+                else if (failure == "duplicate") skeleton = skeleton.Concat(new[] { skeleton[index] }).ToArray();
+                else if (failure == "invalid") skeleton[index].rotation = new Quaternion(float.NaN, 0f, 0f, 1f);
+                else skeleton[index].scale = new Vector3(1f, 2f, 1f);
+                Transform[] bones = animator.GetComponentsInChildren<Transform>(true);
+                Vector3[] positions = bones.Select(t => t.localPosition).ToArray();
+                Quaternion[] rotations = bones.Select(t => t.localRotation).ToArray();
+                Vector3[] scales = bones.Select(t => t.localScale).ToArray();
+                object left = Field(reference, "_leftFootRotation"), right = Field(reference, "_rightFootRotation");
+                object lengths = Field(reference, "_footForwardLengths");
+                Assert.That(Invoke(reference, "TryInitializeAvatarFootReference", skeleton), Is.False);
+                Assert.That(Field(reference, "_leftFootRotation"), Is.SameAs(left));
+                Assert.That(Field(reference, "_rightFootRotation"), Is.SameAs(right));
+                Assert.That(Field(reference, "_footForwardLengths"), Is.EqualTo(lengths));
+                for (int i = 0; i < bones.Length; i++)
+                {
+                    Assert.That(bones[i].localPosition, Is.EqualTo(positions[i]));
+                    AssertAxes(bones[i].localRotation, rotations[i]);
+                    Assert.That(bones[i].localScale, Is.EqualTo(scales[i]));
+                }
+            }
+            finally { ((IDisposable)reference).Dispose(); }
+        }
+
+        private static Quaternion[] CaptureAvatarLocalFrames(Animator animator, Transform[] feet, Transform[] toes, out Vector2 lengths)
+        {
+            Dictionary<string, SkeletonBone> skeleton = animator.avatar.humanDescription.skeleton.ToDictionary(b => b.name);
+            Matrix4x4 RestMatrix(Transform bone)
+            {
+                if (bone == animator.transform) return animator.transform.localToWorldMatrix;
+                SkeletonBone pose = skeleton[bone.name];
+                return RestMatrix(bone.parent) * Matrix4x4.TRS(pose.position, pose.rotation, pose.scale);
+            }
+            Vector3 Direction(int side) => RestMatrix(toes[side]).MultiplyPoint3x4(Vector3.zero) - RestMatrix(feet[side]).MultiplyPoint3x4(Vector3.zero);
+            lengths = new Vector2(Vector3.ProjectOnPlane(Direction(0), animator.transform.up).magnitude,
+                Vector3.ProjectOnPlane(Direction(1), animator.transform.up).magnitude);
+            return feet.Select((foot, side) =>
+            {
+                Matrix4x4 footMatrix = RestMatrix(foot), toeMatrix = RestMatrix(toes[side]);
+                Vector3 direction = toeMatrix.MultiplyPoint3x4(Vector3.zero) - footMatrix.MultiplyPoint3x4(Vector3.zero);
+                return Quaternion.Inverse(footMatrix.rotation) * Quaternion.LookRotation(
+                    Vector3.ProjectOnPlane(direction, animator.transform.up).normalized, animator.transform.up);
+            }).ToArray();
         }
 
         private static Quaternion CaptureLocalFrame(Transform foot, Transform toes, Vector3 up) =>
