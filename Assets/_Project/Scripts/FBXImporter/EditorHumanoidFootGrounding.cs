@@ -139,14 +139,13 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
 
             HasGround = _left.HasGround || _right.HasGround;
-            // 바닥 부재는 실패가 아니며 원본·상체 보정 뒤의 자세를 그대로 유지함.
-            if (!HasGround)
-                return true;
-
             float maximumOffset = _humanScale * 0.025f;
-            if (!HumanoidPelvisReachCalculator.TryCalculateOffset(
+            // 무지면에는 원래 발 목표와 골반 높이를 유지하되 무릎 방향 정책은 계속 적용함.
+            float offset = 0f;
+            Vector2 footOffsets = Vector2.zero;
+            if (HasGround && !HumanoidPelvisReachCalculator.TryCalculateOffset(
                     _left.BuildReach(true), _right.BuildReach(true), Vector3.up,
-                    maximumOffset, out float offset, out Vector2 footOffsets))
+                    maximumOffset, out offset, out footOffsets))
             {
                 // 감쇠와 양발 지지가 충돌하면 본을 늘리지 않고 물리 길이 한도로 다시 판단함.
                 UsedPhysicalReach = true;
@@ -410,12 +409,11 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _target += Vector3.up * footOffset;
                 error = Vector3.Distance(Foot.position, _target);
-                // 위치 변화가 없어도 지지 피벗에 필요한 발 회전은 반영함.
-                if (error >= 0.000001f &&
-                    (!HumanoidLegPoseSolver.TryCalculateBendNormal(_upperToKnee, _kneeToFoot,
+                // 목표 변위가 0에 가까워져도 무릎 방향 보정을 계속 적용하여 자세가 튀지 않게 함.
+                if (!HumanoidLegPoseSolver.TryCalculateBendNormal(_upperToKnee, _kneeToFoot,
                         _target - Upper.position, _originalUpperRotation * _referenceNormal,
                         out Vector3 normal, out _) ||
-                    !HumanoidLegPoseSolver.TrySolve(Upper, Lower, Foot, _target, normal, out error)))
+                    !HumanoidLegPoseSolver.TrySolve(Upper, Lower, Foot, _target, normal, out error))
                     return false;
                 Foot.rotation = _targetFootRotation;
                 Toes.localRotation = _toeRotation;

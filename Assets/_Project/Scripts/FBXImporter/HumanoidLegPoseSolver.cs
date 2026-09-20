@@ -11,7 +11,7 @@ namespace Fbx2Vmd.FBXImporter
     internal static class HumanoidLegPoseSolver
     {
         // 원본 벡터는 골반·IK 보정 전, 목표 벡터는 골반 보정 후의 허벅지에서 발목으로 향함.
-        // 실패 시 방향을 임의로 뒤집지 않으며 호출자가 원본 방향 유지 여부를 결정함.
+        // 반대 굽힘을 증폭하지 않도록 현재 방향과 Avatar 기준의 정렬 정도도 함께 반영함.
         internal static bool TryCalculateBendNormal(Vector3 originalUpperToKnee,
             Vector3 originalKneeToFoot, Vector3 upperToTarget, Vector3 referenceNormal,
             out Vector3 bendNormal, out float referenceWeight)
@@ -43,14 +43,6 @@ namespace Fbx2Vmd.FBXImporter
             float currentLength = current.magnitude;
             if (currentLength == 0f && IsPositive(originalCross.sqrMagnitude))
                 return false;
-            if (weight == 0f)
-            {
-                if (!IsPositive(currentLength))
-                    return false;
-                bendNormal = current / currentLength;
-                return true;
-            }
-
             if (!IsFinite(referenceNormal.sqrMagnitude))
                 return false;
             Vector3 reference = Vector3.ProjectOnPlane(referenceNormal, axis);
@@ -61,9 +53,10 @@ namespace Fbx2Vmd.FBXImporter
             if (IsPositive(currentLength))
             {
                 current /= currentLength;
-                if (Vector3.Dot(current, reference) <= -0.99f)
-                    return false;
-                reference = Vector3.Slerp(current, reference, weight).normalized;
+                // 부호를 즉시 뒤집으면 직교 경계에서 무릎이 튀므로 기준 방향의 비중을 연속적으로 높임.
+                weight = Mathf.Max(weight, 1f - Mathf.Clamp01(Vector3.Dot(current, reference)));
+                if (weight < 1f)
+                    reference = Vector3.Slerp(current, reference, weight).normalized;
             }
 
             bendNormal = reference;
@@ -98,29 +91,29 @@ namespace Fbx2Vmd.FBXImporter
             double radius = Math.Sqrt(Math.Max(0d, upperLength * (double)upperLength - along * along));
             Vector3 desiredKnee = direction.normalized * (float)along +
                 Vector3.Cross(direction, unitBendNormal).normalized * (float)radius;
-            ApplyResidualRotation(upperLeg, lowerLeg.position - upperLeg.position, desiredKnee, upperLength);
+            ApplyResidualRotation(upperLeg, lowerLeg.position - upperLeg.position, desiredKnee);
             // 무릎 위치가 바뀌면 종아리의 필요 회전은 미세각 범위를 넘을 수 있으므로 목표 방향부터 다시 맞춤.
             lowerLeg.rotation = Quaternion.FromToRotation(foot.position - lowerLeg.position,
                 target - lowerLeg.position) * lowerLeg.rotation;
-            ApplyResidualRotation(lowerLeg, foot.position - lowerLeg.position, target - lowerLeg.position, lowerLength);
+            ApplyResidualRotation(lowerLeg, foot.position - lowerLeg.position, target - lowerLeg.position);
 
             targetError = Vector3.Distance(foot.position, target);
             return IsFinite(targetError);
         }
 
-        private static void ApplyResidualRotation(Transform bone, Vector3 current, Vector3 desired, float boneLength)
+        private static void ApplyResidualRotation(Transform bone, Vector3 current, Vector3 desired)
         {
             float currentLength = current.magnitude;
             float desiredLength = desired.magnitude;
-            if (IsPositive(currentLength) && IsPositive(desiredLength) &&
-                Mathf.Abs(desiredLength - currentLength) <= boneLength * 0.000001f)
+            if (IsPositive(currentLength) && IsPositive(desiredLength))
             {
                 current /= currentLength;
                 desired /= desiredLength;
                 Vector3 cross = Vector3.Cross(current, desired);
                 float crossLength = cross.magnitude;
                 float angle = Mathf.Atan2(crossLength, Vector3.Dot(current, desired)) * Mathf.Rad2Deg;
-                // 도달 반경이 맞는 근평행 잔여에만 작은 보완각을 허용하여 다른 IK 실패를 덮지 않음.
+                // 월드 좌표의 반올림으로 두 반경이 달라도 길이를 보존하는 미세 방향 정렬은 허용함.
+                // 도달 성공은 호출자의 최종 목표 오차로 판정함.
                 if (crossLength > 0f && angle > 0f && angle <= 0.1f)
                     bone.rotation = Quaternion.AngleAxis(angle, cross / crossLength) * bone.rotation;
             }
