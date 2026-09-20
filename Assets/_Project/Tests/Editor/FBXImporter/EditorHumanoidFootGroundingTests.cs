@@ -138,7 +138,8 @@ namespace Tests.Editor.FBXImporter
                         int physicalReachCount = 0;
                         float maximumTargetError = 0f, minimumSoleClearance = 0f, maximumContactError = 0f;
                         float[] frames = { 58f, 92f, 1080f, 1084f, 1089f, 1104f, 9810f,
-                            1172f, 1173f, 1268f, 1269f, 1276f, 58.5f };
+                            1172f, 1173f, 1268f, 1269f, 1276f, 58.5f,
+                            4554f, 4866f, 4867f, 4873f, 4874f, 4964f, 4965f };
                         foreach (float frame in frames.Concat(frames.Reverse()))
                         {
                             floor.SetActive(false);
@@ -189,6 +190,13 @@ namespace Tests.Editor.FBXImporter
                             AssertStatus(controller, "Applied");
                             AssertPose(bones, current, currentRotations);
                         }
+
+                        int rightFootIndex = Array.IndexOf(bones, animator.GetBoneTransform(HumanBodyBones.RightFoot));
+                        foreach (Vector2 boundary in new[] { new Vector2(4866f, 4867f),
+                            new Vector2(4873f, 4874f), new Vector2(4964f, 4965f) })
+                            Assert.That(Quaternion.Angle(rotations[boundary.x][rightFootIndex],
+                                rotations[boundary.y][rightFootIndex]), Is.LessThan(5f),
+                                "골반 이동 한도로 접지 경로가 전환되어 발이 수십 도 튀면 안 됨");
 
                         Invoke(controller, "Seek", 58f / clip.frameRate);
                         var self = model.AddComponent<BoxCollider>();
