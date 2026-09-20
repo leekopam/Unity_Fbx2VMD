@@ -159,9 +159,89 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
-        private static MotionVideoRecordingSettings CreateSettings()
+        [TestCase(24f)]
+        [TestCase(60f)]
+        public void Given_Recording_When_FrameDurationVaries_Then_UsesOutputFrameTimes(float frameRate)
         {
-            return new MotionVideoRecordingSettings("motion", 1920, 1080, 60f);
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+            try
+            {
+                Assert.That((bool)Invoke(controller, "TryStart", CreateSettings(frameRate), null), Is.True);
+                Invoke(controller, "Tick", 0f);
+                Invoke(controller, "Tick", 0f);
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"), Is.Zero);
+
+                float[] durations = { 0.5f, 0.001f, 0.12f, 0.033f };
+                for (int index = 0; index < durations.Length; index++)
+                {
+                    Assert.That((bool)Invoke(controller, "Tick", durations[index]), Is.False);
+                    Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                        Is.EqualTo((index + 1) / frameRate).Within(TimeTolerance));
+                }
+
+                Invoke(controller, "Stop");
+                Invoke(controller, "TryStart", CreateSettings(frameRate), null);
+                Invoke(controller, "Tick", 0.2f);
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                    Is.EqualTo(1f / frameRate).Within(TimeTolerance), "재녹화는 첫 표본부터 시작해야 합니다.");
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [TestCase(1f, 0f)]
+        [TestCase(60f, 1f / 60f)]
+        [TestCase(60f, 0.04f)]
+        public void Given_Recording_When_LastPoseIsReached_Then_StopsAfterItsRenderOpportunity(
+            float frameRate, float testLength)
+        {
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+            try
+            {
+                if (testLength > 0f)
+                {
+                    // 짧은 종료 경계만 평가하여 float 반올림과 부분 프레임을 재현함.
+                    playback.GetType().GetProperty("ClipLengthSeconds",
+                        BindingFlags.Instance | BindingFlags.NonPublic).SetValue(playback, testLength);
+                }
+                Invoke(controller, "TryStart", CreateSettings(frameRate), null);
+                float length = ReadProperty<float>(playback, "ClipLengthSeconds");
+                int lastSample = Mathf.CeilToInt(length * frameRate);
+                for (int sample = 1; sample <= lastSample; sample++)
+                {
+                    Assert.That((bool)Invoke(controller, "Tick", 1f), Is.False);
+                    Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                        Is.EqualTo(Mathf.Min(sample / frameRate, length)).Within(TimeTolerance));
+                }
+                Assert.That(recorder.IsRecording, Is.True, "마지막 자세의 렌더 전에 녹화를 종료하면 안 됩니다.");
+                Invoke(controller, "Tick", 0f);
+                Assert.That(recorder.IsRecording, Is.True);
+                Assert.That((bool)Invoke(controller, "Tick", 1f), Is.True);
+                Assert.That(recorder.IsRecording, Is.False);
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"), Is.Zero);
+                Assert.That(recorder.StopCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        private static MotionVideoRecordingSettings CreateSettings(float frameRate = 60f)
+        {
+            return new MotionVideoRecordingSettings("motion", 1920, 1080, frameRate);
         }
 
         private static object CreatePlaybackController(GameObject target)

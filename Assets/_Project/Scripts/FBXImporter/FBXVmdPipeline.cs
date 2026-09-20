@@ -2652,12 +2652,21 @@ namespace Fbx2Vmd.FBXImporter
 
             HumanoidMotionPlaybackState previousState =
                 _humanoidMotionPlaybackController.State;
-            _humanoidMotionPlaybackController.Tick(deltaTimeSeconds);
-            if (previousState == HumanoidMotionPlaybackState.Playing &&
-                _humanoidMotionPlaybackController.State == HumanoidMotionPlaybackState.Ready)
+            bool completedRecording = false;
+            if (_humanoidMotionRecordingController?.IsRecording == true)
             {
-                bool completedRecording =
-                    _humanoidMotionRecordingController?.StopWhenPlaybackCompletes() ?? false;
+                // 녹화 시작 프레임에는 deltaTime이 갱신 전일 수 있어 현재 정지 상태도 확인함.
+                completedRecording = _humanoidMotionRecordingController.Tick(
+                    Time.timeScale > 0f ? Time.deltaTime : 0f);
+            }
+            else
+            {
+                _humanoidMotionPlaybackController.Tick(deltaTimeSeconds);
+            }
+            if (completedRecording ||
+                (previousState == HumanoidMotionPlaybackState.Playing &&
+                 _humanoidMotionPlaybackController.State == HumanoidMotionPlaybackState.Ready))
+            {
                 string outputPath = _humanoidMotionRecordingController?.OutputFilePath;
                 SetSessionState(
                     FBXSessionState.Ready,
