@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -89,21 +90,87 @@ namespace Fbx2Vmd.FBXImporter
                     "Native Humanoid 기준 모델에 양발 본이 필요합니다.");
             }
             InitialRootRotation = _referenceAnimator.transform.rotation;
-            HumanoidFootRotationBinding.TryCreate(_leftFoot, _leftToes,
-                _referenceAnimator.transform.up, out _leftFootRotation);
-            HumanoidFootRotationBinding.TryCreate(_rightFoot, _rightToes,
-                _referenceAnimator.transform.up, out _rightFootRotation);
-            if (HasFootRotationReference)
-            {
-                Vector3 referenceUp = InitialRootRotation * Vector3.up;
-                _footForwardLengths = new Vector2(
-                    Vector3.ProjectOnPlane(_leftToes.position - _leftFoot.position, referenceUp).magnitude,
-                    Vector3.ProjectOnPlane(_rightToes.position - _rightFoot.position, referenceUp).magnitude);
-            }
+            if (!TryInitializeAvatarFootReference(_referenceAnimator.avatar.humanDescription.skeleton))
+                TryInitializeFootReference();
             _animationPlayer.Initialize(_referenceAnimator, clip);
             _poseHandler = new HumanPoseHandler(
                 _referenceAnimator.avatar,
                 _referenceAnimator.transform);
+        }
+
+        private bool TryInitializeAvatarFootReference(SkeletonBone[] skeleton)
+        {
+            Transform root = _referenceAnimator.transform;
+            if (skeleton == null || skeleton.Length == 0 || _leftToes == null || _rightToes == null)
+                return false;
+
+            var bones = new List<Transform>();
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Transform toes in new[] { _leftToes, _rightToes })
+            {
+                if (!toes.IsChildOf(root)) return false;
+                for (Transform bone = toes; bone != root; bone = bone.parent)
+                {
+                    if (bones.Contains(bone)) continue;
+                    if (!names.Add(bone.name)) return false;
+                    bones.Add(bone);
+                }
+            }
+            foreach (Transform bone in root.GetComponentsInChildren<Transform>(true))
+                if (bone != root && names.Contains(bone.name) && !bones.Contains(bone)) return false;
+
+            var reference = new Dictionary<string, SkeletonBone>(StringComparer.Ordinal);
+            foreach (SkeletonBone pose in skeleton)
+            {
+                if (pose.name == null || !names.Contains(pose.name)) continue;
+                if (reference.ContainsKey(pose.name) || !IsFinite(pose.position) || !IsFinite(pose.rotation) ||
+                    !IsFinite(pose.scale) || pose.scale.x <= 0f || pose.scale.y <= 0f || pose.scale.z <= 0f ||
+                    Mathf.Abs(Quaternion.Dot(pose.rotation, pose.rotation) - 1f) > 0.0001f)
+                    return false;
+                reference.Add(pose.name, pose);
+            }
+            if (reference.Count != bones.Count) return false;
+
+            var original = new SkeletonBone[bones.Count];
+            for (int i = 0; i < bones.Count; i++)
+                original[i] = new SkeletonBone { position = bones[i].localPosition,
+                    rotation = bones[i].localRotation, scale = bones[i].localScale };
+            try
+            {
+                // 첫 동작의 기울기를 중립으로 삼지 않도록 Avatar 기준에서 발 축과 길이를 함께 취득함.
+                foreach (Transform bone in bones)
+                {
+                    SkeletonBone pose = reference[bone.name];
+                    bone.localPosition = pose.position;
+                    bone.localRotation = pose.rotation;
+                    bone.localScale = pose.scale;
+                }
+                return TryInitializeFootReference();
+            }
+            finally
+            {
+                // 재생기와 HumanPoseHandler가 임시 자세를 초기 상태로 기억하지 않도록 먼저 복원함.
+                for (int i = 0; i < bones.Count; i++)
+                {
+                    bones[i].localPosition = original[i].position;
+                    bones[i].localRotation = original[i].rotation;
+                    bones[i].localScale = original[i].scale;
+                }
+            }
+        }
+
+        private bool TryInitializeFootReference()
+        {
+            Vector3 up = InitialRootRotation * Vector3.up;
+            if (!HumanoidFootRotationBinding.TryCreate(_leftFoot, _leftToes, up, out var left) ||
+                !HumanoidFootRotationBinding.TryCreate(_rightFoot, _rightToes, up, out var right))
+                return false;
+            _leftFootRotation = left;
+            _rightFootRotation = right;
+            _footForwardLengths = new Vector2(
+                Vector3.ProjectOnPlane(_leftToes.position - _leftFoot.position, up).magnitude,
+                Vector3.ProjectOnPlane(_rightToes.position - _rightFoot.position, up).magnitude);
+            return true;
         }
 
         internal bool TryEvaluateFootFramesAt(float timeSeconds,
