@@ -101,9 +101,9 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
 
             float candidate = (float)Math.Max(minimum, Math.Min(0d, maximum));
-            float leftShift = CalculateFootOffset(left, candidate);
-            float rightShift = CalculateFootOffset(right, candidate);
-            if (!CanReach(left, up, candidate, leftShift) ||
+            if (!TryCalculateFootOffset(left, up, candidate, out float leftShift) ||
+                !TryCalculateFootOffset(right, up, candidate, out float rightShift) ||
+                !CanReach(left, up, candidate, leftShift) ||
                 !CanReach(right, up, candidate, rightShift))
                 return false;
 
@@ -114,6 +114,27 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool TryIntersect(Leg leg, Vector3 up, ref double minimum, ref double maximum)
         {
+            if (!TryGetRelativeHeightInterval(leg, up, out double low, out double high))
+                return false;
+
+            // 발의 골반 추종을 필수 이동으로 묶지 않고 원래 추종량과 0 사이에서 허용함.
+            // 도달 가능한 발 목표를 지지 강도로 다시 나누어 몸을 급히 내리는 것을 막음.
+            if (low <= 0d)
+                low = leg.SupportWeight > 0f
+                    ? Math.Max(low / leg.SupportWeight, low - leg.SoleClearance)
+                    : low - leg.SoleClearance;
+            if (high >= 0d)
+                high = leg.SupportWeight > 0f ? high / leg.SupportWeight : double.PositiveInfinity;
+
+            minimum = Math.Max(minimum, low);
+            maximum = Math.Min(maximum, high);
+            return minimum <= maximum;
+        }
+
+        private static bool TryGetRelativeHeightInterval(Leg leg, Vector3 up,
+            out double minimum, out double maximum)
+        {
+            minimum = maximum = 0d;
             if (!IsFinite(leg.TargetToHip.x) || !IsFinite(leg.TargetToHip.y) ||
                 !IsFinite(leg.TargetToHip.z) || !IsFinite(leg.UpperLength) ||
                 !IsFinite(leg.LowerLength) || leg.UpperLength <= 0f || leg.LowerLength <= 0f ||
@@ -136,30 +157,22 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
 
             double vertical = Math.Sqrt(verticalSquared);
-            double low = -vertical - height - leg.SoleClearance;
-            double high = vertical - height - leg.SoleClearance;
-            if (leg.SupportWeight == 0f)
-            {
-                if (height < -vertical)
-                    return false;
-                if (height <= vertical)
-                    high = double.PositiveInfinity;
-            }
-            else
-            {
-                // 바닥에 막힌 발과 자유롭게 따라오는 발의 두 구간을 함께 역산함.
-                low = Math.Max(low, (-vertical - height) / leg.SupportWeight);
-                high = Math.Max(high, (vertical - height) / leg.SupportWeight);
-            }
-
-            minimum = Math.Max(minimum, low);
-            maximum = Math.Min(maximum, high);
-            return minimum <= maximum;
+            minimum = -vertical - height;
+            maximum = vertical - height;
+            return true;
         }
 
-        private static float CalculateFootOffset(Leg leg, float offset)
+        private static bool TryCalculateFootOffset(Leg leg, Vector3 up, float offset, out float footOffset)
         {
-            return Mathf.Max((1f - leg.SupportWeight) * offset, -leg.SoleClearance);
+            footOffset = 0f;
+            if (!TryGetRelativeHeightInterval(leg, up, out double minimum, out double maximum))
+                return false;
+
+            double preferred = Mathf.Max((1f - leg.SupportWeight) * offset, -leg.SoleClearance);
+            double reachable = Math.Max(offset - maximum, Math.Min(preferred, offset - minimum));
+            // 경계의 float 반올림으로 지지 발이 움직이거나 밑창 여유를 넘지 않게 함.
+            footOffset = (float)Math.Max(Math.Min(0d, preferred), Math.Min(Math.Max(0d, preferred), reachable));
+            return IsFinite(footOffset);
         }
 
         private static bool CanReach(Leg leg, Vector3 up, float offset, float footOffset)

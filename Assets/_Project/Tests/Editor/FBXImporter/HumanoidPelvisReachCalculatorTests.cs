@@ -91,8 +91,55 @@ namespace Tests.Editor.FBXImporter
             var partial = Calculate(Vector3.up * 1.02f, Vector3.up * 1.03f,
                 1f, 0.5f, 0f, 0.005f);
             Assert.That(partial.success, Is.True);
-            Assert.That(partial.offset, Is.EqualTo(-0.035f).Within(0.000001f));
-            Assert.That(partial.shifts.y, Is.EqualTo(-0.005f).Within(0.000001f));
+            Assert.That(partial.offset, Is.EqualTo(-0.03f).Within(0.000001f));
+            Assert.That(partial.shifts.y, Is.EqualTo(0f).Within(0.000001f));
+        }
+
+        [Test]
+        public void Given_PartialSupportBeyondReach_When_Calculating_Then_LimitsFollowBeforeExtraPelvisDrop()
+        {
+            var result = Calculate(Vector3.up * 1.03f, Vector3.up * 0.9f,
+                0.25f, 1f, 0.1f, 0f);
+            Assert.That(result.success, Is.True);
+            Assert.That(result.offset, Is.EqualTo(-0.03f).Within(0.000001f));
+            Assert.That(result.shifts.x, Is.EqualTo(0f).Within(0.000001f));
+        }
+
+        [Test]
+        public void Given_BlendedTargetAtReachBoundary_When_SupportStarts_Then_PelvisRemainsContinuous()
+        {
+            foreach (float weight in new[] { 0f, 0.0001f, 0.001f, 0.1f, 0.5f, 0.9999f, 1f })
+            {
+                var result = Calculate(Vector3.up * (1f + 0.03f * weight), Vector3.up * 0.9f,
+                    weight, 1f, 0.1f, 0f);
+                Assert.That(result.success, Is.True, $"지지 강도 {weight}");
+                Assert.That(result.offset, Is.EqualTo(-0.03f * weight).Within(0.000001f));
+                Assert.That(result.shifts.x, Is.EqualTo(0f).Within(0.000001f));
+            }
+        }
+
+        [Test]
+        public void Given_OtherLegDrivesPelvis_When_FollowIsReachable_Then_PreservesPreferredFootMovement()
+        {
+            foreach (float direction in new[] { -1f, 1f })
+            foreach (float weight in new[] { 0f, 0.0001f, 0.5f, 0.9999f, 1f })
+            {
+                var result = Calculate(Vector3.up * (1.04f * direction), Vector3.up * (0.9f * direction),
+                    1f, weight, 0f, 0.1f);
+                Assert.That(result.success, Is.True);
+                Assert.That(result.offset, Is.EqualTo(-0.04f * direction).Within(0.000001f));
+                Assert.That(result.shifts.y, Is.EqualTo((1f - weight) * result.offset).Within(0.000001f));
+            }
+        }
+
+        [Test]
+        public void Given_PartialFollowExceedsReach_When_OtherLegDrivesPelvis_Then_KeepsFeasibleIntermediateShift()
+        {
+            var result = Calculate(Vector3.up * 1.04f, Vector3.up * 1.02f,
+                1f, 0.25f, 0f, 0.1f);
+            Assert.That(result.success, Is.True);
+            Assert.That(result.offset, Is.EqualTo(-0.04f).Within(0.000001f));
+            Assert.That(result.shifts.y, Is.EqualTo(-0.02f).Within(0.000001f));
         }
 
         [Test]
