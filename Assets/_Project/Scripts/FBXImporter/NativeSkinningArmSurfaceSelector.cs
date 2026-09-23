@@ -125,24 +125,37 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             Transform[] bones = renderer.bones;
+            int upperArmIndex = Array.IndexOf(bones, upperArm);
             int lowerArmIndex = Array.IndexOf(bones, lowerArm);
+            int handIndex = Array.IndexOf(bones, hand);
             if (lowerArmIndex < 0)
             {
                 return;
             }
 
-            Vector3 upperArmPosition = renderer.transform.InverseTransformPoint(
-                upperArm.position);
-            Vector3 lowerArmPosition = renderer.transform.InverseTransformPoint(
-                lowerArm.position);
-            Vector3 handPosition = renderer.transform.InverseTransformPoint(
-                hand.position);
+            Matrix4x4[] bindPoses = mesh.bindposes;
+            bool hasArmBindPoses = bindPoses.Length == bones.Length &&
+                upperArmIndex >= 0 && handIndex >= 0;
+            // 기본 메시 정점과 팔 본 위치를 같은 바인드 자세 좌표계에서 비교함.
+            Vector3 upperArmPosition = hasArmBindPoses
+                ? bindPoses[upperArmIndex].inverse.MultiplyPoint3x4(Vector3.zero)
+                : renderer.transform.InverseTransformPoint(upperArm.position);
+            Vector3 lowerArmPosition = hasArmBindPoses
+                ? bindPoses[lowerArmIndex].inverse.MultiplyPoint3x4(Vector3.zero)
+                : renderer.transform.InverseTransformPoint(lowerArm.position);
+            Vector3 handPosition = hasArmBindPoses
+                ? bindPoses[handIndex].inverse.MultiplyPoint3x4(Vector3.zero)
+                : renderer.transform.InverseTransformPoint(hand.position);
             float armChainLength = Vector3.Distance(
                     upperArmPosition,
                     lowerArmPosition) +
                 Vector3.Distance(lowerArmPosition, handPosition);
             Vector3 incomingAxis = lowerArmPosition - upperArmPosition;
-            if (armChainLength <= Mathf.Epsilon || incomingAxis.sqrMagnitude <= Mathf.Epsilon)
+            if (!IsFinite(upperArmPosition) ||
+                !IsFinite(lowerArmPosition) ||
+                !IsFinite(handPosition) ||
+                armChainLength <= Mathf.Epsilon ||
+                incomingAxis.sqrMagnitude <= Mathf.Epsilon)
             {
                 return;
             }
@@ -234,6 +247,13 @@ namespace Fbx2Vmd.FBXImporter
                 total += weight.weight3;
             }
             return total;
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
+                   !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
+                   !float.IsNaN(value.z) && !float.IsInfinity(value.z);
         }
 
         private sealed class VertexDisjointSet

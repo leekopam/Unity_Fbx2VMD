@@ -13,6 +13,8 @@ namespace Tests.Editor.FBXImporter
     {
         private const string TargetAssetPath =
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
+        private const string TestPrefabAssetPath =
+            "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab";
         private const int FixtureSleeveVertexIndex = 17178;
 
         [Test]
@@ -89,6 +91,56 @@ namespace Tests.Editor.FBXImporter
                     Assert.That(
                         ReadProperty<int[]>(selection, "EvaluatedVertexIndices").Length,
                         Is.GreaterThanOrEqualTo(4));
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_AnimatedArms_When_FindingArmSurfaces_Then_KeepsBindPoseSelection()
+        {
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(
+                TestPrefabAssetPath);
+            Assert.That(source, Is.Not.Null);
+            GameObject target = UnityEngine.Object.Instantiate(source);
+
+            try
+            {
+                Animator animator = target.GetComponent<Animator>();
+                Assert.That(animator, Is.Not.Null);
+                object[] initial = FindAll(animator).Cast<object>().ToArray();
+                Assert.That(initial.Length, Is.GreaterThan(0));
+                int[][] initialVertices = initial
+                    .Select(selection => ReadProperty<int[]>(
+                        selection,
+                        "EvaluatedVertexIndices"))
+                    .ToArray();
+
+                foreach (HumanBodyBones bone in new[]
+                         {
+                             HumanBodyBones.LeftUpperArm,
+                             HumanBodyBones.RightUpperArm
+                         })
+                {
+                    Transform arm = animator.GetBoneTransform(bone);
+                    Assert.That(arm, Is.Not.Null);
+                    arm.rotation = Quaternion.AngleAxis(70f, Vector3.forward) *
+                        arm.rotation;
+                }
+
+                object[] animated = FindAll(animator).Cast<object>().ToArray();
+                Assert.That(animated.Length, Is.EqualTo(initial.Length));
+                for (int index = 0; index < initial.Length; index++)
+                {
+                    Assert.That(ReadProperty<SkinnedMeshRenderer>(animated[index], "Renderer"),
+                        Is.SameAs(ReadProperty<SkinnedMeshRenderer>(initial[index], "Renderer")));
+                    Assert.That(ReadProperty<object>(animated[index], "Side").ToString(),
+                        Is.EqualTo(ReadProperty<object>(initial[index], "Side").ToString()));
+                    Assert.That(ReadProperty<int[]>(animated[index], "EvaluatedVertexIndices"),
+                        Is.EqualTo(initialVertices[index]));
                 }
             }
             finally
