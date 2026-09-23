@@ -9,6 +9,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         private const float DefaultComparisonCameraViewportCenterY = 0.28f;
         private const float DefaultComparisonCameraAspect = 16f / 9f;
         private const float DefaultComparisonCameraDepth = 39f;
+        private const float DefaultFloorViewPitchPerOrthographicUnit = 0.5f;
 
         internal static void ApplyDefaultFraming(Camera camera, GameObject targetRoot)
         {
@@ -29,7 +30,10 @@ namespace Fbx2Vmd.Settings.EditorTools
                 bounds.extents.x / (DefaultComparisonCameraAspect * DefaultComparisonCameraViewportWidth));
             float cameraY = focus.y - (DefaultComparisonCameraViewportCenterY - 0.5f) * 2f * camera.orthographicSize;
             camera.transform.position = new Vector3(focus.x, cameraY, focus.z + DefaultComparisonCameraDepth);
-            camera.transform.rotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
+            camera.transform.rotation = Quaternion.Euler(
+                camera.orthographicSize * DefaultFloorViewPitchPerOrthographicUnit,
+                180f,
+                0f);
             camera.nearClipPlane = 0.3f;
             camera.farClipPlane = DefaultComparisonCameraDepth + bounds.extents.z + 100f;
             camera.useOcclusionCulling = false;

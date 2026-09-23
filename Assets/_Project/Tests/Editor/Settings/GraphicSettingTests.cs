@@ -1031,6 +1031,7 @@ namespace Tests.Editor.Settings
                 Assert.That(camera.transform.position.x, Is.EqualTo(expectedBounds.center.x).Within(0.0001f));
                 Assert.That(camera.transform.position.y, Is.EqualTo(expectedY).Within(0.0001f));
                 Assert.That(camera.transform.position.z, Is.EqualTo(expectedBounds.center.z + 39f).Within(0.0001f));
+                Assert.That(camera.transform.eulerAngles.x, Is.EqualTo(expectedSize * 0.5f).Within(0.0001f));
                 Assert.That(Vector3.Dot(camera.transform.forward, Vector3.back), Is.GreaterThan(0.999f));
                 Assert.That(camera.nearClipPlane, Is.EqualTo(0.3f).Within(0.0001f));
                 Assert.That(camera.farClipPlane, Is.EqualTo(139f + expectedBounds.extents.z).Within(0.0001f));
