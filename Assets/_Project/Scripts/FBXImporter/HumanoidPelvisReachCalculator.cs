@@ -61,11 +61,10 @@ namespace Fbx2Vmd.FBXImporter
             double requested = Math.Acos(Math.Max(-1d, Math.Min(1d, cosine)));
             if (supportWeight > 0f && requested > original && requested > dampingThresholdRadians)
             {
-                // 원본보다 추가로 펴지는 양만 감쇠하여 원래 곧게 편 자세와 굴곡 동작은 유지함.
+                // 지지 강도는 발 목표 보간에 이미 반영됨. 다시 감쇠를 줄이면 부분 착지에서 무릎이 거의 펴짐.
                 double damped = original + IntegrateDamping(requested, dampingThresholdRadians) -
                     IntegrateDamping(original, dampingThresholdRadians);
-                double angle = requested + (damped - requested) * supportWeight;
-                reach = Math.Sqrt(Math.Max(0d, upper * upper + lower * lower - 2d * upper * lower * Math.Cos(angle)));
+                reach = Math.Sqrt(Math.Max(0d, upper * upper + lower * lower - 2d * upper * lower * Math.Cos(damped)));
             }
 
             maximumReach = (float)reach;

@@ -24,6 +24,19 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_PartialSupport_When_ExtensionIsRequested_Then_DampsBeforeKneeStraightens()
+        {
+            float originalAngle = 170f * Mathf.Deg2Rad;
+            var partial = CalculateLimit(originalAngle, 1.02f, 0.12f);
+            var full = CalculateLimit(originalAngle, 1.02f, 1f);
+            var free = CalculateLimit(originalAngle, 1.02f, 0f);
+
+            Assert.That(partial.success && full.success && free.success, Is.True);
+            Assert.That(partial.reach, Is.EqualTo(full.reach).Within(0.000001f));
+            Assert.That(free.reach, Is.EqualTo(1f).Within(0.000001f));
+        }
+
+        [Test]
         public void Given_NoAdditionalExtension_When_Damping_Then_PreservesOriginalReach()
         {
             foreach (var result in new[]
