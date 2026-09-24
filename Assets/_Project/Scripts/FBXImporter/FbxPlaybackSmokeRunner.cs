@@ -26,6 +26,8 @@ namespace Fbx2Vmd.FBXImporter
         private const string RunAllImportFbxTailCommand = "run_all_import_fbx_tail_31s";
         private const string CaptureSatisfactionQuickVmdSmokeCommand = "capture_satisfaction_quick_vmd_smoke_2s";
         private const string CapturePreselectionStateCommand = "capture_preselection_state";
+        private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
+        private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
         private const string CaptureAntennaTailHelperEvidenceCommand = "capture_antenna_tail_helper_evidence";
@@ -116,6 +118,33 @@ namespace Fbx2Vmd.FBXImporter
         private static Transform[] _preselectionBones;
         private static Vector3[] _preselectionBonePositions;
         private static FBXVmdPipeline _preselectionPipeline;
+        private enum PlaybackEvidencePhase
+        {
+            None,
+            Importing,
+            Preparing,
+            Playing,
+            FirstCapture,
+            SecondCapture,
+            RepeatCapture,
+            Resumed
+        }
+
+        private static PlaybackEvidencePhase _playbackEvidencePhase;
+        private static FBXVmdPipeline _playbackEvidencePipeline;
+        private static PlaybackEvidence _playbackEvidence;
+        private static DateTime _playbackEvidenceStartedUtc;
+        private static DateTime _playbackCaptureStartedUtc;
+        private static string _playbackEvidencePath;
+        private static string _playbackCapturePath;
+        private enum InvalidInputPhase { None, MissingPath, InvalidAvatar }
+        private static InvalidInputPhase _invalidInputPhase;
+        private static FBXVmdPipeline _invalidInputPipeline;
+        private static Animator _invalidInputAnimator;
+        private static Avatar _originalAvatar;
+        private static InvalidInputEvidence _invalidInputEvidence;
+        private static string _invalidInputEvidencePath;
+        private static DateTime _invalidInputStartedUtc;
 
         static FbxPlaybackSmokeRunner()
         {
@@ -349,6 +378,18 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void PollAutomationRequest()
         {
+            if (_invalidInputPhase != InvalidInputPhase.None)
+            {
+                PollInvalidInputEvidence();
+                return;
+            }
+
+            if (_playbackEvidencePhase != PlaybackEvidencePhase.None)
+            {
+                PollPlaybackEvidence();
+                return;
+            }
+
             if (!string.IsNullOrEmpty(_preselectionCapturePath))
             {
                 PollPreselectionCapture();
@@ -485,6 +526,10 @@ namespace Fbx2Vmd.FBXImporter
             {
                 case CapturePreselectionStateCommand:
                     return TryStartPreselectionCapture(request.request_id, out message);
+                case CapturePlaybackSeekEvidenceCommand:
+                    return TryStartPlaybackEvidence(request.request_id, out message);
+                case CaptureInvalidInputEvidenceCommand:
+                    return TryStartInvalidInputEvidence(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
                     return TryStartAutomationSingleSmoke(
                         SatisfactionFbxFileName,
@@ -753,6 +798,589 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return false;
             }
+        }
+
+        [Serializable]
+        private sealed class PlaybackPoseEvidence
+        {
+            public int requested_frame;
+            public int actual_frame;
+            public float time_seconds;
+            public string state;
+            public Vector3 body_position;
+            public Quaternion body_rotation;
+            public Vector3 hips_position;
+            public Vector3 head_position;
+            public Vector3 left_foot_position;
+            public Vector3 right_foot_position;
+            public Quaternion hips_rotation;
+            public Quaternion head_rotation;
+            public Quaternion left_foot_rotation;
+            public Quaternion right_foot_rotation;
+            public float[] muscles;
+        }
+
+        [Serializable]
+        private sealed class PlaybackEvidence
+        {
+            public string scene;
+            public string input_path;
+            public float clip_length_seconds;
+            public float clip_frame_rate;
+            public int last_frame;
+            public PlaybackPoseEvidence paused;
+            public PlaybackPoseEvidence first_seek;
+            public PlaybackPoseEvidence second_seek;
+            public PlaybackPoseEvidence repeat_seek;
+            public PlaybackPoseEvidence resumed;
+            public string first_capture_path;
+            public string second_capture_path;
+            public string repeat_capture_path;
+            public float repeat_max_position_delta_mm;
+            public float repeat_max_rotation_delta_degrees;
+            public float repeat_max_muscle_delta;
+            public bool structural_passed;
+            public bool visual_review_required;
+            public string failure_stage;
+            public string failure_message;
+        }
+
+        private static bool TryStartPlaybackEvidence(string requestId, out string message)
+        {
+            message = string.Empty;
+            if (!Guid.TryParse(requestId, out Guid id) ||
+                !TryGetFBXVmdPipeline(SatisfactionFbxFileName, out FBXVmdPipeline pipeline,
+                    interactive: false, out message))
+            {
+                if (string.IsNullOrEmpty(message)) message = "request id is invalid";
+                return false;
+            }
+
+            if (SceneManager.GetActiveScene().name != MainAutoSceneName ||
+                pipeline.IsProcessing || pipeline.IsImportedMotionRecording ||
+                Time.captureFramerate != 0)
+            {
+                message = "Main_Auto의 비녹화 Play 상태가 필요합니다.";
+                return false;
+            }
+
+            string inputPath = Path.Combine(GetImportFbxDirectory(), SatisfactionFbxFileName);
+            string sessionPath = Path.Combine(
+                Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
+                "Docs", "Workflow", "Local", "evidence", "boogle", "playback", id.ToString("D"));
+            try
+            {
+                Directory.CreateDirectory(sessionPath);
+                _playbackEvidencePath = Path.Combine(sessionPath, "state.json");
+                _playbackEvidence = new PlaybackEvidence
+                {
+                    scene = MainAutoSceneName,
+                    input_path = inputPath
+                };
+                _playbackEvidencePipeline = pipeline;
+                _playbackEvidenceStartedUtc = DateTime.UtcNow;
+                if (!pipeline.TryStartFbxImportFromSharedSettings(inputPath))
+                {
+                    message = "제품 FBX 가져오기 요청이 거부되었습니다.";
+                    ClearPlaybackEvidence();
+                    return false;
+                }
+
+                _playbackEvidencePhase = PlaybackEvidencePhase.Importing;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                message = $"F03 실행 시작 실패: {ex.Message}";
+                ClearPlaybackEvidence();
+                return false;
+            }
+        }
+
+        private static void PollPlaybackEvidence()
+        {
+            try
+            {
+                if (!EditorApplication.isPlaying ||
+                    SceneManager.GetActiveScene().name != MainAutoSceneName ||
+                    _playbackEvidencePipeline == null)
+                {
+                    CompletePlaybackEvidence(false, "environment", "Play 상태 또는 Main_Auto 씬이 변경되었습니다.");
+                    return;
+                }
+
+                if (DateTime.UtcNow - _playbackEvidenceStartedUtc > TimeSpan.FromMinutes(20))
+                {
+                    CompletePlaybackEvidence(false, "timeout", "F03 가져오기 또는 재생 준비 시간이 초과되었습니다.");
+                    return;
+                }
+
+                if (_playbackEvidencePipeline.SessionState == FBXVmdPipeline.FBXSessionState.Failed)
+                {
+                    CompletePlaybackEvidence(false, "import_or_playback",
+                        _playbackEvidencePipeline.LastSessionMessage);
+                    return;
+                }
+
+                switch (_playbackEvidencePhase)
+                {
+                    case PlaybackEvidencePhase.Importing:
+                        if (_playbackEvidencePipeline.IsProcessing ||
+                            !_playbackEvidencePipeline.HasPreparedImportedMotion ||
+                            _playbackEvidencePipeline.SessionState != FBXVmdPipeline.FBXSessionState.Ready)
+                            return;
+
+                        _playbackEvidence.clip_length_seconds =
+                            _playbackEvidencePipeline.ImportedMotionClipLengthSeconds;
+                        _playbackEvidence.clip_frame_rate =
+                            _playbackEvidencePipeline.ImportedMotionFrameRate;
+                        _playbackEvidence.last_frame =
+                            _playbackEvidencePipeline.ImportedMotionLastFrameIndex;
+                        if (_playbackEvidence.last_frame < 544 ||
+                            _playbackEvidence.clip_frame_rate <= 0f ||
+                            !_playbackEvidencePipeline.TryPlayImportedMotion())
+                        {
+                            CompletePlaybackEvidence(false, "playback", "모션 길이 또는 재생 시작이 유효하지 않습니다.");
+                            return;
+                        }
+
+                        _playbackEvidencePhase = PlaybackEvidencePhase.Preparing;
+                        break;
+                    case PlaybackEvidencePhase.Preparing:
+                        if (_playbackEvidencePipeline.IsImportedMotionPlaying &&
+                            !_playbackEvidencePipeline.IsPreparingImportedMotionCorrection)
+                            _playbackEvidencePhase = PlaybackEvidencePhase.Playing;
+                        break;
+                    case PlaybackEvidencePhase.Playing:
+                        if (_playbackEvidencePipeline.ImportedMotionCurrentTimeSeconds < 0.1f) return;
+                        if (!_playbackEvidencePipeline.TryPauseImportedMotion() ||
+                            !TryCapturePlaybackPose(-1, out _playbackEvidence.paused))
+                        {
+                            CompletePlaybackEvidence(false, "pause", "일시정지 상태 또는 표시 포즈를 읽지 못했습니다.");
+                            return;
+                        }
+
+                        if (!TryBeginSeekCapture(166, PlaybackEvidencePhase.FirstCapture))
+                            CompletePlaybackEvidence(false, "seek", "166프레임 탐색 또는 캡처를 시작하지 못했습니다.");
+                        break;
+                    case PlaybackEvidencePhase.FirstCapture:
+                        if (!IsPlaybackCaptureReady()) return;
+                        if (!TryBeginSeekCapture(544, PlaybackEvidencePhase.SecondCapture))
+                            CompletePlaybackEvidence(false, "seek", "544프레임 탐색 또는 캡처를 시작하지 못했습니다.");
+                        break;
+                    case PlaybackEvidencePhase.SecondCapture:
+                        if (!IsPlaybackCaptureReady()) return;
+                        if (!TryBeginSeekCapture(166, PlaybackEvidencePhase.RepeatCapture))
+                            CompletePlaybackEvidence(false, "seek", "166프레임 재탐색 또는 캡처를 시작하지 못했습니다.");
+                        break;
+                    case PlaybackEvidencePhase.RepeatCapture:
+                        if (!IsPlaybackCaptureReady()) return;
+                        CompareRepeatedPose();
+                        if (!_playbackEvidencePipeline.TryPlayImportedMotion())
+                        {
+                            CompletePlaybackEvidence(false, "resume", "프레임 재탐색 뒤 재생하지 못했습니다.");
+                            return;
+                        }
+
+                        _playbackEvidencePhase = PlaybackEvidencePhase.Resumed;
+                        break;
+                    case PlaybackEvidencePhase.Resumed:
+                        if (!_playbackEvidencePipeline.IsImportedMotionPlaying ||
+                            _playbackEvidencePipeline.ImportedMotionCurrentTimeSeconds <=
+                                _playbackEvidence.repeat_seek.time_seconds + 0.05f) return;
+                        if (!TryCapturePlaybackPose(-1, out _playbackEvidence.resumed))
+                        {
+                            CompletePlaybackEvidence(false, "resume", "재개된 표시 포즈를 읽지 못했습니다.");
+                            return;
+                        }
+
+                        bool passed = _playbackEvidence.repeat_max_position_delta_mm <= 0.5f &&
+                            _playbackEvidence.repeat_max_rotation_delta_degrees <= 0.5f &&
+                            _playbackEvidence.repeat_max_muscle_delta <= 0.0001f;
+                        CompletePlaybackEvidence(passed, passed ? string.Empty : "reproducibility",
+                            passed ? "" : "같은 프레임의 반복 탐색 포즈가 다릅니다.");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                CompletePlaybackEvidence(false, "infrastructure", ex.Message);
+            }
+        }
+
+        private static bool TryBeginSeekCapture(int frame, PlaybackEvidencePhase phase)
+        {
+            if (!_playbackEvidencePipeline.TrySeekImportedMotionFrame(frame) ||
+                !TryCapturePlaybackPose(frame, out PlaybackPoseEvidence pose) ||
+                pose.actual_frame != frame ||
+                Mathf.Abs(pose.time_seconds - frame / _playbackEvidence.clip_frame_rate) >
+                    0.5f / _playbackEvidence.clip_frame_rate ||
+                pose.state != FBXVmdPipeline.FBXSessionState.PreviewPaused.ToString())
+                return false;
+
+            string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            _playbackCapturePath = Path.Combine(Path.GetDirectoryName(_playbackEvidencePath),
+                $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}-{phase}_why-F03_how-GameView.png");
+            if (phase == PlaybackEvidencePhase.FirstCapture)
+            {
+                _playbackEvidence.first_seek = pose;
+                _playbackEvidence.first_capture_path = _playbackCapturePath;
+            }
+            else if (phase == PlaybackEvidencePhase.SecondCapture)
+            {
+                _playbackEvidence.second_seek = pose;
+                _playbackEvidence.second_capture_path = _playbackCapturePath;
+            }
+            else
+            {
+                _playbackEvidence.repeat_seek = pose;
+                _playbackEvidence.repeat_capture_path = _playbackCapturePath;
+            }
+
+            ScreenCapture.CaptureScreenshot(_playbackCapturePath);
+            _playbackCaptureStartedUtc = DateTime.UtcNow;
+            _playbackEvidencePhase = phase;
+            return true;
+        }
+
+        private static bool IsPlaybackCaptureReady()
+        {
+            if (HasCompletedPng(_playbackCapturePath)) return true;
+            if (DateTime.UtcNow - _playbackCaptureStartedUtc <= TimeSpan.FromSeconds(15)) return false;
+            throw new IOException($"Game View 캡처가 완료되지 않았습니다: {_playbackCapturePath}");
+        }
+
+        private static bool TryCapturePlaybackPose(int requestedFrame, out PlaybackPoseEvidence sample)
+        {
+            sample = null;
+            Animator animator = _playbackEvidencePipeline.targetCharacter != null
+                ? _playbackEvidencePipeline.targetCharacter.GetComponentInChildren<Animator>(true)
+                : null;
+            if (animator == null || !animator.isHuman ||
+                !_playbackEvidencePipeline.TryCaptureImportedMotionPose(out HumanPose pose)) return false;
+
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            if (hips == null || head == null || leftFoot == null || rightFoot == null) return false;
+
+            sample = new PlaybackPoseEvidence
+            {
+                requested_frame = requestedFrame,
+                actual_frame = _playbackEvidencePipeline.ImportedMotionCurrentFrameIndex,
+                time_seconds = _playbackEvidencePipeline.ImportedMotionCurrentTimeSeconds,
+                state = _playbackEvidencePipeline.SessionState.ToString(),
+                body_position = pose.bodyPosition,
+                body_rotation = pose.bodyRotation,
+                hips_position = hips.position,
+                head_position = head.position,
+                left_foot_position = leftFoot.position,
+                right_foot_position = rightFoot.position,
+                hips_rotation = hips.rotation,
+                head_rotation = head.rotation,
+                left_foot_rotation = leftFoot.rotation,
+                right_foot_rotation = rightFoot.rotation,
+                muscles = pose.muscles != null ? (float[])pose.muscles.Clone() : Array.Empty<float>()
+            };
+            return true;
+        }
+
+        private static void CompareRepeatedPose()
+        {
+            PlaybackPoseEvidence first = _playbackEvidence.first_seek;
+            PlaybackPoseEvidence repeat = _playbackEvidence.repeat_seek;
+            _playbackEvidence.repeat_max_position_delta_mm = 1000f * new[]
+            {
+                Vector3.Distance(first.hips_position, repeat.hips_position),
+                Vector3.Distance(first.head_position, repeat.head_position),
+                Vector3.Distance(first.left_foot_position, repeat.left_foot_position),
+                Vector3.Distance(first.right_foot_position, repeat.right_foot_position)
+            }.Max();
+            _playbackEvidence.repeat_max_rotation_delta_degrees = new[]
+            {
+                Quaternion.Angle(first.hips_rotation, repeat.hips_rotation),
+                Quaternion.Angle(first.head_rotation, repeat.head_rotation),
+                Quaternion.Angle(first.left_foot_rotation, repeat.left_foot_rotation),
+                Quaternion.Angle(first.right_foot_rotation, repeat.right_foot_rotation)
+            }.Max();
+            _playbackEvidence.repeat_max_muscle_delta = first.muscles.Length == repeat.muscles.Length
+                ? first.muscles.Zip(repeat.muscles, (left, right) => Mathf.Abs(left - right)).DefaultIfEmpty(0f).Max()
+                : float.MaxValue;
+        }
+
+        private static void CompletePlaybackEvidence(bool passed, string failureStage, string message)
+        {
+            if (_playbackEvidence == null) return;
+            _playbackEvidence.failure_stage = failureStage;
+            _playbackEvidence.failure_message = message;
+            _playbackEvidence.structural_passed = passed;
+            _playbackEvidence.visual_review_required = passed;
+            string statePath = _playbackEvidencePath;
+            try
+            {
+                if (_playbackEvidencePipeline != null &&
+                    (_playbackEvidencePipeline.IsImportedMotionPlaying ||
+                     _playbackEvidencePipeline.IsPreparingImportedMotionCorrection ||
+                     _playbackEvidencePipeline.SessionState == FBXVmdPipeline.FBXSessionState.PreviewPaused))
+                    _playbackEvidencePipeline.TryStopImportedMotion();
+                File.WriteAllText(statePath, JsonUtility.ToJson(_playbackEvidence, true));
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = _activeAutomationRequestId,
+                    status = passed ? "completed" : "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = _activeAutomationRequestedCommand,
+                    message = passed ? "F03 상태 수집 완료, Game View 검토 필요" : message,
+                    passed = passed,
+                    failure_stage = failureStage,
+                    playback_state_path = statePath,
+                    manifest_path = statePath,
+                    total_jobs = 1,
+                    success_jobs = passed ? 1 : 0,
+                    failures = passed ? Array.Empty<string>() : new[] { message }
+                });
+                TraceAutomation($"playback id={_activeAutomationRequestId} passed={passed} stage={failureStage} message={message}");
+            }
+            finally
+            {
+                ClearPlaybackEvidence();
+                ClearAutomationRequestState();
+                TryDeleteRequestFile();
+            }
+        }
+
+        private static void ClearPlaybackEvidence()
+        {
+            _playbackEvidencePhase = PlaybackEvidencePhase.None;
+            _playbackEvidencePipeline = null;
+            _playbackEvidence = null;
+            _playbackEvidencePath = null;
+            _playbackCapturePath = null;
+        }
+
+        [Serializable]
+        private sealed class InvalidInputCaseEvidence
+        {
+            public string case_id;
+            public string input_path;
+            public string product_status;
+            public string failure_stage;
+            public string product_error;
+            public bool expected_rejection_observed;
+        }
+
+        [Serializable]
+        private sealed class InvalidInputEvidence
+        {
+            public string scene;
+            public InvalidInputCaseEvidence missing_fbx;
+            public InvalidInputCaseEvidence invalid_avatar;
+            public bool original_avatar_restored;
+            public bool is_recording;
+            public int capture_framerate;
+            public bool test_passed;
+            public string test_failure_stage;
+            public string test_failure_message;
+        }
+
+        private static bool TryStartInvalidInputEvidence(string requestId, out string message)
+        {
+            message = string.Empty;
+            if (!Guid.TryParse(requestId, out Guid id) ||
+                !TryGetFBXVmdPipeline(null, out FBXVmdPipeline pipeline,
+                    interactive: false, out message))
+            {
+                if (string.IsNullOrEmpty(message)) message = "request id is invalid";
+                return false;
+            }
+
+            Animator animator = pipeline.targetCharacter != null
+                ? pipeline.targetCharacter.GetComponent<Animator>() : null;
+            if (SceneManager.GetActiveScene().name != MainAutoSceneName ||
+                pipeline.IsProcessing || pipeline.HasPreparedImportedMotion ||
+                pipeline.IsImportedMotionRecording || Time.captureFramerate != 0 ||
+                animator == null || animator.avatar == null ||
+                !animator.avatar.isValid || !animator.avatar.isHuman)
+            {
+                message = "F07은 Main_Auto의 새 Play와 유효한 기본 Avatar가 필요합니다.";
+                return false;
+            }
+
+            string missingPath = Path.Combine(GetImportFbxDirectory(),
+                $"missing-F07-{id:N}.fbx");
+            if (File.Exists(missingPath))
+            {
+                message = "의도적 실패용 FBX 경로에 파일이 이미 있습니다.";
+                return false;
+            }
+
+            string sessionPath = Path.Combine(
+                Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
+                "Docs", "Workflow", "Local", "evidence", "boogle", "invalid-input", id.ToString("D"));
+            try
+            {
+                Directory.CreateDirectory(sessionPath);
+                _invalidInputEvidencePath = Path.Combine(sessionPath, "state.json");
+                _invalidInputEvidence = new InvalidInputEvidence
+                {
+                    scene = MainAutoSceneName,
+                    missing_fbx = new InvalidInputCaseEvidence
+                    {
+                        case_id = "missing_fbx_path",
+                        input_path = missingPath,
+                        failure_stage = "input_validation"
+                    },
+                    invalid_avatar = new InvalidInputCaseEvidence
+                    {
+                        case_id = "invalid_avatar",
+                        input_path = Path.Combine(GetImportFbxDirectory(), SatisfactionFbxFileName),
+                        failure_stage = "avatar_preparation"
+                    }
+                };
+                _invalidInputPipeline = pipeline;
+                _invalidInputAnimator = animator;
+                _originalAvatar = animator.avatar;
+                _invalidInputStartedUtc = DateTime.UtcNow;
+                if (!pipeline.TryStartFbxImportFromSharedSettings(missingPath))
+                {
+                    message = "없는 FBX 경로의 제품 가져오기 요청이 시작되지 않았습니다.";
+                    ClearInvalidInputEvidence();
+                    return false;
+                }
+
+                _invalidInputPhase = InvalidInputPhase.MissingPath;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                message = $"F07 실행 시작 실패: {ex.Message}";
+                ClearInvalidInputEvidence();
+                return false;
+            }
+        }
+
+        private static void PollInvalidInputEvidence()
+        {
+            try
+            {
+                if (!EditorApplication.isPlaying ||
+                    SceneManager.GetActiveScene().name != MainAutoSceneName ||
+                    _invalidInputPipeline == null || _invalidInputAnimator == null)
+                {
+                    CompleteInvalidInputEvidence(false, "environment", "Play 상태 또는 대상 모델이 변경되었습니다.");
+                    return;
+                }
+
+                if (DateTime.UtcNow - _invalidInputStartedUtc > TimeSpan.FromSeconds(90))
+                {
+                    CompleteInvalidInputEvidence(false, "timeout", "의도적 실패 확인 시간이 초과되었습니다.");
+                    return;
+                }
+
+                if (_invalidInputPipeline.IsProcessing) return;
+
+                if (_invalidInputPhase == InvalidInputPhase.MissingPath)
+                {
+                    InvalidInputCaseEvidence sample = _invalidInputEvidence.missing_fbx;
+                    sample.product_status = _invalidInputPipeline.SessionState.ToString();
+                    sample.product_error = _invalidInputPipeline.LastSessionMessage;
+                    sample.expected_rejection_observed =
+                        _invalidInputPipeline.SessionState == FBXVmdPipeline.FBXSessionState.Failed &&
+                        sample.product_error.Contains("FBX 파일을 찾을 수 없습니다") &&
+                        sample.product_error.Contains(sample.input_path);
+                    if (!sample.expected_rejection_observed)
+                    {
+                        CompleteInvalidInputEvidence(false, "input_validation",
+                            "없는 FBX 경로가 예상한 제품 실패로 기록되지 않았습니다.");
+                        return;
+                    }
+
+                    _invalidInputAnimator.avatar = null;
+                    if (!_invalidInputPipeline.TryStartFbxImportFromSharedSettings(
+                            _invalidInputEvidence.invalid_avatar.input_path))
+                    {
+                        CompleteInvalidInputEvidence(false, "avatar_preparation",
+                            "무효 Avatar의 제품 가져오기 요청이 시작되지 않았습니다.");
+                        return;
+                    }
+
+                    _invalidInputPhase = InvalidInputPhase.InvalidAvatar;
+                    return;
+                }
+
+                InvalidInputCaseEvidence avatarSample = _invalidInputEvidence.invalid_avatar;
+                avatarSample.product_status = _invalidInputPipeline.SessionState.ToString();
+                avatarSample.product_error = _invalidInputPipeline.LastSessionMessage;
+                avatarSample.expected_rejection_observed =
+                    _invalidInputPipeline.SessionState == FBXVmdPipeline.FBXSessionState.Failed &&
+                    avatarSample.product_error.Contains("유효한 Humanoid Avatar가 없습니다");
+                CompleteInvalidInputEvidence(avatarSample.expected_rejection_observed,
+                    avatarSample.expected_rejection_observed ? string.Empty : "avatar_preparation",
+                    avatarSample.expected_rejection_observed ? string.Empty :
+                        "무효 Avatar가 예상한 제품 실패로 기록되지 않았습니다.");
+            }
+            catch (Exception ex)
+            {
+                CompleteInvalidInputEvidence(false, "infrastructure", ex.Message);
+            }
+        }
+
+        private static void CompleteInvalidInputEvidence(bool passed, string failureStage, string message)
+        {
+            if (_invalidInputEvidence == null) return;
+            if (_invalidInputAnimator != null) _invalidInputAnimator.avatar = _originalAvatar;
+            _invalidInputEvidence.original_avatar_restored =
+                _invalidInputAnimator != null && _invalidInputAnimator.avatar == _originalAvatar &&
+                _originalAvatar != null && _originalAvatar.isValid;
+            _invalidInputEvidence.is_recording =
+                _invalidInputPipeline != null && _invalidInputPipeline.IsImportedMotionRecording;
+            _invalidInputEvidence.capture_framerate = Time.captureFramerate;
+            passed = passed && _invalidInputEvidence.original_avatar_restored &&
+                !_invalidInputEvidence.is_recording && Time.captureFramerate == 0;
+            _invalidInputEvidence.test_passed = passed;
+            _invalidInputEvidence.test_failure_stage = failureStage;
+            _invalidInputEvidence.test_failure_message = message;
+            string statePath = _invalidInputEvidencePath;
+            try
+            {
+                File.WriteAllText(statePath, JsonUtility.ToJson(_invalidInputEvidence, true));
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = _activeAutomationRequestId,
+                    status = passed ? "completed" : "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = _activeAutomationRequestedCommand,
+                    message = passed ? "의도적 제품 실패 2건을 확인했습니다." : message,
+                    passed = passed,
+                    failure_stage = failureStage,
+                    failure_evidence_path = statePath,
+                    manifest_path = statePath,
+                    total_jobs = 2,
+                    success_jobs = (int)(_invalidInputEvidence.missing_fbx.expected_rejection_observed ? 1 : 0) +
+                        (int)(_invalidInputEvidence.invalid_avatar.expected_rejection_observed ? 1 : 0),
+                    failures = passed ? Array.Empty<string>() : new[] { message }
+                });
+                TraceAutomation($"invalid-input id={_activeAutomationRequestId} passed={passed} stage={failureStage}");
+            }
+            finally
+            {
+                ClearInvalidInputEvidence();
+                ClearAutomationRequestState();
+                TryDeleteRequestFile();
+            }
+        }
+
+        private static void ClearInvalidInputEvidence()
+        {
+            if (_invalidInputAnimator != null && _originalAvatar != null)
+                _invalidInputAnimator.avatar = _originalAvatar;
+            _invalidInputPhase = InvalidInputPhase.None;
+            _invalidInputPipeline = null;
+            _invalidInputAnimator = null;
+            _originalAvatar = null;
+            _invalidInputEvidence = null;
+            _invalidInputEvidencePath = null;
         }
 
         private static bool TryBootstrapCleanAutomationRequest(FbxPlaybackSmokeAutomationRequest request)
