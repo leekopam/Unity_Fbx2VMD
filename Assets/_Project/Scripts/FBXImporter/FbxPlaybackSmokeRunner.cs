@@ -19,6 +19,8 @@ namespace Fbx2Vmd.FBXImporter
     {
         private const string MenuRoot = "Machine Spirit/FBX Smoke/";
         private const string MainAutoSceneName = "Main_Auto";
+        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string E2eModelName = "YYB Hatsune Miku";
         private const string MainRecordingSceneName = "Main_recoding";
         private const string ImportFbxRelativeDirectory = "Resources/Import_FBX";
         private const string RunAllImportFbxHeadCommand = "run_all_import_fbx_31s";
@@ -28,6 +30,9 @@ namespace Fbx2Vmd.FBXImporter
         private const string CapturePreselectionStateCommand = "capture_preselection_state";
         private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
+        private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
+        private const string EnterE2ePlayCommand = "enter_e2e_play";
+        private const string ExitE2ePlayCommand = "exit_e2e_play";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
         private const string CaptureAntennaTailHelperEvidenceCommand = "capture_antenna_tail_helper_evidence";
@@ -477,6 +482,11 @@ namespace Fbx2Vmd.FBXImporter
             PersistRequest(request);
             TraceAutomation($"loaded request id={request.request_id} command={request.command} requested={request.requested_command}");
 
+            if (TryHandleE2eControlRequest(request))
+            {
+                return;
+            }
+
             if (TryBootstrapCleanAutomationRequest(request))
             {
                 return;
@@ -514,6 +524,157 @@ namespace Fbx2Vmd.FBXImporter
                 passed = false,
                 failures = Array.Empty<string>()
             });
+        }
+
+        [Serializable]
+        private sealed class E2eEnvironmentEvidence
+        {
+            public bool play_mode;
+            public string scene;
+            public string scene_path;
+            public bool scene_dirty;
+            public string model_name;
+            public bool model_active;
+            public Vector3 model_position;
+            public Quaternion model_rotation;
+            public Vector3 model_scale;
+            public string avatar_name;
+            public bool avatar_valid;
+            public bool is_processing;
+            public bool has_prepared_motion;
+            public bool is_playing_motion;
+            public bool is_recording;
+            public bool recorder_recording;
+            public string recorder_output_name;
+            public string recorder_last_saved_path;
+            public int capture_framerate;
+            public float time_scale;
+        }
+
+        private static bool TryHandleE2eControlRequest(FbxPlaybackSmokeAutomationRequest request)
+        {
+            bool isCapture = request.command == CaptureE2eEnvironmentCommand;
+            bool isEnter = request.command == EnterE2ePlayCommand;
+            bool isExit = request.command == ExitE2ePlayCommand;
+            if (!isCapture && !isEnter && !isExit) return false;
+
+            try
+            {
+                if (isCapture)
+                {
+                    if (!Guid.TryParse(request.request_id, out Guid id))
+                        throw new InvalidOperationException("환경 기록 요청 ID가 유효하지 않습니다.");
+
+                    string projectRoot = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
+                    string directory = Path.Combine(projectRoot, "Docs", "Workflow", "Local",
+                        "evidence", "boogle", "e2e-environment", id.ToString("D"));
+                    Directory.CreateDirectory(directory);
+                    string statePath = Path.Combine(directory, "state.json");
+                    Scene scene = SceneManager.GetActiveScene();
+                    FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
+                    GameObject model = pipeline != null ? pipeline.targetCharacter : null;
+                    Animator animator = model != null ? model.GetComponentInChildren<Animator>(true) : null;
+                    UnityHumanoidVMDRecorder recorder = model != null
+                        ? model.GetComponentInChildren<UnityHumanoidVMDRecorder>(true) : null;
+                    HumanoidSampleCode recordingControl = model != null
+                        ? model.GetComponentInChildren<HumanoidSampleCode>(true) : null;
+                    E2eEnvironmentEvidence state = new E2eEnvironmentEvidence
+                    {
+                        play_mode = EditorApplication.isPlaying,
+                        scene = scene.name,
+                        scene_path = scene.path,
+                        scene_dirty = scene.isDirty,
+                        model_name = model != null ? model.name : string.Empty,
+                        model_active = model != null && model.activeSelf,
+                        model_position = model != null ? model.transform.position : Vector3.zero,
+                        model_rotation = model != null ? model.transform.rotation : Quaternion.identity,
+                        model_scale = model != null ? model.transform.localScale : Vector3.zero,
+                        avatar_name = animator != null && animator.avatar != null
+                            ? animator.avatar.name : string.Empty,
+                        avatar_valid = animator != null && animator.avatar != null &&
+                            animator.avatar.isValid && animator.avatar.isHuman,
+                        is_processing = pipeline != null && pipeline.IsProcessing,
+                        has_prepared_motion = pipeline != null && pipeline.HasPreparedImportedMotion,
+                        is_playing_motion = pipeline != null && pipeline.IsImportedMotionPlaying,
+                        is_recording = pipeline != null && pipeline.IsImportedMotionRecording,
+                        recorder_recording = recorder != null && recorder.IsRecording,
+                        recorder_output_name = recordingControl != null
+                            ? recordingControl.HumanoidVMDName : string.Empty,
+                        recorder_last_saved_path = recordingControl != null
+                            ? recordingControl.LastSavedFilePath : string.Empty,
+                        capture_framerate = Time.captureFramerate,
+                        time_scale = Time.timeScale
+                    };
+                    File.WriteAllText(statePath, JsonUtility.ToJson(state, true));
+                    WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                    {
+                        request_id = request.request_id,
+                        status = "completed",
+                        updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                        command = request.requested_command,
+                        passed = true,
+                        environment_state_path = statePath,
+                        manifest_path = statePath,
+                        failures = Array.Empty<string>()
+                    });
+                    TraceAutomation($"environment id={request.request_id} play={state.play_mode} scene={state.scene} recording={state.is_recording}");
+                }
+                else
+                {
+                    bool targetPlay = isEnter;
+                    Scene scene = SceneManager.GetActiveScene();
+                    FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
+                    if (targetPlay && (scene.path != MainAutoScenePath || scene.isDirty ||
+                        pipeline == null || pipeline.targetCharacter == null ||
+                        pipeline.targetCharacter.name != E2eModelName))
+                        throw new InvalidOperationException("Main_Auto 씬을 저장된 Edit 상태로 준비해야 합니다.");
+
+                    if (EditorApplication.isPlaying != targetPlay)
+                    {
+                        WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                        {
+                            request_id = request.request_id,
+                            status = "running",
+                            updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                            command = request.requested_command,
+                            message = targetPlay ? "Play 진입 중" : "Play 종료 중",
+                            passed = false,
+                            failures = Array.Empty<string>()
+                        });
+                        EditorApplication.isPlaying = targetPlay;
+                        return true;
+                    }
+
+                    WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                    {
+                        request_id = request.request_id,
+                        status = "completed",
+                        updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                        command = request.requested_command,
+                        passed = true,
+                        failures = Array.Empty<string>()
+                    });
+                    TraceAutomation($"play-state id={request.request_id} play={targetPlay}");
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = request.request_id,
+                    status = "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = request.requested_command,
+                    failure_stage = "environment",
+                    message = ex.Message,
+                    passed = false,
+                    failures = new[] { ex.Message }
+                });
+                TraceAutomation($"environment failed id={request.request_id} message={ex.Message}");
+            }
+
+            TryDeleteRequestFile();
+            return true;
         }
 
         private static bool TryStartAutomationRequest(FbxPlaybackSmokeAutomationRequest request, out string message)

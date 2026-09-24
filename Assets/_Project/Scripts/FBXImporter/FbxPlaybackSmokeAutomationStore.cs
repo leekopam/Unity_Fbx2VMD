@@ -32,6 +32,7 @@ namespace Fbx2Vmd.FBXImporter
         public string preselection_state_path;
         public string playback_state_path;
         public string failure_evidence_path;
+        public string environment_state_path;
         public int total_jobs;
         public int success_jobs;
         public string[] failures;

@@ -22,6 +22,14 @@ const command = "capture_satisfaction_quick_vmd_smoke_2s";
 const preselectionCommand = "capture_preselection_state";
 const playbackCommand = "capture_playback_seek_evidence";
 const invalidInputCommand = "capture_invalid_input_evidence";
+const environmentCommand = "capture_e2e_environment";
+const enterPlayCommand = "enter_e2e_play";
+const exitPlayCommand = "exit_e2e_play";
+const environmentFields = ["play_mode", "scene", "scene_path", "scene_dirty",
+  "model_name", "model_active", "model_position", "model_rotation", "model_scale",
+  "avatar_name", "avatar_valid", "is_processing", "has_prepared_motion",
+  "is_playing_motion", "is_recording", "recorder_recording",
+  "recorder_output_name", "recorder_last_saved_path", "capture_framerate", "time_scale"];
 
 async function readOptional(pathToRead) {
   try {
@@ -97,6 +105,86 @@ function inspectShortVmd(bytes) {
     bytesPerFrame: bytes.length / 60 };
 }
 
+async function executeControl(runId, controlCommand) {
+  const sessionRoot = path.join(evidenceRoot, "control-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const requestId = randomUUID();
+  const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
+  let status = null;
+  let state = null;
+  let result = { status: "INFRA_ERROR" };
+  let failureStage = "preflight";
+  let submitted = false;
+  let terminal = false;
+  try {
+    if (await readOptional(requestPath) || (await readStatus())?.status === "running") {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      await writeFile(requestPath, JSON.stringify({
+        request_id: requestId, command: controlCommand, requested_command: controlCommand
+      }), { flag: "wx" });
+      submitted = true;
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 180000) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const candidate = await readStatus();
+        if (candidate?.request_id !== requestId) continue;
+        status = candidate;
+        if (candidate.status !== "running") {
+          terminal = true;
+          break;
+        }
+      }
+      if (!terminal) {
+        failureStage = "timeout";
+        result = { status: "TIMED_OUT", failureKind: "timeout" };
+      } else if (status.status !== "completed" || status.passed !== true) {
+        failureStage = status.failure_stage || "environment";
+        result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL",
+          failureKind: failureStage === "preflight" ? "preflight" : "test_failure" };
+      } else if (controlCommand === environmentCommand) {
+        failureStage = "evidence";
+        const statePath = path.resolve(status.environment_state_path || "");
+        const relative = path.relative(path.join(evidenceRoot, "e2e-environment"), statePath);
+        if (relative.startsWith("..") || path.isAbsolute(relative)) {
+          result = { status: "INFRA_ERROR" };
+        } else {
+          state = JSON.parse(await readFile(statePath, "utf8"));
+          failureStage = "";
+          result = { status: "PASS" };
+        }
+      } else {
+        failureStage = "";
+        result = { status: "PASS" };
+      }
+    }
+  } catch (error) {
+    failureStage = "infrastructure";
+    result = { status: submitted ? "INFRA_ERROR" : "BLOCKED" };
+  } finally {
+    if (submitted && terminal) {
+      const current = await readOptional(requestPath);
+      if (current) {
+        try {
+          if (JSON.parse(current.toString("utf8")).request_id === requestId)
+            await rm(requestPath);
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error;
+        }
+      }
+    }
+    const trace = await readOptional(tracePath);
+    if (trace && trace.length > traceOffset)
+      await writeFile(path.join(sessionRoot, `${controlCommand}-${requestId}-trace.log`),
+        trace.subarray(traceOffset));
+    await writeFile(path.join(sessionRoot, `${controlCommand}-${requestId}.json`), JSON.stringify({
+      runId, requestId, command: controlCommand, result: result.status,
+      failureStage, status, state, terminal
+    }, null, 2));
+  }
+  return { ...result, state, requestId, terminal };
+}
+
 async function executeSmoke(runId) {
   const sessionRoot = path.join(evidenceRoot, "product-smoke", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -127,6 +215,8 @@ async function executeSmoke(runId) {
       const request = { request_id: requestId, command, requested_command: command };
       await writeFile(requestPath, JSON.stringify(request), { flag: "wx" });
       requestSubmitted = true;
+      // 종료 상태가 확인되기 전에는 기존 산출물에 손대지 않는다.
+      stillRunning = true;
       const startedAt = Date.now();
       while (Date.now() - startedAt < 600000) {
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -145,9 +235,8 @@ async function executeSmoke(runId) {
       }
 
       if (!status || status.status === "running") {
-        outcome = status?.status === "running"
-          ? { status: "TIMED_OUT", failureKind: "timeout" }
-          : { status: "BLOCKED", failureKind: "preflight" };
+        failureStage = "timeout";
+        outcome = { status: "TIMED_OUT", failureKind: "timeout" };
       } else if (status.status !== "completed" || status.passed !== true) {
         failureStage = status.failure_stage || "product_path";
         outcome = failureStage === "preflight"
@@ -186,16 +275,14 @@ async function executeSmoke(runId) {
       ? { status: "BLOCKED", failureKind: "preflight" }
       : { status: "INFRA_ERROR" };
   } finally {
+    const cleanupErrors = [];
     if (requestSubmitted && !stillRunning) {
-      const currentRequest = await readOptional(requestPath);
-      if (currentRequest) {
-        try {
-          if (JSON.parse(currentRequest.toString("utf8")).request_id === requestId) {
-            await rm(requestPath);
-          }
-        } catch (error) {
-          if (!(error instanceof SyntaxError)) throw error;
-        }
+      try {
+        const currentRequest = await readOptional(requestPath);
+        if (currentRequest && JSON.parse(currentRequest.toString("utf8")).request_id === requestId)
+          await rm(requestPath);
+      } catch (error) {
+        cleanupErrors.push(`request: ${error.message}`);
       }
     }
     try {
@@ -206,23 +293,35 @@ async function executeSmoke(runId) {
         else await rm(outputPath, { force: true });
         if (priorMeta) await copyFile(backupMetaPath, `${outputPath}.meta`);
         else await rm(`${outputPath}.meta`, { force: true });
-        restored = true;
+        const currentOutput = await readOptional(outputPath);
+        const currentMeta = await readOptional(`${outputPath}.meta`);
+        restored = (priorOutput === null ? currentOutput === null :
+          currentOutput !== null && priorOutput.equals(currentOutput)) &&
+          (priorMeta === null ? currentMeta === null :
+            currentMeta !== null && priorMeta.equals(currentMeta));
+        if (!restored) throw new Error("기존 VMD 또는 .meta가 원본과 다릅니다.");
       }
     } catch (error) {
+      cleanupErrors.push(`output: ${error.message}`);
+    }
+    try {
+      const trace = await readOptional(tracePath);
+      if (trace && trace.length > traceOffset)
+        await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
+    } catch (error) {
+      cleanupErrors.push(`trace: ${error.message}`);
+    }
+    if (cleanupErrors.length) {
       failureStage = "cleanup";
       outcome = { status: "INFRA_ERROR" };
-    }
-    const trace = await readOptional(tracePath);
-    if (trace && trace.length > traceOffset) {
-      await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, command, result: outcome.status, failureStage, restored,
       status, outputPath, backupPath: priorOutput ? backupPath : null,
-      vmdStructure
+      vmdStructure, cleanupErrors
     }, null, 2));
   }
-  return outcome;
+  return { ...outcome, requestId };
 }
 
 async function executePreselection(runId) {
@@ -243,6 +342,7 @@ async function executePreselection(runId) {
         request_id: requestId, command: preselectionCommand, requested_command: preselectionCommand
       }), { flag: "wx" });
       submitted = true;
+      running = true;
       const startedAt = Date.now();
       while (Date.now() - startedAt < 30000) {
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -256,6 +356,7 @@ async function executePreselection(runId) {
         if (!running) break;
       }
       if (!status || running) {
+        failureStage = running ? "timeout" : "preflight";
         result = { status: running ? "TIMED_OUT" : "BLOCKED",
           failureKind: running ? "timeout" : "preflight" };
       } else if (status.status !== "completed" || status.passed !== true) {
@@ -313,7 +414,7 @@ async function executePreselection(runId) {
       failureStage, status
     }, null, 2));
   }
-  return result;
+  return { ...result, requestId };
 }
 
 async function executePlayback(runId) {
@@ -338,6 +439,7 @@ async function executePlayback(runId) {
         request_id: requestId, command: playbackCommand, requested_command: playbackCommand
       }), { flag: "wx" });
       submitted = true;
+      running = true;
       const startedAt = Date.now();
       while (Date.now() - startedAt < 1260000) {
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -351,6 +453,7 @@ async function executePlayback(runId) {
         if (!running) break;
       }
       if (!status || running) {
+        failureStage = running ? "timeout" : "preflight";
         result = { status: running ? "TIMED_OUT" : "BLOCKED",
           failureKind: running ? "timeout" : "preflight" };
       } else if (status.status !== "completed" || status.passed !== true) {
@@ -481,7 +584,7 @@ async function executePlayback(runId) {
       failureStage, status, csvPath, frameMapPath, humanLabelsPath
     }, null, 2));
   }
-  return result;
+  return { ...result, requestId };
 }
 
 async function executeInvalidInput(runId) {
@@ -503,6 +606,7 @@ async function executeInvalidInput(runId) {
         request_id: requestId, command: invalidInputCommand, requested_command: invalidInputCommand
       }), { flag: "wx" });
       submitted = true;
+      running = true;
       const startedAt = Date.now();
       while (Date.now() - startedAt < 120000) {
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -516,6 +620,7 @@ async function executeInvalidInput(runId) {
         if (!running) break;
       }
       if (!status || running) {
+        failureStage = running ? "timeout" : "preflight";
         result = { status: running ? "TIMED_OUT" : "BLOCKED",
           failureKind: running ? "timeout" : "preflight" };
       } else if (status.status !== "completed" || status.passed !== true) {
@@ -578,17 +683,204 @@ async function executeInvalidInput(runId) {
       failureStage, status
     }, null, 2));
   }
+  return { ...result, requestId };
+}
+
+async function executeSuite(runId) {
+  const sessionRoot = path.join(evidenceRoot, "suite-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const steps = [];
+  const outputHashBefore = await hashFile(outputPath);
+  const metaHashBefore = await hashFile(`${outputPath}.meta`);
+  let before = null;
+  let after = null;
+  let enteredPlay = false;
+  let result = { status: "INFRA_ERROR" };
+  let restored = false;
+  let cleanupError = null;
+  try {
+    const baseline = await executeControl(runId, environmentCommand);
+    steps.push({ name: "F08_before", status: baseline.status, requestId: baseline.requestId });
+    before = baseline.state;
+    if (baseline.status !== "PASS" || !before || before.play_mode ||
+        before.scene !== "Main_Auto" ||
+        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        !before.model_active ||
+        !before.avatar_valid || before.is_processing || before.has_prepared_motion ||
+        before.is_recording || before.recorder_recording || before.capture_framerate !== 0) {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      const enter = await executeControl(runId, enterPlayCommand);
+      steps.push({ name: "F08_enter_play", status: enter.status, requestId: enter.requestId });
+      enteredPlay = enter.status === "PASS";
+      result = enter.status === "PASS" ? { status: "PASS" } : enter;
+      if (enteredPlay) {
+        for (const [name, run, allowed] of [
+          ["F01", executePreselection, ["MANUAL_REVIEW_REQUIRED"]],
+          ["F07", executeInvalidInput, ["PASS"]],
+          ["F02_F03_F04_F05", executePlayback, ["MANUAL_REVIEW_REQUIRED"]],
+          ["F06", executeSmoke, ["PASS"]]
+        ]) {
+          const step = await run(runId);
+          steps.push({ name, status: step.status, requestId: step.requestId });
+          if (!allowed.includes(step.status)) {
+            result = step;
+            break;
+          }
+          if (step.status === "MANUAL_REVIEW_REQUIRED")
+            result = { status: "MANUAL_REVIEW_REQUIRED" };
+        }
+      }
+    }
+  } catch (error) {
+    result = { status: "INFRA_ERROR" };
+    cleanupError = error.message;
+  } finally {
+    try {
+      const pending = await readOptional(requestPath);
+      const latest = await readStatus();
+      const needsRecovery = steps.some((step) => step.status === "TIMED_OUT");
+      if (enteredPlay && !needsRecovery && !pending && latest?.status !== "running") {
+        const exit = await executeControl(runId, exitPlayCommand);
+        steps.push({ name: "F08_exit_play", status: exit.status, requestId: exit.requestId });
+        if (exit.status !== "PASS") result = exit;
+      }
+      if (!needsRecovery && !await readOptional(requestPath) &&
+          (await readStatus())?.status !== "running") {
+        const finalState = await executeControl(runId, environmentCommand);
+        steps.push({ name: "F08_after", status: finalState.status, requestId: finalState.requestId });
+        after = finalState.state;
+      }
+      const stateRestored = !!before && !!after && environmentFields.every((field) =>
+        JSON.stringify(before[field]) === JSON.stringify(after[field]));
+      const outputHashAfter = await hashFile(outputPath);
+      const metaHashAfter = await hashFile(`${outputPath}.meta`);
+      restored = stateRestored && outputHashBefore === outputHashAfter &&
+        metaHashBefore === metaHashAfter;
+      if (enteredPlay && !restored && result.status !== "TIMED_OUT")
+        result = { status: "INFRA_ERROR" };
+      await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+        runId, result: result.status, restored, steps, before, after,
+        outputHashBefore, outputHashAfter, metaHashBefore, metaHashAfter,
+        cleanupError, pendingRequest: !!(await readOptional(requestPath))
+      }, null, 2));
+    } catch (error) {
+      result = { status: "INFRA_ERROR" };
+      await writeFile(path.join(sessionRoot, "cleanup-error.json"), JSON.stringify({
+        runId, message: error.message, steps
+      }, null, 2));
+    }
+  }
+  if (!restored && before && steps.some((step) =>
+      step.name === "F08_enter_play" && step.status !== "BLOCKED")) {
+    try {
+      const recovery = await recoverSuite(runId);
+      if (recovery.restored) restored = true;
+    } catch (error) {
+      await writeFile(path.join(sessionRoot, "recovery-error.json"), JSON.stringify({
+        runId, message: error.message
+      }, null, 2));
+    }
+  }
   return result;
+}
+
+async function recoverSuite(runId) {
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(runId))
+    throw new Error("복구할 SDK 실행 ID가 유효하지 않습니다.");
+  const sessionRoot = path.join(evidenceRoot, "suite-runs", runId);
+  const manifestPath = path.join(sessionRoot, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  if (manifest.restored) return { status: "PASS", restored: true };
+  const smokeManifestPath = path.join(evidenceRoot, "product-smoke", runId, "manifest.json");
+  const smokeContent = await readOptional(smokeManifestPath);
+  const smoke = smokeContent ? JSON.parse(smokeContent.toString("utf8")) : null;
+  const ownedIds = new Set(manifest.steps.map((step) => step.requestId).filter(Boolean));
+  if (smoke?.requestId) ownedIds.add(smoke.requestId);
+  let pending = await readOptional(requestPath);
+  if (pending && !ownedIds.has(JSON.parse(pending.toString("utf8")).request_id))
+    return { status: "BLOCKED", restored: false };
+  const startedAt = Date.now();
+  while (pending && Date.now() - startedAt < 180000) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    pending = await readOptional(requestPath);
+  }
+  if (pending) return { status: "TIMED_OUT", restored: false };
+  const latest = await readStatus();
+  if (latest?.status === "running" || !ownedIds.has(latest?.request_id))
+    return { status: "BLOCKED", restored: false };
+  const timedOut = [...manifest.steps].reverse().find((step) => step.status === "TIMED_OUT");
+  if (timedOut && latest.request_id !== timedOut.requestId)
+    return { status: "BLOCKED", restored: false };
+
+  if (smoke && !smoke.restored) {
+    if (smoke.backupPath && await hashFile(smoke.backupPath) !== manifest.outputHashBefore)
+      return { status: "INFRA_ERROR", restored: false };
+    const metaBackup = path.join(evidenceRoot, "product-smoke", runId, "prior-output.vmd.meta");
+    if (manifest.metaHashBefore !== "missing" &&
+        await hashFile(metaBackup) !== manifest.metaHashBefore)
+      return { status: "INFRA_ERROR", restored: false };
+    for (const [target, backup, expected] of [
+      [outputPath, smoke.backupPath, manifest.outputHashBefore],
+      [`${outputPath}.meta`, manifest.metaHashBefore === "missing" ? null : metaBackup,
+        manifest.metaHashBefore]
+    ]) {
+      if (await hashFile(target) !== expected) {
+        if (await readOptional(target))
+          await copyFile(target, path.join(sessionRoot,
+            `late-output-${randomUUID()}${target.endsWith(".meta") ? ".vmd.meta" : ".vmd"}`));
+        if (backup) await copyFile(backup, target);
+        else await rm(target, { force: true });
+      }
+    }
+    smoke.restored = await hashFile(outputPath) === manifest.outputHashBefore &&
+      await hashFile(`${outputPath}.meta`) === manifest.metaHashBefore;
+    await writeFile(smokeManifestPath, JSON.stringify(smoke, null, 2));
+    if (!smoke.restored) return { status: "INFRA_ERROR", restored: false };
+  }
+
+  const current = await executeControl(runId, environmentCommand);
+  if (current.status !== "PASS") return { status: current.status, restored: false };
+  if (current.state.play_mode) {
+    const exit = await executeControl(runId, exitPlayCommand);
+    manifest.steps.push({ name: "F08_recovery_exit_play", status: exit.status,
+      requestId: exit.requestId });
+    if (exit.status !== "PASS") {
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+      return { status: exit.status, restored: false };
+    }
+  }
+  const finalState = await executeControl(runId, environmentCommand);
+  manifest.steps.push({ name: "F08_recovery_after", status: finalState.status,
+    requestId: finalState.requestId });
+  manifest.after = finalState.state;
+  manifest.outputHashAfter = await hashFile(outputPath);
+  manifest.metaHashAfter = await hashFile(`${outputPath}.meta`);
+  manifest.restored = finalState.status === "PASS" && environmentFields.every((field) =>
+    JSON.stringify(manifest.before?.[field]) === JSON.stringify(manifest.after?.[field])) &&
+    manifest.outputHashBefore === manifest.outputHashAfter &&
+    manifest.metaHashBefore === manifest.metaHashAfter;
+  manifest.recovery = { status: manifest.restored ? "PASS" : "INFRA_ERROR",
+    completedAt: new Date().toISOString() };
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  return { status: manifest.recovery.status, restored: manifest.restored };
 }
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "invalid-input"].includes(mode) ||
-      process.argv.length > (mode === "smoke" ? 2 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|invalid-input]");
+  if (!["smoke", "preselection", "playback", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+      process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
+  }
+  if (mode === "recover") {
+    const recovery = await recoverSuite(process.argv[3] || "");
+    process.stdout.write(`${JSON.stringify({ runId: process.argv[3], ...recovery })}\n`);
+    process.exitCode = recovery.status === "PASS" ? 0 : 1;
+    return;
   }
   await access(sdkRunnerPath);
   const unityVersion = (await readFile(
@@ -610,11 +902,13 @@ async function main() {
     protocolVersion: "0.1.0",
     projectId,
     adapter: { id: "fbx2vmd-smoke", version: "0.1.1" },
-    testPack: { id: "fbx2vmd-product-smoke", version: "0.1.2" },
+    testPack: { id: "fbx2vmd-product-smoke", version: "0.1.3" },
     retries: 0,
     inputConditions: {
-      testCaseIds: mode === "preselection" ? "F01" : mode === "playback" ? "F03,F04,F05" :
-        mode === "invalid-input" ? "F07" : "F02,F06",
+      testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08" :
+        mode === "environment" ? "F08" :
+        mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05" :
+          mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
       modelSha256: modelHash, sceneSha256: sceneHash
     },
@@ -626,12 +920,16 @@ async function main() {
   }, async (temporaryPath) => {
     const runId = path.basename(temporaryPath);
     try {
-      return mode === "preselection" ? await executePreselection(runId)
+      return mode === "suite" ? await executeSuite(runId)
+        : mode === "environment" ? await executeControl(runId, environmentCommand)
+        : mode === "preselection" ? await executePreselection(runId)
         : mode === "playback" ? await executePlayback(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)
             : await executeSmoke(runId);
     } catch (error) {
       const sessionRoot = path.join(evidenceRoot,
+        mode === "suite" ? "suite-runs" :
+        mode === "environment" ? "control-runs" :
         mode === "preselection" ? "preselection-runs" :
           mode === "playback" ? "playback-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
