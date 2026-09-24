@@ -192,6 +192,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private sealed class Leg
         {
+            private const float MaximumSupportedToePitch = 40f;
             internal readonly Transform Upper;
             internal readonly Transform Lower;
             internal readonly Transform Foot;
@@ -205,6 +206,8 @@ namespace Fbx2Vmd.FBXImporter
             private readonly Vector3[] _localContactPoints = new Vector3[2];
             private readonly Vector3[] _anchors = new Vector3[2];
             private Vector2[] _weights;
+            private float[] _relativeHeights;
+            private float _nearLevelHeight;
             private bool _hasSupportRoles;
             private Vector2 _activeWeights;
             private Quaternion _upperRotation, _lowerRotation, _footRotation, _toeRotation;
@@ -304,6 +307,8 @@ namespace Fbx2Vmd.FBXImporter
                     _weights = roleWeights;
                     _hasSupportRoles = true;
                 }
+                _relativeHeights = relativeHeights;
+                _nearLevelHeight = sourceScale / 70f;
 
                 return EditorHumanoidFootContactPlan.TryBuild(Foot, Sampler, _sourcePoints, _weights,
                     sourceRotation, scaleRatio, frameRate, clipLength, evaluate, out _plan,
@@ -375,7 +380,7 @@ namespace Fbx2Vmd.FBXImporter
                         Quaternion.FromToRotation(current, desired) * _originalFootRotation,
                         Mathf.Min(_activeWeights.x, _activeWeights.y));
                 }
-                if (!TryAlignSupportSurface()) return false;
+                if (!TryAlignSupportSurface(frame)) return false;
                 Vector3 weightedTarget = Vector3.zero;
                 float totalWeight = 0f;
                 for (int channel = 0; channel < 2; channel++)
@@ -402,7 +407,7 @@ namespace Fbx2Vmd.FBXImporter
                     Vector3.Distance(Upper.position, _target), _support, 2.8f, out _maximumReach);
             }
 
-            private bool TryAlignSupportSurface()
+            private bool TryAlignSupportSurface(float frame)
             {
                 if ((_activeWeights.x <= 0f && _activeWeights.y <= 0f) || !_localFootFrame.HasValue)
                     return true;
@@ -415,15 +420,37 @@ namespace Fbx2Vmd.FBXImporter
 
                 float difference = Vector3.Dot(_targetFootRotation * (rearPoint - frontPoint), _ground.normal);
                 float weight = difference > 0f ? _activeWeights.x : _activeWeights.y;
-                if (weight <= 0f) return true;
+                if (weight <= 0f && _relativeHeights != null)
+                {
+                    int first = Mathf.FloorToInt(frame);
+                    int second = Mathf.Min(first + 1, _relativeHeights.Length - 1);
+                    float sourceHeight = Mathf.Lerp(_relativeHeights[first], _relativeHeights[second], frame - first);
+                    float oppositeWeight = difference > 0f ? _activeWeights.y : _activeWeights.x;
+                    // 거의 평평한 자세는 단일 지지로 분류되어도 밑창의 들린 쪽을 함께 내림.
+                    weight = oppositeWeight * Mathf.Clamp01(2f - Mathf.Abs(sourceHeight) / _nearLevelHeight);
+                }
                 Vector3 axis = Vector3.Cross(_ground.normal,
                     _targetFootRotation * (_localFootFrame.Value * Vector3.forward)).normalized;
                 if (axis.sqrMagnitude < 0.5f) return true;
-                if (!EditorHumanoidFootContactPlan.TryFindSupportPose(Foot, Sampler, axis,
-                        _targetFootRotation, _ground.normal, out Quaternion rotation, out _, out _)) return true;
-
-                // 들리는 영역의 지지 강도만 반영하여 해제 중인 발을 수평으로 강제하지 않음.
-                _targetFootRotation = Quaternion.Slerp(_targetFootRotation, rotation, weight);
+                if (weight > 0f && EditorHumanoidFootContactPlan.TryFindSupportPose(Foot, Sampler, axis,
+                        _targetFootRotation, _ground.normal, out Quaternion rotation, out _, out _))
+                {
+                    // 들리는 영역의 지지 강도만 반영하여 해제 중인 발을 수평으로 강제하지 않음.
+                    _targetFootRotation = Quaternion.Slerp(_targetFootRotation, rotation, weight);
+                }
+                if (difference > 0f && _activeWeights.x <= 0f && _activeWeights.y > 0f)
+                {
+                    Vector3 forward = _targetFootRotation * (_localFootFrame.Value * Vector3.forward);
+                    float pitch = Mathf.Asin(Mathf.Clamp(Vector3.Dot(forward, _ground.normal), -1f, 1f)) *
+                        Mathf.Rad2Deg;
+                    if (pitch < -MaximumSupportedToePitch)
+                    {
+                        // 앞꿈치 지지는 유지하되 원본의 과도한 발끝 하향 회전만 제한함.
+                        Quaternion limited = Quaternion.AngleAxis(pitch + MaximumSupportedToePitch, axis) *
+                            _targetFootRotation;
+                        _targetFootRotation = Quaternion.Slerp(_targetFootRotation, limited, _activeWeights.y);
+                    }
+                }
                 return true;
             }
 
