@@ -29,6 +29,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureSatisfactionQuickVmdSmokeCommand = "capture_satisfaction_quick_vmd_smoke_2s";
         private const string CapturePreselectionStateCommand = "capture_preselection_state";
         private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
+        private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
         private const string EnterE2ePlayCommand = "enter_e2e_play";
@@ -149,6 +150,7 @@ namespace Fbx2Vmd.FBXImporter
         private static DateTime _playbackCaptureStartedUtc;
         private static string _playbackEvidencePath;
         private static string _playbackCapturePath;
+        private static FbxFootLiveEvidenceCapture _footLiveEvidence;
         private static int _footEvidenceFrameIndex;
         private static readonly List<string> PlaybackStageLog = new List<string>();
         private enum InvalidInputPhase { None, MissingPath, InvalidAvatar }
@@ -392,6 +394,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void PollAutomationRequest()
         {
+            if (_footLiveEvidence != null)
+            {
+                PollFootLiveEvidence();
+                return;
+            }
+
             if (_invalidInputPhase != InvalidInputPhase.None)
             {
                 PollInvalidInputEvidence();
@@ -698,6 +706,11 @@ namespace Fbx2Vmd.FBXImporter
                     return TryStartPreselectionCapture(request.request_id, out message);
                 case CapturePlaybackSeekEvidenceCommand:
                     return TryStartPlaybackEvidence(request.request_id, out message);
+                case CaptureTetorisLiveFootEvidenceCommand:
+                    if (!TryGetFBXVmdPipeline("tetoris_001.fbx", out FBXVmdPipeline footPipeline,
+                            interactive: false, out message)) return false;
+                    return FbxFootLiveEvidenceCapture.TryStart(footPipeline, request.request_id,
+                        request.run_id, out _footLiveEvidence, out message);
                 case CaptureInvalidInputEvidenceCommand:
                     return TryStartInvalidInputEvidence(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
@@ -1130,6 +1143,42 @@ namespace Fbx2Vmd.FBXImporter
             if (message.StartsWith("[FBXImport] 상태 변경됨.", StringComparison.Ordinal) &&
                 PlaybackStageLog.Count < 64)
                 PlaybackStageLog.Add(message);
+        }
+
+        private static void PollFootLiveEvidence()
+        {
+            _footLiveEvidence.Poll();
+            if (!_footLiveEvidence.IsFinished) return;
+            try
+            {
+                bool hasEvidence = _footLiveEvidence.HasEvidence;
+                string message = hasEvidence
+                    ? "F09 실제 시간 측정과 영상 수집, 사람 검토 필요"
+                    : _footLiveEvidence.FailureMessage;
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = _activeAutomationRequestId,
+                    status = hasEvidence ? "completed" : "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = _activeAutomationRequestedCommand,
+                    message = message,
+                    passed = hasEvidence,
+                    failure_stage = _footLiveEvidence.FailureStage,
+                    foot_live_state_path = _footLiveEvidence.StatePath,
+                    manifest_path = _footLiveEvidence.StatePath,
+                    total_jobs = 1,
+                    success_jobs = hasEvidence ? 1 : 0,
+                    failures = hasEvidence ? Array.Empty<string>() : new[] { message }
+                });
+                TraceAutomation($"foot live id={_activeAutomationRequestId} evidence={hasEvidence} stage={_footLiveEvidence.FailureStage}");
+            }
+            finally
+            {
+                _footLiveEvidence.Dispose();
+                _footLiveEvidence = null;
+                ClearAutomationRequestState();
+                TryDeleteRequestFile();
+            }
         }
 
         private static void PollPlaybackEvidence()
