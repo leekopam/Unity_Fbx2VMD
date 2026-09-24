@@ -5,14 +5,19 @@
   "type": "module",
   "description": "Main recording settings Electron shell",
   "main": "electron/main.js",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "bridge:e2e": "node scripts/runBridgeE2e.mjs",
+    "boogle": "node node_modules/boogle-sdk/dist/cli.js",
     "package:release": "node scripts/packageElectronRelease.mjs",
     "start:dev": "node scripts/runElectron.mjs --dev",
     "start:prod": "node scripts/runElectron.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
+    "boogle-sdk": "file:../../../../Tools/Boogle/boogle-sdk-0.1.0-beta.0.tgz",
     "electron": "^42.4.1"
   },
   "dependencies": {
