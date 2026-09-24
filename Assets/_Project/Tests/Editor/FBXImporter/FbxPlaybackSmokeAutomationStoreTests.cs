@@ -92,6 +92,8 @@ namespace Tests.Editor.FBXImporter
                 ("output_path", "smoke_satisfaction_2_2s.vmd"),
                 ("frame_count", 60),
                 ("file_size_bytes", 360000L),
+                ("capture_path", "game-view.png"),
+                ("preselection_state_path", "state.json"),
                 ("total_jobs", 2),
                 ("success_jobs", 1),
                 ("failures", new[] { "failure-1" }));
@@ -110,6 +112,8 @@ namespace Tests.Editor.FBXImporter
             Assert.That(statusJson, Does.Contain("\"output_path\": \"smoke_satisfaction_2_2s.vmd\""));
             Assert.That(statusJson, Does.Contain("\"frame_count\": 60"));
             Assert.That(statusJson, Does.Contain("\"file_size_bytes\": 360000"));
+            Assert.That(statusJson, Does.Contain("\"capture_path\": \"game-view.png\""));
+            Assert.That(statusJson, Does.Contain("\"preselection_state_path\": \"state.json\""));
             Assert.That(statusJson, Does.Contain("\"manifest_path\": \"manifest.json\""));
             Assert.That(statusJson, Does.Contain("\"total_jobs\": 2"));
             Assert.That(statusJson, Does.Contain("\"success_jobs\": 1"));

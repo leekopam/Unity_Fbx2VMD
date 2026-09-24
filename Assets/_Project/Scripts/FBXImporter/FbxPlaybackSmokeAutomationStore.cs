@@ -28,6 +28,8 @@ namespace Fbx2Vmd.FBXImporter
         public string output_path;
         public int frame_count;
         public long file_size_bytes;
+        public string capture_path;
+        public string preselection_state_path;
         public int total_jobs;
         public int success_jobs;
         public string[] failures;
