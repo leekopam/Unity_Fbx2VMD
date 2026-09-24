@@ -30,6 +30,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CapturePreselectionStateCommand = "capture_preselection_state";
         private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
         private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
+        private const string CaptureSatisfactionFullClipMetricsCommand = "capture_satisfaction_full_clip_metrics";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
         private const string EnterE2ePlayCommand = "enter_e2e_play";
@@ -151,6 +152,7 @@ namespace Fbx2Vmd.FBXImporter
         private static string _playbackEvidencePath;
         private static string _playbackCapturePath;
         private static FbxFootLiveEvidenceCapture _footLiveEvidence;
+        private static FbxFullClipFootMetricsCapture _fullClipMetrics;
         private static int _footEvidenceFrameIndex;
         private static readonly List<string> PlaybackStageLog = new List<string>();
         private enum InvalidInputPhase { None, MissingPath, InvalidAvatar }
@@ -394,6 +396,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void PollAutomationRequest()
         {
+            if (_fullClipMetrics != null)
+            {
+                PollFullClipMetrics();
+                return;
+            }
+
             if (_footLiveEvidence != null)
             {
                 PollFootLiveEvidence();
@@ -711,6 +719,11 @@ namespace Fbx2Vmd.FBXImporter
                             interactive: false, out message)) return false;
                     return FbxFootLiveEvidenceCapture.TryStart(footPipeline, request.request_id,
                         request.run_id, out _footLiveEvidence, out message);
+                case CaptureSatisfactionFullClipMetricsCommand:
+                    if (!TryGetFBXVmdPipeline(SatisfactionFbxFileName, out FBXVmdPipeline fullPipeline,
+                            interactive: false, out message)) return false;
+                    return FbxFullClipFootMetricsCapture.TryStart(fullPipeline, request.request_id,
+                        request.run_id, out _fullClipMetrics, out message);
                 case CaptureInvalidInputEvidenceCommand:
                     return TryStartInvalidInputEvidence(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
@@ -1143,6 +1156,42 @@ namespace Fbx2Vmd.FBXImporter
             if (message.StartsWith("[FBXImport] 상태 변경됨.", StringComparison.Ordinal) &&
                 PlaybackStageLog.Count < 64)
                 PlaybackStageLog.Add(message);
+        }
+
+        private static void PollFullClipMetrics()
+        {
+            _fullClipMetrics.Poll();
+            if (!_fullClipMetrics.IsFinished) return;
+            try
+            {
+                bool hasEvidence = _fullClipMetrics.HasEvidence;
+                string message = hasEvidence
+                    ? "F10 전체 프레임 수집 완료, 화면·전체 재생 검토 필요"
+                    : _fullClipMetrics.FailureMessage;
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = _activeAutomationRequestId,
+                    status = hasEvidence ? "completed" : "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = _activeAutomationRequestedCommand,
+                    message = message,
+                    passed = hasEvidence,
+                    failure_stage = _fullClipMetrics.FailureStage,
+                    full_clip_state_path = _fullClipMetrics.StatePath,
+                    manifest_path = _fullClipMetrics.StatePath,
+                    total_jobs = 1,
+                    success_jobs = hasEvidence ? 1 : 0,
+                    failures = hasEvidence ? Array.Empty<string>() : new[] { message }
+                });
+                TraceAutomation($"full clip id={_activeAutomationRequestId} evidence={hasEvidence} stage={_fullClipMetrics.FailureStage}");
+            }
+            finally
+            {
+                _fullClipMetrics.Dispose();
+                _fullClipMetrics = null;
+                ClearAutomationRequestState();
+                TryDeleteRequestFile();
+            }
         }
 
         private static void PollFootLiveEvidence()

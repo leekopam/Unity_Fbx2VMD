@@ -22,6 +22,7 @@ const command = "capture_satisfaction_quick_vmd_smoke_2s";
 const preselectionCommand = "capture_preselection_state";
 const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
+const fullClipCommand = "capture_satisfaction_full_clip_metrics";
 const invalidInputCommand = "capture_invalid_input_evidence";
 const environmentCommand = "capture_e2e_environment";
 const enterPlayCommand = "enter_e2e_play";
@@ -838,6 +839,131 @@ async function executeFootLive(runId) {
   return { ...result, requestId };
 }
 
+async function executeFullClip(runId) {
+  const sessionRoot = path.join(evidenceRoot, "full-clip-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const requestId = randomUUID();
+  const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
+  const steps = [];
+  const vmdBefore = await hashFile(outputPath);
+  const vmdMetaBefore = await hashFile(`${outputPath}.meta`);
+  let before = null;
+  let after = null;
+  let unityStatus = null;
+  let state = null;
+  let submitted = false;
+  let terminal = false;
+  let enteredPlay = false;
+  let result = { status: "INFRA_ERROR" };
+  let failureStage = "preflight";
+  try {
+    await access(fbxPath);
+    const baseline = await executeControl(runId, environmentCommand);
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    before = baseline.state;
+    if (baseline.status !== "PASS" || !before || before.play_mode ||
+        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        !before.model_active || before.has_prepared_motion || before.is_recording ||
+        before.capture_framerate !== 0) {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      const enter = await executeControl(runId, enterPlayCommand);
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      enteredPlay = enter.status === "PASS";
+      if (!enteredPlay) result = { status: enter.status };
+      else if (await readOptional(requestPath) || (await readStatus())?.status === "running")
+        result = { status: "BLOCKED", failureKind: "preflight" };
+      else {
+        await writeFile(requestPath, JSON.stringify({ request_id: requestId,
+          command: fullClipCommand, requested_command: fullClipCommand, run_id: runId
+        }), { flag: "wx" });
+        submitted = true;
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 1920000) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const candidate = await readStatus();
+          if (candidate?.request_id !== requestId) continue;
+          unityStatus = candidate;
+          if (candidate.status !== "running") { terminal = true; break; }
+        }
+        if (!terminal) {
+          failureStage = "timeout";
+          result = { status: "TIMED_OUT", failureKind: "timeout" };
+        } else if (unityStatus.status !== "completed" || unityStatus.passed !== true) {
+          failureStage = unityStatus.failure_stage || "capture";
+          result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL",
+            failureKind: failureStage === "preflight" ? "preflight" : "test_failure" };
+        } else {
+          failureStage = "evidence";
+          const allowedRoot = path.join(evidenceRoot, "full-clip", runId, requestId);
+          const statePath = path.resolve(unityStatus.full_clip_state_path || "");
+          if (path.relative(allowedRoot, statePath) !== "state.json")
+            throw new Error("F10 상태 파일 경로가 실행 폴더를 벗어났습니다.");
+          state = JSON.parse(await readFile(statePath, "utf8"));
+          const csvPath = path.resolve(state.csv_path || "");
+          if (path.relative(allowedRoot, csvPath) !== "all-frames.csv")
+            throw new Error("F10 CSV 경로가 실행 폴더를 벗어났습니다.");
+          const rows = (await readFile(csvPath, "utf8")).trimEnd().split(/\r?\n/);
+          const expected = (state.last_frame + 1) * 2;
+          const valid = state.status === "metrics_complete_review_required" &&
+            state.scene === "Assets/_Project/Scene/Main_Auto.unity" &&
+            state.input === "satisfaction_2.fbx" && state.last_frame >= 1333 &&
+            state.clip_frame_rate > 0 && state.processed_frames === state.last_frame + 1 &&
+            state.row_count === expected && rows.length === expected + 1 &&
+            rows[0].startsWith("frame,time_s,time_error_ms,side,") &&
+            rows.slice(1).every((row, index) => {
+              const cells = row.split(",");
+              const frame = Math.floor(index / 2);
+              return cells.length === 39 && Number(cells[0]) === frame &&
+                cells[3] === (index % 2 ? "right" : "left") &&
+                Math.abs(Number(cells[1]) - frame / state.clip_frame_rate) * 1000 <=
+                  500 / state.clip_frame_rate + 0.02 &&
+                Number.isFinite(Number(cells[2]));
+            });
+          result = valid ? { status: "MANUAL_REVIEW_REQUIRED" } :
+            { status: "FAIL", failureKind: "test_failure" };
+          if (valid) failureStage = "";
+        }
+      }
+    }
+  } catch (error) {
+    failureStage = "infrastructure";
+    result = { status: "INFRA_ERROR", message: error.message };
+  } finally {
+    if (submitted && terminal) {
+      const pending = await readOptional(requestPath);
+      if (pending && JSON.parse(pending.toString("utf8")).request_id === requestId)
+        await rm(requestPath);
+    }
+    if (enteredPlay && (!submitted || terminal)) {
+      const exit = await executeControl(runId, exitPlayCommand);
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
+    }
+    if (!submitted || terminal) {
+      const final = await executeControl(runId, environmentCommand);
+      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      after = final.state;
+      if (!before || final.status !== "PASS" ||
+          !environmentFields.every((field) =>
+            JSON.stringify(before[field]) === JSON.stringify(after?.[field])) ||
+          vmdBefore !== await hashFile(outputPath) ||
+          vmdMetaBefore !== await hashFile(`${outputPath}.meta`))
+        result = { status: "INFRA_ERROR" };
+    }
+    const trace = await readOptional(tracePath);
+    if (trace && trace.length > traceOffset)
+      await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, requestId, result: result.status, failureStage, steps, before, after,
+      unityStatus, statePath: unityStatus?.full_clip_state_path || null,
+      processedFrames: state?.processed_frames || null, rowCount: state?.row_count || null
+    }, null, 2));
+  }
+  return { ...result, requestId };
+}
+
 async function executeSuite(runId) {
   const sessionRoot = path.join(evidenceRoot, "suite-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -1021,9 +1147,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1060,6 +1186,7 @@ async function main() {
     inputConditions: {
       testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08" :
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
+        mode === "full-clip" ? "F10" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05" :
           mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
@@ -1078,6 +1205,7 @@ async function main() {
         : mode === "preselection" ? await executePreselection(runId)
         : mode === "playback" ? await executePlayback(runId)
         : mode === "foot-live" ? await executeFootLive(runId)
+        : mode === "full-clip" ? await executeFullClip(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)
             : await executeSmoke(runId);
     } catch (error) {
@@ -1087,6 +1215,7 @@ async function main() {
         mode === "preselection" ? "preselection-runs" :
           mode === "playback" ? "playback-runs" :
             mode === "foot-live" ? "foot-live-runs" :
+            mode === "full-clip" ? "full-clip-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
       await writeFile(path.join(sessionRoot, "adapter-error.json"), JSON.stringify({
