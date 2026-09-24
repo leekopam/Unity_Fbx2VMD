@@ -20,6 +20,8 @@ const sdkRunnerPath = path.join(
 const projectId = "f2f44dc8-83ef-46d0-9d26-b0e52d1c4d20";
 const command = "capture_satisfaction_quick_vmd_smoke_2s";
 const preselectionCommand = "capture_preselection_state";
+const playbackCommand = "capture_playback_seek_evidence";
+const invalidInputCommand = "capture_invalid_input_evidence";
 
 async function readOptional(pathToRead) {
   try {
@@ -267,10 +269,216 @@ async function executePreselection(runId) {
   return result;
 }
 
+async function executePlayback(runId) {
+  const sessionRoot = path.join(evidenceRoot, "playback-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const requestId = randomUUID();
+  const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
+  let status = null;
+  let result = { status: "INFRA_ERROR" };
+  let failureStage = "preflight";
+  let submitted = false;
+  let running = false;
+  try {
+    await access(fbxPath);
+    if (await readOptional(requestPath) || (await readStatus())?.status === "running") {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      await writeFile(requestPath, JSON.stringify({
+        request_id: requestId, command: playbackCommand, requested_command: playbackCommand
+      }), { flag: "wx" });
+      submitted = true;
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 1260000) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const candidate = await readStatus();
+        if (candidate?.request_id !== requestId) {
+          if (Date.now() - startedAt > 30000) break;
+          continue;
+        }
+        status = candidate;
+        running = candidate.status === "running";
+        if (!running) break;
+      }
+      if (!status || running) {
+        result = { status: running ? "TIMED_OUT" : "BLOCKED",
+          failureKind: running ? "timeout" : "preflight" };
+      } else if (status.status !== "completed" || status.passed !== true) {
+        failureStage = status.failure_stage || "playback";
+        result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL",
+          failureKind: failureStage === "preflight" ? "preflight" : "test_failure" };
+      } else {
+        failureStage = "evidence";
+        const statePath = path.resolve(status.playback_state_path || "");
+        const allowedRoot = path.join(evidenceRoot, "playback");
+        const relativePath = path.relative(allowedRoot, statePath);
+        if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+          result = { status: "INFRA_ERROR" };
+        } else {
+          const state = JSON.parse(await readFile(statePath, "utf8"));
+          const captures = [state.first_capture_path, state.second_capture_path,
+            state.repeat_capture_path];
+          const completePngs = (await Promise.all(captures.map(async (capturePath) => {
+            const resolved = path.resolve(capturePath || "");
+            const relative = path.relative(path.dirname(statePath), resolved);
+            if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
+            const content = await readFile(resolved);
+            return content.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) &&
+              content.subarray(-8).equals(Buffer.from("49454e44ae426082", "hex"));
+          }))).every(Boolean);
+          const expectedFrames = state.first_seek?.actual_frame === 166 &&
+            state.second_seek?.actual_frame === 544 &&
+            state.repeat_seek?.actual_frame === 166;
+          const expectedStates = state.paused?.state === "PreviewPaused" &&
+            state.first_seek?.state === "PreviewPaused" &&
+            state.second_seek?.state === "PreviewPaused" &&
+            state.repeat_seek?.state === "PreviewPaused" &&
+            state.resumed?.state === "PreviewPlaying";
+          if (state.structural_passed === true && state.visual_review_required === true &&
+              state.scene === "Main_Auto" && expectedFrames && expectedStates &&
+              state.repeat_max_position_delta_mm <= 0.5 &&
+              state.repeat_max_rotation_delta_degrees <= 0.5 &&
+              state.repeat_max_muscle_delta <= 0.0001 && completePngs) {
+            failureStage = "";
+            result = { status: "MANUAL_REVIEW_REQUIRED" };
+          } else {
+            result = { status: "FAIL", failureKind: "test_failure" };
+          }
+        }
+      }
+    }
+  } catch (error) {
+    failureStage = "infrastructure";
+    result = !submitted && (error.code === "ENOENT" || error.code === "EEXIST")
+      ? { status: "BLOCKED", failureKind: "preflight" }
+      : { status: "INFRA_ERROR" };
+  } finally {
+    if (submitted && !running) {
+      const current = await readOptional(requestPath);
+      if (current) {
+        try {
+          if (JSON.parse(current.toString("utf8")).request_id === requestId) {
+            await rm(requestPath);
+          }
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error;
+        }
+      }
+    }
+    const trace = await readOptional(tracePath);
+    if (trace && trace.length > traceOffset) {
+      await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
+    }
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, requestId, command: playbackCommand, result: result.status,
+      failureStage, status
+    }, null, 2));
+  }
+  return result;
+}
+
+async function executeInvalidInput(runId) {
+  const sessionRoot = path.join(evidenceRoot, "invalid-input-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const requestId = randomUUID();
+  const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
+  let status = null;
+  let result = { status: "INFRA_ERROR" };
+  let failureStage = "preflight";
+  let submitted = false;
+  let running = false;
+  try {
+    await access(fbxPath);
+    if (await readOptional(requestPath) || (await readStatus())?.status === "running") {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      await writeFile(requestPath, JSON.stringify({
+        request_id: requestId, command: invalidInputCommand, requested_command: invalidInputCommand
+      }), { flag: "wx" });
+      submitted = true;
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 120000) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const candidate = await readStatus();
+        if (candidate?.request_id !== requestId) {
+          if (Date.now() - startedAt > 30000) break;
+          continue;
+        }
+        status = candidate;
+        running = candidate.status === "running";
+        if (!running) break;
+      }
+      if (!status || running) {
+        result = { status: running ? "TIMED_OUT" : "BLOCKED",
+          failureKind: running ? "timeout" : "preflight" };
+      } else if (status.status !== "completed" || status.passed !== true) {
+        failureStage = status.failure_stage || "invalid_input";
+        result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL",
+          failureKind: failureStage === "preflight" ? "preflight" : "test_failure" };
+      } else {
+        failureStage = "evidence";
+        const statePath = path.resolve(status.failure_evidence_path || "");
+        const relativePath = path.relative(path.join(evidenceRoot, "invalid-input"), statePath);
+        if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+          result = { status: "INFRA_ERROR" };
+        } else {
+          const state = JSON.parse(await readFile(statePath, "utf8"));
+          const missing = state.missing_fbx;
+          const avatar = state.invalid_avatar;
+          if (state.test_passed === true && state.scene === "Main_Auto" &&
+              state.original_avatar_restored === true &&
+              state.is_recording === false && state.capture_framerate === 0 &&
+              missing?.product_status === "Failed" &&
+              missing?.failure_stage === "input_validation" &&
+              missing?.expected_rejection_observed === true &&
+              missing?.product_error?.includes("FBX 파일을 찾을 수 없습니다") &&
+              avatar?.product_status === "Failed" &&
+              avatar?.failure_stage === "avatar_preparation" &&
+              avatar?.expected_rejection_observed === true &&
+              avatar?.product_error?.includes("유효한 Humanoid Avatar가 없습니다")) {
+            failureStage = "";
+            result = { status: "PASS" };
+          } else {
+            result = { status: "FAIL", failureKind: "test_failure" };
+          }
+        }
+      }
+    }
+  } catch (error) {
+    failureStage = "infrastructure";
+    result = error.code === "EEXIST"
+      ? { status: "BLOCKED", failureKind: "preflight" }
+      : { status: "INFRA_ERROR" };
+  } finally {
+    if (submitted && !running) {
+      const current = await readOptional(requestPath);
+      if (current) {
+        try {
+          if (JSON.parse(current.toString("utf8")).request_id === requestId) {
+            await rm(requestPath);
+          }
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error;
+        }
+      }
+    }
+    const trace = await readOptional(tracePath);
+    if (trace && trace.length > traceOffset) {
+      await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
+    }
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, requestId, command: invalidInputCommand, result: result.status,
+      failureStage, status
+    }, null, 2));
+  }
+  return result;
+}
+
 async function main() {
-  const preselection = process.argv[2] === "preselection";
-  if (process.argv.length > (preselection ? 3 : 2)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection]");
+  const mode = process.argv[2] || "smoke";
+  if (!["smoke", "preselection", "playback", "invalid-input"].includes(mode) ||
+      process.argv.length > (mode === "smoke" ? 2 : 3)) {
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|invalid-input]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -298,7 +506,9 @@ async function main() {
     testPack: { id: "fbx2vmd-product-smoke", version: "0.1.2" },
     retries: 0,
     inputConditions: {
-      testCaseIds: preselection ? "F01" : "F02,F06", fbxSha256: fbxHash,
+      testCaseIds: mode === "preselection" ? "F01" : mode === "playback" ? "F03" :
+        mode === "invalid-input" ? "F07" : "F02,F06",
+      fbxSha256: fbxHash,
       modelSha256: modelHash, sceneSha256: sceneHash
     },
     environmentConditions: {
@@ -309,9 +519,15 @@ async function main() {
   }, async (temporaryPath) => {
     const runId = path.basename(temporaryPath);
     try {
-      return preselection ? await executePreselection(runId) : await executeSmoke(runId);
+      return mode === "preselection" ? await executePreselection(runId)
+        : mode === "playback" ? await executePlayback(runId)
+          : mode === "invalid-input" ? await executeInvalidInput(runId)
+            : await executeSmoke(runId);
     } catch (error) {
-      const sessionRoot = path.join(evidenceRoot, preselection ? "preselection-runs" : "product-smoke", runId);
+      const sessionRoot = path.join(evidenceRoot,
+        mode === "preselection" ? "preselection-runs" :
+          mode === "playback" ? "playback-runs" :
+            mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
       await writeFile(path.join(sessionRoot, "adapter-error.json"), JSON.stringify({
         runId, result: "INFRA_ERROR", failureStage: "adapter", message: error.message
