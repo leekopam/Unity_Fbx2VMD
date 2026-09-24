@@ -198,6 +198,20 @@ namespace Tests.Editor.FBXImporter
                                 rotations[boundary.y][rightFootIndex]), Is.LessThan(5f),
                                 "골반 이동 한도로 접지 경로가 전환되어 발이 수십 도 튀면 안 됨");
 
+                        if (modelPath.Contains("YYB Hatsune Miku_default/"))
+                        {
+                            Invoke(controller, "Seek", 790f / clip.frameRate);
+                            AssertStatus(controller, "Applied");
+                            Assert.That(FindSoleClearance(grounding, "_right", false, 3f), Is.LessThan(0.002f),
+                                "정지 자세의 뒤꿈치를 앞꿈치만 지지하는 자세로 두면 안 됨");
+                            Invoke(controller, "Seek", 1332f / clip.frameRate);
+                            AssertStatus(controller, "Applied");
+                            Assert.That(FindSoleClearance(grounding, "_left", false, 3f),
+                                Is.InRange(0.01f, 0.035f), "앞꿈치 자세를 유지하면서 과도한 뒤꿈치 들림을 제한해야 함");
+                            Assert.That(Mathf.Abs(FindSoleClearance(grounding, "_left", true, 3f)),
+                                Is.LessThan(0.002f), "앞꿈치 지지점은 바닥에 닿아 있어야 함");
+                        }
+
                         Invoke(controller, "Seek", 58f / clip.frameRate);
                         var self = model.AddComponent<BoxCollider>();
                         self.center = Vector3.up * 0.3f;
@@ -255,6 +269,18 @@ namespace Tests.Editor.FBXImporter
 
         private static object Field(object target, string name) =>
             target.GetType().GetField(name, Flags).GetValue(target);
+
+        private static float FindSoleClearance(object grounding, string side, bool isFront, float floorHeight)
+        {
+            object leg = Field(grounding, side);
+            object sampler = Field(leg, "Sampler");
+            Assert.That(Invoke(sampler, "TrySample"), Is.True);
+            object[] contact = { isFront, Vector3.up, 0, Vector3.zero };
+            Assert.That(Invoke(sampler, "TrySelectContact", contact), Is.True);
+            object[] point = { (int)contact[2], Vector3.zero };
+            Assert.That(Invoke(sampler, "TryGetLocalPoint", point), Is.True);
+            return ((Transform)Field(leg, "Foot")).TransformPoint((Vector3)point[1]).y - floorHeight;
+        }
 
         private static Vector3[] CaptureLeftRearSupport(object grounding)
         {
