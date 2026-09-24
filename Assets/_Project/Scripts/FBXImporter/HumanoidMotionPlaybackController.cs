@@ -49,6 +49,7 @@ namespace Fbx2Vmd.FBXImporter
         internal float ClipLengthSeconds { get; private set; }
 
         internal float ClipFrameRate { get; private set; }
+        internal string ClipName { get; private set; } = string.Empty;
 
         internal int CurrentFrameIndex =>
             HumanoidMotionFrameCalculator.CalculateFrameIndex(
@@ -126,6 +127,7 @@ namespace Fbx2Vmd.FBXImporter
                 ClipLengthSeconds = Mathf.Max(0f, clip.length);
                 ClipFrameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(
                     clip.frameRate);
+                ClipName = clip.name;
                 CurrentTimeSeconds = 0f;
                 _player.EvaluateAt(CurrentTimeSeconds);
                 _poseFrameEditor.Initialize(targetAnimator);
@@ -216,6 +218,19 @@ namespace Fbx2Vmd.FBXImporter
             return IsPrepared && _poseFrameEditor.TryCapture(out pose);
         }
 
+#if UNITY_EDITOR
+        internal bool TryCaptureCurrentFootSurface(out HumanoidFootGroundingSnapshot left,
+            out HumanoidFootGroundingSnapshot right)
+        {
+            left = null;
+            right = null;
+            return IsPrepared &&
+                (LastGroundingStatus == HumanoidFootGroundingStatus.Applied ||
+                 LastGroundingStatus == HumanoidFootGroundingStatus.NoGround) &&
+                _footGrounding != null && _footGrounding.TryCaptureCurrentSurface(out left, out right);
+        }
+#endif
+
         internal bool TryPreviewPoseCorrection(
             HumanoidPoseCorrectionDocument document)
         {
@@ -296,6 +311,7 @@ namespace Fbx2Vmd.FBXImporter
             CurrentTimeSeconds = 0f;
             ClipLengthSeconds = 0f;
             ClipFrameRate = 0f;
+            ClipName = string.Empty;
             _poseCorrectionDocument = null;
             State = HumanoidMotionPlaybackState.Empty;
         }

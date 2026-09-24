@@ -1490,6 +1490,8 @@ namespace Fbx2Vmd.FBXImporter
             _humanoidMotionPlaybackController?.ClipLengthSeconds ?? 0f;
         public float ImportedMotionFrameRate =>
             _humanoidMotionPlaybackController?.ClipFrameRate ?? 0f;
+        public string ImportedMotionClipName =>
+            _humanoidMotionPlaybackController?.ClipName ?? string.Empty;
         public int ImportedMotionPoseCorrectionFrameCount =>
             _poseCorrectionDocument?.FrameCount ?? 0;
 #if UNITY_EDITOR
@@ -1577,7 +1579,8 @@ namespace Fbx2Vmd.FBXImporter
             float diagnosticScreenshotPaddingOverride = float.NaN,
             float diagnosticScreenshotVerticalViewportCenterOverride = float.NaN,
             float recordingStartTimeOverrideSeconds = float.NaN,
-            float recordingPlaybackSpeedOverride = float.NaN)
+            float recordingPlaybackSpeedOverride = float.NaN,
+            bool useInputBaseName = false)
         {
             if (_isProcessing)
             {
@@ -1671,6 +1674,7 @@ namespace Fbx2Vmd.FBXImporter
                 DiagnosticScreenshotVerticalViewportCenterOverride =
                     screenshotVerticalViewportCenterOverride,
                 UseKnownReferenceTiming = useKnownReferenceTiming,
+                UseInputBaseName = useInputBaseName,
                 RecordingStartTimeOverrideSeconds = startTimeOverride,
                 RecordingPlaybackSpeedOverride = playbackSpeedOverride
             });
@@ -2015,6 +2019,20 @@ namespace Fbx2Vmd.FBXImporter
                 _humanoidMotionPlaybackController != null &&
                 _humanoidMotionPlaybackController.TryCaptureCurrentPose(out pose);
         }
+
+#if UNITY_EDITOR
+        internal bool TryCaptureImportedMotionFootSurface(out HumanoidFootGroundingSnapshot left,
+            out HumanoidFootGroundingSnapshot right, out HumanoidFootGroundingStatus status)
+        {
+            left = null;
+            right = null;
+            status = _humanoidMotionPlaybackController?.LastGroundingStatus ??
+                HumanoidFootGroundingStatus.Unavailable;
+            return !IsImportedMotionRecording && !IsPreparingImportedMotionCorrection &&
+                _humanoidMotionPlaybackController != null &&
+                _humanoidMotionPlaybackController.TryCaptureCurrentFootSurface(out left, out right);
+        }
+#endif
 
         public bool TryApplyImportedMotionMuscleDelta(
             string muscleName,

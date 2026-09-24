@@ -14,6 +14,28 @@ namespace Fbx2Vmd.FBXImporter
         Fallback
     }
 
+    [Serializable]
+    internal sealed class HumanoidFootGroundingSnapshot
+    {
+        public bool has_ground;
+        public string support_role;
+        public float rear_weight;
+        public float front_weight;
+        public Vector3 ground_point;
+        public Vector3 ground_normal;
+        public Vector3 rear_anchor;
+        public Vector3 front_anchor;
+        public Vector3 rear_point;
+        public Vector3 front_point;
+        public float rear_distance_mm;
+        public float front_distance_mm;
+        public float minimum_distance_mm;
+        public string rear_renderer;
+        public string front_renderer;
+        public int rear_vertex;
+        public int front_vertex;
+    }
+
     /// <summary>
     /// 명시적 재생 시각의 지지·밑창 목표와 양다리 도달 보정을 조립함.
     /// </summary>
@@ -47,6 +69,15 @@ namespace Fbx2Vmd.FBXImporter
         internal int FullySupportedContactCount { get; private set; }
         internal int UnresolvedSupportPairCount => _left.UnresolvedPairCount + _right.UnresolvedPairCount;
         internal int InterpolatedSupportContactCount => _left.InterpolatedContactCount + _right.InterpolatedContactCount;
+
+        internal bool TryCaptureCurrentSurface(out HumanoidFootGroundingSnapshot left,
+            out HumanoidFootGroundingSnapshot right)
+        {
+            left = null;
+            right = null;
+            return IsPrepared && _left.TryCaptureCurrentSurface(out left) &&
+                _right.TryCaptureCurrentSurface(out right);
+        }
 
         internal static bool TryCreate(Animator animator, out EditorHumanoidFootGrounding grounding)
         {
@@ -222,6 +253,41 @@ namespace Fbx2Vmd.FBXImporter
             internal int InterpolatedContactCount =>
                 (_activeWeights.x >= 0.999f && _activeContacts[0].IsInterpolatedPoint ? 1 : 0) +
                 (_activeWeights.y >= 0.999f && _activeContacts[1].IsInterpolatedPoint ? 1 : 0);
+
+            internal bool TryCaptureCurrentSurface(out HumanoidFootGroundingSnapshot sample)
+            {
+                sample = new HumanoidFootGroundingSnapshot
+                {
+                    has_ground = HasGround,
+                    rear_weight = _activeWeights.x,
+                    front_weight = _activeWeights.y,
+                    rear_anchor = _anchors[0],
+                    front_anchor = _anchors[1],
+                    support_role = _activeWeights.x > 0f
+                        ? (_activeWeights.y > 0f ? "both" : "rear")
+                        : (_activeWeights.y > 0f ? "front" : "released")
+                };
+                if (!HasGround) return true;
+                if (!Sampler.TrySample() ||
+                    !Sampler.TrySelectContact(false, _ground.normal, out int rear, out Vector3 rearPoint) ||
+                    !Sampler.TrySelectContact(true, _ground.normal, out int front, out Vector3 frontPoint) ||
+                    !Sampler.TryGetPointIdentity(rear, out SkinnedMeshRenderer rearRenderer, out int rearVertex) ||
+                    !Sampler.TryGetPointIdentity(front, out SkinnedMeshRenderer frontRenderer, out int frontVertex))
+                    return false;
+
+                sample.ground_point = _ground.point;
+                sample.ground_normal = _ground.normal;
+                sample.rear_point = rearPoint;
+                sample.front_point = frontPoint;
+                sample.rear_distance_mm = Vector3.Dot(rearPoint - _ground.point, _ground.normal) * 1000f;
+                sample.front_distance_mm = Vector3.Dot(frontPoint - _ground.point, _ground.normal) * 1000f;
+                sample.minimum_distance_mm = Mathf.Min(sample.rear_distance_mm, sample.front_distance_mm);
+                sample.rear_renderer = rearRenderer.name;
+                sample.front_renderer = frontRenderer.name;
+                sample.rear_vertex = rearVertex;
+                sample.front_vertex = frontVertex;
+                return true;
+            }
 
             private Leg(Transform upper, Transform lower, Transform foot, Transform toes,
                 EditorHumanoidFootSoleSampler sampler, Vector3 referenceNormal, Quaternion? localFootFrame)
