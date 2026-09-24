@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -12,7 +12,7 @@ const requestPath = path.join(runtimeRoot, "fbx_smoke_request.json");
 const statusPath = path.join(runtimeRoot, "fbx_smoke_status.json");
 const tracePath = path.join(runtimeRoot, "fbx_smoke_trace.log");
 const fbxPath = path.join(projectRoot, "Assets/Resources/Import_FBX/satisfaction_2.fbx");
-const outputPath = path.join(projectRoot, "Assets/VMDRecorderSample/smoke_satisfaction_2_2s.vmd");
+const outputPath = path.join(projectRoot, "Assets/VMDRecorderSample/satisfaction_2.vmd");
 const sdkRunnerPath = path.join(
   projectRoot,
   "Assets/_Project/Tools/MainRecordingSettings/node_modules/boogle-sdk/dist/runner.js"
@@ -54,6 +54,49 @@ async function hashFile(filePath) {
   return digest.digest("hex");
 }
 
+async function hasCompletePngWithin(filePath, directory) {
+  const resolved = path.resolve(filePath || "");
+  const relative = path.relative(directory, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
+  const file = await open(resolved, "r");
+  try {
+    const { size } = await file.stat();
+    if (size < 20) return false;
+    const head = Buffer.alloc(8);
+    const tail = Buffer.alloc(8);
+    await file.read(head, 0, 8, 0);
+    await file.read(tail, 0, 8, size - 8);
+    return head.equals(Buffer.from("89504e470d0a1a0a", "hex")) &&
+      tail.equals(Buffer.from("49454e44ae426082", "hex"));
+  } finally {
+    await file.close();
+  }
+}
+
+function inspectShortVmd(bytes) {
+  if (bytes.length < 58 ||
+      bytes.subarray(0, 30).toString("ascii").replace(/\0+$/, "") !==
+        "Vocaloid Motion Data 0002") return null;
+  const boneRecords = bytes.readUInt32LE(50);
+  const morphOffset = 54 + boneRecords * 111;
+  if (boneRecords < 60 || morphOffset + 4 > bytes.length) return null;
+  const frames = new Set();
+  const bones = new Set();
+  for (let index = 0; index < boneRecords; index++) {
+    const offset = 54 + index * 111;
+    const frame = bytes.readUInt32LE(offset + 15);
+    if (frame >= 60) return null;
+    const key = `${bytes.subarray(offset, offset + 15).toString("hex")}:${frame}`;
+    if (bones.has(key)) return null;
+    bones.add(key);
+    frames.add(frame);
+  }
+  const morphRecords = bytes.readUInt32LE(morphOffset);
+  if (morphOffset + 4 + morphRecords * 23 > bytes.length) return null;
+  return { boneRecords, morphRecords, uniqueFrames: frames.size,
+    bytesPerFrame: bytes.length / 60 };
+}
+
 async function executeSmoke(runId) {
   const sessionRoot = path.join(evidenceRoot, "product-smoke", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -70,6 +113,7 @@ async function executeSmoke(runId) {
   let backupCreated = false;
   let stillRunning = false;
   let restored = false;
+  let vmdStructure = null;
 
   try {
     await access(fbxPath);
@@ -113,9 +157,11 @@ async function executeSmoke(runId) {
         failureStage = "output";
         const output = await stat(outputPath).catch(() => null);
         const hasExpectedPath = path.resolve(status.output_path || "").toLowerCase() === outputPath.toLowerCase();
+        if (output?.size > 0) vmdStructure = inspectShortVmd(await readFile(outputPath));
         if (status.total_jobs === 1 && status.success_jobs === 1 &&
             status.frame_count === 60 && status.file_size_bytes === output?.size &&
-            output?.size > 0 && hasExpectedPath) {
+            output?.size > 0 && hasExpectedPath &&
+            vmdStructure?.uniqueFrames === 60 && vmdStructure.boneRecords % 60 === 0) {
           failureStage = "";
           outcome = {
             status: "PASS",
@@ -172,7 +218,8 @@ async function executeSmoke(runId) {
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, command, result: outcome.status, failureStage, restored,
-      status, outputPath, backupPath: priorOutput ? backupPath : null
+      status, outputPath, backupPath: priorOutput ? backupPath : null,
+      vmdStructure
     }, null, 2));
   }
   return outcome;
@@ -279,6 +326,9 @@ async function executePlayback(runId) {
   let failureStage = "preflight";
   let submitted = false;
   let running = false;
+  let csvPath = null;
+  let frameMapPath = null;
+  let humanLabelsPath = null;
   try {
     await access(fbxPath);
     if (await readOptional(requestPath) || (await readStatus())?.status === "running") {
@@ -318,14 +368,60 @@ async function executePlayback(runId) {
           const state = JSON.parse(await readFile(statePath, "utf8"));
           const captures = [state.first_capture_path, state.second_capture_path,
             state.repeat_capture_path];
-          const completePngs = (await Promise.all(captures.map(async (capturePath) => {
-            const resolved = path.resolve(capturePath || "");
-            const relative = path.relative(path.dirname(statePath), resolved);
-            if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
-            const content = await readFile(resolved);
-            return content.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) &&
-              content.subarray(-8).equals(Buffer.from("49454e44ae426082", "hex"));
-          }))).every(Boolean);
+          const expectedFootFrames = [0, 165, 166, 167, 543, 544, 545, 789, 790, 791,
+            1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333];
+          const footFrames = state.foot_frames || [];
+          csvPath = path.join(path.dirname(statePath), "foot-frames.csv");
+          const rows = ["frame,time_s,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,root_y_m,hips_y_m,knee_y_m,rear_vertex,front_vertex"];
+          for (const frame of footFrames) {
+            if (!frame) continue;
+            for (const side of ["left", "right"]) {
+              const foot = frame[side];
+              if (!foot) continue;
+              rows.push([frame.actual_frame, frame.time_seconds, side,
+                frame.grounding_status, foot.has_ground, foot.support_role,
+                foot.rear_weight, foot.front_weight, foot.rear_distance_mm,
+                foot.front_distance_mm, foot.minimum_distance_mm,
+                frame.root_position?.y, frame.hips_position?.y,
+                frame[`${side}_knee_position`]?.y,
+                foot.rear_vertex, foot.front_vertex].join(","));
+            }
+          }
+          await writeFile(csvPath, `${rows.join("\n")}\n`);
+          frameMapPath = path.join(path.dirname(statePath), "frame-map.csv");
+          const samples = [["paused", state.paused], ["first_seek", state.first_seek],
+            ["second_seek", state.second_seek], ["repeat_seek", state.repeat_seek],
+            ["resumed", state.resumed],
+            ...footFrames.filter(Boolean).map((frame) => [`foot_${frame.actual_frame}`, frame])];
+          const frameRows = ["sample,requested_clip_frame,unity_frame,time_s,expected_vmd_frame_at_30fps",
+            ...samples.map(([name, sample]) => [name, sample?.requested_frame,
+              sample?.actual_frame, sample?.time_seconds,
+              Math.round((sample?.time_seconds || 0) * 30)].join(","))];
+          await writeFile(frameMapPath, `${frameRows.join("\n")}\n`);
+          humanLabelsPath = path.join(path.dirname(statePath), "human-labels.csv");
+          const intervals = [[0, 0], [165, 167], [543, 545], [789, 791], [1323, 1333]];
+          const labelRows = ["from_frame,to_frame,side,contact_label,motion_label,reviewer,notes",
+            ...intervals.flatMap(([start, end]) => ["left", "right"].map((side) =>
+              `${start},${end},${side},,,,`))];
+          await writeFile(humanLabelsPath, `${labelRows.join("\n")}\n`, { flag: "wx" });
+          const footEvidenceValid = footFrames.length === expectedFootFrames.length &&
+            footFrames.every((frame, index) => frame?.requested_frame === expectedFootFrames[index] &&
+              frame.actual_frame === expectedFootFrames[index] &&
+              ["Applied", "NoGround"].includes(frame.grounding_status) &&
+              frame.left && frame.right &&
+              typeof frame.left.support_role === "string" &&
+              typeof frame.right.support_role === "string" &&
+              [frame.left, frame.right].every((foot) => !foot.has_ground ||
+                [foot.rear_distance_mm, foot.front_distance_mm, foot.minimum_distance_mm,
+                  foot.rear_weight, foot.front_weight].every(Number.isFinite)) &&
+              Number.isFinite(frame.root_position?.y) &&
+              Number.isFinite(frame.hips_position?.y));
+          const pngPaths = [...captures, ...footFrames.map((frame) => frame?.game_view_path),
+            ...footFrames.map((frame) => frame?.side_view_path).filter(Boolean)];
+          const completePngs = (await Promise.all(pngPaths.map((file) =>
+            hasCompletePngWithin(file, path.dirname(statePath))))).every(Boolean);
+          const sideFrames = footFrames.filter((frame) => frame?.side_view_path)
+            .map((frame) => frame.actual_frame);
           const expectedFrames = state.first_seek?.actual_frame === 166 &&
             state.second_seek?.actual_frame === 544 &&
             state.repeat_seek?.actual_frame === 166;
@@ -334,11 +430,22 @@ async function executePlayback(runId) {
             state.second_seek?.state === "PreviewPaused" &&
             state.repeat_seek?.state === "PreviewPaused" &&
             state.resumed?.state === "PreviewPlaying";
+          const expectedStages = ["Selected", "Copied", "LoadingFbx", "AvatarReady", "Ready"]
+            .every((stage) => state.stage_log?.some((line) =>
+              line.includes(`상태=${stage},`)));
           if (state.structural_passed === true && state.visual_review_required === true &&
-              state.scene === "Main_Auto" && expectedFrames && expectedStates &&
+              state.scene === "Main_Auto" && expectedFrames && expectedStates && expectedStages &&
+              state.source_asset_path === "Assets/Resources/Import_FBX/satisfaction_2.fbx" &&
+              state.model && state.avatar && state.clip_name &&
+              state.importer_clip_count > 0 && state.importer_animation_type === "Human" &&
+              state.last_frame >= 1333 && state.clip_frame_rate > 0 &&
               state.repeat_max_position_delta_mm <= 0.5 &&
               state.repeat_max_rotation_delta_degrees <= 0.5 &&
-              state.repeat_max_muscle_delta <= 0.0001 && completePngs) {
+              state.repeat_max_muscle_delta <= 0.0001 && footEvidenceValid &&
+              sideFrames.join(",") === "0,166,544" &&
+              typeof state.apply_root_motion === "boolean" &&
+              typeof state.lock_root_height_y === "boolean" &&
+              typeof state.lock_root_position_xz === "boolean" && completePngs) {
             failureStage = "";
             result = { status: "MANUAL_REVIEW_REQUIRED" };
           } else {
@@ -371,7 +478,7 @@ async function executePlayback(runId) {
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, command: playbackCommand, result: result.status,
-      failureStage, status
+      failureStage, status, csvPath, frameMapPath, humanLabelsPath
     }, null, 2));
   }
   return result;
@@ -506,7 +613,7 @@ async function main() {
     testPack: { id: "fbx2vmd-product-smoke", version: "0.1.2" },
     retries: 0,
     inputConditions: {
-      testCaseIds: mode === "preselection" ? "F01" : mode === "playback" ? "F03" :
+      testCaseIds: mode === "preselection" ? "F01" : mode === "playback" ? "F03,F04,F05" :
         mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
       modelSha256: modelHash, sceneSha256: sceneHash

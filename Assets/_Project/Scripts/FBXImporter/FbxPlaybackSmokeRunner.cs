@@ -127,8 +127,15 @@ namespace Fbx2Vmd.FBXImporter
             FirstCapture,
             SecondCapture,
             RepeatCapture,
+            FootCaptures,
             Resumed
         }
+
+        private static readonly int[] FootEvidenceFrames =
+        {
+            0, 165, 166, 167, 543, 544, 545, 789, 790, 791,
+            1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333
+        };
 
         private static PlaybackEvidencePhase _playbackEvidencePhase;
         private static FBXVmdPipeline _playbackEvidencePipeline;
@@ -137,6 +144,8 @@ namespace Fbx2Vmd.FBXImporter
         private static DateTime _playbackCaptureStartedUtc;
         private static string _playbackEvidencePath;
         private static string _playbackCapturePath;
+        private static int _footEvidenceFrameIndex;
+        private static readonly List<string> PlaybackStageLog = new List<string>();
         private enum InvalidInputPhase { None, MissingPath, InvalidAvatar }
         private static InvalidInputPhase _invalidInputPhase;
         private static FBXVmdPipeline _invalidInputPipeline;
@@ -538,7 +547,8 @@ namespace Fbx2Vmd.FBXImporter
                         null,
                         "quick-vmd-smoke",
                         FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
-                        out message);
+                        out message,
+                        useInputBaseName: true);
                 case CaptureSatisfactionThumbEvidenceCommand:
                     return TryStartAutomationSingleSmoke(
                         "satisfaction_2.fbx",
@@ -825,6 +835,17 @@ namespace Fbx2Vmd.FBXImporter
         {
             public string scene;
             public string input_path;
+            public string source_asset_path;
+            public string model;
+            public string avatar;
+            public string clip_name;
+            public string importer_clip_name;
+            public int importer_clip_count;
+            public float importer_first_frame;
+            public float importer_last_frame;
+            public string importer_animation_type;
+            public string importer_avatar_setup;
+            public string[] stage_log;
             public float clip_length_seconds;
             public float clip_frame_rate;
             public int last_frame;
@@ -839,10 +860,40 @@ namespace Fbx2Vmd.FBXImporter
             public float repeat_max_position_delta_mm;
             public float repeat_max_rotation_delta_degrees;
             public float repeat_max_muscle_delta;
+            public Vector3 pre_import_root_position;
+            public Vector3 pre_import_hips_position;
+            public bool apply_root_motion;
+            public bool lock_root_height_y;
+            public bool keep_original_position_y;
+            public bool lock_root_position_xz;
+            public bool keep_original_position_xz;
+            public FootFrameEvidence[] foot_frames;
             public bool structural_passed;
             public bool visual_review_required;
             public string failure_stage;
             public string failure_message;
+        }
+
+        [Serializable]
+        private sealed class FootFrameEvidence
+        {
+            public int requested_frame;
+            public int actual_frame;
+            public float time_seconds;
+            public string grounding_status;
+            public Vector3 root_position;
+            public Vector3 hips_position;
+            public Vector3 body_position;
+            public Vector3 left_knee_position;
+            public Vector3 right_knee_position;
+            public Quaternion left_ankle_rotation;
+            public Quaternion right_ankle_rotation;
+            public Quaternion left_toe_rotation;
+            public Quaternion right_toe_rotation;
+            public HumanoidFootGroundingSnapshot left;
+            public HumanoidFootGroundingSnapshot right;
+            public string game_view_path;
+            public string side_view_path;
         }
 
         private static bool TryStartPlaybackEvidence(string requestId, out string message)
@@ -865,6 +916,15 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             string inputPath = Path.Combine(GetImportFbxDirectory(), SatisfactionFbxFileName);
+            Animator animator = pipeline.targetCharacter != null
+                ? pipeline.targetCharacter.GetComponentInChildren<Animator>(true) : null;
+            Transform hips = animator != null && animator.isHuman
+                ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
+            if (animator == null || hips == null)
+            {
+                message = "기본 모델의 Humanoid Hips를 찾을 수 없습니다.";
+                return false;
+            }
             string sessionPath = Path.Combine(
                 Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
                 "Docs", "Workflow", "Local", "evidence", "boogle", "playback", id.ToString("D"));
@@ -875,10 +935,17 @@ namespace Fbx2Vmd.FBXImporter
                 _playbackEvidence = new PlaybackEvidence
                 {
                     scene = MainAutoSceneName,
-                    input_path = inputPath
+                    input_path = inputPath,
+                    pre_import_root_position = pipeline.targetCharacter.transform.position,
+                    pre_import_hips_position = hips.position,
+                    apply_root_motion = animator.applyRootMotion,
+                    foot_frames = new FootFrameEvidence[FootEvidenceFrames.Length]
                 };
                 _playbackEvidencePipeline = pipeline;
                 _playbackEvidenceStartedUtc = DateTime.UtcNow;
+                PlaybackStageLog.Clear();
+                Application.logMessageReceived -= CapturePlaybackStageLog;
+                Application.logMessageReceived += CapturePlaybackStageLog;
                 if (!pipeline.TryStartFbxImportFromSharedSettings(inputPath))
                 {
                     message = "제품 FBX 가져오기 요청이 거부되었습니다.";
@@ -895,6 +962,13 @@ namespace Fbx2Vmd.FBXImporter
                 ClearPlaybackEvidence();
                 return false;
             }
+        }
+
+        private static void CapturePlaybackStageLog(string message, string stackTrace, LogType type)
+        {
+            if (message.StartsWith("[FBXImport] 상태 변경됨.", StringComparison.Ordinal) &&
+                PlaybackStageLog.Count < 64)
+                PlaybackStageLog.Add(message);
         }
 
         private static void PollPlaybackEvidence()
@@ -936,7 +1010,13 @@ namespace Fbx2Vmd.FBXImporter
                             _playbackEvidencePipeline.ImportedMotionFrameRate;
                         _playbackEvidence.last_frame =
                             _playbackEvidencePipeline.ImportedMotionLastFrameIndex;
-                        if (_playbackEvidence.last_frame < 544 ||
+                        if (!TryCaptureImportedClipSettings())
+                        {
+                            CompletePlaybackEvidence(false, "import_settings",
+                                "선택된 모델·클립 또는 FBX 임포트 설정을 확인하지 못했습니다.");
+                            return;
+                        }
+                        if (_playbackEvidence.last_frame < FootEvidenceFrames[FootEvidenceFrames.Length - 1] ||
                             _playbackEvidence.clip_frame_rate <= 0f ||
                             !_playbackEvidencePipeline.TryPlayImportedMotion())
                         {
@@ -976,9 +1056,22 @@ namespace Fbx2Vmd.FBXImporter
                     case PlaybackEvidencePhase.RepeatCapture:
                         if (!IsPlaybackCaptureReady()) return;
                         CompareRepeatedPose();
+                        _footEvidenceFrameIndex = 0;
+                        if (!TryBeginFootFrameCapture())
+                            CompletePlaybackEvidence(false, "foot_surface", "첫 하체 프레임 계측 또는 캡처에 실패했습니다.");
+                        break;
+                    case PlaybackEvidencePhase.FootCaptures:
+                        if (!IsPlaybackCaptureReady()) return;
+                        _footEvidenceFrameIndex++;
+                        if (_footEvidenceFrameIndex < FootEvidenceFrames.Length)
+                        {
+                            if (!TryBeginFootFrameCapture())
+                                CompletePlaybackEvidence(false, "foot_surface", "하체 연속 프레임 계측 또는 캡처에 실패했습니다.");
+                            break;
+                        }
                         if (!_playbackEvidencePipeline.TryPlayImportedMotion())
                         {
-                            CompletePlaybackEvidence(false, "resume", "프레임 재탐색 뒤 재생하지 못했습니다.");
+                            CompletePlaybackEvidence(false, "resume", "하체 프레임 탐색 뒤 재생하지 못했습니다.");
                             return;
                         }
 
@@ -996,7 +1089,8 @@ namespace Fbx2Vmd.FBXImporter
 
                         bool passed = _playbackEvidence.repeat_max_position_delta_mm <= 0.5f &&
                             _playbackEvidence.repeat_max_rotation_delta_degrees <= 0.5f &&
-                            _playbackEvidence.repeat_max_muscle_delta <= 0.0001f;
+                            _playbackEvidence.repeat_max_muscle_delta <= 0.0001f &&
+                            _playbackEvidence.foot_frames.All(frame => frame != null);
                         CompletePlaybackEvidence(passed, passed ? string.Empty : "reproducibility",
                             passed ? "" : "같은 프레임의 반복 탐색 포즈가 다릅니다.");
                         break;
@@ -1048,6 +1142,134 @@ namespace Fbx2Vmd.FBXImporter
             if (HasCompletedPng(_playbackCapturePath)) return true;
             if (DateTime.UtcNow - _playbackCaptureStartedUtc <= TimeSpan.FromSeconds(15)) return false;
             throw new IOException($"Game View 캡처가 완료되지 않았습니다: {_playbackCapturePath}");
+        }
+
+        private static bool TryCaptureImportedClipSettings()
+        {
+            const string assetPath = "Assets/" + ImportFbxRelativeDirectory + "/" + SatisfactionFbxFileName;
+            var importer = AssetImporter.GetAtPath(assetPath) as ModelImporter;
+            ModelImporterClipAnimation[] clips = importer?.clipAnimations;
+            if (clips == null || clips.Length == 0) clips = importer?.defaultClipAnimations;
+            Animator animator = _playbackEvidencePipeline.targetCharacter != null
+                ? _playbackEvidencePipeline.targetCharacter.GetComponentInChildren<Animator>(true) : null;
+            if (importer == null || clips == null || clips.Length == 0 || animator == null ||
+                animator.avatar == null || !animator.avatar.isValid || !animator.avatar.isHuman ||
+                string.IsNullOrWhiteSpace(_playbackEvidencePipeline.ImportedMotionClipName)) return false;
+
+            string clipName = _playbackEvidencePipeline.ImportedMotionClipName;
+            ModelImporterClipAnimation clip = clips.FirstOrDefault(candidate => candidate.name == clipName)
+                ?? clips[0];
+            _playbackEvidence.source_asset_path = assetPath;
+            _playbackEvidence.model = _playbackEvidencePipeline.targetCharacter.name;
+            _playbackEvidence.avatar = animator.avatar.name;
+            _playbackEvidence.clip_name = clipName;
+            _playbackEvidence.importer_clip_name = clip.name;
+            _playbackEvidence.importer_clip_count = clips.Length;
+            _playbackEvidence.importer_first_frame = clip.firstFrame;
+            _playbackEvidence.importer_last_frame = clip.lastFrame;
+            _playbackEvidence.importer_animation_type = importer.animationType.ToString();
+            _playbackEvidence.importer_avatar_setup = importer.avatarSetup.ToString();
+            _playbackEvidence.lock_root_height_y = clip.lockRootHeightY;
+            _playbackEvidence.keep_original_position_y = clip.keepOriginalPositionY;
+            _playbackEvidence.lock_root_position_xz = clip.lockRootPositionXZ;
+            _playbackEvidence.keep_original_position_xz = clip.keepOriginalPositionXZ;
+            return true;
+        }
+
+        private static bool TryBeginFootFrameCapture()
+        {
+            int frame = FootEvidenceFrames[_footEvidenceFrameIndex];
+            if (!_playbackEvidencePipeline.TrySeekImportedMotionFrame(frame) ||
+                !_playbackEvidencePipeline.TryCaptureImportedMotionFootSurface(
+                    out HumanoidFootGroundingSnapshot left,
+                    out HumanoidFootGroundingSnapshot right,
+                    out HumanoidFootGroundingStatus status) ||
+                !_playbackEvidencePipeline.TryCaptureImportedMotionPose(out HumanPose pose)) return false;
+
+            Animator animator = _playbackEvidencePipeline.targetCharacter != null
+                ? _playbackEvidencePipeline.targetCharacter.GetComponentInChildren<Animator>(true) : null;
+            if (animator == null || !animator.isHuman) return false;
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform leftKnee = animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
+            Transform rightKnee = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
+            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            Transform leftToe = animator.GetBoneTransform(HumanBodyBones.LeftToes);
+            Transform rightToe = animator.GetBoneTransform(HumanBodyBones.RightToes);
+            if (hips == null || leftKnee == null || rightKnee == null || leftFoot == null ||
+                rightFoot == null || leftToe == null || rightToe == null) return false;
+
+            string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            string prefix = $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}_why-F04-F05";
+            string directory = Path.GetDirectoryName(_playbackEvidencePath);
+            _playbackCapturePath = Path.Combine(directory, prefix + "_how-GameView.png");
+            var sample = new FootFrameEvidence
+            {
+                requested_frame = frame,
+                actual_frame = _playbackEvidencePipeline.ImportedMotionCurrentFrameIndex,
+                time_seconds = _playbackEvidencePipeline.ImportedMotionCurrentTimeSeconds,
+                grounding_status = status.ToString(),
+                root_position = _playbackEvidencePipeline.targetCharacter.transform.position,
+                hips_position = hips.position,
+                body_position = pose.bodyPosition,
+                left_knee_position = leftKnee.position,
+                right_knee_position = rightKnee.position,
+                left_ankle_rotation = leftFoot.rotation,
+                right_ankle_rotation = rightFoot.rotation,
+                left_toe_rotation = leftToe.rotation,
+                right_toe_rotation = rightToe.rotation,
+                left = left,
+                right = right,
+                game_view_path = _playbackCapturePath
+            };
+            if (sample.actual_frame != frame) return false;
+            if (frame == 0 || frame == 166 || frame == 544)
+            {
+                sample.side_view_path = Path.Combine(directory, prefix + "_how-side-camera.png");
+                if (!TryCaptureSideView(animator, hips.position, sample.side_view_path)) return false;
+            }
+
+            _playbackEvidence.foot_frames[_footEvidenceFrameIndex] = sample;
+            ScreenCapture.CaptureScreenshot(_playbackCapturePath);
+            _playbackCaptureStartedUtc = DateTime.UtcNow;
+            _playbackEvidencePhase = PlaybackEvidencePhase.FootCaptures;
+            return true;
+        }
+
+        private static bool TryCaptureSideView(Animator animator, Vector3 center, string path)
+        {
+            Camera source = Camera.main;
+            if (source == null) return false;
+            GameObject cameraObject = null;
+            RenderTexture target = null;
+            Texture2D image = null;
+            RenderTexture previous = RenderTexture.active;
+            try
+            {
+                cameraObject = new GameObject("F04 Side View") { hideFlags = HideFlags.HideAndDontSave };
+                Camera side = cameraObject.AddComponent<Camera>();
+                side.CopyFrom(source);
+                float distance = Vector3.Distance(source.transform.position, center);
+                side.transform.position = center + animator.transform.right * distance +
+                    Vector3.up * (source.transform.position.y - center.y);
+                side.transform.LookAt(center);
+                target = new RenderTexture(1024, 768, 24);
+                side.targetTexture = target;
+                side.Render();
+                RenderTexture.active = target;
+                image = new Texture2D(1024, 768, TextureFormat.RGB24, false);
+                image.ReadPixels(new Rect(0, 0, 1024, 768), 0, 0);
+                image.Apply();
+                File.WriteAllBytes(path, image.EncodeToPNG());
+                return HasCompletedPng(path);
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                if (image != null) UnityEngine.Object.DestroyImmediate(image);
+                if (target != null) UnityEngine.Object.DestroyImmediate(target);
+                if (cameraObject != null) UnityEngine.Object.DestroyImmediate(cameraObject);
+            }
         }
 
         private static bool TryCapturePlaybackPose(int requestedFrame, out PlaybackPoseEvidence sample)
@@ -1114,6 +1336,7 @@ namespace Fbx2Vmd.FBXImporter
             if (_playbackEvidence == null) return;
             _playbackEvidence.failure_stage = failureStage;
             _playbackEvidence.failure_message = message;
+            _playbackEvidence.stage_log = PlaybackStageLog.ToArray();
             _playbackEvidence.structural_passed = passed;
             _playbackEvidence.visual_review_required = passed;
             string statePath = _playbackEvidencePath;
@@ -1152,11 +1375,14 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void ClearPlaybackEvidence()
         {
+            Application.logMessageReceived -= CapturePlaybackStageLog;
+            PlaybackStageLog.Clear();
             _playbackEvidencePhase = PlaybackEvidencePhase.None;
             _playbackEvidencePipeline = null;
             _playbackEvidence = null;
             _playbackEvidencePath = null;
             _playbackCapturePath = null;
+            _footEvidenceFrameIndex = 0;
         }
 
         [Serializable]
@@ -1451,7 +1677,8 @@ namespace Fbx2Vmd.FBXImporter
             out string message,
             int captureWidthOverride = 0,
             int captureHeightOverride = 0,
-            float recordingStartTimeOverrideSeconds = float.NaN)
+            float recordingStartTimeOverrideSeconds = float.NaN,
+            bool useInputBaseName = false)
         {
             message = string.Empty;
             if (!TryGetFBXVmdPipeline(fbxFileName, out FBXVmdPipeline fileManager, interactive: false, out message))
@@ -1459,7 +1686,9 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds, enableFingerCloseups, sampleTimesOverride, captureWidthOverride, captureHeightOverride, recordingStartTimeOverrideSeconds))
+            if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds,
+                    enableFingerCloseups, sampleTimesOverride, captureWidthOverride,
+                    captureHeightOverride, recordingStartTimeOverrideSeconds, useInputBaseName))
             {
                 message = $"smoke start failed: {fbxFileName}";
                 return false;
@@ -1602,7 +1831,8 @@ namespace Fbx2Vmd.FBXImporter
             float[] sampleTimesOverride = null,
             int captureWidthOverride = 0,
             int captureHeightOverride = 0,
-            float recordingStartTimeOverrideSeconds = float.NaN)
+            float recordingStartTimeOverrideSeconds = float.NaN,
+            bool useInputBaseName = false)
         {
             if (fileManager == null)
             {
@@ -1630,7 +1860,8 @@ namespace Fbx2Vmd.FBXImporter
                 sampleTimesOverride: sampleTimesOverride,
                 captureWidthOverride: captureWidthOverride,
                 captureHeightOverride: captureHeightOverride,
-                recordingStartTimeOverrideSeconds: recordingStartTimeOverrideSeconds);
+                recordingStartTimeOverrideSeconds: recordingStartTimeOverrideSeconds,
+                useInputBaseName: useInputBaseName);
 
             if (started)
             {

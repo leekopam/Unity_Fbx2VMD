@@ -146,10 +146,10 @@ namespace Fbx2Vmd.FBXImporter
                     recordingTargetFrameCount = Mathf.Min(
                         Mathf.Max(1, editorDiagnosticSession.TargetFrameCount),
                         Mathf.CeilToInt(recordingLength * FBXVmdPipeline.EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE));
-                    recordingOutputBaseName = FBXEditorDiagnosticPlanner.BuildOutputBaseName(
-                        outputBaseName,
-                        recordingLength,
-                        editorDiagnosticSession.Segment);
+                    recordingOutputBaseName = editorDiagnosticSession.UseInputBaseName
+                        ? outputBaseName
+                        : FBXEditorDiagnosticPlanner.BuildOutputBaseName(
+                            outputBaseName, recordingLength, editorDiagnosticSession.Segment);
                     comparisonLabel = $"auto_{recordingOutputBaseName}";
                     Debug.Log(
                         $"[Recording] 에디터 스모크 녹화 제한 적용됨. VMD={recordingOutputBaseName}.vmd, " +

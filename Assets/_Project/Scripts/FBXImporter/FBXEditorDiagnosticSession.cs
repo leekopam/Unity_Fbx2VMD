@@ -45,6 +45,7 @@ namespace Fbx2Vmd.FBXImporter
             internal float DiagnosticScreenshotPaddingOverride { get; set; } = float.NaN;
             internal float DiagnosticScreenshotVerticalViewportCenterOverride { get; set; } = float.NaN;
             internal bool UseKnownReferenceTiming { get; set; }
+            internal bool UseInputBaseName { get; set; }
             internal float RecordingStartTimeOverrideSeconds { get; set; } = float.NaN;
             internal float RecordingPlaybackSpeedOverride { get; set; } = float.NaN;
         }
@@ -65,6 +66,7 @@ namespace Fbx2Vmd.FBXImporter
         internal float DiagnosticScreenshotPaddingOverride { get; private set; } = float.NaN;
         internal float DiagnosticScreenshotVerticalViewportCenterOverride { get; private set; } = float.NaN;
         internal bool UseKnownReferenceTiming { get; private set; }
+        internal bool UseInputBaseName { get; private set; }
         internal float RecordingStartTimeOverrideSeconds { get; private set; } = float.NaN;
         internal float RecordingPlaybackSpeedOverride { get; private set; } = float.NaN;
         internal bool HasSettingsSnapshot { get; private set; }
@@ -95,6 +97,7 @@ namespace Fbx2Vmd.FBXImporter
             DiagnosticScreenshotVerticalViewportCenterOverride =
                 plan.DiagnosticScreenshotVerticalViewportCenterOverride;
             UseKnownReferenceTiming = plan.UseKnownReferenceTiming;
+            UseInputBaseName = plan.UseInputBaseName;
             RecordingStartTimeOverrideSeconds = plan.RecordingStartTimeOverrideSeconds;
             RecordingPlaybackSpeedOverride = plan.RecordingPlaybackSpeedOverride;
         }
@@ -116,6 +119,7 @@ namespace Fbx2Vmd.FBXImporter
             DiagnosticScreenshotPaddingOverride = float.NaN;
             DiagnosticScreenshotVerticalViewportCenterOverride = float.NaN;
             UseKnownReferenceTiming = false;
+            UseInputBaseName = false;
             RecordingStartTimeOverrideSeconds = float.NaN;
             RecordingPlaybackSpeedOverride = float.NaN;
             _settingsSnapshot = default(SettingsSnapshot);
