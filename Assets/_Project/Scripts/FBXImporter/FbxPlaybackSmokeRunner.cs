@@ -429,6 +429,7 @@ namespace Fbx2Vmd.FBXImporter
                     updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
                     command = request.requested_command ?? request.command,
                     message = startMessage,
+                    failure_stage = "preflight",
                     passed = false,
                     failures = new[] { startMessage }
                 });
@@ -875,7 +876,8 @@ namespace Fbx2Vmd.FBXImporter
                     GetLastManifestPath(_singleFBXVmdPipeline),
                     result.Success ? Array.Empty<string>() : new[] { result.ErrorMessage },
                     totalJobs: 1,
-                    successJobs: result.Success ? 1 : 0);
+                    successJobs: result.Success ? 1 : 0,
+                    saveResult: result);
             }
 
             ClearSingleSmokeTracking();
@@ -1058,7 +1060,8 @@ namespace Fbx2Vmd.FBXImporter
             string manifestPath,
             string[] failures,
             int totalJobs,
-            int successJobs)
+            int successJobs,
+            VmdSaveResult? saveResult = null)
         {
             WriteStatus(new FbxPlaybackSmokeAutomationStatus
             {
@@ -1069,6 +1072,10 @@ namespace Fbx2Vmd.FBXImporter
                 message = message ?? string.Empty,
                 passed = passed,
                 manifest_path = manifestPath ?? string.Empty,
+                failure_stage = passed ? string.Empty : "product_path",
+                output_path = saveResult?.FilePath ?? string.Empty,
+                frame_count = saveResult?.FrameCount ?? 0,
+                file_size_bytes = saveResult?.FileSizeBytes ?? 0,
                 total_jobs = totalJobs,
                 success_jobs = successJobs,
                 failures = failures ?? Array.Empty<string>()

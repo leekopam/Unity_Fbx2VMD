@@ -24,6 +24,10 @@ namespace Fbx2Vmd.FBXImporter
         public string message;
         public bool passed;
         public string manifest_path;
+        public string failure_stage;
+        public string output_path;
+        public int frame_count;
+        public long file_size_bytes;
         public int total_jobs;
         public int success_jobs;
         public string[] failures;

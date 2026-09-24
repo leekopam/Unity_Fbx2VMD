@@ -88,6 +88,10 @@ namespace Tests.Editor.FBXImporter
                 ("message", "완료"),
                 ("passed", true),
                 ("manifest_path", "manifest.json"),
+                ("failure_stage", ""),
+                ("output_path", "smoke_satisfaction_2_2s.vmd"),
+                ("frame_count", 60),
+                ("file_size_bytes", 360000L),
                 ("total_jobs", 2),
                 ("success_jobs", 1),
                 ("failures", new[] { "failure-1" }));
@@ -103,6 +107,9 @@ namespace Tests.Editor.FBXImporter
             Assert.That(statusJson, Does.Contain("\"command\": \"capture\""));
             Assert.That(statusJson, Does.Contain("\"message\": \"완료\""));
             Assert.That(statusJson, Does.Contain("\"passed\": true"));
+            Assert.That(statusJson, Does.Contain("\"output_path\": \"smoke_satisfaction_2_2s.vmd\""));
+            Assert.That(statusJson, Does.Contain("\"frame_count\": 60"));
+            Assert.That(statusJson, Does.Contain("\"file_size_bytes\": 360000"));
             Assert.That(statusJson, Does.Contain("\"manifest_path\": \"manifest.json\""));
             Assert.That(statusJson, Does.Contain("\"total_jobs\": 2"));
             Assert.That(statusJson, Does.Contain("\"success_jobs\": 1"));
