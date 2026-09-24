@@ -25,6 +25,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string RunAllImportFbxMiddleCommand = "run_all_import_fbx_middle_31s";
         private const string RunAllImportFbxTailCommand = "run_all_import_fbx_tail_31s";
         private const string CaptureSatisfactionQuickVmdSmokeCommand = "capture_satisfaction_quick_vmd_smoke_2s";
+        private const string CapturePreselectionStateCommand = "capture_preselection_state";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
         private const string CaptureAntennaTailHelperEvidenceCommand = "capture_antenna_tail_helper_evidence";
@@ -109,6 +110,12 @@ namespace Fbx2Vmd.FBXImporter
         private static string _activeAutomationCommand;
         private static string _activeAutomationRequestedCommand;
         private static DateTime _nextAutomationPollUtc = DateTime.MinValue;
+        private static DateTime _preselectionStartedUtc;
+        private static string _preselectionCapturePath;
+        private static string _preselectionStatePath;
+        private static Transform[] _preselectionBones;
+        private static Vector3[] _preselectionBonePositions;
+        private static FBXVmdPipeline _preselectionPipeline;
 
         static FbxPlaybackSmokeRunner()
         {
@@ -342,6 +349,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void PollAutomationRequest()
         {
+            if (!string.IsNullOrEmpty(_preselectionCapturePath))
+            {
+                PollPreselectionCapture();
+                return;
+            }
+
             if (DateTime.UtcNow < _nextAutomationPollUtc)
             {
                 return;
@@ -470,6 +483,8 @@ namespace Fbx2Vmd.FBXImporter
 
             switch (request.command)
             {
+                case CapturePreselectionStateCommand:
+                    return TryStartPreselectionCapture(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
                     return TryStartAutomationSingleSmoke(
                         SatisfactionFbxFileName,
@@ -518,6 +533,225 @@ namespace Fbx2Vmd.FBXImporter
                 default:
                     message = $"unsupported command: {request.command}";
                     return false;
+            }
+        }
+
+        [Serializable]
+        private sealed class PreselectionEvidence
+        {
+            public string scene;
+            public string model;
+            public string avatar;
+            public bool avatar_valid;
+            public float plane_y;
+            public int plane_layer;
+            public Vector3 plane_normal;
+            public string camera;
+            public Vector3 camera_position;
+            public Vector3 camera_forward;
+            public bool camera_orthographic;
+            public int capture_width;
+            public int capture_height;
+            public int capture_framerate;
+            public bool has_prepared_motion;
+            public bool is_recording;
+            public float max_pose_drift_mm;
+            public string capture_path;
+            public bool structural_passed;
+            public bool visual_review_required;
+        }
+
+        private static bool TryStartPreselectionCapture(string requestId, out string message)
+        {
+            message = string.Empty;
+            if (!Guid.TryParse(requestId, out Guid id) ||
+                !ValidateRuntimeContext(null, interactive: false, out message))
+            {
+                if (string.IsNullOrEmpty(message)) message = "request id is invalid";
+                return false;
+            }
+
+            Scene scene = SceneManager.GetActiveScene();
+            FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
+            GameObject plane = scene.GetRootGameObjects().FirstOrDefault(root => root.name == "Plane");
+            Collider planeCollider = plane != null ? plane.GetComponent<Collider>() : null;
+            Camera camera = Camera.main;
+            Animator animator = pipeline != null && pipeline.targetCharacter != null
+                ? pipeline.targetCharacter.GetComponentInChildren<Animator>(true)
+                : null;
+            UnityHumanoidVMDRecorder recorder = pipeline != null && pipeline.targetCharacter != null
+                ? pipeline.targetCharacter.GetComponentInChildren<UnityHumanoidVMDRecorder>(true)
+                : null;
+            if (scene.name != MainAutoSceneName || pipeline == null || pipeline.IsProcessing ||
+                pipeline.HasPreparedImportedMotion || pipeline.IsImportedMotionPlaying ||
+                pipeline.IsImportedMotionRecording || (recorder != null && recorder.IsRecording) ||
+                Time.captureFramerate != 0 ||
+                animator == null || !animator.gameObject.activeInHierarchy || !animator.isHuman ||
+                animator.avatar == null || !animator.avatar.isValid ||
+                plane == null || !plane.activeInHierarchy || planeCollider == null ||
+                !planeCollider.enabled || planeCollider.isTrigger ||
+                Mathf.Abs(plane.transform.position.y) > 0.001f ||
+                Vector3.Angle(plane.transform.up, Vector3.up) > 1f ||
+                camera == null || !camera.isActiveAndEnabled || camera.targetTexture != null ||
+                Screen.width <= 0 || Screen.height <= 0)
+            {
+                message = "Main_Auto의 선택 전 모델·Avatar·바닥·카메라·녹화 상태를 확인하세요.";
+                return false;
+            }
+
+            _preselectionBones = new[]
+            {
+                animator.GetBoneTransform(HumanBodyBones.Head),
+                animator.GetBoneTransform(HumanBodyBones.Hips),
+                animator.GetBoneTransform(HumanBodyBones.LeftFoot),
+                animator.GetBoneTransform(HumanBodyBones.RightFoot)
+            };
+            if (_preselectionBones.Any(bone => bone == null))
+            {
+                message = "기본 자세를 측정할 Humanoid 본이 누락되었습니다.";
+                return false;
+            }
+
+            string sessionPath = Path.Combine(
+                Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
+                "Docs", "Workflow", "Local", "evidence", "boogle", "preselection", id.ToString("D"));
+            try
+            {
+                Directory.CreateDirectory(sessionPath);
+                string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+                _preselectionCapturePath = Path.Combine(sessionPath,
+                    $"when-{capturedAt}_where-Main_Auto_who-auto_what-preselection-GameView_why-F01_how-ScreenCapture.png");
+                _preselectionStatePath = Path.Combine(sessionPath, "state.json");
+                _preselectionBonePositions = _preselectionBones.Select(bone => bone.position).ToArray();
+                _preselectionStartedUtc = DateTime.UtcNow;
+                ScreenCapture.CaptureScreenshot(_preselectionCapturePath);
+                _preselectionPipeline = pipeline;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _preselectionCapturePath = null;
+                _preselectionStatePath = null;
+                _preselectionBones = null;
+                _preselectionBonePositions = null;
+                message = $"선택 전 캡처 시작 실패: {ex.Message}";
+                return false;
+            }
+        }
+
+        private static void PollPreselectionCapture()
+        {
+            if (DateTime.UtcNow - _preselectionStartedUtc < TimeSpan.FromMilliseconds(500)) return;
+
+            bool screenshotReady = HasCompletedPng(_preselectionCapturePath);
+            if (!screenshotReady && DateTime.UtcNow - _preselectionStartedUtc < TimeSpan.FromSeconds(15)) return;
+
+            bool contextReady = EditorApplication.isPlaying &&
+                SceneManager.GetActiveScene().name == MainAutoSceneName &&
+                _preselectionPipeline != null && !_preselectionPipeline.IsProcessing &&
+                !_preselectionPipeline.HasPreparedImportedMotion &&
+                !_preselectionPipeline.IsImportedMotionRecording && Time.captureFramerate == 0;
+            float drift = 0f;
+            for (int index = 0; index < _preselectionBones.Length; index++)
+            {
+                if (_preselectionBones[index] == null)
+                {
+                    contextReady = false;
+                    break;
+                }
+                drift = Mathf.Max(drift, Vector3.Distance(
+                    _preselectionBonePositions[index], _preselectionBones[index].position) * 1000f);
+            }
+
+            GameObject plane = SceneManager.GetActiveScene().GetRootGameObjects()
+                .FirstOrDefault(root => root.name == "Plane");
+            Collider planeCollider = plane != null ? plane.GetComponent<Collider>() : null;
+            Camera camera = Camera.main;
+            Animator animator = _preselectionPipeline != null && _preselectionPipeline.targetCharacter != null
+                ? _preselectionPipeline.targetCharacter.GetComponentInChildren<Animator>(true)
+                : null;
+            UnityHumanoidVMDRecorder recorder = _preselectionPipeline != null && _preselectionPipeline.targetCharacter != null
+                ? _preselectionPipeline.targetCharacter.GetComponentInChildren<UnityHumanoidVMDRecorder>(true)
+                : null;
+            bool passed = screenshotReady && contextReady && drift <= 0.5f &&
+                plane != null && plane.activeInHierarchy && planeCollider != null &&
+                planeCollider.enabled && !planeCollider.isTrigger &&
+                Mathf.Abs(plane.transform.position.y) <= 0.001f &&
+                Vector3.Angle(plane.transform.up, Vector3.up) <= 1f &&
+                camera != null && camera.isActiveAndEnabled && camera.targetTexture == null &&
+                animator != null && animator.isHuman && animator.avatar != null && animator.avatar.isValid &&
+                (recorder == null || !recorder.IsRecording);
+            var evidence = new PreselectionEvidence
+            {
+                scene = SceneManager.GetActiveScene().name,
+                model = animator != null ? animator.gameObject.name : string.Empty,
+                avatar = animator != null && animator.avatar != null ? animator.avatar.name : string.Empty,
+                avatar_valid = animator != null && animator.avatar != null && animator.avatar.isValid,
+                plane_y = plane != null ? plane.transform.position.y : 0f,
+                plane_layer = plane != null ? plane.layer : -1,
+                plane_normal = plane != null ? plane.transform.up : Vector3.zero,
+                camera = camera != null ? camera.name : string.Empty,
+                camera_position = camera != null ? camera.transform.position : Vector3.zero,
+                camera_forward = camera != null ? camera.transform.forward : Vector3.zero,
+                camera_orthographic = camera != null && camera.orthographic,
+                capture_width = Screen.width,
+                capture_height = Screen.height,
+                capture_framerate = Time.captureFramerate,
+                has_prepared_motion = _preselectionPipeline != null && _preselectionPipeline.HasPreparedImportedMotion,
+                is_recording = (_preselectionPipeline != null && _preselectionPipeline.IsImportedMotionRecording) ||
+                    (recorder != null && recorder.IsRecording),
+                max_pose_drift_mm = drift,
+                capture_path = screenshotReady ? _preselectionCapturePath : string.Empty,
+                structural_passed = passed,
+                visual_review_required = passed
+            };
+            File.WriteAllText(_preselectionStatePath, JsonUtility.ToJson(evidence, true));
+            WriteStatus(new FbxPlaybackSmokeAutomationStatus
+            {
+                request_id = _activeAutomationRequestId,
+                status = passed ? "completed" : "failed",
+                updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                command = _activeAutomationRequestedCommand,
+                message = passed ? "선택 전 상태 수집 완료, Game View 수동 검토 필요" : "선택 전 상태 또는 Game View 캡처 실패",
+                passed = passed,
+                failure_stage = passed ? string.Empty : "preselection",
+                manifest_path = _preselectionStatePath,
+                preselection_state_path = _preselectionStatePath,
+                capture_path = screenshotReady ? _preselectionCapturePath : string.Empty,
+                total_jobs = 1,
+                success_jobs = passed ? 1 : 0,
+                failures = passed ? Array.Empty<string>() : new[] { "preselection structure, pose drift or capture failed" }
+            });
+            TraceAutomation($"preselection id={_activeAutomationRequestId} passed={passed} driftMm={drift:F3} screenshot={screenshotReady}");
+            _preselectionPipeline = null;
+            _preselectionCapturePath = null;
+            _preselectionStatePath = null;
+            _preselectionBones = null;
+            _preselectionBonePositions = null;
+            ClearAutomationRequestState();
+            TryDeleteRequestFile();
+        }
+
+        private static bool HasCompletedPng(string filePath)
+        {
+            if (!File.Exists(filePath)) return false;
+            try
+            {
+                using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                {
+                    if (stream.Length < 20) return false;
+                    stream.Seek(-8, SeekOrigin.End);
+                    byte[] trailer = new byte[8];
+                    return stream.Read(trailer, 0, trailer.Length) == trailer.Length &&
+                        trailer[0] == 0x49 && trailer[1] == 0x45 &&
+                        trailer[2] == 0x4e && trailer[3] == 0x44 &&
+                        trailer[4] == 0xae && trailer[5] == 0x42 &&
+                        trailer[6] == 0x60 && trailer[7] == 0x82;
+                }
+            }
+            catch (IOException)
+            {
+                return false;
             }
         }
 

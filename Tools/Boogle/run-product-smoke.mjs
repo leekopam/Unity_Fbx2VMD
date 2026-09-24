@@ -19,6 +19,7 @@ const sdkRunnerPath = path.join(
 );
 const projectId = "f2f44dc8-83ef-46d0-9d26-b0e52d1c4d20";
 const command = "capture_satisfaction_quick_vmd_smoke_2s";
+const preselectionCommand = "capture_preselection_state";
 
 async function readOptional(pathToRead) {
   try {
@@ -175,7 +176,102 @@ async function executeSmoke(runId) {
   return outcome;
 }
 
+async function executePreselection(runId) {
+  const sessionRoot = path.join(evidenceRoot, "preselection-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const requestId = randomUUID();
+  const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
+  let status = null;
+  let result = { status: "INFRA_ERROR" };
+  let failureStage = "preflight";
+  let submitted = false;
+  let running = false;
+  try {
+    if (await readOptional(requestPath) || (await readStatus())?.status === "running") {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      await writeFile(requestPath, JSON.stringify({
+        request_id: requestId, command: preselectionCommand, requested_command: preselectionCommand
+      }), { flag: "wx" });
+      submitted = true;
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 30000) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const candidate = await readStatus();
+        if (candidate?.request_id !== requestId) {
+          if (Date.now() - startedAt > 10000) break;
+          continue;
+        }
+        status = candidate;
+        running = candidate.status === "running";
+        if (!running) break;
+      }
+      if (!status || running) {
+        result = { status: running ? "TIMED_OUT" : "BLOCKED",
+          failureKind: running ? "timeout" : "preflight" };
+      } else if (status.status !== "completed" || status.passed !== true) {
+        failureStage = status.failure_stage || "preselection";
+        result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL",
+          failureKind: failureStage === "preflight" ? "preflight" : "test_failure" };
+      } else {
+        failureStage = "evidence";
+        const statePath = path.resolve(status.preselection_state_path || "");
+        const capturePath = path.resolve(status.capture_path || "");
+        const allowedRoot = path.join(evidenceRoot, "preselection") + path.sep;
+        if (statePath.startsWith(allowedRoot) && capturePath.startsWith(allowedRoot)) {
+          const state = JSON.parse(await readFile(statePath, "utf8"));
+          const capture = await readFile(capturePath);
+          const completePng = capture.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) &&
+            capture.subarray(-8).equals(Buffer.from("49454e44ae426082", "hex"));
+          if (state.structural_passed === true && state.visual_review_required === true &&
+              state.scene === "Main_Auto" && state.avatar_valid === true &&
+              state.has_prepared_motion === false && state.is_recording === false &&
+              state.max_pose_drift_mm <= 0.5 && completePng) {
+            failureStage = "";
+            result = { status: "MANUAL_REVIEW_REQUIRED" };
+          } else {
+            result = { status: "FAIL", failureKind: "test_failure" };
+          }
+        } else {
+          result = { status: "INFRA_ERROR" };
+        }
+      }
+    }
+  } catch (error) {
+    const wasPreflight = failureStage === "preflight";
+    failureStage = "infrastructure";
+    result = { status: wasPreflight &&
+      (error.code === "ENOENT" || error.code === "EEXIST") ? "BLOCKED" : "INFRA_ERROR" };
+  } finally {
+    if (submitted && !running) {
+      const current = await readOptional(requestPath);
+      if (current) {
+        try {
+          if (JSON.parse(current.toString("utf8")).request_id === requestId) {
+            await rm(requestPath);
+          }
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error;
+        }
+      }
+    }
+    const trace = await readOptional(tracePath);
+    if (trace && trace.length > traceOffset) {
+      await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
+    }
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, requestId, command: preselectionCommand, result: result.status,
+      failureStage, status
+    }, null, 2));
+  }
+  return result;
+}
+
 async function main() {
+  const preselection = process.argv[2] === "preselection";
+  if (process.argv.length > (preselection ? 3 : 2)) {
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection]");
+  }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
   }
@@ -198,11 +294,11 @@ async function main() {
   const run = await runWithAdapter(evidenceRoot, {
     protocolVersion: "0.1.0",
     projectId,
-    adapter: { id: "fbx2vmd-smoke", version: "0.1.0" },
-    testPack: { id: "fbx2vmd-product-smoke", version: "0.1.1" },
+    adapter: { id: "fbx2vmd-smoke", version: "0.1.1" },
+    testPack: { id: "fbx2vmd-product-smoke", version: "0.1.2" },
     retries: 0,
     inputConditions: {
-      testCaseIds: "F02,F06", fbxSha256: fbxHash,
+      testCaseIds: preselection ? "F01" : "F02,F06", fbxSha256: fbxHash,
       modelSha256: modelHash, sceneSha256: sceneHash
     },
     environmentConditions: {
@@ -213,9 +309,9 @@ async function main() {
   }, async (temporaryPath) => {
     const runId = path.basename(temporaryPath);
     try {
-      return await executeSmoke(runId);
+      return preselection ? await executePreselection(runId) : await executeSmoke(runId);
     } catch (error) {
-      const sessionRoot = path.join(evidenceRoot, "product-smoke", runId);
+      const sessionRoot = path.join(evidenceRoot, preselection ? "preselection-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
       await writeFile(path.join(sessionRoot, "adapter-error.json"), JSON.stringify({
         runId, result: "INFRA_ERROR", failureStage: "adapter", message: error.message
