@@ -26,6 +26,11 @@ const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
 const fullRegressionCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
+const segmentCases = [
+  ["head", "capture_satisfaction_head_31s", "smoke_satisfaction_2_31s"],
+  ["middle", "capture_satisfaction_middle_31s", "smoke_middle_satisfaction_2_31s"],
+  ["tail", "capture_satisfaction_tail_31s", "smoke_tail_satisfaction_2_31s"]
+];
 const invalidInputCommand = "capture_invalid_input_evidence";
 const environmentCommand = "capture_e2e_environment";
 const enterPlayCommand = "enter_e2e_play";
@@ -1067,6 +1072,73 @@ async function executeFullRegression(runId) {
   return result;
 }
 
+async function executeSegments(runId) {
+  const sessionRoot = path.join(evidenceRoot, "segment-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const steps = [];
+  let before = null;
+  let after = null;
+  let enteredPlay = false;
+  let result = { status: "INFRA_ERROR" };
+  try {
+    const baseline = await executeControl(runId, environmentCommand);
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    before = baseline.state;
+    if (baseline.status !== "PASS" || !before || before.play_mode ||
+        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        !before.model_active || !before.avatar_valid || before.is_processing ||
+        before.has_prepared_motion || before.is_recording ||
+        before.capture_framerate !== 0) {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      const enter = await executeControl(runId, enterPlayCommand);
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      enteredPlay = enter.status === "PASS";
+      result = enter;
+      if (enteredPlay) {
+        for (const [name, segmentCommand, prefix] of segmentCases) {
+          const step = await executeSmoke(runId, {
+            command: segmentCommand,
+            outputPath: path.join(projectRoot, "Assets/VMDRecorderSample", `${prefix}.vmd`),
+            frameCount: 930,
+            folder: `segment-${name}`,
+            protectedPrefix: prefix,
+            timeoutMs: 900000,
+            visualReview: true
+          });
+          steps.push({ name, status: step.status, requestId: step.requestId,
+            terminal: step.terminal, restored: step.restored });
+          result = step;
+          if (step.status !== "MANUAL_REVIEW_REQUIRED") break;
+        }
+      }
+    }
+  } catch (error) {
+    result = { status: "INFRA_ERROR", message: error.message };
+  } finally {
+    const requestActive = !!(await readOptional(requestPath)) ||
+      (await readStatus())?.status === "running";
+    if (enteredPlay && !requestActive) {
+      const exit = await executeControl(runId, exitPlayCommand);
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
+    }
+    if (before && !requestActive) {
+      const final = await executeControl(runId, environmentCommand);
+      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      after = final.state;
+      if (final.status !== "PASS" || !environmentFields.every((field) =>
+        JSON.stringify(before[field]) === JSON.stringify(after?.[field])) ||
+        steps.some((step) => step.restored === false)) result = { status: "INFRA_ERROR" };
+    }
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, result: result.status, steps, before, after, requestActive
+    }, null, 2));
+  }
+  return result;
+}
+
 async function executeSuite(runId) {
   const sessionRoot = path.join(evidenceRoot, "suite-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -1250,9 +1322,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1289,7 +1361,7 @@ async function main() {
     inputConditions: {
       testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08" :
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
-        mode === "full-clip" || mode === "full-regression" ? "F10" :
+        mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05" :
           mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
@@ -1310,6 +1382,7 @@ async function main() {
         : mode === "foot-live" ? await executeFootLive(runId)
         : mode === "full-clip" ? await executeFullClip(runId)
         : mode === "full-regression" ? await executeFullRegression(runId)
+        : mode === "segments" ? await executeSegments(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)
             : await executeSmoke(runId);
     } catch (error) {
@@ -1321,6 +1394,7 @@ async function main() {
             mode === "foot-live" ? "foot-live-runs" :
             mode === "full-clip" ? "full-clip-runs" :
             mode === "full-regression" ? "full-regression-runs" :
+            mode === "segments" ? "segment-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
       await writeFile(path.join(sessionRoot, "adapter-error.json"), JSON.stringify({
