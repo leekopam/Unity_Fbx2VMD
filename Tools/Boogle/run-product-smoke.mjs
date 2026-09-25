@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, copyFile, mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -13,6 +13,8 @@ const statusPath = path.join(runtimeRoot, "fbx_smoke_status.json");
 const tracePath = path.join(runtimeRoot, "fbx_smoke_trace.log");
 const fbxPath = path.join(projectRoot, "Assets/Resources/Import_FBX/satisfaction_2.fbx");
 const outputPath = path.join(projectRoot, "Assets/VMDRecorderSample/satisfaction_2.vmd");
+const fullRegressionOutputPath = path.join(projectRoot,
+  "Assets/VMDRecorderSample/smoke_satisfaction_2_208s.vmd");
 const sdkRunnerPath = path.join(
   projectRoot,
   "Assets/_Project/Tools/MainRecordingSettings/node_modules/boogle-sdk/dist/runner.js"
@@ -23,6 +25,7 @@ const preselectionCommand = "capture_preselection_state";
 const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
+const fullRegressionCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
 const invalidInputCommand = "capture_invalid_input_evidence";
 const environmentCommand = "capture_e2e_environment";
 const enterPlayCommand = "enter_e2e_play";
@@ -83,19 +86,19 @@ async function hasCompletePngWithin(filePath, directory) {
   }
 }
 
-function inspectShortVmd(bytes) {
+function inspectVmd(bytes, expectedFrames) {
   if (bytes.length < 58 ||
       bytes.subarray(0, 30).toString("ascii").replace(/\0+$/, "") !==
         "Vocaloid Motion Data 0002") return null;
   const boneRecords = bytes.readUInt32LE(50);
   const morphOffset = 54 + boneRecords * 111;
-  if (boneRecords < 60 || morphOffset + 4 > bytes.length) return null;
+  if (boneRecords < expectedFrames || morphOffset + 4 > bytes.length) return null;
   const frames = new Set();
   const bones = new Set();
   for (let index = 0; index < boneRecords; index++) {
     const offset = 54 + index * 111;
     const frame = bytes.readUInt32LE(offset + 15);
-    if (frame >= 60) return null;
+    if (frame >= expectedFrames) return null;
     const key = `${bytes.subarray(offset, offset + 15).toString("hex")}:${frame}`;
     if (bones.has(key)) return null;
     bones.add(key);
@@ -104,7 +107,7 @@ function inspectShortVmd(bytes) {
   const morphRecords = bytes.readUInt32LE(morphOffset);
   if (morphOffset + 4 + morphRecords * 23 > bytes.length) return null;
   return { boneRecords, morphRecords, uniqueFrames: frames.size,
-    bytesPerFrame: bytes.length / 60 };
+    bytesPerFrame: bytes.length / expectedFrames };
 }
 
 async function executeControl(runId, controlCommand) {
@@ -187,13 +190,18 @@ async function executeControl(runId, controlCommand) {
   return { ...result, state, requestId, terminal };
 }
 
-async function executeSmoke(runId) {
-  const sessionRoot = path.join(evidenceRoot, "product-smoke", runId);
+async function executeSmoke(runId, options = {}) {
+  const smokeCommand = options.command || command;
+  const smokeOutputPath = options.outputPath || outputPath;
+  const expectedFrames = options.frameCount || 60;
+  const sessionRoot = path.join(evidenceRoot, options.folder || "product-smoke", runId);
   await mkdir(sessionRoot, { recursive: true });
   const backupPath = path.join(sessionRoot, "prior-output.vmd");
   const backupMetaPath = path.join(sessionRoot, "prior-output.vmd.meta");
-  const priorOutput = await readOptional(outputPath);
-  const priorMeta = await readOptional(`${outputPath}.meta`);
+  const priorOutput = await readOptional(smokeOutputPath);
+  const priorMeta = await readOptional(`${smokeOutputPath}.meta`);
+  const outputDirectory = path.dirname(smokeOutputPath);
+  const extraBackups = [];
   const requestId = randomUUID();
   const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
   let outcome = { status: "INFRA_ERROR" };
@@ -207,20 +215,31 @@ async function executeSmoke(runId) {
 
   try {
     await access(fbxPath);
-    await access(path.dirname(outputPath));
+    await access(path.dirname(smokeOutputPath));
     if (await readOptional(requestPath) || (await readStatus())?.status === "running") {
       outcome = { status: "BLOCKED", failureKind: "preflight" };
     } else {
-      if (priorOutput) await copyFile(outputPath, backupPath);
-      if (priorMeta) await copyFile(`${outputPath}.meta`, backupMetaPath);
+      if (priorOutput) await copyFile(smokeOutputPath, backupPath);
+      if (priorMeta) await copyFile(`${smokeOutputPath}.meta`, backupMetaPath);
+      if (options.protectedPrefix) {
+        for (const name of await readdir(outputDirectory)) {
+          if (!name.startsWith(options.protectedPrefix)) continue;
+          const target = path.join(outputDirectory, name);
+          if (target === smokeOutputPath || target === `${smokeOutputPath}.meta`) continue;
+          const backup = path.join(sessionRoot, `prior-${name}`);
+          await copyFile(target, backup);
+          extraBackups.push({ target, backup, sha256: await hashFile(target) });
+        }
+      }
       backupCreated = true;
-      const request = { request_id: requestId, command, requested_command: command };
+      const request = { request_id: requestId, command: smokeCommand,
+        requested_command: smokeCommand };
       await writeFile(requestPath, JSON.stringify(request), { flag: "wx" });
       requestSubmitted = true;
       // 종료 상태가 확인되기 전에는 기존 산출물에 손대지 않는다.
       stillRunning = true;
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 600000) {
+      while (Date.now() - startedAt < (options.timeoutMs || 600000)) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         const candidate = await readStatus();
         if (candidate?.request_id !== requestId) {
@@ -246,16 +265,22 @@ async function executeSmoke(runId) {
           : { status: "FAIL", failureKind: "test_failure" };
       } else {
         failureStage = "output";
-        const output = await stat(outputPath).catch(() => null);
-        const hasExpectedPath = path.resolve(status.output_path || "").toLowerCase() === outputPath.toLowerCase();
-        if (output?.size > 0) vmdStructure = inspectShortVmd(await readFile(outputPath));
+        const output = await stat(smokeOutputPath).catch(() => null);
+        const hasExpectedPath = path.resolve(status.output_path || "").toLowerCase() === smokeOutputPath.toLowerCase();
+        const manifestPath = path.resolve(status.manifest_path || "");
+        const manifestRelative = path.relative(path.join(projectRoot, "Docs/Workflow/Local"), manifestPath);
+        const hasManifest = !options.visualReview ||
+          (!manifestRelative.startsWith("..") && !path.isAbsolute(manifestRelative) &&
+            !!(await stat(manifestPath).catch(() => null)));
+        if (output?.size > 0) vmdStructure = inspectVmd(await readFile(smokeOutputPath), expectedFrames);
         if (status.total_jobs === 1 && status.success_jobs === 1 &&
-            status.frame_count === 60 && status.file_size_bytes === output?.size &&
-            output?.size > 0 && hasExpectedPath &&
-            vmdStructure?.uniqueFrames === 60 && vmdStructure.boneRecords % 60 === 0) {
+            status.frame_count === expectedFrames && status.file_size_bytes === output?.size &&
+            output?.size > 0 && hasExpectedPath && hasManifest &&
+            vmdStructure?.uniqueFrames === expectedFrames &&
+            vmdStructure.boneRecords % expectedFrames === 0) {
           failureStage = "";
           outcome = {
-            status: "PASS",
+            status: options.visualReview ? "MANUAL_REVIEW_REQUIRED" : "PASS",
             metrics: [{
               name: "artifact/bytes_per_frame",
               value: output.size / status.frame_count,
@@ -291,12 +316,26 @@ async function executeSmoke(runId) {
       if (!backupCreated) {
         restored = true;
       } else if (!stillRunning) {
-        if (priorOutput) await copyFile(backupPath, outputPath);
-        else await rm(outputPath, { force: true });
-        if (priorMeta) await copyFile(backupMetaPath, `${outputPath}.meta`);
-        else await rm(`${outputPath}.meta`, { force: true });
-        const currentOutput = await readOptional(outputPath);
-        const currentMeta = await readOptional(`${outputPath}.meta`);
+        if (priorOutput) await copyFile(backupPath, smokeOutputPath);
+        else await rm(smokeOutputPath, { force: true });
+        if (priorMeta) await copyFile(backupMetaPath, `${smokeOutputPath}.meta`);
+        else await rm(`${smokeOutputPath}.meta`, { force: true });
+        if (options.protectedPrefix) {
+          const originals = new Set(extraBackups.map((entry) => entry.target));
+          for (const name of await readdir(outputDirectory)) {
+            const target = path.join(outputDirectory, name);
+            if (name.startsWith(options.protectedPrefix) &&
+                target !== smokeOutputPath && target !== `${smokeOutputPath}.meta` &&
+                !originals.has(target)) await rm(target, { force: true });
+          }
+          for (const entry of extraBackups) {
+            await copyFile(entry.backup, entry.target);
+            if (await hashFile(entry.target) !== entry.sha256)
+              throw new Error(`기존 진단 산출물이 원본과 다릅니다: ${entry.target}`);
+          }
+        }
+        const currentOutput = await readOptional(smokeOutputPath);
+        const currentMeta = await readOptional(`${smokeOutputPath}.meta`);
         restored = (priorOutput === null ? currentOutput === null :
           currentOutput !== null && priorOutput.equals(currentOutput)) &&
           (priorMeta === null ? currentMeta === null :
@@ -318,12 +357,13 @@ async function executeSmoke(runId) {
       outcome = { status: "INFRA_ERROR" };
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
-      runId, requestId, command, result: outcome.status, failureStage, restored,
-      status, outputPath, backupPath: priorOutput ? backupPath : null,
-      vmdStructure, cleanupErrors
+      runId, requestId, command: smokeCommand, result: outcome.status, failureStage, restored,
+      status, outputPath: smokeOutputPath, backupPath: priorOutput ? backupPath : null,
+      backupMetaPath: priorMeta ? backupMetaPath : null,
+      extraBackups, vmdStructure, cleanupErrors
     }, null, 2));
   }
-  return { ...outcome, requestId };
+  return { ...outcome, requestId, terminal: !stillRunning, restored };
 }
 
 async function executePreselection(runId) {
@@ -964,6 +1004,69 @@ async function executeFullClip(runId) {
   return { ...result, requestId };
 }
 
+async function executeFullRegression(runId) {
+  const sessionRoot = path.join(evidenceRoot, "full-regression-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const steps = [];
+  let before = null;
+  let after = null;
+  let smoke = null;
+  let enteredPlay = false;
+  let result = { status: "INFRA_ERROR" };
+  try {
+    const baseline = await executeControl(runId, environmentCommand);
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    before = baseline.state;
+    if (baseline.status !== "PASS" || !before || before.play_mode ||
+        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        !before.model_active || !before.avatar_valid || before.is_processing ||
+        before.has_prepared_motion || before.is_recording ||
+        before.capture_framerate !== 0) {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      const enter = await executeControl(runId, enterPlayCommand);
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      enteredPlay = enter.status === "PASS";
+      result = enter;
+      if (enteredPlay) {
+        smoke = await executeSmoke(runId, {
+          command: fullRegressionCommand,
+          outputPath: fullRegressionOutputPath,
+          frameCount: 6234,
+          folder: "full-regression-output",
+          protectedPrefix: "smoke_satisfaction_2_208s",
+          timeoutMs: 3600000,
+          visualReview: true
+        });
+        steps.push({ name: "F10_208s", status: smoke.status, requestId: smoke.requestId });
+        result = smoke;
+      }
+    }
+  } catch (error) {
+    result = { status: "INFRA_ERROR", message: error.message };
+  } finally {
+    if (enteredPlay && (!smoke || smoke.terminal)) {
+      const exit = await executeControl(runId, exitPlayCommand);
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
+    }
+    if (!enteredPlay || !smoke || smoke.terminal) {
+      const final = await executeControl(runId, environmentCommand);
+      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      after = final.state;
+      if (!before || final.status !== "PASS" || !environmentFields.every((field) =>
+        JSON.stringify(before[field]) === JSON.stringify(after?.[field])) ||
+        smoke && !smoke.restored) result = { status: "INFRA_ERROR" };
+    }
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, result: result.status, steps, before, after, smokeRequestId: smoke?.requestId,
+      smokeTerminal: smoke?.terminal ?? null, restored: smoke?.restored ?? null
+    }, null, 2));
+  }
+  return result;
+}
+
 async function executeSuite(runId) {
   const sessionRoot = path.join(evidenceRoot, "suite-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -1147,9 +1250,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1186,7 +1289,7 @@ async function main() {
     inputConditions: {
       testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08" :
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
-        mode === "full-clip" ? "F10" :
+        mode === "full-clip" || mode === "full-regression" ? "F10" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05" :
           mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
@@ -1206,6 +1309,7 @@ async function main() {
         : mode === "playback" ? await executePlayback(runId)
         : mode === "foot-live" ? await executeFootLive(runId)
         : mode === "full-clip" ? await executeFullClip(runId)
+        : mode === "full-regression" ? await executeFullRegression(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)
             : await executeSmoke(runId);
     } catch (error) {
@@ -1216,6 +1320,7 @@ async function main() {
           mode === "playback" ? "playback-runs" :
             mode === "foot-live" ? "foot-live-runs" :
             mode === "full-clip" ? "full-clip-runs" :
+            mode === "full-regression" ? "full-regression-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
       await writeFile(path.join(sessionRoot, "adapter-error.json"), JSON.stringify({
