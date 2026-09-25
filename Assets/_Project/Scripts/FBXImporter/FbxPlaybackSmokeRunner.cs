@@ -37,6 +37,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string ExitE2ePlayCommand = "exit_e2e_play";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
+        private const string CaptureSatisfactionFullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
         private const string CaptureSatisfactionHead31Command = "capture_satisfaction_head_31s";
         private const string CaptureSatisfactionMiddle31Command = "capture_satisfaction_middle_31s";
         private const string CaptureSatisfactionTail31Command = "capture_satisfaction_tail_31s";
@@ -773,6 +774,17 @@ namespace Fbx2Vmd.FBXImporter
                         FullRegressionEvidenceCaptureWidth,
                         FullRegressionEvidenceCaptureHeight,
                         FullRegressionEvidenceRecordingStartTimeOverrideSeconds);
+                case CaptureSatisfactionFullNamedVmdCommand:
+                    return TryStartAutomationSingleSmoke(
+                        SatisfactionFbxFileName,
+                        SatisfactionFullRegressionEvidenceDurationSeconds,
+                        false,
+                        null,
+                        "full-named-vmd",
+                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
+                        out message,
+                        recordingStartTimeOverrideSeconds: FullRegressionEvidenceRecordingStartTimeOverrideSeconds,
+                        useInputBaseName: true);
                 case CaptureSatisfactionHead31Command:
                 case CaptureSatisfactionMiddle31Command:
                 case CaptureSatisfactionTail31Command:
