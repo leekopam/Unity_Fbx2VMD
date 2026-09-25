@@ -1223,6 +1223,7 @@ namespace Fbx2Vmd.FBXImporter
             public StageBoneEvidence[] f11_after_foot_stabilization;
             public string game_view_path;
             public string side_view_path;
+            public string source_view_path;
             public Vector3 camera_position;
             public Quaternion camera_rotation;
             public bool camera_orthographic;
@@ -1897,10 +1898,18 @@ namespace Fbx2Vmd.FBXImporter
                 camera_field_of_view = camera.fieldOfView
             };
             if (sample.actual_frame != frame) return false;
+            sample.source_view_path = Path.Combine(directory,
+                prefix.Replace("where-Main_Auto_who-auto", "where-SourceFBX_who-original") +
+                "_how-side-camera.png");
+            if (!TryCaptureSourceView(controller, sample.time_seconds,
+                    sample.source_view_path)) return false;
             if (_playbackSideFrames.Contains(frame))
             {
                 sample.side_view_path = Path.Combine(directory, prefix + "_how-side-camera.png");
-                if (!TryCaptureSideView(animator, hips.position, sample.side_view_path)) return false;
+                Vector3 feetCenter = (leftFoot.position + rightFoot.position) * 0.5f;
+                if (!TryCaptureSideView(animator,
+                        Vector3.Lerp(hips.position, feetCenter, 0.55f),
+                        sample.side_view_path)) return false;
             }
 
             _playbackEvidence.foot_frames[_footEvidenceFrameIndex] = sample;
@@ -1927,7 +1936,53 @@ namespace Fbx2Vmd.FBXImporter
             }).ToArray();
         }
 
-        private static bool TryCaptureSideView(Animator animator, Vector3 center, string path)
+        private static bool TryCaptureSourceView(
+            HumanoidMotionPlaybackController controller,
+            float timeSeconds,
+            string path)
+        {
+            var reference = ReadMemberValue(typeof(HumanoidMotionPlaybackController),
+                controller, "_poseReferencePlayer") as EditorHumanoidPoseReferencePlayer;
+            HumanPose pose = new HumanPose();
+            if (reference == null || !reference.TryEvaluateAt(timeSeconds, ref pose))
+                return false;
+            var root = ReadMemberValue(typeof(EditorHumanoidPoseReferencePlayer),
+                reference, "_referenceInstance") as GameObject;
+            Animator animator = root != null ? root.GetComponentInChildren<Animator>(true) : null;
+            if (animator == null || !animator.isHuman) return false;
+            Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+            Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+            Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            if (hips == null || head == null || leftFoot == null || rightFoot == null)
+                return false;
+
+            Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
+            int[] previousLayers = transforms.Select(item => item.gameObject.layer).ToArray();
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+            bool[] previousVisibility = renderers.Select(item => item.enabled).ToArray();
+            if (renderers.Length == 0) return false;
+            try
+            {
+                foreach (Transform item in transforms) item.gameObject.layer = 31;
+                foreach (Renderer item in renderers) item.enabled = true;
+                Vector3 feetCenter = (leftFoot.position + rightFoot.position) * 0.5f;
+                Vector3 center = Vector3.Lerp(hips.position, feetCenter, 0.55f);
+                float bodyHeight = Mathf.Max(0.1f, head.position.y - feetCenter.y);
+                return TryCaptureSideView(animator, center, path,
+                    1 << 31, bodyHeight * 0.75f);
+            }
+            finally
+            {
+                for (int i = 0; i < renderers.Length; i++)
+                    renderers[i].enabled = previousVisibility[i];
+                for (int i = 0; i < transforms.Length; i++)
+                    transforms[i].gameObject.layer = previousLayers[i];
+            }
+        }
+
+        private static bool TryCaptureSideView(Animator animator, Vector3 center,
+            string path, int cullingMask = -1, float orthographicSize = 0f)
         {
             Camera source = Camera.main;
             if (source == null) return false;
@@ -1940,6 +1995,14 @@ namespace Fbx2Vmd.FBXImporter
                 cameraObject = new GameObject("F04 Side View") { hideFlags = HideFlags.HideAndDontSave };
                 Camera side = cameraObject.AddComponent<Camera>();
                 side.CopyFrom(source);
+                if (cullingMask != -1)
+                {
+                    side.cullingMask = cullingMask;
+                    side.clearFlags = CameraClearFlags.SolidColor;
+                    side.backgroundColor = Color.black;
+                }
+                if (orthographicSize > 0f)
+                    side.orthographicSize = orthographicSize;
                 float distance = Vector3.Distance(source.transform.position, center);
                 side.transform.position = center + animator.transform.right * distance +
                     Vector3.up * (source.transform.position.y - center.y);

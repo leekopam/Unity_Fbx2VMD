@@ -706,7 +706,8 @@ async function executePlayback(runId, captureFrames = null, sideCaptureFrames = 
             };
           } else f11Metrics = { status: "FAIL" };
           const pngPaths = [...captures, ...footFrames.map((frame) => frame?.game_view_path),
-            ...footFrames.map((frame) => frame?.side_view_path).filter(Boolean)];
+            ...footFrames.map((frame) => frame?.side_view_path).filter(Boolean),
+            ...footFrames.map((frame) => frame?.source_view_path)];
           const completePngs = (await Promise.all(pngPaths.map((file) =>
             hasCompletePngWithin(file, path.dirname(statePath))))).every(Boolean);
           const sideFrames = footFrames.filter((frame) => frame?.side_view_path)
@@ -929,7 +930,7 @@ async function executeContactCapture(runId, source, inputHashes) {
             capture_request_id: playback.requestId,
             source_csv_sha256: source.events.input.csv_sha256,
             capture_state_path: captureStatePath, camera: source.state.camera,
-            stages: ["source", "retarget", "f11_before_foot_stabilization",
+            stages: ["source", "source_view", "retarget", "f11_before_foot_stabilization",
               "f11_after_foot_stabilization", "final_sole", "game_view"],
             windows: plan.windows.map(window => ({ id: window.id, side: window.side,
               frames: window.frames.map(frame => {
@@ -946,6 +947,7 @@ async function executeContactCapture(runId, source, inputHashes) {
                   capture_frame_index: sampleIndex,
                   game_view_path: sample.game_view_path,
                   side_view_path: sample.side_view_path || null,
+                  source_view_path: sample.source_view_path,
                   grounding_status: sample.grounding_status,
                   support_roles: Object.fromEntries(sides.map(side =>
                     [side, sample[side]?.support_role])),
