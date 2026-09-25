@@ -316,12 +316,6 @@ namespace Fbx2Vmd.FBXImporter
                     out errorByContract[0]);
                 successByContract[0] = success;
                 fallbackByContract[0] = fallback;
-                if (!success)
-                {
-                    usedFallback = fallback;
-                    errorMessage = errorByContract[0];
-                    return false;
-                }
             }
             else
             {
@@ -350,10 +344,57 @@ namespace Fbx2Vmd.FBXImporter
                 return true;
             }
 
-            errorMessage = string.IsNullOrWhiteSpace(
+            string failure = string.IsNullOrWhiteSpace(
                     errorByContract[failedContractIndex])
                 ? $"frame {frameIndex}의 Native 표면 보정을 계산하지 못했습니다."
                 : errorByContract[failedContractIndex];
+            NativeSkinningSurfaceContract failedContract =
+                contracts[failedContractIndex];
+            NativeSkinningSurfaceCorrectionResult failedCorrection =
+                calculatedCorrections[failedContractIndex];
+            errorMessage = $"{failure} renderer={failedContract.Renderer.name} " +
+                $"side={failedContract.Side} contract={failedContractIndex}";
+            if (failedCorrection != null)
+            {
+                errorMessage +=
+                    $" initialFold={failedCorrection.InitialSharpFoldCount}" +
+                    $" residualFold={failedCorrection.ResidualSharpFoldCount}" +
+                    $" newFold={failedCorrection.NewSharpFoldCount}" +
+                    $" degenerate={failedCorrection.NewDegenerateFaceCount}" +
+                    $" reversed={failedCorrection.ReversedFaceCount}" +
+                    $" displacement={failedCorrection.MaximumVertexDisplacement:F6}" +
+                    $" strain={failedCorrection.MaximumEdgeLengthStrain:F6}" +
+                    $" restRecovery={failedCorrection.UsedRestShapeRecovery}" +
+                    $" restStrain={failedCorrection.MaximumRestEdgeStrainIncrease:F6}" +
+                    $" unresolved={failedCorrection.UnresolvedRestShapeRecoveryCount}";
+                for (int pairIndex = 0;
+                     pairIndex < failedContract.FacePairs.Length;
+                     pairIndex++)
+                {
+                    if (failedContract.RestAnglesDegrees[pairIndex] >
+                            NativeSkinningSurfaceDefectDetector
+                                .MaximumCorrectableRestAngleDegrees ||
+                        !NativeSkinningSurfaceContractBuilder.TryMeasureAngle(
+                            failedCorrection.CorrectedVertices,
+                            failedContract.FacePairs[pairIndex],
+                            out float correctedAngle) ||
+                        correctedAngle <= NativeSkinningSurfaceDefectDetector
+                            .MinimumSharpFoldAngleDegrees)
+                    {
+                        continue;
+                    }
+
+                    NativeSkinningSurfaceContractBuilder.TryMeasureAngle(
+                        vertices,
+                        failedContract.FacePairs[pairIndex],
+                        out float baselineAngle);
+                    errorMessage += $" pair={pairIndex}" +
+                        $" restAngle={failedContract.RestAnglesDegrees[pairIndex]:F2}" +
+                        $" baselineAngle={baselineAngle:F2}" +
+                        $" correctedAngle={correctedAngle:F2}";
+                    break;
+                }
+            }
             return false;
         }
 
