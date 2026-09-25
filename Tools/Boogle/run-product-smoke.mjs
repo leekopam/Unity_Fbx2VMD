@@ -14,6 +14,7 @@ const statusPath = path.join(runtimeRoot, "fbx_smoke_status.json");
 const tracePath = path.join(runtimeRoot, "fbx_smoke_trace.log");
 const fbxPath = path.join(projectRoot, "Assets/Resources/Import_FBX/satisfaction_2.fbx");
 const outputPath = path.join(projectRoot, "Assets/VMDRecorderSample/satisfaction_2.vmd");
+const vrmOutputPath = path.join(projectRoot, "Assets/VMDRecorderSample/satisfaction_2.vrm");
 const fullRegressionOutputPath = path.join(projectRoot,
   "Assets/VMDRecorderSample/smoke_satisfaction_2_208s.vmd");
 const sdkRunnerPath = path.join(
@@ -30,6 +31,7 @@ const alternateModelCommand = "capture_tetoris_testprefab_full_clip_metrics";
 const productUiCommand = "capture_product_ui_flow";
 const fullRegressionCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
 const fullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
+const exportVrmCommand = "capture_satisfaction_vrm";
 const segmentCases = [
   ["head", "capture_satisfaction_head_31s", "smoke_satisfaction_2_31s"],
   ["middle", "capture_satisfaction_middle_31s", "smoke_middle_satisfaction_2_31s"],
@@ -119,6 +121,26 @@ function inspectVmd(bytes, expectedFrames) {
     bytesPerFrame: bytes.length / expectedFrames };
 }
 
+function inspectVrm(bytes) {
+  if (bytes.length < 20 || bytes.toString("ascii", 0, 4) !== "glTF" ||
+      bytes.readUInt32LE(4) !== 2 || bytes.readUInt32LE(8) !== bytes.length) return null;
+  const jsonLength = bytes.readUInt32LE(12);
+  if (bytes.readUInt32LE(16) !== 0x4e4f534a || jsonLength < 2 ||
+      20 + jsonLength > bytes.length) return null;
+  try {
+    const gltf = JSON.parse(bytes.toString("utf8", 20, 20 + jsonLength));
+    const meta = gltf.extensions?.VRM?.meta;
+    if (gltf.asset?.version !== "2.0" || !gltf.extensionsUsed?.includes("VRM") ||
+        !Array.isArray(gltf.meshes) || gltf.meshes.length === 0 ||
+        meta?.title !== "Hatsune Miku" || meta?.author !== "SANMUYYB" ||
+        meta?.licenseName !== "Redistribution_Prohibited") return null;
+    return { meshCount: gltf.meshes.length, nodeCount: gltf.nodes?.length || 0,
+      title: meta.title, author: meta.author, licenseName: meta.licenseName };
+  } catch {
+    return null;
+  }
+}
+
 async function executeControl(runId, controlCommand) {
   const sessionRoot = path.join(evidenceRoot, "control-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -196,7 +218,7 @@ async function executeControl(runId, controlCommand) {
       failureStage, status, state, terminal
     }, null, 2));
   }
-  return { ...result, state, requestId, terminal };
+  return { ...result, state, requestId, terminal, unityStatus: status };
 }
 
 async function executeSmoke(runId, options = {}) {
@@ -373,6 +395,65 @@ async function executeSmoke(runId, options = {}) {
     }, null, 2));
   }
   return { ...outcome, requestId, terminal: !stillRunning, restored };
+}
+
+async function executeVrmOutput(runId) {
+  const sessionRoot = path.join(evidenceRoot, "full-vrm-output", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const backupPath = path.join(sessionRoot, "prior-output.vrm");
+  const backupMetaPath = `${backupPath}.meta`;
+  const priorOutput = await readOptional(vrmOutputPath);
+  const priorMeta = await readOptional(`${vrmOutputPath}.meta`);
+  let commandResult = null;
+  let structure = null;
+  let fileSizeBytes = 0;
+  let restored = false;
+  let result = { status: "INFRA_ERROR" };
+  try {
+    if (priorOutput) await copyFile(vrmOutputPath, backupPath);
+    if (priorMeta) await copyFile(`${vrmOutputPath}.meta`, backupMetaPath);
+    commandResult = await executeControl(runId, exportVrmCommand);
+    result = { status: commandResult.status };
+    if (commandResult.status === "PASS") {
+      const file = await stat(vrmOutputPath).catch(() => null);
+      fileSizeBytes = file?.size || 0;
+      if (fileSizeBytes > 0) structure = inspectVrm(await readFile(vrmOutputPath));
+      result = {
+        status: structure &&
+          path.resolve(commandResult.unityStatus?.vrm_output_path || "").toLowerCase() ===
+            vrmOutputPath.toLowerCase() &&
+          commandResult.unityStatus?.vrm_file_size_bytes === fileSizeBytes
+          ? "MANUAL_REVIEW_REQUIRED" : "FAIL"
+      };
+    }
+  } catch (error) {
+    result = { status: "INFRA_ERROR", message: error.message };
+  } finally {
+    if (!commandResult || commandResult.terminal || commandResult.status === "BLOCKED") {
+      try {
+        if (priorOutput) await copyFile(backupPath, vrmOutputPath);
+        else await rm(vrmOutputPath, { force: true });
+        if (priorMeta) await copyFile(backupMetaPath, `${vrmOutputPath}.meta`);
+        else await rm(`${vrmOutputPath}.meta`, { force: true });
+        const currentOutput = await readOptional(vrmOutputPath);
+        const currentMeta = await readOptional(`${vrmOutputPath}.meta`);
+        restored = (priorOutput === null ? currentOutput === null :
+          currentOutput !== null && priorOutput.equals(currentOutput)) &&
+          (priorMeta === null ? currentMeta === null :
+            currentMeta !== null && priorMeta.equals(currentMeta));
+        if (!restored) result = { status: "INFRA_ERROR", message: "VRM 복원 불일치" };
+      } catch (error) {
+        result = { status: "INFRA_ERROR", message: error.message };
+      }
+    }
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, result: result.status, requestId: commandResult?.requestId ?? null,
+      unityStatus: commandResult?.unityStatus ?? null, outputPath: vrmOutputPath,
+      fileSizeBytes, structure, restored
+    }, null, 2));
+  }
+  return { ...result, requestId: commandResult?.requestId ?? null,
+    outputPath: vrmOutputPath, fileSizeBytes, structure, restored };
 }
 
 async function executePreselection(runId) {
@@ -1243,6 +1324,7 @@ async function executeFullRegression(runId, namedOutput = false) {
   let before = null;
   let after = null;
   let smoke = null;
+  let vrm = null;
   let enteredPlay = false;
   let result = { status: "INFRA_ERROR" };
   try {
@@ -1284,19 +1366,26 @@ async function executeFullRegression(runId, namedOutput = false) {
       steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
       if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
     }
+    if (namedOutput && smoke?.terminal && smoke.status === "MANUAL_REVIEW_REQUIRED" &&
+        steps.some((step) => step.name === "exit_play" && step.status === "PASS")) {
+      vrm = await executeVrmOutput(runId);
+      steps.push({ name: "F12_VRM", status: vrm.status, requestId: vrm.requestId });
+      if (vrm.status !== "MANUAL_REVIEW_REQUIRED") result = { status: vrm.status };
+    }
     if (!enteredPlay || !smoke || smoke.terminal) {
       const final = await executeControl(runId, environmentCommand);
       steps.push({ name: "after", status: final.status, requestId: final.requestId });
       after = final.state;
       if (!before || final.status !== "PASS" || !environmentFields.every((field) =>
         JSON.stringify(before[field]) === JSON.stringify(after?.[field])) ||
-        smoke && !smoke.restored) result = { status: "INFRA_ERROR" };
+        smoke && !smoke.restored || vrm && !vrm.restored)
+        result = { status: "INFRA_ERROR" };
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, result: result.status, steps, before, after, smokeRequestId: smoke?.requestId,
       smokeTerminal: smoke?.terminal ?? null, restored: smoke?.restored ?? null,
-      ...(namedOutput ? { vrm: { status: "SKIP",
-        reason: "자동 FBX 경로에 VRM 산출 단계가 없음" },
+      ...(namedOutput ? { vrm: vrm ?? { status: "SKIP",
+        reason: "F12 실행 전 준비 단계에서 중단" },
         manualReference: { status: "NOT_COMPARABLE",
           reason: "동일 모델·Avatar·녹화 구간의 수동 VMD 기준이 확인되지 않음" } } : {})
     }, null, 2));
@@ -1703,9 +1792,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "vrm-output", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|vrm-output|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1748,6 +1837,7 @@ async function main() {
       testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08,F11" :
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
         mode === "full-output" ? "F12" :
+        mode === "vrm-output" ? "F12" :
         mode === "manual-compare" ? "F13" :
         mode === "alternate-model" ? "F14" :
         mode === "product-ui" ? "F15" :
@@ -1775,6 +1865,7 @@ async function main() {
         : mode === "product-ui" ? await executeProductUi(runId)
         : mode === "full-regression" ? await executeFullRegression(runId)
         : mode === "full-output" ? await executeFullRegression(runId, true)
+        : mode === "vrm-output" ? await executeVrmOutput(runId)
         : mode === "manual-compare" ? await executeManualComparison(runId)
         : mode === "segments" ? await executeSegments(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)

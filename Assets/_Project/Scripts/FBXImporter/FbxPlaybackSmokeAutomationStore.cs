@@ -29,6 +29,8 @@ namespace Fbx2Vmd.FBXImporter
         public string output_path;
         public int frame_count;
         public long file_size_bytes;
+        public string vrm_output_path;
+        public long vrm_file_size_bytes;
         public string capture_path;
         public string preselection_state_path;
         public string playback_state_path;

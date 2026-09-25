@@ -40,6 +40,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
         private const string CaptureSatisfactionFullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
+        private const string CaptureSatisfactionVrmCommand = "capture_satisfaction_vrm";
         private const string CaptureSatisfactionHead31Command = "capture_satisfaction_head_31s";
         private const string CaptureSatisfactionMiddle31Command = "capture_satisfaction_middle_31s";
         private const string CaptureSatisfactionTail31Command = "capture_satisfaction_tail_31s";
@@ -603,7 +604,8 @@ namespace Fbx2Vmd.FBXImporter
             bool isCapture = request.command == CaptureE2eEnvironmentCommand;
             bool isEnter = request.command == EnterE2ePlayCommand;
             bool isExit = request.command == ExitE2ePlayCommand;
-            if (!isCapture && !isEnter && !isExit) return false;
+            bool isVrmExport = request.command == CaptureSatisfactionVrmCommand;
+            if (!isCapture && !isEnter && !isExit && !isVrmExport) return false;
 
             try
             {
@@ -666,6 +668,48 @@ namespace Fbx2Vmd.FBXImporter
                     });
                     TraceAutomation($"environment id={request.request_id} play={state.play_mode} scene={state.scene} recording={state.is_recording}");
                 }
+                else if (isVrmExport)
+                {
+                    Scene scene = SceneManager.GetActiveScene();
+                    FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
+                    GameObject model = pipeline != null ? pipeline.targetCharacter : null;
+                    Animator animator = model != null ? model.GetComponent<Animator>() : null;
+                    if (EditorApplication.isPlaying || scene.path != MainAutoScenePath ||
+                        scene.isDirty || model == null || model.name != E2eModelName ||
+                        animator == null || animator.avatar == null ||
+                        !animator.avatar.isValid || !animator.avatar.isHuman)
+                        throw new InvalidOperationException("F12 VRM 대상 모델과 Edit Mode 상태가 유효하지 않습니다.");
+
+                    GameObject exportModel = UnityEngine.Object.Instantiate(model);
+                    byte[] bytes;
+                    try
+                    {
+                        IKControl ikControl = exportModel.GetComponent<IKControl>();
+                        if (ikControl != null) UnityEngine.Object.DestroyImmediate(ikControl);
+                        bytes = YybVrmDiagnosticExporter.Export(exportModel);
+                    }
+                    finally
+                    {
+                        UnityEngine.Object.DestroyImmediate(exportModel);
+                    }
+                    if (bytes == null || bytes.Length < 20)
+                        throw new InvalidDataException("VRM 내보내기 결과가 비어 있습니다.");
+                    string outputPath = Path.Combine(Application.dataPath,
+                        "VMDRecorderSample", "satisfaction_2.vrm");
+                    File.WriteAllBytes(outputPath, bytes);
+                    WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                    {
+                        request_id = request.request_id,
+                        status = "completed",
+                        updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                        command = request.requested_command,
+                        passed = true,
+                        vrm_output_path = outputPath,
+                        vrm_file_size_bytes = bytes.LongLength,
+                        failures = Array.Empty<string>()
+                    });
+                    TraceAutomation($"vrm-export id={request.request_id} bytes={bytes.LongLength}");
+                }
                 else
                 {
                     bool targetPlay = isEnter;
@@ -712,12 +756,13 @@ namespace Fbx2Vmd.FBXImporter
                     status = "failed",
                     updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
                     command = request.requested_command,
-                    failure_stage = "environment",
+                    failure_stage = isVrmExport ? "output" : "environment",
                     message = ex.Message,
                     passed = false,
                     failures = new[] { ex.Message }
                 });
                 TraceAutomation($"environment failed id={request.request_id} message={ex.Message}");
+                if (isVrmExport) Debug.LogException(ex);
             }
 
             TryDeleteRequestFile();

@@ -1,0 +1,7 @@
+{
+  "name": "Fbx2Vmd.YybVrmDiagnosticExporter",
+  "rootNamespace": "Fbx2Vmd.FBXImporter",
+  "references": ["VRM", "UniVRM.Editor", "UniGLTF"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
