@@ -210,7 +210,16 @@ public class HumanoidSampleCode : MonoBehaviour
         _isRecordingSessionActive = false;
         _isSaving = false;
         Debug.LogError($"[Recorder] {message}");
-        UpdateUI(0f, 0f, $"오류: {message}");
+        const string missingFbxPrefix = "FBX 파일을 찾을 수 없습니다: ";
+        string displayMessage = message;
+        if (message != null && message.StartsWith(missingFbxPrefix, StringComparison.Ordinal))
+        {
+            string sourcePath = message.Substring(missingFbxPrefix.Length);
+            int fileNameStart = Math.Max(sourcePath.LastIndexOf('\\'), sourcePath.LastIndexOf('/')) + 1;
+            displayMessage = $"FBX 파일을 찾을 수 없습니다.\n{sourcePath.Substring(fileNameStart)}";
+        }
+
+        UpdateUI(0f, 0f, $"오류: {displayMessage}");
     }
 
     private void Update()
@@ -519,7 +528,9 @@ public class HumanoidSampleCode : MonoBehaviour
         {
             EnsureProgressTextKoreanFont();
             string totalText = StopRecordingTime > 0 ? StopRecordingTime.ToString() : "-";
-            SetProgressText($"{status} {currentTime:F1}s / {totalText}s");
+            SetProgressText(status.StartsWith("오류: ", StringComparison.Ordinal)
+                ? status
+                : $"{status} {currentTime:F1}s / {totalText}s");
         }
     }
 
