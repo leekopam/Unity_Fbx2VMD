@@ -16,12 +16,14 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal sealed class FbxFullClipFootMetricsCapture : IDisposable
     {
-        private const string InputFileName = "satisfaction_2.fbx";
+        private const string DefaultInputFileName = "satisfaction_2.fbx";
         private const string ScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const int FramesPerPoll = 12;
         private enum Phase { Importing, Preparing, Scanning, Finished }
 
         private readonly FBXVmdPipeline _pipeline;
+        private readonly string _inputFileName;
+        private readonly string _caseId;
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private StreamWriter _writer;
         private HumanoidMotionPlaybackController _controller;
@@ -53,9 +55,12 @@ namespace Fbx2Vmd.FBXImporter
         private int _maximumFootRotationStepFrame;
         private int _maximumHipsStepFrame;
 
-        private FbxFullClipFootMetricsCapture(FBXVmdPipeline pipeline, string directory)
+        private FbxFullClipFootMetricsCapture(FBXVmdPipeline pipeline, string directory,
+            string inputFileName, string caseId)
         {
             _pipeline = pipeline;
+            _inputFileName = inputFileName;
+            _caseId = caseId;
             CsvPath = Path.Combine(directory, "all-frames.csv");
             StatePath = Path.Combine(directory, "state.json");
         }
@@ -66,9 +71,11 @@ namespace Fbx2Vmd.FBXImporter
         internal bool HasEvidence { get; private set; }
         internal string FailureStage { get; private set; } = string.Empty;
         internal string FailureMessage { get; private set; } = string.Empty;
+        internal string CaseId => _caseId;
 
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
-            out FbxFullClipFootMetricsCapture capture, out string message)
+            out FbxFullClipFootMetricsCapture capture, out string message,
+            string inputFileName = DefaultInputFileName, string caseId = "F10")
         {
             capture = null;
             message = string.Empty;
@@ -78,28 +85,36 @@ namespace Fbx2Vmd.FBXImporter
                 pipeline.HasPreparedImportedMotion || pipeline.IsImportedMotionRecording ||
                 Time.captureFramerate != 0 || pipeline.targetCharacter == null)
             {
-                message = "F10은 저장된 Main_Auto의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
+                message = $"{caseId}는 저장된 Main_Auto의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
                 return false;
             }
 
             string root = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
-            string input = Path.Combine(root, "Assets", "Resources", "Import_FBX", InputFileName);
+            if (string.IsNullOrWhiteSpace(inputFileName) ||
+                Path.GetFileName(inputFileName) != inputFileName)
+            {
+                message = "입력 FBX 파일명이 유효하지 않습니다.";
+                return false;
+            }
+            string input = Path.Combine(root, "Assets", "Resources", "Import_FBX", inputFileName);
             if (!File.Exists(input))
             {
-                message = $"F10 입력 FBX가 없습니다: {InputFileName}";
+                message = $"{caseId} 입력 FBX가 없습니다: {inputFileName}";
                 return false;
             }
 
             string directory = Path.Combine(root, "Docs", "Workflow", "Local", "evidence",
-                "boogle", "full-clip", runGuid.ToString("D"), requestGuid.ToString("D"));
+                "boogle", caseId == "F14" ? "full-clip-f14" : "full-clip",
+                runGuid.ToString("D"), requestGuid.ToString("D"));
             try
             {
                 Directory.CreateDirectory(directory);
-                capture = new FbxFullClipFootMetricsCapture(pipeline, directory);
+                capture = new FbxFullClipFootMetricsCapture(pipeline, directory,
+                    inputFileName, caseId);
                 if (pipeline.TryStartFbxImportFromSharedSettings(input)) return true;
-                message = "F10 제품 FBX 가져오기 요청이 거부되었습니다.";
+                message = $"{caseId} 제품 FBX 가져오기 요청이 거부되었습니다.";
             }
-            catch (Exception error) { message = $"F10 시작 실패: {error.Message}"; }
+            catch (Exception error) { message = $"{caseId} 시작 실패: {error.Message}"; }
             capture = null;
             return false;
         }
@@ -113,9 +128,14 @@ namespace Fbx2Vmd.FBXImporter
                     _pipeline == null || Time.captureFramerate != 0)
                     throw new InvalidOperationException("Play·씬·프레임률 상태가 변경되었습니다.");
                 if (DateTime.UtcNow - _startedUtc > TimeSpan.FromMinutes(30))
-                    throw new TimeoutException("F10 전체 프레임 수집 시간이 초과되었습니다.");
+                    throw new TimeoutException($"{_caseId} 전체 프레임 수집 시간이 초과되었습니다.");
                 if (_pipeline.SessionState == FBXVmdPipeline.FBXSessionState.Failed)
-                    throw new InvalidOperationException(_pipeline.LastSessionMessage);
+                {
+                    string stage = _phase == Phase.Preparing
+                        ? "native_skinning_preparation" : "import_or_retarget";
+                    Finish(stage, _pipeline.LastSessionMessage);
+                    return;
+                }
 
                 switch (_phase)
                 {
@@ -123,14 +143,17 @@ namespace Fbx2Vmd.FBXImporter
                         if (_pipeline.IsProcessing || !_pipeline.HasPreparedImportedMotion ||
                             _pipeline.SessionState != FBXVmdPipeline.FBXSessionState.Ready) return;
                         if (!_pipeline.TryPlayImportedMotion())
-                            throw new InvalidOperationException("F10 제품 재생 준비를 시작하지 못했습니다.");
+                        {
+                            Finish("playback_start", _pipeline.LastSessionMessage);
+                            return;
+                        }
                         _phase = Phase.Preparing;
                         break;
                     case Phase.Preparing:
                         if (_pipeline.IsPreparingImportedMotionCorrection ||
                             !_pipeline.IsImportedMotionPlaying) return;
                         if (!_pipeline.TryPauseImportedMotion())
-                            throw new InvalidOperationException("F10 준비 후 일시정지 실패");
+                            throw new InvalidOperationException($"{_caseId} 준비 후 일시정지 실패");
                         Initialize();
                         _phase = Phase.Scanning;
                         break;
@@ -166,7 +189,7 @@ namespace Fbx2Vmd.FBXImporter
             if (_controller == null || _hips == null || _knees.Any(item => item == null) ||
                 _feet.Any(item => item == null) || _toes.Any(item => item == null) ||
                 !(_frameRate > 0f) || _lastFrame < 1)
-                throw new InvalidOperationException("F10 전체 클립 또는 하체 본이 준비되지 않았습니다.");
+                throw new InvalidOperationException($"{_caseId} 전체 클립 또는 하체 본이 준비되지 않았습니다.");
 
             _writer = new StreamWriter(CsvPath, false, new System.Text.UTF8Encoding(false));
             _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m");
@@ -178,7 +201,7 @@ namespace Fbx2Vmd.FBXImporter
             if (!_controller.SeekFrame(frame) || _pipeline.ImportedMotionCurrentFrameIndex != frame ||
                 !_pipeline.TryCaptureImportedMotionFootSurface(out HumanoidFootGroundingSnapshot left,
                     out HumanoidFootGroundingSnapshot right, out HumanoidFootGroundingStatus status))
-                throw new InvalidOperationException($"F10 {frame}프레임 탐색·접지 측정 실패");
+                throw new InvalidOperationException($"{_caseId} {frame}프레임 탐색·접지 측정 실패");
 
             float time = _pipeline.ImportedMotionCurrentTimeSeconds;
             float timeError = Mathf.Abs(time - frame / _frameRate) * 1000f;
@@ -248,7 +271,7 @@ namespace Fbx2Vmd.FBXImporter
                 _hips.position.y, _animator.transform.position.y
             };
             if (values.OfType<float>().Any(value => !IsFinite(value)))
-                throw new InvalidOperationException($"F10 {frame}프레임 비유한 하체 수치");
+                throw new InvalidOperationException($"{_caseId} {frame}프레임 비유한 하체 수치");
             _writer.WriteLine(string.Join(",", values.Select(value =>
                 value is float number ? number.ToString("R", CultureInfo.InvariantCulture) : value)));
             _rowCount++;
@@ -271,8 +294,12 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     status = HasEvidence ? "metrics_complete_review_required" : "failed",
                     failure_stage = stage, failure_message = message,
-                    scene = ScenePath, input = InputFileName,
+                    scene = ScenePath, input = _inputFileName,
                     model = _pipeline?.targetCharacter != null ? _pipeline.targetCharacter.name : string.Empty,
+                    native_skinning_processed_frames =
+                        _pipeline?.ImportedMotionCorrectionProcessedFrameCount ?? 0,
+                    native_skinning_total_frames =
+                        _pipeline?.ImportedMotionCorrectionTotalFrameCount ?? 0,
                     clip_frame_rate = _frameRate, last_frame = _lastFrame,
                     processed_frames = _frame, row_count = _rowCount,
                     csv_path = CsvPath,
@@ -303,7 +330,7 @@ namespace Fbx2Vmd.FBXImporter
 
         public void Dispose()
         {
-            if (!IsFinished) Finish("cancelled", "F10 수집이 종료되었습니다.");
+            if (!IsFinished) Finish("cancelled", $"{_caseId} 수집이 종료되었습니다.");
         }
 
         private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);

@@ -31,6 +31,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
         private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
         private const string CaptureSatisfactionFullClipMetricsCommand = "capture_satisfaction_full_clip_metrics";
+        private const string CaptureTetorisTestPrefabFullClipCommand = "capture_tetoris_testprefab_full_clip_metrics";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
         private const string EnterE2ePlayCommand = "enter_e2e_play";
@@ -170,6 +171,11 @@ namespace Fbx2Vmd.FBXImporter
         private static string _playbackCapturePath;
         private static FbxFootLiveEvidenceCapture _footLiveEvidence;
         private static FbxFullClipFootMetricsCapture _fullClipMetrics;
+        private static FBXVmdPipeline _alternateModelPipeline;
+        private static GameObject _originalModel;
+        private static GameObject _alternateModel;
+        private static bool _originalModelWasActive;
+        private static bool _alternateModelWasActive;
         private static int _footEvidenceFrameIndex;
         private static readonly List<string> PlaybackStageLog = new List<string>();
         private enum InvalidInputPhase { None, MissingPath, InvalidAvatar }
@@ -741,6 +747,8 @@ namespace Fbx2Vmd.FBXImporter
                             interactive: false, out message)) return false;
                     return FbxFullClipFootMetricsCapture.TryStart(fullPipeline, request.request_id,
                         request.run_id, out _fullClipMetrics, out message);
+                case CaptureTetorisTestPrefabFullClipCommand:
+                    return TryStartTestPrefabFullClip(request, out message);
                 case CaptureInvalidInputEvidenceCommand:
                     return TryStartInvalidInputEvidence(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
@@ -1224,7 +1232,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 bool hasEvidence = _fullClipMetrics.HasEvidence;
                 string message = hasEvidence
-                    ? "F10 전체 프레임 수집 완료, 화면·전체 재생 검토 필요"
+                    ? $"{_fullClipMetrics.CaseId} 전체 프레임 수집 완료, 화면·전체 재생 검토 필요"
                     : _fullClipMetrics.FailureMessage;
                 WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
@@ -1247,9 +1255,58 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _fullClipMetrics.Dispose();
                 _fullClipMetrics = null;
+                RestoreAlternateModel();
                 ClearAutomationRequestState();
                 TryDeleteRequestFile();
             }
+        }
+
+        private static bool TryStartTestPrefabFullClip(
+            FbxPlaybackSmokeAutomationRequest request, out string message)
+        {
+            if (!TryGetFBXVmdPipeline("tetoris_001.fbx", out FBXVmdPipeline pipeline,
+                    interactive: false, out message)) return false;
+            GameObject model = SceneManager.GetActiveScene().GetRootGameObjects()
+                .FirstOrDefault(root => root.name == "testPrefab");
+            Animator animator = model != null ? model.GetComponentInChildren<Animator>(true) : null;
+            if (pipeline.targetCharacter == null ||
+                pipeline.targetCharacter.name != E2eModelName || model == null ||
+                animator == null || animator.avatar == null || !animator.avatar.isValid)
+            {
+                message = "F14는 Main_Auto의 YYB 대상과 유효한 testPrefab Avatar가 필요합니다.";
+                return false;
+            }
+
+            _alternateModelPipeline = pipeline;
+            _originalModel = pipeline.targetCharacter;
+            _alternateModel = model;
+            _originalModelWasActive = _originalModel.activeSelf;
+            _alternateModelWasActive = model.activeSelf;
+            try
+            {
+                _originalModel.SetActive(false);
+                model.SetActive(true);
+                pipeline.targetCharacter = model;
+                if (FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
+                    request.run_id, out _fullClipMetrics, out message,
+                    "tetoris_001.fbx", "F14")) return true;
+            }
+            finally
+            {
+                if (_fullClipMetrics == null) RestoreAlternateModel();
+            }
+            return false;
+        }
+
+        private static void RestoreAlternateModel()
+        {
+            if (_alternateModelPipeline != null)
+                _alternateModelPipeline.targetCharacter = _originalModel;
+            if (_alternateModel != null) _alternateModel.SetActive(_alternateModelWasActive);
+            if (_originalModel != null) _originalModel.SetActive(_originalModelWasActive);
+            _alternateModelPipeline = null;
+            _originalModel = null;
+            _alternateModel = null;
         }
 
         private static void PollFootLiveEvidence()

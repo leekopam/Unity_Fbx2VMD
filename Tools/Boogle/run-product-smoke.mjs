@@ -25,6 +25,7 @@ const preselectionCommand = "capture_preselection_state";
 const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
+const alternateModelCommand = "capture_tetoris_testprefab_full_clip_metrics";
 const fullRegressionCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
 const fullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
 const segmentCases = [
@@ -929,8 +930,9 @@ async function executeFootLive(runId) {
   return { ...result, requestId };
 }
 
-async function executeFullClip(runId) {
-  const sessionRoot = path.join(evidenceRoot, "full-clip-runs", runId);
+async function executeFullClip(runId, alternateModel = false) {
+  const sessionRoot = path.join(evidenceRoot,
+    alternateModel ? "alternate-model-runs" : "full-clip-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
   const requestId = randomUUID();
   const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
@@ -947,7 +949,8 @@ async function executeFullClip(runId) {
   let result = { status: "INFRA_ERROR" };
   let failureStage = "preflight";
   try {
-    await access(fbxPath);
+    await access(alternateModel
+      ? path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx") : fbxPath);
     const baseline = await executeControl(runId, environmentCommand);
     steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
     before = baseline.state;
@@ -966,7 +969,9 @@ async function executeFullClip(runId) {
         result = { status: "BLOCKED", failureKind: "preflight" };
       else {
         await writeFile(requestPath, JSON.stringify({ request_id: requestId,
-          command: fullClipCommand, requested_command: fullClipCommand, run_id: runId
+          command: alternateModel ? alternateModelCommand : fullClipCommand,
+          requested_command: alternateModel ? alternateModelCommand : fullClipCommand,
+          run_id: runId
         }), { flag: "wx" });
         submitted = true;
         const startedAt = Date.now();
@@ -980,40 +985,49 @@ async function executeFullClip(runId) {
         if (!terminal) {
           failureStage = "timeout";
           result = { status: "TIMED_OUT", failureKind: "timeout" };
-        } else if (unityStatus.status !== "completed" || unityStatus.passed !== true) {
+        } else if (!unityStatus.full_clip_state_path) {
           failureStage = unityStatus.failure_stage || "capture";
           result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL",
             failureKind: failureStage === "preflight" ? "preflight" : "test_failure" };
         } else {
           failureStage = "evidence";
-          const allowedRoot = path.join(evidenceRoot, "full-clip", runId, requestId);
+          const allowedRoot = path.join(evidenceRoot,
+            alternateModel ? "full-clip-f14" : "full-clip", runId, requestId);
           const statePath = path.resolve(unityStatus.full_clip_state_path || "");
           if (path.relative(allowedRoot, statePath) !== "state.json")
-            throw new Error("F10 상태 파일 경로가 실행 폴더를 벗어났습니다.");
+            throw new Error("상태 파일 경로가 실행 폴더를 벗어났습니다.");
           state = JSON.parse(await readFile(statePath, "utf8"));
-          const csvPath = path.resolve(state.csv_path || "");
-          if (path.relative(allowedRoot, csvPath) !== "all-frames.csv")
-            throw new Error("F10 CSV 경로가 실행 폴더를 벗어났습니다.");
-          const rows = (await readFile(csvPath, "utf8")).trimEnd().split(/\r?\n/);
-          const expected = (state.last_frame + 1) * 2;
-          const valid = state.status === "metrics_complete_review_required" &&
-            state.scene === "Assets/_Project/Scene/Main_Auto.unity" &&
-            state.input === "satisfaction_2.fbx" && state.last_frame >= 1333 &&
-            state.clip_frame_rate > 0 && state.processed_frames === state.last_frame + 1 &&
-            state.row_count === expected && rows.length === expected + 1 &&
-            rows[0].startsWith("frame,time_s,time_error_ms,side,") &&
-            rows.slice(1).every((row, index) => {
-              const cells = row.split(",");
-              const frame = Math.floor(index / 2);
-              return cells.length === 39 && Number(cells[0]) === frame &&
-                cells[3] === (index % 2 ? "right" : "left") &&
-                Math.abs(Number(cells[1]) - frame / state.clip_frame_rate) * 1000 <=
-                  500 / state.clip_frame_rate + 0.02 &&
-                Number.isFinite(Number(cells[2]));
-            });
-          result = valid ? { status: "MANUAL_REVIEW_REQUIRED" } :
-            { status: "FAIL", failureKind: "test_failure" };
-          if (valid) failureStage = "";
+          if (unityStatus.status !== "completed" || unityStatus.passed !== true) {
+            failureStage = state.failure_stage || unityStatus.failure_stage || "capture";
+            result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL",
+              failureKind: failureStage === "preflight" ? "preflight" : "test_failure" };
+          } else {
+            const csvPath = path.resolve(state.csv_path || "");
+            if (path.relative(allowedRoot, csvPath) !== "all-frames.csv")
+              throw new Error("CSV 경로가 실행 폴더를 벗어났습니다.");
+            const rows = (await readFile(csvPath, "utf8")).trimEnd().split(/\r?\n/);
+            const expected = (state.last_frame + 1) * 2;
+            const valid = state.status === "metrics_complete_review_required" &&
+              state.scene === "Assets/_Project/Scene/Main_Auto.unity" &&
+              state.input === (alternateModel ? "tetoris_001.fbx" : "satisfaction_2.fbx") &&
+              state.model === (alternateModel ? "testPrefab" : "YYB Hatsune Miku") &&
+              state.last_frame >= (alternateModel ? 8706 : 1333) &&
+              state.clip_frame_rate > 0 && state.processed_frames === state.last_frame + 1 &&
+              state.row_count === expected && rows.length === expected + 1 &&
+              rows[0].startsWith("frame,time_s,time_error_ms,side,") &&
+              rows.slice(1).every((row, index) => {
+                const cells = row.split(",");
+                const frame = Math.floor(index / 2);
+                return cells.length === 39 && Number(cells[0]) === frame &&
+                  cells[3] === (index % 2 ? "right" : "left") &&
+                  Math.abs(Number(cells[1]) - frame / state.clip_frame_rate) * 1000 <=
+                    500 / state.clip_frame_rate + 0.02 &&
+                  Number.isFinite(Number(cells[2]));
+              });
+            result = valid ? { status: "MANUAL_REVIEW_REQUIRED" } :
+              { status: "FAIL", failureKind: "test_failure" };
+            if (valid) failureStage = "";
+          }
         }
       }
     }
@@ -1048,7 +1062,11 @@ async function executeFullClip(runId) {
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, result: result.status, failureStage, steps, before, after,
       unityStatus, statePath: unityStatus?.full_clip_state_path || null,
-      processedFrames: state?.processed_frames || null, rowCount: state?.row_count || null
+      processedFrames: state?.processed_frames ?? null, rowCount: state?.row_count ?? null,
+      nativeSkinningProcessedFrames: state?.native_skinning_processed_frames ?? null,
+      nativeSkinningTotalFrames: state?.native_skinning_total_frames ?? null,
+      lowerBodyDirectAssessment: alternateModel ? "DIAGNOSTIC_ONLY" : null,
+      fullVmdOutput: alternateModel ? "NOT_CAPTURED_BY_METRICS" : null
     }, null, 2));
   }
   return { ...result, requestId };
@@ -1431,9 +1449,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "manual-compare", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "manual-compare", "alternate-model", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|manual-compare|segments|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|manual-compare|alternate-model|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1448,10 +1466,12 @@ async function main() {
   const unityVersion = (await readFile(
     path.join(projectRoot, "ProjectSettings/ProjectVersion.txt"), "utf8"
   )).match(/^m_EditorVersion:\s*(\S+)/m)?.[1] || "unknown";
-  const fbxHash = await hashFile(mode === "foot-live"
+  const fbxHash = await hashFile(mode === "foot-live" || mode === "alternate-model"
     ? path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx") : fbxPath);
   const modelHash = await hashFile(path.join(
-    projectRoot, "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx"
+    projectRoot, mode === "alternate-model"
+      ? "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab"
+      : "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx"
   ));
   const sceneHash = await hashFile(path.join(projectRoot, "Assets/_Project/Scene/Main_Auto.unity"));
   const gitRevision = execFileSync("git", ["rev-parse", "HEAD"], {
@@ -1472,6 +1492,7 @@ async function main() {
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
         mode === "full-output" ? "F12" :
         mode === "manual-compare" ? "F13" :
+        mode === "alternate-model" ? "F14" :
         mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
@@ -1492,6 +1513,7 @@ async function main() {
         : mode === "playback" ? await executePlayback(runId)
         : mode === "foot-live" ? await executeFootLive(runId)
         : mode === "full-clip" ? await executeFullClip(runId)
+        : mode === "alternate-model" ? await executeFullClip(runId, true)
         : mode === "full-regression" ? await executeFullRegression(runId)
         : mode === "full-output" ? await executeFullRegression(runId, true)
         : mode === "manual-compare" ? await executeManualComparison(runId)
@@ -1509,6 +1531,7 @@ async function main() {
             mode === "full-regression" ? "full-regression-runs" :
             mode === "full-output" ? "full-output-runs" :
             mode === "manual-compare" ? "manual-comparison-runs" :
+            mode === "alternate-model" ? "alternate-model-runs" :
             mode === "segments" ? "segment-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
