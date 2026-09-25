@@ -19,6 +19,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             VisualComparisonRunOptionsCopier.Copy(source, destination);
+            destination.f13PairOnly = source.f13PairOnly;
             destination.enableYybArmSwingLimitRuntimeOverride = source.enableYybArmSwingLimitRuntimeOverride;
             destination.yybArmSwingLimitWeight = source.yybArmSwingLimitWeight;
             destination.yybArmSwingMaxDownDot = source.yybArmSwingMaxDownDot;
