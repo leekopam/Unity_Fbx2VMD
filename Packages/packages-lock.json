@@ -313,6 +313,28 @@
         "com.unity.render-pipelines.core": "14.0.12"
       }
     },
+    "com.vrmc.gltf": {
+      "version": "https://github.com/vrm-c/UniVRM.git?path=/Assets/UniGLTF#v0.130.1",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.modules.animation": "1.0.0",
+        "com.unity.modules.imgui": "1.0.0",
+        "com.unity.modules.imageconversion": "1.0.0",
+        "com.unity.test-framework": "1.4.6"
+      },
+      "hash": "c7212c7988e6b5fe69d93a293a4274192a105005"
+    },
+    "com.vrmc.univrm": {
+      "version": "https://github.com/vrm-c/UniVRM.git?path=/Assets/VRM#v0.130.1",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.vrmc.gltf": "0.130.1",
+        "com.unity.ugui": "1.0.0"
+      },
+      "hash": "c7212c7988e6b5fe69d93a293a4274192a105005"
+    },
     "com.unity.modules.ai": {
       "version": "1.0.0",
       "depth": 0,
