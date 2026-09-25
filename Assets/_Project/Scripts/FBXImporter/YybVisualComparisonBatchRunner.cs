@@ -62,6 +62,10 @@ namespace Fbx2Vmd.FBXImporter
             60f,
             120f
         };
+        private static readonly float[] F13ProbeLocalSampleTimes =
+        {
+            0f, 0.5f, 1f, 1.5f, 2f, 2.5f
+        };
         private static readonly string[] RuntimeDiagnosticScriptPaths =
         {
             "Assets/Plugins/VMDRecorderSample/SampleScript/MotionComparisonProbe.cs",
@@ -1114,13 +1118,17 @@ namespace Fbx2Vmd.FBXImporter
                 _currentRunOptions.enableReferenceMmdTimingRuntimeOverride,
                 ResolveKnownReferenceMmdDurationSeconds());
             float referenceClipStartSeconds = timingPlan.ReferenceVideoStartSeconds;
-            float[] referenceLocalSampleSeconds = LoadReferenceMp4CurrentClipLocalSampleSeconds(
-                referenceClipStartSeconds,
-                _currentRunOptions.durationSeconds);
+            float[] referenceLocalSampleSeconds = _currentRunOptions.f13PairOnly
+                ? Array.Empty<float>()
+                : LoadReferenceMp4CurrentClipLocalSampleSeconds(
+                    referenceClipStartSeconds,
+                    _currentRunOptions.durationSeconds);
             float[] probeSampleTimes = ReferenceAlignedSampleTimePlanner.Build(
                 timingPlan.CandidateClipStartSeconds,
                 _currentRunOptions.durationSeconds,
-                ReferenceMp4ProbeDefaultLocalSampleTimes,
+                _currentRunOptions.f13PairOnly
+                    ? F13ProbeLocalSampleTimes
+                    : ReferenceMp4ProbeDefaultLocalSampleTimes,
                 referenceLocalSampleSeconds,
                 timingPlan.CandidateClipSecondsPerReferenceSecond,
                 DefaultFrameRate);
@@ -2294,10 +2302,14 @@ namespace Fbx2Vmd.FBXImporter
             return ReferenceAlignedSampleTimePlanner.Build(
                 referenceClipStartSeconds,
                 requestedDurationSeconds,
-                ReferenceMp4ProbeDefaultLocalSampleTimes,
-                LoadReferenceMp4CurrentClipLocalSampleSeconds(
-                    referenceClipStartSeconds,
-                    requestedDurationSeconds),
+                _currentRunOptions.f13PairOnly
+                    ? F13ProbeLocalSampleTimes
+                    : ReferenceMp4ProbeDefaultLocalSampleTimes,
+                _currentRunOptions.f13PairOnly
+                    ? Array.Empty<float>()
+                    : LoadReferenceMp4CurrentClipLocalSampleSeconds(
+                        referenceClipStartSeconds,
+                        requestedDurationSeconds),
                 1f,
                 DefaultFrameRate);
         }

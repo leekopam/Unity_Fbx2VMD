@@ -39,19 +39,20 @@ function localEvidencePath(projectRoot, relativePath) {
   return resolved;
 }
 
-function byFrame(rows) {
+function bySample(rows) {
   const result = new Map();
   for (const row of rows) {
     const frame = Number(row.recorderFrame);
     if (!Number.isInteger(frame) || frame < 0) continue;
-    if (result.has(frame)) {
-      const previous = result.get(frame);
+    const key = row.reason || String(frame);
+    if (result.has(key)) {
+      const previous = result.get(key);
       if (previous.animationClipName !== row.animationClipName ||
           previous.animationClipTime !== row.animationClipTime)
-        throw new Error(`중복 recorderFrame의 클립·시간 불일치: ${frame}`);
+        throw new Error(`중복 샘플의 클립·시간 불일치: ${key}`);
       continue;
     }
-    result.set(frame, row);
+    result.set(key, row);
   }
   return result;
 }
@@ -70,28 +71,28 @@ export async function compareManualCapture(summary, projectRoot) {
     manual.comparisonMetricsCsvPath, automatic.comparisonMetricsCsvPath,
     manual.comparisonFrameIndexPath, automatic.comparisonFrameIndexPath
   ].map(async (file) => readCsv(await readFile(localEvidencePath(projectRoot, file), "utf8"))));
-  const manualRows = byFrame(manualCsv);
-  const automaticRows = byFrame(automaticCsv);
+  const manualRows = bySample(manualCsv);
+  const automaticRows = bySample(automaticCsv);
   if (manualRows.size !== automaticRows.size ||
-      [...manualRows.keys()].some((frame) => !automaticRows.has(frame)))
-    return { status: "NOT_COMPARABLE", reason: "수동·자동 측정 프레임 집합이 다름" };
+      [...manualRows.keys()].some((sample) => !automaticRows.has(sample)))
+    return { status: "NOT_COMPARABLE", reason: "수동·자동 측정 시각 집합이 다름" };
   const manualImages = new Map(manualIndexCsv.filter((row) => row.view === "front")
-    .map((row) => [Number(row.recorderFrame), row.path]));
+    .map((row) => [row.reason || row.recorderFrame, row.path]));
   const automaticImages = new Map(automaticIndexCsv.filter((row) => row.view === "front")
-    .map((row) => [Number(row.recorderFrame), row.path]));
+    .map((row) => [row.reason || row.recorderFrame, row.path]));
   const fields = ["rootX", "rootY", "rootZ", "leftFootX", "leftFootZ",
     "rightFootX", "rightFootZ", "lowestFootBottomY", "leftKneeAngle",
     "rightKneeAngle", "maxScaleDelta", "cameraFacingDot"];
   const frames = [];
-  for (const [frame, manualRow] of manualRows) {
-    const automaticRow = automaticRows.get(frame);
+  for (const [sample, manualRow] of manualRows) {
+    const automaticRow = automaticRows.get(sample);
     if (!automaticRow) continue;
     const manualTime = Number(manualRow.animationClipTime);
     const automaticTime = Number(automaticRow.animationClipTime);
     if (!Number.isFinite(manualTime) || !Number.isFinite(automaticTime) ||
         Math.abs(manualTime - automaticTime) > 1 / 30 + 0.001 ||
         manualRow.animationClipName !== automaticRow.animationClipName)
-      return { status: "NOT_COMPARABLE", reason: `프레임 ${frame}의 FBX 클립·시간 불일치` };
+      return { status: "NOT_COMPARABLE", reason: `시각 ${sample}의 FBX 클립·시간 불일치` };
     const metrics = {};
     for (const field of fields) {
       const before = Number(manualRow[field]);
@@ -100,13 +101,17 @@ export async function compareManualCapture(summary, projectRoot) {
           Number.isFinite(after)) metrics[field] = { manual: before, automatic: after,
             delta: Number((after - before).toFixed(6)) };
     }
-    const manualImage = manualImages.get(frame);
-    const automaticImage = automaticImages.get(frame);
-    frames.push({ frame, clipTime: manualTime, metrics,
+    const manualImage = manualImages.get(sample);
+    const automaticImage = automaticImages.get(sample);
+    frames.push({ frame: Number(automaticRow.recorderFrame), sample,
+      manualFrame: Number(manualRow.recorderFrame),
+      automaticFrame: Number(automaticRow.recorderFrame),
+      manualClipTime: manualTime, automaticClipTime: automaticTime,
+      clipTime: manualTime, metrics,
       manualImage: manualImage || null, automaticImage: automaticImage || null });
   }
   if (!frames.length || !frames.some((item) => item.manualImage && item.automaticImage))
-    return { status: "BLOCKED", reason: "같은 프레임의 수치·정면 캡처 쌍이 없음" };
+    return { status: "BLOCKED", reason: "같은 시각의 수치·정면 캡처 쌍이 없음" };
   if (frames.some((item) => Boolean(item.manualImage) !== Boolean(item.automaticImage)) ||
       !frames.some((item) => Object.keys(item.metrics).length))
     return { status: "BLOCKED", reason: "수동·자동 캡처 또는 측정값이 불완전함" };

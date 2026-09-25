@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { compareManualCapture } from "./manual-compare.mjs";
 
-test("F13은 같은 FBX 프레임의 측정값과 정면 캡처만 비교한다", async () => {
+test("F13은 같은 샘플 시각의 측정값과 정면 캡처만 비교한다", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fbx2vmd-f13-"));
   const directory = path.join(root, "Docs/Workflow/Local/f13");
   const png = Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"),
@@ -14,10 +14,10 @@ test("F13은 같은 FBX 프레임의 측정값과 정면 캡처만 비교한다"
     await mkdir(directory, { recursive: true });
     for (const role of ["manual", "auto"]) {
       await writeFile(path.join(directory, `${role}.csv`),
-        `recorderFrame,animationClipName,animationClipTime,leftFootX\n30,motion,1,${role === "manual" ? 1 : 1.25}\n`);
+        `reason,recorderFrame,animationClipName,animationClipTime,leftFootX\nt1,${role === "manual" ? 31 : 30},motion,1,${role === "manual" ? 1 : 1.25}\n`);
       await writeFile(path.join(directory, `${role}.png`), png);
       await writeFile(path.join(directory, `${role}-index.csv`),
-        `recorderFrame,view,path\n30,front,Docs/Workflow/Local/f13/${role}.png\n`);
+        `reason,recorderFrame,view,path\nt1,${role === "manual" ? 31 : 30},front,Docs/Workflow/Local/f13/${role}.png\n`);
     }
     const result = (role, jobMode) => ({ jobMode, success: true, frameCount: 60,
       comparisonMetricsCsvPath: `Docs/Workflow/Local/f13/${role}.csv`,
@@ -27,8 +27,10 @@ test("F13은 같은 FBX 프레임의 측정값과 정면 캡처만 비교한다"
     const paired = await compareManualCapture(summary, root);
     assert.equal(paired.status, "MANUAL_REVIEW_REQUIRED");
     assert.equal(paired.frames[0].metrics.leftFootX.delta, 0.25);
+    assert.equal(paired.frames[0].manualFrame, 31);
+    assert.equal(paired.frames[0].automaticFrame, 30);
     await writeFile(path.join(directory, "auto.csv"),
-      "recorderFrame,animationClipName,animationClipTime,leftFootX\n30,motion,2,1.25\n");
+      "reason,recorderFrame,animationClipName,animationClipTime,leftFootX\nt1,30,motion,2,1.25\n");
     assert.equal((await compareManualCapture(summary, root)).status, "NOT_COMPARABLE");
   } finally {
     await rm(root, { recursive: true, force: true });
