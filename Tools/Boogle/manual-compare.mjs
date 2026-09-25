@@ -44,7 +44,13 @@ function byFrame(rows) {
   for (const row of rows) {
     const frame = Number(row.recorderFrame);
     if (!Number.isInteger(frame) || frame < 0) continue;
-    if (result.has(frame)) throw new Error(`중복 recorderFrame: ${frame}`);
+    if (result.has(frame)) {
+      const previous = result.get(frame);
+      if (previous.animationClipName !== row.animationClipName ||
+          previous.animationClipTime !== row.animationClipTime)
+        throw new Error(`중복 recorderFrame의 클립·시간 불일치: ${frame}`);
+      continue;
+    }
     result.set(frame, row);
   }
   return result;

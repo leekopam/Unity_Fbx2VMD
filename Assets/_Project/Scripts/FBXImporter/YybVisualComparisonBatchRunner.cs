@@ -21,6 +21,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
+        private const string F13ManualScenePath = "Assets/_Project/Scene/Sub_Manual_F13.unity";
         private const string SatisfactionReferenceOutputBaseName = "satisfaction_2";
         private const int SatisfactionReferenceMaxMmdFrame = 6000;
         private const string ManualControllerPath = "Assets/_ManualReference/SampleAnimation/TestAnimator1_Manual.controller";
@@ -77,6 +78,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string RunnerStateSessionKey = "Fbx2Vmd.YybVisualComparison.RunnerStateJson";
         private const string ManualTestPrefabNameToken = "testPrefab";
         private const string ManualYybNameToken = "YYB Hatsune Miku_default_1.0ver";
+        private const string F13ManualYybNameToken = "YYB Hatsune Miku";
         private const string ManualTestPrefabLabelSuffix = "testPrefab";
         private const string ManualYybLabelSuffix = "yyb";
 
@@ -851,17 +853,23 @@ namespace Fbx2Vmd.FBXImporter
 
         private static CaptureJob[] BuildCaptureJobs(bool enableVmdPlaybackProbeRuntimeOverride)
         {
+            bool f13PairOnly = _currentRunOptions.f13PairOnly;
             var profile = new VisualComparisonCaptureProfile(
                 modelDisplayName: "YYB",
                 manualReferenceDisplayName: "testPrefab",
                 manualReferenceTargetNameToken: ManualTestPrefabNameToken,
-                manualTargetNameToken: ManualYybNameToken,
-                manualScene: new VisualComparisonScene(SubManualScenePath, "Sub_Manual"),
+                manualTargetNameToken: f13PairOnly ? F13ManualYybNameToken : ManualYybNameToken,
+                manualScene: new VisualComparisonScene(
+                    f13PairOnly ? F13ManualScenePath : SubManualScenePath,
+                    f13PairOnly ? "Sub_Manual_F13" : "Sub_Manual"),
                 recordingScene: new VisualComparisonScene(MainRecordingScenePath, "Main_Recoding"),
                 automaticScene: new VisualComparisonScene(MainAutoScenePath, "Main_Auto"));
 
             return VisualComparisonCaptureJobPlanner
                 .Build(profile, enableVmdPlaybackProbeRuntimeOverride)
+                .Where(job => !f13PairOnly ||
+                    job.Role == VisualComparisonCaptureRole.ManualTarget ||
+                    job.Role == VisualComparisonCaptureRole.Automatic)
                 .Select(MapCaptureJob)
                 .ToArray();
         }
@@ -1193,6 +1201,10 @@ namespace Fbx2Vmd.FBXImporter
                 _currentRunOptions.durationSeconds,
                 DefaultFrameRate,
                 _editorDiagnosticSmokeSegment);
+            if (_currentRunOptions.f13PairOnly)
+            {
+                animator.runtimeAnimatorController = _fallbackController;
+            }
             PrepareManualAnimator(animator, _referenceClip, capturePlan.StartTimeSeconds);
             UnityHumanoidVMDRecorder vmdRecorder = _activeRecorder.GetComponent<UnityHumanoidVMDRecorder>();
             if (vmdRecorder != null)

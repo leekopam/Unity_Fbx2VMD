@@ -5,6 +5,7 @@ namespace Fbx2Vmd.FBXImporter
     [Serializable]
     internal class YybVisualComparisonRunOptions : VisualComparisonRunOptions
     {
+        public bool f13PairOnly;
         public bool enableYybArmSwingLimitRuntimeOverride;
         public float yybArmSwingLimitWeight;
         public float yybArmSwingMaxDownDot;

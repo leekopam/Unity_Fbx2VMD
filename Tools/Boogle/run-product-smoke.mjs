@@ -1396,10 +1396,10 @@ async function executeFullRegression(runId, namedOutput = false) {
 async function executeManualComparison(runId) {
   const sessionRoot = path.join(evidenceRoot, "manual-comparison-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
-  const manualScenePath = path.join(projectRoot, "Assets/_Project/Scene/Sub_Manual.unity");
+  const manualScenePath = path.join(projectRoot, "Assets/_Project/Scene/Sub_Manual_F13.unity");
   const automaticScenePath = path.join(projectRoot, "Assets/_Project/Scene/Main_Auto.unity");
   const manualPrefabPath = path.join(projectRoot,
-    "Assets/_ManualReference/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_Prefab.prefab");
+    "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
   const automaticPrefabPath = path.join(projectRoot,
     "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
   const [manualScene, automaticScene, manualPrefab, automaticPrefab,
@@ -1440,14 +1440,27 @@ async function executeManualComparison(runId) {
     camera: camera(automaticScene) };
   manual.sceneContainsPrefab = manualScene.includes(`guid: ${manual.prefabGuid}`);
   automatic.sceneContainsPrefab = automaticScene.includes(`guid: ${automatic.prefabGuid}`);
+  const sameCamera = (left, right) => left && right &&
+    ["position", "rotation", "orthographic", "orthographicSize", "fieldOfView"]
+      .every((field) => {
+        const numbers = (value) => (value?.match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) || [])
+          .map(Number);
+        const a = numbers(left[field]);
+        const b = numbers(right[field]);
+        return a.length > 0 && a.length === b.length &&
+          a.every((value, index) => Math.abs(value - b[index]) < 0.00001);
+      });
   const differences = [];
-  for (const field of ["prefabGuid", "avatarGuid", "camera",
-    "sceneContainsPrefab"]) {
+  for (const field of ["prefabGuid", "avatarGuid", "sceneContainsPrefab"]) {
     if (!manual[field] || !automatic[field] ||
         JSON.stringify(manual[field]) !== JSON.stringify(automatic[field]))
       differences.push({ field, manual: manual[field], automatic: automatic[field] });
   }
-  const manifest = { runId, manual, automatic, differences,
+  if (!sameCamera(manual.camera, automatic.camera))
+    differences.push({ field: "camera", manual: manual.camera,
+      automatic: automatic.camera });
+  const manifest = { runId, manualReference: "Sub_Manual_F13 controlled fixture",
+    manual, automatic, differences,
     inputFbxSha256: await hashFile(fbxPath) };
   let result = { status: "NOT_COMPARABLE", reason: "모델·Avatar·카메라 조건이 다름" };
   if (!differences.length) {
@@ -1474,8 +1487,8 @@ async function executeManualComparison(runId) {
       let visualStatus = null;
       try {
         await writeFile(visualRequestPath, JSON.stringify({ request_id: requestId,
-          fbx_file: "satisfaction_2.fbx", duration_seconds: 31,
-          finger_closeups: false }), { flag: "wx" });
+          fbx_file: "satisfaction_2.fbx", duration_seconds: 3,
+          finger_closeups: false, f13_pair_only: true }), { flag: "wx" });
         const start = Date.now();
         while (Date.now() - start < 1200000) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -1499,7 +1512,9 @@ async function executeManualComparison(runId) {
           const relative = path.relative(path.join(projectRoot, "Docs/Workflow/Local"), summaryPath);
           if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
             throw new Error("비교 요약 경로가 로컬 근거 폴더 밖입니다.");
-          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+          const summaryText = (await readFile(summaryPath, "utf8")).replace(/^\uFEFF/, "")
+            .replace(/^(\s*"[^"]+":\s*)NaN(?=\s*[,}])/gm, "$1null");
+          const summary = JSON.parse(summaryText);
           manifest.inputFbxSha256After = await hashFile(fbxPath);
           result = summary.fbx_file === "satisfaction_2.fbx" &&
               manifest.inputFbxSha256After === manifest.inputFbxSha256

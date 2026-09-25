@@ -82,6 +82,7 @@ namespace Fbx2Vmd.FBXImporter
             public string fbx_file = default;
             public float duration_seconds = 31f;
             public bool finger_closeups = default;
+            public bool f13_pair_only = default;
             public float mmd_ik_delta_guard_limit_vmd = float.NaN;
             public float mmd_ik_delta_guard_recovery_trigger_vmd = float.NaN;
             public float mmd_ik_delta_guard_recovery_debt_vmd = float.NaN;
@@ -282,6 +283,7 @@ namespace Fbx2Vmd.FBXImporter
                 fbxFileName = request.fbx_file,
                 durationSeconds = request.duration_seconds,
                 enableFingerCloseups = request.finger_closeups,
+                f13PairOnly = request.f13_pair_only,
                 enableRecorderParentFrameIkOffsetsWhenCenterParented = true,
                 mmdIkDeltaGuardLimitOverrideVmd = request.mmd_ik_delta_guard_limit_vmd,
                 mmdIkDeltaGuardRecoveryTriggerVmd = request.mmd_ik_delta_guard_recovery_trigger_vmd,
