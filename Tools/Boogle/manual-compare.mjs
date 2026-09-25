@@ -90,7 +90,7 @@ export async function compareManualCapture(summary, projectRoot) {
     const manualTime = Number(manualRow.animationClipTime);
     const automaticTime = Number(automaticRow.animationClipTime);
     if (!Number.isFinite(manualTime) || !Number.isFinite(automaticTime) ||
-        Math.abs(manualTime - automaticTime) > 1 / 30 + 0.001 ||
+        Math.abs(manualTime - automaticTime) > 1 / 60 + 0.001 ||
         manualRow.animationClipName !== automaticRow.animationClipName)
       return { status: "NOT_COMPARABLE", reason: `시각 ${sample}의 FBX 클립·시간 불일치` };
     const metrics = {};
