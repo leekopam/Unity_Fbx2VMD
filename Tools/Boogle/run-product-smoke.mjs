@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import { access, copyFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { compareManualCapture } from "./manual-compare.mjs";
+import { compareManualCapture, readCsv } from "./manual-compare.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const evidenceRoot = path.join(projectRoot, "Docs/Workflow/Local/evidence/boogle");
@@ -28,6 +28,8 @@ const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
 const alternateModelCommand = "capture_tetoris_testprefab_full_clip_metrics";
+const vrmBaselineCommand = "capture_vrm_mmd_head_metrics";
+const vrmLoadedCommand = "capture_vrm_univrm_head_metrics";
 const productUiCommand = "capture_product_ui_flow";
 const fullRegressionCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
 const fullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
@@ -141,7 +143,7 @@ function inspectVrm(bytes) {
   }
 }
 
-async function executeControl(runId, controlCommand) {
+async function executeControl(runId, controlCommand, requestFields = {}, timeoutMs = 180000) {
   const sessionRoot = path.join(evidenceRoot, "control-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
   const requestId = randomUUID();
@@ -157,11 +159,12 @@ async function executeControl(runId, controlCommand) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
       await writeFile(requestPath, JSON.stringify({
-        request_id: requestId, command: controlCommand, requested_command: controlCommand
+        request_id: requestId, command: controlCommand, requested_command: controlCommand,
+        run_id: runId, ...requestFields
       }), { flag: "wx" });
       submitted = true;
       const startedAt = Date.now();
-      while (Date.now() - startedAt < 180000) {
+      while (Date.now() - startedAt < timeoutMs) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         const candidate = await readStatus();
         if (candidate?.request_id !== requestId) continue;
@@ -1805,11 +1808,143 @@ async function recoverSuite(runId) {
   return { status: manifest.recovery.status, restored: manifest.restored };
 }
 
+async function executeVrmCharacterComparison(runId, vrmFile) {
+  const sessionRoot = path.join(evidenceRoot, "vrm-character-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const manifest = { runId, vrmFile, steps: [] };
+  const outputHash = await hashFile(outputPath);
+  const metaHash = await hashFile(`${outputPath}.meta`);
+  const vrmHash = await hashFile(vrmFile);
+  let enteredPlay = false;
+  let result = { status: "BLOCKED", reason: "VRM 입력 파일이 없음" };
+  try {
+    if (vrmHash !== "missing" && path.extname(vrmFile).toLowerCase() === ".vrm") {
+      const before = await executeControl(runId, environmentCommand);
+      manifest.before = before.state;
+      manifest.steps.push({ name: "before", status: before.status });
+      if (before.status !== "PASS" || before.state?.play_mode ||
+          before.state?.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+          before.state?.scene_dirty || before.state?.model_name !== "YYB Hatsune Miku") {
+        result = { status: "BLOCKED", reason: "저장된 Main_Auto Edit 상태가 필요함" };
+      } else {
+        const jobs = [
+          { name: "univrm", command: vrmLoadedCommand, fields: { vrm_file: vrmFile } },
+          { name: "mmd", command: vrmBaselineCommand, fields: {} }
+        ];
+        const states = {};
+        for (const job of jobs) {
+          const enter = await executeControl(runId, enterPlayCommand);
+          manifest.steps.push({ name: `${job.name}_enter`, status: enter.status });
+          if (enter.status !== "PASS") {
+            result = { status: "INFRA_ERROR", reason: "Unity Play 진입 실패" };
+            break;
+          }
+          enteredPlay = true;
+          const capture = await executeControl(runId, job.command, job.fields, 1200000);
+          manifest.steps.push({ name: job.name, status: capture.status,
+            requestId: capture.requestId, failureStage: capture.unityStatus?.failure_stage });
+          if (job.name === "univrm" && capture.unityStatus?.capture_path) {
+            const importPath = capture.unityStatus.capture_path;
+            const requestRoot = path.join(evidenceRoot, "vrm-character", runId,
+              capture.requestId);
+            if (path.relative(requestRoot, path.resolve(importPath)) !== "import.png" ||
+                !(await hasCompletePngWithin(importPath, requestRoot)))
+              throw new Error("UniVRM 로딩 화면 캡처가 불완전합니다.");
+            manifest.univrmImportCapturePath = importPath;
+          }
+          if (capture.unityStatus?.full_clip_state_path) {
+            const statePath = path.resolve(capture.unityStatus.full_clip_state_path);
+            const relative = path.relative(path.join(evidenceRoot, "vrm-character", runId), statePath);
+            if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
+              throw new Error("VRM 계측 상태 경로가 실행 폴더 밖입니다.");
+            states[job.name] = JSON.parse(await readFile(statePath, "utf8"));
+            manifest[`${job.name}StatePath`] = statePath;
+          }
+          if (capture.terminal) {
+            const exit = await executeControl(runId, exitPlayCommand);
+            manifest.steps.push({ name: `${job.name}_exit`, status: exit.status });
+            enteredPlay = exit.status !== "PASS";
+          }
+          if (capture.status !== "PASS" || enteredPlay) {
+            result = { status: capture.status === "PASS" ? "INFRA_ERROR" : capture.status,
+              reason: capture.unityStatus?.message || "VRM 비교 구간 수집 실패",
+              failureStage: capture.unityStatus?.failure_stage || null };
+            break;
+          }
+        }
+        if (states.univrm && states.mmd && !enteredPlay) {
+          const root = path.join(evidenceRoot, "vrm-character", runId);
+          const rows = {};
+          for (const [name, state] of Object.entries(states)) {
+            if (state.input !== "satisfaction_2.fbx" || state.last_frame !== 90 ||
+                state.row_count !== 182 || !state.camera ||
+                state.capture_paths?.length !== 2 ||
+                !(await Promise.all(state.capture_paths.map(file =>
+                  hasCompletePngWithin(file, root)))).every(Boolean))
+              throw new Error(`${name}의 같은 구간 계측·카메라·PNG가 불완전합니다.`);
+            const csvPath = path.resolve(state.csv_path || "");
+            const relative = path.relative(root, csvPath);
+            if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
+              throw new Error(`${name} CSV가 실행 폴더 밖입니다.`);
+            rows[name] = readCsv(await readFile(csvPath, "utf8"));
+          }
+          if (JSON.stringify(states.univrm.camera) !== JSON.stringify(states.mmd.camera))
+            throw new Error("두 캐릭터의 카메라 조건이 다릅니다.");
+          const reference = new Map(rows.mmd.map(row => [`${row.frame}:${row.side}`, row]));
+          const paired = ["frame,side,time_s,mmd_foot_y_m,univrm_foot_y_m,mmd_hips_y_m,univrm_hips_y_m,mmd_minimum_signed_mm,univrm_minimum_signed_mm"];
+          const seen = new Set();
+          for (const row of rows.univrm) {
+            const key = `${row.frame}:${row.side}`;
+            const baseline = reference.get(key);
+            const frame = Number(row.frame);
+            const time = Number(row.time_s);
+            const baselineTime = Number(baseline?.time_s);
+            if (seen.has(key) || !Number.isInteger(frame) || frame < 0 || frame > 90 ||
+                !["left", "right"].includes(row.side) || !baseline ||
+                !Number.isFinite(time) || !Number.isFinite(baselineTime) ||
+                Math.abs(time - baselineTime) > 0.001)
+              throw new Error(`프레임 ${row.frame}의 FBX 시간·발 위치가 일치하지 않습니다.`);
+            seen.add(key);
+            paired.push([row.frame, row.side, row.time_s, baseline.foot_y_m,
+              row.foot_y_m, baseline.hips_y_m, row.hips_y_m,
+              baseline.minimum_signed_mm, row.minimum_signed_mm].join(","));
+          }
+          if (rows.univrm.length !== 182 || reference.size !== 182)
+            throw new Error("두 캐릭터의 비교 행 개수가 다릅니다.");
+          manifest.pairedMetricsPath = path.join(sessionRoot, "paired-metrics.csv");
+          await writeFile(manifest.pairedMetricsPath, `${paired.join("\n")}\n`);
+          result = { status: "MANUAL_REVIEW_REQUIRED", comparedFrames: 91,
+            pairedRows: 182 };
+        }
+      }
+    }
+  } catch (error) {
+    result = { status: "INFRA_ERROR", reason: error.message };
+  } finally {
+    if (!enteredPlay && manifest.before) {
+      const after = await executeControl(runId, environmentCommand);
+      manifest.after = after.state;
+      manifest.environmentRestored = after.status === "PASS" &&
+        environmentFields.every(field => JSON.stringify(manifest.before[field]) ===
+          JSON.stringify(after.state?.[field]));
+    }
+    manifest.inputUnchanged = vrmHash === await hashFile(vrmFile);
+    manifest.outputsUnchanged = outputHash === await hashFile(outputPath) &&
+      metaHash === await hashFile(`${outputPath}.meta`);
+    if (manifest.before && !enteredPlay &&
+        (!manifest.environmentRestored || !manifest.outputsUnchanged || !manifest.inputUnchanged))
+      result = { status: "INFRA_ERROR", reason: "입력·출력 또는 Unity 환경 복원 불일치" };
+    manifest.result = result;
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify(manifest, null, 2));
+  }
+  return result;
+}
+
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "vrm-output", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
-      process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|vrm-output|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "vrm-output", "vrm-character", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+      process.argv.length > (mode === "smoke" ? 2 : mode === "recover" || mode === "vrm-character" ? 4 : 3)) {
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|vrm-output|vrm-character [VRM 경로]|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1821,6 +1956,8 @@ async function main() {
     return;
   }
   await access(sdkRunnerPath);
+  const vrmInputPath = path.resolve(process.argv[3] || path.join(projectRoot,
+    "Docs/ref/ExportedProject/ExportedProject/Assets/StreamingAssets/Characters/HatsuneMikuNT.vrm"));
   const unityVersion = (await readFile(
     path.join(projectRoot, "ProjectSettings/ProjectVersion.txt"), "utf8"
   )).match(/^m_EditorVersion:\s*(\S+)/m)?.[1] || "unknown";
@@ -1829,11 +1966,10 @@ async function main() {
     mode === "product-ui"
       ? path.join(projectRoot, "Assets/Resources/Import_FBX/Snake Hip Hop Dance.fbx")
       : fbxPath);
-  const modelHash = await hashFile(path.join(
-    projectRoot, mode === "alternate-model"
+  const modelHash = mode === "vrm-character" ? await hashFile(vrmInputPath) :
+    await hashFile(path.join(projectRoot, mode === "alternate-model"
       ? "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab"
-      : "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx"
-  ));
+      : "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx"));
   const sceneHash = await hashFile(path.join(projectRoot, "Assets/_Project/Scene/Main_Auto.unity"));
   const gitRevision = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: projectRoot, encoding: "utf8"
@@ -1854,6 +1990,7 @@ async function main() {
         mode === "full-output" ? "F12" :
         mode === "vrm-output" ? "F12" :
         mode === "manual-compare" ? "F13" :
+        mode === "vrm-character" ? "F14" :
         mode === "alternate-model" ? "F14" :
         mode === "product-ui" ? "F15" :
         mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
@@ -1881,6 +2018,7 @@ async function main() {
         : mode === "full-regression" ? await executeFullRegression(runId)
         : mode === "full-output" ? await executeFullRegression(runId, true)
         : mode === "vrm-output" ? await executeVrmOutput(runId)
+        : mode === "vrm-character" ? await executeVrmCharacterComparison(runId, vrmInputPath)
         : mode === "manual-compare" ? await executeManualComparison(runId)
         : mode === "segments" ? await executeSegments(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)
@@ -1896,6 +2034,7 @@ async function main() {
             mode === "full-regression" ? "full-regression-runs" :
             mode === "full-output" ? "full-output-runs" :
             mode === "manual-compare" ? "manual-comparison-runs" :
+            mode === "vrm-character" ? "vrm-character-runs" :
             mode === "alternate-model" ? "alternate-model-runs" :
             mode === "product-ui" ? "product-ui-runs" :
             mode === "segments" ? "segment-runs" :

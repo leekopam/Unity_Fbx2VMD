@@ -25,6 +25,9 @@ namespace Fbx2Vmd.FBXImporter
         private readonly FBXVmdPipeline _pipeline;
         private readonly string _inputFileName;
         private readonly string _caseId;
+        private readonly int _frameLimit;
+        private readonly bool _captureViews;
+        private readonly List<string> _capturePaths = new List<string>();
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private StreamWriter _writer;
         private HumanoidMotionPlaybackController _controller;
@@ -60,11 +63,13 @@ namespace Fbx2Vmd.FBXImporter
         private int _maximumHipsStepFrame;
 
         private FbxFullClipFootMetricsCapture(FBXVmdPipeline pipeline, string directory,
-            string inputFileName, string caseId)
+            string inputFileName, string caseId, int frameLimit, bool captureViews)
         {
             _pipeline = pipeline;
             _inputFileName = inputFileName;
             _caseId = caseId;
+            _frameLimit = frameLimit;
+            _captureViews = captureViews;
             CsvPath = Path.Combine(directory, "all-frames.csv");
             StatePath = Path.Combine(directory, "state.json");
         }
@@ -79,7 +84,8 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
             out FbxFullClipFootMetricsCapture capture, out string message,
-            string inputFileName = DefaultInputFileName, string caseId = "F10")
+            string inputFileName = DefaultInputFileName, string caseId = "F10",
+            int frameLimit = 0, bool captureViews = false)
         {
             capture = null;
             message = string.Empty;
@@ -108,13 +114,14 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             string directory = Path.Combine(root, "Docs", "Workflow", "Local", "evidence",
-                "boogle", caseId == "F14" ? "full-clip-f14" : "full-clip",
+                "boogle", caseId.StartsWith("VRM_", StringComparison.Ordinal)
+                    ? "vrm-character" : caseId == "F14" ? "full-clip-f14" : "full-clip",
                 runGuid.ToString("D"), requestGuid.ToString("D"));
             try
             {
                 Directory.CreateDirectory(directory);
                 capture = new FbxFullClipFootMetricsCapture(pipeline, directory,
-                    inputFileName, caseId);
+                    inputFileName, caseId, frameLimit, captureViews);
                 if (pipeline.TryStartFbxImportFromSharedSettings(input)) return true;
                 message = $"{caseId} 제품 FBX 가져오기 요청이 거부되었습니다.";
             }
@@ -189,7 +196,9 @@ namespace Fbx2Vmd.FBXImporter
             _toes[0] = _animator?.GetBoneTransform(HumanBodyBones.LeftToes);
             _toes[1] = _animator?.GetBoneTransform(HumanBodyBones.RightToes);
             _frameRate = _pipeline.ImportedMotionFrameRate;
-            _lastFrame = _pipeline.ImportedMotionLastFrameIndex;
+            _lastFrame = _frameLimit > 0
+                ? Mathf.Min(_pipeline.ImportedMotionLastFrameIndex, _frameLimit - 1)
+                : _pipeline.ImportedMotionLastFrameIndex;
             var stabilizer = _controller == null ? null :
                 (EditorHumanoidFootContactStabilizer)typeof(HumanoidMotionPlaybackController)
                     .GetField("_footContactStabilizer", BindingFlags.Instance |
@@ -233,6 +242,43 @@ namespace Fbx2Vmd.FBXImporter
             _previousHipsY = hipsY;
             WriteFoot(frame, time, timeError, 0, status, left);
             WriteFoot(frame, time, timeError, 1, status, right);
+            if (_captureViews && (frame == 0 || frame == _lastFrame))
+                CaptureGameView(frame);
+        }
+
+        private void CaptureGameView(int frame)
+        {
+            string file = Path.Combine(Path.GetDirectoryName(CsvPath),
+                $"frame-{frame:000000}.png");
+            WriteGameViewPng(file);
+            _capturePaths.Add(file);
+        }
+
+        internal static void WriteGameViewPng(string file)
+        {
+            Camera camera = Camera.main;
+            if (camera == null) throw new InvalidOperationException("Main Camera가 없습니다.");
+            var renderTexture = new RenderTexture(1280, 720, 24);
+            var texture = new Texture2D(1280, 720, TextureFormat.RGB24, false);
+            RenderTexture previousActive = RenderTexture.active;
+            RenderTexture previousTarget = camera.targetTexture;
+            try
+            {
+                camera.targetTexture = renderTexture;
+                camera.Render();
+                RenderTexture.active = renderTexture;
+                texture.ReadPixels(new Rect(0, 0, 1280, 720), 0, 0);
+                texture.Apply();
+                File.WriteAllBytes(file, texture.EncodeToPNG());
+            }
+            finally
+            {
+                camera.targetTexture = previousTarget;
+                RenderTexture.active = previousActive;
+                renderTexture.Release();
+                UnityEngine.Object.Destroy(renderTexture);
+                UnityEngine.Object.Destroy(texture);
+            }
         }
 
         private void WriteFoot(int frame, float time, float timeError, int side,
@@ -319,9 +365,12 @@ namespace Fbx2Vmd.FBXImporter
                 _writer?.Dispose();
                 _writer = null;
                 HasEvidence = string.IsNullOrEmpty(stage) && _rowCount == (_lastFrame + 1) * 2 &&
-                    File.Exists(CsvPath) && new FileInfo(CsvPath).Length > 100;
+                    File.Exists(CsvPath) && new FileInfo(CsvPath).Length > 100 &&
+                    (!_captureViews || (_capturePaths.Count == 2 &&
+                        _capturePaths.All(path => File.Exists(path) && new FileInfo(path).Length > 100)));
                 int[] reviewFrames = { 166, 544, 790, 1324, 1332, 4866, 4965, 5547,
                     _maximumSoleStepFrame, _maximumFootRotationStepFrame, _maximumHipsStepFrame };
+                Camera camera = Camera.main;
                 File.WriteAllText(StatePath, JsonConvert.SerializeObject(new
                 {
                     status = HasEvidence ? "metrics_complete_review_required" : "failed",
@@ -333,6 +382,15 @@ namespace Fbx2Vmd.FBXImporter
                     native_skinning_total_frames =
                         _pipeline?.ImportedMotionCorrectionTotalFrameCount ?? 0,
                     clip_frame_rate = _frameRate, last_frame = _lastFrame,
+                    frame_limit = _frameLimit, capture_paths = _capturePaths,
+                    camera = camera == null ? null : new
+                    {
+                        position = new[] { camera.transform.position.x, camera.transform.position.y,
+                            camera.transform.position.z },
+                        rotation = new[] { camera.transform.rotation.x, camera.transform.rotation.y,
+                            camera.transform.rotation.z, camera.transform.rotation.w },
+                        camera.orthographic, camera.orthographicSize, camera.fieldOfView
+                    },
                     source_human_scale = _sourceHumanScale,
                     stage_basis = "source=FBX Humanoid world; retarget=initial target pose before contact correction; sole and foot=final evaluated pose; Game View mesh not presented per frame",
                     processed_frames = _frame, row_count = _rowCount,

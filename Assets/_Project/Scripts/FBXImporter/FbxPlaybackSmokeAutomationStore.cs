@@ -13,6 +13,7 @@ namespace Fbx2Vmd.FBXImporter
         public string command;
         public string requested_command;
         public string run_id;
+        public string vrm_file;
     }
 
     [Serializable]
