@@ -835,7 +835,8 @@ namespace Fbx2Vmd.FBXImporter
                             out FBXVmdPipeline uiPipeline, interactive: false,
                             out message)) return false;
                     return FbxProductUiFlowCapture.TryStart(uiPipeline, request.request_id,
-                        request.run_id, out _productUiFlow, out message);
+                        request.run_id, request.screen_width, request.screen_height,
+                        out _productUiFlow, out message);
                 case CaptureInvalidInputEvidenceCommand:
                     return TryStartInvalidInputEvidence(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
@@ -2051,6 +2052,14 @@ namespace Fbx2Vmd.FBXImporter
                 RenderTexture.active = target;
                 image = new Texture2D(1024, 768, TextureFormat.RGB24, false);
                 image.ReadPixels(new Rect(0, 0, 1024, 768), 0, 0);
+                if (sideView)
+                {
+                    int groundPixelY = Mathf.RoundToInt(
+                        view.WorldToViewportPoint(Vector3.zero).y * image.height);
+                    if (groundPixelY >= 0 && groundPixelY < image.height)
+                        for (int x = 0; x < image.width; x++)
+                            image.SetPixel(x, groundPixelY, Color.yellow);
+                }
                 image.Apply();
                 File.WriteAllBytes(path, image.EncodeToPNG());
                 return HasCompletedPng(path);
