@@ -82,6 +82,10 @@ export async function compareManualCapture(summary, projectRoot) {
     .map((row) => [row.reason || row.recorderFrame, row.path]));
   const automaticImages = new Map(automaticIndexCsv.filter((row) => row.view === "front")
     .map((row) => [row.reason || row.recorderFrame, row.path]));
+  const manualSideImages = new Map(manualIndexCsv.filter((row) => row.view === "right")
+    .map((row) => [row.reason || row.recorderFrame, row.path]));
+  const automaticSideImages = new Map(automaticIndexCsv.filter((row) => row.view === "right")
+    .map((row) => [row.reason || row.recorderFrame, row.path]));
   const fields = ["rootX", "rootY", "rootZ", "leftFootX", "leftFootZ",
     "rightFootX", "rightFootZ", "lowestFootBottomY", "leftKneeAngle",
     "rightKneeAngle", "maxScaleDelta", "cameraFacingDot"];
@@ -105,20 +109,27 @@ export async function compareManualCapture(summary, projectRoot) {
     }
     const manualImage = manualImages.get(sample);
     const automaticImage = automaticImages.get(sample);
+    const manualSideImage = manualSideImages.get(sample);
+    const automaticSideImage = automaticSideImages.get(sample);
     frames.push({ frame: Number(automaticRow.recorderFrame), sample,
       manualFrame: Number(manualRow.recorderFrame),
       automaticFrame: Number(automaticRow.recorderFrame),
       manualClipTime: manualTime, automaticClipTime: automaticTime,
       clipTime: manualTime, metrics,
-      manualImage: manualImage || null, automaticImage: automaticImage || null });
+      manualImage: manualImage || null, automaticImage: automaticImage || null,
+      manualSideImage: manualSideImage || null,
+      automaticSideImage: automaticSideImage || null });
   }
   if (!frames.length || !frames.some((item) => item.manualImage && item.automaticImage))
     return { status: "BLOCKED", reason: "같은 시각의 수치·정면 캡처 쌍이 없음" };
   if (frames.some((item) => Boolean(item.manualImage) !== Boolean(item.automaticImage)) ||
+      frames.some((item) => Boolean(item.manualSideImage) !==
+        Boolean(item.automaticSideImage)) ||
       !frames.some((item) => Object.keys(item.metrics).length))
     return { status: "BLOCKED", reason: "수동·자동 캡처 또는 측정값이 불완전함" };
   for (const item of frames) {
-    for (const file of [item.manualImage, item.automaticImage].filter(Boolean)) {
+    for (const file of [item.manualImage, item.automaticImage,
+      item.manualSideImage, item.automaticSideImage].filter(Boolean)) {
       const bytes = await readFile(localEvidencePath(projectRoot, file));
       if (bytes.length < 20 || bytes.subarray(0, 8).toString("hex") !==
           "89504e470d0a1a0a" || bytes.subarray(-8).toString("hex") !==
