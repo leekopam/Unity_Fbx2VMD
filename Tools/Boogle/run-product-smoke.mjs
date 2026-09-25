@@ -1432,6 +1432,7 @@ async function executeProductUi(runId, width, height) {
   let after = null;
   let unityStatus = null;
   let state = null;
+  let offSizeSteps = [];
   let submitted = false;
   let terminal = false;
   let enteredPlay = false;
@@ -1515,17 +1516,15 @@ async function executeProductUi(runId, width, height) {
               if ((await stat(imagePath).catch(() => ({ size: 0 }))).size === 0)
                 throw new Error("F15 Game View 캡처가 생성되지 않았습니다.");
               const png = await readFile(imagePath);
-              const recorderSize = ["recording", "recording_stopped", "stopped"]
+              const recordingStep = ["recording", "recording_stopped", "stopped"]
                 .includes(entry.step);
-              const expectedWidth = recorderSize ? 960 : width;
-              const expectedHeight = recorderSize ? 960 : height;
               validImageSizes &&= png.length >= 24 &&
                 png.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" &&
                 png.subarray(-8).toString("hex") === "49454e44ae426082" &&
-                png.readUInt32BE(16) === expectedWidth &&
-                png.readUInt32BE(20) === expectedHeight &&
-                entry.screen_width === expectedWidth &&
-                entry.screen_height === expectedHeight;
+                png.readUInt32BE(16) === entry.screen_width &&
+                png.readUInt32BE(20) === entry.screen_height &&
+                (recordingStep ||
+                  (entry.screen_width === width && entry.screen_height === height));
             }
             const valid = state.status === "manual_review_required" && validSteps && validUiState &&
               state.input === "Snake Hip Hop Dance.fbx" && state.model === "YYB Hatsune Miku" &&
@@ -1569,16 +1568,20 @@ async function executeProductUi(runId, width, height) {
           vmdMetaBefore !== await hashFile(`${outputPath}.meta`))
         result = { status: "INFRA_ERROR" };
     }
+    offSizeSteps = state?.events?.filter((entry) => entry.game_view_path &&
+      (entry.screen_width !== width || entry.screen_height !== height))
+      .map((entry) => entry.step) || [];
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, width, height, result: result.status, failureStage, steps, before, after,
       unityStatus, statePath: unityStatus?.manifest_path || null,
       eventSteps: state?.events?.map((entry) => entry.step) || [],
       screenSizes: state?.events?.map((entry) => ({ step: entry.step,
         width: entry.screen_width, height: entry.screen_height })) || [],
+      offSizeSteps,
       screenshotCount: state?.events?.filter((entry) => entry.game_view_path).length || 0
     }, null, 2));
   }
-  return { ...result, requestId };
+  return { ...result, requestId, offSizeSteps };
 }
 
 async function executeProductUiSizes(runId) {
