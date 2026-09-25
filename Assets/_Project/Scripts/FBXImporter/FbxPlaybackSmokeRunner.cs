@@ -37,6 +37,9 @@ namespace Fbx2Vmd.FBXImporter
         private const string ExitE2ePlayCommand = "exit_e2e_play";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
+        private const string CaptureSatisfactionHead31Command = "capture_satisfaction_head_31s";
+        private const string CaptureSatisfactionMiddle31Command = "capture_satisfaction_middle_31s";
+        private const string CaptureSatisfactionTail31Command = "capture_satisfaction_tail_31s";
         private const string CaptureAntennaTailHelperEvidenceCommand = "capture_antenna_tail_helper_evidence";
         private const string CaptureAntennaTailHelperEvidenceCleanCommand = "capture_antenna_tail_helper_evidence_clean";
         private const string CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand = "capture_antenna_tail_helper_evidence_resume_after_clean";
@@ -757,6 +760,23 @@ namespace Fbx2Vmd.FBXImporter
                         FullRegressionEvidenceCaptureWidth,
                         FullRegressionEvidenceCaptureHeight,
                         FullRegressionEvidenceRecordingStartTimeOverrideSeconds);
+                case CaptureSatisfactionHead31Command:
+                case CaptureSatisfactionMiddle31Command:
+                case CaptureSatisfactionTail31Command:
+                    FBXVmdPipeline.EditorDiagnosticSmokeSegment segment =
+                        request.command == CaptureSatisfactionMiddle31Command
+                            ? FBXVmdPipeline.EditorDiagnosticSmokeSegment.Middle
+                            : request.command == CaptureSatisfactionTail31Command
+                                ? FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail
+                                : FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head;
+                    return TryStartAutomationSingleSmoke(
+                        SatisfactionFbxFileName,
+                        SmokeDurationSeconds,
+                        false,
+                        null,
+                        "single",
+                        segment,
+                        out message);
                 case CaptureAntennaTailHelperEvidenceCommand:
                     return TryStartAutomationSingleSmoke(
                         "Antenna39 try_006 g.fbx",
