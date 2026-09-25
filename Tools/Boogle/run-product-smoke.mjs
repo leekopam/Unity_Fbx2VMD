@@ -1506,22 +1506,25 @@ async function executeProductUi(runId, width, height) {
             const screenshots = state.events.filter((entry) => entry.game_view_path);
             let validImageSizes = true;
             for (const entry of screenshots) {
-              const imagePath = path.resolve(entry.game_view_path);
-              const relativeImagePath = path.relative(allowedRoot, imagePath);
-              if (relativeImagePath.startsWith("..") || path.isAbsolute(relativeImagePath))
-                throw new Error("F15 Game View 경로가 실행 폴더를 벗어났습니다.");
-              const startedImageWait = Date.now();
-              while (!(await readOptional(imagePath)) && Date.now() - startedImageWait < 5000)
-                await new Promise((resolve) => setTimeout(resolve, 250));
-              if ((await stat(imagePath).catch(() => ({ size: 0 }))).size === 0)
-                throw new Error("F15 Game View 캡처가 생성되지 않았습니다.");
-              const png = await readFile(imagePath);
-              validImageSizes &&= png.length >= 24 &&
-                png.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" &&
-                png.subarray(-8).toString("hex") === "49454e44ae426082" &&
-                png.readUInt32BE(16) === entry.screen_width &&
-                png.readUInt32BE(20) === entry.screen_height &&
-                entry.screen_width === width && entry.screen_height === height;
+              for (const field of ["game_view_path", "camera_only_path"]) {
+                if (!entry[field]) throw new Error(`F15 ${field} 경로가 없습니다.`);
+                const imagePath = path.resolve(entry[field]);
+                const relativeImagePath = path.relative(allowedRoot, imagePath);
+                if (relativeImagePath.startsWith("..") || path.isAbsolute(relativeImagePath))
+                  throw new Error(`F15 ${field} 경로가 실행 폴더를 벗어났습니다.`);
+                const startedImageWait = Date.now();
+                while (!(await readOptional(imagePath)) && Date.now() - startedImageWait < 5000)
+                  await new Promise((resolve) => setTimeout(resolve, 250));
+                if ((await stat(imagePath).catch(() => ({ size: 0 }))).size === 0)
+                  throw new Error(`F15 ${field} 캡처가 생성되지 않았습니다.`);
+                const png = await readFile(imagePath);
+                validImageSizes &&= png.length >= 24 &&
+                  png.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" &&
+                  png.subarray(-8).toString("hex") === "49454e44ae426082" &&
+                  png.readUInt32BE(16) === entry.screen_width &&
+                  png.readUInt32BE(20) === entry.screen_height &&
+                  entry.screen_width === width && entry.screen_height === height;
+              }
             }
             const valid = state.status === "manual_review_required" && validSteps && validUiState &&
               state.input === "Snake Hip Hop Dance.fbx" && state.model === "YYB Hatsune Miku" &&
@@ -1575,7 +1578,8 @@ async function executeProductUi(runId, width, height) {
       screenSizes: state?.events?.map((entry) => ({ step: entry.step,
         width: entry.screen_width, height: entry.screen_height })) || [],
       offSizeSteps,
-      screenshotCount: state?.events?.filter((entry) => entry.game_view_path).length || 0
+      screenshotCount: state?.events?.filter((entry) => entry.game_view_path).length || 0,
+      cameraOnlyCount: state?.events?.filter((entry) => entry.camera_only_path).length || 0
     }, null, 2));
   }
   return { ...result, requestId, offSizeSteps };
