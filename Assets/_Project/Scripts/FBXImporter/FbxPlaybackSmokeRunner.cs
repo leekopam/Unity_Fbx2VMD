@@ -144,7 +144,8 @@ namespace Fbx2Vmd.FBXImporter
         private static readonly int[] FootEvidenceFrames =
         {
             0, 165, 166, 167, 543, 544, 545, 789, 790, 791,
-            1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333
+            1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333,
+            2404, 2405, 2406, 8019, 8020, 8021, 11615, 11616, 11617
         };
 
         private static PlaybackEvidencePhase _playbackEvidencePhase;

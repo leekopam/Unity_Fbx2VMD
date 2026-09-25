@@ -519,7 +519,8 @@ async function executePlayback(runId) {
           const captures = [state.first_capture_path, state.second_capture_path,
             state.repeat_capture_path];
           const expectedFootFrames = [0, 165, 166, 167, 543, 544, 545, 789, 790, 791,
-            1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333];
+            1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333,
+            2404, 2405, 2406, 8019, 8020, 8021, 11615, 11616, 11617];
           const footFrames = state.foot_frames || [];
           csvPath = path.join(path.dirname(statePath), "foot-frames.csv");
           const rows = ["frame,time_s,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,root_y_m,hips_y_m,knee_y_m,rear_vertex,front_vertex"];
@@ -549,7 +550,8 @@ async function executePlayback(runId) {
               Math.round((sample?.time_seconds || 0) * 30)].join(","))];
           await writeFile(frameMapPath, `${frameRows.join("\n")}\n`);
           humanLabelsPath = path.join(path.dirname(statePath), "human-labels.csv");
-          const intervals = [[0, 0], [165, 167], [543, 545], [789, 791], [1323, 1333]];
+          const intervals = [[0, 0], [165, 167], [543, 545], [789, 791], [1323, 1333],
+            [2404, 2406], [8019, 8021], [11615, 11617]];
           const labelRows = ["from_frame,to_frame,side,contact_label,motion_label,reviewer,notes",
             ...intervals.flatMap(([start, end]) => ["left", "right"].map((side) =>
               `${start},${end},${side},,,,`))];
