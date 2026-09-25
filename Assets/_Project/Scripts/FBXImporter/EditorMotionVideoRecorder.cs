@@ -55,6 +55,7 @@ namespace Fbx2Vmd.FBXImporter
                 _movieSettings.ImageInputSettings = new CameraInputSettings
                 {
                     Source = ImageSource.MainCamera,
+                    CaptureUI = false,
                     OutputWidth = settings.Width,
                     OutputHeight = settings.Height
                 };

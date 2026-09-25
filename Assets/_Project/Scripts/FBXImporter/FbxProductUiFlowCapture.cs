@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Fbx2Vmd.FileSystem;
+using Fbx2Vmd.Settings;
 using Newtonsoft.Json;
 using TMPro;
 using UnityEditor;
@@ -41,6 +42,7 @@ namespace Fbx2Vmd.FBXImporter
         private readonly List<object> _events = new List<object>();
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private readonly bool _originalAutoRecord;
+        private readonly RecordingDiagnosticsSettings _originalRecordingSettings;
         private readonly EditorWindow _gameView;
         private readonly PropertyInfo _selectedSizeIndex;
         private readonly MethodInfo _setCustomResolution;
@@ -59,6 +61,7 @@ namespace Fbx2Vmd.FBXImporter
             _directory = directory;
             _requestId = requestId;
             _originalAutoRecord = pipeline.ShouldRecordVmdAfterImport;
+            _originalRecordingSettings = pipeline.DiagnosticsSettings;
             Type gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
             _gameView = gameViewType != null
                 ? Resources.FindObjectsOfTypeAll(gameViewType).FirstOrDefault() as EditorWindow
@@ -218,6 +221,13 @@ namespace Fbx2Vmd.FBXImporter
                             if (File.Exists(System.IO.Path.Combine(recordings, name)))
                                 throw new InvalidOperationException("동일 시각의 기존 녹화 파일이 있습니다.");
                         }
+                        _pipeline.DiagnosticsSettings = new RecordingDiagnosticsSettings(
+                            _originalRecordingSettings.EnableRecordingDiagnostics,
+                            _originalRecordingSettings.UseDeterministicCaptureFramerateForDiagnostics,
+                            _originalRecordingSettings.EnableDiagnosticFingerCloseups,
+                            RecordingCaptureQualityPreset.Custom,
+                            _screenWidth,
+                            _screenHeight);
                         Click("FBX_Record_Button");
                         _phase = Phase.Recording;
                         break;
@@ -389,6 +399,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 if (_pipeline.IsImportedMotionRecording)
                     _pipeline.TryStopImportedMotionRecording();
+                _pipeline.DiagnosticsSettings = _originalRecordingSettings;
                 _pipeline.ShouldRecordVmdAfterImport = _originalAutoRecord;
                 RestoreGameViewResolution();
                 _phase = Phase.Finished;

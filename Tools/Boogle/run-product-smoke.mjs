@@ -1516,15 +1516,12 @@ async function executeProductUi(runId, width, height) {
               if ((await stat(imagePath).catch(() => ({ size: 0 }))).size === 0)
                 throw new Error("F15 Game View 캡처가 생성되지 않았습니다.");
               const png = await readFile(imagePath);
-              const recordingStep = ["recording", "recording_stopped", "stopped"]
-                .includes(entry.step);
               validImageSizes &&= png.length >= 24 &&
                 png.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" &&
                 png.subarray(-8).toString("hex") === "49454e44ae426082" &&
                 png.readUInt32BE(16) === entry.screen_width &&
                 png.readUInt32BE(20) === entry.screen_height &&
-                (recordingStep ||
-                  (entry.screen_width === width && entry.screen_height === height));
+                entry.screen_width === width && entry.screen_height === height;
             }
             const valid = state.status === "manual_review_required" && validSteps && validUiState &&
               state.input === "Snake Hip Hop Dance.fbx" && state.model === "YYB Hatsune Miku" &&
