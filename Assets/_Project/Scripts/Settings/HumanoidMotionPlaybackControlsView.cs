@@ -113,7 +113,7 @@ namespace Fbx2Vmd.Settings
                 HandleStopClick);
             _timelineSlider = CreateTimelineSlider(
                 template,
-                ButtonVerticalSpacing * 4f,
+                ButtonVerticalSpacing * 4f + TimelineHeight + 12f,
                 HandleTimelineValueChanged,
                 out _timelineLabel,
                 out _legacyTimelineLabel);
@@ -274,14 +274,14 @@ namespace Fbx2Vmd.Settings
             bool isPreparingCorrection)
         {
             string label = isPreparingCorrection
-                ? $"표면 보정 준비 " +
-                  $"{_pipeline.ImportedMotionCorrectionProcessedFrameCount} / " +
-                  $"{_pipeline.ImportedMotionCorrectionTotalFrameCount} · " +
+                ? $"표면 보정 " +
+                  $"{_pipeline.ImportedMotionCorrectionProcessedFrameCount}/" +
+                  $"{_pipeline.ImportedMotionCorrectionTotalFrameCount}\n" +
                   $"{_pipeline.ImportedMotionCorrectionPreparationProgress:P0}"
                 : hasPreparedMotion
-                ? $"프레임 {_pipeline.ImportedMotionCurrentFrameIndex} / " +
-                  $"{_pipeline.ImportedMotionLastFrameIndex} · " +
-                  $"{FormatTime(_pipeline.ImportedMotionCurrentTimeSeconds)} / " +
+                ? $"프레임 {_pipeline.ImportedMotionCurrentFrameIndex}/" +
+                  $"{_pipeline.ImportedMotionLastFrameIndex}\n" +
+                  $"{FormatTime(_pipeline.ImportedMotionCurrentTimeSeconds)}/" +
                   FormatTime(_pipeline.ImportedMotionClipLengthSeconds)
                 : "프레임 - / -";
 
@@ -319,6 +319,22 @@ namespace Fbx2Vmd.Settings
                 rectTransform.anchoredPosition =
                     templateRectTransform.anchoredPosition + Vector2.down * verticalOffset;
                 rectTransform.SetAsLastSibling();
+            }
+
+            TMP_Text tmpLabel = button.GetComponentInChildren<TMP_Text>(true);
+            if (tmpLabel != null)
+            {
+                tmpLabel.enableAutoSizing = true;
+                tmpLabel.fontSizeMin = 18f;
+            }
+            else
+            {
+                Text legacyLabel = button.GetComponentInChildren<Text>(true);
+                if (legacyLabel != null)
+                {
+                    legacyLabel.resizeTextForBestFit = true;
+                    legacyLabel.resizeTextMinSize = 18;
+                }
             }
 
             SetLabel(button, label);
@@ -395,6 +411,7 @@ namespace Fbx2Vmd.Settings
                 timelineLabel = Instantiate(tmpTemplate, sliderRect);
                 ConfigureTimelineLabel(timelineLabel.rectTransform);
                 timelineLabel.name = TimelineLabelName;
+                timelineLabel.color = Color.white;
                 timelineLabel.raycastTarget = false;
             }
             else
@@ -406,6 +423,7 @@ namespace Fbx2Vmd.Settings
                     ConfigureTimelineLabel(
                         legacyTimelineLabel.GetComponent<RectTransform>());
                     legacyTimelineLabel.name = TimelineLabelName;
+                    legacyTimelineLabel.color = Color.white;
                     legacyTimelineLabel.raycastTarget = false;
                 }
             }
