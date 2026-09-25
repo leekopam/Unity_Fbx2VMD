@@ -32,6 +32,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
         private const string CaptureSatisfactionFullClipMetricsCommand = "capture_satisfaction_full_clip_metrics";
         private const string CaptureTetorisTestPrefabFullClipCommand = "capture_tetoris_testprefab_full_clip_metrics";
+        private const string CaptureProductUiFlowCommand = "capture_product_ui_flow";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
         private const string EnterE2ePlayCommand = "enter_e2e_play";
@@ -171,6 +172,7 @@ namespace Fbx2Vmd.FBXImporter
         private static string _playbackCapturePath;
         private static FbxFootLiveEvidenceCapture _footLiveEvidence;
         private static FbxFullClipFootMetricsCapture _fullClipMetrics;
+        private static FbxProductUiFlowCapture _productUiFlow;
         private static FBXVmdPipeline _alternateModelPipeline;
         private static GameObject _originalModel;
         private static GameObject _alternateModel;
@@ -419,6 +421,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void PollAutomationRequest()
         {
+            if (_productUiFlow != null)
+            {
+                PollProductUiFlow();
+                return;
+            }
+
             if (_fullClipMetrics != null)
             {
                 PollFullClipMetrics();
@@ -749,6 +757,12 @@ namespace Fbx2Vmd.FBXImporter
                         request.run_id, out _fullClipMetrics, out message);
                 case CaptureTetorisTestPrefabFullClipCommand:
                     return TryStartTestPrefabFullClip(request, out message);
+                case CaptureProductUiFlowCommand:
+                    if (!TryGetFBXVmdPipeline(SatisfactionFbxFileName,
+                            out FBXVmdPipeline uiPipeline, interactive: false,
+                            out message)) return false;
+                    return FbxProductUiFlowCapture.TryStart(uiPipeline, request.request_id,
+                        request.run_id, out _productUiFlow, out message);
                 case CaptureInvalidInputEvidenceCommand:
                     return TryStartInvalidInputEvidence(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
@@ -1256,6 +1270,40 @@ namespace Fbx2Vmd.FBXImporter
                 _fullClipMetrics.Dispose();
                 _fullClipMetrics = null;
                 RestoreAlternateModel();
+                ClearAutomationRequestState();
+                TryDeleteRequestFile();
+            }
+        }
+
+        private static void PollProductUiFlow()
+        {
+            _productUiFlow.Poll();
+            if (!_productUiFlow.IsFinished) return;
+            try
+            {
+                bool hasEvidence = _productUiFlow.HasEvidence;
+                string message = hasEvidence
+                    ? "F15 제품 UI 이벤트 수집 완료, Game View 사람 검토 필요"
+                    : _productUiFlow.FailureMessage;
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = _activeAutomationRequestId,
+                    status = hasEvidence ? "completed" : "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = _activeAutomationRequestedCommand,
+                    message = message,
+                    passed = hasEvidence,
+                    failure_stage = _productUiFlow.FailureStage,
+                    manifest_path = _productUiFlow.StatePath,
+                    total_jobs = 1,
+                    success_jobs = hasEvidence ? 1 : 0,
+                    failures = hasEvidence ? Array.Empty<string>() : new[] { message }
+                });
+            }
+            finally
+            {
+                _productUiFlow.Dispose();
+                _productUiFlow = null;
                 ClearAutomationRequestState();
                 TryDeleteRequestFile();
             }

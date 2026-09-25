@@ -26,6 +26,7 @@ const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
 const alternateModelCommand = "capture_tetoris_testprefab_full_clip_metrics";
+const productUiCommand = "capture_product_ui_flow";
 const fullRegressionCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
 const fullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
 const segmentCases = [
@@ -1072,6 +1073,146 @@ async function executeFullClip(runId, alternateModel = false) {
   return { ...result, requestId };
 }
 
+async function executeProductUi(runId) {
+  const sessionRoot = path.join(evidenceRoot, "product-ui-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const requestId = randomUUID();
+  const steps = [];
+  const vmdBefore = await hashFile(outputPath);
+  const vmdMetaBefore = await hashFile(`${outputPath}.meta`);
+  let before = null;
+  let after = null;
+  let unityStatus = null;
+  let state = null;
+  let submitted = false;
+  let terminal = false;
+  let enteredPlay = false;
+  let result = { status: "INFRA_ERROR" };
+  let failureStage = "preflight";
+  try {
+    await access(path.join(projectRoot, "Assets/Resources/Import_FBX/Snake Hip Hop Dance.fbx"));
+    const baseline = await executeControl(runId, environmentCommand);
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    before = baseline.state;
+    if (baseline.status !== "PASS" || !before || before.play_mode ||
+        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        !before.model_active || before.has_prepared_motion || before.is_recording ||
+        before.capture_framerate !== 0) {
+      result = { status: "BLOCKED", failureKind: "preflight" };
+    } else {
+      const enter = await executeControl(runId, enterPlayCommand);
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      enteredPlay = enter.status === "PASS";
+      if (!enteredPlay) result = { status: enter.status };
+      else if (await readOptional(requestPath) || (await readStatus())?.status === "running")
+        result = { status: "BLOCKED", failureKind: "preflight" };
+      else {
+        await writeFile(requestPath, JSON.stringify({ request_id: requestId,
+          command: productUiCommand, requested_command: productUiCommand, run_id: runId
+        }), { flag: "wx" });
+        submitted = true;
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 480000) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const candidate = await readStatus();
+          if (candidate?.request_id !== requestId) continue;
+          unityStatus = candidate;
+          if (candidate.status !== "running") { terminal = true; break; }
+        }
+        if (!terminal) {
+          failureStage = "timeout";
+          result = { status: "TIMED_OUT", failureKind: "timeout" };
+        } else if (!unityStatus.manifest_path) {
+          failureStage = unityStatus.failure_stage || "capture";
+          result = { status: failureStage === "preflight" ? "BLOCKED" : "FAIL" };
+        } else {
+          const allowedRoot = path.join(evidenceRoot, "product-ui", runId, requestId);
+          const statePath = path.resolve(unityStatus.manifest_path);
+          if (path.relative(allowedRoot, statePath) !== "state.json")
+            throw new Error("F15 상태 파일 경로가 실행 폴더를 벗어났습니다.");
+          state = JSON.parse(await readFile(statePath, "utf8"));
+          if (unityStatus.status !== "completed" || unityStatus.passed !== true) {
+            failureStage = state.failure_stage || unityStatus.failure_stage || "capture";
+            result = { status: "FAIL", failureKind: "test_failure" };
+          } else {
+            const expectedSteps = ["before_import", "import_ready", "playing", "paused",
+              "recording", "recording_stopped", "stopped", "invalid_input_error"];
+            const recordedSteps = state.events?.map((entry) => entry.step) || [];
+            const validSteps = expectedSteps.every((step, index) =>
+              recordedSteps.indexOf(step) >= 0 &&
+              (index === 0 || recordedSteps.indexOf(step) > recordedSteps.indexOf(expectedSteps[index - 1])));
+            const byStep = Object.fromEntries(state.events.map((entry) => [entry.step, entry]));
+            const button = (step, name) => byStep[step]?.buttons.find((entry) => entry.name === name);
+            const validUiState = byStep.playing?.is_playing === true &&
+              byStep.paused?.is_playing === false &&
+              byStep.recording?.is_recording === true &&
+              byStep.recording_stopped?.is_recording === false &&
+              byStep.invalid_input_error?.session_state === "Failed" &&
+              byStep.invalid_input_error?.progress_text.includes("오류") &&
+              button("playing", "FBX_PlayPause_Button")?.label === "일시정지" &&
+              button("paused", "FBX_PlayPause_Button")?.label === "재생" &&
+              button("recording", "FBX_Record_Button")?.label === "녹화 중지";
+            const screenshots = state.events.filter((entry) => entry.game_view_path);
+            for (const entry of screenshots) {
+              const imagePath = path.resolve(entry.game_view_path);
+              const relativeImagePath = path.relative(allowedRoot, imagePath);
+              if (relativeImagePath.startsWith("..") || path.isAbsolute(relativeImagePath))
+                throw new Error("F15 Game View 경로가 실행 폴더를 벗어났습니다.");
+              const startedImageWait = Date.now();
+              while (!(await readOptional(imagePath)) && Date.now() - startedImageWait < 5000)
+                await new Promise((resolve) => setTimeout(resolve, 250));
+              if ((await stat(imagePath).catch(() => ({ size: 0 }))).size === 0)
+                throw new Error("F15 Game View 캡처가 생성되지 않았습니다.");
+            }
+            const valid = state.status === "manual_review_required" && validSteps && validUiState &&
+              state.input === "Snake Hip Hop Dance.fbx" && state.model === "YYB Hatsune Miku" &&
+              state.auto_vmd_recording_suppressed === true && screenshots.length >= 3 &&
+              screenshots.every((entry) => entry.game_view_path &&
+                !entry.progress_text.includes("�")) &&
+              state.events.every((entry) => entry.buttons.length === 4);
+            result = valid ? { status: "MANUAL_REVIEW_REQUIRED" } :
+              { status: "FAIL", failureKind: "test_failure" };
+            failureStage = valid ? "" : "evidence";
+          }
+        }
+      }
+    }
+  } catch (error) {
+    failureStage = "infrastructure";
+    result = { status: "INFRA_ERROR", message: error.message };
+  } finally {
+    if (submitted && terminal) {
+      const pending = await readOptional(requestPath);
+      if (pending && JSON.parse(pending.toString("utf8")).request_id === requestId)
+        await rm(requestPath);
+    }
+    if (enteredPlay && (!submitted || terminal)) {
+      const exit = await executeControl(runId, exitPlayCommand);
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
+    }
+    if (!submitted || terminal) {
+      const final = await executeControl(runId, environmentCommand);
+      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      after = final.state;
+      if (!before || final.status !== "PASS" ||
+          !environmentFields.every((field) =>
+            JSON.stringify(before[field]) === JSON.stringify(after?.[field])) ||
+          vmdBefore !== await hashFile(outputPath) ||
+          vmdMetaBefore !== await hashFile(`${outputPath}.meta`))
+        result = { status: "INFRA_ERROR" };
+    }
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, requestId, result: result.status, failureStage, steps, before, after,
+      unityStatus, statePath: unityStatus?.manifest_path || null,
+      eventSteps: state?.events?.map((entry) => entry.step) || [],
+      screenshotCount: state?.events?.filter((entry) => entry.game_view_path).length || 0
+    }, null, 2));
+  }
+  return { ...result, requestId };
+}
+
 async function executeFullRegression(runId, namedOutput = false) {
   const sessionRoot = path.join(evidenceRoot,
     namedOutput ? "full-output-runs" : "full-regression-runs", runId);
@@ -1449,9 +1590,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "manual-compare", "alternate-model", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|manual-compare|alternate-model|segments|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1467,7 +1608,10 @@ async function main() {
     path.join(projectRoot, "ProjectSettings/ProjectVersion.txt"), "utf8"
   )).match(/^m_EditorVersion:\s*(\S+)/m)?.[1] || "unknown";
   const fbxHash = await hashFile(mode === "foot-live" || mode === "alternate-model"
-    ? path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx") : fbxPath);
+    ? path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx") :
+    mode === "product-ui"
+      ? path.join(projectRoot, "Assets/Resources/Import_FBX/Snake Hip Hop Dance.fbx")
+      : fbxPath);
   const modelHash = await hashFile(path.join(
     projectRoot, mode === "alternate-model"
       ? "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab"
@@ -1493,6 +1637,7 @@ async function main() {
         mode === "full-output" ? "F12" :
         mode === "manual-compare" ? "F13" :
         mode === "alternate-model" ? "F14" :
+        mode === "product-ui" ? "F15" :
         mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
@@ -1514,6 +1659,7 @@ async function main() {
         : mode === "foot-live" ? await executeFootLive(runId)
         : mode === "full-clip" ? await executeFullClip(runId)
         : mode === "alternate-model" ? await executeFullClip(runId, true)
+        : mode === "product-ui" ? await executeProductUi(runId)
         : mode === "full-regression" ? await executeFullRegression(runId)
         : mode === "full-output" ? await executeFullRegression(runId, true)
         : mode === "manual-compare" ? await executeManualComparison(runId)
@@ -1532,6 +1678,7 @@ async function main() {
             mode === "full-output" ? "full-output-runs" :
             mode === "manual-compare" ? "manual-comparison-runs" :
             mode === "alternate-model" ? "alternate-model-runs" :
+            mode === "product-ui" ? "product-ui-runs" :
             mode === "segments" ? "segment-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
