@@ -26,6 +26,7 @@ const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
 const fullRegressionCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
+const fullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
 const segmentCases = [
   ["head", "capture_satisfaction_head_31s", "smoke_satisfaction_2_31s"],
   ["middle", "capture_satisfaction_middle_31s", "smoke_middle_satisfaction_2_31s"],
@@ -1053,8 +1054,9 @@ async function executeFullClip(runId) {
   return { ...result, requestId };
 }
 
-async function executeFullRegression(runId) {
-  const sessionRoot = path.join(evidenceRoot, "full-regression-runs", runId);
+async function executeFullRegression(runId, namedOutput = false) {
+  const sessionRoot = path.join(evidenceRoot,
+    namedOutput ? "full-output-runs" : "full-regression-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
   const steps = [];
   let before = null;
@@ -1080,15 +1082,16 @@ async function executeFullRegression(runId) {
       result = enter;
       if (enteredPlay) {
         smoke = await executeSmoke(runId, {
-          command: fullRegressionCommand,
-          outputPath: fullRegressionOutputPath,
+          command: namedOutput ? fullNamedVmdCommand : fullRegressionCommand,
+          outputPath: namedOutput ? outputPath : fullRegressionOutputPath,
           frameCount: 6234,
-          folder: "full-regression-output",
-          protectedPrefix: "smoke_satisfaction_2_208s",
+          folder: namedOutput ? "full-named-vmd-output" : "full-regression-output",
+          protectedPrefix: namedOutput ? "satisfaction_2" : "smoke_satisfaction_2_208s",
           timeoutMs: 3600000,
           visualReview: true
         });
-        steps.push({ name: "F10_208s", status: smoke.status, requestId: smoke.requestId });
+        steps.push({ name: namedOutput ? "F12_VMD" : "F10_208s",
+          status: smoke.status, requestId: smoke.requestId });
         result = smoke;
       }
     }
@@ -1110,7 +1113,11 @@ async function executeFullRegression(runId) {
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, result: result.status, steps, before, after, smokeRequestId: smoke?.requestId,
-      smokeTerminal: smoke?.terminal ?? null, restored: smoke?.restored ?? null
+      smokeTerminal: smoke?.terminal ?? null, restored: smoke?.restored ?? null,
+      ...(namedOutput ? { vrm: { status: "SKIP",
+        reason: "자동 FBX 경로에 VRM 산출 단계가 없음" },
+        manualReference: { status: "NOT_COMPARABLE",
+          reason: "동일 모델·Avatar·녹화 구간의 수동 VMD 기준이 확인되지 않음" } } : {})
     }, null, 2));
   }
   return result;
@@ -1366,9 +1373,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|segments|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1405,6 +1412,7 @@ async function main() {
     inputConditions: {
       testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08,F11" :
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
+        mode === "full-output" ? "F12" :
         mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
@@ -1426,6 +1434,7 @@ async function main() {
         : mode === "foot-live" ? await executeFootLive(runId)
         : mode === "full-clip" ? await executeFullClip(runId)
         : mode === "full-regression" ? await executeFullRegression(runId)
+        : mode === "full-output" ? await executeFullRegression(runId, true)
         : mode === "segments" ? await executeSegments(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)
             : await executeSmoke(runId);
@@ -1438,6 +1447,7 @@ async function main() {
             mode === "foot-live" ? "foot-live-runs" :
             mode === "full-clip" ? "full-clip-runs" :
             mode === "full-regression" ? "full-regression-runs" :
+            mode === "full-output" ? "full-output-runs" :
             mode === "segments" ? "segment-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
