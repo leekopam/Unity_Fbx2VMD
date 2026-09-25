@@ -62,9 +62,10 @@ namespace Fbx2Vmd.FBXImporter
             60f,
             120f
         };
+        // 종료 이벤트는 Animator의 마지막 평가 전에 발생하므로 종료 직전 자세를 비교함.
         private static readonly float[] F13ProbeLocalSampleTimes =
         {
-            0f, 0.5f, 1f, 1.5f, 2f, 2.5f
+            0f, 0.5f, 1f, 1.5f, 2f, 2.5f, 2.9f
         };
         private static readonly string[] RuntimeDiagnosticScriptPaths =
         {
