@@ -243,8 +243,12 @@ namespace Tests.Editor.FBXImporter
                     $"segmentStepOver45={excessiveSegmentStepCount}, " +
                     $"leftContactRuns={leftContact.RunCount}, " +
                     $"leftAdditionalDriftMax={leftContact.MaximumAdditionalDriftMeters:F9}, " +
+                    $"leftWorstRun={leftContact.WorstRun}, " +
                     $"rightContactRuns={rightContact.RunCount}, " +
                     $"rightAdditionalDriftMax={rightContact.MaximumAdditionalDriftMeters:F9}, " +
+                    $"rightWorstRun={rightContact.WorstRun}, " +
+                    $"sourceHumanScale={sourceRig.Animator.humanScale:F6}, " +
+                    $"targetHumanScale={correctedRig.Animator.humanScale:F6}, " +
                     $"leftFootContactF1={leftFootAgreement.F1:F6}, " +
                     $"leftToesContactF1={leftToesAgreement.F1:F6}, " +
                     $"rightFootContactF1={rightFootAgreement.F1:F6}, " +
@@ -841,14 +845,16 @@ namespace Tests.Editor.FBXImporter
 
         private sealed class FootContactMetrics
         {
-            private FootContactMetrics(int runCount, float maximumAdditionalDriftMeters)
+            private FootContactMetrics(int runCount, float maximumAdditionalDriftMeters, string worstRun)
             {
                 RunCount = runCount;
                 MaximumAdditionalDriftMeters = maximumAdditionalDriftMeters;
+                WorstRun = worstRun;
             }
 
             internal int RunCount { get; }
             internal float MaximumAdditionalDriftMeters { get; }
+            internal string WorstRun { get; }
 
             internal static FootContactMetrics Calculate(
                 IReadOnlyList<Vector3> sourcePoints,
@@ -873,6 +879,7 @@ namespace Tests.Editor.FBXImporter
 
                 int runCount = 0;
                 float maximumAdditionalDrift = 0f;
+                string worstRun = "없음";
                 int startIndex = -1;
                 for (int index = 0; index <= contactFrames.Length; index++)
                 {
@@ -897,16 +904,20 @@ namespace Tests.Editor.FBXImporter
                         float targetDrift = HorizontalDistance(
                             targetPoints[startIndex],
                             targetPoints[endIndex]);
-                        maximumAdditionalDrift = Mathf.Max(
-                            maximumAdditionalDrift,
-                            targetDrift - sourceDrift);
+                        float additionalDrift = targetDrift - sourceDrift;
+                        if (additionalDrift > maximumAdditionalDrift)
+                        {
+                            maximumAdditionalDrift = additionalDrift;
+                            worstRun = $"{startIndex}-{endIndex}" +
+                                $"(source={sourceDrift:F9},target={targetDrift:F9})";
+                        }
                         runCount++;
                     }
 
                     startIndex = -1;
                 }
 
-                return new FootContactMetrics(runCount, maximumAdditionalDrift);
+                return new FootContactMetrics(runCount, maximumAdditionalDrift, worstRun);
             }
 
             private static bool[] DetectStableContactFrames(
