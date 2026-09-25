@@ -39,6 +39,18 @@ function localEvidencePath(projectRoot, relativePath) {
   return resolved;
 }
 
+async function readSideContact(projectRoot, image) {
+  const file = image.replace(/\.png$/i, ".csv");
+  if (file === image) throw new Error(`측면 접점 CSV 경로가 잘못되었습니다: ${image}`);
+  const rows = readCsv(await readFile(localEvidencePath(projectRoot, file), "utf8"));
+  const fields = ["groundY_m", "leftSoleMinY_m", "rightSoleMinY_m",
+    "leftGap_mm", "rightGap_mm"];
+  if (rows.length !== 1 || fields.some((field) =>
+    !rows[0][field]?.trim() || !Number.isFinite(Number(rows[0][field]))))
+    throw new Error(`측면 접점 수치가 불완전합니다: ${file}`);
+  return Object.fromEntries(fields.map((field) => [field, Number(rows[0][field])]));
+}
+
 function bySample(rows) {
   const result = new Map();
   for (const row of rows) {
@@ -138,20 +150,9 @@ export async function compareManualCapture(summary, projectRoot) {
     }
     if (!item.manualSideImage || !item.automaticSideImage)
       return { status: "BLOCKED", reason: `측면 바닥·접점 자료 누락: ${item.sample}` };
-    const readContact = async (image) => {
-      const file = image.replace(/\.png$/i, ".csv");
-      if (file === image) throw new Error(`측면 접점 CSV 경로가 잘못되었습니다: ${image}`);
-      const rows = readCsv(await readFile(localEvidencePath(projectRoot, file), "utf8"));
-      const fields = ["groundY_m", "leftSoleMinY_m", "rightSoleMinY_m",
-        "leftGap_mm", "rightGap_mm"];
-      if (rows.length !== 1 || fields.some((field) =>
-        !rows[0][field]?.trim() || !Number.isFinite(Number(rows[0][field]))))
-        throw new Error(`측면 접점 수치가 불완전합니다: ${file}`);
-      return Object.fromEntries(fields.map((field) => [field, Number(rows[0][field])]));
-    };
     try {
-      item.sideContact = { manual: await readContact(item.manualSideImage),
-        automatic: await readContact(item.automaticSideImage) };
+      item.sideContact = { manual: await readSideContact(projectRoot, item.manualSideImage),
+        automatic: await readSideContact(projectRoot, item.automaticSideImage) };
     } catch (error) {
       return { status: "BLOCKED", reason: error.message };
     }
@@ -184,6 +185,12 @@ export async function linkOriginalCapture(comparison, source, projectRoot) {
     item.originalFrame = expectedFrame;
     item.originalClipTime = sample.time_seconds;
     item.originalSideImage = sample.source_view_path;
+    try {
+      item.sideContact.original = await readSideContact(projectRoot,
+        sample.source_view_path);
+    } catch (error) {
+      return { status: "BLOCKED", reason: error.message };
+    }
   }
   comparison.original = { clipName: source.clip_name,
     clipFrameRate: source.clip_frame_rate, sourceAssetPath: source.source_asset_path };

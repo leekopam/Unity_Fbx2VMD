@@ -2002,8 +2002,10 @@ namespace Fbx2Vmd.FBXImporter
                 Vector3 feetCenter = (leftFoot.position + rightFoot.position) * 0.5f;
                 Vector3 center = Vector3.Lerp(hips.position, feetCenter, 0.55f);
                 float bodyHeight = Mathf.Max(0.1f, head.position.y - feetCenter.y);
-                return TryCapturePoseView(animator.transform.right, center, path, true,
-                    1 << 31, bodyHeight * 0.75f);
+                if (!TryCapturePoseView(animator.transform.right, center, path, true,
+                    1 << 31, bodyHeight * 0.75f)) return false;
+                MotionComparisonProbe.WriteSideContactCsv(animator, path);
+                return true;
             }
             finally
             {
