@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import { access, copyFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { compareManualCapture } from "./manual-compare.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const evidenceRoot = path.join(projectRoot, "Docs/Workflow/Local/evidence/boogle");
@@ -1330,14 +1331,99 @@ async function executeManualComparison(runId) {
         JSON.stringify(manual[field]) !== JSON.stringify(automatic[field]))
       differences.push({ field, manual: manual[field], automatic: automatic[field] });
   }
-  const result = differences.length ? "NOT_COMPARABLE" : "BLOCKED";
-  await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
-    runId, result, manual, automatic, differences,
-    inputFbxSha256: await hashFile(fbxPath),
-    reason: differences.length ? "모델·Avatar·카메라 조건이 다름" :
-      "동일 FBX·Animator·시간 및 새 프레임 캡처 확인 전 비교 보류"
-  }, null, 2));
-  return { status: result };
+  const manifest = { runId, manual, automatic, differences,
+    inputFbxSha256: await hashFile(fbxPath) };
+  let result = { status: "NOT_COMPARABLE", reason: "모델·Avatar·카메라 조건이 다름" };
+  if (!differences.length) {
+    const visualRequestPath = path.join(runtimeRoot, "yyb_visual_compare_request.json");
+    const visualStatusPath = path.join(runtimeRoot, "yyb_visual_compare_status.json");
+    const outputDirectory = path.join(projectRoot, "Assets/VMDRecorderSample");
+    const prefixes = ["testPrefab_satisfaction_2_", "yyb_satisfaction_2_",
+      "smoke_satisfaction_2_31s"];
+    const protectedNames = () => readdir(outputDirectory).then((names) =>
+      names.filter((name) => prefixes.some((prefix) => name.startsWith(prefix))));
+    const before = await executeControl(runId, environmentCommand);
+    manifest.before = before.state;
+    if (before.status !== "PASS" || before.state?.play_mode ||
+        before.state?.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+        before.state?.scene_dirty || await readOptional(visualRequestPath) ||
+        (await readOptional(visualStatusPath))?.toString("utf8").includes('"status": "running"')) {
+      result = { status: "BLOCKED", reason: "Unity 편집기 또는 비교 요청이 준비되지 않음" };
+    } else {
+      const priorNames = await protectedNames();
+      for (const name of priorNames)
+        await copyFile(path.join(outputDirectory, name), path.join(sessionRoot, `prior-${name}`));
+      const requestId = randomUUID();
+      let settled = false;
+      let visualStatus = null;
+      try {
+        await writeFile(visualRequestPath, JSON.stringify({ request_id: requestId,
+          fbx_file: "satisfaction_2.fbx", duration_seconds: 31,
+          finger_closeups: false }), { flag: "wx" });
+        const start = Date.now();
+        while (Date.now() - start < 1200000) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          const content = await readOptional(visualStatusPath);
+          if (!content) continue;
+          try { visualStatus = JSON.parse(content.toString("utf8")); }
+          catch (error) { if (error instanceof SyntaxError) continue; throw error; }
+          if (visualStatus.request_id !== requestId) continue;
+          if (["completed", "failed"].includes(visualStatus.status)) {
+            settled = true;
+            break;
+          }
+        }
+        manifest.visualRequestId = requestId;
+        manifest.visualStatus = visualStatus;
+        if (!settled) result = { status: "TIMED_OUT", reason: "Unity 비교 실행 종료 미확인" };
+        else if (!visualStatus.summary_json_path)
+          result = { status: "BLOCKED", reason: "새 Unity 비교 요약이 없음" };
+        else {
+          const summaryPath = path.resolve(projectRoot, visualStatus.summary_json_path);
+          const relative = path.relative(path.join(projectRoot, "Docs/Workflow/Local"), summaryPath);
+          if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
+            throw new Error("비교 요약 경로가 로컬 근거 폴더 밖입니다.");
+          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+          manifest.inputFbxSha256After = await hashFile(fbxPath);
+          result = summary.fbx_file === "satisfaction_2.fbx" &&
+              manifest.inputFbxSha256After === manifest.inputFbxSha256
+            ? await compareManualCapture(summary, projectRoot)
+            : { status: "NOT_COMPARABLE", reason: "Unity 비교 입력 FBX가 다름" };
+          manifest.summaryPath = visualStatus.summary_json_path;
+        }
+      } catch (error) {
+        result = { status: "INFRA_ERROR", reason: error.message };
+      } finally {
+        if (settled) {
+          try {
+            for (const name of await protectedNames()) {
+              if (!priorNames.includes(name)) await rm(path.join(outputDirectory, name));
+            }
+            for (const name of priorNames)
+              await copyFile(path.join(sessionRoot, `prior-${name}`), path.join(outputDirectory, name));
+            manifest.outputsRestored = (await Promise.all(priorNames.map(async (name) =>
+              await hashFile(path.join(outputDirectory, name)) ===
+                await hashFile(path.join(sessionRoot, `prior-${name}`))))).every(Boolean) &&
+              (await protectedNames()).length === priorNames.length;
+            const after = await executeControl(runId, environmentCommand);
+            manifest.after = after.state;
+            manifest.environmentRestored = after.status === "PASS" &&
+              environmentFields.every((field) =>
+                JSON.stringify(before.state?.[field]) === JSON.stringify(after.state?.[field]));
+            if (!manifest.environmentRestored || !manifest.outputsRestored)
+              result = { status: "INFRA_ERROR", reason: "실행 전후 상태 복원 불일치" };
+          } catch (error) {
+            result = { status: "INFRA_ERROR", reason: `복원 실패: ${error.message}` };
+          }
+        }
+      }
+    }
+  }
+  manifest.result = result.status;
+  manifest.reason = result.reason;
+  if (result.frames) manifest.comparison = result;
+  await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify(manifest, null, 2));
+  return { status: result.status };
 }
 
 async function executeSegments(runId) {

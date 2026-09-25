@@ -1,0 +1,116 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+function readCsv(source) {
+  const rows = [];
+  let row = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < source.length; index++) {
+    const char = source[index];
+    if (char === '"') {
+      if (quoted && source[index + 1] === '"') { value += '"'; index++; }
+      else quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(value); value = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && source[index + 1] === "\n") index++;
+      row.push(value);
+      if (row.some((field) => field !== "")) rows.push(row);
+      row = []; value = "";
+    } else value += char;
+  }
+  if (quoted) throw new Error("CSV 따옴표가 닫히지 않았습니다.");
+  if (value || row.length) { row.push(value); rows.push(row); }
+  const [header, ...records] = rows;
+  if (!header?.length) throw new Error("CSV 헤더가 없습니다.");
+  return records.map((fields) => Object.fromEntries(header.map((key, index) =>
+    [key, fields[index] ?? ""])));
+}
+
+function localEvidencePath(projectRoot, relativePath) {
+  const root = path.resolve(projectRoot, "Docs/Workflow/Local");
+  const resolved = path.resolve(projectRoot, relativePath || "");
+  const relative = path.relative(root, resolved);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
+    throw new Error(`로컬 근거 경로가 아닙니다: ${relativePath}`);
+  return resolved;
+}
+
+function byFrame(rows) {
+  const result = new Map();
+  for (const row of rows) {
+    const frame = Number(row.recorderFrame);
+    if (!Number.isInteger(frame) || frame < 0) continue;
+    if (result.has(frame)) throw new Error(`중복 recorderFrame: ${frame}`);
+    result.set(frame, row);
+  }
+  return result;
+}
+
+export async function compareManualCapture(summary, projectRoot) {
+  const manual = summary.results?.find((item) => item.jobMode === "SubManualYyb");
+  const automatic = summary.results?.find((item) => item.jobMode === "MainAuto");
+  if (!manual?.success || !automatic?.success ||
+      !manual.comparisonMetricsCsvPath || !automatic.comparisonMetricsCsvPath ||
+      !manual.comparisonFrameIndexPath || !automatic.comparisonFrameIndexPath)
+    return { status: "BLOCKED", reason: "수동 YYB 또는 자동 경로의 새 CSV·캡처가 없음" };
+  if (manual.frameCount !== automatic.frameCount || manual.frameCount < 1)
+    return { status: "NOT_COMPARABLE", reason: "기록 프레임 수가 다름" };
+
+  const [manualCsv, automaticCsv, manualIndexCsv, automaticIndexCsv] = await Promise.all([
+    manual.comparisonMetricsCsvPath, automatic.comparisonMetricsCsvPath,
+    manual.comparisonFrameIndexPath, automatic.comparisonFrameIndexPath
+  ].map(async (file) => readCsv(await readFile(localEvidencePath(projectRoot, file), "utf8"))));
+  const manualRows = byFrame(manualCsv);
+  const automaticRows = byFrame(automaticCsv);
+  if (manualRows.size !== automaticRows.size ||
+      [...manualRows.keys()].some((frame) => !automaticRows.has(frame)))
+    return { status: "NOT_COMPARABLE", reason: "수동·자동 측정 프레임 집합이 다름" };
+  const manualImages = new Map(manualIndexCsv.filter((row) => row.view === "front")
+    .map((row) => [Number(row.recorderFrame), row.path]));
+  const automaticImages = new Map(automaticIndexCsv.filter((row) => row.view === "front")
+    .map((row) => [Number(row.recorderFrame), row.path]));
+  const fields = ["rootX", "rootY", "rootZ", "leftFootX", "leftFootZ",
+    "rightFootX", "rightFootZ", "lowestFootBottomY", "leftKneeAngle",
+    "rightKneeAngle", "maxScaleDelta", "cameraFacingDot"];
+  const frames = [];
+  for (const [frame, manualRow] of manualRows) {
+    const automaticRow = automaticRows.get(frame);
+    if (!automaticRow) continue;
+    const manualTime = Number(manualRow.animationClipTime);
+    const automaticTime = Number(automaticRow.animationClipTime);
+    if (!Number.isFinite(manualTime) || !Number.isFinite(automaticTime) ||
+        Math.abs(manualTime - automaticTime) > 1 / 30 + 0.001 ||
+        manualRow.animationClipName !== automaticRow.animationClipName)
+      return { status: "NOT_COMPARABLE", reason: `프레임 ${frame}의 FBX 클립·시간 불일치` };
+    const metrics = {};
+    for (const field of fields) {
+      const before = Number(manualRow[field]);
+      const after = Number(automaticRow[field]);
+      if (manualRow[field] && automaticRow[field] && Number.isFinite(before) &&
+          Number.isFinite(after)) metrics[field] = { manual: before, automatic: after,
+            delta: Number((after - before).toFixed(6)) };
+    }
+    const manualImage = manualImages.get(frame);
+    const automaticImage = automaticImages.get(frame);
+    frames.push({ frame, clipTime: manualTime, metrics,
+      manualImage: manualImage || null, automaticImage: automaticImage || null });
+  }
+  if (!frames.length || !frames.some((item) => item.manualImage && item.automaticImage))
+    return { status: "BLOCKED", reason: "같은 프레임의 수치·정면 캡처 쌍이 없음" };
+  if (frames.some((item) => Boolean(item.manualImage) !== Boolean(item.automaticImage)) ||
+      !frames.some((item) => Object.keys(item.metrics).length))
+    return { status: "BLOCKED", reason: "수동·자동 캡처 또는 측정값이 불완전함" };
+  for (const item of frames) {
+    for (const file of [item.manualImage, item.automaticImage].filter(Boolean)) {
+      const bytes = await readFile(localEvidencePath(projectRoot, file));
+      if (bytes.length < 20 || bytes.subarray(0, 8).toString("hex") !==
+          "89504e470d0a1a0a" || bytes.subarray(-8).toString("hex") !==
+          "49454e44ae426082")
+        return { status: "BLOCKED", reason: `캡처 PNG 손상: ${file}` };
+    }
+  }
+  return { status: "MANUAL_REVIEW_REQUIRED", frameCount: manual.frameCount,
+    comparedFrames: frames.length, frames, manual, automatic };
+}
