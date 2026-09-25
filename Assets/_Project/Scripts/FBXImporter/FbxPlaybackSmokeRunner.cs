@@ -158,6 +158,7 @@ namespace Fbx2Vmd.FBXImporter
         };
         private static int[] _playbackFootFrames = FootEvidenceFrames;
         private static int[] _playbackSideFrames = { 0, 166, 544 };
+        private static readonly int[] F11VisualEvidenceFrames = { 166, 790, 1328, 8020 };
         private static readonly HumanBodyBones[] F11Bones =
         {
             HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest,
@@ -1221,6 +1222,10 @@ namespace Fbx2Vmd.FBXImporter
             public HumanoidFootGroundingSnapshot right;
             public StageBoneEvidence[] f11_before_foot_stabilization;
             public StageBoneEvidence[] f11_after_foot_stabilization;
+            public string f11_before_front_view_path;
+            public string f11_before_side_view_path;
+            public string f11_after_front_view_path;
+            public string f11_after_side_view_path;
             public string game_view_path;
             public string side_view_path;
             public string source_view_path;
@@ -1840,22 +1845,6 @@ namespace Fbx2Vmd.FBXImporter
             Animator animator = _playbackEvidencePipeline.targetCharacter != null
                 ? _playbackEvidencePipeline.targetCharacter.GetComponentInChildren<Animator>(true) : null;
             if (animator == null || !animator.isHuman) return false;
-            StageBoneEvidence[] originalFinalPose = CaptureStageBones(animator);
-            var controller = ReadMemberValue(typeof(FBXVmdPipeline), _playbackEvidencePipeline,
-                "_humanoidMotionPlaybackController") as HumanoidMotionPlaybackController;
-            StageBoneEvidence[] beforeFootStabilization = null;
-            if (controller == null || !controller.TryCapturePoseBeforeFootStabilization(
-                    () => beforeFootStabilization = CaptureStageBones(animator))) return false;
-            StageBoneEvidence[] afterFootStabilization = CaptureStageBones(animator);
-            if (originalFinalPose.Where((bone, index) => bone.present &&
-                    (Vector3.Distance(bone.position, afterFootStabilization[index].position) > 0.0001f ||
-                     Quaternion.Angle(bone.rotation, afterFootStabilization[index].rotation) > 0.01f))
-                .Any()) return false;
-            if (!_playbackEvidencePipeline.TryCaptureImportedMotionFootSurface(
-                    out HumanoidFootGroundingSnapshot left,
-                    out HumanoidFootGroundingSnapshot right,
-                    out HumanoidFootGroundingStatus status) ||
-                !_playbackEvidencePipeline.TryCaptureImportedMotionPose(out HumanPose pose)) return false;
             Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
             Transform leftKnee = animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
             Transform rightKnee = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
@@ -1870,6 +1859,47 @@ namespace Fbx2Vmd.FBXImporter
             string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
             string prefix = $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}_why-F04-F05";
             string directory = Path.GetDirectoryName(_playbackEvidencePath);
+            bool captureF11Views = F11VisualEvidenceFrames.Contains(frame);
+            Vector3 feetCenter = (leftFoot.position + rightFoot.position) * 0.5f;
+            Vector3 viewCenter = Vector3.Lerp(hips.position, feetCenter, 0.55f);
+            Vector3 viewRight = animator.transform.right;
+            string f11Prefix = $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}_why-F11";
+            string beforeFrontPath = captureF11Views
+                ? Path.Combine(directory, f11Prefix + "_how-before-foot-front-camera.png") : null;
+            string beforeSidePath = captureF11Views
+                ? Path.Combine(directory, f11Prefix + "_how-before-foot-side-camera.png") : null;
+            string afterFrontPath = captureF11Views
+                ? Path.Combine(directory, f11Prefix + "_how-after-foot-front-camera.png") : null;
+            string afterSidePath = captureF11Views
+                ? Path.Combine(directory, f11Prefix + "_how-after-foot-side-camera.png") : null;
+
+            StageBoneEvidence[] originalFinalPose = CaptureStageBones(animator);
+            var controller = ReadMemberValue(typeof(FBXVmdPipeline), _playbackEvidencePipeline,
+                "_humanoidMotionPlaybackController") as HumanoidMotionPlaybackController;
+            StageBoneEvidence[] beforeFootStabilization = null;
+            bool beforeViewsCaptured = true;
+            if (controller == null || !controller.TryCapturePoseBeforeFootStabilization(
+                    () =>
+                    {
+                        beforeFootStabilization = CaptureStageBones(animator);
+                        if (captureF11Views)
+                            beforeViewsCaptured =
+                                TryCapturePoseView(viewRight, viewCenter, beforeFrontPath, false) &&
+                                TryCapturePoseView(viewRight, viewCenter, beforeSidePath, true);
+                    }) || !beforeViewsCaptured) return false;
+            StageBoneEvidence[] afterFootStabilization = CaptureStageBones(animator);
+            if (originalFinalPose.Where((bone, index) => bone.present &&
+                    (Vector3.Distance(bone.position, afterFootStabilization[index].position) > 0.0001f ||
+                     Quaternion.Angle(bone.rotation, afterFootStabilization[index].rotation) > 0.01f))
+                .Any()) return false;
+            if (captureF11Views &&
+                (!TryCapturePoseView(viewRight, viewCenter, afterFrontPath, false) ||
+                 !TryCapturePoseView(viewRight, viewCenter, afterSidePath, true))) return false;
+            if (!_playbackEvidencePipeline.TryCaptureImportedMotionFootSurface(
+                    out HumanoidFootGroundingSnapshot left,
+                    out HumanoidFootGroundingSnapshot right,
+                    out HumanoidFootGroundingStatus status) ||
+                !_playbackEvidencePipeline.TryCaptureImportedMotionPose(out HumanPose pose)) return false;
             _playbackCapturePath = Path.Combine(directory, prefix + "_how-GameView.png");
             var sample = new FootFrameEvidence
             {
@@ -1890,6 +1920,10 @@ namespace Fbx2Vmd.FBXImporter
                 right = right,
                 f11_before_foot_stabilization = beforeFootStabilization,
                 f11_after_foot_stabilization = afterFootStabilization,
+                f11_before_front_view_path = beforeFrontPath,
+                f11_before_side_view_path = beforeSidePath,
+                f11_after_front_view_path = afterFrontPath,
+                f11_after_side_view_path = afterSidePath,
                 game_view_path = _playbackCapturePath,
                 camera_position = camera.transform.position,
                 camera_rotation = camera.transform.rotation,
@@ -1906,10 +1940,8 @@ namespace Fbx2Vmd.FBXImporter
             if (_playbackSideFrames.Contains(frame))
             {
                 sample.side_view_path = Path.Combine(directory, prefix + "_how-side-camera.png");
-                Vector3 feetCenter = (leftFoot.position + rightFoot.position) * 0.5f;
-                if (!TryCaptureSideView(animator,
-                        Vector3.Lerp(hips.position, feetCenter, 0.55f),
-                        sample.side_view_path)) return false;
+                if (!TryCapturePoseView(viewRight, viewCenter,
+                        sample.side_view_path, true)) return false;
             }
 
             _playbackEvidence.foot_frames[_footEvidenceFrameIndex] = sample;
@@ -1969,7 +2001,7 @@ namespace Fbx2Vmd.FBXImporter
                 Vector3 feetCenter = (leftFoot.position + rightFoot.position) * 0.5f;
                 Vector3 center = Vector3.Lerp(hips.position, feetCenter, 0.55f);
                 float bodyHeight = Mathf.Max(0.1f, head.position.y - feetCenter.y);
-                return TryCaptureSideView(animator, center, path,
+                return TryCapturePoseView(animator.transform.right, center, path, true,
                     1 << 31, bodyHeight * 0.75f);
             }
             finally
@@ -1981,8 +2013,8 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private static bool TryCaptureSideView(Animator animator, Vector3 center,
-            string path, int cullingMask = -1, float orthographicSize = 0f)
+        private static bool TryCapturePoseView(Vector3 viewRight, Vector3 center,
+            string path, bool sideView, int cullingMask = -1, float orthographicSize = 0f)
         {
             Camera source = Camera.main;
             if (source == null) return false;
@@ -1992,24 +2024,30 @@ namespace Fbx2Vmd.FBXImporter
             RenderTexture previous = RenderTexture.active;
             try
             {
-                cameraObject = new GameObject("F04 Side View") { hideFlags = HideFlags.HideAndDontSave };
-                Camera side = cameraObject.AddComponent<Camera>();
-                side.CopyFrom(source);
+                cameraObject = new GameObject("E2E Pose View") { hideFlags = HideFlags.HideAndDontSave };
+                Camera view = cameraObject.AddComponent<Camera>();
+                view.CopyFrom(source);
                 if (cullingMask != -1)
                 {
-                    side.cullingMask = cullingMask;
-                    side.clearFlags = CameraClearFlags.SolidColor;
-                    side.backgroundColor = Color.black;
+                    view.cullingMask = cullingMask;
+                    view.clearFlags = CameraClearFlags.SolidColor;
+                    view.backgroundColor = Color.black;
                 }
                 if (orthographicSize > 0f)
-                    side.orthographicSize = orthographicSize;
-                float distance = Vector3.Distance(source.transform.position, center);
-                side.transform.position = center + animator.transform.right * distance +
-                    Vector3.up * (source.transform.position.y - center.y);
-                side.transform.LookAt(center);
+                    view.orthographicSize = orthographicSize;
+                if (sideView)
+                {
+                    float distance = Vector3.Distance(source.transform.position, center);
+                    view.transform.position = center + viewRight * distance +
+                        Vector3.up * (source.transform.position.y - center.y);
+                    view.transform.LookAt(center);
+                }
+                else
+                    view.transform.SetPositionAndRotation(
+                        source.transform.position, source.transform.rotation);
                 target = new RenderTexture(1024, 768, 24);
-                side.targetTexture = target;
-                side.Render();
+                view.targetTexture = target;
+                view.Render();
                 RenderTexture.active = target;
                 image = new Texture2D(1024, 768, TextureFormat.RGB24, false);
                 image.ReadPixels(new Rect(0, 0, 1024, 768), 0, 0);

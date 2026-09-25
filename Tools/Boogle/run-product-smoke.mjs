@@ -553,6 +553,7 @@ async function executePreselection(runId) {
 }
 
 async function executePlayback(runId, captureFrames = null, sideCaptureFrames = null) {
+  const requestedSideFrames = sideCaptureFrames ?? [0, 166, 544];
   const sessionRoot = path.join(evidenceRoot, "playback-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
   const requestId = randomUUID();
@@ -574,7 +575,7 @@ async function executePlayback(runId, captureFrames = null, sideCaptureFrames = 
       await writeFile(requestPath, JSON.stringify({
         request_id: requestId, command: playbackCommand, requested_command: playbackCommand,
         ...(captureFrames ? { capture_frames: captureFrames } : {}),
-        ...(sideCaptureFrames ? { side_capture_frames: sideCaptureFrames } : {})
+        side_capture_frames: requestedSideFrames
       }), { flag: "wx" });
       submitted = true;
       running = true;
@@ -694,7 +695,8 @@ async function executePlayback(runId, captureFrames = null, sideCaptureFrames = 
               status: "MANUAL_REVIEW_REQUIRED",
               sampledFrames: footFrames.length,
               bonesPerStage: 20,
-              maxBoneLengthDeltaMm: Math.max(...pairs.filter(([before]) => before.present)
+              maxBoneLengthDeltaMm: Math.max(...pairs.filter(([before]) =>
+                before.present && before.bone !== "Hips")
                 .map(([before, after]) => 1000 * Math.abs(
                   length(before.local_position) - length(after.local_position)))),
               maxLocalScaleDelta: Math.max(...pairs.filter(([before]) => before.present)
@@ -705,9 +707,20 @@ async function executePlayback(runId, captureFrames = null, sideCaptureFrames = 
                 })))
             };
           } else f11Metrics = { status: "FAIL" };
+          const f11VisualFrames = [166, 790, 1328, 8020]
+            .filter((frame) => expectedFootFrames.includes(frame));
+          const f11VisualPaths = ["f11_before_front_view_path", "f11_before_side_view_path",
+            "f11_after_front_view_path", "f11_after_side_view_path"];
+          const f11VisualValid = f11VisualFrames.every((frame) => {
+            const sample = footFrames.find((item) => item?.actual_frame === frame);
+            return sample && f11VisualPaths.every((field) =>
+              typeof sample[field] === "string" && sample[field].length > 0);
+          });
           const pngPaths = [...captures, ...footFrames.map((frame) => frame?.game_view_path),
             ...footFrames.map((frame) => frame?.side_view_path).filter(Boolean),
-            ...footFrames.map((frame) => frame?.source_view_path)];
+            ...footFrames.map((frame) => frame?.source_view_path),
+            ...footFrames.flatMap((frame) => f11VisualPaths.map((field) => frame?.[field])
+              .filter(Boolean))];
           const completePngs = (await Promise.all(pngPaths.map((file) =>
             hasCompletePngWithin(file, path.dirname(statePath))))).every(Boolean);
           const sideFrames = footFrames.filter((frame) => frame?.side_view_path)
@@ -734,8 +747,8 @@ async function executePlayback(runId, captureFrames = null, sideCaptureFrames = 
               state.repeat_max_position_delta_mm <= 0.5 &&
               state.repeat_max_rotation_delta_degrees <= 0.5 &&
               state.repeat_max_muscle_delta <= 0.0001 && footEvidenceValid &&
-              stageEvidenceValid &&
-              sideFrames.join(",") === (sideCaptureFrames || [0, 166, 544]).join(",") &&
+              stageEvidenceValid && f11VisualValid &&
+              sideFrames.join(",") === requestedSideFrames.join(",") &&
               typeof state.apply_root_motion === "boolean" &&
               typeof state.lock_root_height_y === "boolean" &&
               typeof state.lock_root_position_xz === "boolean" && completePngs) {
