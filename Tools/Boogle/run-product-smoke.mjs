@@ -1123,6 +1123,64 @@ async function executeFullRegression(runId, namedOutput = false) {
   return result;
 }
 
+async function executeManualComparison(runId) {
+  const sessionRoot = path.join(evidenceRoot, "manual-comparison-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const manualScenePath = path.join(projectRoot, "Assets/_Project/Scene/Sub_Manual.unity");
+  const automaticScenePath = path.join(projectRoot, "Assets/_Project/Scene/Main_Auto.unity");
+  const manualPrefabPath = path.join(projectRoot,
+    "Assets/_ManualReference/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_Prefab.prefab");
+  const automaticPrefabPath = path.join(projectRoot,
+    "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
+  const [manualScene, automaticScene, manualPrefab, automaticPrefab,
+    manualMeta, automaticMeta] = await Promise.all([
+    manualScenePath, automaticScenePath, manualPrefabPath, automaticPrefabPath,
+    `${manualPrefabPath}.meta`, `${automaticPrefabPath}.meta`
+  ].map((file) => readFile(file, "utf8")));
+  const guid = (source) => source.match(/^guid:\s*([0-9a-f]{32})/m)?.[1] || null;
+  const avatar = (source) => source.match(/^\s*m_Avatar: \{fileID: \d+(?:, guid: ([0-9a-f]{32}))?/m)?.[1] || null;
+  const camera = (source) => {
+    const blocks = source.split(/^--- !u!/m);
+    const gameObject = blocks.find((block) => /^1 &\d+/m.test(block) &&
+      /^\s*m_Name: Main Camera\s*$/m.test(block));
+    const gameObjectId = gameObject?.match(/^1 &(\d+)/)?.[1];
+    const ownsCamera = (block, type) => gameObjectId && block.startsWith(`${type} &`) &&
+      block.includes(`m_GameObject: {fileID: ${gameObjectId}}`);
+    const lens = blocks.find((block) => ownsCamera(block, 20));
+    const transform = blocks.find((block) => ownsCamera(block, 4));
+    if (!lens || !transform) return null;
+    const field = (block, name) => block.match(new RegExp(`^\\s*${name}: (.+)$`, "m"))?.[1] || null;
+    return {
+      position: field(transform, "m_LocalPosition"),
+      rotation: field(transform, "m_LocalRotation"),
+      orthographic: field(lens, "orthographic"),
+      orthographicSize: field(lens, "orthographic size"),
+      fieldOfView: field(lens, "field of view")
+    };
+  };
+  const manual = { prefabGuid: guid(manualMeta),
+    serializedAvatarGuid: avatar(manualPrefab), camera: camera(manualScene) };
+  const automatic = { prefabGuid: guid(automaticMeta),
+    serializedAvatarGuid: avatar(automaticPrefab), camera: camera(automaticScene) };
+  manual.sceneContainsPrefab = manualScene.includes(`guid: ${manual.prefabGuid}`);
+  automatic.sceneContainsPrefab = automaticScene.includes(`guid: ${automatic.prefabGuid}`);
+  const differences = [];
+  for (const field of ["prefabGuid", "serializedAvatarGuid", "camera",
+    "sceneContainsPrefab"]) {
+    if (!manual[field] || !automatic[field] ||
+        JSON.stringify(manual[field]) !== JSON.stringify(automatic[field]))
+      differences.push({ field, manual: manual[field], automatic: automatic[field] });
+  }
+  const result = differences.length ? "NOT_COMPARABLE" : "BLOCKED";
+  await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+    runId, result, manual, automatic, differences,
+    inputFbxSha256: await hashFile(fbxPath),
+    reason: differences.length ? "모델·Avatar·카메라 조건이 다름" :
+      "동일 FBX·Animator·시간 및 새 프레임 캡처 확인 전 비교 보류"
+  }, null, 2));
+  return { status: result };
+}
+
 async function executeSegments(runId) {
   const sessionRoot = path.join(evidenceRoot, "segment-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -1373,9 +1431,9 @@ async function recoverSuite(runId) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "manual-compare", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
       process.argv.length > (mode === "smoke" ? 2 : mode === "recover" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|segments|invalid-input|environment|suite|recover <runId>]");
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|manual-compare|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1413,6 +1471,7 @@ async function main() {
       testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08,F11" :
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
         mode === "full-output" ? "F12" :
+        mode === "manual-compare" ? "F13" :
         mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
@@ -1435,6 +1494,7 @@ async function main() {
         : mode === "full-clip" ? await executeFullClip(runId)
         : mode === "full-regression" ? await executeFullRegression(runId)
         : mode === "full-output" ? await executeFullRegression(runId, true)
+        : mode === "manual-compare" ? await executeManualComparison(runId)
         : mode === "segments" ? await executeSegments(runId)
           : mode === "invalid-input" ? await executeInvalidInput(runId)
             : await executeSmoke(runId);
@@ -1448,6 +1508,7 @@ async function main() {
             mode === "full-clip" ? "full-clip-runs" :
             mode === "full-regression" ? "full-regression-runs" :
             mode === "full-output" ? "full-output-runs" :
+            mode === "manual-compare" ? "manual-comparison-runs" :
             mode === "segments" ? "segment-runs" :
             mode === "invalid-input" ? "invalid-input-runs" : "product-smoke", runId);
       await mkdir(sessionRoot, { recursive: true });
