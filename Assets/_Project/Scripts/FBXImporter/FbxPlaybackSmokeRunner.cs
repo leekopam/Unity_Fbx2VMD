@@ -147,6 +147,18 @@ namespace Fbx2Vmd.FBXImporter
             1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333,
             2404, 2405, 2406, 8019, 8020, 8021, 11615, 11616, 11617
         };
+        private static readonly HumanBodyBones[] F11Bones =
+        {
+            HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest,
+            HumanBodyBones.Head,
+            HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand,
+            HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
+            HumanBodyBones.LeftThumbProximal, HumanBodyBones.RightThumbProximal,
+            HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg,
+            HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes,
+            HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg,
+            HumanBodyBones.RightFoot, HumanBodyBones.RightToes
+        };
 
         private static PlaybackEvidencePhase _playbackEvidencePhase;
         private static FBXVmdPipeline _playbackEvidencePipeline;
@@ -1100,8 +1112,21 @@ namespace Fbx2Vmd.FBXImporter
             public Quaternion right_toe_rotation;
             public HumanoidFootGroundingSnapshot left;
             public HumanoidFootGroundingSnapshot right;
+            public StageBoneEvidence[] f11_before_foot_stabilization;
+            public StageBoneEvidence[] f11_after_foot_stabilization;
             public string game_view_path;
             public string side_view_path;
+        }
+
+        [Serializable]
+        private sealed class StageBoneEvidence
+        {
+            public string bone;
+            public bool present;
+            public Vector3 position;
+            public Quaternion rotation;
+            public Vector3 local_position;
+            public Vector3 local_scale;
         }
 
         private static bool TryStartPlaybackEvidence(string requestId, out string message)
@@ -1459,16 +1484,27 @@ namespace Fbx2Vmd.FBXImporter
         private static bool TryBeginFootFrameCapture()
         {
             int frame = FootEvidenceFrames[_footEvidenceFrameIndex];
-            if (!_playbackEvidencePipeline.TrySeekImportedMotionFrame(frame) ||
-                !_playbackEvidencePipeline.TryCaptureImportedMotionFootSurface(
-                    out HumanoidFootGroundingSnapshot left,
-                    out HumanoidFootGroundingSnapshot right,
-                    out HumanoidFootGroundingStatus status) ||
-                !_playbackEvidencePipeline.TryCaptureImportedMotionPose(out HumanPose pose)) return false;
+            if (!_playbackEvidencePipeline.TrySeekImportedMotionFrame(frame)) return false;
 
             Animator animator = _playbackEvidencePipeline.targetCharacter != null
                 ? _playbackEvidencePipeline.targetCharacter.GetComponentInChildren<Animator>(true) : null;
             if (animator == null || !animator.isHuman) return false;
+            StageBoneEvidence[] originalFinalPose = CaptureStageBones(animator);
+            var controller = ReadMemberValue(typeof(FBXVmdPipeline), _playbackEvidencePipeline,
+                "_humanoidMotionPlaybackController") as HumanoidMotionPlaybackController;
+            StageBoneEvidence[] beforeFootStabilization = null;
+            if (controller == null || !controller.TryCapturePoseBeforeFootStabilization(
+                    () => beforeFootStabilization = CaptureStageBones(animator))) return false;
+            StageBoneEvidence[] afterFootStabilization = CaptureStageBones(animator);
+            if (originalFinalPose.Where((bone, index) => bone.present &&
+                    (Vector3.Distance(bone.position, afterFootStabilization[index].position) > 0.0001f ||
+                     Quaternion.Angle(bone.rotation, afterFootStabilization[index].rotation) > 0.01f))
+                .Any()) return false;
+            if (!_playbackEvidencePipeline.TryCaptureImportedMotionFootSurface(
+                    out HumanoidFootGroundingSnapshot left,
+                    out HumanoidFootGroundingSnapshot right,
+                    out HumanoidFootGroundingStatus status) ||
+                !_playbackEvidencePipeline.TryCaptureImportedMotionPose(out HumanPose pose)) return false;
             Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
             Transform leftKnee = animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
             Transform rightKnee = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
@@ -1500,6 +1536,8 @@ namespace Fbx2Vmd.FBXImporter
                 right_toe_rotation = rightToe.rotation,
                 left = left,
                 right = right,
+                f11_before_foot_stabilization = beforeFootStabilization,
+                f11_after_foot_stabilization = afterFootStabilization,
                 game_view_path = _playbackCapturePath
             };
             if (sample.actual_frame != frame) return false;
@@ -1514,6 +1552,23 @@ namespace Fbx2Vmd.FBXImporter
             _playbackCaptureStartedUtc = DateTime.UtcNow;
             _playbackEvidencePhase = PlaybackEvidencePhase.FootCaptures;
             return true;
+        }
+
+        private static StageBoneEvidence[] CaptureStageBones(Animator animator)
+        {
+            return F11Bones.Select(bone =>
+            {
+                Transform transform = animator.GetBoneTransform(bone);
+                return new StageBoneEvidence
+                {
+                    bone = bone.ToString(),
+                    present = transform != null,
+                    position = transform != null ? transform.position : Vector3.zero,
+                    rotation = transform != null ? transform.rotation : Quaternion.identity,
+                    local_position = transform != null ? transform.localPosition : Vector3.zero,
+                    local_scale = transform != null ? transform.localScale : Vector3.zero
+                };
+            }).ToArray();
         }
 
         private static bool TryCaptureSideView(Animator animator, Vector3 center, string path)

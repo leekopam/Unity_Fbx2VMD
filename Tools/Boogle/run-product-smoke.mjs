@@ -477,6 +477,7 @@ async function executePlayback(runId) {
   let csvPath = null;
   let frameMapPath = null;
   let humanLabelsPath = null;
+  let f11Metrics = null;
   try {
     await access(fbxPath);
     if (await readOptional(requestPath) || (await readStatus())?.status === "running") {
@@ -568,6 +569,46 @@ async function executePlayback(runId) {
                   foot.rear_weight, foot.front_weight].every(Number.isFinite)) &&
               Number.isFinite(frame.root_position?.y) &&
               Number.isFinite(frame.hips_position?.y));
+          const mandatoryBones = new Set(["Hips", "Head", "LeftHand", "RightHand",
+            "LeftFoot", "RightFoot"]);
+          const stageEvidenceValid = footFrames.length === expectedFootFrames.length &&
+            footFrames.every((frame) => {
+              const before = frame?.f11_before_foot_stabilization;
+              const after = frame?.f11_after_foot_stabilization;
+              return Array.isArray(before) && Array.isArray(after) &&
+                before.length === 20 && after.length === before.length &&
+                before.every((bone, index) => {
+                  const finalBone = after[index];
+                  return bone.bone === finalBone?.bone &&
+                    bone.present === finalBone.present &&
+                    (!mandatoryBones.has(bone.bone) || bone.present) &&
+                    (!bone.present || [bone, finalBone].every((sample) =>
+                      [sample.position, sample.rotation, sample.local_position,
+                        sample.local_scale].every((value) =>
+                        value && Object.keys(value).length >= 3 &&
+                        Object.values(value).every(Number.isFinite))));
+                });
+            });
+          if (stageEvidenceValid) {
+            const length = (vector) => Math.hypot(vector.x, vector.y, vector.z);
+            const pairs = footFrames.flatMap((frame) =>
+              frame.f11_before_foot_stabilization.map((before, index) =>
+                [before, frame.f11_after_foot_stabilization[index]]));
+            f11Metrics = {
+              status: "MANUAL_REVIEW_REQUIRED",
+              sampledFrames: footFrames.length,
+              bonesPerStage: 20,
+              maxBoneLengthDeltaMm: Math.max(...pairs.filter(([before]) => before.present)
+                .map(([before, after]) => 1000 * Math.abs(
+                  length(before.local_position) - length(after.local_position)))),
+              maxLocalScaleDelta: Math.max(...pairs.filter(([before]) => before.present)
+                .map(([before, after]) => length({
+                  x: before.local_scale.x - after.local_scale.x,
+                  y: before.local_scale.y - after.local_scale.y,
+                  z: before.local_scale.z - after.local_scale.z
+                })))
+            };
+          } else f11Metrics = { status: "FAIL" };
           const pngPaths = [...captures, ...footFrames.map((frame) => frame?.game_view_path),
             ...footFrames.map((frame) => frame?.side_view_path).filter(Boolean)];
           const completePngs = (await Promise.all(pngPaths.map((file) =>
@@ -594,6 +635,7 @@ async function executePlayback(runId) {
               state.repeat_max_position_delta_mm <= 0.5 &&
               state.repeat_max_rotation_delta_degrees <= 0.5 &&
               state.repeat_max_muscle_delta <= 0.0001 && footEvidenceValid &&
+              stageEvidenceValid &&
               sideFrames.join(",") === "0,166,544" &&
               typeof state.apply_root_motion === "boolean" &&
               typeof state.lock_root_height_y === "boolean" &&
@@ -630,7 +672,7 @@ async function executePlayback(runId) {
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, command: playbackCommand, result: result.status,
-      failureStage, status, csvPath, frameMapPath, humanLabelsPath
+      failureStage, status, csvPath, frameMapPath, humanLabelsPath, f11Metrics
     }, null, 2));
   }
   return { ...result, requestId };
@@ -1174,7 +1216,7 @@ async function executeSuite(runId) {
         for (const [name, run, allowed] of [
           ["F01", executePreselection, ["MANUAL_REVIEW_REQUIRED"]],
           ["F07", executeInvalidInput, ["PASS"]],
-          ["F02_F03_F04_F05", executePlayback, ["MANUAL_REVIEW_REQUIRED"]],
+          ["F02_F03_F04_F05_F11", executePlayback, ["MANUAL_REVIEW_REQUIRED"]],
           ["F06", executeSmoke, ["PASS"]]
         ]) {
           const step = await run(runId);
@@ -1361,10 +1403,10 @@ async function main() {
     testPack: { id: "fbx2vmd-product-smoke", version: "0.1.3" },
     retries: 0,
     inputConditions: {
-      testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08" :
+      testCaseIds: mode === "suite" ? "F01,F02,F03,F04,F05,F06,F07,F08,F11" :
         mode === "environment" ? "F08" : mode === "foot-live" ? "F09" :
         mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
-        mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05" :
+        mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
       modelSha256: modelHash, sceneSha256: sceneHash

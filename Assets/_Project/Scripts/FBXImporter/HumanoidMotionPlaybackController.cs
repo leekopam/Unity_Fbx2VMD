@@ -229,6 +229,22 @@ namespace Fbx2Vmd.FBXImporter
                  LastGroundingStatus == HumanoidFootGroundingStatus.NoGround) &&
                 _footGrounding != null && _footGrounding.TryCaptureCurrentSurface(out left, out right);
         }
+
+        internal bool TryCapturePoseBeforeFootStabilization(Action capture)
+        {
+            if (!IsPrepared || capture == null) return false;
+            try
+            {
+                if (!EvaluateCurrentPoseWithCorrection(applyFootStabilization: false)) return false;
+                capture();
+                return true;
+            }
+            finally
+            {
+                if (!EvaluateCurrentPoseWithCorrection())
+                    throw new InvalidOperationException("계측 후 접지 자세를 복원하지 못했습니다.");
+            }
+        }
 #endif
 
         internal bool TryPreviewPoseCorrection(
@@ -316,7 +332,7 @@ namespace Fbx2Vmd.FBXImporter
             State = HumanoidMotionPlaybackState.Empty;
         }
 
-        private bool EvaluateCurrentPoseWithCorrection()
+        private bool EvaluateCurrentPoseWithCorrection(bool applyFootStabilization = true)
         {
             // 원본 자세와 상체 보정 뒤에 발 접촉을 마지막으로 고정함.
 #if UNITY_EDITOR
@@ -346,9 +362,9 @@ namespace Fbx2Vmd.FBXImporter
                     _poseCorrectionDocument,
                     frameIndex);
             _armSupportPoseApplier.Apply();
-            return isApplied && TryApplyFootContactStabilization(
+            return isApplied && (!applyFootStabilization || TryApplyFootContactStabilization(
                 leftBendNormal,
-                rightBendNormal);
+                rightBendNormal));
         }
 
         private bool TryApplyArmDirectionCorrection()
