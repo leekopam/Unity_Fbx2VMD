@@ -6,11 +6,14 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Fbx2Vmd.FBXImporter;
+using UniGLTF;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using VRM;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -32,6 +35,8 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
         private const string CaptureSatisfactionFullClipMetricsCommand = "capture_satisfaction_full_clip_metrics";
         private const string CaptureTetorisTestPrefabFullClipCommand = "capture_tetoris_testprefab_full_clip_metrics";
+        private const string CaptureVrmBaselineCommand = "capture_vrm_mmd_head_metrics";
+        private const string CaptureVrmLoadedCommand = "capture_vrm_univrm_head_metrics";
         private const string CaptureProductUiFlowCommand = "capture_product_ui_flow";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
@@ -179,6 +184,11 @@ namespace Fbx2Vmd.FBXImporter
         private static GameObject _alternateModel;
         private static bool _originalModelWasActive;
         private static bool _alternateModelWasActive;
+        private static Task<RuntimeGltfInstance> _vrmLoadTask;
+        private static FbxPlaybackSmokeAutomationRequest _vrmLoadRequest;
+        private static FBXVmdPipeline _vrmLoadPipeline;
+        private static GameObject _loadedVrmRoot;
+        private static string _vrmImportCapturePath;
         private static int _footEvidenceFrameIndex;
         private static readonly List<string> PlaybackStageLog = new List<string>();
         private enum InvalidInputPhase { None, MissingPath, InvalidAvatar }
@@ -422,6 +432,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void PollAutomationRequest()
         {
+            if (_vrmLoadTask != null)
+            {
+                PollVrmLoading();
+                return;
+            }
+
             if (_productUiFlow != null)
             {
                 PollProductUiFlow();
@@ -778,7 +794,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-            if (IsBatchRunning() || _singleFBXVmdPipeline != null)
+            if (IsBatchRunning() || _singleFBXVmdPipeline != null || _vrmLoadTask != null)
             {
                 message = "smoke runner is already active";
                 return false;
@@ -802,6 +818,15 @@ namespace Fbx2Vmd.FBXImporter
                         request.run_id, out _fullClipMetrics, out message);
                 case CaptureTetorisTestPrefabFullClipCommand:
                     return TryStartTestPrefabFullClip(request, out message);
+                case CaptureVrmBaselineCommand:
+                    if (!TryGetFBXVmdPipeline(SatisfactionFbxFileName,
+                            out FBXVmdPipeline vrmBaselinePipeline, interactive: false,
+                            out message)) return false;
+                    return FbxFullClipFootMetricsCapture.TryStart(vrmBaselinePipeline,
+                        request.request_id, request.run_id, out _fullClipMetrics, out message,
+                        SatisfactionFbxFileName, "VRM_MMD", frameLimit: 91, captureViews: true);
+                case CaptureVrmLoadedCommand:
+                    return TryStartVrmLoadedCapture(request, out message);
                 case CaptureProductUiFlowCommand:
                     if (!TryGetFBXVmdPipeline(SatisfactionFbxFileName,
                             out FBXVmdPipeline uiPipeline, interactive: false,
@@ -1291,7 +1316,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 bool hasEvidence = _fullClipMetrics.HasEvidence;
                 string message = hasEvidence
-                    ? $"{_fullClipMetrics.CaseId} 전체 프레임 수집 완료, 화면·전체 재생 검토 필요"
+                    ? $"{_fullClipMetrics.CaseId} 구간 수집 완료, 화면 검토 필요"
                     : _fullClipMetrics.FailureMessage;
                 WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
@@ -1302,6 +1327,7 @@ namespace Fbx2Vmd.FBXImporter
                     message = message,
                     passed = hasEvidence,
                     failure_stage = _fullClipMetrics.FailureStage,
+                    capture_path = _vrmImportCapturePath,
                     full_clip_state_path = _fullClipMetrics.StatePath,
                     manifest_path = _fullClipMetrics.StatePath,
                     total_jobs = 1,
@@ -1391,15 +1417,145 @@ namespace Fbx2Vmd.FBXImporter
             return false;
         }
 
+        private static bool TryStartVrmLoadedCapture(
+            FbxPlaybackSmokeAutomationRequest request, out string message)
+        {
+            message = string.Empty;
+            if (request == null || !Guid.TryParse(request.run_id, out _) ||
+                !Guid.TryParse(request.request_id, out _) ||
+                string.IsNullOrWhiteSpace(request.vrm_file) ||
+                !string.Equals(Path.GetExtension(request.vrm_file), ".vrm",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                message = "UniVRM 비교용 VRM 파일과 실행 ID가 필요합니다.";
+                return false;
+            }
+
+            string vrmPath;
+            try { vrmPath = Path.GetFullPath(request.vrm_file); }
+            catch (Exception error)
+            {
+                message = $"VRM 파일 경로가 유효하지 않습니다: {error.Message}";
+                return false;
+            }
+            if (!File.Exists(vrmPath))
+            {
+                message = $"VRM 파일이 없습니다: {vrmPath}";
+                return false;
+            }
+            if (!TryGetFBXVmdPipeline(SatisfactionFbxFileName,
+                    out FBXVmdPipeline pipeline, interactive: false,
+                    out message)) return false;
+            if (pipeline.targetCharacter == null || pipeline.targetCharacter.name != E2eModelName)
+            {
+                message = "Main_Auto의 MMD4Mecanim 기준 모델이 필요합니다.";
+                return false;
+            }
+
+            _vrmLoadRequest = request;
+            _vrmLoadPipeline = pipeline;
+            try
+            {
+                _vrmLoadTask = VrmUtility.LoadAsync(vrmPath, new RuntimeOnlyAwaitCaller());
+            }
+            catch (Exception error)
+            {
+                _vrmLoadRequest = null;
+                _vrmLoadPipeline = null;
+                message = $"UniVRM 파일 로딩을 시작할 수 없습니다: {error.Message}";
+                return false;
+            }
+            return true;
+        }
+
+        private static void PollVrmLoading()
+        {
+            if (!_vrmLoadTask.IsCompleted) return;
+            Task<RuntimeGltfInstance> task = _vrmLoadTask;
+            FbxPlaybackSmokeAutomationRequest request = _vrmLoadRequest;
+            FBXVmdPipeline pipeline = _vrmLoadPipeline;
+            _vrmLoadTask = null;
+            _vrmLoadRequest = null;
+            _vrmLoadPipeline = null;
+            string stage = "vrm_import";
+            try
+            {
+                RuntimeGltfInstance loaded = task.GetAwaiter().GetResult();
+                _loadedVrmRoot = loaded != null ? loaded.Root : null;
+                Animator animator = _loadedVrmRoot != null
+                    ? _loadedVrmRoot.GetComponent<Animator>() : null;
+                stage = "vrm_avatar";
+                if (animator == null || animator.avatar == null ||
+                    !animator.avatar.isValid || !animator.avatar.isHuman)
+                    throw new InvalidOperationException("UniVRM Humanoid Avatar가 유효하지 않습니다.");
+
+                loaded.ShowMeshes();
+                _loadedVrmRoot.name = "UniVRM Character";
+                _loadedVrmRoot.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                _alternateModelPipeline = pipeline;
+                _originalModel = pipeline.targetCharacter;
+                _alternateModel = _loadedVrmRoot;
+                _originalModelWasActive = _originalModel.activeSelf;
+                _alternateModelWasActive = _alternateModel.activeSelf;
+                _originalModel.SetActive(false);
+                _alternateModel.SetActive(true);
+                pipeline.targetCharacter = _alternateModel;
+                stage = "vrm_evidence";
+                string evidenceDirectory = Path.Combine(Path.GetDirectoryName(Application.dataPath),
+                    "Docs", "Workflow", "Local", "evidence", "boogle", "vrm-character",
+                    Guid.Parse(request.run_id).ToString("D"),
+                    Guid.Parse(request.request_id).ToString("D"));
+                Directory.CreateDirectory(evidenceDirectory);
+                string importCapturePath = Path.Combine(evidenceDirectory, "import.png");
+                FbxFullClipFootMetricsCapture.WriteGameViewPng(importCapturePath);
+                _vrmImportCapturePath = importCapturePath;
+                stage = "vrm_capture_start";
+                if (!FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
+                        request.run_id, out _fullClipMetrics, out string message,
+                        SatisfactionFbxFileName, "VRM_UNIVRM", frameLimit: 91,
+                        captureViews: true))
+                    throw new InvalidOperationException(message);
+                TraceAutomation($"UniVRM loaded id={request.request_id} model={_alternateModel.name}");
+            }
+            catch (Exception error)
+            {
+                string importCapturePath = _vrmImportCapturePath;
+                RestoreAlternateModel();
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = request.request_id,
+                    status = "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = _activeAutomationRequestedCommand,
+                    failure_stage = stage,
+                    capture_path = importCapturePath,
+                    message = error.Message,
+                    passed = false,
+                    failures = new[] { error.Message }
+                });
+                TraceAutomation($"UniVRM failed id={request.request_id} stage={stage} message={error.Message}");
+                ClearAutomationRequestState();
+                TryDeleteRequestFile();
+            }
+        }
+
         private static void RestoreAlternateModel()
         {
             if (_alternateModelPipeline != null)
                 _alternateModelPipeline.targetCharacter = _originalModel;
-            if (_alternateModel != null) _alternateModel.SetActive(_alternateModelWasActive);
+            if (_alternateModel != null && _alternateModel != _loadedVrmRoot)
+                _alternateModel.SetActive(_alternateModelWasActive);
             if (_originalModel != null) _originalModel.SetActive(_originalModelWasActive);
+            if (_loadedVrmRoot != null)
+            {
+                _loadedVrmRoot.SetActive(false);
+                UnityEngine.Object.Destroy(_loadedVrmRoot);
+                _loadedVrmRoot = null;
+            }
             _alternateModelPipeline = null;
             _originalModel = null;
             _alternateModel = null;
+            _vrmImportCapturePath = null;
         }
 
         private static void PollFootLiveEvidence()
