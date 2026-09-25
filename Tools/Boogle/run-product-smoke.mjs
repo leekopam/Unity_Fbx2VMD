@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import { access, copyFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { compareManualCapture, readCsv } from "./manual-compare.mjs";
+import { compareManualCapture, linkOriginalCapture, readCsv } from "./manual-compare.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const evidenceRoot = path.join(projectRoot, "Docs/Workflow/Local/evidence/boogle");
@@ -1421,8 +1421,8 @@ async function executeFullClip(runId, alternateModel = false) {
   return { ...result, requestId };
 }
 
-async function executeProductUi(runId) {
-  const sessionRoot = path.join(evidenceRoot, "product-ui-runs", runId);
+async function executeProductUi(runId, width, height) {
+  const sessionRoot = path.join(evidenceRoot, "product-ui-runs", runId, `${width}x${height}`);
   await mkdir(sessionRoot, { recursive: true });
   const requestId = randomUUID();
   const steps = [];
@@ -1457,7 +1457,8 @@ async function executeProductUi(runId) {
         result = { status: "BLOCKED", failureKind: "preflight" };
       else {
         await writeFile(requestPath, JSON.stringify({ request_id: requestId,
-          command: productUiCommand, requested_command: productUiCommand, run_id: runId
+          command: productUiCommand, requested_command: productUiCommand, run_id: runId,
+          screen_width: width, screen_height: height
         }), { flag: "wx" });
         submitted = true;
         const startedAt = Date.now();
@@ -1502,6 +1503,7 @@ async function executeProductUi(runId) {
               button("paused", "FBX_PlayPause_Button")?.label === "재생" &&
               button("recording", "FBX_Record_Button")?.label === "녹화 중지";
             const screenshots = state.events.filter((entry) => entry.game_view_path);
+            let validImageSizes = true;
             for (const entry of screenshots) {
               const imagePath = path.resolve(entry.game_view_path);
               const relativeImagePath = path.relative(allowedRoot, imagePath);
@@ -1512,10 +1514,26 @@ async function executeProductUi(runId) {
                 await new Promise((resolve) => setTimeout(resolve, 250));
               if ((await stat(imagePath).catch(() => ({ size: 0 }))).size === 0)
                 throw new Error("F15 Game View 캡처가 생성되지 않았습니다.");
+              const png = await readFile(imagePath);
+              const recorderSize = ["recording", "recording_stopped", "stopped"]
+                .includes(entry.step);
+              const expectedWidth = recorderSize ? 960 : width;
+              const expectedHeight = recorderSize ? 960 : height;
+              validImageSizes &&= png.length >= 24 &&
+                png.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" &&
+                png.subarray(-8).toString("hex") === "49454e44ae426082" &&
+                png.readUInt32BE(16) === expectedWidth &&
+                png.readUInt32BE(20) === expectedHeight &&
+                entry.screen_width === expectedWidth &&
+                entry.screen_height === expectedHeight;
             }
             const valid = state.status === "manual_review_required" && validSteps && validUiState &&
               state.input === "Snake Hip Hop Dance.fbx" && state.model === "YYB Hatsune Miku" &&
-              state.auto_vmd_recording_suppressed === true && screenshots.length >= 3 &&
+              state.auto_vmd_recording_suppressed === true &&
+              state.requested_screen_width === width &&
+              state.requested_screen_height === height &&
+              screenshots.length === expectedSteps.length +
+                (byStep.correction_preparing ? 1 : 0) && validImageSizes &&
               screenshots.every((entry) => entry.game_view_path &&
                 !entry.progress_text.includes("�")) &&
               state.events.every((entry) => entry.buttons.length === 4);
@@ -1552,13 +1570,31 @@ async function executeProductUi(runId) {
         result = { status: "INFRA_ERROR" };
     }
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
-      runId, requestId, result: result.status, failureStage, steps, before, after,
+      runId, requestId, width, height, result: result.status, failureStage, steps, before, after,
       unityStatus, statePath: unityStatus?.manifest_path || null,
       eventSteps: state?.events?.map((entry) => entry.step) || [],
+      screenSizes: state?.events?.map((entry) => ({ step: entry.step,
+        width: entry.screen_width, height: entry.screen_height })) || [],
       screenshotCount: state?.events?.filter((entry) => entry.game_view_path).length || 0
     }, null, 2));
   }
   return { ...result, requestId };
+}
+
+async function executeProductUiSizes(runId) {
+  const sizes = [[960, 960], [1280, 720], [720, 1280]];
+  const results = [];
+  for (const [width, height] of sizes) {
+    const result = await executeProductUi(runId, width, height);
+    results.push({ width, height, ...result });
+    if (["BLOCKED", "INFRA_ERROR", "TIMED_OUT"].includes(result.status)) break;
+  }
+  await writeFile(path.join(evidenceRoot, "product-ui-runs", runId, "manifest.json"),
+    JSON.stringify({ runId, results }, null, 2));
+  return { status: results.length === sizes.length &&
+    results.every((item) => item.status === "MANUAL_REVIEW_REQUIRED")
+    ? "MANUAL_REVIEW_REQUIRED" :
+      results.find((item) => item.status !== "MANUAL_REVIEW_REQUIRED")?.status || "FAIL" };
 }
 
 async function executeFullRegression(runId, namedOutput = false) {
@@ -1827,6 +1863,49 @@ async function executeManualComparison(runId) {
           }
         }
       }
+    }
+  }
+  if (result.status === "MANUAL_REVIEW_REQUIRED") {
+    const sourceFrames = result.frames.map((frame) => Math.round(frame.clipTime * 60));
+    const sourceEnter = await executeControl(runId, enterPlayCommand);
+    manifest.sourceEnterPlay = sourceEnter.status;
+    let sourceRun = { status: sourceEnter.status, terminal: true };
+    if (sourceEnter.status === "PASS") {
+      try {
+        sourceRun = await executePlayback(runId, sourceFrames, sourceFrames);
+      } catch (error) {
+        sourceRun = { status: "INFRA_ERROR", reason: error.message, terminal: true };
+      } finally {
+        if (sourceRun.terminal !== false) {
+          const sourceExit = await executeControl(runId, exitPlayCommand);
+          manifest.sourceExitPlay = sourceExit.status;
+          if (sourceExit.status !== "PASS")
+            sourceRun = { status: "INFRA_ERROR", terminal: true };
+        }
+      }
+    }
+    manifest.sourceCapture = sourceRun;
+    if (sourceRun.status !== "MANUAL_REVIEW_REQUIRED") {
+      manifest.manualAutomaticComparison = result;
+      result = { status: sourceRun.status, reason: "원본 FBX 측면 캡처 실패" };
+    } else {
+      try {
+        const sourceManifest = JSON.parse(await readFile(path.join(evidenceRoot,
+          "playback-runs", runId, "manifest.json"), "utf8"));
+        const sourceStatePath = path.resolve(sourceManifest.status?.playback_state_path || "");
+        const relative = path.relative(path.join(evidenceRoot, "playback"), sourceStatePath);
+        if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
+          throw new Error("원본 캡처 상태 파일이 실행 폴더 밖입니다.");
+        const sourceState = JSON.parse(await readFile(sourceStatePath, "utf8"));
+        result = await linkOriginalCapture(result, sourceState, projectRoot);
+      } catch (error) {
+        result = { status: "INFRA_ERROR", reason: error.message };
+      }
+      const final = await executeControl(runId, environmentCommand);
+      manifest.afterSource = final.state;
+      if (final.status !== "PASS" || !environmentFields.every((field) =>
+        JSON.stringify(manifest.before?.[field]) === JSON.stringify(final.state?.[field])))
+        result = { status: "INFRA_ERROR", reason: "원본 캡처 후 환경 복원 불일치" };
     }
   }
   manifest.result = result.status;
@@ -2297,7 +2376,7 @@ async function main() {
         : mode === "contact-capture" ? await executeContactCapture(runId, contactSource,
           { fbxSha256: fbxHash, modelSha256: modelHash, sceneSha256: sceneHash })
         : mode === "alternate-model" ? await executeFullClip(runId, true)
-        : mode === "product-ui" ? await executeProductUi(runId)
+        : mode === "product-ui" ? await executeProductUiSizes(runId)
         : mode === "full-regression" ? await executeFullRegression(runId)
         : mode === "full-output" ? await executeFullRegression(runId, true)
         : mode === "vrm-output" ? await executeVrmOutput(runId)

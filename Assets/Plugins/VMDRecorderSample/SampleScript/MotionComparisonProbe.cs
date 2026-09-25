@@ -3005,13 +3005,30 @@ public class MotionComparisonProbe : MonoBehaviour
                 viewName,
                 frameName);
 
-        if (!RenderCameraToPng(captureCamera, outputPaths.ScreenshotPath))
+        bool isSideView = viewName == "right";
+        if (!RenderCameraToPng(captureCamera, outputPaths.ScreenshotPath, isSideView))
         {
             Debug.LogWarning(MotionComparisonProbeReportWriter.BuildScreenshotBlankWarningMessage(outputPaths.ScreenshotPath));
             return;
         }
 
         _nonBlankScreenshotCount++;
+        if (isSideView)
+        {
+            float leftY = CaptureSoleMinimumY(GetBone(HumanBodyBones.LeftFoot));
+            float rightY = CaptureSoleMinimumY(GetBone(HumanBodyBones.RightFoot));
+            const float groundY = 0f;
+            string contactCsv = "groundY_m,leftSoleMinY_m,rightSoleMinY_m,leftGap_mm,rightGap_mm" +
+                Environment.NewLine + string.Join(",", new[]
+                {
+                    groundY.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                    FormatContactValue(leftY), FormatContactValue(rightY),
+                    FormatContactValue((leftY - groundY) * 1000f),
+                    FormatContactValue((rightY - groundY) * 1000f)
+                }) + Environment.NewLine;
+            System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(
+                outputPaths.ScreenshotPath, ".csv"), contactCsv);
+        }
         MotionComparisonProbeReportWriter.AppendScreenshotIndexRow(
             _screenshotIndexPath,
             outputPaths.IndexRow);
@@ -3163,7 +3180,51 @@ public class MotionComparisonProbe : MonoBehaviour
         return true;
     }
 
-    private bool RenderCameraToPng(Camera captureCamera, string path)
+    private static string FormatContactValue(float value)
+    {
+        return float.IsNaN(value) || float.IsInfinity(value) ? string.Empty :
+            value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private float CaptureSoleMinimumY(Transform foot)
+    {
+        if (foot == null) return float.NaN;
+        float minimum = float.PositiveInfinity;
+        foreach (SkinnedMeshRenderer renderer in _animator.GetComponentsInChildren<SkinnedMeshRenderer>())
+        {
+            if (renderer.sharedMesh == null) continue;
+            Transform[] bones = renderer.bones;
+            BoneWeight[] weights = renderer.sharedMesh.boneWeights;
+            if (weights.Length == 0) continue;
+            Mesh baked = new Mesh();
+            try
+            {
+                renderer.BakeMesh(baked);
+                Vector3[] vertices = baked.vertices;
+                for (int i = 0; i < Mathf.Min(weights.Length, vertices.Length); i++)
+                {
+                    BoneWeight weight = weights[i];
+                    float footWeight = FootBoneWeight(bones, weight.boneIndex0, weight.weight0, foot) +
+                        FootBoneWeight(bones, weight.boneIndex1, weight.weight1, foot) +
+                        FootBoneWeight(bones, weight.boneIndex2, weight.weight2, foot) +
+                        FootBoneWeight(bones, weight.boneIndex3, weight.weight3, foot);
+                    if (footWeight >= 0.5f)
+                        minimum = Mathf.Min(minimum,
+                            renderer.transform.TransformPoint(vertices[i]).y);
+                }
+            }
+            finally { Destroy(baked); }
+        }
+        return float.IsPositiveInfinity(minimum) ? float.NaN : minimum;
+    }
+
+    private static float FootBoneWeight(Transform[] bones, int index, float weight, Transform foot)
+    {
+        return index >= 0 && index < bones.Length && bones[index] != null &&
+            (bones[index] == foot || bones[index].IsChildOf(foot)) ? weight : 0f;
+    }
+
+    private bool RenderCameraToPng(Camera captureCamera, string path, bool drawGroundReference)
     {
         RenderTexture previousRenderTexture = RenderTexture.active;
         RenderTexture renderTexture = RenderTexture.GetTemporary(screenshotWidth, screenshotHeight, 24, RenderTextureFormat.ARGB32);
@@ -3178,6 +3239,16 @@ public class MotionComparisonProbe : MonoBehaviour
 
             texture = new Texture2D(screenshotWidth, screenshotHeight, TextureFormat.RGB24, false);
             texture.ReadPixels(new Rect(0, 0, screenshotWidth, screenshotHeight), 0, 0);
+            if (drawGroundReference)
+            {
+                float viewportY = captureCamera.WorldToViewportPoint(Vector3.zero).y;
+                int pixelY = Mathf.RoundToInt(viewportY * screenshotHeight);
+                if (pixelY >= 0 && pixelY < screenshotHeight)
+                {
+                    for (int x = 0; x < screenshotWidth; x++)
+                        texture.SetPixel(x, pixelY, Color.yellow);
+                }
+            }
             texture.Apply();
             return MotionComparisonProbeReportWriter.WriteNonBlankScreenshotPng(path, texture);
         }

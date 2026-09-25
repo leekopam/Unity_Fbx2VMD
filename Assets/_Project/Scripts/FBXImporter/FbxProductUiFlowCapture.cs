@@ -21,8 +21,10 @@ namespace Fbx2Vmd.FBXImporter
         private const string InputFileName = "Snake Hip Hop Dance.fbx";
         private enum Phase
         {
-            BeforeImport, Importing, ImportReady, Preparing, PlayingCaptured,
-            Paused, Recording, RecordingCaptured, Error, ErrorCaptured, Finished
+            WaitingForResolution, BeforeImport, Importing, ImportReady, Preparing,
+            PlayingCaptured, Paused, PausedCaptured, Recording, RecordingCaptured,
+            RecordingStoppedCaptured, StoppedCaptured, WaitingForErrorResolution,
+            Error, ErrorCaptured, Finished
         }
 
         private sealed class SelectedFileBrowser : IFileBrowserService
@@ -39,18 +41,37 @@ namespace Fbx2Vmd.FBXImporter
         private readonly List<object> _events = new List<object>();
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private readonly bool _originalAutoRecord;
+        private readonly EditorWindow _gameView;
+        private readonly PropertyInfo _selectedSizeIndex;
+        private readonly MethodInfo _setCustomResolution;
+        private readonly int _originalSizeIndex;
+        private readonly int _screenWidth;
+        private readonly int _screenHeight;
         private Phase _phase;
         private bool _capturedPreparation;
         private string _videoPath = string.Empty;
         private DateTime _nextActionUtc;
 
         private FbxProductUiFlowCapture(FBXVmdPipeline pipeline, string directory,
-            string requestId)
+            string requestId, int screenWidth, int screenHeight)
         {
             _pipeline = pipeline;
             _directory = directory;
             _requestId = requestId;
             _originalAutoRecord = pipeline.ShouldRecordVmdAfterImport;
+            Type gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
+            _gameView = gameViewType != null
+                ? Resources.FindObjectsOfTypeAll(gameViewType).FirstOrDefault() as EditorWindow
+                : null;
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic;
+            _selectedSizeIndex = gameViewType?.GetProperty("selectedSizeIndex", flags);
+            _setCustomResolution = gameViewType?.GetMethod("SetCustomResolution", flags);
+            if (_gameView == null || _selectedSizeIndex == null || _setCustomResolution == null)
+                throw new InvalidOperationException("Game View 크기 설정을 찾지 못했습니다.");
+            _originalSizeIndex = (int)_selectedSizeIndex.GetValue(_gameView);
+            _screenWidth = screenWidth;
+            _screenHeight = screenHeight;
             StatePath = System.IO.Path.Combine(directory, "state.json");
         }
 
@@ -61,12 +82,15 @@ namespace Fbx2Vmd.FBXImporter
         internal string FailureMessage { get; private set; } = string.Empty;
 
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
+            int screenWidth, int screenHeight,
             out FbxProductUiFlowCapture capture, out string message)
         {
             capture = null;
             message = string.Empty;
             if (pipeline == null || !Guid.TryParse(requestId, out Guid requestGuid) ||
                 !Guid.TryParse(runId, out Guid runGuid) || !EditorApplication.isPlaying ||
+                screenWidth < 320 || screenWidth > 3840 ||
+                screenHeight < 320 || screenHeight > 3840 ||
                 SceneManager.GetActiveScene().path != "Assets/_Project/Scene/Main_Auto.unity" ||
                 pipeline.IsProcessing || pipeline.HasPreparedImportedMotion ||
                 Time.captureFramerate != 0 || EventSystem.current == null ||
@@ -92,13 +116,13 @@ namespace Fbx2Vmd.FBXImporter
             {
                 Directory.CreateDirectory(directory);
                 capture = new FbxProductUiFlowCapture(pipeline, directory,
-                    requestGuid.ToString("D"));
+                    requestGuid.ToString("D"), screenWidth, screenHeight);
                 // UI 수동 녹화와 자동 VMD 출력을 분리해 기존 사용자 파일을 보호함.
                 pipeline.ShouldRecordVmdAfterImport = false;
-                capture.Record("before_import", true);
+                capture.SetGameViewResolution();
                 capture._browser.Path = input;
                 capture._nextActionUtc = DateTime.UtcNow.AddMilliseconds(150);
-                capture._phase = Phase.BeforeImport;
+                capture._phase = Phase.WaitingForResolution;
                 return true;
             }
             catch (Exception error)
@@ -106,6 +130,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (capture != null)
                 {
                     capture._pipeline.ShouldRecordVmdAfterImport = capture._originalAutoRecord;
+                    capture.RestoreGameViewResolution();
                     capture = null;
                 }
                 message = $"F15 시작 실패: {error.Message}";
@@ -134,8 +159,15 @@ namespace Fbx2Vmd.FBXImporter
 
                 switch (_phase)
                 {
+                    case Phase.WaitingForResolution:
+                        if (Screen.width != _screenWidth || Screen.height != _screenHeight) return;
+                        Record("before_import", true);
+                        _nextActionUtc = DateTime.UtcNow.AddMilliseconds(150);
+                        _phase = Phase.BeforeImport;
+                        break;
                     case Phase.BeforeImport:
-                        if (DateTime.UtcNow < _nextActionUtc) return;
+                        if (DateTime.UtcNow < _nextActionUtc ||
+                            _pipeline.ImportController == null) return;
                         Click("FBX_Button", _browser.Path);
                         _phase = Phase.Importing;
                         break;
@@ -154,7 +186,7 @@ namespace Fbx2Vmd.FBXImporter
                     case Phase.Preparing:
                         if (_pipeline.IsPreparingImportedMotionCorrection && !_capturedPreparation)
                         {
-                            Record("correction_preparing", false);
+                            Record("correction_preparing", true);
                             _capturedPreparation = true;
                         }
                         if (!_pipeline.IsImportedMotionPlaying ||
@@ -171,7 +203,12 @@ namespace Fbx2Vmd.FBXImporter
                     case Phase.Paused:
                         if (_pipeline.SessionState != FBXVmdPipeline.FBXSessionState.PreviewPaused)
                             return;
-                        Record("paused", false);
+                        Record("paused", true);
+                        _nextActionUtc = DateTime.UtcNow.AddMilliseconds(150);
+                        _phase = Phase.PausedCaptured;
+                        break;
+                    case Phase.PausedCaptured:
+                        if (DateTime.UtcNow < _nextActionUtc) return;
                         string recordings = System.IO.Path.Combine(
                             Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
                             "Recordings");
@@ -195,9 +232,24 @@ namespace Fbx2Vmd.FBXImporter
                         if (DateTime.UtcNow < _nextActionUtc) return;
                         Click("FBX_Record_Button");
                         _videoPath = _pipeline.LastSessionMessage;
-                        Record("recording_stopped", false);
+                        Record("recording_stopped", true);
+                        _nextActionUtc = DateTime.UtcNow.AddMilliseconds(150);
+                        _phase = Phase.RecordingStoppedCaptured;
+                        break;
+                    case Phase.RecordingStoppedCaptured:
+                        if (DateTime.UtcNow < _nextActionUtc) return;
                         Click("FBX_Stop_Button");
-                        Record("stopped", false);
+                        Record("stopped", true);
+                        _nextActionUtc = DateTime.UtcNow.AddMilliseconds(150);
+                        _phase = Phase.StoppedCaptured;
+                        break;
+                    case Phase.StoppedCaptured:
+                        if (DateTime.UtcNow < _nextActionUtc) return;
+                        SetGameViewResolution();
+                        _phase = Phase.WaitingForErrorResolution;
+                        break;
+                    case Phase.WaitingForErrorResolution:
+                        if (Screen.width != _screenWidth || Screen.height != _screenHeight) return;
                         string root = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
                         string missing = System.IO.Path.Combine(root, "Assets", "Resources",
                             "Import_FBX", $"__e2e_missing_{_requestId}.fbx");
@@ -298,6 +350,8 @@ namespace Fbx2Vmd.FBXImporter
                 progress_text = fallbackText != null && fallbackText.enabled
                     ? fallbackText.text : progressText != null ? progressText.text : string.Empty,
                 progress = progressSlider != null ? (float?)progressSlider.value : null,
+                screen_width = Screen.width,
+                screen_height = Screen.height,
                 game_view_path = imagePath
             });
         }
@@ -319,6 +373,8 @@ namespace Fbx2Vmd.FBXImporter
                     model = _pipeline.targetCharacter != null
                         ? _pipeline.targetCharacter.name : string.Empty,
                     auto_vmd_recording_suppressed = true,
+                    requested_screen_width = _screenWidth,
+                    requested_screen_height = _screenHeight,
                     video_result_message = _videoPath,
                     events = _events
                 }, Formatting.Indented));
@@ -334,8 +390,23 @@ namespace Fbx2Vmd.FBXImporter
                 if (_pipeline.IsImportedMotionRecording)
                     _pipeline.TryStopImportedMotionRecording();
                 _pipeline.ShouldRecordVmdAfterImport = _originalAutoRecord;
+                RestoreGameViewResolution();
                 _phase = Phase.Finished;
             }
+        }
+
+        private void SetGameViewResolution()
+        {
+            if (Screen.width == _screenWidth && Screen.height == _screenHeight)
+                return;
+            _setCustomResolution.Invoke(_gameView,
+                new object[] { new Vector2(_screenWidth, _screenHeight),
+                    $"F15 {_screenWidth}x{_screenHeight}" });
+        }
+
+        private void RestoreGameViewResolution()
+        {
+            _selectedSizeIndex.SetValue(_gameView, _originalSizeIndex);
         }
 
         public void Dispose()

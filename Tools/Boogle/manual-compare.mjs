@@ -115,7 +115,7 @@ export async function compareManualCapture(summary, projectRoot) {
       manualFrame: Number(manualRow.recorderFrame),
       automaticFrame: Number(automaticRow.recorderFrame),
       manualClipTime: manualTime, automaticClipTime: automaticTime,
-      clipTime: manualTime, metrics,
+      clipTime: manualTime, clipName: manualRow.animationClipName, metrics,
       manualImage: manualImage || null, automaticImage: automaticImage || null,
       manualSideImage: manualSideImage || null,
       automaticSideImage: automaticSideImage || null });
@@ -136,7 +136,56 @@ export async function compareManualCapture(summary, projectRoot) {
           "49454e44ae426082")
         return { status: "BLOCKED", reason: `캡처 PNG 손상: ${file}` };
     }
+    if (!item.manualSideImage || !item.automaticSideImage)
+      return { status: "BLOCKED", reason: `측면 바닥·접점 자료 누락: ${item.sample}` };
+    const readContact = async (image) => {
+      const file = image.replace(/\.png$/i, ".csv");
+      if (file === image) throw new Error(`측면 접점 CSV 경로가 잘못되었습니다: ${image}`);
+      const rows = readCsv(await readFile(localEvidencePath(projectRoot, file), "utf8"));
+      const fields = ["groundY_m", "leftSoleMinY_m", "rightSoleMinY_m",
+        "leftGap_mm", "rightGap_mm"];
+      if (rows.length !== 1 || fields.some((field) =>
+        !rows[0][field]?.trim() || !Number.isFinite(Number(rows[0][field]))))
+        throw new Error(`측면 접점 수치가 불완전합니다: ${file}`);
+      return Object.fromEntries(fields.map((field) => [field, Number(rows[0][field])]));
+    };
+    try {
+      item.sideContact = { manual: await readContact(item.manualSideImage),
+        automatic: await readContact(item.automaticSideImage) };
+    } catch (error) {
+      return { status: "BLOCKED", reason: error.message };
+    }
   }
   return { status: "MANUAL_REVIEW_REQUIRED", frameCount: manual.frameCount,
-    comparedFrames: frames.length, frames, manual, automatic };
+    comparedFrames: frames.length,
+    sideGroundReference: "world Y=0 m; yellow line in side PNG",
+    sideContactBasis: "minimum world Y of vertices with foot/toe skin weight >= 0.5",
+    frames, manual, automatic };
+}
+
+export async function linkOriginalCapture(comparison, source, projectRoot) {
+  if (comparison.status !== "MANUAL_REVIEW_REQUIRED" ||
+      source.source_asset_path !== "Assets/Resources/Import_FBX/satisfaction_2.fbx" ||
+      source.clip_name !== comparison.frames[0]?.clipName ||
+      !Number.isFinite(source.clip_frame_rate) || source.clip_frame_rate <= 0)
+    return { status: "NOT_COMPARABLE", reason: "원본 FBX와 F13 클립의 출처·시간 기준 불일치" };
+  for (const item of comparison.frames) {
+    const expectedFrame = Math.round(item.clipTime * source.clip_frame_rate);
+    const sample = source.foot_frames?.find((frame) => frame?.actual_frame === expectedFrame);
+    if (!sample || Math.abs(sample.time_seconds - item.clipTime) >
+        1 / source.clip_frame_rate + 0.001 || !sample.source_view_path)
+      return { status: "NOT_COMPARABLE", reason: `원본 시각 자료 불일치: ${item.sample}` };
+    const file = localEvidencePath(projectRoot, sample.source_view_path);
+    const bytes = await readFile(file);
+    if (bytes.length < 20 || bytes.subarray(0, 8).toString("hex") !==
+        "89504e470d0a1a0a" || bytes.subarray(-8).toString("hex") !==
+        "49454e44ae426082")
+      return { status: "BLOCKED", reason: `원본 측면 PNG 손상: ${file}` };
+    item.originalFrame = expectedFrame;
+    item.originalClipTime = sample.time_seconds;
+    item.originalSideImage = sample.source_view_path;
+  }
+  comparison.original = { clipName: source.clip_name,
+    clipFrameRate: source.clip_frame_rate, sourceAssetPath: source.source_asset_path };
+  return comparison;
 }
