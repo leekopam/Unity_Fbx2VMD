@@ -254,25 +254,36 @@ namespace Fbx2Vmd.FBXImporter
             _capturePaths.Add(file);
         }
 
-        internal static void WriteGameViewPng(string file)
+        internal static void WriteGameViewPng(string file, int width = 1280,
+            int height = 720, bool excludeUi = false)
         {
             Camera camera = Camera.main;
             if (camera == null) throw new InvalidOperationException("Main Camera가 없습니다.");
-            var renderTexture = new RenderTexture(1280, 720, 24);
-            var texture = new Texture2D(1280, 720, TextureFormat.RGB24, false);
+            var renderTexture = new RenderTexture(width, height, 24);
+            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+            Canvas[] canvases = excludeUi
+                ? UnityEngine.Object.FindObjectsOfType<Canvas>(true) : Array.Empty<Canvas>();
+            bool[] canvasStates = new bool[canvases.Length];
             RenderTexture previousActive = RenderTexture.active;
             RenderTexture previousTarget = camera.targetTexture;
             try
             {
+                for (int index = 0; index < canvases.Length; index++)
+                {
+                    canvasStates[index] = canvases[index].enabled;
+                    canvases[index].enabled = false;
+                }
                 camera.targetTexture = renderTexture;
                 camera.Render();
                 RenderTexture.active = renderTexture;
-                texture.ReadPixels(new Rect(0, 0, 1280, 720), 0, 0);
+                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
                 File.WriteAllBytes(file, texture.EncodeToPNG());
             }
             finally
             {
+                for (int index = 0; index < canvases.Length; index++)
+                    if (canvases[index] != null) canvases[index].enabled = canvasStates[index];
                 camera.targetTexture = previousTarget;
                 RenderTexture.active = previousActive;
                 renderTexture.Release();

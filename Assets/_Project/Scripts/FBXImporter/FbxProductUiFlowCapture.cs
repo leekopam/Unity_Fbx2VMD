@@ -331,13 +331,18 @@ namespace Fbx2Vmd.FBXImporter
             Slider progressSlider = progress != null ? typeof(HumanoidSampleCode)
                 .GetField("_progressSlider", flags)?.GetValue(progress) as Slider : null;
             string imagePath = string.Empty;
+            string cameraPath = string.Empty;
             if (captureImage)
             {
                 string when = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff",
                     CultureInfo.InvariantCulture);
                 imagePath = System.IO.Path.Combine(_directory,
                     $"when-{when}_where-Main_Auto_who-auto_what-{step}_why-F15_how-GameView.png");
+                cameraPath = System.IO.Path.Combine(_directory,
+                    $"when-{when.Substring(0, 15)}_where-Auto_who-YYB_what-{step}_why-F15_how-cam.png");
                 ScreenCapture.CaptureScreenshot(imagePath);
+                FbxFullClipFootMetricsCapture.WriteGameViewPng(
+                    cameraPath, _screenWidth, _screenHeight, excludeUi: true);
             }
             _events.Add(new
             {
@@ -362,7 +367,8 @@ namespace Fbx2Vmd.FBXImporter
                 progress = progressSlider != null ? (float?)progressSlider.value : null,
                 screen_width = Screen.width,
                 screen_height = Screen.height,
-                game_view_path = imagePath
+                game_view_path = imagePath,
+                camera_only_path = cameraPath
             });
         }
 
