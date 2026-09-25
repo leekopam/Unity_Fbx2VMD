@@ -3014,21 +3014,7 @@ public class MotionComparisonProbe : MonoBehaviour
 
         _nonBlankScreenshotCount++;
         if (isSideView)
-        {
-            float leftY = CaptureSoleMinimumY(GetBone(HumanBodyBones.LeftFoot));
-            float rightY = CaptureSoleMinimumY(GetBone(HumanBodyBones.RightFoot));
-            const float groundY = 0f;
-            string contactCsv = "groundY_m,leftSoleMinY_m,rightSoleMinY_m,leftGap_mm,rightGap_mm" +
-                Environment.NewLine + string.Join(",", new[]
-                {
-                    groundY.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-                    FormatContactValue(leftY), FormatContactValue(rightY),
-                    FormatContactValue((leftY - groundY) * 1000f),
-                    FormatContactValue((rightY - groundY) * 1000f)
-                }) + Environment.NewLine;
-            System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(
-                outputPaths.ScreenshotPath, ".csv"), contactCsv);
-        }
+            WriteSideContactCsv(_animator, outputPaths.ScreenshotPath);
         MotionComparisonProbeReportWriter.AppendScreenshotIndexRow(
             _screenshotIndexPath,
             outputPaths.IndexRow);
@@ -3186,11 +3172,30 @@ public class MotionComparisonProbe : MonoBehaviour
             value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private float CaptureSoleMinimumY(Transform foot)
+    public static void WriteSideContactCsv(Animator animator, string screenshotPath)
+    {
+        float leftY = CaptureSoleMinimumY(animator,
+            animator.GetBoneTransform(HumanBodyBones.LeftFoot));
+        float rightY = CaptureSoleMinimumY(animator,
+            animator.GetBoneTransform(HumanBodyBones.RightFoot));
+        const float groundY = 0f;
+        string contactCsv = "groundY_m,leftSoleMinY_m,rightSoleMinY_m,leftGap_mm,rightGap_mm" +
+            Environment.NewLine + string.Join(",", new[]
+            {
+                groundY.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                FormatContactValue(leftY), FormatContactValue(rightY),
+                FormatContactValue((leftY - groundY) * 1000f),
+                FormatContactValue((rightY - groundY) * 1000f)
+            }) + Environment.NewLine;
+        System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(screenshotPath, ".csv"),
+            contactCsv);
+    }
+
+    private static float CaptureSoleMinimumY(Animator animator, Transform foot)
     {
         if (foot == null) return float.NaN;
         float minimum = float.PositiveInfinity;
-        foreach (SkinnedMeshRenderer renderer in _animator.GetComponentsInChildren<SkinnedMeshRenderer>())
+        foreach (SkinnedMeshRenderer renderer in animator.GetComponentsInChildren<SkinnedMeshRenderer>())
         {
             if (renderer.sharedMesh == null) continue;
             Transform[] bones = renderer.bones;
