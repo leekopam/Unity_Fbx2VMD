@@ -560,6 +560,8 @@ async function executePlayback(runId) {
           const labelRows = ["from_frame,to_frame,side,contact_label,motion_label,reviewer,notes",
             ...intervals.flatMap(([start, end]) => ["left", "right"].map((side) =>
               `${start},${end},${side},,,,`))];
+          await writeFile(path.join(path.dirname(statePath), "human-labels-template.csv"),
+            `${labelRows.join("\n")}\n`, { flag: "wx" });
           await writeFile(humanLabelsPath, `${labelRows.join("\n")}\n`, { flag: "wx" });
           const footEvidenceValid = footFrames.length === expectedFootFrames.length &&
             footFrames.every((frame, index) => frame?.requested_frame === expectedFootFrames[index] &&
@@ -888,6 +890,8 @@ async function executeFootLive(runId) {
           for (const [first, last] of ranges)
             for (const side of ["left", "right"])
               labels.push(`${first},${last},${side},,,,`);
+          await writeFile(path.join(allowedRoot, "human-labels-template.csv"),
+            `${labels.join("\n")}\n`, { flag: "wx" });
           await writeFile(labelsPath, `${labels.join("\n")}\n`, { flag: "wx" });
           result = valid ? { status: "MANUAL_REVIEW_REQUIRED" } :
             { status: "FAIL", failureKind: "test_failure" };
@@ -950,6 +954,7 @@ async function executeFullClip(runId, alternateModel = false) {
   let enteredPlay = false;
   let result = { status: "INFRA_ERROR" };
   let failureStage = "preflight";
+  let humanLabelsPath = null;
   try {
     await access(alternateModel
       ? path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx") : fbxPath);
@@ -1020,7 +1025,7 @@ async function executeFullClip(runId, alternateModel = false) {
               rows.slice(1).every((row, index) => {
                 const cells = row.split(",");
                 const frame = Math.floor(index / 2);
-                return cells.length === 39 && Number(cells[0]) === frame &&
+                return cells.length === 47 && Number(cells[0]) === frame &&
                   cells[3] === (index % 2 ? "right" : "left") &&
                   Math.abs(Number(cells[1]) - frame / state.clip_frame_rate) * 1000 <=
                     500 / state.clip_frame_rate + 0.02 &&
@@ -1028,7 +1033,22 @@ async function executeFullClip(runId, alternateModel = false) {
               });
             result = valid ? { status: "MANUAL_REVIEW_REQUIRED" } :
               { status: "FAIL", failureKind: "test_failure" };
-            if (valid) failureStage = "";
+            if (valid) {
+              failureStage = "";
+              const ranges = [];
+              for (const frame of state.review_frames || []) {
+                const last = ranges.at(-1);
+                if (last && frame === last[1] + 1) last[1] = frame;
+                else ranges.push([frame, frame]);
+              }
+              const labels = ["from_frame,to_frame,side,contact_label,motion_label,reviewer,notes",
+                ...ranges.flatMap(([first, last]) => ["left", "right"].map((side) =>
+                  `${first},${last},${side},,,,`))];
+              humanLabelsPath = path.join(allowedRoot, "human-labels.csv");
+              await writeFile(path.join(allowedRoot, "human-labels-template.csv"),
+                `${labels.join("\n")}\n`, { flag: "wx" });
+              await writeFile(humanLabelsPath, `${labels.join("\n")}\n`, { flag: "wx" });
+            }
           }
         }
       }
@@ -1064,6 +1084,7 @@ async function executeFullClip(runId, alternateModel = false) {
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, result: result.status, failureStage, steps, before, after,
       unityStatus, statePath: unityStatus?.full_clip_state_path || null,
+      humanLabelsPath,
       processedFrames: state?.processed_frames ?? null, rowCount: state?.row_count ?? null,
       nativeSkinningProcessedFrames: state?.native_skinning_processed_frames ?? null,
       nativeSkinningTotalFrames: state?.native_skinning_total_frames ?? null,

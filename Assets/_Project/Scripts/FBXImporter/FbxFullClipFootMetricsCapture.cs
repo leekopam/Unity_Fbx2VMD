@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -40,6 +41,9 @@ namespace Fbx2Vmd.FBXImporter
         private readonly string[] _previousFrontRenderer = new string[2];
         private readonly Quaternion[] _previousFootRotation = new Quaternion[2];
         private readonly bool[] _hasPrevious = new bool[2];
+        private IReadOnlyList<HumanoidFootContactSample> _sourceSamples;
+        private IReadOnlyList<HumanoidFootContactSample> _targetSamples;
+        private float _sourceHumanScale;
         private Phase _phase = Phase.Importing;
         private int _frame;
         private int _lastFrame;
@@ -186,13 +190,23 @@ namespace Fbx2Vmd.FBXImporter
             _toes[1] = _animator?.GetBoneTransform(HumanBodyBones.RightToes);
             _frameRate = _pipeline.ImportedMotionFrameRate;
             _lastFrame = _pipeline.ImportedMotionLastFrameIndex;
+            var stabilizer = _controller == null ? null :
+                (EditorHumanoidFootContactStabilizer)typeof(HumanoidMotionPlaybackController)
+                    .GetField("_footContactStabilizer", BindingFlags.Instance |
+                        BindingFlags.NonPublic)?.GetValue(_controller);
+            _sourceSamples = stabilizer?.SourceSamples;
+            _targetSamples = stabilizer?.TargetSamples;
+            _sourceHumanScale = stabilizer?.SourceHumanScale ?? 0f;
             if (_controller == null || _hips == null || _knees.Any(item => item == null) ||
                 _feet.Any(item => item == null) || _toes.Any(item => item == null) ||
-                !(_frameRate > 0f) || _lastFrame < 1)
+                !(_frameRate > 0f) || _lastFrame < 1 ||
+                _sourceSamples == null || _sourceSamples.Count <= _lastFrame ||
+                _targetSamples == null || _targetSamples.Count <= _lastFrame ||
+                !(_sourceHumanScale > 0f))
                 throw new InvalidOperationException($"{_caseId} 전체 클립 또는 하체 본이 준비되지 않았습니다.");
 
             _writer = new StreamWriter(CsvPath, false, new System.Text.UTF8Encoding(false));
-            _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m");
+            _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps");
         }
 
         private void CaptureFrame(int frame)
@@ -255,6 +269,18 @@ namespace Fbx2Vmd.FBXImporter
             _hasPrevious[side] = foot.has_ground;
             Vector3 angles = bone.localEulerAngles;
             Vector3 position = bone.position;
+            HumanoidFootContactSample source = _sourceSamples[frame];
+            Vector3 sourceFoot = side == 0 ? source.LeftFoot : source.RightFoot;
+            Vector3 sourceToes = side == 0 ? source.LeftToes : source.RightToes;
+            HumanoidFootContactSample previousSource = _sourceSamples[Mathf.Max(0, frame - 1)];
+            Vector3 previousSourceFoot = side == 0 ? previousSource.LeftFoot : previousSource.RightFoot;
+            Vector3 previousSourceToes = side == 0 ? previousSource.LeftToes : previousSource.RightToes;
+            HumanoidFootContactSample target = _targetSamples[frame];
+            Vector3 targetFoot = side == 0 ? target.LeftFoot : target.RightFoot;
+            Vector3 targetToes = side == 0 ? target.LeftToes : target.RightToes;
+            HumanoidFootContactSample previousTarget = _targetSamples[Mathf.Max(0, frame - 1)];
+            Vector3 previousTargetFoot = side == 0 ? previousTarget.LeftFoot : previousTarget.RightFoot;
+            Vector3 previousTargetToes = side == 0 ? previousTarget.LeftToes : previousTarget.RightToes;
             object[] values =
             {
                 frame, time, timeError, side == 0 ? "left" : "right", status, foot.has_ground,
@@ -268,7 +294,13 @@ namespace Fbx2Vmd.FBXImporter
                 frontStepValid ? (object)frontStep : string.Empty, rotationStep,
                 position.x, position.y, position.z, angles.x, angles.y, angles.z,
                 _toes[side].position.y, _knees[side].position.y,
-                _hips.position.y, _animator.transform.position.y
+                _hips.position.y, _animator.transform.position.y,
+                sourceFoot.y, sourceToes.y,
+                frame > 0 ? (object)(Vector3.Distance(sourceFoot, previousSourceFoot) * _frameRate) : string.Empty,
+                frame > 0 ? (object)(Vector3.Distance(sourceToes, previousSourceToes) * _frameRate) : string.Empty,
+                targetFoot.y, targetToes.y,
+                frame > 0 ? (object)(Vector3.Distance(targetFoot, previousTargetFoot) * _frameRate) : string.Empty,
+                frame > 0 ? (object)(Vector3.Distance(targetToes, previousTargetToes) * _frameRate) : string.Empty
             };
             if (values.OfType<float>().Any(value => !IsFinite(value)))
                 throw new InvalidOperationException($"{_caseId} {frame}프레임 비유한 하체 수치");
@@ -301,6 +333,8 @@ namespace Fbx2Vmd.FBXImporter
                     native_skinning_total_frames =
                         _pipeline?.ImportedMotionCorrectionTotalFrameCount ?? 0,
                     clip_frame_rate = _frameRate, last_frame = _lastFrame,
+                    source_human_scale = _sourceHumanScale,
+                    stage_basis = "source=FBX Humanoid world; retarget=initial target pose before contact correction; sole and foot=final evaluated pose; Game View mesh not presented per frame",
                     processed_frames = _frame, row_count = _rowCount,
                     csv_path = CsvPath,
                     maximum_time_error_ms = _maximumTimeErrorMilliseconds,

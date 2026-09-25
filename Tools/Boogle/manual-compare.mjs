@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-function readCsv(source) {
+export function readCsv(source) {
   const rows = [];
   let row = [];
   let value = "";
@@ -24,8 +24,10 @@ function readCsv(source) {
   if (value || row.length) { row.push(value); rows.push(row); }
   const [header, ...records] = rows;
   if (!header?.length) throw new Error("CSV 헤더가 없습니다.");
-  return records.map((fields) => Object.fromEntries(header.map((key, index) =>
-    [key, fields[index] ?? ""])));
+  return records.map((fields) => {
+    if (fields.length !== header.length) throw new Error("CSV 열 개수가 일치하지 않습니다.");
+    return Object.fromEntries(header.map((key, index) => [key, fields[index]]));
+  });
 }
 
 function localEvidencePath(projectRoot, relativePath) {

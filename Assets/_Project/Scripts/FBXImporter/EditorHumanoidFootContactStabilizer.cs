@@ -37,6 +37,9 @@ namespace Fbx2Vmd.FBXImporter
         internal IReadOnlyList<HumanoidFootContactSample> SourceSamples { get; private set; } =
             Array.Empty<HumanoidFootContactSample>();
 
+        internal IReadOnlyList<HumanoidFootContactSample> TargetSamples { get; private set; } =
+            Array.Empty<HumanoidFootContactSample>();
+
         internal float SourceHumanScale { get; private set; }
 
         internal void Initialize(
@@ -154,6 +157,7 @@ namespace Fbx2Vmd.FBXImporter
                     targetAnimator.humanScale);
                 // 이미 평가한 원본 궤적을 정밀 밑창 접지에서도 재사용함.
                 SourceSamples = Array.AsReadOnly(sourceSamples);
+                TargetSamples = Array.AsReadOnly(targetSamples);
                 SourceHumanScale = sourceReference.SourceHumanScale;
             }
             finally
@@ -255,6 +259,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             _plan = null;
             SourceSamples = Array.Empty<HumanoidFootContactSample>();
+            TargetSamples = Array.Empty<HumanoidFootContactSample>();
             SourceHumanScale = 0f;
             _targetRoot = null;
             _leftBaseRootSpaceFootPositions = Array.Empty<Vector3>();
