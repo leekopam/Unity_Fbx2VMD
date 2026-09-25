@@ -1320,6 +1320,10 @@ async function executeManualComparison(runId) {
   ].map((file) => readFile(file, "utf8")));
   const guid = (source) => source.match(/^guid:\s*([0-9a-f]{32})/m)?.[1] || null;
   const avatar = (source) => source.match(/^\s*m_Avatar: \{fileID: \d+(?:, guid: ([0-9a-f]{32}))?/m)?.[1] || null;
+  const effectiveAvatar = (scene, prefab, prefabGuid) =>
+    scene.match(new RegExp(`- target: \\{fileID: \\d+, guid: ${prefabGuid}, type: \\d+\\}` +
+      "\\s+propertyPath: m_Avatar\\s+value:\\s+objectReference: " +
+      "\\{fileID: \\d+, guid: ([0-9a-f]{32})"))?.[1] || avatar(prefab);
   const camera = (source) => {
     const blocks = source.split(/^--- !u!/m);
     const gameObject = blocks.find((block) => /^1 &\d+/m.test(block) &&
@@ -1340,13 +1344,15 @@ async function executeManualComparison(runId) {
     };
   };
   const manual = { prefabGuid: guid(manualMeta),
-    serializedAvatarGuid: avatar(manualPrefab), camera: camera(manualScene) };
+    avatarGuid: effectiveAvatar(manualScene, manualPrefab, guid(manualMeta)),
+    camera: camera(manualScene) };
   const automatic = { prefabGuid: guid(automaticMeta),
-    serializedAvatarGuid: avatar(automaticPrefab), camera: camera(automaticScene) };
+    avatarGuid: effectiveAvatar(automaticScene, automaticPrefab, guid(automaticMeta)),
+    camera: camera(automaticScene) };
   manual.sceneContainsPrefab = manualScene.includes(`guid: ${manual.prefabGuid}`);
   automatic.sceneContainsPrefab = automaticScene.includes(`guid: ${automatic.prefabGuid}`);
   const differences = [];
-  for (const field of ["prefabGuid", "serializedAvatarGuid", "camera",
+  for (const field of ["prefabGuid", "avatarGuid", "camera",
     "sceneContainsPrefab"]) {
     if (!manual[field] || !automatic[field] ||
         JSON.stringify(manual[field]) !== JSON.stringify(automatic[field]))
