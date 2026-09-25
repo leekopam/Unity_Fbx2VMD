@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, copyFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compareManualCapture, readCsv } from "./manual-compare.mjs";
@@ -552,7 +552,7 @@ async function executePreselection(runId) {
   return { ...result, requestId };
 }
 
-async function executePlayback(runId) {
+async function executePlayback(runId, captureFrames = null, sideCaptureFrames = null) {
   const sessionRoot = path.join(evidenceRoot, "playback-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
   const requestId = randomUUID();
@@ -572,7 +572,9 @@ async function executePlayback(runId) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
       await writeFile(requestPath, JSON.stringify({
-        request_id: requestId, command: playbackCommand, requested_command: playbackCommand
+        request_id: requestId, command: playbackCommand, requested_command: playbackCommand,
+        ...(captureFrames ? { capture_frames: captureFrames } : {}),
+        ...(sideCaptureFrames ? { side_capture_frames: sideCaptureFrames } : {})
       }), { flag: "wx" });
       submitted = true;
       running = true;
@@ -607,7 +609,7 @@ async function executePlayback(runId) {
           const state = JSON.parse(await readFile(statePath, "utf8"));
           const captures = [state.first_capture_path, state.second_capture_path,
             state.repeat_capture_path];
-          const expectedFootFrames = [0, 165, 166, 167, 543, 544, 545, 789, 790, 791,
+          const expectedFootFrames = captureFrames || [0, 165, 166, 167, 543, 544, 545, 789, 790, 791,
             1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333,
             2404, 2405, 2406, 8019, 8020, 8021, 11615, 11616, 11617];
           const footFrames = state.foot_frames || [];
@@ -639,8 +641,12 @@ async function executePlayback(runId) {
               Math.round((sample?.time_seconds || 0) * 30)].join(","))];
           await writeFile(frameMapPath, `${frameRows.join("\n")}\n`);
           humanLabelsPath = path.join(path.dirname(statePath), "human-labels.csv");
-          const intervals = [[0, 0], [165, 167], [543, 545], [789, 791], [1323, 1333],
-            [2404, 2406], [8019, 8021], [11615, 11617]];
+          const intervals = [];
+          for (const frame of expectedFootFrames) {
+            const last = intervals.at(-1);
+            if (last && frame === last[1] + 1) last[1] = frame;
+            else intervals.push([frame, frame]);
+          }
           const labelRows = ["from_frame,to_frame,side,contact_label,motion_label,reviewer,notes",
             ...intervals.flatMap(([start, end]) => ["left", "right"].map((side) =>
               `${start},${end},${side},,,,`))];
@@ -721,12 +727,14 @@ async function executePlayback(runId) {
               state.source_asset_path === "Assets/Resources/Import_FBX/satisfaction_2.fbx" &&
               state.model && state.avatar && state.clip_name &&
               state.importer_clip_count > 0 && state.importer_animation_type === "Human" &&
-              state.last_frame >= 1333 && state.clip_frame_rate > 0 &&
+              state.last_frame >= expectedFootFrames.at(-1) &&
+              JSON.stringify(state.capture_frames) === JSON.stringify(expectedFootFrames) &&
+              state.clip_frame_rate > 0 &&
               state.repeat_max_position_delta_mm <= 0.5 &&
               state.repeat_max_rotation_delta_degrees <= 0.5 &&
               state.repeat_max_muscle_delta <= 0.0001 && footEvidenceValid &&
               stageEvidenceValid &&
-              sideFrames.join(",") === "0,166,544" &&
+              sideFrames.join(",") === (sideCaptureFrames || [0, 166, 544]).join(",") &&
               typeof state.apply_root_motion === "boolean" &&
               typeof state.lock_root_height_y === "boolean" &&
               typeof state.lock_root_position_xz === "boolean" && completePngs) {
@@ -765,7 +773,226 @@ async function executePlayback(runId) {
       failureStage, status, csvPath, frameMapPath, humanLabelsPath, f11Metrics
     }, null, 2));
   }
-  return { ...result, requestId };
+  return { ...result, requestId, terminal: !running };
+}
+
+async function loadContactSource(directory) {
+  const root = path.join(evidenceRoot, "full-clip");
+  const relative = path.relative(root, directory);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative) ||
+      relative.split(path.sep).length !== 2 ||
+      path.relative(await realpath(root), await realpath(directory)) !== relative)
+    throw new Error("47열 F10 실행 폴더 경로가 필요합니다.");
+  const [runId, requestId] = relative.split(path.sep);
+  const [stateSource, csv, eventsSource, sessionSource, sdkSource] = await Promise.all([
+    readFile(path.join(directory, "state.json"), "utf8"),
+    readFile(path.join(directory, "all-frames.csv"), "utf8"),
+    readFile(path.join(directory, "contact-events.json"), "utf8"),
+    readFile(path.join(evidenceRoot, "full-clip-runs", runId, "manifest.json"), "utf8"),
+    readFile(path.join(evidenceRoot, "projects", projectId, "runs", runId,
+      "run-manifest.json"), "utf8")
+  ]);
+  const state = JSON.parse(stateSource);
+  const events = JSON.parse(eventsSource);
+  const session = JSON.parse(sessionSource);
+  const sdk = JSON.parse(sdkSource);
+  const sha256 = value => createHash("sha256").update(value).digest("hex");
+  if (state.status !== "metrics_complete_review_required" ||
+      events.status !== "MANUAL_REVIEW_REQUIRED" ||
+      events.input?.csv_sha256 !== sha256(csv) ||
+      events.input?.state_sha256 !== sha256(stateSource) ||
+      events.input?.last_frame !== state.last_frame ||
+      session.runId !== runId || session.requestId !== requestId ||
+      session.result !== "MANUAL_REVIEW_REQUIRED" || sdk.runId !== runId)
+    throw new Error("P1 결과·F10 계측·실행 ID가 일치하지 않습니다.");
+  return { directory, runId, requestId, state, events, csv, sdk };
+}
+
+function planContactFrames(source) {
+  const limit = source.state.last_frame;
+  const windows = [
+    { id: "known-166", side: "both", points: [166], radius: 1 },
+    { id: "known-544", side: "both", points: [544], radius: 1 },
+    { id: "known-790", side: "both", points: [790], radius: 1 },
+    { id: "known-1324-1332", side: "both",
+      points: Array.from({ length: 9 }, (_, index) => 1324 + index), radius: 1 },
+    { id: "known-8020", side: "both", points: [8020], radius: 1 }
+  ];
+  for (const id of source.events.review_queue.slice(0, 3)) {
+    const event = source.events.events.find(item => item.id === id);
+    if (!event || !["left", "right"].includes(event.side) ||
+        !Number.isInteger(event.start_frame) || !Number.isInteger(event.end_frame))
+      throw new Error(`P1 사건 ID가 유효하지 않습니다: ${id}`);
+    windows.push({ id, side: event.side,
+      points: [event.start_frame, event.representative_frame, event.end_frame],
+      radius: 2 });
+  }
+  const normal = source.events.segments.find(item =>
+    item.side === "left" && item.source_classification === "support" &&
+    item.final_measurements?.source_final_conflict_frames === 0 &&
+    item.end_frame - item.start_frame >= 5 &&
+    !windows.some(window => window.points.some(point =>
+      Math.abs(point - item.representative_frame) < 20)) &&
+    source.events.segments.some(other => other.side === "right" &&
+      other.source_classification === "support" &&
+      other.start_frame <= item.representative_frame &&
+      other.end_frame >= item.representative_frame));
+  if (normal) windows.push({ id: "normal-control-candidate", side: "both",
+    points: [normal.representative_frame], radius: 1 });
+  for (const window of windows)
+    window.frames = [...new Set(window.points.flatMap(point =>
+      Array.from({ length: window.radius * 2 + 1 }, (_, offset) =>
+        point + offset - window.radius).filter(frame => frame >= 0 && frame <= limit)))].sort(
+      (a, b) => a - b);
+  const frames = [...new Set(windows.flatMap(window => window.frames))].sort((a, b) => a - b);
+  if (frames.length > 100 || frames.at(-1) > limit)
+    throw new Error("국소 캡처 프레임 수 또는 클립 범위가 유효하지 않습니다.");
+  return { windows, frames };
+}
+
+function matchesCaptureCamera(sourceCamera, sample) {
+  const close = (left, right, tolerance = 0.0001) =>
+    Number.isFinite(left) && Math.abs(left - right) <= tolerance;
+  return ["x", "y", "z"].every((axis, index) =>
+    close(sample.camera_position?.[axis], sourceCamera.position?.[index])) &&
+    ["x", "y", "z", "w"].every((axis, index) =>
+      close(sample.camera_rotation?.[axis], sourceCamera.rotation?.[index])) &&
+    sample.camera_orthographic === sourceCamera.orthographic &&
+    close(sample.camera_orthographic_size, sourceCamera.orthographicSize) &&
+    close(sample.camera_field_of_view, sourceCamera.fieldOfView);
+}
+
+async function executeContactCapture(runId, source, inputHashes) {
+  const sessionRoot = path.join(evidenceRoot, "contact-capture-runs", runId);
+  await mkdir(sessionRoot, { recursive: true });
+  const plan = planContactFrames(source);
+  const steps = [];
+  const sdkFingerprint = value => `sha256:${createHash("sha256").update(value).digest("hex")}`;
+  if (!Object.entries(inputHashes).every(([key, value]) =>
+    source.sdk.inputConditions?.[key] === sdkFingerprint(value))) {
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, sourceRunId: source.runId, result: "NOT_COMPARABLE",
+      reason: "FBX·모델·씬 입력 해시가 F10 수집 때와 다름", plan
+    }, null, 2));
+    return { status: "NOT_COMPARABLE" };
+  }
+  const vmdBefore = await hashFile(outputPath);
+  const metaBefore = await hashFile(`${outputPath}.meta`);
+  let before = null;
+  let after = null;
+  let enteredPlay = false;
+  let playback = null;
+  let index = null;
+  let environmentRestored = null;
+  let outputsRestored = null;
+  let result = { status: "INFRA_ERROR" };
+  try {
+    const baseline = await executeControl(runId, environmentCommand);
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    before = baseline.state;
+    if (baseline.status !== "PASS" || !before || before.play_mode ||
+        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
+        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.has_prepared_motion || before.is_recording || before.capture_framerate !== 0) {
+      result = { status: "BLOCKED" };
+    } else {
+      const enter = await executeControl(runId, enterPlayCommand);
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      enteredPlay = enter.status === "PASS";
+      if (!enteredPlay) result = { status: enter.status };
+      else {
+        const sideFrames = [...new Set(plan.windows.map(window =>
+          window.id === "known-1324-1332" ? 1328 :
+            window.id.startsWith("known-") ? window.points[0] :
+              window.id === "normal-control-candidate" ? window.points[0] :
+                window.points[1]))].sort((a, b) => a - b);
+        playback = await executePlayback(runId, plan.frames, sideFrames);
+        steps.push({ name: "capture", status: playback.status, requestId: playback.requestId });
+        result = { status: playback.status };
+        if (playback.status === "MANUAL_REVIEW_REQUIRED") {
+          const captureManifest = JSON.parse(await readFile(path.join(evidenceRoot,
+            "playback-runs", runId, "manifest.json"), "utf8"));
+          const captureStatePath = path.resolve(captureManifest.status?.playback_state_path || "");
+          const captureRoot = path.join(evidenceRoot, "playback", playback.requestId);
+          if (path.relative(captureRoot, captureStatePath) !== "state.json")
+            throw new Error("국소 화면 상태 파일이 실행 폴더 밖에 있습니다.");
+          const capture = JSON.parse(await readFile(captureStatePath, "utf8"));
+          const samples = new Map(capture.foot_frames.map((sample, sampleIndex) =>
+            [sample.actual_frame, { sample, sampleIndex }]));
+          if (capture.foot_frames.length !== plan.frames.length ||
+              !plan.frames.every(frame => samples.has(frame) &&
+                matchesCaptureCamera(source.state.camera, samples.get(frame).sample)))
+            throw new Error("국소 프레임 또는 F10 카메라 조건이 일치하지 않습니다.");
+          const csvRows = readCsv(source.csv);
+          index = { status: "MANUAL_REVIEW_REQUIRED", source_run_id: source.runId,
+            source_request_id: source.requestId, capture_run_id: runId,
+            capture_request_id: playback.requestId,
+            source_csv_sha256: source.events.input.csv_sha256,
+            capture_state_path: captureStatePath, camera: source.state.camera,
+            stages: ["source", "retarget", "f11_before_foot_stabilization",
+              "f11_after_foot_stabilization", "final_sole", "game_view"],
+            windows: plan.windows.map(window => ({ id: window.id, side: window.side,
+              frames: window.frames.map(frame => {
+                const { sample, sampleIndex } = samples.get(frame);
+                const sides = window.side === "both" ? ["left", "right"] : [window.side];
+                if (!sides.every(side => {
+                  const row = csvRows[frame * 2 + (side === "left" ? 0 : 1)];
+                  return Number(row?.frame) === frame && row.side === side &&
+                    Math.abs(Number(row.time_s) - sample.time_seconds) <= 1 / 60 + 0.001;
+                })) throw new Error(`원본·국소 캡처 시간 또는 발 대응 불일치: ${frame}`);
+                return { frame, time_s: sample.time_seconds,
+                  source_csv_rows: Object.fromEntries(sides.map(side =>
+                    [side, frame * 2 + (side === "left" ? 2 : 3)])),
+                  capture_frame_index: sampleIndex,
+                  game_view_path: sample.game_view_path,
+                  side_view_path: sample.side_view_path || null,
+                  grounding_status: sample.grounding_status,
+                  support_roles: Object.fromEntries(sides.map(side =>
+                    [side, sample[side]?.support_role])),
+                  source_and_retarget: Object.fromEntries(sides.map(side => {
+                    const row = csvRows[frame * 2 + (side === "left" ? 0 : 1)];
+                    return [side, { source_foot_y_m: Number(row.source_foot_y_m),
+                      source_toes_y_m: Number(row.source_toes_y_m),
+                      retarget_foot_y_m: Number(row.retarget_foot_y_m),
+                      retarget_toes_y_m: Number(row.retarget_toes_y_m) }];
+                  })) };
+              }) })) };
+        }
+      }
+    }
+  } catch (error) {
+    result = { status: "INFRA_ERROR", message: error.message };
+  } finally {
+    if (enteredPlay && (!playback || playback.terminal)) {
+      const exit = await executeControl(runId, exitPlayCommand);
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
+    }
+    if (!playback || playback.terminal) {
+      const final = await executeControl(runId, environmentCommand);
+      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      after = final.state;
+      environmentRestored = !!before && final.status === "PASS" &&
+        environmentFields.every(field =>
+          JSON.stringify(before[field]) === JSON.stringify(after?.[field]));
+      outputsRestored = vmdBefore === await hashFile(outputPath) &&
+        metaBefore === await hashFile(`${outputPath}.meta`);
+      if (!environmentRestored || !outputsRestored)
+        result = { status: "INFRA_ERROR", message: "환경 또는 기존 출력 복원 불일치" };
+    }
+    if (index && result.status === "MANUAL_REVIEW_REQUIRED")
+      await writeFile(path.join(source.directory, `contact-capture-${runId}.json`),
+        JSON.stringify(index, null, 2));
+    await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
+      runId, sourceRunId: source.runId, sourceRequestId: source.requestId,
+      result: result.status, steps, before, after, environmentRestored,
+      outputsRestored, plan,
+      captureRequestId: playback?.requestId || null,
+      indexPath: index && result.status === "MANUAL_REVIEW_REQUIRED"
+        ? path.join(source.directory, `contact-capture-${runId}.json`) : null
+    }, null, 2));
+  }
+  return result;
 }
 
 async function executeInvalidInput(runId) {
@@ -1406,9 +1633,9 @@ async function executeManualComparison(runId) {
   const automaticPrefabPath = path.join(projectRoot,
     "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku.prefab");
   const [manualScene, automaticScene, manualPrefab, automaticPrefab,
-    manualMeta, automaticMeta] = await Promise.all([
+    manualMeta, automaticMeta, fbxMeta] = await Promise.all([
     manualScenePath, automaticScenePath, manualPrefabPath, automaticPrefabPath,
-    `${manualPrefabPath}.meta`, `${automaticPrefabPath}.meta`
+    `${manualPrefabPath}.meta`, `${automaticPrefabPath}.meta`, `${fbxPath}.meta`
   ].map((file) => readFile(file, "utf8")));
   const guid = (source) => source.match(/^guid:\s*([0-9a-f]{32})/m)?.[1] || null;
   const avatar = (source) => source.match(/^\s*m_Avatar: \{fileID: \d+(?:, guid: ([0-9a-f]{32}))?/m)?.[1] || null;
@@ -1416,6 +1643,25 @@ async function executeManualComparison(runId) {
     scene.match(new RegExp(`- target: \\{fileID: \\d+, guid: ${prefabGuid}, type: \\d+\\}` +
       "\\s+propertyPath: m_Avatar\\s+value:\\s+objectReference: " +
       "\\{fileID: \\d+, guid: ([0-9a-f]{32})"))?.[1] || avatar(prefab);
+  const sceneOverride = (scene, prefabGuid, property) =>
+    scene.match(new RegExp(`- target: \\{fileID: \\d+, guid: ${prefabGuid}, type: \\d+\\}` +
+      `\\s+propertyPath: ${property}\\s+value:([^\\n]*)` +
+      "\\s+objectReference: \\{fileID: \\d+(?:, guid: ([0-9a-f]{32}))?")) || null;
+  const animator = (scene, prefab, prefabGuid) => ({
+    applyRootMotion: sceneOverride(scene, prefabGuid, "m_ApplyRootMotion")?.[1]?.trim() ||
+      prefab.match(/^\s*m_ApplyRootMotion: (\d+)/m)?.[1] || null,
+    controllerGuid: sceneOverride(scene, prefabGuid, "m_Controller")?.[2] ||
+      prefab.match(/^\s*m_Controller: \{fileID: \d+, guid: ([0-9a-f]{32})/m)?.[1] || null
+  });
+  const clipRootTransform = Object.fromEntries([
+    "keepOriginalOrientation", "keepOriginalPositionY", "keepOriginalPositionXZ",
+    "heightFromFeet", "rootMotionBoneName"
+  ].map(field => [field, fbxMeta.match(new RegExp(`^\\s*${field}:([^\\n]*)`, "m"))?.[1]?.trim() ?? null]));
+  const groundingFields = ["smoothRetargetGrounding", "GroundingSmoothing", "GroundingDeadZone",
+    "_shouldFreezeRootYAfterInitialGrounding", "rejectRendererGroundingOutliers",
+    "smoothLateVisualGroundingCorrection", "enableFinalIkFootGroundingExperiment"];
+  const automaticGrounding = Object.fromEntries(groundingFields.map(field =>
+    [field, automaticScene.match(new RegExp(`^\\s*${field}:([^\\n]*)`, "m"))?.[1]?.trim() ?? null]));
   const camera = (source) => {
     const blocks = source.split(/^--- !u!/m);
     const gameObject = blocks.find((block) => /^1 &\d+/m.test(block) &&
@@ -1437,10 +1683,16 @@ async function executeManualComparison(runId) {
   };
   const manual = { prefabGuid: guid(manualMeta),
     avatarGuid: effectiveAvatar(manualScene, manualPrefab, guid(manualMeta)),
-    camera: camera(manualScene) };
+    camera: camera(manualScene),
+    animator: animator(manualScene, manualPrefab, guid(manualMeta)),
+    rootTransform: clipRootTransform,
+    grounding: { path: "manual_animator" } };
   const automatic = { prefabGuid: guid(automaticMeta),
     avatarGuid: effectiveAvatar(automaticScene, automaticPrefab, guid(automaticMeta)),
-    camera: camera(automaticScene) };
+    camera: camera(automaticScene),
+    animator: animator(automaticScene, automaticPrefab, guid(automaticMeta)),
+    rootTransform: clipRootTransform,
+    grounding: { path: "fbx_pipeline", settings: automaticGrounding } };
   manual.sceneContainsPrefab = manualScene.includes(`guid: ${manual.prefabGuid}`);
   automatic.sceneContainsPrefab = automaticScene.includes(`guid: ${automatic.prefabGuid}`);
   const sameCamera = (left, right) => left && right &&
@@ -1454,8 +1706,13 @@ async function executeManualComparison(runId) {
           a.every((value, index) => Math.abs(value - b[index]) < 0.00001);
       });
   const differences = [];
-  for (const field of ["prefabGuid", "avatarGuid", "sceneContainsPrefab"]) {
+  for (const field of ["prefabGuid", "avatarGuid", "sceneContainsPrefab",
+    "animator", "rootTransform"]) {
     if (!manual[field] || !automatic[field] ||
+        (field === "animator" && (!Object.values(manual.animator).every(Boolean) ||
+          !Object.values(automatic.animator).every(Boolean))) ||
+        (field === "rootTransform" && ["keepOriginalPositionY", "keepOriginalPositionXZ",
+          "heightFromFeet"].some(key => manual.rootTransform[key] === null)) ||
         JSON.stringify(manual[field]) !== JSON.stringify(automatic[field]))
       differences.push({ field, manual: manual[field], automatic: automatic[field] });
   }
@@ -1464,8 +1721,10 @@ async function executeManualComparison(runId) {
       automatic: automatic.camera });
   const manifest = { runId, manualReference: "Sub_Manual_F13 controlled fixture",
     manual, automatic, differences,
+    groundingAttribution: "수동 Animator와 자동 FBX 경로의 접지 설정이 달라 단일 원인으로 단정할 수 없음",
+    inputFbxMetaSha256: await hashFile(`${fbxPath}.meta`),
     inputFbxSha256: await hashFile(fbxPath) };
-  let result = { status: "NOT_COMPARABLE", reason: "모델·Avatar·카메라 조건이 다름" };
+  let result = { status: "NOT_COMPARABLE", reason: "모델·Avatar·카메라·Animator·Root Transform 조건이 다름" };
   if (!differences.length) {
     const visualRequestPath = path.join(runtimeRoot, "yyb_visual_compare_request.json");
     const visualStatusPath = path.join(runtimeRoot, "yyb_visual_compare_status.json");
@@ -1519,10 +1778,12 @@ async function executeManualComparison(runId) {
             .replace(/^(\s*"[^"]+":\s*)NaN(?=\s*[,}])/gm, "$1null");
           const summary = JSON.parse(summaryText);
           manifest.inputFbxSha256After = await hashFile(fbxPath);
+          manifest.inputFbxMetaSha256After = await hashFile(`${fbxPath}.meta`);
           result = summary.fbx_file === "satisfaction_2.fbx" &&
-              manifest.inputFbxSha256After === manifest.inputFbxSha256
+              manifest.inputFbxSha256After === manifest.inputFbxSha256 &&
+              manifest.inputFbxMetaSha256After === manifest.inputFbxMetaSha256
             ? await compareManualCapture(summary, projectRoot)
-            : { status: "NOT_COMPARABLE", reason: "Unity 비교 입력 FBX가 다름" };
+            : { status: "NOT_COMPARABLE", reason: "Unity 비교 입력 FBX 또는 임포트 설정이 다름" };
           manifest.summaryPath = visualStatus.summary_json_path;
         }
       } catch (error) {
@@ -1942,9 +2203,9 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "full-regression", "full-output", "vrm-output", "vrm-character", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
-      process.argv.length > (mode === "smoke" ? 2 : mode === "recover" || mode === "vrm-character" ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|full-regression|full-output|vrm-output|vrm-character [VRM 경로]|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "contact-capture", "full-regression", "full-output", "vrm-output", "vrm-character", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+      process.argv.length > (mode === "smoke" ? 2 : ["recover", "vrm-character", "contact-capture"].includes(mode) ? 4 : 3)) {
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|contact-capture <F10 실행 폴더>|full-regression|full-output|vrm-output|vrm-character [VRM 경로]|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -1956,6 +2217,8 @@ async function main() {
     return;
   }
   await access(sdkRunnerPath);
+  const contactSource = mode === "contact-capture"
+    ? await loadContactSource(path.resolve(process.argv[3] || "")) : null;
   const vrmInputPath = path.resolve(process.argv[3] || path.join(projectRoot,
     "Docs/ref/ExportedProject/ExportedProject/Assets/StreamingAssets/Characters/HatsuneMikuNT.vrm"));
   const unityVersion = (await readFile(
@@ -1994,9 +2257,12 @@ async function main() {
         mode === "alternate-model" ? "F14" :
         mode === "product-ui" ? "F15" :
         mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
+        mode === "contact-capture" ? "F04,F05,F10,F11" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
+      ...(contactSource ? { sourceRunId: contactSource.runId,
+        sourceCsvSha256: contactSource.events.input.csv_sha256 } : {}),
       modelSha256: modelHash, sceneSha256: sceneHash
     },
     environmentConditions: {
@@ -2013,6 +2279,8 @@ async function main() {
         : mode === "playback" ? await executePlayback(runId)
         : mode === "foot-live" ? await executeFootLive(runId)
         : mode === "full-clip" ? await executeFullClip(runId)
+        : mode === "contact-capture" ? await executeContactCapture(runId, contactSource,
+          { fbxSha256: fbxHash, modelSha256: modelHash, sceneSha256: sceneHash })
         : mode === "alternate-model" ? await executeFullClip(runId, true)
         : mode === "product-ui" ? await executeProductUi(runId)
         : mode === "full-regression" ? await executeFullRegression(runId)
@@ -2031,6 +2299,7 @@ async function main() {
           mode === "playback" ? "playback-runs" :
             mode === "foot-live" ? "foot-live-runs" :
             mode === "full-clip" ? "full-clip-runs" :
+            mode === "contact-capture" ? "contact-capture-runs" :
             mode === "full-regression" ? "full-regression-runs" :
             mode === "full-output" ? "full-output-runs" :
             mode === "manual-compare" ? "manual-comparison-runs" :

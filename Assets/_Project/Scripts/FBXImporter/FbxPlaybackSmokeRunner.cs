@@ -156,6 +156,8 @@ namespace Fbx2Vmd.FBXImporter
             1323, 1324, 1325, 1326, 1327, 1328, 1329, 1330, 1331, 1332, 1333,
             2404, 2405, 2406, 8019, 8020, 8021, 11615, 11616, 11617
         };
+        private static int[] _playbackFootFrames = FootEvidenceFrames;
+        private static int[] _playbackSideFrames = { 0, 166, 544 };
         private static readonly HumanBodyBones[] F11Bones =
         {
             HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest,
@@ -805,7 +807,7 @@ namespace Fbx2Vmd.FBXImporter
                 case CapturePreselectionStateCommand:
                     return TryStartPreselectionCapture(request.request_id, out message);
                 case CapturePlaybackSeekEvidenceCommand:
-                    return TryStartPlaybackEvidence(request.request_id, out message);
+                    return TryStartPlaybackEvidence(request, out message);
                 case CaptureTetorisLiveFootEvidenceCommand:
                     if (!TryGetFBXVmdPipeline("tetoris_001.fbx", out FBXVmdPipeline footPipeline,
                             interactive: false, out message)) return false;
@@ -1192,6 +1194,7 @@ namespace Fbx2Vmd.FBXImporter
             public bool lock_root_position_xz;
             public bool keep_original_position_xz;
             public FootFrameEvidence[] foot_frames;
+            public int[] capture_frames;
             public bool structural_passed;
             public bool visual_review_required;
             public string failure_stage;
@@ -1220,6 +1223,11 @@ namespace Fbx2Vmd.FBXImporter
             public StageBoneEvidence[] f11_after_foot_stabilization;
             public string game_view_path;
             public string side_view_path;
+            public Vector3 camera_position;
+            public Quaternion camera_rotation;
+            public bool camera_orthographic;
+            public float camera_orthographic_size;
+            public float camera_field_of_view;
         }
 
         [Serializable]
@@ -1233,9 +1241,11 @@ namespace Fbx2Vmd.FBXImporter
             public Vector3 local_scale;
         }
 
-        private static bool TryStartPlaybackEvidence(string requestId, out string message)
+        private static bool TryStartPlaybackEvidence(
+            FbxPlaybackSmokeAutomationRequest request, out string message)
         {
             message = string.Empty;
+            string requestId = request?.request_id;
             if (!Guid.TryParse(requestId, out Guid id) ||
                 !TryGetFBXVmdPipeline(SatisfactionFbxFileName, out FBXVmdPipeline pipeline,
                     interactive: false, out message))
@@ -1243,6 +1253,27 @@ namespace Fbx2Vmd.FBXImporter
                 if (string.IsNullOrEmpty(message)) message = "request id is invalid";
                 return false;
             }
+
+            int[] requestedFrames = request.capture_frames;
+            if (requestedFrames != null && requestedFrames.Length > 0 &&
+                (requestedFrames.Length > 100 || requestedFrames.Any(frame => frame < 0) ||
+                 !requestedFrames.SequenceEqual(requestedFrames.Distinct().OrderBy(frame => frame))))
+            {
+                message = "캡처 프레임은 중복 없는 오름차순 100개 이하가 필요합니다.";
+                return false;
+            }
+            _playbackFootFrames = requestedFrames != null && requestedFrames.Length > 0
+                ? requestedFrames : FootEvidenceFrames;
+            int[] requestedSideFrames = request.side_capture_frames;
+            if (requestedSideFrames != null &&
+                (requestedSideFrames.Length > 20 ||
+                 requestedSideFrames.Any(frame => !_playbackFootFrames.Contains(frame)) ||
+                 !requestedSideFrames.SequenceEqual(requestedSideFrames.Distinct().OrderBy(frame => frame))))
+            {
+                message = "측면 캡처 프레임은 계측 프레임에 포함된 중복 없는 오름차순 20개 이하가 필요합니다.";
+                return false;
+            }
+            _playbackSideFrames = requestedSideFrames ?? new[] { 0, 166, 544 };
 
             if (SceneManager.GetActiveScene().name != MainAutoSceneName ||
                 pipeline.IsProcessing || pipeline.IsImportedMotionRecording ||
@@ -1276,7 +1307,8 @@ namespace Fbx2Vmd.FBXImporter
                     pre_import_root_position = pipeline.targetCharacter.transform.position,
                     pre_import_hips_position = hips.position,
                     apply_root_motion = animator.applyRootMotion,
-                    foot_frames = new FootFrameEvidence[FootEvidenceFrames.Length]
+                    foot_frames = new FootFrameEvidence[_playbackFootFrames.Length],
+                    capture_frames = _playbackFootFrames
                 };
                 _playbackEvidencePipeline = pipeline;
                 _playbackEvidenceStartedUtc = DateTime.UtcNow;
@@ -1639,7 +1671,7 @@ namespace Fbx2Vmd.FBXImporter
                                 "선택된 모델·클립 또는 FBX 임포트 설정을 확인하지 못했습니다.");
                             return;
                         }
-                        if (_playbackEvidence.last_frame < FootEvidenceFrames[FootEvidenceFrames.Length - 1] ||
+                        if (_playbackEvidence.last_frame < _playbackFootFrames[_playbackFootFrames.Length - 1] ||
                             _playbackEvidence.clip_frame_rate <= 0f ||
                             !_playbackEvidencePipeline.TryPlayImportedMotion())
                         {
@@ -1686,7 +1718,7 @@ namespace Fbx2Vmd.FBXImporter
                     case PlaybackEvidencePhase.FootCaptures:
                         if (!IsPlaybackCaptureReady()) return;
                         _footEvidenceFrameIndex++;
-                        if (_footEvidenceFrameIndex < FootEvidenceFrames.Length)
+                        if (_footEvidenceFrameIndex < _playbackFootFrames.Length)
                         {
                             if (!TryBeginFootFrameCapture())
                                 CompletePlaybackEvidence(false, "foot_surface", "하체 연속 프레임 계측 또는 캡처에 실패했습니다.");
@@ -1801,7 +1833,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool TryBeginFootFrameCapture()
         {
-            int frame = FootEvidenceFrames[_footEvidenceFrameIndex];
+            int frame = _playbackFootFrames[_footEvidenceFrameIndex];
             if (!_playbackEvidencePipeline.TrySeekImportedMotionFrame(frame)) return false;
 
             Animator animator = _playbackEvidencePipeline.targetCharacter != null
@@ -1830,8 +1862,9 @@ namespace Fbx2Vmd.FBXImporter
             Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
             Transform leftToe = animator.GetBoneTransform(HumanBodyBones.LeftToes);
             Transform rightToe = animator.GetBoneTransform(HumanBodyBones.RightToes);
+            Camera camera = Camera.main;
             if (hips == null || leftKnee == null || rightKnee == null || leftFoot == null ||
-                rightFoot == null || leftToe == null || rightToe == null) return false;
+                rightFoot == null || leftToe == null || rightToe == null || camera == null) return false;
 
             string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
             string prefix = $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}_why-F04-F05";
@@ -1856,10 +1889,15 @@ namespace Fbx2Vmd.FBXImporter
                 right = right,
                 f11_before_foot_stabilization = beforeFootStabilization,
                 f11_after_foot_stabilization = afterFootStabilization,
-                game_view_path = _playbackCapturePath
+                game_view_path = _playbackCapturePath,
+                camera_position = camera.transform.position,
+                camera_rotation = camera.transform.rotation,
+                camera_orthographic = camera.orthographic,
+                camera_orthographic_size = camera.orthographicSize,
+                camera_field_of_view = camera.fieldOfView
             };
             if (sample.actual_frame != frame) return false;
-            if (frame == 0 || frame == 166 || frame == 544)
+            if (_playbackSideFrames.Contains(frame))
             {
                 sample.side_view_path = Path.Combine(directory, prefix + "_how-side-camera.png");
                 if (!TryCaptureSideView(animator, hips.position, sample.side_view_path)) return false;
@@ -2036,6 +2074,8 @@ namespace Fbx2Vmd.FBXImporter
             _playbackEvidencePath = null;
             _playbackCapturePath = null;
             _footEvidenceFrameIndex = 0;
+            _playbackFootFrames = FootEvidenceFrames;
+            _playbackSideFrames = new[] { 0, 166, 544 };
         }
 
         [Serializable]

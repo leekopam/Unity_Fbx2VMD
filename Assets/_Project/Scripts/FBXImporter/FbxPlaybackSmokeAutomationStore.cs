@@ -14,6 +14,8 @@ namespace Fbx2Vmd.FBXImporter
         public string requested_command;
         public string run_id;
         public string vrm_file;
+        public int[] capture_frames;
+        public int[] side_capture_frames;
     }
 
     [Serializable]
