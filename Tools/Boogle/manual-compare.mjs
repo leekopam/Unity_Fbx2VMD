@@ -42,6 +42,8 @@ function localEvidencePath(projectRoot, relativePath) {
 function bySample(rows) {
   const result = new Map();
   for (const row of rows) {
+    // 수동 종료 샘플은 마지막 Animator 평가 전에 기록되므로 명시적 시각 샘플만 비교함.
+    if (row.reason === "finish") continue;
     const frame = Number(row.recorderFrame);
     if (!Number.isInteger(frame) || frame < 0) continue;
     const key = row.reason || String(frame);

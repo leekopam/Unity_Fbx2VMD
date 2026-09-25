@@ -390,7 +390,9 @@ public class MotionComparisonProbe : MonoBehaviour
 
         float elapsed = Time.time - _startTime;
         float sampleClock = GetCurrentSampleClock(elapsed);
-        while (_nextSampleIndex < sampleTimes.Length && sampleClock >= sampleTimes[_nextSampleIndex])
+        // 누적된 float 오차로 목표 시각의 캡처가 한 프레임 늦어지지 않게 함.
+        while (_nextSampleIndex < sampleTimes.Length &&
+               sampleClock + 0.0001f >= sampleTimes[_nextSampleIndex])
         {
             SampleNow(MotionComparisonProbeReportWriter.BuildSampleTimeReason(sampleTimes[_nextSampleIndex]));
             _nextSampleIndex++;
