@@ -23,7 +23,6 @@ namespace Fbx2Vmd.FBXImporter
         internal const int MAX_RETARGET_PREWARM_FRAME_COUNT = 120;
 #if UNITY_EDITOR
         internal const float EDITOR_DIAGNOSTIC_SMOKE_FRAME_RATE = 30f;
-        private const float EDITOR_MOTION_VIDEO_FRAME_RATE = 60f;
 #endif
         private static Func<IFileBrowserService> fileBrowserServiceFactory = () => new FileBrowserService();
         private static Func<AssimpFBXImporter> fbxImporterFactory = () => new AssimpFBXImporter();
@@ -1053,6 +1052,19 @@ namespace Fbx2Vmd.FBXImporter
         [FormerlySerializedAs("additionalVmdCopyFolder")]
         [SerializeField] private string _additionalVmdCopyFolder= "";
         public string additionalVmdCopyFolder { get => _additionalVmdCopyFolder; private set => _additionalVmdCopyFolder = value; }
+
+        [Header("영상 녹화 설정")]
+        [Tooltip("녹화 버튼으로 저장하는 영상의 출력 폴더입니다. 비워두면 프로젝트 루트의 Recordings 폴더를 사용합니다.")]
+        [SerializeField] private string _motionVideoOutputFolder= "";
+        public string motionVideoOutputFolder { get => _motionVideoOutputFolder; private set => _motionVideoOutputFolder = value; }
+
+        [Tooltip("녹화 영상의 컨테이너/코덱입니다.")]
+        [SerializeField] private MotionVideoFileFormat _motionVideoFormat= MotionVideoFileFormat.Mp4;
+        public MotionVideoFileFormat motionVideoFormat { get => _motionVideoFormat; private set => _motionVideoFormat = value; }
+
+        [Tooltip("녹화 영상의 프레임률입니다. 녹화 타이밍과 모션 진행 단위에 함께 사용됩니다.")]
+        [SerializeField] private MotionVideoFrameRate _motionVideoFrameRate= MotionVideoFrameRate.Fps60;
+        public MotionVideoFrameRate motionVideoFrameRate { get => _motionVideoFrameRate; private set => _motionVideoFrameRate = value; }
 
         [Tooltip("비교 CSV/프레임 캡처 Probe를 켭니다. 일반 변환에서는 미세 멈춤을 줄이기 위해 끄고, 회귀 테스트 때만 켭니다.")]
         [HideInInspector]
@@ -2197,13 +2209,14 @@ namespace Fbx2Vmd.FBXImporter
         private bool TryStartImportedMotionRecordingNow()
         {
 
-            RecordingCaptureResolutionPlan resolution =
-                DiagnosticsSettings.CreateCaptureResolutionPlan();
+            // GameView 현재 크기로 기록해 녹화 중 화면 해상도가 바뀌지 않게 함.
             var settings = new MotionVideoRecordingSettings(
                 _preparedMotionName,
-                resolution.Width,
-                resolution.Height,
-                EDITOR_MOTION_VIDEO_FRAME_RATE);
+                Screen.width,
+                Screen.height,
+                (float)_motionVideoFrameRate,
+                outputDirectory: _motionVideoOutputFolder,
+                format: _motionVideoFormat);
             if (!_humanoidMotionRecordingController.TryStart(
                     settings,
                     out string errorMessage))

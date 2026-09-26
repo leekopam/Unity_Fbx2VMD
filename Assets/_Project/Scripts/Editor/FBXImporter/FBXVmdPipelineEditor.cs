@@ -823,6 +823,13 @@ namespace Fbx2Vmd.FBXImporter
             EditorDrawUtility.DrawProperty(serializedObject, "_useKnownMmdReferenceTiming", "satisfaction_2 reference timing 사용", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_RetargetPrewarmFrameCount", "시작 포즈 prewarm 프레임", showWarningOnNull: true);
             DrawFolderProperty("_additionalVmdCopyFolder", "VMD 추가 복사 폴더", "생성된 VMD를 추가로 복사할 폴더(선택)");
+
+            EditorGUILayout.Space(6f);
+            EditorDrawUtility.DrawSection("영상 녹화 (녹화 버튼)");
+            EditorGUILayout.HelpBox("UI를 제외하고 MainCamera 화면만 영상으로 저장합니다.", MessageType.None);
+            DrawFolderProperty("_motionVideoOutputFolder", "영상 저장 폴더", "영상 저장 폴더 선택");
+            EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoFormat", "영상 파일 형식", showWarningOnNull: true);
+            EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoFrameRate", "영상 FPS", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_clampRetargetVisualClipStep", "Ghost clip time step 제한", showWarningOnNull: true);
             if (EditorDrawUtility.GetBool(serializedObject, "_clampRetargetVisualClipStep"))
             {
