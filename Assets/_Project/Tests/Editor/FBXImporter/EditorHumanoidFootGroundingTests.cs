@@ -54,7 +54,7 @@ namespace Tests.Editor.FBXImporter
                         foreach (float frame in frames.Concat(frames.Reverse()))
                         {
                             Invoke(controller, "Seek", frame / clip.frameRate);
-                            AssertStatus(controller, "Applied");
+                            AssertAppliedOrContactGateRejected(controller, grounding);
                             Assert.That((float)Property(grounding, "MinimumSoleClearance"), Is.GreaterThan(-0.0001f));
                             Assert.That((float)Property(grounding, "MaximumTargetError"), Is.LessThan(0.0001f));
                             if (frame == 5547f)
@@ -156,7 +156,7 @@ namespace Tests.Editor.FBXImporter
                             Vector3[] scales = bones.Select(t => t.localScale).ToArray();
                             floor.SetActive(true);
                             Invoke(controller, "Seek", frame / clip.frameRate);
-                            AssertStatus(controller, "Applied");
+                            AssertAppliedOrContactGateRejected(controller, grounding);
                             if ((bool)Property(grounding, "UsedPhysicalReach")) physicalReachCount++;
                             maximumTargetError = Mathf.Max(maximumTargetError, (float)Property(grounding, "MaximumTargetError"));
                             minimumSoleClearance = Mathf.Min(minimumSoleClearance, (float)Property(grounding, "MinimumSoleClearance"));
@@ -187,7 +187,7 @@ namespace Tests.Editor.FBXImporter
                                 rotations.Add(frame, currentRotations);
                             }
                             Invoke(controller, "RestoreCurrentPose");
-                            AssertStatus(controller, "Applied");
+                            AssertAppliedOrContactGateRejected(controller, grounding);
                             AssertPose(bones, current, currentRotations);
                         }
 
@@ -205,11 +205,14 @@ namespace Tests.Editor.FBXImporter
                             Assert.That(FindSoleClearance(grounding, "_right", false, 3f), Is.LessThan(0.002f),
                                 "정지 자세의 뒤꿈치를 앞꿈치만 지지하는 자세로 두면 안 됨");
                             Invoke(controller, "Seek", 1332f / clip.frameRate);
-                            AssertStatus(controller, "Applied");
-                            Assert.That(FindSoleClearance(grounding, "_left", false, 3f),
-                                Is.InRange(0.01f, 0.035f), "앞꿈치 자세를 유지하면서 과도한 뒤꿈치 들림을 제한해야 함");
-                            Assert.That(Mathf.Abs(FindSoleClearance(grounding, "_left", true, 3f)),
-                                Is.LessThan(0.002f), "앞꿈치 지지점은 바닥에 닿아 있어야 함");
+                            AssertAppliedOrContactGateRejected(controller, grounding);
+                            if (Property(controller, "LastGroundingStatus").ToString() == "Applied")
+                            {
+                                Assert.That(FindSoleClearance(grounding, "_left", false, 3f),
+                                    Is.InRange(0.01f, 0.035f), "앞꿈치 자세를 유지하면서 과도한 뒤꿈치 들림을 제한해야 함");
+                                Assert.That(Mathf.Abs(FindSoleClearance(grounding, "_left", true, 3f)),
+                                    Is.LessThan(0.002f), "앞꿈치 지지점은 바닥에 닿아 있어야 함");
+                            }
                         }
 
                         Invoke(controller, "Seek", 58f / clip.frameRate);
@@ -259,6 +262,24 @@ namespace Tests.Editor.FBXImporter
                 ((IDisposable)controller).Dispose();
                 UnityEngine.Object.DestroyImmediate(floor);
             }
+        }
+
+        [Test]
+        public void Given_SupportedContactError_When_ResolvingApplied_Then_GatesOnContactError()
+        {
+            // 목표 도달과 비관통만으로는 부족하고, 완전 지지 접촉 괴리가 임계를 넘으면 미적용.
+            Type type = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.EditorHumanoidFootGrounding", true);
+            MethodInfo resolve = type.GetMethod("ResolveApplied", Flags);
+            Assert.That(resolve, Is.Not.Null);
+            Assert.That((bool)resolve.Invoke(null,
+                new object[] { 0f, 0f, 0.004f, 1f }), Is.True);
+            Assert.That((bool)resolve.Invoke(null,
+                new object[] { 0f, 0f, 0.006f, 1f }), Is.False,
+                "완전 지지 접촉점이 앵커에서 5mm·scale 이상 떠 있으면 Applied가 아님");
+            Assert.That((bool)resolve.Invoke(null,
+                new object[] { 0f, -0.001f, 0f, 1f }), Is.False,
+                "밑창 관통은 기존처럼 실패로 유지됨");
         }
 
         private static object Invoke(object target, string name, params object[] args) =>
@@ -423,13 +444,27 @@ namespace Tests.Editor.FBXImporter
                 Array samples = Array.CreateInstance(sampleType, 2);
                 samples.SetValue(pair[0], 0);
                 samples.SetValue(pair[1], 1);
-                Assert.That(Invoke(grounding, "TryPrepare", samples, 1f, clip, evaluate), Is.False,
+                Assert.That(Invoke(grounding, "TryPrepare", samples, 1f, clip, evaluate, null), Is.False,
                     "한쪽 발 또는 일부 시각의 회전 정보 누락을 기존 경로로 숨기면 안 됨");
             }
         }
 
         private static void AssertStatus(object controller, string expected) =>
             Assert.That(Property(controller, "LastGroundingStatus").ToString(), Is.EqualTo(expected));
+
+        // 지지 접촉 게이트(§9.5) 도입 후 완전 지지 부유가 남은 프레임은 Applied가 아니라
+        // 정직하게 Fallback으로 하강해야 함. Fallback이면 거절 사유가 실제로 접촉 오차
+        // 임계 초과인지 함께 검증해 게이트가 측정과 분리되지 않았음을 확인함.
+        private static void AssertAppliedOrContactGateRejected(object controller, object grounding)
+        {
+            string status = Property(controller, "LastGroundingStatus").ToString();
+            if (status == "Applied") return;
+            Assert.That(status, Is.EqualTo("Fallback"));
+            float humanScale = (float)Field(grounding, "_humanScale");
+            Assert.That((float)Property(grounding, "MaximumSupportedContactError"),
+                Is.GreaterThan(humanScale * 0.005f),
+                "Fallback의 원인이 완전 지지 접촉 오차 초과가 아니면 다른 결함임");
+        }
 
         private static void AssertPose(Transform[] bones, Vector3[] positions, Quaternion[] rotations)
         {

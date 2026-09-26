@@ -5,7 +5,15 @@ import { fileURLToPath } from "node:url";
 import { readCsv } from "./manual-compare.mjs";
 
 const evidenceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
-  "../../Docs/Workflow/Local/evidence/boogle/full-clip");
+  "../../Docs/Workflow/Local/evidence/boogle");
+// 허용된 증거 패밀리별 세션 매니페스트 폴더를 연결함.
+// full-clip-f14는 F14 하체 전용 경로, vrm-character는 VRM 캡처 경로임.
+const evidenceFamilies = {
+  "full-clip": "full-clip-runs",
+  "full-clip-f14": "alternate-model-runs",
+  "vrm-character": "vrm-character-runs"
+};
+const sdkProjectId = "f2f44dc8-83ef-46d0-9d26-b0e52d1c4d20";
 const baseColumns = ("frame,time_s,time_error_ms,side,grounding_status,has_ground," +
   "support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm," +
   "minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m," +
@@ -407,17 +415,37 @@ export function analyzeContactEvents(state, csv, fingerprint = {}) {
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const directory = path.resolve(process.argv[2] || "");
-  const relative = path.relative(evidenceRoot, directory);
-  if (!process.argv[2] || !relative || relative.startsWith("..") ||
-      path.isAbsolute(relative) || relative.split(path.sep).length !== 2)
-    throw new Error("로컬 full-clip/<runId>/<requestId> 근거 폴더가 필요합니다.");
-  const realRoot = await realpath(evidenceRoot);
-  const realDirectory = await realpath(directory);
+// 허용된 증거 패밀리 아래 <runId>/<requestId> 구조만 풀어줌.
+// 경로 상위 이동이나 다른 폴더는 거부함.
+export function resolveEvidenceDirectoryPath(argument, root = evidenceRoot) {
+  const directory = path.resolve(argument || "");
+  const relative = path.relative(root, directory);
+  if (!argument || !relative || relative.startsWith("..") ||
+      path.isAbsolute(relative)) return null;
+  const segments = relative.split(path.sep);
+  if (segments.length !== 3 || !Object.hasOwn(evidenceFamilies, segments[0]))
+    return null;
+  return { directory, family: segments[0], runId: segments[1], requestId: segments[2] };
+}
+
+// 심볼릭 링크·연결점 우회를 막기 위해 실제 경로와 실행 경로가 같은지 확인함.
+export async function resolveEvidenceDirectory(argument, root = evidenceRoot) {
+  const resolved = resolveEvidenceDirectoryPath(argument, root);
+  if (!resolved)
+    throw new Error(
+      "로컬 full-clip, full-clip-f14, vrm-character의 <runId>/<requestId> 근거 폴더가 필요합니다.");
+  const realRoot = await realpath(root);
+  const realDirectory = await realpath(resolved.directory);
   const realRelative = path.relative(realRoot, realDirectory);
+  const relative = path.relative(root, resolved.directory);
   if (realRelative !== relative)
     throw new Error("로컬 근거 폴더의 실제 경로가 실행 경로와 다름");
+  return resolved;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { directory, family, runId, requestId } =
+    await resolveEvidenceDirectory(process.argv[2]);
   const outputPath = path.join(directory, "contact-events.json");
   const outputStat = await lstat(outputPath).catch(error => {
     if (error.code === "ENOENT") return null;
@@ -427,12 +455,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     throw new Error("분석 결과 파일은 심볼릭 링크일 수 없음");
   let result;
   try {
-    const runId = path.basename(path.dirname(directory));
-    const requestId = path.basename(directory);
-    const sdkManifestPath = path.resolve(evidenceRoot, "../projects",
-      "f2f44dc8-83ef-46d0-9d26-b0e52d1c4d20", "runs", runId,
-      "run-manifest.json");
-    const sessionManifestPath = path.resolve(evidenceRoot, "../full-clip-runs",
+    const sdkManifestPath = path.join(evidenceRoot, "projects", sdkProjectId,
+      "runs", runId, "run-manifest.json");
+    const sessionManifestPath = path.join(evidenceRoot, evidenceFamilies[family],
       runId, "manifest.json");
     const [stateSource, csv, sdkManifestSource, sessionManifestSource] = await Promise.all([
       readFile(path.join(directory, "state.json"), "utf8"),

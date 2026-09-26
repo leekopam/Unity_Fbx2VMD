@@ -121,15 +121,40 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_HumanAirborneLabel_When_Estimating_Then_SplitsSupportSpan()
+        {
+            // 자동으로 지지로 분류된 구간 중간에 사람이 자유발 표식을 남기면 구간이 갈라짐.
+            object labels = CreateLabelSet(new[] { CreateLabel(40, 49, false, null) });
+            object estimate = Estimate(Still(90), labels);
+            List<object> left = Intents(estimate, "Left");
+            Assert.That(left.Count, Is.EqualTo(2));
+            Assert.That(Field(left[0], "EndFrameExclusive"), Is.EqualTo(40));
+            Assert.That(Field(left[1], "StartFrame"), Is.EqualTo(50));
+            // 표식 구간도 사전 병합 기준으로 덮어써서 확신은 유지됨.
+            Assert.That(Field(left[0], "Certainty").ToString(), Is.EqualTo("Confident"));
+        }
+
+        [Test]
+        public void Given_HumanSlideLabel_When_Estimating_Then_OverridesMode()
+        {
+            // 자동 판정 Plant를 사람의 Slide 표식이 덮어씀.
+            object labels = CreateLabelSet(new[] { CreateLabel(1, 89, null, 1) });
+            object estimate = Estimate(Still(90), labels);
+            List<object> left = Intents(estimate, "Left");
+            Assert.That(left.Count, Is.EqualTo(1));
+            Assert.That(Field(left[0], "Mode").ToString(), Is.EqualTo("Slide"));
+        }
+
+        [Test]
         public void Given_InvalidInput_When_Estimating_Then_Throws()
         {
             MethodInfo estimate = EstimatorType.GetMethod("Estimate", Flags);
             Assert.Throws<TargetInvocationException>(() =>
                 estimate.Invoke(null, new object[]
-                    { Array.CreateInstance(SampleType, 1), FrameRate, HumanScale }));
+                    { Array.CreateInstance(SampleType, 1), FrameRate, HumanScale, null }));
         }
 
-        private static object Estimate(List<Vector3> leftFoot)
+        private static object Estimate(List<Vector3> leftFoot, object labels = null)
         {
             var rightFoot = new List<Vector3>(leftFoot.Count);
             for (int index = 0; index < leftFoot.Count; index++)
@@ -138,10 +163,11 @@ namespace Tests.Editor.FBXImporter
                     Vector3.left * 0.1f);
             }
 
-            return Estimate(leftFoot, rightFoot);
+            return Estimate(leftFoot, rightFoot, labels);
         }
 
-        private static object Estimate(List<Vector3> leftFoot, List<Vector3> rightFoot)
+        private static object Estimate(List<Vector3> leftFoot, List<Vector3> rightFoot,
+            object labels = null)
         {
             Array samples = Array.CreateInstance(SampleType, leftFoot.Count);
             for (int index = 0; index < leftFoot.Count; index++)
@@ -156,7 +182,37 @@ namespace Tests.Editor.FBXImporter
             }
 
             return EstimatorType.GetMethod("Estimate", Flags).Invoke(null,
-                new object[] { samples, FrameRate, HumanScale });
+                new object[] { samples, FrameRate, HumanScale, labels });
+        }
+
+        private static object CreateLabel(int startFrame, int endFrameInclusive,
+            bool? isSupport, int? mode)
+        {
+            Assembly assembly = typeof(FBXVmdPipeline).Assembly;
+            Type labelType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabel", true);
+            Type modeType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentMode", true);
+            return Activator.CreateInstance(labelType, Flags, null,
+                new object[] { startFrame, endFrameInclusive, isSupport,
+                    mode.HasValue ? Enum.ToObject(modeType, mode.Value) : null },
+                null);
+        }
+
+        private static object CreateLabelSet(object[] leftLabels)
+        {
+            Assembly assembly = typeof(FBXVmdPipeline).Assembly;
+            Type labelType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabel", true);
+            Type setType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabelSet", true);
+            Array left = Array.CreateInstance(labelType, leftLabels.Length);
+            for (int index = 0; index < leftLabels.Length; index++)
+                left.SetValue(leftLabels[index], index);
+            return Activator.CreateInstance(setType, Flags, null,
+                new object[] { left, Array.CreateInstance(labelType, 0),
+                    leftLabels.Length, leftLabels.Length },
+                null);
         }
 
         private static List<Vector3> Still(int count)

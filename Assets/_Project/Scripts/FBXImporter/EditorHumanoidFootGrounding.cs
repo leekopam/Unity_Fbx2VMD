@@ -110,7 +110,8 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         internal bool TryPrepare(IReadOnlyList<HumanoidFootContactSample> samples,
-            float sourceHumanScale, AnimationClip clip, Action<float> evaluateReference)
+            float sourceHumanScale, AnimationClip clip, Action<float> evaluateReference,
+            HumanoidFootContactIntentEstimate intents = null)
         {
             IsPrepared = false;
             if (samples == null || samples.Count < 2 || clip == null || evaluateReference == null ||
@@ -122,9 +123,11 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 IsPrepared = _left.TryBuildContacts(samples, true, sourceHumanScale,
-                    _frameRate, clip.length, evaluateReference, _sourceToTargetRotation, _sourceScaleRatio) &&
+                    _frameRate, clip.length, evaluateReference, _sourceToTargetRotation, _sourceScaleRatio,
+                    intents?.Left) &&
                     _right.TryBuildContacts(samples, false, sourceHumanScale,
-                    _frameRate, clip.length, evaluateReference, _sourceToTargetRotation, _sourceScaleRatio);
+                    _frameRate, clip.length, evaluateReference, _sourceToTargetRotation, _sourceScaleRatio,
+                    intents?.Right);
                 if (IsPrepared && UnresolvedSupportPairCount > 0)
                     Debug.LogWarning($"공동 지지 계획 미해결 {UnresolvedSupportPairCount}건. " +
                         $"왼발: {_left.FirstPlanIssue}, 오른발: {_right.FirstPlanIssue}. 해당 구간은 개별 목표를 유지함.");
@@ -202,8 +205,8 @@ namespace Fbx2Vmd.FBXImporter
                 MinimumSoleClearance = Mathf.Min(leftClearance, rightClearance);
                 MaximumSupportedContactError = Mathf.Max(leftContact, rightContact);
                 FullySupportedContactCount = leftCount + rightCount;
-                isApplied = MaximumTargetError <= _humanScale * 0.0001f &&
-                    MinimumSoleClearance >= -_humanScale * 0.0001f;
+                isApplied = ResolveApplied(MaximumTargetError, MinimumSoleClearance,
+                    MaximumSupportedContactError, _humanScale);
                 return isApplied;
             }
             finally
@@ -219,6 +222,18 @@ namespace Fbx2Vmd.FBXImporter
             IsPrepared = false;
             _left.Sampler.Dispose();
             _right.Sampler.Dispose();
+        }
+
+        // 완전 지지 중에는 앵커와 실측 접촉점의 괴리도 게이트 조건임.
+        // 지지 중에 부유·관통이 남은 프레임을 Applied로 보고하지 않음.
+        private const float SupportedContactErrorPerHumanScale = 0.005f;
+
+        internal static bool ResolveApplied(float targetError, float soleClearance,
+            float supportedContactError, float humanScale)
+        {
+            return targetError <= humanScale * 0.0001f &&
+                soleClearance >= -humanScale * 0.0001f &&
+                supportedContactError <= humanScale * SupportedContactErrorPerHumanScale;
         }
 
         private sealed class Leg
@@ -323,7 +338,8 @@ namespace Fbx2Vmd.FBXImporter
 
             internal bool TryBuildContacts(IReadOnlyList<HumanoidFootContactSample> samples,
                 bool isLeft, float sourceScale, float frameRate, float clipLength, Action<float> evaluate,
-                Quaternion sourceRotation, float scaleRatio)
+                Quaternion sourceRotation, float scaleRatio,
+                IReadOnlyList<HumanoidFootContactIntent> intents = null)
             {
                 Vector2 referenceHeights = Vector2.zero;
                 bool hasRelativeHeights = samples[0].RelativeFootHeights.HasValue;
@@ -364,6 +380,9 @@ namespace Fbx2Vmd.FBXImporter
                         0.1f, 0.1f, out _weights))
                     return false;
 
+                // 확정된 지지 의도 구간 안에서 감지된 접촉은 빠르게 잠금함(터치다운 비대칭 전이).
+                HumanoidFootAnchorPolicyResolver.ApplyTouchdownLock(_weights, intents);
+
                 // 역할 배열을 먼저 확정하여 임의 탐색 순서에도 같은 접촉 계획을 사용함.
                 if (hasRelativeHeights)
                 {
@@ -376,9 +395,17 @@ namespace Fbx2Vmd.FBXImporter
                 _relativeHeights = relativeHeights;
                 _nearLevelHeight = sourceScale / 70f;
 
+                // 의도 구간을 프레임별 앵커 방침으로 변환하고 자유 구간은 속도 상한을 둠.
+                HumanoidFootAnchorPolicy[] policies =
+                    HumanoidFootAnchorPolicyResolver.Rasterize(intents, _weights.Length);
+                float pinRelease = sourceScale *
+                    HumanoidFootContactIntentEstimator.SlideDisplacementPerHumanScale;
+                float trackStep = sourceScale * scaleRatio *
+                    HumanoidFootContactIntentEstimator.SupportSpeedPerHumanScale / frameRate;
                 return EditorHumanoidFootContactPlan.TryBuild(Foot, Sampler, _sourcePoints, _weights,
                     sourceRotation, scaleRatio, frameRate, clipLength, evaluate, out _plan,
-                    sourceFrames, hasSourceFrames ? _localFootFrame : null);
+                    sourceFrames, hasSourceFrames ? _localFootFrame : null,
+                    policies, pinRelease, trackStep);
             }
 
             internal void CapturePose()

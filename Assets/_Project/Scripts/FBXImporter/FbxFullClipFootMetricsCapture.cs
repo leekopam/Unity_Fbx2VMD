@@ -47,6 +47,8 @@ namespace Fbx2Vmd.FBXImporter
         private readonly bool[] _hasPrevious = new bool[2];
         private IReadOnlyList<HumanoidFootContactSample> _sourceSamples;
         private IReadOnlyList<HumanoidFootContactSample> _targetSamples;
+        private HumanoidFootContactIntentEstimate _intentEstimate;
+        private HumanoidFootContactIntentLabelSet _intentLabels;
         private float _sourceHumanScale;
         private Phase _phase = Phase.Importing;
         private int _frame;
@@ -215,6 +217,8 @@ namespace Fbx2Vmd.FBXImporter
                         BindingFlags.NonPublic)?.GetValue(_controller);
             _sourceSamples = stabilizer?.SourceSamples;
             _targetSamples = stabilizer?.TargetSamples;
+            _intentEstimate = stabilizer?.IntentEstimate;
+            _intentLabels = stabilizer?.IntentLabels;
             _sourceHumanScale = stabilizer?.SourceHumanScale ?? 0f;
             if (_controller == null || _hips == null || _knees.Any(item => item == null) ||
                 _feet.Any(item => item == null) || _toes.Any(item => item == null) ||
@@ -398,6 +402,7 @@ namespace Fbx2Vmd.FBXImporter
                     failure_stage = stage, failure_message = message,
                     scene = ScenePath, input = _inputFileName,
                     lower_body_only = _lowerBodyOnly,
+                    fingerprint = BuildFingerprint(),
                     contact_intents = BuildContactIntentsSummary(),
                     model = _pipeline?.targetCharacter != null ? _pipeline.targetCharacter.name : string.Empty,
                     native_skinning_processed_frames =
@@ -443,7 +448,64 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
+        // 런타임과 같은 조건(모델·버전·설정·날짜)을 기록해 증거 비교의 기준을 고정함.
+        private object BuildFingerprint()
+        {
+            return new
+            {
+                schema = 1,
+                input = _inputFileName,
+                model = _pipeline?.targetCharacter != null
+                    ? _pipeline.targetCharacter.name
+                    : string.Empty,
+                model_asset_path = _pipeline?.targetCharacter != null
+                    ? AssetDatabase.GetAssetPath(_pipeline.targetCharacter)
+                    : string.Empty,
+                unity_version = Application.unityVersion,
+                clip_frame_rate = _frameRate,
+                last_frame = _lastFrame,
+                frame_limit = _frameLimit,
+                lower_body_only = _lowerBodyOnly,
+                capture_views = _captureViews,
+                created_at_utc = _startedUtc.ToString("o", CultureInfo.InvariantCulture),
+                git_commit = TryReadGitCommit()
+            };
+        }
+
+        // 버전 관리상 커밋을 읽어 재현 조건을 남김. 실패해도 증거 기록을 막지 않음.
+        private static string TryReadGitCommit()
+        {
+            try
+            {
+                string root = Directory.GetParent(Application.dataPath)?.FullName;
+                if (string.IsNullOrEmpty(root)) return null;
+                string gitRoot = Path.Combine(root, ".git");
+                if (File.Exists(gitRoot))
+                {
+                    // 워크트리는 .git 파일이 실제 gitdir을 가리킴.
+                    const string prefix = "gitdir:";
+                    string content = File.ReadAllText(gitRoot).Trim();
+                    if (!content.StartsWith(prefix, StringComparison.Ordinal)) return null;
+                    gitRoot = content.Substring(prefix.Length).Trim();
+                }
+                if (!Directory.Exists(gitRoot)) return null;
+                string headPath = Path.Combine(gitRoot, "HEAD");
+                if (!File.Exists(headPath)) return null;
+                string head = File.ReadAllText(headPath).Trim();
+                if (!head.StartsWith("ref:", StringComparison.Ordinal))
+                    return head.Length >= 7 ? head : null;
+                string referencePath = Path.Combine(gitRoot,
+                    head.Substring(4).Trim().Replace('/', Path.DirectorySeparatorChar));
+                return File.Exists(referencePath) ? File.ReadAllText(referencePath).Trim() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         // 원본 궤적 기반 접지 의도를 오프라인 분석기와 교차 대조할 수 있게 상태에 기록함.
+        // 런타임이 실제 사용한 추정과 같은 값을 우선 기록하고 표식 적용량도 함께 남김.
         // 추정 실패가 계측 증거 자체를 깨지 않게 오류는 요약 안에 담음.
         private object BuildContactIntentsSummary()
         {
@@ -455,13 +517,20 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-                HumanoidFootContactIntentEstimate estimate =
+                HumanoidFootContactIntentLabelSet labels = _intentLabels ??
+                    EditorHumanoidFootContactIntentLabelStore.Load(_inputFileName);
+                HumanoidFootContactIntentEstimate estimate = _intentEstimate ??
                     HumanoidFootContactIntentEstimator.Estimate(
                         _sourceSamples.Take(_lastFrame + 1).ToArray(),
-                        _frameRate, _sourceHumanScale);
+                        _frameRate, _sourceHumanScale, labels);
                 return new
                 {
                     source = HumanoidFootContactIntent.Source,
+                    labels = new
+                    {
+                        file_count = labels?.FileCount ?? 0,
+                        row_count = labels?.RowCount ?? 0
+                    },
                     left = DescribeIntentSide(estimate.Left, estimate.LeftUncertainSpans),
                     right = DescribeIntentSide(estimate.Right, estimate.RightUncertainSpans)
                 };
@@ -475,21 +544,29 @@ namespace Fbx2Vmd.FBXImporter
         private object DescribeIntentSide(IReadOnlyList<HumanoidFootContactIntent> intents,
             IReadOnlyList<Vector2Int> uncertainSpans)
         {
-            int uncertainFrames = uncertainSpans.Sum(span => span.y - span.x);
             int totalFrames = _lastFrame + 1;
-            return new
-            {
-                intents = intents.Select(intent => new
+            // 런타임 추정은 전체 클립 기준이므로 기록된 프레임 범위로 잘라 담음.
+            var clippedIntents = intents
+                .Where(intent => intent.StartFrame < totalFrames)
+                .Select(intent => new
                 {
                     start_frame = intent.StartFrame,
-                    end_frame_exclusive = intent.EndFrameExclusive,
+                    end_frame_exclusive = Mathf.Min(intent.EndFrameExclusive, totalFrames),
                     mode = intent.Mode.ToString().ToLowerInvariant(),
                     certainty = intent.Certainty.ToString().ToLowerInvariant(),
                     starts_at_clip_start = intent.StartsAtClipStart,
                     anchor_m = new[] { intent.Anchor.x, intent.Anchor.y, intent.Anchor.z }
-                }).ToArray(),
+                }).ToArray();
+            var clippedSpans = uncertainSpans
+                .Where(span => span.x < totalFrames)
+                .Select(span => new[] { span.x, Mathf.Min(span.y, totalFrames) })
+                .ToArray();
+            int uncertainFrames = clippedSpans.Sum(span => span[1] - span[0]);
+            return new
+            {
+                intents = clippedIntents,
                 // 각 구간은 [시작 프레임, 끝 배타 프레임]임.
-                uncertain_spans = uncertainSpans.Select(span => new[] { span.x, span.y }).ToArray(),
+                uncertain_spans = clippedSpans,
                 uncertain_ratio = totalFrames > 0 ? uncertainFrames / (double)totalFrames : 0d
             };
         }

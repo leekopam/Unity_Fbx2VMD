@@ -83,7 +83,8 @@ namespace Fbx2Vmd.FBXImporter
             float frameRate,
             float sourceHumanScale,
             Quaternion sourceToTargetRotation,
-            float targetHumanScale = float.NaN)
+            float targetHumanScale = float.NaN,
+            HumanoidFootContactIntentEstimate intents = null)
         {
             ValidateSamples(sourceSamples, targetSamples, frameRate);
 
@@ -157,6 +158,7 @@ namespace Fbx2Vmd.FBXImporter
                 normalizedRotation,
                 minimumContactFrames,
                 releaseFrames,
+                intents?.Left,
                 out int leftRunCount);
             Vector3[] rightCorrections = BuildFootCorrections(
                 sourceRight,
@@ -166,6 +168,7 @@ namespace Fbx2Vmd.FBXImporter
                 normalizedRotation,
                 minimumContactFrames,
                 releaseFrames,
+                intents?.Right,
                 out int rightRunCount);
             Vector3[] leftToeDirections = ApplySupportPoseCorrections(
                 sourceLeftFeet,
@@ -292,8 +295,14 @@ namespace Fbx2Vmd.FBXImporter
             Quaternion sourceToTargetRotation,
             int minimumContactFrames,
             int releaseFrames,
+            IReadOnlyList<HumanoidFootContactIntent> intents,
             out int runCount)
         {
+            // 확정된 의도 구간은 프레임별 앵커 방침으로 변환해 보정 계획에 반영함.
+            HumanoidFootAnchorPolicy[] policies =
+                HumanoidFootAnchorPolicyResolver.Rasterize(intents, sourcePoints.Count);
+            float pinRelease =
+                sourceHumanScale * HumanoidFootContactIntentEstimator.SlideDisplacementPerHumanScale;
             float contactHeight = CalculatePercentileHeight(sourcePoints, 0.02f) +
                 sourceHumanScale * ContactHeightMarginPerHumanScale;
             float contactSpeedLimit =
@@ -335,7 +344,9 @@ namespace Fbx2Vmd.FBXImporter
                         targetToSourceRotation,
                         runStart,
                         runEnd,
-                        releaseFrames);
+                        releaseFrames,
+                        policies,
+                        pinRelease);
                     runCount++;
                 }
 
@@ -354,14 +365,48 @@ namespace Fbx2Vmd.FBXImporter
             Quaternion targetToSourceRotation,
             int runStart,
             int runEnd,
-            int releaseFrames)
+            int releaseFrames,
+            HumanoidFootAnchorPolicy[] policies,
+            float pinReleaseDistance)
         {
             Vector3 sourceAnchor = sourcePoints[runStart];
             Vector3 targetAnchor = targetPoints[runStart];
+            bool pinned = false;
+            bool pinBlocked = false;
+            Vector3 pinSource = Vector3.zero;
             for (int index = runStart; index <= runEnd; index++)
             {
                 Vector3 sourceDelta = sourcePoints[index] - sourceAnchor;
                 sourceDelta.y = 0f;
+                if (policies[index] == HumanoidFootAnchorPolicy.Pinned && !pinBlocked)
+                {
+                    if (!pinned)
+                    {
+                        // 핀 진입 시 지금까지 추종한 위치에 앵커를 접어 경계 위치를 유지함.
+                        targetAnchor += sourceToTargetRotation * sourceDelta;
+                        pinSource = sourcePoints[index];
+                        pinned = true;
+                    }
+                    else if (pinReleaseDistance > 0f &&
+                        HorizontalDistance(sourcePoints[index], pinSource) >= pinReleaseDistance)
+                    {
+                        // 원본이 핀 구간에서 실제로 움직이면 의도 추정 오류로 보고 추종을 재개하되
+                        // 해제 프레임에 앵커가 튀지 않도록 기준점을 현재 원본으로 넘김.
+                        pinned = false;
+                        pinBlocked = true;
+                        sourceAnchor = sourcePoints[index];
+                        sourceDelta = Vector3.zero;
+                    }
+                    if (pinned)
+                    {
+                        sourceAnchor = sourcePoints[index];
+                        sourceDelta = Vector3.zero;
+                    }
+                }
+                else
+                {
+                    pinned = false;
+                }
                 Vector3 desiredTargetPoint =
                     targetAnchor + sourceToTargetRotation * sourceDelta;
                 Vector3 worldCorrection = desiredTargetPoint - targetPoints[index];

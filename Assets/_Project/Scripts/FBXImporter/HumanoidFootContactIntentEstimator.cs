@@ -14,21 +14,24 @@ namespace Fbx2Vmd.FBXImporter
 
         private const float FloorPercentile = 0.1f;
         private const float SupportHeightPerHumanScale = 0.015f;
-        private const float SupportSpeedPerHumanScale = 0.05f;
+        // 지지 속도 비율은 런타임 앵커 방침의 추종 상한으로도 재사용함.
+        internal const float SupportSpeedPerHumanScale = 0.05f;
         private const float AirborneHeightPerHumanScale = 0.05f;
         private const float AirborneSpeedPerHumanScale = 0.2f;
         private const float ClipMotionPerHumanScale = 0.05f;
         private const float MinimumSupportDurationSeconds = 0.1f;
         private const int NoiseGapFrames = 2;
 
-        // 지지 구간 안에서 순수 수평 이동이 이 비율을 넘고 방향이 일치할 때만 미끄러짐 의도로 봄.
-        private const float SlideDisplacementPerHumanScale = 0.02f;
+        // 지지 구간 안에서 순수 수평 이동이 이 비율을 넘고 방향이 일치할 때만 미끄럼 의도로 봄.
+        // 핀 해제 임계로도 재사용함.
+        internal const float SlideDisplacementPerHumanScale = 0.02f;
         private const float SlideDirectionConsistency = 0.5f;
 
         internal static HumanoidFootContactIntentEstimate Estimate(
             IReadOnlyList<HumanoidFootContactSample> samples,
             float frameRate,
-            float humanScale)
+            float humanScale,
+            HumanoidFootContactIntentLabelSet labels = null)
         {
             if (samples == null || samples.Count < 2 ||
                 !IsFinite(frameRate) || frameRate <= 0f ||
@@ -71,10 +74,10 @@ namespace Fbx2Vmd.FBXImporter
                 maxRightFootY - minRightFootY >= humanScale * ClipMotionPerHumanScale;
             List<HumanoidFootContactIntent> left = EstimateFoot(
                 leftFeet, leftToes, frameRate, humanScale, true, hasClipMotion,
-                out List<Vector2Int> leftUncertain);
+                labels?.Left, out List<Vector2Int> leftUncertain);
             List<HumanoidFootContactIntent> right = EstimateFoot(
                 rightFeet, rightToes, frameRate, humanScale, false, hasClipMotion,
-                out List<Vector2Int> rightUncertain);
+                labels?.Right, out List<Vector2Int> rightUncertain);
             return new HumanoidFootContactIntentEstimate(
                 left, right, leftUncertain, rightUncertain);
         }
@@ -86,6 +89,7 @@ namespace Fbx2Vmd.FBXImporter
             float humanScale,
             bool isLeft,
             bool hasClipMotion,
+            IReadOnlyList<HumanoidFootContactIntentLabel> labels,
             out List<Vector2Int> uncertainSpans)
         {
             int count = feet.Length;
@@ -177,6 +181,14 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
 
+            // 사람 확정 표식은 자동 정리를 모두 거친 뒤 마지막에 덮어씀.
+            // 병합 판정(preMerge)에도 같은 표식을 입혀 표식 구간이 확신을 깎지 않게 함.
+            if (labels != null)
+            {
+                ApplyHumanLabels(classes, labels);
+                ApplyHumanLabels(preMerge, labels);
+            }
+
             var intents = new List<HumanoidFootContactIntent>();
             uncertainSpans = new List<Vector2Int>();
             foreach (IntRange span in Ranges(classes))
@@ -184,7 +196,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (span.Classification == FrameClass.Support)
                 {
                     intents.Add(BuildIntent(feet, toes, preMerge, span,
-                        humanScale, isLeft));
+                        humanScale, isLeft, labels));
                 }
                 else if (span.Classification == FrameClass.Uncertain)
                 {
@@ -201,7 +213,8 @@ namespace Fbx2Vmd.FBXImporter
             FrameClass[] classes,
             IntRange span,
             float humanScale,
-            bool isLeft)
+            bool isLeft,
+            IReadOnlyList<HumanoidFootContactIntentLabel> labels)
         {
             Vector3 anchor = (feet[span.Start] + toes[span.Start]) * 0.5f;
             Vector2 net = HorizontalDelta(anchor,
@@ -231,6 +244,9 @@ namespace Fbx2Vmd.FBXImporter
                 consistency >= SlideDirectionConsistency
                     ? HumanoidFootContactIntentMode.Slide
                     : HumanoidFootContactIntentMode.Plant;
+            // 겹치는 표식의 모드가 하나로 확정될 때만 자동 판정을 덮어씀.
+            HumanoidFootContactIntentMode? labeled = ResolveLabeledMode(labels, span);
+            if (labeled.HasValue) mode = labeled.Value;
             HumanoidFootContactIntentCertainty certainty = HumanoidFootContactIntentCertainty.Confident;
             for (int index = span.Start; index <= span.End; index++)
             {
@@ -250,6 +266,41 @@ namespace Fbx2Vmd.FBXImporter
                 // 첫 프레임은 속도가 없어 항상 불확실이므로, 첫 관측 프레임부터
                 // 이어진 지지는 touchdown이 관측되지 않은 클립 시작 지지로 표시함.
                 span.Start <= 1);
+        }
+
+        // 지지·자유발 표식은 자동 정리 이후의 분류를 그대로 덮어씀.
+        private static void ApplyHumanLabels(FrameClass[] classes,
+            IReadOnlyList<HumanoidFootContactIntentLabel> labels)
+        {
+            foreach (HumanoidFootContactIntentLabel label in labels)
+            {
+                if (!label.IsSupport.HasValue) continue;
+                int start = Mathf.Max(0, label.StartFrame);
+                int end = Mathf.Min(classes.Length - 1, label.EndFrameInclusive);
+                FrameClass value = label.IsSupport.Value
+                    ? FrameClass.Support
+                    : FrameClass.Airborne;
+                for (int index = start; index <= end; index++)
+                    classes[index] = value;
+            }
+        }
+
+        private static HumanoidFootContactIntentMode? ResolveLabeledMode(
+            IReadOnlyList<HumanoidFootContactIntentLabel> labels, IntRange span)
+        {
+            if (labels == null) return null;
+            HumanoidFootContactIntentMode? selected = null;
+            foreach (HumanoidFootContactIntentLabel label in labels)
+            {
+                if (!label.Mode.HasValue ||
+                    label.EndFrameInclusive < span.Start ||
+                    label.StartFrame > span.End) continue;
+                // 서로 엇갈리는 모드 표식은 어느 쪽도 채택하지 않음.
+                if (selected.HasValue && selected.Value != label.Mode.Value)
+                    return null;
+                selected = label.Mode;
+            }
+            return selected;
         }
 
         private readonly struct IntRange

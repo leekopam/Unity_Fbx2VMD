@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { analyzeContactEvents } from "./analyze-contact-events.mjs";
+import { analyzeContactEvents, resolveEvidenceDirectory,
+  resolveEvidenceDirectoryPath } from "./analyze-contact-events.mjs";
 
 const columns = ("frame,time_s,time_error_ms,side,grounding_status,has_ground," +
   "support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm," +
@@ -158,4 +162,50 @@ test("접지 의도 추정이 없는 상태 문서는 교차 대조 없이 기�
   assert.equal(result.contact_intent_crosscheck, null);
   assert.ok(result.events.every(item =>
     item.kind !== "contact_intent_mismatch"));
+});
+
+test("허용된 증거 패밀리의 runId/requestId 경로만 풀어준다", () => {
+  const root = path.resolve("D:/evidence/boogle");
+  const runId = "11111111-2222-3333-4444-555555555555";
+  const requestId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  for (const family of ["full-clip", "full-clip-f14", "vrm-character"]) {
+    const resolved = resolveEvidenceDirectoryPath(
+      path.join(root, family, runId, requestId), root);
+    assert.equal(resolved.family, family);
+    assert.equal(resolved.runId, runId);
+    assert.equal(resolved.requestId, requestId);
+  }
+  // 허용 패밀리 밖의 폴더, 깊이 부족·초과, 상위 이동, 루트 밖 경로는 거부함.
+  for (const bad of [
+    path.join(root, "full-clip-runs", runId, requestId),
+    path.join(root, "full-clip", runId),
+    path.join(root, "full-clip", runId, requestId, "nested"),
+    path.join(root, "..", "full-clip", runId, requestId),
+    "relative/path",
+    ""])
+    assert.equal(resolveEvidenceDirectoryPath(bad, root), null, bad);
+});
+
+test("실제 경로와 실행 경로가 다르면 증거 폴더를 거부한다", async (t) => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "contact-events-"));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const root = path.join(temp, "boogle");
+  const runId = "11111111-2222-3333-4444-555555555555";
+  const requestId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const directory = path.join(root, "full-clip-f14", runId, requestId);
+  await mkdir(directory, { recursive: true });
+  // 실제 폴더는 F14 패밀리를 그대로 허용함.
+  const resolved = await resolveEvidenceDirectory(directory, root);
+  assert.equal(resolved.family, "full-clip-f14");
+  // 심볼릭 링크·연결점으로 만든 겉보기 경로는 실제 경로와 달라 거부함.
+  const linkDirectory = path.join(root, "full-clip", runId, requestId);
+  try {
+    await mkdir(path.dirname(linkDirectory), { recursive: true });
+    await symlink(directory, linkDirectory, "junction");
+  } catch (error) {
+    t.skip(`링크를 만들 수 없는 환경: ${error.message}`);
+    return;
+  }
+  await assert.rejects(() => resolveEvidenceDirectory(linkDirectory, root),
+    /실제 경로가 실행 경로와 다름/);
 });

@@ -136,10 +136,42 @@ namespace Tests.Editor.FBXImporter
             Assert.That(correction.y, Is.EqualTo(0.02f).Within(0.000001f));
         }
 
+        [Test]
+        public void Given_ConfidentPlantIntent_When_SourceDriftsDuringSupport_Then_AnchorStaysPinned()
+        {
+            // 지지 구간 안에서 원본 발이 미세하게 이동해도 확정된 Plant 의도는 앵커를 고정함.
+            Vector3[] source = CreatePoints(40, index => new Vector3(
+                index >= 10 && index < 20 ? (index - 9) * 0.0005f :
+                index >= 20 ? 0.0055f : 0f, 0f, 0f));
+            Vector3[] target = CreatePoints(40, _ => Vector3.zero);
+
+            object plan = BuildPlan(source, target, Quaternion.identity,
+                CreateEstimate(10, 20));
+
+            TryEvaluate(plan, 11f / FrameRate, out Vector3 pinnedFirst);
+            TryEvaluate(plan, 18f / FrameRate, out Vector3 pinnedLast);
+            Assert.That(Vector3.Distance(pinnedFirst, pinnedLast),
+                Is.LessThan(0.000001f));
+
+            // 의도가 없으면 같은 구간의 보정이 원본 이동을 그대로 따라감.
+            object freePlan = BuildPlan(source, target, Quaternion.identity);
+            TryEvaluate(freePlan, 11f / FrameRate, out Vector3 freeFirst);
+            TryEvaluate(freePlan, 18f / FrameRate, out Vector3 freeLast);
+            Assert.That(Vector3.Distance(freeFirst, freeLast),
+                Is.GreaterThan(0.0005f));
+
+            // 핀 구간을 빠져나가면 접힌 앵커에서 원본 추종을 재개해 위치가 연속됨.
+            TryEvaluate(plan, 19f / FrameRate, out Vector3 pinnedEdge);
+            TryEvaluate(plan, 21f / FrameRate, out Vector3 resumed);
+            Assert.That(Vector3.Distance(pinnedEdge, resumed),
+                Is.LessThan(0.002f));
+        }
+
         private static object BuildPlan(
             Vector3[] source,
             Vector3[] target,
-            Quaternion rotation)
+            Quaternion rotation,
+            object intents = null)
         {
             Assembly assembly = typeof(FBXVmdPipeline).Assembly;
             Type sampleType = assembly.GetType(
@@ -147,6 +179,9 @@ namespace Tests.Editor.FBXImporter
                 throwOnError: true);
             Type plannerType = assembly.GetType(
                 "Fbx2Vmd.FBXImporter.HumanoidFootContactPlanner",
+                throwOnError: true);
+            Type estimateType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentEstimate",
                 throwOnError: true);
             Array sourceSamples = CreateSamples(sampleType, source);
             Array targetSamples = CreateSamples(sampleType, target);
@@ -161,7 +196,8 @@ namespace Tests.Editor.FBXImporter
                     typeof(float),
                     typeof(float),
                     typeof(Quaternion),
-                    typeof(float)
+                    typeof(float),
+                    estimateType
                 },
                 modifiers: null);
             Assert.That(build, Is.Not.Null);
@@ -174,8 +210,49 @@ namespace Tests.Editor.FBXImporter
                     FrameRate,
                     HumanScale,
                     rotation,
-                    HumanScale
+                    HumanScale,
+                    intents
                 });
+        }
+
+        private static object CreateEstimate(int startFrame, int endFrameExclusive)
+        {
+            Assembly assembly = typeof(FBXVmdPipeline).Assembly;
+            Type estimateType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentEstimate",
+                throwOnError: true);
+            Type intentType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntent",
+                throwOnError: true);
+            Type modeType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentMode",
+                throwOnError: true);
+            Type certaintyType = assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentCertainty",
+                throwOnError: true);
+            Array left = Array.CreateInstance(intentType, 1);
+            left.SetValue(
+                Activator.CreateInstance(
+                    intentType,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    binder: null,
+                    args: new object[]
+                    {
+                        true, startFrame, endFrameExclusive, Vector3.zero,
+                        Enum.ToObject(modeType, 0), Enum.ToObject(certaintyType, 0), false
+                    },
+                    culture: null),
+                0);
+            return Activator.CreateInstance(
+                estimateType,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                args: new object[]
+                {
+                    left, Array.CreateInstance(intentType, 0),
+                    new Vector2Int[0], new Vector2Int[0]
+                },
+                culture: null);
         }
 
         private static Array CreateSamples(Type sampleType, Vector3[] points)
