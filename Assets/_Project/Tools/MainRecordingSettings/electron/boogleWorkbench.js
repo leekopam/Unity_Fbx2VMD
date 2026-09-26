@@ -16,7 +16,8 @@ export function extractWorkbenchUrl(line) {
 
 // boogle-sdk의 workbench 명령을 자식 프로세스로 띄워 준비 URL을 받는다.
 // Electron 안에서는 ELECTRON_RUN_AS_NODE로 node 런타임으로 실행한다.
-export function startBoogleWorkbench({ appRoot, spawnProcess = spawn, onError, readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
+// 준비 완료 후 프로세스가 종료되면 onExit을 호출해 호출자가 참조를 정리하게 한다.
+export function startBoogleWorkbench({ appRoot, spawnProcess = spawn, onError, onExit, readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
   const cliPath = path.join(appRoot, "node_modules", "boogle-sdk", "dist", "cli.js");
   const child = spawnProcess(process.execPath, [cliPath, "workbench"], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
@@ -68,7 +69,9 @@ export function startBoogleWorkbench({ appRoot, spawnProcess = spawn, onError, r
     child.once("exit", (code) => {
       if (!settled) {
         settle(reject, new Error(`Workbench 프로세스가 종료됨 (code ${code})`));
+        return;
       }
+      onExit?.(code);
     });
   });
   url.catch((error) => onError?.(error));

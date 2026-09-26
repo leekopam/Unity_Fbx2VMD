@@ -14,7 +14,7 @@ const statusLabels = {
   error: "연결 오류"
 };
 
-export function bootstrapSettingsUi(root = document) {
+export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 15000 } = {}) {
   const elements = {
     shell: root.querySelector(".app-shell"),
     importButton: root.querySelector("#importButton"),
@@ -24,12 +24,20 @@ export function bootstrapSettingsUi(root = document) {
     log: root.querySelector("#eventLog"),
     workbenchFrame: root.querySelector("#boogleFrame"),
     workbenchStatus: root.querySelector("#workbenchStatus"),
-    workbenchRetry: root.querySelector("#workbenchRetry")
+    workbenchRetry: root.querySelector("#workbenchRetry"),
+    workbenchReload: root.querySelector("#workbenchReload")
   };
   let workbenchRequested = false;
-  elements.workbenchRetry?.addEventListener("click", () => {
-    workbenchRequested = false;
-    void ensureWorkbenchLoaded();
+  let workbenchLoadTimer = null;
+  elements.workbenchRetry?.addEventListener("click", reloadWorkbench);
+  elements.workbenchReload?.addEventListener("click", reloadWorkbench);
+  elements.workbenchFrame?.addEventListener("load", () => {
+    clearTimeout(workbenchLoadTimer);
+    workbenchLoadTimer = null;
+    if (elements.workbenchStatus) {
+      elements.workbenchStatus.textContent = "";
+      elements.workbenchStatus.hidden = true;
+    }
   });
   const panelTargets = Array.from(root.querySelectorAll?.("[data-panel-target]") ?? []);
   const panelViews = Array.from(root.querySelectorAll?.("[data-panel-view]") ?? []);
@@ -151,15 +159,29 @@ export function bootstrapSettingsUi(root = document) {
         showWorkbenchError("Workbench 서버를 시작하지 못했습니다. boogle-sdk 설치를 확인하세요.");
         return;
       }
-      elements.workbenchFrame.addEventListener("load", () => {
-        elements.workbenchStatus.textContent = "";
-        elements.workbenchStatus.hidden = true;
-      }, { once: true });
       elements.workbenchFrame.src = url;
       elements.workbenchFrame.hidden = false;
+      // iframe load가 끝나지 않으면 오류 상태로 전환해 다시 시도 경로를 연다.
+      workbenchLoadTimer = setTimeout(() => {
+        workbenchLoadTimer = null;
+        showWorkbenchError("Workbench 화면 로드 시간이 초과됐습니다.");
+      }, workbenchLoadTimeoutMs);
+      workbenchLoadTimer.unref?.();
     } catch {
       showWorkbenchError("Workbench 주소를 가져오지 못했습니다.");
     }
+  }
+
+  // 다시 시도·다시 불러오기는 요청 상태를 초기화하고 iframe을 비운 뒤 URL부터 다시 받는다.
+  function reloadWorkbench() {
+    clearTimeout(workbenchLoadTimer);
+    workbenchLoadTimer = null;
+    workbenchRequested = false;
+    if (elements.workbenchFrame) {
+      elements.workbenchFrame.hidden = true;
+      elements.workbenchFrame.src = "about:blank";
+    }
+    void ensureWorkbenchLoaded();
   }
 
   function showWorkbenchError(message) {
