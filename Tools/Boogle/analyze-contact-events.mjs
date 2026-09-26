@@ -93,6 +93,62 @@ function classifySide(rows, scale, frameRate, hasClipMotion) {
   return { classes, floorFoot, floorToes, limits, hasStableFloor };
 }
 
+// 캡처가 기록한 원본 궤적 접지 의도와 이 분석기의 프레임 분류를 교차 대조함.
+// 의도 구간의 과반 미만이 지지로 분류되면 불일치 사건으로 남김.
+function crosscheckContactIntents(contactIntents, classesBySide) {
+  if (!contactIntents || typeof contactIntents !== "object") return null;
+  const summary = { source: contactIntents.source ?? null };
+  if (contactIntents.error) summary.error = String(contactIntents.error);
+  const mismatches = [];
+  for (const side of ["left", "right"]) {
+    const sideIntents = contactIntents[side];
+    const classes = classesBySide[side];
+    const intents = Array.isArray(sideIntents?.intents) ? sideIntents.intents : [];
+    const uncertainSpans = Array.isArray(sideIntents?.uncertain_spans)
+      ? sideIntents.uncertain_spans : [];
+    const details = [];
+    let coveredFrames = 0;
+    let agreedFrames = 0;
+    for (const intent of intents) {
+      const start = intent?.start_frame;
+      const end = intent?.end_frame_exclusive;
+      const detail = { start_frame: start, end_frame_exclusive: end,
+        mode: intent?.mode ?? null, certainty: intent?.certainty ?? null,
+        starts_at_clip_start: intent?.starts_at_clip_start === true };
+      if (!Number.isInteger(start) || !Number.isInteger(end) ||
+          start < 0 || end > classes.length || start >= end) {
+        detail.support_agreement = null;
+        detail.malformed = true;
+      } else {
+        let support = 0;
+        for (let frame = start; frame < end; frame++)
+          if (classes[frame] === "support") support++;
+        detail.support_agreement = support / (end - start);
+        coveredFrames += end - start;
+        agreedFrames += support;
+        if (support * 2 < end - start)
+          mismatches.push({ side, start_frame: start, end_frame: end - 1 });
+      }
+      details.push(detail);
+    }
+    // 의도 측 불확실 구간이 분석기에서는 확정됐는지도 교차 대조함.
+    let uncertainOverlap = 0;
+    for (const span of uncertainSpans) {
+      if (!Array.isArray(span) || span.length !== 2 ||
+          !Number.isInteger(span[0]) || !Number.isInteger(span[1])) continue;
+      for (let frame = Math.max(0, span[0]);
+           frame < Math.min(span[1], classes.length); frame++)
+        if (classes[frame] !== "uncertain") uncertainOverlap++;
+    }
+    summary[side] = { intent_count: intents.length,
+      support_frame_agreement: coveredFrames ? agreedFrames / coveredFrames : null,
+      uncertain_overlap_frames: uncertainOverlap,
+      uncertain_ratio: sideIntents?.uncertain_ratio ?? null,
+      intents: details };
+  }
+  return { summary, mismatches };
+}
+
 function readFrames(state, csv) {
   const header = csv.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0].split(",");
   if (header.length < baseColumns.length ||
@@ -231,11 +287,13 @@ export function analyzeContactEvents(state, csv, fingerprint = {}) {
       maximum(bySide[side].map(row => row.sourceFootY)) -
         minimum(bySide[side].map(row => row.sourceFootY)) >=
           state.source_human_scale * 0.05);
+    const classesBySide = {};
     for (const side of ["left", "right"]) {
       const rows = bySide[side];
       const { classes, floorFoot, floorToes, limits, hasStableFloor } =
         classifySide(rows, state.source_human_scale, state.clip_frame_rate,
           hasClipMotion);
+      classesBySide[side] = classes;
       thresholds[side] = { floorFootM: floorFoot, floorToesM: floorToes,
         hasStableFloor, ...limits };
       let previousConfident = null;
@@ -309,6 +367,23 @@ export function analyzeContactEvents(state, csv, fingerprint = {}) {
       }
       appendIssueEvents(events, segments, rows, classes, side, limits);
     }
+    // 캡처 기록의 접지 의도와 프레임 분류가 크게 어긋난 구간은 검토 사건으로 남김.
+    const intentCrosscheck =
+      crosscheckContactIntents(state.contact_intents, classesBySide);
+    if (intentCrosscheck) {
+      for (const mismatch of intentCrosscheck.mismatches) {
+        events.push({
+          id: `${mismatch.side}-contact_intent_mismatch-${mismatch.start_frame}-${mismatch.end_frame}`,
+          segment_id: null, side: mismatch.side,
+          start_frame: mismatch.start_frame, end_frame: mismatch.end_frame,
+          representative_frame: Math.floor((mismatch.start_frame +
+            mismatch.end_frame) / 2),
+          kind: "contact_intent_mismatch", priority: 2,
+          hit_frames: mismatch.end_frame - mismatch.start_frame + 1,
+          investigate_first: "원본 의도 추정과 오프라인 분석 구간 비교",
+          status: "MANUAL_REVIEW_REQUIRED" });
+      }
+    }
     events.sort((a, b) => b.priority - a.priority ||
       (b.end_frame - b.start_frame) - (a.end_frame - a.start_frame) ||
       a.start_frame - b.start_frame || a.side.localeCompare(b.side));
@@ -318,7 +393,8 @@ export function analyzeContactEvents(state, csv, fingerprint = {}) {
         frame_rate: state.clip_frame_rate, last_frame: state.last_frame,
         row_count: state.row_count, source_human_scale: state.source_human_scale,
         ...fingerprint },
-      limits: thresholds, summary: { segment_count: segments.length,
+      limits: thresholds, contact_intent_crosscheck: intentCrosscheck?.summary ?? null,
+      summary: { segment_count: segments.length,
         event_count: events.length, transition_count: transitions.length,
         review_queue_count: reviewQueue.length },
       limitations: ["원본 XZ·root 궤적이 없어 고정·의도된 이동을 확정하지 않음",
