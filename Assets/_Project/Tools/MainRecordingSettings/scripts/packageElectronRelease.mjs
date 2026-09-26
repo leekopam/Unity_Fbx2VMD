@@ -25,7 +25,8 @@ const runtimeAppEntries = [
   "client",
   "electron",
   "server",
-  "node_modules/ws"
+  "node_modules/ws",
+  "node_modules/boogle-sdk"
 ];
 
 export async function packageElectronRelease({

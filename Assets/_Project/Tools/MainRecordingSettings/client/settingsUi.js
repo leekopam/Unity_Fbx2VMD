@@ -21,8 +21,11 @@ export function bootstrapSettingsUi(root = document) {
     statusBadge: root.querySelector("#statusBadge"),
     statusText: root.querySelector("#statusText"),
     feedback: root.querySelector("#feedback"),
-    log: root.querySelector("#eventLog")
+    log: root.querySelector("#eventLog"),
+    workbenchFrame: root.querySelector("#boogleFrame"),
+    workbenchStatus: root.querySelector("#workbenchStatus")
   };
+  let workbenchRequested = false;
   const panelTargets = Array.from(root.querySelectorAll?.("[data-panel-target]") ?? []);
   const panelViews = Array.from(root.querySelectorAll?.("[data-panel-view]") ?? []);
 
@@ -110,6 +113,43 @@ export function bootstrapSettingsUi(root = document) {
 
     for (const view of panelViews) {
       view.hidden = view.dataset.panelView !== panelName;
+    }
+
+    if (panelName === "developer") {
+      void ensureWorkbenchLoaded();
+    }
+  }
+
+  // 개발자 모드 패널이 처음 열릴 때만 Workbench URL을 가져와 iframe에 탑재한다.
+  async function ensureWorkbenchLoaded() {
+    if (workbenchRequested || !elements.workbenchFrame || !elements.workbenchStatus) {
+      return;
+    }
+    workbenchRequested = true;
+
+    const getUrl = globalThis.window?.settingsShell?.getWorkbenchUrl;
+    if (typeof getUrl !== "function") {
+      elements.workbenchStatus.dataset.tone = "error";
+      elements.workbenchStatus.textContent = "현재 환경에서는 Workbench를 사용할 수 없습니다.";
+      return;
+    }
+
+    try {
+      const url = await getUrl();
+      if (!url) {
+        elements.workbenchStatus.dataset.tone = "error";
+        elements.workbenchStatus.textContent = "Workbench 서버를 시작하지 못했습니다. boogle-sdk 설치를 확인하세요.";
+        return;
+      }
+      elements.workbenchFrame.addEventListener("load", () => {
+        elements.workbenchStatus.textContent = "";
+        elements.workbenchStatus.hidden = true;
+      }, { once: true });
+      elements.workbenchFrame.src = url;
+      elements.workbenchFrame.hidden = false;
+    } catch {
+      elements.workbenchStatus.dataset.tone = "error";
+      elements.workbenchStatus.textContent = "Workbench 주소를 가져오지 못했습니다.";
     }
   }
 
