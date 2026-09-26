@@ -1497,23 +1497,24 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void MainRecordingScene_ActualGameViewZoomDriftIsReappliedFromOneXSetting()
+        public void MainRecordingScene_GameViewZoomDriftIsNotForcedBack()
         {
             Type autoApplierType = RequireType(GameViewScaleAutoApplierTypeName);
+            Assert.That(
+                autoApplierType.GetMethod(
+                    "ApplyActiveSceneSettingGameViewScaleIfDrifted",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic),
+                Is.Null,
+                "주기적 확대율 감시는 제거되어 GameView 스케일을 자유롭게 조절할 수 있어야 합니다.");
+
             EditorSceneManager.OpenScene(MainRecordingScenePath);
             EditorWindow gameView = RequireGameViewWindow();
 
             SetGameViewZoomScale(gameView, new Vector2(5f, 5f));
-            Vector2 before = GetGameViewZoomScale(gameView);
-            Assert.That(before.x, Is.EqualTo(5f).Within(0.001f));
-            Assert.That(before.y, Is.EqualTo(5f).Within(0.001f));
-
-            bool applied = (bool)InvokeStatic(autoApplierType, "ApplyActiveSceneSettingGameViewScaleIfDrifted");
             Vector2 after = GetGameViewZoomScale(gameView);
 
-            Assert.That(applied, Is.True, "OneX setting must reapply when the already-open GameView drifts back to a zoomed scale.");
-            Assert.That(after.x, Is.EqualTo(1f).Within(0.001f));
-            Assert.That(after.y, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(after.x, Is.EqualTo(5f).Within(0.001f));
+            Assert.That(after.y, Is.EqualTo(5f).Within(0.001f));
         }
 
         [Test]

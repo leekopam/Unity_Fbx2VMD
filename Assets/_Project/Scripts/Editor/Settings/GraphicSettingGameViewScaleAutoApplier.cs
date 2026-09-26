@@ -10,16 +10,12 @@ namespace Fbx2Vmd.Settings.EditorTools
     public static class GraphicSettingGameViewScaleAutoApplier
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
-        private const double MaintainIntervalSeconds = 0.5d;
         private static bool isScheduled;
-        private static double nextMaintainTime;
 
         static GraphicSettingGameViewScaleAutoApplier()
         {
             EditorSceneManager.sceneOpened -= OnSceneOpened;
             EditorSceneManager.sceneOpened += OnSceneOpened;
-            EditorApplication.update -= MaintainActiveSceneSettingGameViewScale;
-            EditorApplication.update += MaintainActiveSceneSettingGameViewScale;
             ScheduleApply();
         }
 
@@ -45,41 +41,12 @@ namespace Fbx2Vmd.Settings.EditorTools
             return setting != null && GameViewScaleController.TryApply(setting.GameViewScaleMode);
         }
 
-        public static bool ApplyActiveSceneSettingGameViewScaleIfDrifted()
-        {
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
-            {
-                return false;
-            }
-
-            GraphicSetting setting = FindActiveSceneGraphicSetting();
-            if (setting == null || setting.GameViewScaleMode != GraphicGameViewScaleMode.OneX)
-            {
-                return false;
-            }
-
-            return !GameViewScaleController.IsCurrentZoomScale(Vector2.one, 0.001f)
-                && GameViewScaleController.TryApply(setting.GameViewScaleMode);
-        }
-
         private static void OnSceneOpened(Scene scene, OpenSceneMode mode)
         {
             if (scene.path == MainRecordingScenePath)
             {
                 ScheduleApply();
             }
-        }
-
-        private static void MaintainActiveSceneSettingGameViewScale()
-        {
-            double now = EditorApplication.timeSinceStartup;
-            if (now < nextMaintainTime)
-            {
-                return;
-            }
-
-            nextMaintainTime = now + MaintainIntervalSeconds;
-            ApplyActiveSceneSettingGameViewScaleIfDrifted();
         }
 
         private static void ApplyScheduled()
