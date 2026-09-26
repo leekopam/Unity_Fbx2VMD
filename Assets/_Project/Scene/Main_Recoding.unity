@@ -141,7 +141,7 @@ Material:
   m_CustomRenderQueue: 2001
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties:
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
@@ -871,7 +871,7 @@ MonoBehaviour:
   applyOnAwake: 1
   applyOnValidate: 0
   applyBackgroundColor: 1
-  backgroundColor: {r: 0, g: 0, b: 0, a: 1}
+  backgroundColor: {r: 0, g: 0, b: 0, a: 0}
 --- !u!114 &156355648
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1565,7 +1565,7 @@ RectTransform:
   m_Father: {fileID: 158675714}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 10, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -1964,17 +1964,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
---- !u!114 &421532801 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 8151235911576539714, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-  m_PrefabInstance: {fileID: 421532800}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 643269947}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0bf1e550773f04541abd1cc49b5bff75, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &422886706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2567,11 +2556,6 @@ MonoBehaviour:
   boneID: 121
   ikEnabled: 0
   ikWeight: 1
---- !u!1 &643269947 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 6818878734488371576, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
-  m_PrefabInstance: {fileID: 421532800}
-  m_PrefabAsset: {fileID: 0}
 --- !u!114 &646933165
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3244,7 +3228,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &729755635
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3913,7 +3897,7 @@ Material:
   m_CustomRenderQueue: 2001
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties:
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
@@ -5203,7 +5187,7 @@ Material:
   m_CustomRenderQueue: 2001
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties:
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
@@ -5361,7 +5345,7 @@ Material:
   m_CustomRenderQueue: 2001
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties:
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
@@ -6574,9 +6558,13 @@ PrefabInstance:
       propertyPath: m_Name
       value: YYB Hatsune Miku_default_1.0ver
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 5866666021909216657, guid: a67a6bac72a604e41821293537b3465f, type: 3}
       propertyPath: m_Controller
-      value:
+      value: 
       objectReference: {fileID: 9100000, guid: 87f65b936e5e7d34797ea25489fe5f51, type: 2}
     - target: {fileID: 7026134587718898032, guid: a67a6bac72a604e41821293537b3465f, type: 3}
       propertyPath: m_UpdateWhenOffscreen
@@ -6585,6 +6573,22 @@ PrefabInstance:
     - target: {fileID: 7943319854582600354, guid: a67a6bac72a604e41821293537b3465f, type: 3}
       propertyPath: m_UpdateWhenOffscreen
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8948971497317371650, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8948971497317371650, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8948971497317371650, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8948971497317371650, guid: a67a6bac72a604e41821293537b3465f, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9128207215404129817, guid: a67a6bac72a604e41821293537b3465f, type: 3}
       propertyPath: m_CastShadows
@@ -10341,8 +10345,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   model: {fileID: 1867772924}
   boneID: 107
   ikEnabled: 0
@@ -10357,8 +10361,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   model: {fileID: 1867772924}
   boneID: 106
   ikEnabled: 0
@@ -10373,8 +10377,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   model: {fileID: 1867772924}
   boneID: 105
   ikEnabled: 0
@@ -10389,8 +10393,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 482af93b30da7a048816a8ecabda762d, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   model: {fileID: 1867772924}
   boneID: 13
   ikEnabled: 0
@@ -12105,7 +12109,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1850806468
 RectTransform:
   m_ObjectHideFlags: 0
@@ -14397,8 +14401,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 53ad2e2fe37809d49b6e8b83b2aa20b0, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   _clampMusclesToHumanRange: 0
   _enableAnatomicalArmGuard: 0
   _clampArmStretchMuscles: 0
@@ -14420,8 +14424,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1ccc933889885ac46823f748e666f353, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   _animator: {fileID: 1877614752}
   _groundLayer:
     serializedVersion: 2
@@ -14436,11 +14440,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0bf1e550773f04541abd1cc49b5bff75, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   vmdRecorder: {fileID: 0}
-  _progressSlider: {fileID: 0}
-  _progressText: {fileID: 0}
+  _progressSlider: {fileID: 1850806469}
+  _progressText: {fileID: 729755636}
   ModelName: fbxToVMD
   HumanoidVMDName: fbxToVMD.vmd
   StartRecordingTime: 0.1
@@ -14464,8 +14468,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1fde9fa28c1a2864d9a1d1adbe4b9a5a, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   UseParentOfAll: 1
   UseCenterAsParentOfAll: 1
   RouteHumanoidCenterToGroove: 0
@@ -15348,7 +15352,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2101000001
 RectTransform:
   m_ObjectHideFlags: 0

@@ -557,7 +557,44 @@ public class HumanoidSampleCode : MonoBehaviour
         }
 
         string repaired = TryRepairUtf8Mojibake(text);
-        return IsBetterKoreanText(text, repaired) ? repaired : text;
+        string normalized = IsBetterKoreanText(text, repaired) ? repaired : text;
+        return ShortenTrailingAbsolutePath(normalized);
+    }
+
+    // Game View에는 긴 절대 경로가 잘리지 않게 파일명만 표시함.
+    // 전체 경로는 로그·LastSessionMessage·E2E 결과에 그대로 보존됨.
+    private static string ShortenTrailingAbsolutePath(string text)
+    {
+        int separatorIndex = text.LastIndexOf(": ", StringComparison.Ordinal);
+        if (separatorIndex < 0)
+        {
+            return text;
+        }
+
+        string tail = text.Substring(separatorIndex + 2);
+        if (!LooksLikeAbsolutePath(tail))
+        {
+            return text;
+        }
+
+        int fileNameStart = Math.Max(
+            tail.LastIndexOf('\\'), tail.LastIndexOf('/')) + 1;
+        return text.Substring(0, separatorIndex + 1) +
+            "\n" + tail.Substring(fileNameStart);
+    }
+
+    private static bool LooksLikeAbsolutePath(string value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length < 3)
+        {
+            return false;
+        }
+
+        bool windowsDrive = char.IsLetter(value[0]) && value[1] == ':' &&
+            (value[2] == '\\' || value[2] == '/');
+        bool uncOrUnix = value.StartsWith("\\\\", StringComparison.Ordinal) ||
+            value.StartsWith("/", StringComparison.Ordinal);
+        return windowsDrive || uncOrUnix;
     }
 
     private static string TryRepairUtf8Mojibake(string text)
