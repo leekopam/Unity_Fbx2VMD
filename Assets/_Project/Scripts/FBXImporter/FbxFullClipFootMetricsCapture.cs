@@ -27,6 +27,7 @@ namespace Fbx2Vmd.FBXImporter
         private readonly string _caseId;
         private readonly int _frameLimit;
         private readonly bool _captureViews;
+        private readonly bool _lowerBodyOnly;
         private readonly List<string> _capturePaths = new List<string>();
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private StreamWriter _writer;
@@ -63,13 +64,15 @@ namespace Fbx2Vmd.FBXImporter
         private int _maximumHipsStepFrame;
 
         private FbxFullClipFootMetricsCapture(FBXVmdPipeline pipeline, string directory,
-            string inputFileName, string caseId, int frameLimit, bool captureViews)
+            string inputFileName, string caseId, int frameLimit, bool captureViews,
+            bool lowerBodyOnly)
         {
             _pipeline = pipeline;
             _inputFileName = inputFileName;
             _caseId = caseId;
             _frameLimit = frameLimit;
             _captureViews = captureViews;
+            _lowerBodyOnly = lowerBodyOnly;
             CsvPath = Path.Combine(directory, "all-frames.csv");
             StatePath = Path.Combine(directory, "state.json");
         }
@@ -85,7 +88,7 @@ namespace Fbx2Vmd.FBXImporter
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
             out FbxFullClipFootMetricsCapture capture, out string message,
             string inputFileName = DefaultInputFileName, string caseId = "F10",
-            int frameLimit = 0, bool captureViews = false)
+            int frameLimit = 0, bool captureViews = false, bool lowerBodyOnly = false)
         {
             capture = null;
             message = string.Empty;
@@ -121,7 +124,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 Directory.CreateDirectory(directory);
                 capture = new FbxFullClipFootMetricsCapture(pipeline, directory,
-                    inputFileName, caseId, frameLimit, captureViews);
+                    inputFileName, caseId, frameLimit, captureViews, lowerBodyOnly);
                 if (pipeline.TryStartFbxImportFromSharedSettings(input)) return true;
                 message = $"{caseId} 제품 FBX 가져오기 요청이 거부되었습니다.";
             }
@@ -153,6 +156,13 @@ namespace Fbx2Vmd.FBXImporter
                     case Phase.Importing:
                         if (_pipeline.IsProcessing || !_pipeline.HasPreparedImportedMotion ||
                             _pipeline.SessionState != FBXVmdPipeline.FBXSessionState.Ready) return;
+                        // 하체 전용 진단은 팔 Native 준비 없이 준비된 자세를 바로 탐색함.
+                        if (_lowerBodyOnly)
+                        {
+                            Initialize();
+                            _phase = Phase.Scanning;
+                            break;
+                        }
                         if (!_pipeline.TryPlayImportedMotion())
                         {
                             Finish("playback_start", _pipeline.LastSessionMessage);
@@ -387,6 +397,7 @@ namespace Fbx2Vmd.FBXImporter
                     status = HasEvidence ? "metrics_complete_review_required" : "failed",
                     failure_stage = stage, failure_message = message,
                     scene = ScenePath, input = _inputFileName,
+                    lower_body_only = _lowerBodyOnly,
                     model = _pipeline?.targetCharacter != null ? _pipeline.targetCharacter.name : string.Empty,
                     native_skinning_processed_frames =
                         _pipeline?.ImportedMotionCorrectionProcessedFrameCount ?? 0,
