@@ -45,6 +45,20 @@ namespace Tests.Editor.FBXImporter
             Assert.That(
                 InvokeStatic("GetExtension", MotionVideoFileFormat.WebM),
                 Is.EqualTo(".webm"));
+            Assert.That(
+                InvokeStatic("GetExtension", MotionVideoFileFormat.MovProRes),
+                Is.EqualTo(".mov"));
+        }
+
+        [Test]
+        public void Given_FileFormat_When_CreatingEncoder_Then_MovUsesProRes()
+        {
+            var encoder = InvokeStatic(
+                "CreateEncoderSettings",
+                MotionVideoFileFormat.MovProRes);
+            Assert.That(
+                encoder?.GetType().Name,
+                Is.EqualTo("ProResEncoderSettings"));
         }
 
         [Test]
