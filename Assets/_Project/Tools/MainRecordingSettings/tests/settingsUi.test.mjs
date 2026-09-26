@@ -171,6 +171,112 @@ test("Camera 1 tree item switches to the camera settings panel", () => {
   }
 });
 
+test("개발자 패널을 열면 Workbench iframe을 탑재하고 실패 시 재시도 버튼을 연다", async () => {
+  const shell = createFakeElement("div");
+  shell.dataset.activePanel = "onboarding";
+
+  const onboardingButton = createFakeElement("button");
+  onboardingButton.dataset.panelTarget = "onboarding";
+  const developerButton = createFakeElement("button");
+  developerButton.dataset.panelTarget = "developer";
+
+  const onboardingPanel = createFakeElement("section");
+  onboardingPanel.dataset.panelView = "onboarding";
+  const developerPanel = createFakeElement("section");
+  developerPanel.dataset.panelView = "developer";
+  developerPanel.hidden = true;
+
+  const frame = createFakeElement("iframe");
+  frame.hidden = true;
+  const status = createFakeElement("p");
+  const retry = createFakeElement("button");
+  retry.hidden = true;
+
+  const elements = {
+    ".app-shell": shell,
+    "#importButton": createFakeElement("button"),
+    "#statusBadge": createFakeElement("div"),
+    "#statusText": createFakeElement("span"),
+    "#feedback": createFakeElement("p"),
+    "#eventLog": createFakeElement("div"),
+    "#boogleFrame": frame,
+    "#workbenchStatus": status,
+    "#workbenchRetry": retry
+  };
+  const root = {
+    querySelector(selector) {
+      return elements[selector] ?? null;
+    },
+    querySelectorAll(selector) {
+      if (selector === "[data-panel-target]") {
+        return [onboardingButton, developerButton];
+      }
+      if (selector === "[data-panel-view]") {
+        return [onboardingPanel, developerPanel];
+      }
+      return [];
+    }
+  };
+  const beforeUnloadHandlers = [];
+  const urls = [];
+  const previousDocument = globalThis.document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+
+  globalThis.document = {
+    createElement: () => createFakeElement("div")
+  };
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ runtimeState: { playMode: "stopped", updatedAtUtc: "" } })
+  });
+  globalThis.window = {
+    settingsShell: {
+      getWorkbenchUrl: async () => {
+        if (urls.length === 0) {
+          urls.push("");
+          return "";
+        }
+        urls.push("http://127.0.0.1:9001");
+        return urls[urls.length - 1];
+      }
+    },
+    addEventListener(type, handler) {
+      if (type === "beforeunload") {
+        beforeUnloadHandlers.push(handler);
+      }
+    }
+  };
+
+  try {
+    bootstrapSettingsUi(root);
+    developerButton.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(developerPanel.hidden, false);
+    assert.equal(urls.length, 1);
+    assert.equal(status.dataset.tone, "error");
+    assert.equal(retry.hidden, false);
+
+    retry.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(urls.length, 2);
+    assert.equal(frame.src, "http://127.0.0.1:9001");
+    assert.equal(frame.hidden, false);
+    assert.equal(retry.hidden, true);
+  } finally {
+    for (const handler of beforeUnloadHandlers) {
+      handler();
+    }
+
+    globalThis.document = previousDocument;
+    globalThis.fetch = previousFetch;
+    globalThis.window = previousWindow;
+  }
+});
+
 function createFakeElement(tagName) {
   const handlers = new Map();
   const attributes = new Map();

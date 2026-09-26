@@ -16,23 +16,32 @@ export function extractWorkbenchUrl(line) {
 
 // boogle-sdk의 workbench 명령을 자식 프로세스로 띄워 준비 URL을 받는다.
 // Electron 안에서는 ELECTRON_RUN_AS_NODE로 node 런타임으로 실행한다.
-export function startBoogleWorkbench({ appRoot, spawnProcess = spawn, onError } = {}) {
+export function startBoogleWorkbench({ appRoot, spawnProcess = spawn, onError, readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
   const cliPath = path.join(appRoot, "node_modules", "boogle-sdk", "dist", "cli.js");
   const child = spawnProcess(process.execPath, [cliPath, "workbench"], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true
   });
+  // stderr는 소비하지 않으므로 출력이 차는 것을 막기 위해 흘려보낸다.
+  child.stderr?.resume?.();
 
   let buffer = "";
   let settled = false;
+  const stop = () => {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill();
+    }
+  };
   const url = new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject(new Error("Workbench 시작 시간 초과"));
+      if (settled) {
+        return;
       }
-    }, READY_TIMEOUT_MS);
+      settled = true;
+      stop();
+      reject(new Error("Workbench 시작 시간 초과"));
+    }, readyTimeoutMs);
 
     const settle = (fn, value) => {
       if (settled) {
@@ -64,12 +73,5 @@ export function startBoogleWorkbench({ appRoot, spawnProcess = spawn, onError } 
   });
   url.catch((error) => onError?.(error));
 
-  return {
-    url,
-    stop() {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill();
-      }
-    }
-  };
+  return { url, stop };
 }

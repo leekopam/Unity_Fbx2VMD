@@ -86,9 +86,11 @@ function attachSmokeTestExit(mainWindow, entry, bridge) {
   const smokePanelTarget = getSmokePanelTarget();
   const smokeScreenshotPath = getSmokeScreenshotPath();
   let finished = false;
+  // 개발자 모드 패널 검증은 Workbench 자식 기동과 iframe 로드를 기다리므로 시간을 더 준다.
+  const timeoutMs = smokePanelTarget === "developer" ? 25000 : 10000;
   const timeout = setTimeout(() => {
     finish(2, `SMOKE_LOAD_TIMEOUT ${entry.target}`);
-  }, 10000);
+  }, timeoutMs);
 
   mainWindow.webContents.once("did-finish-load", async () => {
     if (entry.type !== "file") {
@@ -115,6 +117,14 @@ function attachSmokeTestExit(mainWindow, entry, bridge) {
         if (!panelResult.ok) {
           finish(8, `SMOKE_PANEL_FAIL ${JSON.stringify(panelResult)}`);
           return;
+        }
+
+        if (smokePanelTarget === "developer") {
+          const workbenchResult = await runRendererWorkbenchSmoke({ mainWindow });
+          if (!workbenchResult.ok) {
+            finish(9, `SMOKE_WORKBENCH_FAIL ${JSON.stringify(workbenchResult)}`);
+            return;
+          }
         }
       }
 
@@ -258,6 +268,38 @@ async function runRendererPanelSmoke({ mainWindow, panelTarget }) {
   `);
 }
 
+// 개발자 모드 패널은 Workbench iframe 탑재까지 확인하고, 메인에서 서버 health API도 직접 확인한다.
+async function runRendererWorkbenchSmoke({ mainWindow }) {
+  const frame = await mainWindow.webContents.executeJavaScript(`
+    (async () => {
+      const startedAt = Date.now();
+      const status = document.querySelector("#workbenchStatus");
+      const frame = document.querySelector("#boogleFrame");
+      while (Date.now() - startedAt < 15000) {
+        if (status?.dataset.tone === "error") {
+          return { ok: false, reason: "workbench status error", status: status.textContent };
+        }
+        if (frame && !frame.hidden && /^http:\\/\\/127\\.0\\.0\\.1:\\d+\\/?$/.test(frame.src) && status?.hidden === true) {
+          return { ok: true, url: frame.src };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return { ok: false, reason: "workbench frame did not load", src: frame?.src ?? "", status: status?.textContent ?? "" };
+    })()
+  `);
+  if (!frame.ok) {
+    return frame;
+  }
+
+  try {
+    const response = await fetch(`${frame.url.replace(/\/+$/, "")}/api/health`);
+    const body = await response.json();
+    return { ok: response.ok && body.ok === true, url: frame.url };
+  } catch (error) {
+    return { ok: false, reason: `workbench health check failed: ${error.message}` };
+  }
+}
+
 async function captureSmokeScreenshot({ mainWindow, screenshotPath }) {
   await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
   let lastError = null;
@@ -297,10 +339,7 @@ async function startApplication() {
   console.log(`SETTINGS_BRIDGE_READY ${bridgeServer.baseUrl}`);
 
   if (!isSmokeTestMode()) {
-    boogleWorkbench = startBoogleWorkbench({
-      appRoot,
-      onError: (error) => console.error(`BOOGLE_WORKBENCH_FAIL ${error.message}`)
-    });
+    launchWorkbench();
   }
 
   await createMainWindow();
@@ -310,6 +349,22 @@ async function startApplication() {
       await createMainWindow();
     }
   });
+}
+
+// Workbench 자식 프로세스를 기동한다. 준비가 실패하면 참조를 비워 다음 IPC 요청이 재기동한다.
+function launchWorkbench() {
+  const workbench = startBoogleWorkbench({
+    appRoot,
+    onError: (error) => console.error(`BOOGLE_WORKBENCH_FAIL ${error.message}`)
+  });
+  boogleWorkbench = workbench;
+  workbench.url.catch(() => {
+    workbench.stop();
+    if (boogleWorkbench === workbench) {
+      boogleWorkbench = null;
+    }
+  });
+  return workbench;
 }
 
 function focusExistingSettingsWindow() {
@@ -327,11 +382,9 @@ function focusExistingSettingsWindow() {
 
 function registerIpcHandlers() {
   ipcMain.handle("boogle:get-workbench-url", async () => {
-    if (!boogleWorkbench) {
-      return "";
-    }
+    const workbench = boogleWorkbench ?? launchWorkbench();
     try {
-      return await boogleWorkbench.url;
+      return await workbench.url;
     } catch {
       return "";
     }

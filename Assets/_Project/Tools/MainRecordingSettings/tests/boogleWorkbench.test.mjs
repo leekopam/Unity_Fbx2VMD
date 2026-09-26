@@ -59,3 +59,15 @@ test("Workbench 프로세스가 준비 전에 종료되면 URL 요청이 거절�
   child.emit("exit", 2);
   await assert.rejects(workbench.url, /종료/);
 });
+
+test("준비 시간이 지나면 자식 프로세스를 종료하고 URL 요청이 거절된다", async () => {
+  const child = createFakeChild();
+  const workbench = startBoogleWorkbench({
+    appRoot: "C:\\app",
+    spawnProcess: () => child,
+    readyTimeoutMs: 10
+  });
+
+  await assert.rejects(workbench.url, /시간 초과/);
+  assert.equal(child.killed, true);
+});
