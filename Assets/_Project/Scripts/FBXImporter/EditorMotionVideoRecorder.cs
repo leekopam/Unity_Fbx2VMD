@@ -38,8 +38,10 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-                string outputFileWithoutExtension = CreateOutputFilePath(settings.MotionName);
-                OutputFilePath = outputFileWithoutExtension + ".mp4";
+                string outputFileWithoutExtension = CreateOutputFilePath(
+                    settings.MotionName,
+                    settings.OutputDirectory);
+                OutputFilePath = outputFileWithoutExtension + GetExtension(settings.Format);
 
                 _controllerSettings =
                     ScriptableObject.CreateInstance<RecorderControllerSettings>();
@@ -49,7 +51,7 @@ namespace Fbx2Vmd.FBXImporter
                 _movieSettings.EncoderSettings = new CoreEncoderSettings
                 {
                     EncodingQuality = CoreEncoderSettings.VideoEncodingQuality.High,
-                    Codec = CoreEncoderSettings.OutputCodec.MP4
+                    Codec = ToCodec(settings.Format)
                 };
                 _movieSettings.CaptureAudio = settings.CaptureAudio;
                 _movieSettings.ImageInputSettings = new CameraInputSettings
@@ -156,11 +158,24 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        private static string CreateOutputFilePath(string motionName)
+        private static CoreEncoderSettings.OutputCodec ToCodec(
+            MotionVideoFileFormat format) =>
+            format == MotionVideoFileFormat.WebM
+                ? CoreEncoderSettings.OutputCodec.WEBM
+                : CoreEncoderSettings.OutputCodec.MP4;
+
+        private static string GetExtension(MotionVideoFileFormat format) =>
+            format == MotionVideoFileFormat.WebM ? ".webm" : ".mp4";
+
+        private static string CreateOutputFilePath(
+            string motionName,
+            string configuredDirectory)
         {
-            string projectDirectory = Path.GetFullPath(
-                Path.Combine(Application.dataPath, ".."));
-            string outputDirectory = Path.Combine(projectDirectory, OutputDirectoryName);
+            string outputDirectory = string.IsNullOrWhiteSpace(configuredDirectory)
+                ? Path.Combine(
+                    Path.GetFullPath(Path.Combine(Application.dataPath, "..")),
+                    OutputDirectoryName)
+                : configuredDirectory;
             Directory.CreateDirectory(outputDirectory);
 
             string safeMotionName = SanitizeFileName(motionName);
