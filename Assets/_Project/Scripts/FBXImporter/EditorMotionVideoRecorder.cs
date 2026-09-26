@@ -11,7 +11,7 @@ using UnityEngine;
 namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
-    /// Unity Editor의 주 카메라 출력을 H.264 MP4로 기록함.
+    /// Unity Editor의 주 카메라 출력을 선택한 컨테이너/코덱 영상으로 기록함.
     /// </summary>
     internal sealed class EditorMotionVideoRecorder : IMotionVideoRecorder
     {
@@ -48,11 +48,7 @@ namespace Fbx2Vmd.FBXImporter
                 _movieSettings = ScriptableObject.CreateInstance<MovieRecorderSettings>();
                 _movieSettings.name = "FBX Motion Video Recorder";
                 _movieSettings.Enabled = true;
-                _movieSettings.EncoderSettings = new CoreEncoderSettings
-                {
-                    EncodingQuality = CoreEncoderSettings.VideoEncodingQuality.High,
-                    Codec = ToCodec(settings.Format)
-                };
+                _movieSettings.EncoderSettings = CreateEncoderSettings(settings.Format);
                 _movieSettings.CaptureAudio = settings.CaptureAudio;
                 _movieSettings.ImageInputSettings = new CameraInputSettings
                 {
@@ -61,6 +57,9 @@ namespace Fbx2Vmd.FBXImporter
                     OutputWidth = settings.Width,
                     OutputHeight = settings.Height
                 };
+                // 알파 채널 녹화는 ProRes 선택 시에만 활성화함 (ImageInputSettings 할당 이후에 지정해야 전파됨)
+                _movieSettings.CaptureAlpha =
+                    settings.Format == MotionVideoFileFormat.MovProRes;
                 _movieSettings.OutputFile = outputFileWithoutExtension;
 
                 _controllerSettings.AddRecorderSettings(_movieSettings);
@@ -164,8 +163,22 @@ namespace Fbx2Vmd.FBXImporter
                 ? CoreEncoderSettings.OutputCodec.WEBM
                 : CoreEncoderSettings.OutputCodec.MP4;
 
+        // MOV는 알파를 담을 수 있는 ProRes 4444를 사용하고, 그 외는 Unity 미디어 인코더를 사용함
+        private static IEncoderSettings CreateEncoderSettings(MotionVideoFileFormat format) =>
+            format == MotionVideoFileFormat.MovProRes
+                ? (IEncoderSettings)new ProResEncoderSettings
+                {
+                    Format = ProResEncoderSettings.OutputFormat.ProRes4444
+                }
+                : new CoreEncoderSettings
+                {
+                    EncodingQuality = CoreEncoderSettings.VideoEncodingQuality.High,
+                    Codec = ToCodec(format)
+                };
+
         private static string GetExtension(MotionVideoFileFormat format) =>
-            format == MotionVideoFileFormat.WebM ? ".webm" : ".mp4";
+            format == MotionVideoFileFormat.WebM ? ".webm"
+                : format == MotionVideoFileFormat.MovProRes ? ".mov" : ".mp4";
 
         private static string CreateOutputFilePath(
             string motionName,

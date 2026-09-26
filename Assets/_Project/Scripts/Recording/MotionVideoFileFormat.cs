@@ -9,5 +9,6 @@ namespace Fbx2Vmd.Recording
     {
         [InspectorName("MP4 (H.264)")] Mp4 = 0,
         [InspectorName("WebM (VP8)")] WebM = 1,
+        [InspectorName("MOV (ProRes 4444, 배경 투명)")] MovProRes = 2,
     }
 }
