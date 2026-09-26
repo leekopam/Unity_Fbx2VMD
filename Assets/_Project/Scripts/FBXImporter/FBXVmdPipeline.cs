@@ -1066,6 +1066,10 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private MotionVideoFrameRate _motionVideoFrameRate= MotionVideoFrameRate.Fps60;
         public MotionVideoFrameRate motionVideoFrameRate { get => _motionVideoFrameRate; private set => _motionVideoFrameRate = value; }
 
+        [Tooltip("MOV(배경 투명) 녹화 중에만 숨길 오브젝트입니다. 캐릭터만 남기려면 바닥 Plane 등을 지정합니다.")]
+        [SerializeField] private GameObject[] _alphaRecordingHiddenObjects= null;
+        public GameObject[] alphaRecordingHiddenObjects { get => _alphaRecordingHiddenObjects; private set => _alphaRecordingHiddenObjects = value; }
+
         [Tooltip("비교 CSV/프레임 캡처 Probe를 켭니다. 일반 변환에서는 미세 멈춤을 줄이기 위해 끄고, 회귀 테스트 때만 켭니다.")]
         [HideInInspector]
         [FormerlySerializedAs("enableRecordingDiagnostics")]
@@ -2232,6 +2236,26 @@ namespace Fbx2Vmd.FBXImporter
                 0f);
             return true;
         }
+
+        // MOV 녹화 중 숨길 오브젝트들의 렌더러를 수집함.
+        private Renderer[] CollectAlphaHiddenRenderers()
+        {
+            if (_alphaRecordingHiddenObjects == null || _alphaRecordingHiddenObjects.Length == 0)
+            {
+                return null;
+            }
+
+            var renderers = new System.Collections.Generic.List<Renderer>();
+            foreach (GameObject target in _alphaRecordingHiddenObjects)
+            {
+                if (target != null)
+                {
+                    renderers.AddRange(target.GetComponentsInChildren<Renderer>(true));
+                }
+            }
+
+            return renderers.Count == 0 ? null : renderers.ToArray();
+        }
 #endif
 
         public bool TryStopImportedMotionRecording()
@@ -2308,7 +2332,8 @@ namespace Fbx2Vmd.FBXImporter
             _humanoidMotionRecordingController?.Dispose();
             _humanoidMotionRecordingController = new HumanoidMotionRecordingController(
                 _humanoidMotionPlaybackController,
-                new EditorMotionVideoRecorder());
+                new EditorMotionVideoRecorder(),
+                CollectAlphaHiddenRenderers());
             _preparedMotionName = motionName;
             _isProcessing = false;
             if (!NativeSkinningCorrectionPlaybackDriver.TryAttach(
