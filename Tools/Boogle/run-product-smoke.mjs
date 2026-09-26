@@ -1301,6 +1301,8 @@ async function executeFullClip(runId, alternateModel = false) {
       else if (await readOptional(requestPath) || (await readStatus())?.status === "running")
         result = { status: "BLOCKED", failureKind: "preflight" };
       else {
+        // 하체 전용 캡처는 F14 대체 모델 경로와 결합되어 있음 — 팔 Native 준비 실패를
+        // 우회해 하체 의도·앵커 증거를 수집하는 용도이며 다른 모델 경로로 재사용하지 않음.
         await writeFile(requestPath, JSON.stringify({ request_id: requestId,
           command: alternateModel ? alternateModelCommand : fullClipCommand,
           requested_command: alternateModel ? alternateModelCommand : fullClipCommand,

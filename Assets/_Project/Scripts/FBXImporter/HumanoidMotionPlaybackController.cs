@@ -475,10 +475,12 @@ namespace Fbx2Vmd.FBXImporter
                 targetAnimator,
                 clip,
                 _player.EvaluateAt,
-                _poseReferencePlayer);
+                _poseReferencePlayer,
+                sourceModelAsset?.name);
             if (_footGrounding != null)
                 _footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
-                    _footContactStabilizer.SourceHumanScale, clip, EvaluateEditorContactReference);
+                    _footContactStabilizer.SourceHumanScale, clip, EvaluateEditorContactReference,
+                    _footContactStabilizer.IntentEstimate);
         }
 
         private void EvaluateEditorContactReference(float timeSeconds)

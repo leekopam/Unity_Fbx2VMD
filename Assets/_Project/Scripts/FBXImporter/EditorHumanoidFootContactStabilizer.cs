@@ -42,11 +42,18 @@ namespace Fbx2Vmd.FBXImporter
 
         internal float SourceHumanScale { get; private set; }
 
+        // 원본 궤적만으로 추정한 접지 의도 구간임. 런타임 앵커 방침과 증거 기록이 같은 값을 씀.
+        internal HumanoidFootContactIntentEstimate IntentEstimate { get; private set; }
+
+        internal HumanoidFootContactIntentLabelSet IntentLabels { get; private set; } =
+            HumanoidFootContactIntentLabelSet.Empty;
+
         internal void Initialize(
             Animator targetAnimator,
             AnimationClip clip,
             Action<float> evaluateTarget,
-            EditorHumanoidPoseReferencePlayer sourceReference)
+            EditorHumanoidPoseReferencePlayer sourceReference,
+            string sourceAssetName = null)
         {
             if (targetAnimator == null)
             {
@@ -148,13 +155,30 @@ namespace Fbx2Vmd.FBXImporter
                         _rightLeg.CaptureToesPosition());
                 }
 
+                // 누적된 사람 표식을 같은 입력의 과거 증거에서 읽어 추정에 반영함.
+                IntentLabels = EditorHumanoidFootContactIntentLabelStore.Load(sourceAssetName);
+                try
+                {
+                    IntentEstimate = HumanoidFootContactIntentEstimator.Estimate(
+                        sourceSamples, frameRate, sourceReference.SourceHumanScale,
+                        IntentLabels);
+                }
+                catch (Exception error)
+                {
+                    // 추정 실패가 접지 보정 자체를 막지 않게 구간 정책 없이 진행함.
+                    Debug.LogWarning(
+                        $"발 접지 의도 추정 실패로 의도 구간 없이 보정함: {error.Message}");
+                    IntentEstimate = null;
+                }
+
                 _plan = HumanoidFootContactPlanner.Build(
                     sourceSamples,
                     targetSamples,
                     frameRate,
                     sourceReference.SourceHumanScale,
                     sourceToTargetRotation,
-                    targetAnimator.humanScale);
+                    targetAnimator.humanScale,
+                    IntentEstimate);
                 // 이미 평가한 원본 궤적을 정밀 밑창 접지에서도 재사용함.
                 SourceSamples = Array.AsReadOnly(sourceSamples);
                 TargetSamples = Array.AsReadOnly(targetSamples);
@@ -258,6 +282,8 @@ namespace Fbx2Vmd.FBXImporter
         internal void Clear()
         {
             _plan = null;
+            IntentEstimate = null;
+            IntentLabels = HumanoidFootContactIntentLabelSet.Empty;
             SourceSamples = Array.Empty<HumanoidFootContactSample>();
             TargetSamples = Array.Empty<HumanoidFootContactSample>();
             SourceHumanScale = 0f;
