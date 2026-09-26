@@ -1,5 +1,6 @@
 using System;
 using Fbx2Vmd.Recording;
+using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -10,6 +11,7 @@ namespace Fbx2Vmd.FBXImporter
     {
         private readonly HumanoidMotionPlaybackController _playbackController;
         private readonly IMotionVideoRecorder _videoRecorder;
+        private readonly Renderer[] _alphaHiddenRenderers;
         private float _recordingFrameRate;
         private long _nextRecordingFrame;
         private bool _hasReachedLastFrame;
@@ -17,11 +19,20 @@ namespace Fbx2Vmd.FBXImporter
         internal HumanoidMotionRecordingController(
             HumanoidMotionPlaybackController playbackController,
             IMotionVideoRecorder videoRecorder)
+            : this(playbackController, videoRecorder, null)
+        {
+        }
+
+        internal HumanoidMotionRecordingController(
+            HumanoidMotionPlaybackController playbackController,
+            IMotionVideoRecorder videoRecorder,
+            Renderer[] alphaHiddenRenderers)
         {
             _playbackController = playbackController ??
                 throw new ArgumentNullException(nameof(playbackController));
             _videoRecorder = videoRecorder ??
                 throw new ArgumentNullException(nameof(videoRecorder));
+            _alphaHiddenRenderers = alphaHiddenRenderers;
         }
 
         internal bool IsRecording => _videoRecorder.IsRecording;
@@ -62,6 +73,8 @@ namespace Fbx2Vmd.FBXImporter
                 _recordingFrameRate = settings.FrameRate;
                 _nextRecordingFrame = 1;
                 _hasReachedLastFrame = false;
+                // 투명 배경 녹화(MOV)일 때만 지정된 렌더러를 숨겨 캐릭터만 산출함.
+                SetAlphaHidden(settings.Format == MotionVideoFileFormat.MovProRes);
                 return true;
             }
 
@@ -94,6 +107,7 @@ namespace Fbx2Vmd.FBXImporter
             bool hadActiveRecording = _videoRecorder.IsRecording;
             _videoRecorder.Stop();
             bool rewoundMotion = _playbackController.Stop();
+            SetAlphaHidden(false);
             return hadActiveRecording || rewoundMotion;
         }
 
@@ -107,12 +121,31 @@ namespace Fbx2Vmd.FBXImporter
 
             _videoRecorder.Stop();
             _playbackController.Stop();
+            SetAlphaHidden(false);
             return true;
         }
 
         public void Dispose()
         {
+            SetAlphaHidden(false);
             _videoRecorder.Dispose();
+        }
+
+        // 숨김 대상 렌더러를 알파 녹화 기간 동안만 꺼둠.
+        private void SetAlphaHidden(bool hidden)
+        {
+            if (_alphaHiddenRenderers == null)
+            {
+                return;
+            }
+
+            foreach (Renderer renderer in _alphaHiddenRenderers)
+            {
+                if (renderer != null)
+                {
+                    renderer.enabled = !hidden;
+                }
+            }
         }
     }
 }

@@ -829,6 +829,7 @@ namespace Fbx2Vmd.FBXImporter
             EditorGUILayout.HelpBox("UI를 제외하고 MainCamera 화면만 영상으로 저장합니다.", MessageType.None);
             DrawFolderProperty("_motionVideoOutputFolder", "영상 저장 폴더", "영상 저장 폴더 선택");
             EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoFormat", "영상 파일 형식", showWarningOnNull: true);
+            EditorDrawUtility.DrawProperty(serializedObject, "_alphaRecordingHiddenObjects", "MOV 녹화 시 숨길 오브젝트", showWarningOnNull: false);
             EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoFrameRate", "영상 FPS", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_clampRetargetVisualClipStep", "Ghost clip time step 제한", showWarningOnNull: true);
             if (EditorDrawUtility.GetBool(serializedObject, "_clampRetargetVisualClipStep"))

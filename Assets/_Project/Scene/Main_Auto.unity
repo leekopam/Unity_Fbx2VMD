@@ -287,7 +287,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 3470957398348409057, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: m_Avatar
-      value:
+      value: 
       objectReference: {fileID: 9000000, guid: a67a6bac72a604e41821293537b3465f, type: 3}
     - target: {fileID: 5383843759843417041, guid: 27f02e37811a5ed42a4ae6ecb210145b, type: 3}
       propertyPath: nextEdgeMaterial_Pass4
@@ -507,265 +507,270 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _shouldSaveToImportFolder: 0
   _shouldRecordVmdAfterImport: 1
-  targetCharacter: {fileID: 643269947}
+  _targetCharacter: {fileID: 643269947}
   _shouldUseLegacyPoseSpaceFacingCorrection: 0
   _shouldPreserveFbxRootRotation: 0
   _shouldPreserveRetargetBodyPosition: 1
-  useRetargetBodyPositionXZRootMotion: 0
+  _shouldUseRetargetBodyPositionXZRootMotion: 0
   _shouldStabilizeGroundedFootXZ: 0
-  GroundedFootLockWeight: 0.45
-  MaxGroundedFootLockStep: 0.025
-  useEditorHumanoidClipMuscleReference: 1
-  useEditorHumanoidRootTranslationReference: 0
-  editorHumanoidRootTranslationWeight: 0.25
-  editorHumanoidRootTranslationCurrentWeight: 0.35
-  useManualAnimatorFingerPoseReference: 0
-  useManualAnimatorFullBodyPoseReference: 1
-  manualAnimatorFullBodyPoseReferenceWeight: 1
-  manualAnimatorFullBodyPoseExcludeLowerBodyMuscles: 0
-  manualAnimatorFullBodyPoseLowerBodyMusclesOnly: 0
-  manualAnimatorFullBodyPoseLegTwistMusclesOnly: 0
-  manualAnimatorFullBodyPoseRightArmMusclesOnly: 0
-  manualAnimatorFullBodyPoseLeftArmMusclesOnly: 0
-  manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly: 0
-  manualAnimatorFullBodyPoseFrameGateStart: 0
-  manualAnimatorFullBodyPoseFrameGateEnd: 0
-  useSetHumanPoseRightLegTwistOutputReference: 0
-  setHumanPoseRightLegTwistOutputReferenceWeight: 1
-  setHumanPoseRightLegTwistOutputReferenceMaxDelta: 0.02
-  useManualAnimatorBodyRotationReference: 1
-  manualAnimatorBodyRotationReferenceWeight: 1
-  useManualAnimatorBodyPositionYReference: 0
-  useManualAnimatorBodyPositionXzReference: 0
-  manualAnimatorBodyPositionXzReferenceWeight: 1
-  manualAnimatorBodyPositionXzReferenceMaxOffset: 0.025
-  manualAnimatorBodyPositionXzReferenceFrameGateStart: 0
-  manualAnimatorBodyPositionXzReferenceFrameGateEnd: 0
-  manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames: 0
-  manualAnimatorBodyPositionXzReferenceAxisXScale: 1
-  manualAnimatorBodyPositionXzReferenceAxisZScale: 1
-  useYybRightSleeveSilhouetteLocalOffsetReference: 0
-  yybRightSleeveSilhouetteLocalOffsetX: 0
-  yybRightSleeveSilhouetteLocalOffsetFrameGateStart: 0
-  yybRightSleeveSilhouetteLocalOffsetFrameGateEnd: 0
-  useManualAnimatorHipsLocalPositionReference: 0
-  manualAnimatorHipsLocalPositionWeight: 1
-  manualAnimatorHipsLocalPositionMaxOffset: 0.12
-  useManualAnimatorFootHeightGroundingReference: 0
-  manualAnimatorFootHeightGroundingReferenceWeight: 1
-  manualAnimatorFootHeightGroundingReferenceMaxLift: 0.08
-  useManualAnimatorFootLocalRotationReference: 1
-  manualAnimatorFootLocalRotationReferenceWeight: 1
-  useManualAnimatorLowerBodySegmentDirectionReference: 1
-  manualAnimatorLowerBodySegmentDirectionReferenceWeight: 1
-  manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle: 60
-  disableManualAnimatorUpperLegToLowerLegSegmentDirectionReference: 0
-  manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle: 0
-  disableManualAnimatorLowerLegToFootSegmentDirectionReference: 0
-  manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
-  manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
-  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
-  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale: 1
-  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight: 0.125
-  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart: 0
-  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd: 0
-  manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight: 1
-  disableManualAnimatorFootToToesSegmentDirectionReference: 0
-  manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle: 0
-  useManualAnimatorFootHipsAlignedResidualYawReference: 1
-  manualAnimatorFootHipsAlignedResidualYawReferenceWeight: 1
-  manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle: 45
-  useManualAnimatorBipedIkFootPositionReference: 0
-  manualAnimatorBipedIkFootPositionReferenceWeight: 0.65
-  manualAnimatorBipedIkFootPositionReferenceMaxOffset: 0.12
-  usePostSetHumanPoseRightEndpointPositionReference: 0
-  postSetHumanPoseRightEndpointPositionReferenceWeight: 1
-  postSetHumanPoseRightEndpointPositionReferenceMaxOffset: 0.04
-  postSetHumanPoseRightEndpointPositionReferencePositiveZScale: 1
-  postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: 1
-  postSetHumanPoseRightEndpointPositionReferenceFrameGateStart: 0
-  postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: 0
-  postSetHumanPoseEndpointPositionUseLeftSide: 0
-  usePostSetHumanPoseRightFootEvaluatorXzReference: 0
-  postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude: 0.049
-  usePreSetHumanPoseRightEndpointPositionReference: 0
-  preSetHumanPoseRightEndpointPositionReferenceWeight: 1
-  preSetHumanPoseRightEndpointPositionReferenceMaxOffset: 0.025
-  preSetHumanPoseRightEndpointPositionReferencePositiveZScale: 1
-  preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: 1
-  preSetHumanPoseRightEndpointPositionReferenceFrameGateStart: 0
-  preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: 0
-  preSetHumanPoseEndpointPositionUseLeftSide: 0
-  preSetHumanPoseEndpointPositionUseGhostCurrentBasis: 0
-  preSetHumanPoseEndpointPositionInvertBodyPositionX: 0
-  preSetHumanPoseEndpointPositionInvertBodyPositionZ: 0
-  useManualAnimatorThumbLocalRotationReference: 0
-  useManualAnimatorHandLocalRotationReference: 1
-  useManualAnimatorThumbSegmentDirectionReference: 0
-  manualAnimatorThumbSegmentDirectionWeight: 1
-  useManualAnimatorThumbHandDirectionReference: 0
-  manualAnimatorThumbHandDirectionWeight: 0.5
-  useManualAnimatorHandPalmFrameReference: 0
-  manualAnimatorHandPalmFrameWeight: 1
-  useManualAnimatorThumbBasePositionReference: 0
-  manualAnimatorThumbBasePositionWeight: 1
-  manualAnimatorThumbBasePositionMaxOffset: 0.04
-  manualFingerReferencePrefab: {fileID: 0}
-  manualFingerReferenceController: {fileID: 0}
-  disableMmdShoulderPostPoseDuringRetarget: 0
-  _shouldClampRetargetMusclesToHumanRange: 1
-  _shouldEnableAnatomicalArmGuard: 1
-  ArmStretchMuscleLimit: 0.5
-  clampRetargetArmStretchMuscles: 1
-  UpperArmTwistMuscleLimit: 0.75
-  LowerArmTwistMuscleLimit: 0.65
+  _GroundedFootLockWeight: 0.45
+  _MaxGroundedFootLockStep: 0.025
+  _shouldUseEditorHumanoidClipMuscleReference: 1
+  _shouldUseEditorHumanoidRootTranslationReference: 0
+  _editorHumanoidRootTranslationWeight: 0.25
+  _editorHumanoidRootTranslationCurrentWeight: 0.35
+  _shouldUseManualAnimatorFingerPoseReference: 0
+  _shouldUseManualAnimatorFullBodyPoseReference: 1
+  _manualAnimatorFullBodyPoseReferenceWeight: 1
+  _shouldExcludeManualAnimatorFullBodyLowerMuscles: 0
+  _shouldApplyManualAnimatorFullBodyLowerMusclesOnly: 0
+  _shouldApplyManualAnimatorFullBodyLegTwistMusclesOnly: 0
+  _manualAnimatorFullBodyPoseRightArmMusclesOnly: 0
+  _manualAnimatorFullBodyPoseLeftArmMusclesOnly: 0
+  _manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly: 0
+  _manualAnimatorFullBodyPoseFrameGateStart: 0
+  _manualAnimatorFullBodyPoseFrameGateEnd: 0
+  _shouldUseSetHumanPoseRightLegTwistOutputReference: 0
+  _setHumanPoseRightLegTwistOutputReferenceWeight: 1
+  _setHumanPoseRightLegTwistOutputReferenceMaxDelta: 0.02
+  _shouldUseManualAnimatorBodyRotationReference: 1
+  _manualAnimatorBodyRotationReferenceWeight: 1
+  _shouldUseManualAnimatorBodyPositionYReference: 0
+  _shouldUseManualAnimatorBodyPositionXzReference: 0
+  _manualAnimatorBodyPositionXzReferenceWeight: 1
+  _manualAnimatorBodyPositionXzReferenceMaxOffset: 0.025
+  _manualAnimatorBodyPositionXzReferenceFrameGateStart: 0
+  _manualAnimatorBodyPositionXzReferenceFrameGateEnd: 0
+  _manualAnimatorBodyPositionXzReferenceFrameGateBlendFrames: 0
+  _manualAnimatorBodyPositionXzReferenceAxisXScale: 1
+  _manualAnimatorBodyPositionXzReferenceAxisZScale: 1
+  _useYybRightSleeveSilhouetteLocalOffsetReference: 0
+  _yybRightSleeveSilhouetteLocalOffsetX: 0
+  _yybRightSleeveSilhouetteLocalOffsetFrameGateStart: 0
+  _yybRightSleeveSilhouetteLocalOffsetFrameGateEnd: 0
+  _shouldUseManualAnimatorHipsLocalPositionReference: 0
+  _manualAnimatorHipsLocalPositionWeight: 1
+  _manualAnimatorHipsLocalPositionMaxOffset: 0.12
+  _shouldUseManualAnimatorFootHeightGroundingReference: 0
+  _manualAnimatorFootHeightGroundingReferenceWeight: 1
+  _manualAnimatorFootHeightGroundingReferenceMaxLift: 0.08
+  _shouldUseManualAnimatorFootLocalRotationReference: 1
+  _manualAnimatorFootLocalRotationReferenceWeight: 1
+  _shouldUseManualAnimatorLowerBodySegmentDirectionReference: 1
+  _manualAnimatorLowerBodySegmentDirectionReferenceWeight: 1
+  _manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle: 60
+  _shouldDisableManualAnimatorUpperLegToLowerLegSegmentDirectionReference: 0
+  _manualAnimatorUpperLegToLowerLegSegmentDirectionReferenceMaxAngle: 0
+  _shouldDisableManualAnimatorLowerLegToFootSegmentDirectionReference: 0
+  _manualAnimatorLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
+  _manualAnimatorLeftLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
+  _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceMaxAngle: 0
+  _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceAxisXzScale: 1
+  _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight: 0.125
+  _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateStart: 0
+  _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceFrameGateEnd: 0
+  _manualAnimatorRightLowerLegToFootSegmentDirectionReferenceEndpointBlendWeight: 1
+  _shouldDisableManualAnimatorFootToToesSegmentDirectionReference: 0
+  _manualAnimatorFootToToesSegmentDirectionReferenceMaxAngle: 0
+  _shouldUseManualAnimatorFootHipsAlignedResidualYawReference: 1
+  _manualAnimatorFootHipsAlignedResidualYawReferenceWeight: 1
+  _manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle: 45
+  _useManualAnimatorBipedIkFootPositionReference: 0
+  _manualAnimatorBipedIkFootPositionReferenceWeight: 0.65
+  _manualAnimatorBipedIkFootPositionReferenceMaxOffset: 0.12
+  _usePostSetHumanPoseRightEndpointPositionReference: 0
+  _postSetHumanPoseRightEndpointPositionReferenceWeight: 1
+  _postSetHumanPoseRightEndpointPositionReferenceMaxOffset: 0.04
+  _postSetHumanPoseRightEndpointPositionReferencePositiveZScale: 1
+  _postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: 1
+  _postSetHumanPoseRightEndpointPositionReferenceFrameGateStart: 0
+  _postSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: 0
+  _shouldUseLeftSideForPostSetHumanPoseEndpointPosition: 0
+  _usePostSetHumanPoseRightFootEvaluatorXzReference: 0
+  _postSetHumanPoseRightFootEvaluatorXzReferenceTargetMagnitude: 0.049
+  _usePreSetHumanPoseRightEndpointPositionReference: 0
+  _preSetHumanPoseRightEndpointPositionReferenceWeight: 1
+  _preSetHumanPoseRightEndpointPositionReferenceMaxOffset: 0.025
+  _preSetHumanPoseRightEndpointPositionReferencePositiveZScale: 1
+  _preSetHumanPoseRightEndpointPositionReferenceToesBlendWeight: 1
+  _preSetHumanPoseRightEndpointPositionReferenceFrameGateStart: 0
+  _preSetHumanPoseRightEndpointPositionReferenceFrameGateEnd: 0
+  _shouldUseLeftSideForPreSetHumanPoseEndpointPosition: 0
+  _preSetHumanPoseEndpointPositionUseGhostCurrentBasis: 0
+  _shouldInvertPreSetHumanPoseEndpointPositionBodyX: 0
+  _shouldInvertPreSetHumanPoseEndpointPositionBodyZ: 0
+  _useManualAnimatorThumbLocalRotationReference: 0
+  _useManualAnimatorHandLocalRotationReference: 1
+  _useManualAnimatorThumbSegmentDirectionReference: 0
+  _manualAnimatorThumbSegmentDirectionWeight: 1
+  _useManualAnimatorThumbHandDirectionReference: 0
+  _manualAnimatorThumbHandDirectionWeight: 0.5
+  _useManualAnimatorHandPalmFrameReference: 0
+  _manualAnimatorHandPalmFrameWeight: 1
+  _useManualAnimatorThumbBasePositionReference: 0
+  _manualAnimatorThumbBasePositionWeight: 1
+  _manualAnimatorThumbBasePositionMaxOffset: 0.04
+  _manualFingerReferencePrefab: {fileID: 0}
+  _manualFingerReferenceController: {fileID: 0}
+  _disableMmdShoulderPostPoseDuringRetarget: 0
+  _clampRetargetMusclesToHumanRange: 1
+  _enableAnatomicalArmGuard: 1
+  _ArmStretchMuscleLimit: 0.5
+  _clampRetargetArmStretchMuscles: 1
+  _UpperArmTwistMuscleLimit: 0.75
+  _LowerArmTwistMuscleLimit: 0.65
   _shouldLockTargetHumanoidBonePositions: 1
-  _shouldLockTargetLimbChildLocalPositions: 1
-  _shouldLockTargetLimbChildLocalRotations: 0
-  attachTargetArmDeformationGuard: 1
-  targetGuardClampAnatomicalArmMuscles: 1
-  targetGuardClampArmStretchMuscles: 1
-  logArmDeformationGuardCorrections: 0
-  _shouldEnableAnimationRiggingArmTwistCorrection: 0
-  AnimationRiggingArmTwistRigWeight: 0.65
-  AnimationRiggingUpperArmTwistWeight: 0.45
-  AnimationRiggingForearmTwistWeight: 0.85
-  logAnimationRiggingArmTwistCorrection: 0
-  enableYybArmDirectionRetargetCorrection: 0
-  YybArmDirectionUpperArmWeight: 0.65
-  YybArmDirectionForearmWeight: 0.75
-  YybArmDirectionUpperArmMaxDegrees: 65
-  YybArmDirectionForearmMaxDegrees: 85
-  YybArmDirectionLeftSideWeightScale: 1
-  YybArmDirectionRightSideWeightScale: 1
-  logYybArmDirectionRetargetCorrection: 0
-  enableYybArmVisualTwistCorrection: 1
-  YybArmVisualUpperArmInfluence: 0.35
-  YybArmVisualForearmInfluence: 0.75
-  YybArmVisualUpperArmMaxDegrees: 45
-  YybArmVisualForearmMaxDegrees: 75
-  logYybArmVisualTwistCorrection: 0
-  enableYybArmSwingLimitCorrection: 1
-  YybArmSwingLimitWeight: 0.6
-  YybArmSwingMaxDownDot: 0.75
-  YybArmSwingMinHandHorizontalRatio: 0.05
-  YybArmSwingMaxHandBelowShoulderRatio: 1.5
-  YybArmSwingHorizontalReachLimitWeight: 1
-  YybArmSwingMaxHandHorizontalReachRatio: 0.06
-  YybArmSwingHorizontalReachMaxHandBelowShoulderRatio: 0
-  YybArmSwingHorizontalReachMinElbowAngleAfterApply: 0
-  YybArmSwingRaisedPoseHorizontalReachLimitWeight: 0.25
-  YybArmSwingRaisedPoseMinUpperArmDownDot: 0.55
-  YybArmSwingRaisedPoseMaxHandBelowShoulderRatio: 0.05
-  YybArmSwingRaisedPoseMaxHandHorizontalReachRatio: 0.55
-  logYybArmSwingLimitCorrection: 0
-  enableYybArmSleeveAnchorCorrection: 1
-  YybArmSleeveAnchorInfluence: 0.825
-  YybArmShoulderCapAnchorInfluence: 0
-  YybArmSleeveAnchorMaxDegrees: 85
-  logYybArmSleeveAnchorCorrection: 0
-  showBoneMappingLog: 0
-  showRuntimeAnimationLog: 0
-  showGhostModel: 0
-  showGhostSkeletonWhenNoRenderers: 0
-  FingerStretchScale: 1
-  FingerSpreadScale: 1
-  ThumbStretchScale: 1
-  ThumbSpreadScale: 1
-  _shouldEnableThumbAnatomicalGuard: 1
-  preserveManualFingerReferenceThumbMuscles: 0
-  ThumbStretchMin: -2.1
-  ThumbStretchMax: 1
-  ThumbSpreadMin: -0.9
-  ThumbSpreadMax: 0.9
-  logThumbAnatomicalGuardCorrections: 0
-  _shouldEnableThumbLocalRotationGuard: 1
-  disableThumbLocalRotationGuardWithManualFingerReference: 1
-  ThumbProximalMaxLocalAngle: 28
-  ThumbIntermediateMaxLocalAngle: 55
-  ThumbDistalMaxLocalAngle: 55
-  logThumbLocalRotationGuardCorrections: 0
-  syncDetachedThumbBaseHelpers: 1
-  syncDetachedThumbBaseHelperPositions: 1
-  detachedThumbBaseHelperSyncWeight: 0.8
-  detachedThumbBaseHelperMaxLocalAngle: 28
-  detachedThumbBaseHelperMaxPositionOffset: 0.01
-  LeftDetachedThumbBaseHelperDeltaAxisOffset: {x: -6, y: -18, z: 10}
-  RightDetachedThumbBaseHelperDeltaAxisOffset: {x: -6, y: 18, z: -10}
-  LeftDetachedThumbBaseHelperTargetRotationOffset: {x: -3, y: -9, z: 5}
-  RightDetachedThumbBaseHelperTargetRotationOffset: {x: -3, y: 9, z: -5}
-  stabilizeDetachedThumbBasePalm: 0
-  detachedThumbBasePalmStabilizeWeight: 0
-  detachedThumbBasePalmMaxLocalAngle: 45
-  stabilizeThumbWebbingCrease: 1
-  thumbWebbingCreaseStabilizeWeight: 1
-  thumbWebbingCreaseMaxLocalAngle: 6
-  thumbWebbingCreaseMaxPositionOffset: 0.0012
-  _shouldEnableThumbVisualLengthGuard: 1
-  ThumbProjectionMinPalmNormal: 0.358
-  ThumbProjectionMaxPalmNormal: 0.5
-  ThumbProjectionGuardWeight: 1
-  ThumbIndexMaxSpreadAngle: 50
-  ThumbIndexSpreadGuardWeight: 1
-  ThumbMaxSegmentBendAngle: 10
-  ThumbSegmentStraightenWeight: 0.9
-  startDelay: 1
-  vmdRecordingPlaybackSpeed: 1
-  useKnownMmdReferenceTiming: 0
-  RetargetPrewarmFrameCount: 6
-  additionalVmdCopyFolder: 
-  enableRecordingDiagnostics: 0
-  useDeterministicCaptureFramerateForDiagnostics: 0
-  enableDiagnosticFingerCloseups: 1
-  recordingCaptureQuality: 0
-  customRecordingCaptureWidth: 3840
-  customRecordingCaptureHeight: 2160
-  failEditorSmokeOnThumbRisk: 1
-  editorSmokeMaxGenericThumbAnatomyRisk: 0.4
-  editorSmokeMaxYybDeformationRisk: 0.35
-  clampRetargetVisualClipStep: 0
-  RetargetVisualClipFrameRate: 30
-  smoothRetargetPoseOnVisualStepSpike: 1
-  RetargetPoseVisualSpikeCurrentWeight: 0.65
-  RetargetPoseVisualSpikeForearmStretchClampMaxOffset: 0
-  RetargetPoseVisualMuscleDeltaThreshold: 0.35
-  HeightOffset: 0
-  MovementScaleMultiplier: 1
-  _shouldClampRetargetRootDeltaSpikes: 1
-  MaxRetargetRootDeltaPerFrame: 0.25
-  logRetargetRootDeltaSpikes: 0
-  clampRetargetHipsLocalPositionSpikes: 0
-  MaxRetargetHipsLocalPositionDeltaPerFrame: 0.02
-  smoothRetargetGrounding: 1
-  MaxGroundingVerticalStepPerFrame: 0.01
-  GroundingSmoothing: 0.25
-  GroundingDeadZone: 0.005
-  _shouldFreezeRootYAfterInitialGrounding: 1
-  rejectRendererGroundingOutliers: 1
-  MaxRendererFootGroundingSeparation: 0.12
-  smoothLateVisualGroundingCorrection: 1
-  LateVisualGroundingSnapThreshold: 0.03
-  LateVisualGroundingSmoothing: 0.25
-  MaxLateVisualGroundingStepPerFrame: 0.003
-  enableFinalIkFootGroundingExperiment: 0
-  finalIkFootGroundingWeight: 0.15
-  finalIkFootGroundingMaxStep: 0.05
-  finalIkFootGroundingFootRadius: 0.06
-  finalIkFootGroundingPrediction: 0
-  finalIkFootGroundingFootRotationWeight: 0
-  finalIkFootGroundingPelvisDamper: 0.1
-  logFinalIkFootGroundingExperiment: 0
-  ThumbRotationOffset: {x: -10, y: -30, z: 0}
-  mirrorRightThumbRotationOffset: 1
-  LeftThumbRotationOffset: {x: 0, y: 0, z: 0}
-  RightThumbRotationOffset: {x: 0, y: 0, z: 0}
-  useDefaultThumbStretchOffsetWhenUnset: 1
-  ThumbStretchOffset: 0
-  EnableSmartCurve: 1
-  SmartCurveStrength: 0.5
-  StretchThreshold: 0.7
-  EnableThumbSmartCurve: 1
-  ThumbSmartCurveStrength: 0.5
+  _lockTargetLimbChildLocalPositions: 1
+  _lockTargetLimbChildLocalRotations: 0
+  _attachTargetArmDeformationGuard: 1
+  _targetGuardClampAnatomicalArmMuscles: 1
+  _targetGuardClampArmStretchMuscles: 1
+  _logArmDeformationGuardCorrections: 0
+  _enableAnimationRiggingArmTwistCorrection: 0
+  _AnimationRiggingArmTwistRigWeight: 0.65
+  _AnimationRiggingUpperArmTwistWeight: 0.45
+  _AnimationRiggingForearmTwistWeight: 0.85
+  _logAnimationRiggingArmTwistCorrection: 0
+  _enableYybArmDirectionRetargetCorrection: 0
+  _YybArmDirectionUpperArmWeight: 0.65
+  _YybArmDirectionForearmWeight: 0.75
+  _YybArmDirectionUpperArmMaxDegrees: 65
+  _YybArmDirectionForearmMaxDegrees: 85
+  _YybArmDirectionLeftSideWeightScale: 1
+  _YybArmDirectionRightSideWeightScale: 1
+  _logYybArmDirectionRetargetCorrection: 0
+  _enableYybArmVisualTwistCorrection: 1
+  _YybArmVisualUpperArmInfluence: 0.35
+  _YybArmVisualForearmInfluence: 0.75
+  _YybArmVisualUpperArmMaxDegrees: 45
+  _YybArmVisualForearmMaxDegrees: 75
+  _logYybArmVisualTwistCorrection: 0
+  _enableYybArmSwingLimitCorrection: 1
+  _YybArmSwingLimitWeight: 0.6
+  _YybArmSwingMaxDownDot: 0.75
+  _YybArmSwingMinHandHorizontalRatio: 0.05
+  _YybArmSwingMaxHandBelowShoulderRatio: 1.5
+  _YybArmSwingHorizontalReachLimitWeight: 1
+  _YybArmSwingMaxHandHorizontalReachRatio: 0.06
+  _YybArmSwingHorizontalReachMaxHandBelowShoulderRatio: 0
+  _YybArmSwingHorizontalReachMinElbowAngleAfterApply: 0
+  _YybArmSwingRaisedPoseHorizontalReachLimitWeight: 0.25
+  _YybArmSwingRaisedPoseMinUpperArmDownDot: 0.55
+  _YybArmSwingRaisedPoseMaxHandBelowShoulderRatio: 0.05
+  _YybArmSwingRaisedPoseMaxHandHorizontalReachRatio: 0.55
+  _logYybArmSwingLimitCorrection: 0
+  _enableYybArmSleeveAnchorCorrection: 1
+  _YybArmSleeveAnchorInfluence: 0.825
+  _YybArmShoulderCapAnchorInfluence: 0
+  _YybArmSleeveAnchorMaxDegrees: 85
+  _logYybArmSleeveAnchorCorrection: 0
+  _showBoneMappingLog: 0
+  _showRuntimeAnimationLog: 0
+  _showGhostModel: 0
+  _showGhostSkeletonWhenNoRenderers: 0
+  _FingerStretchScale: 1
+  _FingerSpreadScale: 1
+  _ThumbStretchScale: 1
+  _ThumbSpreadScale: 1
+  _enableThumbAnatomicalGuard: 1
+  _preserveManualFingerReferenceThumbMuscles: 0
+  _ThumbStretchMin: -2.1
+  _ThumbStretchMax: 1
+  _ThumbSpreadMin: -0.9
+  _ThumbSpreadMax: 0.9
+  _logThumbAnatomicalGuardCorrections: 0
+  _enableThumbLocalRotationGuard: 1
+  _disableThumbLocalRotationGuardWithManualFingerReference: 1
+  _ThumbProximalMaxLocalAngle: 28
+  _ThumbIntermediateMaxLocalAngle: 55
+  _ThumbDistalMaxLocalAngle: 55
+  _logThumbLocalRotationGuardCorrections: 0
+  _syncDetachedThumbBaseHelpers: 1
+  _syncDetachedThumbBaseHelperPositions: 1
+  _detachedThumbBaseHelperSyncWeight: 0.8
+  _detachedThumbBaseHelperMaxLocalAngle: 28
+  _detachedThumbBaseHelperMaxPositionOffset: 0.01
+  _LeftDetachedThumbBaseHelperDeltaAxisOffset: {x: -6, y: -18, z: 10}
+  _RightDetachedThumbBaseHelperDeltaAxisOffset: {x: -6, y: 18, z: -10}
+  _LeftDetachedThumbBaseHelperTargetRotationOffset: {x: -3, y: -9, z: 5}
+  _RightDetachedThumbBaseHelperTargetRotationOffset: {x: -3, y: 9, z: -5}
+  _stabilizeDetachedThumbBasePalm: 0
+  _detachedThumbBasePalmStabilizeWeight: 0
+  _detachedThumbBasePalmMaxLocalAngle: 45
+  _stabilizeThumbWebbingCrease: 1
+  _thumbWebbingCreaseStabilizeWeight: 1
+  _thumbWebbingCreaseMaxLocalAngle: 6
+  _thumbWebbingCreaseMaxPositionOffset: 0.0012
+  _enableThumbVisualLengthGuard: 1
+  _ThumbProjectionMinPalmNormal: 0.358
+  _ThumbProjectionMaxPalmNormal: 0.5
+  _ThumbProjectionGuardWeight: 1
+  _ThumbIndexMaxSpreadAngle: 50
+  _ThumbIndexSpreadGuardWeight: 1
+  _ThumbMaxSegmentBendAngle: 10
+  _ThumbSegmentStraightenWeight: 0.9
+  _startDelay: 1
+  _vmdRecordingPlaybackSpeed: 1
+  _useKnownMmdReferenceTiming: 0
+  _RetargetPrewarmFrameCount: 6
+  _additionalVmdCopyFolder: 
+  _motionVideoOutputFolder: C:/Users/flzhv/Downloads
+  _motionVideoFormat: 0
+  _motionVideoFrameRate: 60
+  _alphaRecordingHiddenObjects:
+  - {fileID: 1801870904}
+  _enableRecordingDiagnostics: 0
+  _useDeterministicCaptureFramerateForDiagnostics: 0
+  _enableDiagnosticFingerCloseups: 1
+  _recordingCaptureQuality: 0
+  _customRecordingCaptureWidth: 3840
+  _customRecordingCaptureHeight: 2160
+  _failEditorSmokeOnThumbRisk: 1
+  _editorSmokeMaxGenericThumbAnatomyRisk: 0.4
+  _editorSmokeMaxYybDeformationRisk: 0.35
+  _clampRetargetVisualClipStep: 0
+  _RetargetVisualClipFrameRate: 30
+  _smoothRetargetPoseOnVisualStepSpike: 1
+  _RetargetPoseVisualSpikeCurrentWeight: 0.65
+  _RetargetPoseVisualSpikeForearmStretchClampMaxOffset: 0
+  _RetargetPoseVisualMuscleDeltaThreshold: 0.35
+  _HeightOffset: 0
+  _MovementScaleMultiplier: 1
+  _clampRetargetRootDeltaSpikes: 1
+  _MaxRetargetRootDeltaPerFrame: 0.25
+  _logRetargetRootDeltaSpikes: 0
+  _clampRetargetHipsLocalPositionSpikes: 0
+  _MaxRetargetHipsLocalPositionDeltaPerFrame: 0.02
+  _smoothRetargetGrounding: 1
+  _MaxGroundingVerticalStepPerFrame: 0.01
+  _GroundingSmoothing: 0.25
+  _GroundingDeadZone: 0.005
+  _FreezeRootYAfterInitialGrounding: 1
+  _rejectRendererGroundingOutliers: 1
+  _MaxRendererFootGroundingSeparation: 0.12
+  _smoothLateVisualGroundingCorrection: 1
+  _LateVisualGroundingSnapThreshold: 0.03
+  _LateVisualGroundingSmoothing: 0.25
+  _MaxLateVisualGroundingStepPerFrame: 0.003
+  _enableFinalIkFootGroundingExperiment: 0
+  _finalIkFootGroundingWeight: 0.15
+  _finalIkFootGroundingMaxStep: 0.05
+  _finalIkFootGroundingFootRadius: 0.06
+  _finalIkFootGroundingPrediction: 0
+  _finalIkFootGroundingFootRotationWeight: 0
+  _finalIkFootGroundingPelvisDamper: 0.1
+  _logFinalIkFootGroundingExperiment: 0
+  _ThumbRotationOffset: {x: -10, y: -30, z: 0}
+  _mirrorRightThumbRotationOffset: 1
+  _LeftThumbRotationOffset: {x: 0, y: 0, z: 0}
+  _RightThumbRotationOffset: {x: 0, y: 0, z: 0}
+  _useDefaultThumbStretchOffsetWhenUnset: 1
+  _ThumbStretchOffset: 0
+  _EnableSmartCurve: 1
+  _SmartCurveStrength: 0.5
+  _StretchThreshold: 0.7
+  _EnableThumbSmartCurve: 1
+  _ThumbSmartCurveStrength: 0.5
 --- !u!1 &729755634
 GameObject:
   m_ObjectHideFlags: 0
@@ -1033,6 +1038,36 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 765879829}
   m_CullTransparentMesh: 1
+--- !u!21 &919527266
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
+  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.39999998, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!1 &963194225
 GameObject:
   m_ObjectHideFlags: 0
@@ -1071,7 +1106,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.09, g: 0.10, b: 0.13, a: 0}
+  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -1120,7 +1155,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.0000000001907263, y: 0.999990463, z: -0.004363309, w: -0.0000000437109726}
+  m_LocalRotation: {x: -1.907263e-10, y: 0.99999046, z: -0.004363309, w: -0.000000043710973}
   m_LocalPosition: {x: 0, y: 1, z: 39}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1224,6 +1259,36 @@ LightingSettings:
   m_PVRTiledBaking: 0
   m_NumRaysToShootPerTexel: -1
   m_RespectSceneVisibilityWhenBakingGI: 0
+--- !u!21 &1088931515
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
+  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2001
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _EdgeSize: 0.005
+    - _PostfixRenderQueue: 1
+    m_Colors:
+    - _EdgeColor: {r: 0.39999998, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
 --- !u!1 &1247656476
 GameObject:
   m_ObjectHideFlags: 0
@@ -1537,36 +1602,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1630944889}
   m_CullTransparentMesh: 1
---- !u!21 &1716128266
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass8
-  m_Shader: {fileID: 4800000, guid: ff1e1d0bbf6980244a107d25ff535f9a, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1 &1801870904
 GameObject:
   m_ObjectHideFlags: 0
@@ -1762,36 +1797,6 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
---- !u!21 &1884274171
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: MMD4Mecanim/MMDLit-NEXTEdge-Pass4
-  m_Shader: {fileID: 4800000, guid: 684f8af9b4ff4bc459588db5b0f6275d, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 2001
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs: []
-    m_Ints: []
-    m_Floats:
-    - _EdgeSize: 0.005
-    - _PostfixRenderQueue: 1
-    m_Colors:
-    - _EdgeColor: {r: 0.4, g: 1, b: 1, a: 1}
-  m_BuildTextureStacks: []
 --- !u!1 &2002197810
 GameObject:
   m_ObjectHideFlags: 0

@@ -4,7 +4,9 @@ using System.Reflection;
 using Fbx2Vmd.Recording;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -13,6 +15,7 @@ namespace Tests.Editor.FBXImporter
         private const string TargetAssetPath =
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const float TimeTolerance = 0.0001f;
 
         [OneTimeSetUp]
@@ -239,9 +242,164 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
-        private static MotionVideoRecordingSettings CreateSettings(float frameRate = 60f)
+        [Test]
+        public void Given_MovFormat_When_RecordingStartsAndStops_Then_AlphaHiddenRenderersAreRestored()
         {
-            return new MotionVideoRecordingSettings("motion", 1920, 1080, frameRate);
+            GameObject target = InstantiateTarget();
+            GameObject hidden = CreateHiddenRendererTarget(out Renderer hiddenRenderer);
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(
+                playback, recorder, new[] { hiddenRenderer });
+
+            try
+            {
+                bool started = (bool)Invoke(
+                    controller,
+                    "TryStart",
+                    CreateSettings(format: MotionVideoFileFormat.MovProRes),
+                    null);
+
+                Assert.That(started, Is.True);
+                Assert.That(hiddenRenderer.enabled, Is.False,
+                    "MOV 녹화 중에는 숨김 대상 렌더러가 꺼져야 합니다.");
+
+                Invoke(controller, "Stop");
+                Assert.That(hiddenRenderer.enabled, Is.True,
+                    "녹화 종료 후에는 숨김 대상 렌더러가 복원되어야 합니다.");
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(hidden);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_Mp4Format_When_RecordingStarts_Then_AlphaHiddenRenderersStayEnabled()
+        {
+            GameObject target = InstantiateTarget();
+            GameObject hidden = CreateHiddenRendererTarget(out Renderer hiddenRenderer);
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(
+                playback, recorder, new[] { hiddenRenderer });
+
+            try
+            {
+                bool started = (bool)Invoke(
+                    controller,
+                    "TryStart",
+                    CreateSettings(format: MotionVideoFileFormat.Mp4),
+                    null);
+
+                Assert.That(started, Is.True);
+                Assert.That(hiddenRenderer.enabled, Is.True,
+                    "MP4 녹화에서는 숨김 대상 렌더러가 유지되어야 합니다.");
+
+                Invoke(controller, "Stop");
+                Assert.That(hiddenRenderer.enabled, Is.True);
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(hidden);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_MovRecording_When_DisposingController_Then_AlphaHiddenRenderersAreRestored()
+        {
+            GameObject target = InstantiateTarget();
+            GameObject hidden = CreateHiddenRendererTarget(out Renderer hiddenRenderer);
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(
+                playback, recorder, new[] { hiddenRenderer });
+
+            try
+            {
+                bool started = (bool)Invoke(
+                    controller,
+                    "TryStart",
+                    CreateSettings(format: MotionVideoFileFormat.MovProRes),
+                    null);
+
+                Assert.That(started, Is.True);
+                Assert.That(hiddenRenderer.enabled, Is.False);
+
+                Invoke(controller, "Dispose");
+                Assert.That(hiddenRenderer.enabled, Is.True,
+                    "컨트롤러 해제 시에도 숨김 대상 렌더러가 복원되어야 합니다.");
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(hidden);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_MainAutoScene_When_ReadingAlphaHiddenObjects_Then_ContainsScenePlaneRenderer()
+        {
+            string previousScenePath = SceneManager.GetActiveScene().path;
+            EditorSceneManager.OpenScene(MainAutoScenePath, OpenSceneMode.Single);
+
+            try
+            {
+                var pipeline = UnityEngine.Object.FindObjectOfType<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
+                Assert.That(pipeline, Is.Not.Null,
+                    "Main_Auto 씬에서 영상 녹화 파이프라인을 찾아야 합니다.");
+
+                GameObject[] hiddenObjects = pipeline.alphaRecordingHiddenObjects;
+                Assert.That(hiddenObjects, Is.Not.Null.And.Not.Empty,
+                    "MOV 녹화 시 숨길 오브젝트가 씬에 지정되어야 합니다.");
+                Assert.That(
+                    hiddenObjects.Any(candidate => candidate != null && candidate.name == "Plane"),
+                    Is.True,
+                    "숨김 대상에 바닥 Plane이 포함되어야 합니다.");
+
+                MethodInfo collectMethod = pipeline.GetType().GetMethod(
+                    "CollectAlphaHiddenRenderers",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(collectMethod, Is.Not.Null);
+                var renderers = (Renderer[])collectMethod.Invoke(pipeline, null);
+                Assert.That(renderers, Is.Not.Null.And.Not.Empty);
+                Assert.That(
+                    renderers.Any(renderer =>
+                        renderer != null && renderer.gameObject.name == "Plane"),
+                    Is.True,
+                    "숨김 대상 수집에서 Plane 렌더러가 반환되어야 합니다.");
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(previousScenePath))
+                {
+                    EditorSceneManager.OpenScene(previousScenePath, OpenSceneMode.Single);
+                }
+            }
+        }
+
+        private static GameObject CreateHiddenRendererTarget(out Renderer renderer)
+        {
+            var target = new GameObject("AlphaHidden", typeof(MeshRenderer));
+            target.hideFlags = HideFlags.HideAndDontSave;
+            renderer = target.GetComponent<MeshRenderer>();
+            return target;
+        }
+
+        private static MotionVideoRecordingSettings CreateSettings(
+            float frameRate = 60f,
+            MotionVideoFileFormat format = MotionVideoFileFormat.Mp4)
+        {
+            return new MotionVideoRecordingSettings(
+                "motion", 1920, 1080, frameRate, format: format);
         }
 
         private static object CreatePlaybackController(GameObject target)
@@ -254,18 +412,24 @@ namespace Tests.Editor.FBXImporter
             return controller;
         }
 
-        private static object CreateRecordingController(object playback, IMotionVideoRecorder recorder)
+        private static object CreateRecordingController(
+            object playback,
+            IMotionVideoRecorder recorder,
+            Renderer[] alphaHiddenRenderers = null)
         {
             Type type = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
                 "Fbx2Vmd.FBXImporter.HumanoidMotionRecordingController",
                 throwOnError: false);
             Assert.That(type, Is.Not.Null,
                 "재생과 영상 녹화 시작 순서를 관리하는 전용 컨트롤러가 필요합니다.");
+            object[] arguments = alphaHiddenRenderers == null
+                ? new[] { playback, recorder }
+                : new object[] { playback, recorder, alphaHiddenRenderers };
             return Activator.CreateInstance(
                 type,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
                 binder: null,
-                args: new[] { playback, recorder },
+                args: arguments,
                 culture: null);
         }
 
