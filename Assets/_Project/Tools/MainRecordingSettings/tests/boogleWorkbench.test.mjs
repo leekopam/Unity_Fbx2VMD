@@ -71,3 +71,21 @@ test("준비 시간이 지나면 자식 프로세스를 종료하고 URL 요청�
   await assert.rejects(workbench.url, /시간 초과/);
   assert.equal(child.killed, true);
 });
+
+test("준비 완료 후 프로세스가 종료되면 onExit을 호출한다", async () => {
+  const child = createFakeChild();
+  let exitCode = -1;
+  const workbench = startBoogleWorkbench({
+    appRoot: "C:\\app",
+    spawnProcess: () => child,
+    onExit: (code) => {
+      exitCode = code;
+    }
+  });
+
+  child.stdout.emit("data", Buffer.from("BOOGLE_WORKBENCH_READY http://127.0.0.1:9001\n"));
+  assert.equal(await workbench.url, "http://127.0.0.1:9001");
+
+  child.emit("exit", 1);
+  assert.equal(exitCode, 1);
+});

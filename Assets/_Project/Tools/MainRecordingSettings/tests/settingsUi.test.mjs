@@ -277,6 +277,141 @@ test("개발자 패널을 열면 Workbench iframe을 탑재하고 실패 시 재
   }
 });
 
+test("Workbench iframe 로드가 시간 초과되면 오류와 재시도 경로를 연다", async () => {
+  const fixture = setupWorkbenchDom({ urls: ["http://127.0.0.1:9001"] });
+  try {
+    bootstrapSettingsUi(fixture.root, { workbenchLoadTimeoutMs: 5 });
+    fixture.developerButton.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    assert.equal(fixture.frame.src, "http://127.0.0.1:9001");
+    assert.equal(fixture.status.dataset.tone, "error");
+    assert.match(fixture.status.textContent, /초과/);
+    assert.equal(fixture.retry.hidden, false);
+  } finally {
+    fixture.restore();
+  }
+});
+
+test("다시 불러오기 버튼은 Workbench URL을 다시 요청한다", async () => {
+  const fixture = setupWorkbenchDom({ urls: ["http://127.0.0.1:9001", "http://127.0.0.1:9002"] });
+  try {
+    bootstrapSettingsUi(fixture.root);
+    fixture.developerButton.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(fixture.frame.src, "http://127.0.0.1:9001");
+    assert.equal(fixture.calls.length, 1);
+
+    fixture.reload.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(fixture.calls.length, 2);
+    assert.equal(fixture.frame.src, "http://127.0.0.1:9002");
+    assert.equal(fixture.frame.hidden, false);
+    assert.equal(fixture.status.dataset.tone, "info");
+  } finally {
+    fixture.restore();
+  }
+});
+
+// 개발자 패널 테스트가 쓰는 최소 DOM·window 대역을 만든다.
+function setupWorkbenchDom({ urls = [] } = {}) {
+  const shell = createFakeElement("div");
+  shell.dataset.activePanel = "onboarding";
+
+  const onboardingButton = createFakeElement("button");
+  onboardingButton.dataset.panelTarget = "onboarding";
+  const developerButton = createFakeElement("button");
+  developerButton.dataset.panelTarget = "developer";
+
+  const onboardingPanel = createFakeElement("section");
+  onboardingPanel.dataset.panelView = "onboarding";
+  const developerPanel = createFakeElement("section");
+  developerPanel.dataset.panelView = "developer";
+  developerPanel.hidden = true;
+
+  const frame = createFakeElement("iframe");
+  frame.hidden = true;
+  const status = createFakeElement("p");
+  const retry = createFakeElement("button");
+  retry.hidden = true;
+  const reload = createFakeElement("button");
+
+  const elements = {
+    ".app-shell": shell,
+    "#importButton": createFakeElement("button"),
+    "#statusBadge": createFakeElement("div"),
+    "#statusText": createFakeElement("span"),
+    "#feedback": createFakeElement("p"),
+    "#eventLog": createFakeElement("div"),
+    "#boogleFrame": frame,
+    "#workbenchStatus": status,
+    "#workbenchRetry": retry,
+    "#workbenchReload": reload
+  };
+  const root = {
+    querySelector(selector) {
+      return elements[selector] ?? null;
+    },
+    querySelectorAll(selector) {
+      if (selector === "[data-panel-target]") {
+        return [onboardingButton, developerButton];
+      }
+      if (selector === "[data-panel-view]") {
+        return [onboardingPanel, developerPanel];
+      }
+      return [];
+    }
+  };
+  const calls = [];
+  const beforeUnloadHandlers = [];
+  const previousDocument = globalThis.document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+
+  globalThis.document = {
+    createElement: () => createFakeElement("div")
+  };
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ runtimeState: { playMode: "stopped", updatedAtUtc: "" } })
+  });
+  globalThis.window = {
+    settingsShell: {
+      getWorkbenchUrl: async () => {
+        calls.push(true);
+        return urls[Math.min(calls.length, urls.length) - 1] ?? "";
+      }
+    },
+    addEventListener(type, handler) {
+      if (type === "beforeunload") {
+        beforeUnloadHandlers.push(handler);
+      }
+    }
+  };
+
+  return {
+    root,
+    frame,
+    status,
+    retry,
+    reload,
+    developerButton,
+    developerPanel,
+    calls,
+    restore() {
+      for (const handler of beforeUnloadHandlers) {
+        handler();
+      }
+
+      globalThis.document = previousDocument;
+      globalThis.fetch = previousFetch;
+      globalThis.window = previousWindow;
+    }
+  };
+}
+
 function createFakeElement(tagName) {
   const handlers = new Map();
   const attributes = new Map();

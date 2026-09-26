@@ -351,11 +351,16 @@ async function startApplication() {
   });
 }
 
-// Workbench 자식 프로세스를 기동한다. 준비가 실패하면 참조를 비워 다음 IPC 요청이 재기동한다.
+// Workbench 자식 프로세스를 기동한다. 준비 실패나 사후 종료면 참조를 비워 다음 IPC 요청이 재기동한다.
 function launchWorkbench() {
   const workbench = startBoogleWorkbench({
     appRoot,
-    onError: (error) => console.error(`BOOGLE_WORKBENCH_FAIL ${error.message}`)
+    onError: (error) => console.error(`BOOGLE_WORKBENCH_FAIL ${error.message}`),
+    onExit: () => {
+      if (boogleWorkbench === workbench) {
+        boogleWorkbench = null;
+      }
+    }
   });
   boogleWorkbench = workbench;
   workbench.url.catch(() => {
