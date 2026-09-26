@@ -314,6 +314,50 @@ test("다시 불러오기 버튼은 Workbench URL을 다시 요청한다", async
   }
 });
 
+test("로딩 중 다시 불러오기를 눌러도 이전 요청의 늦은 응답이 상태를 덮지 않는다", async () => {
+  const fixture = setupWorkbenchDom();
+  const resolvers = [];
+  try {
+    bootstrapSettingsUi(fixture.root, { workbenchLoadTimeoutMs: 60 });
+    // URL 요청을 수동으로 지연시켜 응답 대기 중 재시도 상황을 만든다.
+    globalThis.window.settingsShell.getWorkbenchUrl = () =>
+      new Promise((resolve) => resolvers.push(resolve));
+
+    fixture.developerButton.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.reload.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(resolvers.length, 2);
+    assert.equal(fixture.frame.src, "about:blank");
+
+    // 첫 요청의 늦은 응답은 무효화돼 iframe 주소와 상태를 덮지 않는다.
+    resolvers[0]("http://127.0.0.1:9001");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(fixture.frame.src, "about:blank");
+    assert.equal(fixture.status.dataset.tone, "info");
+    assert.equal(fixture.status.hidden, false);
+    assert.equal(fixture.retry.hidden, true);
+
+    // 비운 iframe의 load 이벤트는 로딩 상태를 닫지 않는다.
+    fixture.frame.dispatch("load");
+    assert.equal(fixture.status.hidden, false);
+
+    resolvers[1]("http://127.0.0.1:9002");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(fixture.frame.src, "http://127.0.0.1:9002");
+    assert.equal(fixture.frame.hidden, false);
+
+    // 기대한 주소의 load만 로딩 상태를 닫고, 이후에도 오류가 덧씌워지지 않는다.
+    fixture.frame.dispatch("load");
+    assert.equal(fixture.status.hidden, true);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(fixture.status.dataset.tone, "info");
+    assert.equal(fixture.retry.hidden, true);
+  } finally {
+    fixture.restore();
+  }
+});
+
 // 개발자 패널 테스트가 쓰는 최소 DOM·window 대역을 만든다.
 function setupWorkbenchDom({ urls = [] } = {}) {
   const shell = createFakeElement("div");

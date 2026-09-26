@@ -398,6 +398,7 @@ namespace Fbx2Vmd.FBXImporter
                     failure_stage = stage, failure_message = message,
                     scene = ScenePath, input = _inputFileName,
                     lower_body_only = _lowerBodyOnly,
+                    contact_intents = BuildContactIntentsSummary(),
                     model = _pipeline?.targetCharacter != null ? _pipeline.targetCharacter.name : string.Empty,
                     native_skinning_processed_frames =
                         _pipeline?.ImportedMotionCorrectionProcessedFrameCount ?? 0,
@@ -440,6 +441,57 @@ namespace Fbx2Vmd.FBXImporter
                     _pipeline.TryStopImportedMotion();
                 _phase = Phase.Finished;
             }
+        }
+
+        // 원본 궤적 기반 접지 의도를 오프라인 분석기와 교차 대조할 수 있게 상태에 기록함.
+        // 추정 실패가 계측 증거 자체를 깨지 않게 오류는 요약 안에 담음.
+        private object BuildContactIntentsSummary()
+        {
+            if (_sourceSamples == null || _sourceSamples.Count <= _lastFrame ||
+                _lastFrame < 1 || !(_frameRate > 0f) || !(_sourceHumanScale > 0f))
+            {
+                return null;
+            }
+
+            try
+            {
+                HumanoidFootContactIntentEstimate estimate =
+                    HumanoidFootContactIntentEstimator.Estimate(
+                        _sourceSamples.Take(_lastFrame + 1).ToArray(),
+                        _frameRate, _sourceHumanScale);
+                return new
+                {
+                    source = HumanoidFootContactIntent.Source,
+                    left = DescribeIntentSide(estimate.Left, estimate.LeftUncertainSpans),
+                    right = DescribeIntentSide(estimate.Right, estimate.RightUncertainSpans)
+                };
+            }
+            catch (Exception error)
+            {
+                return new { error = error.Message };
+            }
+        }
+
+        private object DescribeIntentSide(IReadOnlyList<HumanoidFootContactIntent> intents,
+            IReadOnlyList<Vector2Int> uncertainSpans)
+        {
+            int uncertainFrames = uncertainSpans.Sum(span => span.y - span.x);
+            int totalFrames = _lastFrame + 1;
+            return new
+            {
+                intents = intents.Select(intent => new
+                {
+                    start_frame = intent.StartFrame,
+                    end_frame_exclusive = intent.EndFrameExclusive,
+                    mode = intent.Mode.ToString().ToLowerInvariant(),
+                    certainty = intent.Certainty.ToString().ToLowerInvariant(),
+                    starts_at_clip_start = intent.StartsAtClipStart,
+                    anchor_m = new[] { intent.Anchor.x, intent.Anchor.y, intent.Anchor.z }
+                }).ToArray(),
+                // 각 구간은 [시작 프레임, 끝 배타 프레임]임.
+                uncertain_spans = uncertainSpans.Select(span => new[] { span.x, span.y }).ToArray(),
+                uncertain_ratio = totalFrames > 0 ? uncertainFrames / (double)totalFrames : 0d
+            };
         }
 
         public void Dispose()

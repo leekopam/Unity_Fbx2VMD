@@ -58,6 +58,9 @@ namespace Fbx2Vmd.FBXImporter
 
         internal HumanoidFootContactIntentCertainty Certainty { get; }
 
+        /// <summary>
+        /// 첫 관측 가능 프레임부터 지지가 이어져 touchdown이 관측되지 않은 구간임.
+        /// </summary>
         internal bool StartsAtClipStart { get; }
     }
 

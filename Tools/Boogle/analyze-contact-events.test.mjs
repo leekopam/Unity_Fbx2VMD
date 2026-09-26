@@ -118,3 +118,44 @@ test("물리 이상·측정 불가를 국소 사건으로 기록하고 정지 �
   assert.ok(staticResult.segments.every(item =>
     item.source_classification === "uncertain"));
 });
+
+test("state.json의 접지 의도 추정과 분석 구간을 교차 대조한다", () => {
+  const csv = createCsv();
+  const enriched = { ...state, contact_intents: {
+    source: "source_fbx_trajectory",
+    left: { intents: [
+        { start_frame: 1, end_frame_exclusive: 8, mode: "plant",
+          certainty: "confident", starts_at_clip_start: true,
+          anchor_m: [0, 0, 0] },
+        { start_frame: 12, end_frame_exclusive: 16, mode: "plant",
+          certainty: "confident", starts_at_clip_start: false,
+          anchor_m: [0, 0, 0] }],
+      uncertain_spans: [[12, 14]], uncertain_ratio: 0.25 },
+    right: { intents: [], uncertain_spans: [], uncertain_ratio: 1 } } };
+  const result = analyzeContactEvents(enriched, csv);
+  const check = result.contact_intent_crosscheck;
+  assert.equal(check.source, "source_fbx_trajectory");
+  assert.equal(check.left.intent_count, 2);
+  // 1~7 프레임 의도는 분석기도 지지로 분류해 완전 일치함.
+  assert.equal(check.left.intents[0].support_agreement, 1);
+  assert.equal(check.left.intents[0].starts_at_clip_start, true);
+  // 12~15 프레임 의도는 분석기가 자유발로 분류해 불일치 사건이 된다.
+  assert.equal(check.left.intents[1].support_agreement, 0);
+  assert.ok(Math.abs(check.left.support_frame_agreement - 7 / 11) < 1e-9);
+  // 의도 측 불확실 구간 12~13은 분석기에서 자유발로 확정돼 겹침 2프레임임.
+  assert.equal(check.left.uncertain_overlap_frames, 2);
+  assert.equal(check.left.uncertain_ratio, 0.25);
+  assert.equal(check.right.intent_count, 0);
+  assert.equal(check.right.support_frame_agreement, null);
+  assert.ok(result.events.some(item => item.kind === "contact_intent_mismatch" &&
+    item.side === "left" && item.start_frame === 12 && item.end_frame === 15));
+});
+
+test("접지 의도 추정이 없는 상태 문서는 교차 대조 없이 기존 결과를 유지한다", () => {
+  const csv = createCsv();
+  const result = analyzeContactEvents(state, csv);
+  assert.equal(result.status, "MANUAL_REVIEW_REQUIRED");
+  assert.equal(result.contact_intent_crosscheck, null);
+  assert.ok(result.events.every(item =>
+    item.kind !== "contact_intent_mismatch"));
+});

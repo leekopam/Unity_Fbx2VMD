@@ -29,9 +29,29 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
   };
   let workbenchRequested = false;
   let workbenchLoadTimer = null;
+  // 다시 불러오기마다 세대를 올려, 진행 중이던 URL 요청의 늦은 결과가 새 시도를 덮지 못하게 한다.
+  let workbenchGeneration = 0;
+  let expectedWorkbenchUrl = "";
   elements.workbenchRetry?.addEventListener("click", reloadWorkbench);
   elements.workbenchReload?.addEventListener("click", reloadWorkbench);
   elements.workbenchFrame?.addEventListener("load", () => {
+    // about:blank·오류 페이지처럼 기대한 주소가 아닌 탐색의 load는 무시한다.
+    if (!expectedWorkbenchUrl ||
+        String(elements.workbenchFrame.src).replace(/\/+$/, "") !== expectedWorkbenchUrl) {
+      return;
+    }
+    // 주소를 바꾸기 직전 커밋된 about:blank의 늦은 load는 제외한다. 같은 출처라
+    // 읽을 수 있으면 href로 확인하고, 다른 출처면 src 일치만으로 판정한다.
+    let loadedHref = null;
+    try {
+      loadedHref = elements.workbenchFrame.contentWindow?.location?.href ?? null;
+    } catch {
+      loadedHref = null;
+    }
+    if (loadedHref != null &&
+        String(loadedHref).replace(/\/+$/, "") !== expectedWorkbenchUrl) {
+      return;
+    }
     clearTimeout(workbenchLoadTimer);
     workbenchLoadTimer = null;
     if (elements.workbenchStatus) {
@@ -140,6 +160,7 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
       return;
     }
     workbenchRequested = true;
+    const generation = workbenchGeneration;
     elements.workbenchStatus.dataset.tone = "info";
     elements.workbenchStatus.hidden = false;
     elements.workbenchStatus.textContent = "Workbench를 시작하는 중입니다.";
@@ -155,10 +176,15 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
 
     try {
       const url = await getUrl();
+      // 다시 불러오기로 새 요청이 시작됐다면 늦게 도착한 이전 결과는 버린다.
+      if (generation !== workbenchGeneration) {
+        return;
+      }
       if (!url) {
         showWorkbenchError("Workbench 서버를 시작하지 못했습니다. boogle-sdk 설치를 확인하세요.");
         return;
       }
+      expectedWorkbenchUrl = String(url).replace(/\/+$/, "");
       elements.workbenchFrame.src = url;
       elements.workbenchFrame.hidden = false;
       // iframe load가 끝나지 않으면 오류 상태로 전환해 다시 시도 경로를 연다.
@@ -168,15 +194,19 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
       }, workbenchLoadTimeoutMs);
       workbenchLoadTimer.unref?.();
     } catch {
-      showWorkbenchError("Workbench 주소를 가져오지 못했습니다.");
+      if (generation === workbenchGeneration) {
+        showWorkbenchError("Workbench 주소를 가져오지 못했습니다.");
+      }
     }
   }
 
   // 다시 시도·다시 불러오기는 요청 상태를 초기화하고 iframe을 비운 뒤 URL부터 다시 받는다.
   function reloadWorkbench() {
+    workbenchGeneration += 1;
     clearTimeout(workbenchLoadTimer);
     workbenchLoadTimer = null;
     workbenchRequested = false;
+    expectedWorkbenchUrl = "";
     if (elements.workbenchFrame) {
       elements.workbenchFrame.hidden = true;
       elements.workbenchFrame.src = "about:blank";
@@ -186,6 +216,7 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
 
   function showWorkbenchError(message) {
     elements.workbenchStatus.dataset.tone = "error";
+    elements.workbenchStatus.hidden = false;
     elements.workbenchStatus.textContent = message;
     if (elements.workbenchRetry) {
       elements.workbenchRetry.hidden = false;

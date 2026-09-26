@@ -41,8 +41,10 @@ namespace Fbx2Vmd.FBXImporter
             var leftToes = new Vector3[samples.Count];
             var rightFeet = new Vector3[samples.Count];
             var rightToes = new Vector3[samples.Count];
-            float minFootY = float.MaxValue;
-            float maxFootY = float.MinValue;
+            float minLeftFootY = float.MaxValue;
+            float maxLeftFootY = float.MinValue;
+            float minRightFootY = float.MaxValue;
+            float maxRightFootY = float.MinValue;
             for (int index = 0; index < samples.Count; index++)
             {
                 HumanoidFootContactSample sample = samples[index];
@@ -56,14 +58,17 @@ namespace Fbx2Vmd.FBXImporter
                 leftToes[index] = sample.LeftToes;
                 rightFeet[index] = sample.RightFoot;
                 rightToes[index] = sample.RightToes;
-                minFootY = Mathf.Min(minFootY,
-                    Mathf.Min(sample.LeftFoot.y, sample.RightFoot.y));
-                maxFootY = Mathf.Max(maxFootY,
-                    Mathf.Max(sample.LeftFoot.y, sample.RightFoot.y));
+                minLeftFootY = Mathf.Min(minLeftFootY, sample.LeftFoot.y);
+                maxLeftFootY = Mathf.Max(maxLeftFootY, sample.LeftFoot.y);
+                minRightFootY = Mathf.Min(minRightFootY, sample.RightFoot.y);
+                maxRightFootY = Mathf.Max(maxRightFootY, sample.RightFoot.y);
             }
 
+            // 오프라인 분석기처럼 발별 움직임 범위로 판정함. 양발을 합치면
+            // 정지한 두 발의 높이 차이를 동작으로 오인한다.
             bool hasClipMotion =
-                maxFootY - minFootY >= humanScale * ClipMotionPerHumanScale;
+                maxLeftFootY - minLeftFootY >= humanScale * ClipMotionPerHumanScale ||
+                maxRightFootY - minRightFootY >= humanScale * ClipMotionPerHumanScale;
             List<HumanoidFootContactIntent> left = EstimateFoot(
                 leftFeet, leftToes, frameRate, humanScale, true, hasClipMotion,
                 out List<Vector2Int> leftUncertain);
@@ -242,7 +247,9 @@ namespace Fbx2Vmd.FBXImporter
                 anchor,
                 mode,
                 certainty,
-                span.Start == 0);
+                // 첫 프레임은 속도가 없어 항상 불확실이므로, 첫 관측 프레임부터
+                // 이어진 지지는 touchdown이 관측되지 않은 클립 시작 지지로 표시함.
+                span.Start <= 1);
         }
 
         private readonly struct IntRange
