@@ -76,8 +76,8 @@ namespace Tests.Editor.Settings
                 tests.MainRecordingScene_InstallerEnsuresActualGameViewQualityPath);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_ActualGameViewZoomIsReappliedFromSceneSetting),
                 tests.MainRecordingScene_ActualGameViewZoomIsReappliedFromSceneSetting);
-            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_ActualGameViewZoomDriftIsReappliedFromOneXSetting),
-                tests.MainRecordingScene_ActualGameViewZoomDriftIsReappliedFromOneXSetting);
+            RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_GameViewZoomDriftIsNotForcedBack),
+                tests.MainRecordingScene_GameViewZoomDriftIsNotForcedBack);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_UsesOnlyMainCameraForGameViewComparison),
                 tests.MainRecordingScene_UsesOnlyMainCameraForGameViewComparison);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_MainCameraUsesReferenceMp4BlackBackground),
