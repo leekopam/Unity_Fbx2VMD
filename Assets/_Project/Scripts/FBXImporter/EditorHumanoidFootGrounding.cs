@@ -36,6 +36,16 @@ namespace Fbx2Vmd.FBXImporter
         public int front_vertex;
     }
 
+    [Serializable]
+    internal sealed class HumanoidFootGroundingGate
+    {
+        public bool measured;
+        public float target_error_m;
+        public float sole_clearance_m;
+        public float supported_contact_error_m;
+        public int supported_contact_count;
+    }
+
     /// <summary>
     /// 명시적 재생 시각의 지지·밑창 목표와 양다리 도달 보정을 조립함.
     /// </summary>
@@ -226,13 +236,16 @@ namespace Fbx2Vmd.FBXImporter
 
         // 완전 지지 중에는 앵커와 실측 접촉점의 괴리도 게이트 조건임.
         // 지지 중에 부유·관통이 남은 프레임을 Applied로 보고하지 않음.
-        private const float SupportedContactErrorPerHumanScale = 0.005f;
+        // 계측 CSV가 같은 임계로 거절 사유를 재현할 수 있게 비율을 공개함.
+        internal const float TargetErrorPerHumanScale = 0.0001f;
+        internal const float SoleClearancePerHumanScale = 0.0001f;
+        internal const float SupportedContactErrorPerHumanScale = 0.005f;
 
         internal static bool ResolveApplied(float targetError, float soleClearance,
             float supportedContactError, float humanScale)
         {
-            return targetError <= humanScale * 0.0001f &&
-                soleClearance >= -humanScale * 0.0001f &&
+            return targetError <= humanScale * TargetErrorPerHumanScale &&
+                soleClearance >= -humanScale * SoleClearancePerHumanScale &&
                 supportedContactError <= humanScale * SupportedContactErrorPerHumanScale;
         }
 

@@ -164,6 +164,56 @@ test("접지 의도 추정이 없는 상태 문서는 교차 대조 없이 기�
     item.kind !== "contact_intent_mismatch"));
 });
 
+test("Applied↔Fallback 번복은 게이트 요동 사건으로 기록한다", () => {
+  const lines = createCsv().trimEnd().split("\n");
+  const setStatus = (frame, side, status) => {
+    const index = frame * 2 + (side === "right" ? 2 : 1);
+    const cells = lines[index].split(",");
+    cells[columns.indexOf("grounding_status")] = status;
+    lines[index] = cells.join(",");
+  };
+  // 왼발 5~8프레임: A,F,A,F,A — 4회 번복으로 요동 구간이 됨.
+  for (const [frame, status] of [[5, "Fallback"], [6, "Applied"],
+      [7, "Fallback"], [8, "Applied"]])
+    setStatus(frame, "left", status);
+  // 오른발 12~15프레임: 지속 Fallback — 가장자리 전이 1회씩이라 요동 아님.
+  for (const frame of [12, 13, 14, 15])
+    setStatus(frame, "right", "Fallback");
+  const result = analyzeContactEvents(state, `${lines.join("\n")}\n`);
+  const flickers = result.events.filter(item => item.kind === "applied_gate_flicker");
+  assert.equal(flickers.length, 1);
+  assert.equal(flickers[0].side, "left");
+  assert.equal(flickers[0].start_frame, 4);
+  assert.equal(flickers[0].end_frame, 8);
+  assert.equal(flickers[0].hit_frames, 4);
+  assert.ok(result.events.every(item => item.kind !== "applied_gate_flicker" ||
+    item.side !== "right"));
+});
+
+test("게이트 수치 열이 있으면 요약을 만들고 없으면 null을 유지한다", () => {
+  const base = createCsv();
+  assert.equal(analyzeContactEvents(state, base).gate, null);
+  const gateColumns = ["grounding_target_error_mm", "grounding_sole_clearance_mm",
+    "grounding_contact_error_mm", "grounding_supported_contacts"];
+  const lines = base.trimEnd().split("\n");
+  lines[0] = `${lines[0]},${gateColumns.join(",")}`;
+  for (let index = 1; index < lines.length; index++) {
+    const fallback = index === 12;
+    lines[index] = `${lines[index]},${fallback ? "0,0,9,1" : "0,0,0,0"}`;
+    if (fallback) {
+      const cells = lines[index].split(",");
+      cells[columns.indexOf("grounding_status")] = "Fallback";
+      lines[index] = cells.join(",");
+    }
+  }
+  const result = analyzeContactEvents(state, `${lines.join("\n")}\n`);
+  assert.equal(result.gate.left.measured_frames, 20);
+  assert.equal(result.gate.left.fallback_frames, 0);
+  assert.equal(result.gate.right.measured_frames, 20);
+  assert.equal(result.gate.right.fallback_frames, 1);
+  assert.equal(result.gate.right.maximum_supported_contact_error_mm, 9);
+});
+
 test("허용된 증거 패밀리의 runId/requestId 경로만 풀어준다", () => {
   const root = path.resolve("D:/evidence/boogle");
   const runId = "11111111-2222-3333-4444-555555555555";

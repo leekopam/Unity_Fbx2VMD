@@ -337,7 +337,7 @@ namespace Fbx2Vmd.FBXImporter
             float time, List<FootEntry> rows)
         {
             if (!_pipeline.TryCaptureImportedMotionFootSurface(out HumanoidFootGroundingSnapshot left,
-                    out HumanoidFootGroundingSnapshot right, out _))
+                    out HumanoidFootGroundingSnapshot right, out _, out _))
                 throw new InvalidOperationException($"F09 {frame}프레임 접지 표면 읽기 실패");
             var surfaces = new[] { left, right };
             var previewVertices = new Dictionary<SkinnedMeshRenderer, Vector3[]>();

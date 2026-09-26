@@ -2038,12 +2038,14 @@ namespace Fbx2Vmd.FBXImporter
 
 #if UNITY_EDITOR
         internal bool TryCaptureImportedMotionFootSurface(out HumanoidFootGroundingSnapshot left,
-            out HumanoidFootGroundingSnapshot right, out HumanoidFootGroundingStatus status)
+            out HumanoidFootGroundingSnapshot right, out HumanoidFootGroundingStatus status,
+            out HumanoidFootGroundingGate gate)
         {
             left = null;
             right = null;
             status = _humanoidMotionPlaybackController?.LastGroundingStatus ??
                 HumanoidFootGroundingStatus.Unavailable;
+            gate = _humanoidMotionPlaybackController?.LastGroundingGate;
             return !IsImportedMotionRecording && !IsPreparingImportedMotionCorrection &&
                 _humanoidMotionPlaybackController != null &&
                 _humanoidMotionPlaybackController.TryCaptureCurrentFootSurface(out left, out right);

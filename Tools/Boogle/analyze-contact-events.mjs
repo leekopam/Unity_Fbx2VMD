@@ -28,6 +28,9 @@ const textColumns = new Set(["side", "grounding_status", "has_ground", "support_
 const speedColumns = new Set(["source_foot_speed_mps", "source_toes_speed_mps",
   "retarget_foot_speed_mps", "retarget_toes_speed_mps"]);
 const optionalColumns = new Set(["rear_step_mm", "front_step_mm"]);
+// 신빌드 계측의 게이트 입력 수치. 없는 구형 CSV도 그대로 분석함.
+const gateColumns = ["grounding_target_error_mm", "grounding_sole_clearance_mm",
+  "grounding_contact_error_mm", "grounding_supported_contacts"];
 const supportRoles = new Set(["released", "front", "rear", "both"]);
 const groundingStatuses = new Set(["Disabled", "Unavailable", "NoGround", "Applied", "Fallback"]);
 const labels = { support: "지지 후보", airborne: "자유발 후보", uncertain: "불확실" };
@@ -168,6 +171,7 @@ function readFrames(state, csv) {
       !Number.isFinite(state.clip_frame_rate) || state.clip_frame_rate <= 0 ||
       !Number.isFinite(state.source_human_scale) || state.source_human_scale <= 0)
     throw new Error("완료된 F10 계측 상태가 필요함");
+  const hasGateColumns = gateColumns.every(field => header.includes(field));
   const records = readCsv(csv.replace(/^\uFEFF/, ""));
   const expected = (state.last_frame + 1) * 2;
   if (records.length !== expected || state.row_count !== expected ||
@@ -225,9 +229,15 @@ function readFrames(state, csv) {
           rearPointZ - previous.rearPointZ) * 1000,
       frontHorizontalStepMm: row.front_step_mm === "" || !previous ? null :
         Math.hypot(frontPointX - previous.frontPointX,
-          frontPointZ - previous.frontPointZ) * 1000 });
+          frontPointZ - previous.frontPointZ) * 1000,
+      gate: hasGateColumns && gateColumns.every(field => row[field] !== "" &&
+          Number.isFinite(Number(row[field]))) ? {
+        targetErrorMm: Number(row.grounding_target_error_mm),
+        soleClearanceMm: Number(row.grounding_sole_clearance_mm),
+        contactErrorMm: Number(row.grounding_contact_error_mm),
+        supportedContacts: Number(row.grounding_supported_contacts) } : null });
   }
-  return bySide;
+  return { bySide, hasGateColumns };
 }
 
 function appendIssueEvents(events, segments, rows, classes, side, limits) {
@@ -284,9 +294,58 @@ function appendIssueEvents(events, segments, rows, classes, side, limits) {
   }
 }
 
+// Applied↔Fallback이 짧은 간격으로 번복되면 교정 자세가 프레임마다 꺼졌다 켜져
+// 다리 떨림으로 나타남. 단일 하강·상승 전이는 요동이 아니므로 2회 이상만 기록함.
+function appendGateFlickerEvents(events, rows, side, limits) {
+  const flips = [];
+  for (let index = 1; index < rows.length; index++) {
+    const previous = rows[index - 1].groundingStatus;
+    const current = rows[index].groundingStatus;
+    if ((previous === "Applied" || previous === "Fallback") &&
+        (current === "Applied" || current === "Fallback") &&
+        current !== previous)
+      flips.push(index);
+  }
+  for (let start = 0; start < flips.length;) {
+    let end = start;
+    while (end + 1 < flips.length &&
+        flips[end + 1] - flips[end] <= limits.noiseGapFrames + 1)
+      end++;
+    const count = end - start + 1;
+    if (count >= 2) {
+      const first = flips[start] - 1;
+      const last = flips[end];
+      events.push({ id: `${side}-applied_gate_flicker-${first}-${last}`,
+        segment_id: null, side, start_frame: rows[first].frame,
+        end_frame: rows[last].frame,
+        representative_frame: rows[Math.floor((first + last) / 2)].frame,
+        kind: "applied_gate_flicker", priority: 2, hit_frames: count,
+        investigate_first: "게이트 임계 경계 확인",
+        status: "MANUAL_REVIEW_REQUIRED" });
+    }
+    start = end + 1;
+  }
+}
+
+// 프레임별 게이트 입력 수치를 모아 번복 횟수·최대 접촉 오차를 요약함.
+function summarizeGate(rows) {
+  const measured = rows.filter(row => row.gate !== null);
+  const flips = rows.reduce((count, row, index) => index > 0 &&
+    row.groundingStatus !== rows[index - 1].groundingStatus &&
+    ["Applied", "Fallback"].includes(row.groundingStatus) &&
+    ["Applied", "Fallback"].includes(rows[index - 1].groundingStatus)
+    ? count + 1 : count, 0);
+  return { measured_frames: measured.length,
+    applied_frames: rows.filter(row => row.groundingStatus === "Applied").length,
+    fallback_frames: rows.filter(row => row.groundingStatus === "Fallback").length,
+    status_flips: flips,
+    maximum_supported_contact_error_mm: measured.length ?
+      maximum(measured.map(row => row.gate.contactErrorMm)) : null };
+}
+
 export function analyzeContactEvents(state, csv, fingerprint = {}) {
   try {
-    const bySide = readFrames(state, csv);
+    const { bySide, hasGateColumns } = readFrames(state, csv);
     const segments = [];
     const events = [];
     const transitions = [];
@@ -374,6 +433,7 @@ export function analyzeContactEvents(state, csv, fingerprint = {}) {
         }
       }
       appendIssueEvents(events, segments, rows, classes, side, limits);
+      appendGateFlickerEvents(events, rows, side, limits);
     }
     // 캡처 기록의 접지 의도와 프레임 분류가 크게 어긋난 구간은 검토 사건으로 남김.
     const intentCrosscheck =
@@ -402,6 +462,9 @@ export function analyzeContactEvents(state, csv, fingerprint = {}) {
         row_count: state.row_count, source_human_scale: state.source_human_scale,
         ...fingerprint },
       limits: thresholds, contact_intent_crosscheck: intentCrosscheck?.summary ?? null,
+      gate: hasGateColumns ? { left: summarizeGate(bySide.left),
+        right: summarizeGate(bySide.right),
+        thresholds_mm: state.gate_thresholds_mm ?? null } : null,
       summary: { segment_count: segments.length,
         event_count: events.length, transition_count: transitions.length,
         review_queue_count: reviewQueue.length },
