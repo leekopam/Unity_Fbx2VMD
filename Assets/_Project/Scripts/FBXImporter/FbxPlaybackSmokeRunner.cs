@@ -616,6 +616,8 @@ namespace Fbx2Vmd.FBXImporter
             public string recorder_last_saved_path;
             public int capture_framerate;
             public float time_scale;
+            public float motion_time_seconds;
+            public float motion_record_framerate;
         }
 
         private static bool TryHandleE2eControlRequest(FbxPlaybackSmokeAutomationRequest request)
@@ -671,7 +673,12 @@ namespace Fbx2Vmd.FBXImporter
                         recorder_last_saved_path = recordingControl != null
                             ? recordingControl.LastSavedFilePath : string.Empty,
                         capture_framerate = Time.captureFramerate,
-                        time_scale = Time.timeScale
+                        time_scale = Time.timeScale,
+                        // E2E가 두 시점 샘플의 motion_time_seconds 차이로 실제 재생 속도를 계산함.
+                        motion_time_seconds = pipeline != null
+                            ? pipeline.ImportedMotionCurrentTimeSeconds : 0f,
+                        motion_record_framerate = pipeline != null
+                            ? (float)pipeline.motionVideoFrameRate : 0f
                     };
                     File.WriteAllText(statePath, JsonUtility.ToJson(state, true));
                     WriteStatus(new FbxPlaybackSmokeAutomationStatus

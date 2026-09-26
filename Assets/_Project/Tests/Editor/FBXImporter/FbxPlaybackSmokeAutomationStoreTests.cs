@@ -3,6 +3,7 @@ using NUnit.Framework;
 using System;
 using System.IO;
 using System.Reflection;
+using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
@@ -119,6 +120,24 @@ namespace Tests.Editor.FBXImporter
             Assert.That(statusJson, Does.Contain("\"success_jobs\": 1"));
             Assert.That(statusJson, Does.Contain("\"failure-1\""));
             Assert.That(trace, Does.Contain("smoke trace"));
+        }
+
+        [Test]
+        public void Given_E2eEnvironmentEvidence_When_Serializing_Then_IncludesPlaybackRateFields()
+        {
+            Type type = typeof(FbxPlaybackSmokeRunner).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.FbxPlaybackSmokeRunner+E2eEnvironmentEvidence",
+                throwOnError: false);
+            Assert.That(type, Is.Not.Null,
+                "E2E 환경 증거 타입이 필요합니다.");
+            object evidence = Activator.CreateInstance(type, nonPublic: true);
+
+            string json = JsonUtility.ToJson(evidence);
+            // 재생 속도 검증에는 두 시점 샘플의 모션 위치 차이가 필요함.
+            Assert.That(json, Does.Contain("\"motion_time_seconds\""),
+                "모션 재생 위치 필드가 E2E 증거에 포함되어야 합니다.");
+            Assert.That(json, Does.Contain("\"motion_record_framerate\""),
+                "기대 화면 진행률 비교용 녹화 FPS 필드가 E2E 증거에 포함되어야 합니다.");
         }
 
         private object CreateStore()
