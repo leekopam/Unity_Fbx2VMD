@@ -135,8 +135,11 @@ namespace Tests.Editor.Settings
                     "프레임 탐색은 자세 검토를 위해 정지 상태를 유지해야 합니다.");
                 playPauseButton.onClick.Invoke();
 
-                Assert.That(pipeline.IsImportedMotionPlaying, Is.True,
-                    "FBX 재임포트로 런타임 콜백이 사라져도 재생 버튼 연결을 복구해야 합니다.");
+                Assert.That(
+                    pipeline.IsImportedMotionPlaying || pipeline.IsPreparingImportedMotionCorrection,
+                    Is.True,
+                    "FBX 재임포트로 런타임 콜백이 사라져도 재생 버튼 연결을 복구해야 합니다. " +
+                    "Native 표면 보정이 필요한 모델은 준비 큐에 재생 요청이 등록돼야 합니다.");
             }
             finally
             {
