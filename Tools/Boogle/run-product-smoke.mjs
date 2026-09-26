@@ -1304,7 +1304,7 @@ async function executeFullClip(runId, alternateModel = false) {
         await writeFile(requestPath, JSON.stringify({ request_id: requestId,
           command: alternateModel ? alternateModelCommand : fullClipCommand,
           requested_command: alternateModel ? alternateModelCommand : fullClipCommand,
-          run_id: runId
+          run_id: runId, lower_body_only: alternateModel
         }), { flag: "wx" });
         submitted = true;
         const startedAt = Date.now();

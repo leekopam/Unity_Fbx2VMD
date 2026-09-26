@@ -1447,7 +1447,8 @@ namespace Fbx2Vmd.FBXImporter
                 pipeline.targetCharacter = model;
                 if (FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
                     request.run_id, out _fullClipMetrics, out message,
-                    "tetoris_001.fbx", "F14")) return true;
+                    "tetoris_001.fbx", "F14", lowerBodyOnly: request.lower_body_only))
+                    return true;
             }
             finally
             {

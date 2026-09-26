@@ -18,6 +18,7 @@ namespace Fbx2Vmd.FBXImporter
         public int[] side_capture_frames;
         public int screen_width;
         public int screen_height;
+        public bool lower_body_only;
     }
 
     [Serializable]
