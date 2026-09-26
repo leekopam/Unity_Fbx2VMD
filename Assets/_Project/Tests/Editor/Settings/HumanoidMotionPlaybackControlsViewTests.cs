@@ -140,6 +140,16 @@ namespace Tests.Editor.Settings
                     Is.True,
                     "FBX 재임포트로 런타임 콜백이 사라져도 재생 버튼 연결을 복구해야 합니다. " +
                     "Native 표면 보정이 필요한 모델은 준비 큐에 재생 요청이 등록돼야 합니다.");
+
+                if (pipeline.IsPreparingImportedMotionCorrection)
+                {
+                    // 전체 프레임 준비는 EditMode timeout을 넘기므로 드라이버를
+                    // 준비 완료 상태로 두고 pending 요청 소비→재생 전환만 검증한다.
+                    ForceNativeSkinningDriverReady(pipeline);
+                    TickNativeSkinningCorrectionPreparation(pipeline);
+                }
+                Assert.That(pipeline.IsImportedMotionPlaying, Is.True,
+                    "준비 완료 후에는 등록된 재생 요청이 실제 재생으로 이어져야 합니다.");
             }
             finally
             {
@@ -147,6 +157,44 @@ namespace Tests.Editor.Settings
                 UnityEngine.Object.DestroyImmediate(target);
                 UnityEngine.Object.DestroyImmediate(canvasObject);
             }
+        }
+
+        private static void ForceNativeSkinningDriverReady(FBXVmdPipeline pipeline)
+        {
+            Component driver = GetNativeSkinningDriver(pipeline);
+            Type driverType = driver.GetType();
+            MethodInfo cancelMethod = driverType.GetMethod(
+                "CancelPreparation",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(cancelMethod, Is.Not.Null, "드라이버 준비 취소 메서드가 필요합니다.");
+            cancelMethod.Invoke(driver, null);
+
+            PropertyInfo isReadyProperty = driverType.GetProperty(
+                "IsReady",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(isReadyProperty?.GetSetMethod(true), Is.Not.Null,
+                "드라이버 준비 상태 setter가 필요합니다.");
+            isReadyProperty.SetValue(driver, true);
+        }
+
+        private static void TickNativeSkinningCorrectionPreparation(FBXVmdPipeline pipeline)
+        {
+            MethodInfo tickMethod = typeof(FBXVmdPipeline).GetMethod(
+                "TickNativeSkinningCorrectionPreparation",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(tickMethod, Is.Not.Null, "준비 진행 메서드가 필요합니다.");
+            tickMethod.Invoke(pipeline, null);
+        }
+
+        private static Component GetNativeSkinningDriver(FBXVmdPipeline pipeline)
+        {
+            FieldInfo driverField = typeof(FBXVmdPipeline).GetField(
+                "_nativeSkinningCorrectionPlaybackDriver",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(driverField, Is.Not.Null, "보정 드라이버 필드가 필요합니다.");
+            Component driver = driverField.GetValue(pipeline) as Component;
+            Assert.That(driver, Is.Not.Null, "준비 중인 보정 드라이버가 필요합니다.");
+            return driver;
         }
 
         private static Button CreateButtonTemplate(Transform parent)
