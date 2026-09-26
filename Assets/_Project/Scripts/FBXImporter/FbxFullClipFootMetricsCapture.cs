@@ -229,7 +229,7 @@ namespace Fbx2Vmd.FBXImporter
                 throw new InvalidOperationException($"{_caseId} 전체 클립 또는 하체 본이 준비되지 않았습니다.");
 
             _writer = new StreamWriter(CsvPath, false, new System.Text.UTF8Encoding(false));
-            _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps");
+            _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps,grounding_target_error_mm,grounding_sole_clearance_mm,grounding_contact_error_mm,grounding_supported_contacts");
         }
 
         private void CaptureFrame(int frame)
@@ -237,7 +237,8 @@ namespace Fbx2Vmd.FBXImporter
             // 상태 로그 1만 건을 만들지 않도록 같은 제품 평가기의 내부 탐색만 호출함.
             if (!_controller.SeekFrame(frame) || _pipeline.ImportedMotionCurrentFrameIndex != frame ||
                 !_pipeline.TryCaptureImportedMotionFootSurface(out HumanoidFootGroundingSnapshot left,
-                    out HumanoidFootGroundingSnapshot right, out HumanoidFootGroundingStatus status))
+                    out HumanoidFootGroundingSnapshot right, out HumanoidFootGroundingStatus status,
+                    out HumanoidFootGroundingGate gate))
                 throw new InvalidOperationException($"{_caseId} {frame}프레임 탐색·접지 측정 실패");
 
             float time = _pipeline.ImportedMotionCurrentTimeSeconds;
@@ -254,8 +255,8 @@ namespace Fbx2Vmd.FBXImporter
                 { _maximumHipsStepMillimeters = hipsStep; _maximumHipsStepFrame = frame; }
             }
             _previousHipsY = hipsY;
-            WriteFoot(frame, time, timeError, 0, status, left);
-            WriteFoot(frame, time, timeError, 1, status, right);
+            WriteFoot(frame, time, timeError, 0, status, left, gate);
+            WriteFoot(frame, time, timeError, 1, status, right, gate);
             if (_captureViews && (frame == 0 || frame == _lastFrame))
                 CaptureGameView(frame);
         }
@@ -307,7 +308,8 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private void WriteFoot(int frame, float time, float timeError, int side,
-            HumanoidFootGroundingStatus status, HumanoidFootGroundingSnapshot foot)
+            HumanoidFootGroundingStatus status, HumanoidFootGroundingSnapshot foot,
+            HumanoidFootGroundingGate gate)
         {
             if (foot == null) throw new InvalidOperationException($"F10 {frame}프레임 발 측정값 누락");
             Vector3 rear = foot.rear_point;
@@ -371,7 +373,12 @@ namespace Fbx2Vmd.FBXImporter
                 frame > 0 ? (object)(Vector3.Distance(sourceToes, previousSourceToes) * _frameRate) : string.Empty,
                 targetFoot.y, targetToes.y,
                 frame > 0 ? (object)(Vector3.Distance(targetFoot, previousTargetFoot) * _frameRate) : string.Empty,
-                frame > 0 ? (object)(Vector3.Distance(targetToes, previousTargetToes) * _frameRate) : string.Empty
+                frame > 0 ? (object)(Vector3.Distance(targetToes, previousTargetToes) * _frameRate) : string.Empty,
+                // 게이트가 실제로 평가된 프레임만 수치를 기록해 거절 원인을 재현함.
+                gate != null && gate.measured ? (object)(gate.target_error_m * 1000f) : string.Empty,
+                gate != null && gate.measured ? (object)(gate.sole_clearance_m * 1000f) : string.Empty,
+                gate != null && gate.measured ? (object)(gate.supported_contact_error_m * 1000f) : string.Empty,
+                gate != null && gate.measured ? (object)gate.supported_contact_count : string.Empty
             };
             if (values.OfType<float>().Any(value => !IsFinite(value)))
                 throw new InvalidOperationException($"{_caseId} {frame}프레임 비유한 하체 수치");
@@ -420,6 +427,15 @@ namespace Fbx2Vmd.FBXImporter
                         camera.orthographic, camera.orthographicSize, camera.fieldOfView
                     },
                     source_human_scale = _sourceHumanScale,
+                    gate_thresholds_mm = new
+                    {
+                        target_error = _animator == null ? (float?)null :
+                            _animator.humanScale * EditorHumanoidFootGrounding.TargetErrorPerHumanScale * 1000f,
+                        sole_clearance_floor = _animator == null ? (float?)null :
+                            -_animator.humanScale * EditorHumanoidFootGrounding.SoleClearancePerHumanScale * 1000f,
+                        supported_contact_error = _animator == null ? (float?)null :
+                            _animator.humanScale * EditorHumanoidFootGrounding.SupportedContactErrorPerHumanScale * 1000f
+                    },
                     stage_basis = "source=FBX Humanoid world; retarget=initial target pose before contact correction; sole and foot=final evaluated pose; Game View mesh not presented per frame",
                     processed_frames = _frame, row_count = _rowCount,
                     csv_path = CsvPath,

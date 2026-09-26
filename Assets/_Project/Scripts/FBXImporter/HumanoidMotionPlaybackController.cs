@@ -39,6 +39,9 @@ namespace Fbx2Vmd.FBXImporter
             _rightFootRotation != null && _poseReferencePlayer.HasFootRotationReference;
         internal HumanoidFootGroundingStatus LastGroundingStatus { get; private set; } =
             HumanoidFootGroundingStatus.Disabled;
+        // 마지막 프레임의 게이트 입력 수치. 계측 경로가 교정 실패 원인을 프레임별로 재현함.
+        internal HumanoidFootGroundingGate LastGroundingGate { get; } =
+            new HumanoidFootGroundingGate();
 #endif
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
@@ -312,6 +315,7 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
             _isGroundResponseEnabled = false;
             LastGroundingStatus = HumanoidFootGroundingStatus.Disabled;
+            LastGroundingGate.measured = false;
             _footGrounding?.Dispose();
             _footGrounding = null;
             RestoreFootRotationBindings();
@@ -412,9 +416,18 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
             LastGroundingStatus = _isGroundResponseEnabled
                 ? HumanoidFootGroundingStatus.Unavailable : HumanoidFootGroundingStatus.Disabled;
+            LastGroundingGate.measured = false;
             if (_isGroundResponseEnabled && _footGrounding != null && _footGrounding.IsPrepared)
             {
-                if (_footGrounding.TryApply(CurrentTimeSeconds, _groundResponse))
+                bool applied = _footGrounding.TryApply(CurrentTimeSeconds, _groundResponse);
+                LastGroundingGate.measured = true;
+                LastGroundingGate.target_error_m = _footGrounding.MaximumTargetError;
+                LastGroundingGate.sole_clearance_m = _footGrounding.MinimumSoleClearance;
+                LastGroundingGate.supported_contact_error_m =
+                    _footGrounding.MaximumSupportedContactError;
+                LastGroundingGate.supported_contact_count =
+                    _footGrounding.FullySupportedContactCount;
+                if (applied)
                 {
                     LastGroundingStatus = _footGrounding.HasGround
                         ? HumanoidFootGroundingStatus.Applied : HumanoidFootGroundingStatus.NoGround;

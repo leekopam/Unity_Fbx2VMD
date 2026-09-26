@@ -1907,7 +1907,8 @@ namespace Fbx2Vmd.FBXImporter
             if (!_playbackEvidencePipeline.TryCaptureImportedMotionFootSurface(
                     out HumanoidFootGroundingSnapshot left,
                     out HumanoidFootGroundingSnapshot right,
-                    out HumanoidFootGroundingStatus status) ||
+                    out HumanoidFootGroundingStatus status,
+                    out _) ||
                 !_playbackEvidencePipeline.TryCaptureImportedMotionPose(out HumanPose pose)) return false;
             _playbackCapturePath = Path.Combine(directory, prefix + "_how-GameView.png");
             var sample = new FootFrameEvidence
