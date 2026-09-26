@@ -40,6 +40,8 @@
 
 # Local-only reference packs and temporary workspaces.
 /tmp/
+# Windows reserved device name; bash `> nul` redirects create a real file that breaks clones.
+/nul
 # Keep all project Docs folders local-only.
 /[Dd][Oo][Cc][Ss]/
 # Agent-generated issue/report drafts must live under Docs and stay out of Git.

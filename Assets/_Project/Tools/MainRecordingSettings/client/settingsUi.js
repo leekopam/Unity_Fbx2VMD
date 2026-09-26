@@ -23,9 +23,14 @@ export function bootstrapSettingsUi(root = document) {
     feedback: root.querySelector("#feedback"),
     log: root.querySelector("#eventLog"),
     workbenchFrame: root.querySelector("#boogleFrame"),
-    workbenchStatus: root.querySelector("#workbenchStatus")
+    workbenchStatus: root.querySelector("#workbenchStatus"),
+    workbenchRetry: root.querySelector("#workbenchRetry")
   };
   let workbenchRequested = false;
+  elements.workbenchRetry?.addEventListener("click", () => {
+    workbenchRequested = false;
+    void ensureWorkbenchLoaded();
+  });
   const panelTargets = Array.from(root.querySelectorAll?.("[data-panel-target]") ?? []);
   const panelViews = Array.from(root.querySelectorAll?.("[data-panel-view]") ?? []);
 
@@ -121,24 +126,29 @@ export function bootstrapSettingsUi(root = document) {
   }
 
   // 개발자 모드 패널이 처음 열릴 때만 Workbench URL을 가져와 iframe에 탑재한다.
+  // 실패하면 다시 시도 버튼을 열어 재기동할 수 있게 한다.
   async function ensureWorkbenchLoaded() {
     if (workbenchRequested || !elements.workbenchFrame || !elements.workbenchStatus) {
       return;
     }
     workbenchRequested = true;
+    elements.workbenchStatus.dataset.tone = "info";
+    elements.workbenchStatus.hidden = false;
+    elements.workbenchStatus.textContent = "Workbench를 시작하는 중입니다.";
+    if (elements.workbenchRetry) {
+      elements.workbenchRetry.hidden = true;
+    }
 
     const getUrl = globalThis.window?.settingsShell?.getWorkbenchUrl;
     if (typeof getUrl !== "function") {
-      elements.workbenchStatus.dataset.tone = "error";
-      elements.workbenchStatus.textContent = "현재 환경에서는 Workbench를 사용할 수 없습니다.";
+      showWorkbenchError("현재 환경에서는 Workbench를 사용할 수 없습니다.");
       return;
     }
 
     try {
       const url = await getUrl();
       if (!url) {
-        elements.workbenchStatus.dataset.tone = "error";
-        elements.workbenchStatus.textContent = "Workbench 서버를 시작하지 못했습니다. boogle-sdk 설치를 확인하세요.";
+        showWorkbenchError("Workbench 서버를 시작하지 못했습니다. boogle-sdk 설치를 확인하세요.");
         return;
       }
       elements.workbenchFrame.addEventListener("load", () => {
@@ -148,8 +158,15 @@ export function bootstrapSettingsUi(root = document) {
       elements.workbenchFrame.src = url;
       elements.workbenchFrame.hidden = false;
     } catch {
-      elements.workbenchStatus.dataset.tone = "error";
-      elements.workbenchStatus.textContent = "Workbench 주소를 가져오지 못했습니다.";
+      showWorkbenchError("Workbench 주소를 가져오지 못했습니다.");
+    }
+  }
+
+  function showWorkbenchError(message) {
+    elements.workbenchStatus.dataset.tone = "error";
+    elements.workbenchStatus.textContent = message;
+    if (elements.workbenchRetry) {
+      elements.workbenchRetry.hidden = false;
     }
   }
 
