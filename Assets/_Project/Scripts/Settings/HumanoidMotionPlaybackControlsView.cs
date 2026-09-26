@@ -19,8 +19,11 @@ namespace Fbx2Vmd.Settings
         private const string StopButtonName = "FBX_Stop_Button";
         private const string TimelineSliderName = "FBX_Timeline_Slider";
         private const string TimelineLabelName = "FBX_Timeline_Label";
-        private const float ButtonVerticalSpacing = 110f;
+        private const float ButtonVerticalSpacing = 100f;
+        private const float ControlSideMargin = 20f;
+        private const float ControlBottomMargin = 100f;
         private const float TimelineHeight = 36f;
+        private const float TimelineBottomMargin = 170f;
         private const float MinimumTimelineFontSize = 12f;
 
         private FBXVmdPipeline _pipeline;
@@ -93,27 +96,28 @@ namespace Fbx2Vmd.Settings
                 _legacyRecordButton.gameObject.SetActive(false);
             }
 
+            // 조작 버튼은 우하단에 위에서 아래로 쌓고, 타임라인은 좌하단에 둬
+            // 상단·중앙의 캐릭터 표시 영역과 겹치지 않게 함.
             _recordButton = CreateControlButton(
                 template,
                 RecordButtonName,
                 "녹화",
-                ButtonVerticalSpacing,
+                ControlBottomMargin + ButtonVerticalSpacing * 2f,
                 HandleRecordClick);
             _playPauseButton = CreateControlButton(
                 template,
                 PlayPauseButtonName,
                 "재생",
-                ButtonVerticalSpacing * 2f,
+                ControlBottomMargin + ButtonVerticalSpacing,
                 HandlePlayPauseClick);
             _stopButton = CreateControlButton(
                 template,
                 StopButtonName,
                 "정지",
-                ButtonVerticalSpacing * 3f,
+                ControlBottomMargin,
                 HandleStopClick);
             _timelineSlider = CreateTimelineSlider(
                 template,
-                ButtonVerticalSpacing * 4f + TimelineHeight + 12f,
                 HandleTimelineValueChanged,
                 out _timelineLabel,
                 out _legacyTimelineLabel);
@@ -313,11 +317,13 @@ namespace Fbx2Vmd.Settings
             button.onClick = new Button.ButtonClickedEvent();
             button.onClick.AddListener(onClick);
 
-            if (button.transform is RectTransform rectTransform &&
-                template.transform is RectTransform templateRectTransform)
+            if (button.transform is RectTransform rectTransform)
             {
+                rectTransform.anchorMin = new Vector2(1f, 0f);
+                rectTransform.anchorMax = new Vector2(1f, 0f);
+                rectTransform.pivot = new Vector2(1f, 0f);
                 rectTransform.anchoredPosition =
-                    templateRectTransform.anchoredPosition + Vector2.down * verticalOffset;
+                    new Vector2(-ControlSideMargin, verticalOffset);
                 rectTransform.SetAsLastSibling();
             }
 
@@ -343,7 +349,6 @@ namespace Fbx2Vmd.Settings
 
         private static Slider CreateTimelineSlider(
             Button template,
-            float verticalOffset,
             UnityEngine.Events.UnityAction<float> onValueChanged,
             out TMP_Text timelineLabel,
             out Text legacyTimelineLabel)
@@ -358,11 +363,11 @@ namespace Fbx2Vmd.Settings
             RectTransform sliderRect = sliderObject.GetComponent<RectTransform>();
             if (template.transform is RectTransform templateRect)
             {
-                sliderRect.anchorMin = templateRect.anchorMin;
-                sliderRect.anchorMax = templateRect.anchorMax;
-                sliderRect.pivot = templateRect.pivot;
+                sliderRect.anchorMin = new Vector2(0f, 0f);
+                sliderRect.anchorMax = new Vector2(0f, 0f);
+                sliderRect.pivot = new Vector2(0f, 0f);
                 sliderRect.anchoredPosition =
-                    templateRect.anchoredPosition + Vector2.down * verticalOffset;
+                    new Vector2(ControlSideMargin, TimelineBottomMargin);
                 sliderRect.sizeDelta = new Vector2(
                     Mathf.Max(240f, templateRect.rect.width),
                     TimelineHeight);
@@ -402,6 +407,19 @@ namespace Fbx2Vmd.Settings
             slider.maxValue = 0f;
             slider.wholeNumbers = true;
             slider.onValueChanged.AddListener(onValueChanged);
+
+            // 밝은 배경 위에서도 진행 수치가 읽히도록 라벨 뒤에 어두운 배경을 둠.
+            Image labelBackground = CreateSliderImage(
+                sliderRect,
+                "FBX_Timeline_Label_Background",
+                new Color32(40, 43, 50, 220));
+            labelBackground.raycastTarget = false;
+            RectTransform labelBackgroundRect = labelBackground.rectTransform;
+            labelBackgroundRect.anchorMin = new Vector2(0f, 1f);
+            labelBackgroundRect.anchorMax = new Vector2(1f, 1f);
+            labelBackgroundRect.pivot = new Vector2(0.5f, 0f);
+            labelBackgroundRect.anchoredPosition = new Vector2(0f, 4f);
+            labelBackgroundRect.sizeDelta = new Vector2(16f, TimelineHeight + 8f);
 
             timelineLabel = null;
             legacyTimelineLabel = null;
