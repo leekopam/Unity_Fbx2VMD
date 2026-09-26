@@ -29,6 +29,7 @@ test("packageElectronRelease copies Electron runtime and app resources into rele
   assert.equal(result.packageMode, "electron");
   assert.equal(result.requiredRuntimeCommands, 0);
   assert.equal(result.copiedAppEntries.includes("node_modules/ws"), true);
+  assert.equal(result.copiedAppEntries.includes("node_modules/boogle-sdk"), true);
   assert.equal(await exists(path.join(outputDir, SETTINGS_EXECUTABLE_FILE_NAME)), true);
   assert.equal(await exists(path.join(outputDir, "electron.exe")), false);
   assert.equal(await exists(path.join(outputDir, "resources", "default_app.asar")), false);
@@ -38,6 +39,7 @@ test("packageElectronRelease copies Electron runtime and app resources into rele
   assert.equal(await exists(path.join(outputDir, "resources", "app", "client", "settingsUi.js")), true);
   assert.equal(await exists(path.join(outputDir, "resources", "app", "server", "settingsBridgeServer.js")), true);
   assert.equal(await exists(path.join(outputDir, "resources", "app", "node_modules", "ws", "package.json")), true);
+  assert.equal(await exists(path.join(outputDir, "resources", "app", "node_modules", "boogle-sdk", "dist", "cli.js")), true);
   assert.equal(await exists(path.join(outputDir, "resources", "app", "node_modules", "electron")), false);
   assert.equal(await exists(path.join(outputDir, "resources", "app", "build.meta")), false);
 });
@@ -48,6 +50,7 @@ async function createFakeAppRoot(appRoot) {
   await fs.mkdir(path.join(appRoot, "electron"), { recursive: true });
   await fs.mkdir(path.join(appRoot, "server"), { recursive: true });
   await fs.mkdir(path.join(appRoot, "node_modules", "ws"), { recursive: true });
+  await fs.mkdir(path.join(appRoot, "node_modules", "boogle-sdk", "dist"), { recursive: true });
   await fs.mkdir(path.join(appRoot, "node_modules", "electron"), { recursive: true });
 
   await fs.writeFile(path.join(appRoot, "package.json"), JSON.stringify({
@@ -61,6 +64,7 @@ async function createFakeAppRoot(appRoot) {
   await fs.writeFile(path.join(appRoot, "electron", "main.js"), "export {};\n", "utf8");
   await fs.writeFile(path.join(appRoot, "server", "settingsBridgeServer.js"), "export {};\n", "utf8");
   await fs.writeFile(path.join(appRoot, "node_modules", "ws", "package.json"), "{\"name\":\"ws\"}\n", "utf8");
+  await fs.writeFile(path.join(appRoot, "node_modules", "boogle-sdk", "dist", "cli.js"), "export {};\n", "utf8");
   await fs.writeFile(path.join(appRoot, "node_modules", "electron", "package.json"), "{\"name\":\"electron\"}\n", "utf8");
 }
 

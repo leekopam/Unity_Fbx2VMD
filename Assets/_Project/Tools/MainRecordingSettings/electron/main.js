@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { startBoogleWorkbench } from "./boogleWorkbench.js";
 import { createFbxFileDialogOptions, extractSelectedFbxPath } from "./fileDialog.js";
 import {
   getRendererEntry,
@@ -23,6 +24,7 @@ const __dirname = path.dirname(__filename);
 const appRoot = path.resolve(__dirname, "..");
 const preloadPath = path.join(__dirname, "preload.cjs");
 let bridgeServer = null;
+let boogleWorkbench = null;
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -294,6 +296,13 @@ async function startApplication() {
   await bridgeServer.listen();
   console.log(`SETTINGS_BRIDGE_READY ${bridgeServer.baseUrl}`);
 
+  if (!isSmokeTestMode()) {
+    boogleWorkbench = startBoogleWorkbench({
+      appRoot,
+      onError: (error) => console.error(`BOOGLE_WORKBENCH_FAIL ${error.message}`)
+    });
+  }
+
   await createMainWindow();
 
   app.on("activate", async () => {
@@ -317,6 +326,16 @@ function focusExistingSettingsWindow() {
 }
 
 function registerIpcHandlers() {
+  ipcMain.handle("boogle:get-workbench-url", async () => {
+    if (!boogleWorkbench) {
+      return "";
+    }
+    try {
+      return await boogleWorkbench.url;
+    } catch {
+      return "";
+    }
+  });
   ipcMain.handle("settings:choose-fbx-file", async () => {
     const smokeImportFbxPath = getSmokeImportFbxPath();
     if (smokeImportFbxPath) {
@@ -335,6 +354,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async () => {
+  if (boogleWorkbench != null) {
+    const workbench = boogleWorkbench;
+    boogleWorkbench = null;
+    workbench.stop();
+  }
   if (bridgeServer == null) {
     return;
   }

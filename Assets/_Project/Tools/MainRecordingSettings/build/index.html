@@ -55,6 +55,14 @@
             </button>
           </section>
 
+          <section class="tree-section" aria-labelledby="treeDeveloper">
+            <h2 id="treeDeveloper">개발자 모드</h2>
+            <button class="tree-item" type="button" data-panel-target="developer" aria-controls="developerPanel">
+              <span class="tree-icon cube-icon" aria-hidden="true"></span>
+              <span>E2E Workbench</span>
+            </button>
+          </section>
+
           <div class="sidebar-actions" aria-label="편집 도구">
             <button type="button" aria-label="추가">+</button>
             <button type="button" aria-label="제거">-</button>
@@ -172,6 +180,15 @@
               <summary>Camera 1 적용 범위</summary>
               <p>이 패널은 녹화 카메라 설정을 한 화면에서 조정하기 위한 진입점입니다.</p>
             </details>
+          </section>
+
+          <section id="developerPanel" class="panel-view developer-panel" data-panel-view="developer" aria-labelledby="developerTitle" hidden>
+            <div class="detail-header">
+              <p class="detail-kicker">개발자 모드</p>
+              <h2 id="developerTitle">E2E Workbench</h2>
+            </div>
+            <p id="workbenchStatus" class="feedback" data-tone="info" role="status" aria-live="polite">Workbench를 시작하는 중입니다.</p>
+            <iframe id="boogleFrame" class="workbench-frame" title="Boogle E2E Workbench" hidden></iframe>
           </section>
         </section>
 

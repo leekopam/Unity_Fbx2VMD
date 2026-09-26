@@ -737,3 +737,17 @@ input {
     width: 230px;
   }
 }
+
+.developer-panel {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto auto 1fr;
+}
+
+.workbench-frame {
+  width: 100%;
+  min-height: 0;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 10px;
+  background: #fff;
+}
