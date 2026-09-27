@@ -133,6 +133,39 @@ namespace Tests.Editor.FBXImporter
                             Assert.That(Vector3.Distance(poses[frame][leftIndex], poses[5592f][leftIndex]), Is.LessThan(0.001f),
                                 "지지 해제 경계에서 발목이 불연속적으로 이동하면 안 됨");
                         AssertRotationOnlyGrounding(grounding);
+
+                        Invoke(controller, "Seek", 968f / clip.frameRate);
+                        Vector3 previousFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        Invoke(controller, "Seek", 969f / clip.frameRate);
+                        object right = Field(grounding, "_right");
+                        object sampler = Field(right, "Sampler");
+                        Assert.That(Invoke(sampler, "TrySample"), Is.True);
+                        Array contacts = (Array)Field(right, "_activeContacts");
+                        var points = new Vector3[2];
+                        for (int channel = 0; channel < 2; channel++)
+                        {
+                            object[] args = { sampler, Vector3.zero };
+                            Assert.That(Invoke(contacts.GetValue(channel), "TryGetLocalPoint", args), Is.True,
+                                $"{path} 지지 채널 {channel}");
+                            points[channel] = (Vector3)args[1];
+                        }
+                        Vector3[] anchors = (Vector3[])Field(right, "_anchors");
+                        float soleSpan = Vector3.Distance(points[0], points[1]) *
+                            animator.GetBoneTransform(HumanBodyBones.RightFoot).lossyScale.x;
+                        Assert.That(Vector3.Distance(anchors[0], anchors[1]),
+                            Is.LessThanOrEqualTo(soleSpan + animator.humanScale * 0.005f),
+                            "새 접촉의 앵커는 이동 상한을 적용한 기존 지지점과 정렬해야 함");
+                        Assert.That(Vector3.Distance(previousFoot,
+                            animator.GetBoneTransform(HumanBodyBones.RightFoot).position),
+                            Is.LessThan(animator.humanScale * 0.03f),
+                            "새 접촉 때문에 발목이 한 프레임에 수cm 이동하면 안 됨");
+                        Invoke(controller, "Seek", 9129f / clip.frameRate);
+                        previousFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot).position;
+                        Invoke(controller, "Seek", 9130f / clip.frameRate);
+                        Assert.That(Vector3.Distance(previousFoot,
+                            animator.GetBoneTransform(HumanBodyBones.RightFoot).position),
+                            Is.LessThan(animator.humanScale * 0.03f),
+                            "정점 교체가 작은 실제 발 이동을 수cm 점프로 바꾸면 안 됨");
                         AssertPartialFootFramesRejected(controller, grounding, clip);
                     }
                     finally { ((IDisposable)controller).Dispose(); UnityEngine.Object.DestroyImmediate(model); }
