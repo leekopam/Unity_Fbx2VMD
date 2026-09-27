@@ -132,9 +132,24 @@ namespace Fbx2Vmd.FBXImporter
                         pinReleaseSourceDistance);
                 }
                 bool overlapping = states[0] != null && states[1] != null;
+                Vector3 previousPrimaryPoint = Vector3.zero;
+                bool hasPreviousPrimaryPoint = false;
                 if (overlapping && !wasOverlapping)
                 {
                     if (!TrySample()) return false;
+                    int primary = states[0].StartFrame <= states[1].StartFrame ? 0 : 1;
+                    if (frame > 0 && emittedValid[primary] && emittedContact[primary] == states[primary])
+                    {
+                        evaluate(Mathf.Min((frame - 1) / frameRate, clipLength));
+                        if (sampler.TrySample() &&
+                            sampler.TryGetLocalPoint(states[primary].Point, out Vector3 previousLocalPoint))
+                        {
+                            previousPrimaryPoint = foot.TransformPoint(previousLocalPoint);
+                            hasPreviousPrimaryPoint = true;
+                        }
+                        evaluate(Mathf.Min(frame / frameRate, clipLength));
+                        if (!sampler.TrySample()) return false;
+                    }
                     Vector3 previousRear = SourcePoint(0), previousFront = SourcePoint(1);
                     if (!TryCreatePair(foot, sampler, states, source, frame, sourceRotation, out pair))
                         result.RecordIssue(frame, "공동 접촉 자세 또는 지상 방향을 준비하지 못함");
@@ -155,6 +170,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (!overlapping) pair = null;
                 wasOverlapping = overlapping;
                 bool canAlign = false;
+                int preservedPrimary = -1;
                 if (pair != null)
                 {
                     Vector3 direction = Vector3.ProjectOnPlane(sourceRotation * (source[1][frame] - source[0][frame]), Vector3.up);
@@ -162,7 +178,25 @@ namespace Fbx2Vmd.FBXImporter
                     {
                         float yaw = Vector3.SignedAngle(pair.SourceDirection, direction, Vector3.up);
                         Vector3 anchor = states[pair.Primary].GetAnchor(SourcePoint(pair.Primary), sourceRotation, scaleRatio);
+                        HumanoidFootAnchorPolicy primaryPolicy = anchorPolicies == null
+                            ? HumanoidFootAnchorPolicy.Free : anchorPolicies[frame];
+                        if (hasPreviousPrimaryPoint &&
+                            result._frames[pair.Primary][frame - 1].Point != states[pair.Primary].Point &&
+                            sampler.TryGetLocalPoint(states[pair.Primary].Point, out Vector3 currentLocalPoint))
+                        {
+                            Vector3 anchorShift = Vector3.ProjectOnPlane(anchor - emitted[pair.Primary], Vector3.up);
+                            Vector3 pointShift = Vector3.ProjectOnPlane(
+                                foot.TransformPoint(currentLocalPoint) - previousPrimaryPoint, Vector3.up);
+                            // 정점 교체의 실제 이동과 맞는 앵커 이동만 발목 자세 보상으로 허용함.
+                            if (Vector3.Distance(anchorShift, pointShift) <= foot.lossyScale.x * 0.005f)
+                                preservedPrimary = pair.Primary;
+                        }
+                        if (anchorTrackStep > 0f && primaryPolicy == HumanoidFootAnchorPolicy.Free &&
+                            emittedValid[pair.Primary] && emittedContact[pair.Primary] == states[pair.Primary] &&
+                            preservedPrimary != pair.Primary)
+                            anchor = Vector3.MoveTowards(emitted[pair.Primary], anchor, anchorTrackStep);
                         int secondary = 1 - pair.Primary;
+                        // 보조 접촉은 최종 주 앵커를 기준으로 정렬해 이동 상한에 따른 간격 불일치를 막음.
                         // 핀 고정된 보조 접촉은 공동 정렬로 앵커를 덮어쓰지 않음.
                         if (!states[secondary].Pinned)
                         {
@@ -191,9 +225,10 @@ namespace Fbx2Vmd.FBXImporter
                         : anchorPolicies[frame];
                     Vector3 anchor = states[channel].GetAnchor(
                         SourcePoint(channel), sourceRotation, scaleRatio);
-                    // 자유 구간의 앵커 수평 이동은 프레임당 상한으로 제한해 자세 연속성을 지킴.
+                    // 자유 구간의 동일 정점 이동만 제한하고, 정점 교체에 필요한 앵커 이동은 보존함.
                     if (anchorTrackStep > 0f && policy == HumanoidFootAnchorPolicy.Free &&
-                        emittedValid[channel] && emittedContact[channel] == states[channel])
+                        emittedValid[channel] && emittedContact[channel] == states[channel] &&
+                        preservedPrimary != channel)
                         anchor = Vector3.MoveTowards(emitted[channel], anchor, anchorTrackStep);
                     result._frames[channel][frame] =
                         new Frame(states[channel].Point, anchor, canAlign);
