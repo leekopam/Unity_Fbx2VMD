@@ -136,6 +136,11 @@ namespace Fbx2Vmd.FBXImporter
 
             _frameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(clip.frameRate);
             _sourceScaleRatio = _humanScale / sourceHumanScale;
+            // 새 접촉 계획의 첫 프레임이 이전 클립의 마지막 게이트 판정을 재사용하지 않게 보류 상태를 초기화함.
+            _gateHoldsFallback = false;
+            _gateOppositeStreak = 0;
+            _lastGateTimeSeconds = -1f;
+            _lastGateDecision = false;
             try
             {
                 IsPrepared = _left.TryBuildContacts(samples, true, sourceHumanScale,
