@@ -126,7 +126,7 @@ export async function reviewContactIntent(state, metricsSource, templateSource,
   const headers = metricsSource.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0].split(",");
   if (!state || state.status !== "metrics_complete_review_required" ||
       !sourceFields.concat(stageFields).every(field => headers.includes(field)))
-    return { status: "BLOCKED", reason: "완료된 47열 F10 원본·단계별 계측이 필요함" };
+    return { status: "BLOCKED", reason: "완료된 47열 이상의 F10 원본·단계별 계측이 필요함" };
   const rows = readCsv(metricsSource.replace(/^\uFEFF/, ""));
   const template = readCsv(templateSource.replace(/^\uFEFF/, ""));
   if (template.length > 64)

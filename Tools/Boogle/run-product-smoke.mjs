@@ -796,7 +796,7 @@ async function loadContactSource(directory) {
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative) ||
       relative.split(path.sep).length !== 2 ||
       path.relative(await realpath(root), await realpath(directory)) !== relative)
-    throw new Error("47열 F10 실행 폴더 경로가 필요합니다.");
+    throw new Error("51열 F10 실행 폴더 경로가 필요합니다.");
   const [runId, requestId] = relative.split(path.sep);
   const [stateSource, csv, eventsSource, sessionSource, sdkSource] = await Promise.all([
     readFile(path.join(directory, "state.json"), "utf8"),
@@ -1353,7 +1353,7 @@ async function executeFullClip(runId, alternateModel = false) {
               rows.slice(1).every((row, index) => {
                 const cells = row.split(",");
                 const frame = Math.floor(index / 2);
-                return cells.length === 47 && Number(cells[0]) === frame &&
+                return cells.length === 51 && Number(cells[0]) === frame &&
                   cells[3] === (index % 2 ? "right" : "left") &&
                   Math.abs(Number(cells[1]) - frame / state.clip_frame_rate) * 1000 <=
                     500 / state.clip_frame_rate + 0.02 &&
