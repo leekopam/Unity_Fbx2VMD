@@ -257,9 +257,9 @@ namespace Fbx2Vmd.FBXImporter
                 supportedContactError <= humanScale * SupportedContactErrorPerHumanScale;
         }
 
-        // 전환에 필요한 연속 반대 결과 프레임 수. 60fps 기준 약 50ms의 판정 지연으로
-        // 1~2프레임짜리 임계 진동을 흡수한다.
-        private const int GateTransitionFrames = 3;
+        // 전환에 필요한 연속 반대 결과 프레임 수. 측정상 잔여 번복 대역은 전부
+        // 정확히 3프레임 연속 실패(최소 섬)이므로 4로 올려 흡수한다.
+        private const int GateTransitionFrames = 4;
 
         // 순차 프레임에서만 상태를 보류한다. 1프레임을 넘는 시간 점프(프레임 탐색)나
         // 무지면 프레임은 즉시 게이트 결과를 사용하고 보류 상태를 현재 결과로 맞춘다.
