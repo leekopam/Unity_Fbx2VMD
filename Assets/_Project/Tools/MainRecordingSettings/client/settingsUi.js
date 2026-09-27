@@ -1,7 +1,7 @@
 import {
   DEFAULT_API_BASE_URL,
   DEFAULT_WS_URL,
-  createPlayModeAutoConnectionController,
+  createSettingsAutoConnectionController,
   getRuntimeState,
   postImportFbx
 } from "./settingsApi.js";
@@ -14,7 +14,10 @@ const statusLabels = {
   error: "연결 오류"
 };
 
-export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 15000 } = {}) {
+export function bootstrapSettingsUi(root = document, {
+  workbenchLoadTimeoutMs = 15000,
+  createWebSocketChannel
+} = {}) {
   const elements = {
     shell: root.querySelector(".app-shell"),
     importButton: root.querySelector("#importButton"),
@@ -63,19 +66,31 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
   const panelViews = Array.from(root.querySelectorAll?.("[data-panel-view]") ?? []);
 
   let isSubmitting = false;
-  const autoConnection = createPlayModeAutoConnectionController({
+  let isPlaying = false;
+  const autoConnection = createSettingsAutoConnectionController({
+    createWebSocketChannel,
     apiBaseUrl: () => getBridgeConfig().apiBaseUrl ?? DEFAULT_API_BASE_URL,
     wsUrl: () => getBridgeConfig().wsUrl ?? DEFAULT_WS_URL,
     fetchRuntimeState: () => getRuntimeState({
       apiBaseUrl: getBridgeConfig().apiBaseUrl ?? DEFAULT_API_BASE_URL
     }),
     onStatusChange: setConnectionStatus,
+    onPlayModeChange: (playMode) => {
+      const wasPlaying = isPlaying;
+      isPlaying = playMode === "playing";
+      refreshControls();
+      if (wasPlaying !== isPlaying) {
+        setFeedback(isPlaying
+          ? "가져오기 버튼을 누르면 FBX 파일 선택 창이 열립니다."
+          : "Unity Play 상태에서 FBX 가져오기를 사용할 수 있습니다.", "info");
+      }
+    },
     onMessage: (message) => appendLog("수신", message),
-    onError: () => setFeedback("Unity Play 상태 확인 또는 WebSocket 연결에 실패했습니다.", "error")
+    onError: () => setFeedback("Unity 상태 확인 또는 WebSocket 연결에 실패했습니다.", "error")
   });
 
   setConnectionStatus("idle");
-  setFeedback("가져오기 버튼을 누르면 FBX 파일 선택 창이 열립니다.", "info");
+  setFeedback("Unity Play 상태에서 FBX 가져오기를 사용할 수 있습니다.", "info");
   renderLogEmptyState();
   initializePanelSwitching();
   refreshControls();
@@ -83,7 +98,7 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
   globalThis.window?.addEventListener?.("beforeunload", () => autoConnection.stop());
 
   elements.importButton.addEventListener("click", async () => {
-    if (isSubmitting) {
+    if (isSubmitting || !isPlaying) {
       return;
     }
 
@@ -235,7 +250,7 @@ export function bootstrapSettingsUi(root = document, { workbenchLoadTimeoutMs = 
   }
 
   function refreshControls() {
-    elements.importButton.disabled = isSubmitting;
+    elements.importButton.disabled = isSubmitting || !isPlaying;
     elements.importButton.textContent = isSubmitting ? "가져오는 중..." : "FBX 가져오기";
   }
 

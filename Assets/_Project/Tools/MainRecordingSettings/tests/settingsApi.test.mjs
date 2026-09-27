@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   createImportFbxRequest,
-  createPlayModeAutoConnectionController,
+  createSettingsAutoConnectionController,
   createRuntimeStateRequest,
   createSettingsWebSocket,
   getRuntimeState,
@@ -97,7 +97,7 @@ test("getRuntimeState fetches GET /state and returns runtime state document", as
   });
 });
 
-test("play mode auto connection controller opens only while Unity is playing", async () => {
+test("settings connection stays open across Unity Play transitions", async () => {
   const states = [
     { runtimeState: { playMode: "stopped" } },
     { runtimeState: { playMode: "playing" } },
@@ -105,10 +105,11 @@ test("play mode auto connection controller opens only while Unity is playing", a
     { runtimeState: { playMode: "stopped" } }
   ];
   const statuses = [];
+  const playModes = [];
   let connectionCount = 0;
   let disconnectCount = 0;
 
-  const controller = createPlayModeAutoConnectionController({
+  const controller = createSettingsAutoConnectionController({
     fetchRuntimeState: async () => states.shift(),
     createWebSocketChannel: ({ wsUrl, onStatusChange }) => {
       connectionCount += 1;
@@ -120,7 +121,8 @@ test("play mode auto connection controller opens only while Unity is playing", a
         }
       };
     },
-    onStatusChange: (status) => statuses.push(status)
+    onStatusChange: (status) => statuses.push(status),
+    onPlayModeChange: (playMode) => playModes.push(playMode)
   });
 
   await controller.pollOnce();
@@ -129,8 +131,11 @@ test("play mode auto connection controller opens only while Unity is playing", a
   await controller.pollOnce();
 
   assert.equal(connectionCount, 1);
+  assert.equal(disconnectCount, 0);
+  assert.deepEqual(statuses, ["connecting"]);
+  assert.deepEqual(playModes, ["stopped", "playing", "playing", "stopped"]);
+  controller.stop();
   assert.equal(disconnectCount, 1);
-  assert.deepEqual(statuses, ["closed", "connecting", "closed"]);
 });
 
 test("createSettingsWebSocket reports connection states and messages", () => {

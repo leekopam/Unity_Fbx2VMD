@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { bootstrapSettingsUi } from "../client/settingsUi.js";
 
+const fakeChannel = () => ({ disconnect() {} });
+
 test("FBX import primary button opens the file picker and submits the selected file", async () => {
   const elements = {
     ".app-shell": createFakeElement("div"),
@@ -31,7 +33,7 @@ test("FBX import primary button opens the file picker and submits the selected f
       return {
         ok: true,
         status: 200,
-        json: async () => ({ runtimeState: { playMode: "stopped", updatedAtUtc: "" } })
+        json: async () => ({ runtimeState: { playMode: "playing", updatedAtUtc: "" } })
       };
     }
 
@@ -58,7 +60,8 @@ test("FBX import primary button opens the file picker and submits the selected f
   };
 
   try {
-    bootstrapSettingsUi(root);
+    bootstrapSettingsUi(root, { createWebSocketChannel: fakeChannel });
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(elements["#importButton"].disabled, false);
     assert.equal(elements["#importButton"].textContent, "FBX 가져오기");
@@ -80,6 +83,18 @@ test("FBX import primary button opens the file picker and submits the selected f
     globalThis.document = previousDocument;
     globalThis.fetch = previousFetch;
     globalThis.window = previousWindow;
+  }
+});
+
+test("FBX import remains disabled in Edit Mode while the settings window is open", async () => {
+  const fixture = setupWorkbenchDom();
+  try {
+    bootstrapSettingsUi(fixture.root, { createWebSocketChannel: fakeChannel });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(fixture.root.querySelector("#importButton").disabled, true);
+    assert.match(fixture.root.querySelector("#feedback").textContent, /Play/);
+  } finally {
+    fixture.restore();
   }
 });
 
@@ -150,7 +165,7 @@ test("Camera 1 tree item switches to the camera settings panel", () => {
   };
 
   try {
-    bootstrapSettingsUi(root);
+    bootstrapSettingsUi(root, { createWebSocketChannel: fakeChannel });
     cameraButton.dispatch("click");
 
     assert.equal(shell.dataset.activePanel, "camera");
@@ -250,7 +265,7 @@ test("개발자 패널을 열면 Workbench iframe을 탑재하고 실패 시 재
   };
 
   try {
-    bootstrapSettingsUi(root);
+    bootstrapSettingsUi(root, { createWebSocketChannel: fakeChannel });
     developerButton.dispatch("click");
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -280,7 +295,7 @@ test("개발자 패널을 열면 Workbench iframe을 탑재하고 실패 시 재
 test("Workbench iframe 로드가 시간 초과되면 오류와 재시도 경로를 연다", async () => {
   const fixture = setupWorkbenchDom({ urls: ["http://127.0.0.1:9001"] });
   try {
-    bootstrapSettingsUi(fixture.root, { workbenchLoadTimeoutMs: 5 });
+    bootstrapSettingsUi(fixture.root, { workbenchLoadTimeoutMs: 5, createWebSocketChannel: fakeChannel });
     fixture.developerButton.dispatch("click");
     await new Promise((resolve) => setTimeout(resolve, 30));
 
@@ -296,7 +311,7 @@ test("Workbench iframe 로드가 시간 초과되면 오류와 재시도 경로�
 test("다시 불러오기 버튼은 Workbench URL을 다시 요청한다", async () => {
   const fixture = setupWorkbenchDom({ urls: ["http://127.0.0.1:9001", "http://127.0.0.1:9002"] });
   try {
-    bootstrapSettingsUi(fixture.root);
+    bootstrapSettingsUi(fixture.root, { createWebSocketChannel: fakeChannel });
     fixture.developerButton.dispatch("click");
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(fixture.frame.src, "http://127.0.0.1:9001");
@@ -318,7 +333,7 @@ test("로딩 중 다시 불러오기를 눌러도 이전 요청의 늦은 응답
   const fixture = setupWorkbenchDom();
   const resolvers = [];
   try {
-    bootstrapSettingsUi(fixture.root, { workbenchLoadTimeoutMs: 60 });
+    bootstrapSettingsUi(fixture.root, { workbenchLoadTimeoutMs: 60, createWebSocketChannel: fakeChannel });
     // URL 요청을 수동으로 지연시켜 응답 대기 중 재시도 상황을 만든다.
     globalThis.window.settingsShell.getWorkbenchUrl = () =>
       new Promise((resolve) => resolvers.push(resolve));

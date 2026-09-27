@@ -111,6 +111,9 @@ namespace Tests.Editor.Settings
             Assert.That(
                 startInfo.Environment[MainRecordingSettingsPathResolver.EnvironmentVariableName],
                 Is.EqualTo(plan.SettingsPath));
+            Assert.That(
+                startInfo.Environment["UNITY_FBX2VMD_EDITOR_PID"],
+                Is.EqualTo(Process.GetCurrentProcess().Id.ToString()));
         }
     }
 }

@@ -17,6 +17,7 @@ export async function runBridgeE2e({
   const settingsPath = path.join(root, "main-recording-settings.json");
   const fbxPath = path.join(root, fbxFileName);
   await fs.writeFile(fbxPath, "temporary FBX placeholder for bridge E2E\n", "utf8");
+  await fs.writeFile(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }), "utf8");
 
   const bridge = createSettingsBridgeServer({
     settingsPath,

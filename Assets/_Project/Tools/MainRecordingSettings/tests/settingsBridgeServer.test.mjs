@@ -10,6 +10,7 @@ import { createSettingsBridgeServer } from "../server/settingsBridgeServer.js";
 test("settings bridge accepts POST /import-fbx and writes command document", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "settings-bridge-"));
   const settingsPath = path.join(tempRoot, "settings.json");
+  await fs.writeFile(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }), "utf8");
   const bridge = createSettingsBridgeServer({
     settingsPath,
     createCommandId: () => "cmd-http",
@@ -44,6 +45,7 @@ test("settings bridge accepts POST /import-fbx and writes command document", asy
 test("settings bridge broadcasts import command to WebSocket clients", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "settings-bridge-"));
   const settingsPath = path.join(tempRoot, "settings.json");
+  await fs.writeFile(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }), "utf8");
   const bridge = createSettingsBridgeServer({
     settingsPath,
     createCommandId: () => "cmd-ws",
@@ -108,6 +110,25 @@ test("settings bridge exposes normalized runtime state through GET /state", asyn
         updatedAtUtc: "2026-06-18T04:00:00.000Z"
       }
     });
+  } finally {
+    await bridge.close();
+  }
+});
+
+test("settings bridge rejects import in Edit Mode without changing the command", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "settings-bridge-"));
+  const settingsPath = path.join(tempRoot, "settings.json");
+  const bridge = createSettingsBridgeServer({ settingsPath });
+  await bridge.listen(0);
+  try {
+    const response = await fetch(`${bridge.baseUrl}/import-fbx`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fbxPath: "C:/Motion/edit.fbx" })
+    });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, "Unity Play 상태에서만 사용할 수 있습니다.");
+    await assert.rejects(fs.readFile(settingsPath, "utf8"), { code: "ENOENT" });
   } finally {
     await bridge.close();
   }
