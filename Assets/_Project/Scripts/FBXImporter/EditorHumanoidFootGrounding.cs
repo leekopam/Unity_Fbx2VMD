@@ -60,6 +60,12 @@ namespace Fbx2Vmd.FBXImporter
         private float _sourceScaleRatio;
         private Vector3 _originalHipsPosition;
         private bool _hasAppliedPose;
+        // 게이트 임계 근처의 프레임 단위 번복(교정·원본 자세 교번 출력 = 다리 떨림)을 막기 위한
+        // 디바운스 상태. 연속 GateTransitionFrames프레임 동일 결과일 때만 상태를 전환한다.
+        private bool _gateHoldsFallback;
+        private int _gateOppositeStreak;
+        private float _lastGateTimeSeconds = -1f;
+        private bool _lastGateDecision;
 
         private EditorHumanoidFootGrounding(Animator animator, Leg left, Leg right)
         {
@@ -215,8 +221,10 @@ namespace Fbx2Vmd.FBXImporter
                 MinimumSoleClearance = Mathf.Min(leftClearance, rightClearance);
                 MaximumSupportedContactError = Mathf.Max(leftContact, rightContact);
                 FullySupportedContactCount = leftCount + rightCount;
-                isApplied = ResolveApplied(MaximumTargetError, MinimumSoleClearance,
-                    MaximumSupportedContactError, _humanScale);
+                isApplied = ApplyGateHold(
+                    ResolveApplied(MaximumTargetError, MinimumSoleClearance,
+                        MaximumSupportedContactError, _humanScale),
+                    timeSeconds);
                 return isApplied;
             }
             finally
@@ -247,6 +255,50 @@ namespace Fbx2Vmd.FBXImporter
             return targetError <= humanScale * TargetErrorPerHumanScale &&
                 soleClearance >= -humanScale * SoleClearancePerHumanScale &&
                 supportedContactError <= humanScale * SupportedContactErrorPerHumanScale;
+        }
+
+        // 전환에 필요한 연속 반대 결과 프레임 수. 60fps 기준 약 50ms의 판정 지연으로
+        // 1~2프레임짜리 임계 진동을 흡수한다.
+        private const int GateTransitionFrames = 3;
+
+        // 순차 프레임에서만 상태를 보류한다. 1프레임을 넘는 시간 점프(프레임 탐색)나
+        // 무지면 프레임은 즉시 게이트 결과를 사용하고 보류 상태를 현재 결과로 맞춘다.
+        private bool ApplyGateHold(bool gatePass, float timeSeconds)
+        {
+            // 캡처처럼 같은 시각을 재평가하는 경로는 첫 판정을 재사용해
+            // 한 프레임이 스트릭을 두 번 올리지 않게 한다.
+            if (timeSeconds == _lastGateTimeSeconds) return _lastGateDecision;
+            bool jumped = _frameRate > 0f &&
+                Mathf.Abs(timeSeconds - _lastGateTimeSeconds) > 1.5f / _frameRate;
+            _lastGateTimeSeconds = timeSeconds;
+            bool decision;
+            if (jumped || !HasGround)
+            {
+                _gateHoldsFallback = !gatePass;
+                _gateOppositeStreak = 0;
+                decision = gatePass;
+            }
+            else if (gatePass == !_gateHoldsFallback)
+            {
+                _gateOppositeStreak = 0;
+                decision = gatePass;
+            }
+            else
+            {
+                _gateOppositeStreak++;
+                if (_gateOppositeStreak < GateTransitionFrames)
+                {
+                    decision = !_gateHoldsFallback;
+                }
+                else
+                {
+                    _gateHoldsFallback = !_gateHoldsFallback;
+                    _gateOppositeStreak = 0;
+                    decision = gatePass;
+                }
+            }
+            _lastGateDecision = decision;
+            return decision;
         }
 
         private sealed class Leg
