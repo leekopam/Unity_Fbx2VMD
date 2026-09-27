@@ -15,6 +15,55 @@ namespace Tests.Editor.FBXImporter
             BindingFlags.Public | BindingFlags.NonPublic;
 
         [Test]
+        public void Given_PlantedFrontPointChanges_When_MeasuringGrounding_Then_UsesCurrentSoleContact()
+        {
+            const string clipPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(clipPath);
+            if (source == null) Assert.Ignore("로컬 FBX 입력이 없는 환경에서는 실제 접촉 검증을 생략함");
+            AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath(clipPath).OfType<AnimationClip>()
+                .First(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal));
+            Type type = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidMotionPlaybackController", true);
+            var floor = new GameObject("접촉점 이동 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
+            floor.transform.position = new Vector3(0f, 2.95f, 0f);
+            floor.AddComponent<BoxCollider>().size = new Vector3(40f, 0.1f, 40f);
+            try
+            {
+                foreach (string path in new[] {
+                    "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx",
+                    "Assets/_Project/FBX/Snake Hip Hop Dance.fbx" })
+                {
+                    GameObject model = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(path));
+                    model.hideFlags = HideFlags.HideAndDontSave;
+                    model.transform.position = new Vector3(0f, 3f, 0f);
+                    foreach (MonoBehaviour script in model.GetComponentsInChildren<MonoBehaviour>(true))
+                        script.enabled = false;
+                    object controller = Activator.CreateInstance(type, true);
+                    try
+                    {
+                        Animator animator = model.GetComponentInChildren<Animator>(true);
+                        animator.enabled = true;
+                        Invoke(controller, "PrepareWithArmDirectionReference", animator, clip, source);
+                        Invoke(controller, "SetGroundResponseEnabled", true);
+                        Invoke(controller, "Seek", 929f / clip.frameRate);
+                        object gate = Property(controller, "LastGroundingGate");
+                        object left = Field(gate, "left");
+                        float threshold = animator.humanScale * 0.005f;
+                        Assert.That(Field(gate, "measured"), Is.True, path);
+                        Assert.That((float)Field(left, "offset_contact_error_m"),
+                            Is.GreaterThan(threshold), "계획 지지점의 들림은 진단에 남겨야 함");
+                        Assert.That((float)Field(left, "supported_contact_error_m"),
+                            Is.LessThan(threshold), "현재 밑창 접촉은 계획 정점의 들림과 구분해야 함");
+                        if (path.Contains("YYB Hatsune Miku_default/"))
+                            AssertStatus(controller, "Applied");
+                    }
+                    finally { ((IDisposable)controller).Dispose(); UnityEngine.Object.DestroyImmediate(model); }
+                }
+            }
+            finally { UnityEngine.Object.DestroyImmediate(floor); }
+        }
+
+        [Test]
         public void Given_OverlappingContacts_When_SeekingAcrossTransitions_Then_PreservesSupportAndFractionalContinuity()
         {
             const string clipPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";

@@ -748,8 +748,17 @@ namespace Fbx2Vmd.FBXImporter
                         continue;
                     if (!_activeContacts[channel].TryGetLocalPoint(Sampler, out Vector3 point))
                         return false;
+                    if (!Sampler.TrySelectContact(channel == 1, _ground.normal, out _,
+                            out Vector3 currentContact))
+                        return false;
+                    Vector3 plannedContact = Foot.TransformPoint(point);
+                    // 계획 지지점의 수평 고정과 현재 밑창 접촉의 높이를 따로 검사함.
+                    // 발 구르기 중 접촉 정점이 바뀌어도 실제 닿은 지지 영역을 거절하지 않음.
+                    Vector3 planarError = Vector3.ProjectOnPlane(plannedContact - _anchors[channel], _ground.normal);
+                    float heightError = Vector3.Dot(currentContact - _anchors[channel], _ground.normal);
                     contactCount++;
-                    contactError = Mathf.Max(contactError, Vector3.Distance(Foot.TransformPoint(point), _anchors[channel]));
+                    contactError = Mathf.Max(contactError,
+                        Mathf.Sqrt(planarError.sqrMagnitude + heightError * heightError));
                 }
                 Diagnostic.supported_contact_error_m = contactError;
                 Diagnostic.supported_contact_count = contactCount;
