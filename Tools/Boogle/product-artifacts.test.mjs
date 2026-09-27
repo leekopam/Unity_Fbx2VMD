@@ -46,3 +46,42 @@ test("제품 실행의 매니페스트와 요청별 CSV·PNG를 SDK artifact로 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("F15 녹화 MP4를 같은 실행의 SDK artifact로 제출한다", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fbx2vmd-video-artifact-"));
+  const evidenceRoot = path.join(root, "evidence");
+  const recordingsRoot = path.join(root, "Recordings");
+  const temporaryPath = path.join(root, "sdk-run");
+  const runId = "33333333-3333-4333-8333-333333333333";
+  const requestId = "44444444-4444-4444-8444-444444444444";
+  const videoPath = path.join(recordingsRoot, "Snake Hip Hop Dance_20260927_130000.mp4");
+  try {
+    await mkdir(path.join(evidenceRoot, "product-ui-runs", runId), { recursive: true });
+    await mkdir(path.join(evidenceRoot, "product-ui", runId, requestId), { recursive: true });
+    await mkdir(recordingsRoot);
+    await mkdir(temporaryPath);
+    await writeFile(path.join(evidenceRoot, "product-ui-runs", runId, "manifest.json"),
+      JSON.stringify({ runId, requestId }));
+    await writeFile(path.join(evidenceRoot, "product-ui", runId, requestId, "state.json"),
+      JSON.stringify({ status: "manual_review_required",
+        video_result_message: `FBX 모션 영상 저장 완료: ${videoPath}` }));
+    await writeFile(videoPath, "mp4-data");
+    const artifacts = await collectProductArtifacts(evidenceRoot, temporaryPath, runId,
+      async (submissionRoot) => {
+        const manifest = JSON.parse(await readFile(path.join(submissionRoot, "artifacts.json"), "utf8"));
+        return Promise.all(manifest.artifacts.map(async (item) => ({ kind: item.kind,
+          content: await readFile(path.join(submissionRoot, "artifacts", item.fileName), "utf8") })));
+      }, recordingsRoot);
+    assert(artifacts.some((item) => item.kind === "video" && item.content === "mp4-data"));
+    assert(artifacts.some((item) => item.content.includes("Recordings/Snake Hip Hop Dance")));
+    const outside = path.join(root, "outside.mp4");
+    await writeFile(outside, "other-video");
+    await writeFile(path.join(evidenceRoot, "product-ui", runId, requestId, "state.json"),
+      JSON.stringify({ status: "manual_review_required",
+        video_result_message: `FBX 모션 영상 저장 완료: ${outside}` }));
+    await assert.rejects(collectProductArtifacts(evidenceRoot, temporaryPath, runId,
+      async () => [], recordingsRoot), /Recordings 밖/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
