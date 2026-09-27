@@ -2421,7 +2421,7 @@ async function main() {
     if (outcome.status === "TIMED_OUT") return outcome;
     try {
       const artifacts = await collectProductArtifacts(evidenceRoot, temporaryPath,
-        runId, collectSubmittedArtifacts);
+        runId, collectSubmittedArtifacts, path.join(projectRoot, "Recordings"));
       return { ...outcome, artifacts };
     } catch (error) {
       process.stderr.write(`SDK artifact 수집 실패 (${runId}): ${error.message}\n`);

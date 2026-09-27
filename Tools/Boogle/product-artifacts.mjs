@@ -15,11 +15,13 @@ async function hashFile(file) {
   return hash.digest("hex");
 }
 
-export async function collectProductArtifacts(evidenceRoot, temporaryPath, runId, collectSubmittedArtifacts) {
+export async function collectProductArtifacts(evidenceRoot, temporaryPath, runId,
+  collectSubmittedArtifacts, recordingsRoot = null) {
   if (!uuid.test(runId)) throw new Error("SDK 실행 ID가 올바르지 않습니다.");
   const families = (await readdir(evidenceRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory() && entry.name !== "projects");
   const files = [];
+  const videoFiles = new Set();
   const requestIds = new Set();
   async function walk(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -31,6 +33,28 @@ export async function collectProductArtifacts(evidenceRoot, temporaryPath, runId
           const contents = await readFile(file, "utf8");
           for (const match of contents.matchAll(/"(?:requestId|request_id)"\s*:\s*"([0-9a-f-]{36})"/gi)) {
             if (uuid.test(match[1])) requestIds.add(match[1]);
+          }
+        }
+        if (recordingsRoot && entry.name === "state.json") {
+          const relative = path.relative(path.join(evidenceRoot, "product-ui"), file);
+          if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+            const state = JSON.parse(await readFile(file, "utf8"));
+            if (state.status === "manual_review_required") {
+              const prefix = "FBX 모션 영상 저장 완료: ";
+              if (typeof state.video_result_message !== "string" ||
+                  !state.video_result_message.startsWith(prefix))
+                throw new Error("F15 녹화 MP4 경로가 없습니다.");
+              const videoFile = path.resolve(state.video_result_message.slice(prefix.length));
+              const videoRelative = path.relative(recordingsRoot, videoFile);
+              if (!videoRelative || videoRelative.startsWith("..") ||
+                  path.isAbsolute(videoRelative) || path.extname(videoFile).toLowerCase() !== ".mp4")
+                throw new Error("F15 녹화 MP4가 프로젝트 Recordings 밖에 있습니다.");
+              const info = await lstat(videoFile);
+              if (!info.isFile() || info.size === 0)
+                throw new Error("F15 녹화 MP4가 비어 있거나 일반 파일이 아닙니다.");
+              files.push(videoFile);
+              videoFiles.add(videoFile);
+            }
           }
         }
       }
@@ -69,7 +93,9 @@ export async function collectProductArtifacts(evidenceRoot, temporaryPath, runId
       submitted.add(fingerprint);
       artifacts.push({ fileName, kind: artifactKinds.get(extension) });
       sources.push({ sdkPath: `artifacts/${fingerprint}`,
-        source: path.relative(evidenceRoot, file).replaceAll(path.sep, "/") });
+        source: videoFiles.has(file)
+          ? `Recordings/${path.relative(recordingsRoot, file).replaceAll(path.sep, "/")}`
+          : path.relative(evidenceRoot, file).replaceAll(path.sep, "/") });
     }
     if (sources.length) {
       await writeFile(path.join(submissionRoot, "artifacts", "source-map.json"),
