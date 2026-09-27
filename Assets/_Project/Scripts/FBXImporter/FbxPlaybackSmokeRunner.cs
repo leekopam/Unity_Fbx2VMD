@@ -854,7 +854,9 @@ namespace Fbx2Vmd.FBXImporter
             }
             else
             {
-                if (!thumbGuard.enabled)
+                // 비활성 GameObject의 컴포넌트는 enabled가 참이라도 LateUpdate가 돌지 않으므로
+                // 오브젝트 활성 상태까지 함께 판정함.
+                if (!thumbGuard.enabled || !thumbGuard.gameObject.activeInHierarchy)
                 {
                     failures.Add("HumanoidThumbDeformationGuard가 비활성화되어 있습니다.");
                 }
@@ -872,12 +874,13 @@ namespace Fbx2Vmd.FBXImporter
             WriteStatus(new FbxPlaybackSmokeAutomationStatus
             {
                 request_id = request.request_id,
-                status = "completed",
+                status = passed ? "completed" : "failed",
                 updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
                 command = request.requested_command,
                 message = passed
                     ? $"thumb-guard ok bones={thumbGuard.CapturedThumbBaselineBoneCount} corrections={thumbGuard.CorrectionsAppliedTotal}"
                     : "thumb-guard 검증 실패",
+                failure_stage = passed ? string.Empty : "environment",
                 passed = passed,
                 failures = failures.ToArray()
             });
