@@ -44,6 +44,52 @@ namespace Fbx2Vmd.FBXImporter
         public float sole_clearance_m;
         public float supported_contact_error_m;
         public int supported_contact_count;
+        public string evaluation_stage;
+        public bool raw_pass;
+        public bool held_pass;
+        public bool used_physical_reach;
+        public float pelvis_offset_m;
+        public float pelvis_maximum_offset_m;
+        public HumanoidFootGroundingLegDiagnostic left;
+        public HumanoidFootGroundingLegDiagnostic right;
+    }
+
+    // Fallback에서 후보 자세를 복원하기 전에 발별 원인 수치를 보존함.
+    internal sealed class HumanoidFootGroundingLegDiagnostic
+    {
+        public bool has_ground;
+        public int rear_point_id = -1;
+        public int front_point_id = -1;
+        public bool mixed_ground_collider;
+        public int contact_ground_misses;
+        public float maximum_ground_normal_angle_deg;
+        public float maximum_anchor_ground_shift_m;
+        public float pair_span_error_m;
+        public float weighted_contact_error_m;
+        public float lift_m;
+        public float lifted_contact_error_m;
+        public float foot_offset_m;
+        public float offset_contact_error_m;
+        public float hip_to_target_m;
+        public float damped_reach_m;
+        public float physical_reach_m;
+        public float target_error_m;
+        public float supported_contact_error_m;
+        public int supported_contact_count;
+
+        internal void Reset()
+        {
+            has_ground = false;
+            rear_point_id = front_point_id = -1;
+            mixed_ground_collider = false;
+            contact_ground_misses = 0;
+            maximum_ground_normal_angle_deg = maximum_anchor_ground_shift_m = 0f;
+            pair_span_error_m = weighted_contact_error_m = 0f;
+            lift_m = lifted_contact_error_m = foot_offset_m = offset_contact_error_m = 0f;
+            hip_to_target_m = damped_reach_m = physical_reach_m = target_error_m = 0f;
+            supported_contact_error_m = 0f;
+            supported_contact_count = 0;
+        }
     }
 
     /// <summary>
@@ -83,6 +129,12 @@ namespace Fbx2Vmd.FBXImporter
         internal float MinimumSoleClearance { get; private set; }
         internal float MaximumSupportedContactError { get; private set; }
         internal int FullySupportedContactCount { get; private set; }
+        internal string EvaluationStage { get; private set; } = "not_started";
+        internal bool RawGatePass { get; private set; }
+        internal float PelvisOffset { get; private set; }
+        internal float PelvisMaximumOffset { get; private set; }
+        internal HumanoidFootGroundingLegDiagnostic LeftDiagnostic => _left.Diagnostic;
+        internal HumanoidFootGroundingLegDiagnostic RightDiagnostic => _right.Diagnostic;
         internal int UnresolvedSupportPairCount => _left.UnresolvedPairCount + _right.UnresolvedPairCount;
         internal int InterpolatedSupportContactCount => _left.InterpolatedContactCount + _right.InterpolatedContactCount;
 
@@ -176,10 +228,16 @@ namespace Fbx2Vmd.FBXImporter
         {
             HasGround = false;
             UsedPhysicalReach = false;
+            RawGatePass = false;
+            PelvisOffset = 0f;
+            PelvisMaximumOffset = 0f;
+            EvaluationStage = "preconditions";
             MaximumTargetError = 0f;
             MinimumSoleClearance = 0f;
             MaximumSupportedContactError = 0f;
             FullySupportedContactCount = 0;
+            _left.Diagnostic.Reset();
+            _right.Diagnostic.Reset();
             if (!IsPrepared || _hips == null || ground == null ||
                 float.IsNaN(timeSeconds) || float.IsInfinity(timeSeconds) || timeSeconds < 0f)
                 return false;
@@ -189,6 +247,7 @@ namespace Fbx2Vmd.FBXImporter
             _right.CapturePose();
             Physics.SyncTransforms();
             float frame = timeSeconds * _frameRate;
+            EvaluationStage = "target";
             if (!_left.TryCalculateTarget(frame, ground, _humanScale) ||
                 !_right.TryCalculateTarget(frame, ground, _humanScale))
                 return false;
@@ -196,9 +255,11 @@ namespace Fbx2Vmd.FBXImporter
             HasGround = _left.HasGround || _right.HasGround;
             // 고정 신장 비율로 도달 가능한 지지를 포기하지 않도록 실제 다리 크기 안에서 최소 이동을 찾음.
             float maximumOffset = Mathf.Max(_left.TotalBoneLength, _right.TotalBoneLength);
+            PelvisMaximumOffset = maximumOffset;
             // 무지면에는 원래 발 목표와 골반 높이를 유지하되 무릎 방향 정책은 계속 적용함.
             float offset = 0f;
             Vector2 footOffsets = Vector2.zero;
+            EvaluationStage = "reach";
             if (HasGround && !HumanoidPelvisReachCalculator.TryCalculateOffset(
                     _left.BuildReach(true), _right.BuildReach(true), Vector3.up,
                     maximumOffset, out offset, out footOffsets))
@@ -210,26 +271,29 @@ namespace Fbx2Vmd.FBXImporter
                         maximumOffset, out offset, out footOffsets))
                     return false;
             }
+            PelvisOffset = offset;
 
             bool isApplied = false;
             _hasAppliedPose = true;
             try
             {
                 _hips.position += Vector3.up * offset;
+                EvaluationStage = "solve";
                 if (!_left.TrySolve(footOffsets.x, out float leftError) ||
                     !_right.TrySolve(footOffsets.y, out float rightError))
                     return false;
                 MaximumTargetError = Mathf.Max(leftError, rightError);
+                EvaluationStage = "measure";
                 if (!_left.TryMeasure(out float leftClearance, out float leftContact, out int leftCount) ||
                     !_right.TryMeasure(out float rightClearance, out float rightContact, out int rightCount))
                     return false;
                 MinimumSoleClearance = Mathf.Min(leftClearance, rightClearance);
                 MaximumSupportedContactError = Mathf.Max(leftContact, rightContact);
                 FullySupportedContactCount = leftCount + rightCount;
-                isApplied = ApplyGateHold(
-                    ResolveApplied(MaximumTargetError, MinimumSoleClearance,
-                        MaximumSupportedContactError, _humanScale),
-                    timeSeconds);
+                EvaluationStage = "gate";
+                RawGatePass = ResolveApplied(MaximumTargetError, MinimumSoleClearance,
+                    MaximumSupportedContactError, _humanScale);
+                isApplied = ApplyGateHold(RawGatePass, timeSeconds);
                 return isApplied;
             }
             finally
@@ -333,6 +397,7 @@ namespace Fbx2Vmd.FBXImporter
             private RaycastHit _ground;
 
             internal bool HasGround { get; private set; }
+            internal readonly HumanoidFootGroundingLegDiagnostic Diagnostic = new HumanoidFootGroundingLegDiagnostic();
             internal int UnresolvedPairCount => _plan?.UnresolvedPairCount ?? 0;
             internal string FirstPlanIssue => _plan?.FirstIssue;
             internal int InterpolatedContactCount =>
@@ -506,8 +571,10 @@ namespace Fbx2Vmd.FBXImporter
                 _support = 0f;
                 _activeWeights = Vector2.zero;
                 HasGround = ground.TryFindGround(_originalFootPosition, out _ground);
+                Diagnostic.has_ground = HasGround;
                 _clearance = humanScale;
                 _maximumReach = _upperToKnee.magnitude + _kneeToFoot.magnitude;
+                Diagnostic.physical_reach_m = _maximumReach;
                 if (!HasGround)
                     return true;
                 if (!Sampler.TrySample())
@@ -524,10 +591,22 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     EditorHumanoidFootContactPlan.Sample contact = _plan.GetSample(channel, frame);
                     _activeContacts[channel] = contact;
+                    if (channel == 0) Diagnostic.rear_point_id = contact.FirstPoint;
+                    else Diagnostic.front_point_id = contact.FirstPoint;
                     if (!contact.HasValue || weights[channel] <= 0f)
                         continue;
                     if (!ground.TryFindGround(contact.Anchor, out RaycastHit contactGround))
+                    {
+                        Diagnostic.contact_ground_misses++;
                         continue;
+                    }
+                    Diagnostic.mixed_ground_collider |= contactGround.collider != _ground.collider;
+                    Diagnostic.maximum_ground_normal_angle_deg = Mathf.Max(
+                        Diagnostic.maximum_ground_normal_angle_deg,
+                        Vector3.Angle(_ground.normal, contactGround.normal));
+                    Diagnostic.maximum_anchor_ground_shift_m = Mathf.Max(
+                        Diagnostic.maximum_anchor_ground_shift_m,
+                        Vector3.Distance(contact.Anchor, contactGround.point));
                     _anchors[channel] = contactGround.point;
                     _activeWeights[channel] = weights[channel];
                     if (!contact.TryGetLocalPoint(Sampler, out _localContactPoints[channel])) return false;
@@ -544,6 +623,10 @@ namespace Fbx2Vmd.FBXImporter
                         Mathf.Min(_activeWeights.x, _activeWeights.y));
                 }
                 if (!TryAlignSupportSurface(frame)) return false;
+                if (_activeWeights.x >= 0.999f && _activeWeights.y >= 0.999f)
+                    Diagnostic.pair_span_error_m = Mathf.Abs(
+                        (_localContactPoints[1] - _localContactPoints[0]).magnitude * Foot.lossyScale.x -
+                        Vector3.Distance(_anchors[0], _anchors[1]));
                 Vector3 weightedTarget = Vector3.zero;
                 float totalWeight = 0f;
                 for (int channel = 0; channel < 2; channel++)
@@ -559,15 +642,21 @@ namespace Fbx2Vmd.FBXImporter
                 _support = Mathf.Max(_activeWeights.x, _activeWeights.y);
                 if (totalWeight > 0f)
                     _target = Vector3.LerpUnclamped(_originalFootPosition, weightedTarget / totalWeight, _support);
+                Diagnostic.weighted_contact_error_m = CalculatePlannedContactError(_target);
                 if (!HumanoidSoleGroundConstraint.TryLiftAbovePlane(_target, _targetFootRotation,
                         Sampler.LocalSolePoints, Foot.lossyScale.x, _ground.point, _ground.normal,
-                        out _target, out _))
+                        out _target, out float lift))
                     return false;
+                Diagnostic.lift_m = lift;
+                Diagnostic.lifted_contact_error_m = CalculatePlannedContactError(_target);
                 _clearance = Mathf.Max(0f, CalculateSoleClearance(_target, _targetFootRotation));
                 float originalAngle = Vector3.Angle(-_upperToKnee, _kneeToFoot) * Mathf.Deg2Rad;
-                return HumanoidPelvisReachCalculator.TryCalculateExtensionReach(
+                Diagnostic.hip_to_target_m = Vector3.Distance(Upper.position, _target);
+                bool hasReach = HumanoidPelvisReachCalculator.TryCalculateExtensionReach(
                     _upperToKnee.magnitude, _kneeToFoot.magnitude, originalAngle,
-                    Vector3.Distance(Upper.position, _target), _support, 2.8f, out _maximumReach);
+                    Diagnostic.hip_to_target_m, _support, 2.8f, out _maximumReach);
+                Diagnostic.damped_reach_m = _maximumReach;
+                return hasReach;
             }
 
             private bool TryAlignSupportSurface(float frame)
@@ -627,6 +716,9 @@ namespace Fbx2Vmd.FBXImporter
             internal bool TrySolve(float footOffset, out float error)
             {
                 _target += Vector3.up * footOffset;
+                Diagnostic.foot_offset_m = footOffset;
+                Diagnostic.offset_contact_error_m = CalculatePlannedContactError(_target);
+                Diagnostic.hip_to_target_m = Vector3.Distance(Upper.position, _target);
                 error = Vector3.Distance(Foot.position, _target);
                 // 목표 변위가 0에 가까워져도 무릎 방향 보정을 계속 적용하여 자세가 튀지 않게 함.
                 if (!HumanoidLegPoseSolver.TryCalculateBendNormal(_upperToKnee, _kneeToFoot,
@@ -636,6 +728,7 @@ namespace Fbx2Vmd.FBXImporter
                     return false;
                 Foot.rotation = _targetFootRotation;
                 Toes.localRotation = _toeRotation;
+                Diagnostic.target_error_m = error;
                 return true;
             }
 
@@ -658,7 +751,22 @@ namespace Fbx2Vmd.FBXImporter
                     contactCount++;
                     contactError = Mathf.Max(contactError, Vector3.Distance(Foot.TransformPoint(point), _anchors[channel]));
                 }
+                Diagnostic.supported_contact_error_m = contactError;
+                Diagnostic.supported_contact_count = contactCount;
                 return true;
+            }
+
+            private float CalculatePlannedContactError(Vector3 position)
+            {
+                float error = 0f;
+                for (int channel = 0; channel < 2; channel++)
+                {
+                    if (_activeWeights[channel] < 0.999f) continue;
+                    Vector3 point = position + _targetFootRotation *
+                        (_localContactPoints[channel] * Foot.lossyScale.x);
+                    error = Mathf.Max(error, Vector3.Distance(point, _anchors[channel]));
+                }
+                return error;
             }
 
             private float CalculateSoleClearance(Vector3 position, Quaternion rotation)

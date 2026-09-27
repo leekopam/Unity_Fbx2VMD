@@ -420,10 +420,24 @@ namespace Fbx2Vmd.FBXImporter
             LastGroundingStatus = _isGroundResponseEnabled
                 ? HumanoidFootGroundingStatus.Unavailable : HumanoidFootGroundingStatus.Disabled;
             LastGroundingGate.measured = false;
+            LastGroundingGate.evaluation_stage = "unavailable";
+            LastGroundingGate.raw_pass = LastGroundingGate.held_pass = false;
+            LastGroundingGate.used_physical_reach = false;
+            LastGroundingGate.pelvis_offset_m = 0f;
+            LastGroundingGate.pelvis_maximum_offset_m = 0f;
+            LastGroundingGate.left = LastGroundingGate.right = null;
             if (_isGroundResponseEnabled && _footGrounding != null && _footGrounding.IsPrepared)
             {
                 bool applied = _footGrounding.TryApply(CurrentTimeSeconds, _groundResponse);
-                LastGroundingGate.measured = true;
+                LastGroundingGate.evaluation_stage = _footGrounding.EvaluationStage;
+                LastGroundingGate.measured = _footGrounding.EvaluationStage == "gate";
+                LastGroundingGate.raw_pass = _footGrounding.RawGatePass;
+                LastGroundingGate.held_pass = applied;
+                LastGroundingGate.used_physical_reach = _footGrounding.UsedPhysicalReach;
+                LastGroundingGate.pelvis_offset_m = _footGrounding.PelvisOffset;
+                LastGroundingGate.pelvis_maximum_offset_m = _footGrounding.PelvisMaximumOffset;
+                LastGroundingGate.left = _footGrounding.LeftDiagnostic;
+                LastGroundingGate.right = _footGrounding.RightDiagnostic;
                 LastGroundingGate.target_error_m = _footGrounding.MaximumTargetError;
                 LastGroundingGate.sole_clearance_m = _footGrounding.MinimumSoleClearance;
                 LastGroundingGate.supported_contact_error_m =
