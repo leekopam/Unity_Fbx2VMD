@@ -25,6 +25,7 @@ namespace Fbx2Vmd.FBXImporter
             private readonly float _blend;
             internal readonly Vector3 Anchor;
             internal readonly bool CanAlignPair;
+            internal int FirstPoint => _firstPoint;
             internal bool HasValue => _firstPoint >= 0;
             internal bool IsInterpolatedPoint => _firstPoint != _secondPoint && _blend > 0f && _blend < 1f;
 

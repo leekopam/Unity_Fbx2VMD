@@ -18,11 +18,13 @@ namespace Fbx2Vmd.FBXImporter
     internal sealed class FbxFullClipFootMetricsCapture : IDisposable
     {
         private const string DefaultInputFileName = "satisfaction_2.fbx";
-        private const string ScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const int FramesPerPoll = 12;
         private enum Phase { Importing, Preparing, Scanning, Finished }
 
         private readonly FBXVmdPipeline _pipeline;
+        private readonly string _scenePath;
         private readonly string _inputFileName;
         private readonly string _caseId;
         private readonly int _frameLimit;
@@ -31,6 +33,7 @@ namespace Fbx2Vmd.FBXImporter
         private readonly List<string> _capturePaths = new List<string>();
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private StreamWriter _writer;
+        private StreamWriter _diagnosticWriter;
         private HumanoidMotionPlaybackController _controller;
         private Animator _animator;
         private Transform _hips;
@@ -54,6 +57,7 @@ namespace Fbx2Vmd.FBXImporter
         private int _frame;
         private int _lastFrame;
         private int _rowCount;
+        private int _diagnosticRowCount;
         private float _frameRate;
         private float _maximumTimeErrorMilliseconds;
         private float _maximumPenetrationMillimeters;
@@ -70,22 +74,30 @@ namespace Fbx2Vmd.FBXImporter
             bool lowerBodyOnly)
         {
             _pipeline = pipeline;
+            _scenePath = SceneManager.GetActiveScene().path;
             _inputFileName = inputFileName;
             _caseId = caseId;
             _frameLimit = frameLimit;
             _captureViews = captureViews;
             _lowerBodyOnly = lowerBodyOnly;
             CsvPath = Path.Combine(directory, "all-frames.csv");
+            DiagnosticPath = Path.Combine(directory, "grounding-diagnostics.csv");
             StatePath = Path.Combine(directory, "state.json");
         }
 
         internal string CsvPath { get; }
+        internal string DiagnosticPath { get; }
         internal string StatePath { get; }
         internal bool IsFinished => _phase == Phase.Finished;
         internal bool HasEvidence { get; private set; }
         internal string FailureStage { get; private set; } = string.Empty;
         internal string FailureMessage { get; private set; } = string.Empty;
         internal string CaseId => _caseId;
+
+        private static bool IsSupportedScenePath(string path)
+        {
+            return path == MainAutoScenePath || path == MainRecordingScenePath;
+        }
 
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
             out FbxFullClipFootMetricsCapture capture, out string message,
@@ -96,11 +108,11 @@ namespace Fbx2Vmd.FBXImporter
             message = string.Empty;
             if (pipeline == null || !Guid.TryParse(requestId, out Guid requestGuid) ||
                 !Guid.TryParse(runId, out Guid runGuid) || !EditorApplication.isPlaying ||
-                SceneManager.GetActiveScene().path != ScenePath || pipeline.IsProcessing ||
+                !IsSupportedScenePath(SceneManager.GetActiveScene().path) || pipeline.IsProcessing ||
                 pipeline.HasPreparedImportedMotion || pipeline.IsImportedMotionRecording ||
                 Time.captureFramerate != 0 || pipeline.targetCharacter == null)
             {
-                message = $"{caseId}는 저장된 Main_Auto의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
+                message = $"{caseId}는 저장된 Main_Auto 또는 Main_Recoding의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
                 return false;
             }
 
@@ -140,7 +152,7 @@ namespace Fbx2Vmd.FBXImporter
             if (IsFinished) return;
             try
             {
-                if (!EditorApplication.isPlaying || SceneManager.GetActiveScene().path != ScenePath ||
+                if (!EditorApplication.isPlaying || SceneManager.GetActiveScene().path != _scenePath ||
                     _pipeline == null || Time.captureFramerate != 0)
                     throw new InvalidOperationException("Play·씬·프레임률 상태가 변경되었습니다.");
                 if (DateTime.UtcNow - _startedUtc > TimeSpan.FromMinutes(30))
@@ -230,6 +242,8 @@ namespace Fbx2Vmd.FBXImporter
 
             _writer = new StreamWriter(CsvPath, false, new System.Text.UTF8Encoding(false));
             _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps,grounding_target_error_mm,grounding_sole_clearance_mm,grounding_contact_error_mm,grounding_supported_contacts");
+            _diagnosticWriter = new StreamWriter(DiagnosticPath, false, new System.Text.UTF8Encoding(false));
+            _diagnosticWriter.WriteLine("frame,side,status,stage,raw_pass,held_pass,used_physical_reach,pelvis_offset_mm,pelvis_maximum_offset_mm,has_ground,rear_point_id,front_point_id,mixed_ground_collider,contact_ground_misses,maximum_ground_normal_angle_deg,maximum_anchor_ground_shift_mm,pair_span_error_mm,weighted_contact_error_mm,lift_mm,lifted_contact_error_mm,foot_offset_mm,offset_contact_error_mm,hip_to_target_mm,damped_reach_mm,physical_reach_mm,target_error_mm,supported_contact_error_mm,supported_contact_count");
         }
 
         private void CaptureFrame(int frame)
@@ -257,6 +271,8 @@ namespace Fbx2Vmd.FBXImporter
             _previousHipsY = hipsY;
             WriteFoot(frame, time, timeError, 0, status, left, gate);
             WriteFoot(frame, time, timeError, 1, status, right, gate);
+            WriteDiagnostic(frame, 0, status, gate);
+            WriteDiagnostic(frame, 1, status, gate);
             if (_captureViews && (frame == 0 || frame == _lastFrame))
                 CaptureGameView(frame);
         }
@@ -387,6 +403,33 @@ namespace Fbx2Vmd.FBXImporter
             _rowCount++;
         }
 
+        private void WriteDiagnostic(int frame, int side, HumanoidFootGroundingStatus status,
+            HumanoidFootGroundingGate gate)
+        {
+            HumanoidFootGroundingLegDiagnostic leg = side == 0 ? gate.left : gate.right;
+            object[] values =
+            {
+                frame, side == 0 ? "left" : "right", status, gate.evaluation_stage,
+                gate.raw_pass, gate.held_pass, gate.used_physical_reach, gate.pelvis_offset_m * 1000f,
+                gate.pelvis_maximum_offset_m * 1000f,
+                leg?.has_ground, leg?.rear_point_id, leg?.front_point_id,
+                leg?.mixed_ground_collider, leg?.contact_ground_misses,
+                leg?.maximum_ground_normal_angle_deg,
+                leg?.maximum_anchor_ground_shift_m * 1000f, leg?.pair_span_error_m * 1000f,
+                leg?.weighted_contact_error_m * 1000f, leg?.lift_m * 1000f,
+                leg?.lifted_contact_error_m * 1000f, leg?.foot_offset_m * 1000f,
+                leg?.offset_contact_error_m * 1000f, leg?.hip_to_target_m * 1000f,
+                leg?.damped_reach_m * 1000f, leg?.physical_reach_m * 1000f,
+                leg?.target_error_m * 1000f, leg?.supported_contact_error_m * 1000f,
+                leg?.supported_contact_count
+            };
+            if (values.OfType<float>().Any(value => !IsFinite(value)))
+                throw new InvalidOperationException($"{_caseId} {frame}프레임 비유한 교정 진단 수치");
+            _diagnosticWriter.WriteLine(string.Join(",", values.Select(value =>
+                value is float number ? number.ToString("R", CultureInfo.InvariantCulture) : value)));
+            _diagnosticRowCount++;
+        }
+
         private void Finish(string stage, string message)
         {
             if (IsFinished) return;
@@ -396,8 +439,12 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _writer?.Dispose();
                 _writer = null;
+                _diagnosticWriter?.Dispose();
+                _diagnosticWriter = null;
                 HasEvidence = string.IsNullOrEmpty(stage) && _rowCount == (_lastFrame + 1) * 2 &&
+                    _diagnosticRowCount == _rowCount &&
                     File.Exists(CsvPath) && new FileInfo(CsvPath).Length > 100 &&
+                    File.Exists(DiagnosticPath) && new FileInfo(DiagnosticPath).Length > 100 &&
                     (!_captureViews || (_capturePaths.Count == 2 &&
                         _capturePaths.All(path => File.Exists(path) && new FileInfo(path).Length > 100)));
                 int[] reviewFrames = { 166, 544, 790, 1324, 1332, 4866, 4965, 5547,
@@ -407,7 +454,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     status = HasEvidence ? "metrics_complete_review_required" : "failed",
                     failure_stage = stage, failure_message = message,
-                    scene = ScenePath, input = _inputFileName,
+                    scene = _scenePath, input = _inputFileName,
                     lower_body_only = _lowerBodyOnly,
                     fingerprint = BuildFingerprint(),
                     contact_intents = BuildContactIntentsSummary(),
@@ -438,7 +485,9 @@ namespace Fbx2Vmd.FBXImporter
                     },
                     stage_basis = "source=FBX Humanoid world; retarget=initial target pose before contact correction; sole and foot=final evaluated pose; Game View mesh not presented per frame",
                     processed_frames = _frame, row_count = _rowCount,
+                    diagnostic_row_count = _diagnosticRowCount,
                     csv_path = CsvPath,
+                    diagnostic_path = DiagnosticPath,
                     maximum_time_error_ms = _maximumTimeErrorMilliseconds,
                     maximum_penetration_mm = _maximumPenetrationMillimeters,
                     maximum_sole_step_mm = _maximumSoleStepMillimeters,

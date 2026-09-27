@@ -458,6 +458,18 @@ namespace Tests.Editor.FBXImporter
         private static void AssertAppliedOrContactGateRejected(object controller, object grounding)
         {
             string status = Property(controller, "LastGroundingStatus").ToString();
+            object gate = Property(controller, "LastGroundingGate");
+            Assert.That(Field(gate, "evaluation_stage"), Is.EqualTo("gate"));
+            Assert.That(Field(gate, "measured"), Is.True);
+            object left = Field(gate, "left");
+            object right = Field(gate, "right");
+            Assert.That((int)Field(left, "supported_contact_count") +
+                (int)Field(right, "supported_contact_count"),
+                Is.EqualTo((int)Field(gate, "supported_contact_count")));
+            Assert.That(Mathf.Max((float)Field(left, "supported_contact_error_m"),
+                (float)Field(right, "supported_contact_error_m")),
+                Is.EqualTo((float)Field(gate, "supported_contact_error_m")).Within(0.000001f),
+                "발별 후보 자세 측정과 기존 게이트 입력이 일치해야 함");
             if (status == "Applied") return;
             Assert.That(status, Is.EqualTo("Fallback"));
             float humanScale = (float)Field(grounding, "_humanScale");
