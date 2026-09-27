@@ -64,7 +64,8 @@ namespace Fbx2Vmd.Settings.EditorTools
             serialized.FindProperty("applyOnAwake").boolValue = true;
             serialized.FindProperty("applyOnValidate").boolValue = false;
             serialized.FindProperty("applyBackgroundColor").boolValue = true;
-            serialized.FindProperty("backgroundColor").colorValue = Color.black;
+            // MOV 투명 녹화가 배경 알파를 그대로 산출하므로 알파 0의 검정을 사용함.
+            serialized.FindProperty("backgroundColor").colorValue = Color.clear;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

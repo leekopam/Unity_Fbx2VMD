@@ -16,6 +16,7 @@ namespace Tests.Editor.FBXImporter
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const float TimeTolerance = 0.0001f;
 
         [OneTimeSetUp]
@@ -346,16 +347,23 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_MainAutoScene_When_ReadingAlphaHiddenObjects_Then_ContainsScenePlaneRenderer()
+        public void Given_MainAutoScene_When_ReadingAlphaHiddenObjects_Then_ContainsScenePlaneRenderer() =>
+            AssertSceneWiresPlaneToAlphaHiddenObjects(MainAutoScenePath, "Main_Auto");
+
+        [Test]
+        public void Given_MainRecodingScene_When_ReadingAlphaHiddenObjects_Then_ContainsScenePlaneRenderer() =>
+            AssertSceneWiresPlaneToAlphaHiddenObjects(MainRecordingScenePath, "Main_Recoding");
+
+        private static void AssertSceneWiresPlaneToAlphaHiddenObjects(string scenePath, string sceneLabel)
         {
             string previousScenePath = SceneManager.GetActiveScene().path;
-            EditorSceneManager.OpenScene(MainAutoScenePath, OpenSceneMode.Single);
+            EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
 
             try
             {
                 var pipeline = UnityEngine.Object.FindObjectOfType<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
                 Assert.That(pipeline, Is.Not.Null,
-                    "Main_Auto 씬에서 영상 녹화 파이프라인을 찾아야 합니다.");
+                    $"{sceneLabel} 씬에서 영상 녹화 파이프라인을 찾아야 합니다.");
 
                 GameObject[] hiddenObjects = pipeline.alphaRecordingHiddenObjects;
                 Assert.That(hiddenObjects, Is.Not.Null.And.Not.Empty,

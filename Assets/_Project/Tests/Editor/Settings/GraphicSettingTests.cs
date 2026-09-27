@@ -55,7 +55,8 @@ namespace Tests.Editor.Settings
         private const string ManualRecordMethodName = "StartManualRecording";
         private const float ReferenceMp4ViewportCenterY = 0.28f;
         private const float ReferenceMp4ViewportHeight = 0.56f;
-        private static readonly Color ReferenceMp4BackgroundColor = Color.black;
+        // 참조 mp4의 검정 배경색. 알파 0은 MOV 투명 녹화가 배경을 투명하게 산출하도록 하는 값임.
+        private static readonly Color ReferenceMp4BackgroundColor = Color.clear;
         private const BindingFlags InstanceFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private const BindingFlags StaticMethods = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private const BindingFlags StaticMembers = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -1442,7 +1443,7 @@ namespace Tests.Editor.Settings
                 Assert.That(mainCamera, Is.Not.Null);
                 Assert.That(mainCamera.allowMSAA, Is.True);
                 Assert.That(mainCamera.backgroundColor, Is.EqualTo(ReferenceMp4BackgroundColor),
-                    "Applied GameView camera background must match the black reference mp4 background.");
+                    "Applied GameView camera background must match the transparent-black reference mp4 background.");
 
                 if (pipelineAsset != null)
                 {
@@ -1541,7 +1542,7 @@ namespace Tests.Editor.Settings
             Assert.That(mainCamera.clearFlags, Is.EqualTo(CameraClearFlags.SolidColor),
                 "GameView must use a stable solid background behind YYB instead of editor transparency.");
             Assert.That(mainCamera.backgroundColor, Is.EqualTo(ReferenceMp4BackgroundColor),
-                "GameView background must match the black background sampled from the reference mp4.");
+                "GameView background must match the transparent-black background sampled from the reference mp4 (alpha 0 keeps MOV alpha recording transparent).");
         }
 
         [Test]
