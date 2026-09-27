@@ -3159,6 +3159,11 @@ MonoBehaviour:
   _useKnownMmdReferenceTiming: 0
   _RetargetPrewarmFrameCount: 6
   _additionalVmdCopyFolder: 
+  _motionVideoOutputFolder: C:/Users/flzhv/Downloads
+  _motionVideoFormat: 2
+  _motionVideoFrameRate: 60
+  _alphaRecordingHiddenObjects:
+  - {fileID: 1801870904}
   _enableRecordingDiagnostics: 0
   _useDeterministicCaptureFramerateForDiagnostics: 0
   _enableDiagnosticFingerCloseups: 1
@@ -4411,7 +4416,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 1}
+  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
