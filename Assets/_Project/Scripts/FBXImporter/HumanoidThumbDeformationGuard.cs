@@ -57,6 +57,9 @@ namespace Fbx2Vmd.FBXImporter
         private readonly Dictionary<Transform, Quaternion> _lastCorrectedLocalRotations = new Dictionary<Transform, Quaternion>();
         private readonly Dictionary<Transform, bool> _cachedThumbSides = new Dictionary<Transform, bool>();
         private bool _warningLogged;
+        private int _lastFrameCorrectionCount;
+        private int _correctionsAppliedTotal;
+        private int _framesWithCorrections;
         private const float ThumbWebbingSpreadFullRiskAngle = 72f;
         private const float ThumbWebbingProjectionFullRiskDistance = 1f;
         private const float ThumbWebbingHelperDistanceWarning = 0.003f;
@@ -141,6 +144,13 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             changed += SyncDetachedThumbBaseHelperTransforms();
+
+            _lastFrameCorrectionCount = changed;
+            _correctionsAppliedTotal += changed;
+            if (changed > 0)
+            {
+                _framesWithCorrections++;
+            }
 
             if (changed > 0 && logCorrections && !_warningLogged)
             {
@@ -244,6 +254,9 @@ namespace Fbx2Vmd.FBXImporter
             _lastCorrectedLocalRotations.Clear();
             _cachedThumbSides.Clear();
             _warningLogged = false;
+            _lastFrameCorrectionCount = 0;
+            _correctionsAppliedTotal = 0;
+            _framesWithCorrections = 0;
 
             if (!InitializeIfNeeded())
             {
@@ -266,6 +279,14 @@ namespace Fbx2Vmd.FBXImporter
             CaptureThumbBaseHelperRotations();
             CaptureDetachedThumbBaseHelperSources();
         }
+
+        // E2E가 Guard 바인딩과 실제 보정 실행 여부를 증명할 수 있게 읽기 전용 진단을 제공함.
+        internal int CapturedThumbBaselineBoneCount => _initialLocalRotations.Count;
+        internal int LastFrameCorrectionCount => _lastFrameCorrectionCount;
+        internal int CorrectionsAppliedTotal => _correctionsAppliedTotal;
+        internal int FramesWithCorrections => _framesWithCorrections;
+        internal bool HasBoundAnimator => targetAnimator != null;
+        internal bool IsRetargeterLinked => linkedPoseSpaceRetargeter != null;
 
         public string BuildThumbHelperDebugSummary(bool isRightThumb)
         {

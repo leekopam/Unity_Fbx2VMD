@@ -42,6 +42,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
         private const string EnterE2ePlayCommand = "enter_e2e_play";
         private const string ExitE2ePlayCommand = "exit_e2e_play";
+        private const string VerifyThumbGuardCommand = "verify_thumb_guard";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
         private const string CaptureSatisfactionFullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
@@ -625,6 +626,14 @@ namespace Fbx2Vmd.FBXImporter
             public float time_scale;
             public float motion_time_seconds;
             public float motion_record_framerate;
+            public bool thumb_guard_present;
+            public bool thumb_guard_enabled;
+            public bool thumb_guard_animator_bound;
+            public bool thumb_guard_retargeter_linked;
+            public int thumb_guard_baseline_bones;
+            public int thumb_corrections_total;
+            public int thumb_correction_frames;
+            public int thumb_corrections_last_frame;
         }
 
         private static bool TryHandleE2eControlRequest(FbxPlaybackSmokeAutomationRequest request)
@@ -633,7 +642,8 @@ namespace Fbx2Vmd.FBXImporter
             bool isEnter = request.command == EnterE2ePlayCommand;
             bool isExit = request.command == ExitE2ePlayCommand;
             bool isVrmExport = request.command == CaptureSatisfactionVrmCommand;
-            if (!isCapture && !isEnter && !isExit && !isVrmExport) return false;
+            bool isThumbVerify = request.command == VerifyThumbGuardCommand;
+            if (!isCapture && !isEnter && !isExit && !isVrmExport && !isThumbVerify) return false;
 
             try
             {
@@ -687,6 +697,20 @@ namespace Fbx2Vmd.FBXImporter
                         motion_record_framerate = pipeline != null
                             ? (float)pipeline.motionVideoFrameRate : 0f
                     };
+                    // 엄지 보정 Guard의 바인딩/실행 상태를 E2E 증거에 함께 기록함.
+                    HumanoidThumbDeformationGuard thumbGuard = model != null
+                        ? model.GetComponentInChildren<HumanoidThumbDeformationGuard>(true) : null;
+                    if (thumbGuard != null)
+                    {
+                        state.thumb_guard_present = true;
+                        state.thumb_guard_enabled = thumbGuard.enabled;
+                        state.thumb_guard_animator_bound = thumbGuard.HasBoundAnimator;
+                        state.thumb_guard_retargeter_linked = thumbGuard.IsRetargeterLinked;
+                        state.thumb_guard_baseline_bones = thumbGuard.CapturedThumbBaselineBoneCount;
+                        state.thumb_corrections_total = thumbGuard.CorrectionsAppliedTotal;
+                        state.thumb_correction_frames = thumbGuard.FramesWithCorrections;
+                        state.thumb_corrections_last_frame = thumbGuard.LastFrameCorrectionCount;
+                    }
                     File.WriteAllText(statePath, JsonUtility.ToJson(state, true));
                     WriteStatus(new FbxPlaybackSmokeAutomationStatus
                     {
@@ -700,6 +724,10 @@ namespace Fbx2Vmd.FBXImporter
                         failures = Array.Empty<string>()
                     });
                     TraceAutomation($"environment id={request.request_id} play={state.play_mode} scene={state.scene} recording={state.is_recording}");
+                }
+                else if (isThumbVerify)
+                {
+                    VerifyThumbGuardBinding(request);
                 }
                 else if (isVrmExport)
                 {
@@ -800,6 +828,64 @@ namespace Fbx2Vmd.FBXImporter
 
             TryDeleteRequestFile();
             return true;
+        }
+
+        // E2E가 엄지 보정 Guard의 바인딩/활성화/실행 여부를 명시 판정할 수 있게 함.
+        // 모션 준비 후 호출되면 구조적 단절을 즉시 실패로 보고함.
+        private static void VerifyThumbGuardBinding(FbxPlaybackSmokeAutomationRequest request)
+        {
+            List<string> failures = new List<string>();
+            FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
+            GameObject model = pipeline != null ? pipeline.targetCharacter : null;
+            if (pipeline == null)
+            {
+                failures.Add("런타임 FBXVmdPipeline을 찾지 못했습니다.");
+            }
+            if (model == null)
+            {
+                failures.Add("타겟 캐릭터 오브젝트가 없습니다.");
+            }
+
+            HumanoidThumbDeformationGuard thumbGuard = model != null
+                ? model.GetComponentInChildren<HumanoidThumbDeformationGuard>(true) : null;
+            if (thumbGuard == null)
+            {
+                failures.Add("HumanoidThumbDeformationGuard 컴포넌트가 바인딩되지 않았습니다.");
+            }
+            else
+            {
+                if (!thumbGuard.enabled)
+                {
+                    failures.Add("HumanoidThumbDeformationGuard가 비활성화되어 있습니다.");
+                }
+                if (!thumbGuard.HasBoundAnimator)
+                {
+                    failures.Add("Guard의 타겟 Animator가 바인딩되지 않았습니다.");
+                }
+                if (thumbGuard.CapturedThumbBaselineBoneCount <= 0)
+                {
+                    failures.Add("엄지 본 베이스라인이 캡처되지 않았습니다.");
+                }
+            }
+
+            bool passed = failures.Count == 0;
+            WriteStatus(new FbxPlaybackSmokeAutomationStatus
+            {
+                request_id = request.request_id,
+                status = "completed",
+                updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                command = request.requested_command,
+                message = passed
+                    ? $"thumb-guard ok bones={thumbGuard.CapturedThumbBaselineBoneCount} corrections={thumbGuard.CorrectionsAppliedTotal}"
+                    : "thumb-guard 검증 실패",
+                passed = passed,
+                failures = failures.ToArray()
+            });
+            TraceAutomation(
+                $"thumb-guard id={request.request_id} passed={passed} " +
+                $"bones={(thumbGuard != null ? thumbGuard.CapturedThumbBaselineBoneCount : -1)} " +
+                $"corrections={(thumbGuard != null ? thumbGuard.CorrectionsAppliedTotal : -1)} " +
+                $"frames={(thumbGuard != null ? thumbGuard.FramesWithCorrections : -1)}");
         }
 
         private static bool TryStartAutomationRequest(FbxPlaybackSmokeAutomationRequest request, out string message)

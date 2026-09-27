@@ -140,6 +140,30 @@ namespace Tests.Editor.FBXImporter
                 "기대 화면 진행률 비교용 녹화 FPS 필드가 E2E 증거에 포함되어야 합니다.");
         }
 
+        [Test]
+        public void Given_E2eEnvironmentEvidence_When_Serializing_Then_IncludesThumbGuardFields()
+        {
+            Type type = typeof(FbxPlaybackSmokeRunner).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.FbxPlaybackSmokeRunner+E2eEnvironmentEvidence",
+                throwOnError: false);
+            Assert.That(type, Is.Not.Null,
+                "E2E 환경 증거 타입이 필요합니다.");
+            object evidence = Activator.CreateInstance(type, nonPublic: true);
+
+            string json = JsonUtility.ToJson(evidence);
+            // 엄지 보정 회귀 감시에는 Guard 바인딩과 누적 보정 수치가 필요함.
+            Assert.That(json, Does.Contain("\"thumb_guard_present\""),
+                "Guard 존재 필드가 E2E 증거에 포함되어야 합니다.");
+            Assert.That(json, Does.Contain("\"thumb_guard_enabled\""),
+                "Guard 활성화 필드가 E2E 증거에 포함되어야 합니다.");
+            Assert.That(json, Does.Contain("\"thumb_guard_retargeter_linked\""),
+                "Guard-retargeter 연결 필드가 E2E 증거에 포함되어야 합니다.");
+            Assert.That(json, Does.Contain("\"thumb_guard_baseline_bones\""),
+                "엄지 본 베이스라인 수가 E2E 증거에 포함되어야 합니다.");
+            Assert.That(json, Does.Contain("\"thumb_corrections_total\""),
+                "누적 보정 횟수가 E2E 증거에 포함되어야 합니다.");
+        }
+
         private object CreateStore()
         {
             Type storeType = FindRuntimeType("FbxPlaybackSmokeAutomationStore");
