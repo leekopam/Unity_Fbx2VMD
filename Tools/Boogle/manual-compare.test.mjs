@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { compareManualCapture } from "./manual-compare.mjs";
 
-test("F13은 같은 샘플 시각의 측정값과 정면 캡처만 비교한다", async () => {
+test("F13은 같은 샘플 시각의 측정값과 정면·측면 캡처를 비교한다", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fbx2vmd-f13-"));
   const directory = path.join(root, "Docs/Workflow/Local/f13");
   const png = Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"),
@@ -16,8 +16,11 @@ test("F13은 같은 샘플 시각의 측정값과 정면 캡처만 비교한다"
       await writeFile(path.join(directory, `${role}.csv`),
         `reason,recorderFrame,animationClipName,animationClipTime,leftFootX\nt1,${role === "manual" ? 31 : 30},motion,1,${role === "manual" ? 1 : 1.25}\n`);
       await writeFile(path.join(directory, `${role}.png`), png);
+      await writeFile(path.join(directory, `${role}-right.png`), png);
+      await writeFile(path.join(directory, `${role}-right.csv`),
+        "groundY_m,leftSoleMinY_m,rightSoleMinY_m,leftGap_mm,rightGap_mm\n0,0.001,0.002,1,2\n");
       await writeFile(path.join(directory, `${role}-index.csv`),
-        `reason,recorderFrame,view,path\nt1,${role === "manual" ? 31 : 30},front,Docs/Workflow/Local/f13/${role}.png\n`);
+        `reason,recorderFrame,view,path\nt1,${role === "manual" ? 31 : 30},front,Docs/Workflow/Local/f13/${role}.png\nt1,${role === "manual" ? 31 : 30},right,Docs/Workflow/Local/f13/${role}-right.png\n`);
     }
     const result = (role, jobMode) => ({ jobMode, success: true, frameCount: 60,
       comparisonMetricsCsvPath: `Docs/Workflow/Local/f13/${role}.csv`,
@@ -29,6 +32,11 @@ test("F13은 같은 샘플 시각의 측정값과 정면 캡처만 비교한다"
     assert.equal(paired.frames[0].metrics.leftFootX.delta, 0.25);
     assert.equal(paired.frames[0].manualFrame, 31);
     assert.equal(paired.frames[0].automaticFrame, 30);
+    assert.equal(paired.frames[0].sideContact.manual.leftGap_mm, 1);
+    await rm(path.join(directory, "auto-right.csv"));
+    assert.equal((await compareManualCapture(summary, root)).status, "BLOCKED");
+    await writeFile(path.join(directory, "auto-right.csv"),
+      "groundY_m,leftSoleMinY_m,rightSoleMinY_m,leftGap_mm,rightGap_mm\n0,0.001,0.002,1,2\n");
     await writeFile(path.join(directory, "auto.csv"),
       "reason,recorderFrame,animationClipName,animationClipTime,leftFootX\nt1,30,motion,2,1.25\n");
     assert.equal((await compareManualCapture(summary, root)).status, "NOT_COMPARABLE");
