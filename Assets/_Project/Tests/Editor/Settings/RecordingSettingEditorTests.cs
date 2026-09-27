@@ -1044,6 +1044,8 @@ namespace Tests.Editor.Settings
             Assert.That(typeof(EditorWindow).IsAssignableFrom(launcherType), Is.False);
             Assert.That(GetStaticMemberValue<string>(launcherType, "MenuPath"),
                 Is.EqualTo("Tools/Graphics/Open Main_recording Settings"));
+            Assert.That(GetStaticMemberValue<string>(launcherType, "GeneralMenuPath"),
+                Is.EqualTo("Window/General/Main Recording Settings"));
             Assert.That(
                 InvokeStatic<string>(launcherType, "GetMainRecordingScenePathForTests"),
                 Is.EqualTo(MainRecordingScenePath));
@@ -1334,7 +1336,7 @@ namespace Tests.Editor.Settings
             };
 
             Assert.That(
-                launcherType.GetField("hasAutoLaunchedWebSettingsForCurrentPlayMode", StaticMembers),
+                launcherType.GetField("SessionLaunchKey", StaticMembers),
                 Is.Not.Null);
             Assert.That(
                 guardType.GetField("hasAutoLaunchedWebSettingsForCurrentPlayMode", StaticMembers),
@@ -1353,6 +1355,8 @@ namespace Tests.Editor.Settings
             Assert.That(
                 launcherSource,
                 Does.Contain("EditorApplication.playModeStateChanged += OnPlayModeStateChanged;"));
+            Assert.That(launcherSource, Does.Contain("EditorApplication.delayCall += TryAutoOpenOnEditorStartup;"));
+            Assert.That(launcherSource, Does.Contain("EditorApplication.quitting += OnEditorQuitting;"));
             Assert.That(guardSource, Does.Not.Contain("TryAutoLaunchWebSettingsForPlayMode"));
             int companionCallbackUnsubscribeIndex = launcherSource.IndexOf(
                 "EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;",
@@ -1379,11 +1383,13 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void Given_CompanionAutoLaunchAlreadyRan_When_PlayModeExits_Then_AllowsNextSessionLaunch()
+        public void Given_CompanionAutoLaunchAlreadyRan_When_PlayModeExits_Then_KeepsEditorSessionLaunch()
         {
             Type launcherType = RequireType(SettingsLauncherTypeName);
             int launchCount = 0;
             Action openSettings = () => launchCount++;
+            const string sessionKey = "Fbx2Vmd.MainRecordingSettings.EditorLaunched";
+            bool originalLaunchState = SessionState.GetBool(sessionKey, false);
 
             InvokeStatic<object>(launcherType, "ResetAutoLaunchWebSettingsForTests");
 
@@ -1409,7 +1415,7 @@ namespace Tests.Editor.Settings
                         false,
                         PlayModeStateChange.EnteredPlayMode,
                         openSettings),
-                    Is.True);
+                    Is.False);
 
                 InvokeStatic<object>(launcherType, "OnPlayModeStateChanged", PlayModeStateChange.EnteredEditMode);
 
@@ -1421,12 +1427,12 @@ namespace Tests.Editor.Settings
                         false,
                         PlayModeStateChange.EnteredPlayMode,
                         openSettings),
-                    Is.True);
-                Assert.That(launchCount, Is.EqualTo(3));
+                    Is.False);
+                Assert.That(launchCount, Is.EqualTo(1));
             }
             finally
             {
-                InvokeStatic<object>(launcherType, "ResetAutoLaunchWebSettingsForTests");
+                SessionState.SetBool(sessionKey, originalLaunchState);
             }
         }
 
@@ -1460,6 +1466,8 @@ namespace Tests.Editor.Settings
             Type launcherType = RequireType(SettingsLauncherTypeName);
             int launchCount = 0;
             string settingsPath = string.Empty;
+            const string sessionKey = "Fbx2Vmd.MainRecordingSettings.EditorLaunched";
+            bool originalLaunchState = SessionState.GetBool(sessionKey, false);
             Action<MainRecordingSettingsLaunchPlan> launcher = plan =>
             {
                 launchCount++;
@@ -1494,7 +1502,7 @@ namespace Tests.Editor.Settings
             }
             finally
             {
-                InvokeStatic<object>(launcherType, "ResetAutoLaunchWebSettingsForTests");
+                SessionState.SetBool(sessionKey, originalLaunchState);
             }
         }
 

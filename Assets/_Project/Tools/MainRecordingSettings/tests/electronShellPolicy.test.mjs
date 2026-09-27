@@ -30,7 +30,8 @@ test("Electron shell keeps project reference bounds for the onboarding workspace
 test("Electron shell keeps one settings window instance and focuses the existing window", async () => {
   const main = await fs.readFile(mainUrl, "utf8");
 
-  assert.match(main, /requestSingleInstanceLock\(\)/);
+  assert.match(main, /requestSingleInstanceLock\(\{/);
+  assert.match(main, /unityEditorPid: process\.env\.UNITY_FBX2VMD_EDITOR_PID/);
   assert.match(main, /second-instance/);
   assert.match(main, /BrowserWindow\.getAllWindows\(\)/);
   assert.match(main, /\.restore\(\)/);

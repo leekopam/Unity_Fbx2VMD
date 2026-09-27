@@ -6,15 +6,25 @@ using UnityEngine.SceneManagement;
 
 namespace Fbx2Vmd.Settings.EditorTools
 {
+    [InitializeOnLoad]
     public static class MainRecordingSettingsCompanionLauncher
     {
         public const string MenuPath = "Tools/Graphics/Open Main_recording Settings";
+        public const string GeneralMenuPath = "Window/General/Main Recording Settings";
 
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string ElectronAppRoot = "Assets/_Project/Tools/MainRecordingSettings";
         private const string NpmExecutableName = "npm";
         private const string NpmArguments = "run start:prod";
-        private static bool hasAutoLaunchedWebSettingsForCurrentPlayMode;
+        private const string SessionLaunchKey = "Fbx2Vmd.MainRecordingSettings.EditorLaunched";
+
+        static MainRecordingSettingsCompanionLauncher()
+        {
+            RegisterEditorPlayModeCallback();
+            EditorApplication.quitting -= OnEditorQuitting;
+            EditorApplication.quitting += OnEditorQuitting;
+            EditorApplication.delayCall += TryAutoOpenOnEditorStartup;
+        }
 
         internal static void RegisterEditorPlayModeCallback()
         {
@@ -23,28 +33,33 @@ namespace Fbx2Vmd.Settings.EditorTools
         }
 
         [MenuItem(MenuPath)]
+        [MenuItem(GeneralMenuPath)]
         public static void OpenMainRecordingSettings()
         {
             OpenMainRecordingSettingsWithLauncher(MainRecordingSettingsCompanionProcessLauncher.Launch);
         }
 
-        private static void OpenMainRecordingSettingsWithLauncher(
+        private static bool OpenMainRecordingSettingsWithLauncher(
             Action<MainRecordingSettingsLaunchPlan> launcher)
         {
             MainRecordingSettingsLaunchPlan plan = CreateDefaultLaunchPlan();
             try
             {
                 (launcher ?? MainRecordingSettingsCompanionProcessLauncher.Launch)(plan);
+                SessionState.SetBool(SessionLaunchKey, true);
+                return true;
             }
             catch (Exception exception)
             {
                 UnityEngine.Debug.LogWarning(
                     "[MainRecordingSettingsCompanionLauncher] Web 설정창 실행에 실패했습니다. " +
                     exception.Message);
+                return false;
             }
         }
 
         [MenuItem(MenuPath, true)]
+        [MenuItem(GeneralMenuPath, true)]
         private static bool ValidateOpenMainRecordingSettings()
         {
             return CanLaunchWebSettings();
@@ -66,10 +81,20 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
         {
+            if (Application.isBatchMode)
+            {
+                return;
+            }
+
             if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.EnteredEditMode)
             {
-                hasAutoLaunchedWebSettingsForCurrentPlayMode = false;
+                WriteRuntimeState(MainRecordingSettingsState.Stopped);
                 return;
+            }
+
+            if (state == PlayModeStateChange.EnteredPlayMode)
+            {
+                WriteRuntimeState(MainRecordingSettingsState.Playing);
             }
 
             TryAutoLaunchWebSettingsForPlayMode(
@@ -88,6 +113,48 @@ namespace Fbx2Vmd.Settings.EditorTools
                    ShouldOpenForScene(scenePath);
         }
 
+        private static void TryAutoOpenOnEditorStartup()
+        {
+            if (Application.isBatchMode)
+            {
+                return;
+            }
+
+            WriteRuntimeState(EditorApplication.isPlaying
+                ? MainRecordingSettingsState.Playing
+                : MainRecordingSettingsState.Stopped);
+            if (!EditorApplication.isPlayingOrWillChangePlaymode &&
+                !SessionState.GetBool(SessionLaunchKey, false))
+            {
+                OpenMainRecordingSettings();
+            }
+        }
+
+        private static void OnEditorQuitting()
+        {
+            if (!Application.isBatchMode)
+            {
+                WriteRuntimeState(MainRecordingSettingsState.Stopped);
+            }
+        }
+
+        private static void WriteRuntimeState(string playMode)
+        {
+            try
+            {
+                var store = new MainRecordingSettingsStore();
+                MainRecordingSettingsDocument document = store.LoadOrCreateDefault();
+                document.runtimeState = MainRecordingSettingsState.Create(playMode, DateTime.UtcNow);
+                store.Save(document);
+            }
+            catch (Exception exception)
+            {
+                UnityEngine.Debug.LogWarning(
+                    "[MainRecordingSettingsCompanionLauncher] Play 상태 기록에 실패했습니다. " +
+                    exception.Message);
+            }
+        }
+
         private static bool TryAutoLaunchWebSettingsForPlayMode(
             string scenePath,
             bool isBatchMode,
@@ -97,24 +164,23 @@ namespace Fbx2Vmd.Settings.EditorTools
                 scenePath,
                 isBatchMode,
                 playModeState,
-                OpenMainRecordingSettings);
+                () => OpenMainRecordingSettingsWithLauncher(MainRecordingSettingsCompanionProcessLauncher.Launch));
         }
 
         private static bool TryAutoLaunchWebSettingsForPlayModeWithLauncher(
             string scenePath,
             bool isBatchMode,
             PlayModeStateChange playModeState,
-            Action openSettings)
+            Func<bool> openSettings)
         {
             if (!ShouldAutoLaunchWebSettingsForPlayMode(scenePath, isBatchMode, playModeState) ||
-                hasAutoLaunchedWebSettingsForCurrentPlayMode)
+                SessionState.GetBool(SessionLaunchKey, false))
             {
                 return false;
             }
 
-            hasAutoLaunchedWebSettingsForCurrentPlayMode = true;
-            (openSettings ?? OpenMainRecordingSettings)();
-            return true;
+            return (openSettings ??
+                (() => OpenMainRecordingSettingsWithLauncher(MainRecordingSettingsCompanionProcessLauncher.Launch)))();
         }
 
         private static string GetMainRecordingScenePathForTests()
@@ -151,12 +217,17 @@ namespace Fbx2Vmd.Settings.EditorTools
                 scenePath,
                 isBatchMode,
                 playModeState,
-                openSettings);
+                () =>
+                {
+                    openSettings();
+                    SessionState.SetBool(SessionLaunchKey, true);
+                    return true;
+                });
         }
 
         private static void ResetAutoLaunchWebSettingsForTests()
         {
-            hasAutoLaunchedWebSettingsForCurrentPlayMode = false;
+            SessionState.SetBool(SessionLaunchKey, false);
         }
 
         private static bool CanLaunchWebSettings()

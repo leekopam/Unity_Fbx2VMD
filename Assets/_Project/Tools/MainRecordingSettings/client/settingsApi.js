@@ -79,7 +79,7 @@ export async function getRuntimeState({
   return await response.json();
 }
 
-export function createPlayModeAutoConnectionController({
+export function createSettingsAutoConnectionController({
   apiBaseUrl = DEFAULT_API_BASE_URL,
   wsUrl = DEFAULT_WS_URL,
   pollIntervalMs = 1000,
@@ -88,6 +88,7 @@ export function createPlayModeAutoConnectionController({
   setTimeoutImpl = globalThis.setTimeout,
   clearTimeoutImpl = globalThis.clearTimeout,
   onStatusChange = () => {},
+  onPlayModeChange = () => {},
   onMessage = () => {},
   onError = () => {}
 } = {}) {
@@ -99,13 +100,8 @@ export function createPlayModeAutoConnectionController({
   async function pollOnce() {
     const stateDocument = await fetchRuntimeState();
     const playMode = normalizePlayMode(stateDocument?.runtimeState?.playMode ?? stateDocument?.playMode);
-
-    if (playMode === "playing") {
-      connectIfNeeded();
-      return;
-    }
-
-    disconnectIfNeeded();
+    onPlayModeChange(playMode);
+    connectIfNeeded();
   }
 
   function connectIfNeeded() {

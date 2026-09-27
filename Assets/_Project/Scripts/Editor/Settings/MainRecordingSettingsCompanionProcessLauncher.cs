@@ -7,6 +7,8 @@ namespace Fbx2Vmd.Settings.EditorTools
 {
     internal static class MainRecordingSettingsCompanionProcessLauncher
     {
+        internal const string EditorProcessIdEnvironmentVariableName = "UNITY_FBX2VMD_EDITOR_PID";
+
         internal static void Launch(MainRecordingSettingsLaunchPlan plan)
         {
             string fullWorkingDirectory = Path.GetFullPath(plan.WorkingDirectory);
@@ -39,6 +41,8 @@ namespace Fbx2Vmd.Settings.EditorTools
                 CreateNoWindow = true,
             };
             startInfo.Environment[MainRecordingSettingsPathResolver.EnvironmentVariableName] = plan.SettingsPath;
+            startInfo.Environment[EditorProcessIdEnvironmentVariableName] =
+                Process.GetCurrentProcess().Id.ToString();
             return startInfo;
         }
 

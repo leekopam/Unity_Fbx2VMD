@@ -25,12 +25,18 @@ const appRoot = path.resolve(__dirname, "..");
 const preloadPath = path.join(__dirname, "preload.cjs");
 let bridgeServer = null;
 let boogleWorkbench = null;
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
+let editorLifetimeTimer = null;
+const gotSingleInstanceLock = app.requestSingleInstanceLock({
+  unityEditorPid: process.env.UNITY_FBX2VMD_EDITOR_PID
+});
 
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
-  app.on("second-instance", focusExistingSettingsWindow);
+  app.on("second-instance", (_event, _argv, _workingDirectory, additionalData) => {
+    monitorUnityEditorLifetime(additionalData?.unityEditorPid);
+    focusExistingSettingsWindow();
+  });
   app.whenReady().then(startApplication);
 }
 
@@ -101,7 +107,7 @@ function attachSmokeTestExit(mainWindow, entry, bridge) {
     try {
       await applyRendererBridgeConfig(mainWindow, bridge);
       const uiReady = await mainWindow.webContents.executeJavaScript(
-        "document.querySelector('#apiBaseUrl') == null && document.querySelector('#wsUrl') == null && document.querySelector('#connectButton') == null && document.querySelector('#disconnectButton') == null && document.querySelector('#fbxPath') == null && document.querySelector('#chooseFbxButton') == null && document.querySelector('#importButton')?.disabled === false && typeof window.settingsShell?.chooseFbxFile === 'function'"
+        "document.querySelector('#apiBaseUrl') == null && document.querySelector('#wsUrl') == null && document.querySelector('#connectButton') == null && document.querySelector('#disconnectButton') == null && document.querySelector('#fbxPath') == null && document.querySelector('#chooseFbxButton') == null && document.querySelector('#importButton') != null && typeof window.settingsShell?.chooseFbxFile === 'function'"
       );
       if (!uiReady) {
         finish(3, `SMOKE_UI_NOT_READY ${entry.target}`);
@@ -196,8 +202,12 @@ async function runRendererImportSmoke({ mainWindow, bridge, fbxPath, finish }) {
       };
 
       const importButton = document.querySelector("#importButton");
+      const readyAt = Date.now();
+      while (importButton?.disabled && Date.now() - readyAt < 5000) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
       if (!importButton || importButton.disabled) {
-        return { ok: false, reason: "import button is not ready" };
+        return { ok: false, reason: "import button is not ready in Play Mode" };
       }
 
       importButton.click();
@@ -324,12 +334,18 @@ function delay(ms) {
 
 async function startApplication() {
   registerIpcHandlers();
+  monitorUnityEditorLifetime(process.env.UNITY_FBX2VMD_EDITOR_PID);
 
   const smokeImportFbxPath = getSmokeImportFbxPath();
   const smokeSettingsPath = getSmokeSettingsPath()
     || (smokeImportFbxPath
       ? path.join(app.getPath("temp"), `main-recording-settings-smoke-${Date.now()}.json`)
       : undefined);
+
+  if (smokeImportFbxPath) {
+    await fs.mkdir(path.dirname(smokeSettingsPath), { recursive: true });
+    await fs.writeFile(smokeSettingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }), "utf8");
+  }
 
   bridgeServer = createSettingsBridgeServer({
     port: isSmokeTestMode() ? 0 : undefined,
@@ -349,6 +365,25 @@ async function startApplication() {
       await createMainWindow();
     }
   });
+}
+
+function monitorUnityEditorLifetime(pidValue) {
+  const editorPid = Number(pidValue);
+  if (!Number.isSafeInteger(editorPid) || editorPid <= 0) {
+    return;
+  }
+
+  clearInterval(editorLifetimeTimer);
+  editorLifetimeTimer = setInterval(() => {
+    try {
+      process.kill(editorPid, 0);
+    } catch {
+      clearInterval(editorLifetimeTimer);
+      editorLifetimeTimer = null;
+      app.quit();
+    }
+  }, 1000);
+  editorLifetimeTimer.unref?.();
 }
 
 // Workbench 자식 프로세스를 기동한다. 준비 실패나 사후 종료면 참조를 비워 다음 IPC 요청이 재기동한다.

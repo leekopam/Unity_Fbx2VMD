@@ -147,6 +147,11 @@ async function handleHttpRequest({
   }
 
   try {
+    if ((await readRuntimeState({ settingsPath })).playMode !== "playing") {
+      sendJsonResponse(response, 409, { error: "Unity Play 상태에서만 사용할 수 있습니다." });
+      return;
+    }
+
     const body = await readJsonBody(request);
     // HTTP 요청을 Unity가 polling으로 읽을 수 있는 JSON command envelope로 변환
     const result = await queueImportFbxCommand({
