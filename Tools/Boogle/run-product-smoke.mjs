@@ -5,6 +5,7 @@ import { access, copyFile, mkdir, open, readFile, readdir, realpath, rm, stat, w
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compareManualCapture, linkOriginalCapture, readCsv } from "./manual-compare.mjs";
+import { collectProductArtifacts } from "./product-artifacts.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const evidenceRoot = path.join(projectRoot, "Docs/Workflow/Local/evidence/boogle");
@@ -2341,6 +2342,8 @@ async function main() {
     cwd: projectRoot, encoding: "utf8"
   });
   const { runWithAdapter } = await import(pathToFileURL(sdkRunnerPath).href);
+  const { collectSubmittedArtifacts } = await import(pathToFileURL(
+    path.join(path.dirname(sdkRunnerPath), "artifact.js")).href);
   const run = await runWithAdapter(evidenceRoot, {
     protocolVersion: "0.1.0",
     projectId,
@@ -2372,8 +2375,9 @@ async function main() {
     }
   }, async (temporaryPath) => {
     const runId = path.basename(temporaryPath);
+    let outcome;
     try {
-      return mode === "suite" ? await executeSuite(runId)
+      outcome = mode === "suite" ? await executeSuite(runId)
         : mode === "environment" ? await executeControl(runId, environmentCommand)
         : mode === "preselection" ? await executePreselection(runId)
         : mode === "playback" ? await executePlayback(runId)
@@ -2412,7 +2416,16 @@ async function main() {
       await writeFile(path.join(sessionRoot, "adapter-error.json"), JSON.stringify({
         runId, result: "INFRA_ERROR", failureStage: "adapter", message: error.message
       }, null, 2));
-      return { status: "INFRA_ERROR" };
+      outcome = { status: "INFRA_ERROR" };
+    }
+    if (outcome.status === "TIMED_OUT") return outcome;
+    try {
+      const artifacts = await collectProductArtifacts(evidenceRoot, temporaryPath,
+        runId, collectSubmittedArtifacts);
+      return { ...outcome, artifacts };
+    } catch (error) {
+      process.stderr.write(`SDK artifact 수집 실패 (${runId}): ${error.message}\n`);
+      return { status: "INFRA_ERROR", failureCode: "artifact_invalid" };
     }
   });
   process.stdout.write(`${JSON.stringify({

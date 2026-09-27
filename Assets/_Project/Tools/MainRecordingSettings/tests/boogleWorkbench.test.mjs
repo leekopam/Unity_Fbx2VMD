@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { extractWorkbenchUrl, startBoogleWorkbench } from "../electron/boogleWorkbench.js";
 
@@ -44,9 +46,28 @@ test("startBoogleWorkbench는 준비 줄에서 URL을 얻고 ELECTRON_RUN_AS_NOD
   assert.equal(calls[0].options.env.ELECTRON_RUN_AS_NODE, "1");
   assert.equal(calls[0].args[0].endsWith("cli.js"), true);
   assert.deepEqual(calls[0].args[1], "workbench");
+  assert.equal(calls[0].args.length, 2);
 
   workbench.stop();
   assert.equal(child.killed, true);
+});
+
+test("Unity 프로젝트에서 실행한 Workbench는 프로젝트 E2E 기록을 연다", async () => {
+  const child = createFakeChild();
+  const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  let args;
+  const workbench = startBoogleWorkbench({
+    appRoot,
+    spawnProcess: (_file, commandArgs) => {
+      args = commandArgs;
+      return child;
+    }
+  });
+  child.stdout.emit("data", Buffer.from("BOOGLE_WORKBENCH_READY http://127.0.0.1:9001\n"));
+  await workbench.url;
+  assert.deepEqual(args.slice(2), ["--data-root", path.resolve(appRoot,
+    "../../../../Docs/Workflow/Local/evidence/boogle")]);
+  workbench.stop();
 });
 
 test("Workbench 프로세스가 준비 전에 종료되면 URL 요청이 거절된다", async () => {

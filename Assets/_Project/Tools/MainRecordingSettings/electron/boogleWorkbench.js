@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 const READY_PREFIX = "BOOGLE_WORKBENCH_READY";
@@ -19,7 +20,11 @@ export function extractWorkbenchUrl(line) {
 // 준비 완료 후 프로세스가 종료되면 onExit을 호출해 호출자가 참조를 정리하게 한다.
 export function startBoogleWorkbench({ appRoot, spawnProcess = spawn, onError, onExit, readyTimeoutMs = READY_TIMEOUT_MS } = {}) {
   const cliPath = path.join(appRoot, "node_modules", "boogle-sdk", "dist", "cli.js");
-  const child = spawnProcess(process.execPath, [cliPath, "workbench"], {
+  const projectRoot = path.resolve(appRoot, "../../../..");
+  const dataRoot = existsSync(path.join(projectRoot, "ProjectSettings", "ProjectVersion.txt"))
+    ? path.join(projectRoot, "Docs", "Workflow", "Local", "evidence", "boogle") : null;
+  const child = spawnProcess(process.execPath,
+    [cliPath, "workbench", ...(dataRoot ? ["--data-root", dataRoot] : [])], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true
