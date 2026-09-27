@@ -227,9 +227,12 @@ namespace Fbx2Vmd.FBXImporter
         {
             left = null;
             right = null;
+            // 폴백 프레임도 접지 평가가 실행된 상태이므로 표면 측정값을 기록해야 한다.
+            // Unavailable/Disabled는 평가 자체가 없어 측정값이 없으므로 제외한다.
             return IsPrepared &&
                 (LastGroundingStatus == HumanoidFootGroundingStatus.Applied ||
-                 LastGroundingStatus == HumanoidFootGroundingStatus.NoGround) &&
+                 LastGroundingStatus == HumanoidFootGroundingStatus.NoGround ||
+                 LastGroundingStatus == HumanoidFootGroundingStatus.Fallback) &&
                 _footGrounding != null && _footGrounding.TryCaptureCurrentSurface(out left, out right);
         }
 

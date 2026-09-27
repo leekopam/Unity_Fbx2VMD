@@ -211,6 +211,13 @@ namespace Fbx2Vmd.FBXImporter
             EditorApplication.update += PollAutomationRequest;
         }
 
+        // 배치 모드 진입점: -executeMethod로 호출해 Main_Auto를 저장된 Edit 상태로 열어
+        // 요청 파일 폴러가 동작할 수 있게 한다. -quit 없이 실행하면 배치 인스턴스가 계속 생존한다.
+        public static void OpenMainAutoForAutomation()
+        {
+            EditorSceneManager.OpenScene(MainAutoScenePath, OpenSceneMode.Single);
+        }
+
         [MenuItem(MenuRoot + "Run All Import_FBX 31s", false, 2090)]
         private static void RunAllImportFbxSmoke()
         {

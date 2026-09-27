@@ -165,7 +165,7 @@ function readFrames(state, csv) {
   if (header.length < baseColumns.length ||
       baseColumns.some((field, index) => header[index] !== field) ||
       new Set(header).size !== header.length)
-    throw new Error("47열 F10 계측 형식이 필요함");
+    throw new Error("47열 이상의 F10 계측 형식이 필요함");
   if (state?.status !== "metrics_complete_review_required" ||
       !Number.isInteger(state.last_frame) || state.last_frame < 1 ||
       !Number.isFinite(state.clip_frame_rate) || state.clip_frame_rate <= 0 ||
