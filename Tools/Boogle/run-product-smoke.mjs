@@ -2384,6 +2384,9 @@ async function main() {
     ? await loadGroundingCase(process.argv[3]) : null;
   if (mode === "grounding-live" && (groundingCase.lower_body_only || !groundingCase.segments))
     throw new Error("실제 재생 영상에는 두 구간과 Native 보정이 필요합니다.");
+  if (mode === "grounding-live" &&
+      groundingCase.segments[1][0] - groundingCase.segments[0][1] <= 60)
+    throw new Error("두 영상 구간 사이에는 Recorder 준비용 60프레임이 필요합니다.");
   const contactSource = mode === "contact-capture"
     ? await loadContactSource(path.resolve(process.argv[3] || "")) : null;
   const vrmInputPath = path.resolve(process.argv[3] || path.join(projectRoot,

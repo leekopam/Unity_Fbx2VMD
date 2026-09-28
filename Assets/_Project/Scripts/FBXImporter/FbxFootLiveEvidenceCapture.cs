@@ -138,6 +138,7 @@ namespace Fbx2Vmd.FBXImporter
                     StringComparison.OrdinalIgnoreCase) ||
                 starts.Length != 2 || ends.Length != 2 || starts[0] < 1 ||
                 starts[1] <= ends[0] ||
+                (continuousPlayback && starts[1] - RecorderPrerollFrames <= ends[0]) ||
                 Enumerable.Range(0, 2).Any(index => ends[index] < starts[index]) ||
                 ends[0] - starts[0] + ends[1] - starts[1] + 2 > 180)
             {
