@@ -77,6 +77,27 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_GroundingCase_When_SavingAndReading_Then_PreservesSceneInputAndModel()
+        {
+            object store = CreateStore();
+            object request = CreateEnvelope(
+                "FbxPlaybackSmokeAutomationRequest",
+                ("request_id", Guid.NewGuid().ToString("D")),
+                ("command", "capture_grounding_full_clip_metrics"),
+                ("scene_path", "Assets/_Project/Scene/Main_Recoding.unity"),
+                ("fbx_file", "tetoris_001.fbx"),
+                ("model_name", "testPrefab"));
+
+            Invoke(store, "SaveRequest", request);
+            object loaded = Invoke(store, "ReadRequest");
+
+            Assert.That(ReadField<string>(loaded, "scene_path"),
+                Is.EqualTo("Assets/_Project/Scene/Main_Recoding.unity"));
+            Assert.That(ReadField<string>(loaded, "fbx_file"), Is.EqualTo("tetoris_001.fbx"));
+            Assert.That(ReadField<string>(loaded, "model_name"), Is.EqualTo("testPrefab"));
+        }
+
+        [Test]
         public void Given_StatusAndTrace_When_WritingArtifacts_Then_PreservesJsonAndMessage()
         {
             object store = CreateStore();

@@ -28,6 +28,7 @@ const preselectionCommand = "capture_preselection_state";
 const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
+const groundingFullClipCommand = "capture_grounding_full_clip_metrics";
 const alternateModelCommand = "capture_tetoris_testprefab_full_clip_metrics";
 const vrmBaselineCommand = "capture_vrm_mmd_head_metrics";
 const vrmLoadedCommand = "capture_vrm_univrm_head_metrics";
@@ -79,6 +80,37 @@ async function hashFile(filePath) {
     throw error;
   }
   return digest.digest("hex");
+}
+
+async function loadGroundingCase(filePath) {
+  const value = JSON.parse(await readFile(path.resolve(filePath), "utf8"));
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      typeof value.model_asset_path !== "string" ||
+      !value.model_asset_path.replaceAll("\\", "/").startsWith("Assets/") ||
+      path.isAbsolute(value.model_asset_path))
+    throw new Error("하체 케이스의 모델 에셋 경로가 유효하지 않습니다.");
+  const scenes = ["Assets/_Project/Scene/Main_Auto.unity",
+    "Assets/_Project/Scene/Main_Recoding.unity"];
+  const assetsRoot = path.join(projectRoot, "Assets");
+  const modelAssetPath = path.resolve(projectRoot, value.model_asset_path);
+  const modelRelative = path.relative(assetsRoot, modelAssetPath);
+  if (!scenes.includes(value.scene_path) ||
+      typeof value.fbx_file !== "string" ||
+      path.basename(value.fbx_file) !== value.fbx_file ||
+      path.extname(value.fbx_file).toLowerCase() !== ".fbx" ||
+      typeof value.model_name !== "string" || !value.model_name.trim() ||
+      (value.lower_body_only !== undefined && typeof value.lower_body_only !== "boolean") ||
+      !modelRelative || modelRelative.startsWith("..") ||
+      path.isAbsolute(modelRelative))
+    throw new Error("하체 케이스의 씬·FBX·모델·모델 에셋 경로가 유효하지 않습니다.");
+  await Promise.all([
+    access(path.join(projectRoot, value.scene_path)),
+    access(path.join(projectRoot, "Assets/Resources/Import_FBX", value.fbx_file)),
+    access(modelAssetPath)
+  ]);
+  return { scene_path: value.scene_path, fbx_file: value.fbx_file,
+    model_name: value.model_name, model_asset_path: value.model_asset_path,
+    lower_body_only: value.lower_body_only === true };
 }
 
 async function hasCompletePngWithin(filePath, directory) {
@@ -1263,7 +1295,14 @@ async function executeFootLive(runId) {
   return { ...result, requestId };
 }
 
-async function executeFullClip(runId, alternateModel = false) {
+async function executeFullClip(runId, alternateModel = false, groundingCase = null) {
+  const scenePath = groundingCase?.scene_path || "Assets/_Project/Scene/Main_Auto.unity";
+  const inputFile = groundingCase?.fbx_file ||
+    (alternateModel ? "tetoris_001.fbx" : "satisfaction_2.fbx");
+  const modelName = groundingCase?.model_name ||
+    (alternateModel ? "testPrefab" : "YYB Hatsune Miku");
+  const captureCommand = groundingCase ? groundingFullClipCommand :
+    alternateModel ? alternateModelCommand : fullClipCommand;
   const sessionRoot = path.join(evidenceRoot,
     alternateModel ? "alternate-model-runs" : "full-clip-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -1283,31 +1322,31 @@ async function executeFullClip(runId, alternateModel = false) {
   let failureStage = "preflight";
   let humanLabelsPath = null;
   try {
-    await access(alternateModel
-      ? path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx") : fbxPath);
+    await access(path.join(projectRoot, "Assets/Resources/Import_FBX", inputFile));
     const baseline = await executeControl(runId, environmentCommand);
     steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
-        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.scene_path !== scenePath ||
+        before.scene_dirty || (!groundingCase && before.model_name !== "YYB Hatsune Miku") ||
         !before.model_active || before.has_prepared_motion || before.is_recording ||
         before.capture_framerate !== 0) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
-      const enter = await executeControl(runId, enterPlayCommand);
+      const enter = await executeControl(runId, enterPlayCommand,
+        groundingCase ? { scene_path: scenePath } : {});
       steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
       enteredPlay = enter.status === "PASS";
       if (!enteredPlay) result = { status: enter.status };
       else if (await readOptional(requestPath) || (await readStatus())?.status === "running")
         result = { status: "BLOCKED", failureKind: "preflight" };
       else {
-        // 하체 전용 캡처는 F14 대체 모델 경로와 결합되어 있음 — 팔 Native 준비 실패를
-        // 우회해 하체 의도·앵커 증거를 수집하는 용도이며 다른 모델 경로로 재사용하지 않음.
+        // Native 준비를 우회한 하체 전용 계측은 실제 재생 합격 근거로 사용하지 않음.
         await writeFile(requestPath, JSON.stringify({ request_id: requestId,
-          command: alternateModel ? alternateModelCommand : fullClipCommand,
-          requested_command: alternateModel ? alternateModelCommand : fullClipCommand,
-          run_id: runId, lower_body_only: alternateModel
+          command: captureCommand, requested_command: captureCommand,
+          run_id: runId, lower_body_only: alternateModel || groundingCase?.lower_body_only === true,
+          ...(groundingCase ? { scene_path: scenePath, fbx_file: inputFile,
+            model_name: modelName } : {})
         }), { flag: "wx" });
         submitted = true;
         const startedAt = Date.now();
@@ -1344,10 +1383,10 @@ async function executeFullClip(runId, alternateModel = false) {
             const rows = (await readFile(csvPath, "utf8")).trimEnd().split(/\r?\n/);
             const expected = (state.last_frame + 1) * 2;
             const valid = state.status === "metrics_complete_review_required" &&
-              state.scene === "Assets/_Project/Scene/Main_Auto.unity" &&
-              state.input === (alternateModel ? "tetoris_001.fbx" : "satisfaction_2.fbx") &&
-              state.model === (alternateModel ? "testPrefab" : "YYB Hatsune Miku") &&
-              state.last_frame >= (alternateModel ? 8706 : 1333) &&
+              state.scene === scenePath && state.input === inputFile &&
+              state.model === modelName &&
+              state.lower_body_only === (alternateModel || groundingCase?.lower_body_only === true) &&
+              state.last_frame >= (groundingCase ? 1 : alternateModel ? 8706 : 1333) &&
               state.clip_frame_rate > 0 && state.processed_frames === state.last_frame + 1 &&
               state.row_count === expected && rows.length === expected + 1 &&
               rows[0].startsWith("frame,time_s,time_error_ms,side,") &&
@@ -1412,12 +1451,14 @@ async function executeFullClip(runId, alternateModel = false) {
       await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, result: result.status, failureStage, steps, before, after,
+      groundingCase,
       unityStatus, statePath: unityStatus?.full_clip_state_path || null,
       humanLabelsPath,
       processedFrames: state?.processed_frames ?? null, rowCount: state?.row_count ?? null,
       nativeSkinningProcessedFrames: state?.native_skinning_processed_frames ?? null,
       nativeSkinningTotalFrames: state?.native_skinning_total_frames ?? null,
-      lowerBodyDirectAssessment: alternateModel ? "DIAGNOSTIC_ONLY" : null,
+      lowerBodyDirectAssessment: alternateModel || groundingCase?.lower_body_only
+        ? "DIAGNOSTIC_ONLY" : null,
       fullVmdOutput: alternateModel ? "NOT_CAPTURED_BY_METRICS" : null
     }, null, 2));
   }
@@ -2304,9 +2345,10 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "contact-capture", "full-regression", "full-output", "vrm-output", "vrm-character", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
-      process.argv.length > (mode === "smoke" ? 2 : ["recover", "vrm-character", "contact-capture"].includes(mode) ? 4 : 3)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|contact-capture <F10 실행 폴더>|full-regression|full-output|vrm-output|vrm-character [VRM 경로]|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
+  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "grounding-case", "contact-capture", "full-regression", "full-output", "vrm-output", "vrm-character", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+      process.argv.length > (mode === "smoke" ? 2 : ["recover", "vrm-character", "contact-capture", "grounding-case"].includes(mode) ? 4 : 3) ||
+      (mode === "grounding-case" && process.argv.length !== 4)) {
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|grounding-case <케이스 JSON>|contact-capture <F10 실행 폴더>|full-regression|full-output|vrm-output|vrm-character [VRM 경로]|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -2318,6 +2360,8 @@ async function main() {
     return;
   }
   await access(sdkRunnerPath);
+  const groundingCase = mode === "grounding-case"
+    ? await loadGroundingCase(process.argv[3]) : null;
   const contactSource = mode === "contact-capture"
     ? await loadContactSource(path.resolve(process.argv[3] || "")) : null;
   const vrmInputPath = path.resolve(process.argv[3] || path.join(projectRoot,
@@ -2325,16 +2369,21 @@ async function main() {
   const unityVersion = (await readFile(
     path.join(projectRoot, "ProjectSettings/ProjectVersion.txt"), "utf8"
   )).match(/^m_EditorVersion:\s*(\S+)/m)?.[1] || "unknown";
-  const fbxHash = await hashFile(mode === "foot-live" || mode === "alternate-model"
+  const fbxHash = await hashFile(groundingCase
+    ? path.join(projectRoot, "Assets/Resources/Import_FBX", groundingCase.fbx_file)
+    : mode === "foot-live" || mode === "alternate-model"
     ? path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx") :
     mode === "product-ui"
       ? path.join(projectRoot, "Assets/Resources/Import_FBX/Snake Hip Hop Dance.fbx")
       : fbxPath);
-  const modelHash = mode === "vrm-character" ? await hashFile(vrmInputPath) :
+  const modelHash = groundingCase
+    ? await hashFile(path.resolve(projectRoot, groundingCase.model_asset_path))
+    : mode === "vrm-character" ? await hashFile(vrmInputPath) :
     await hashFile(path.join(projectRoot, mode === "alternate-model"
       ? "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab"
       : "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx"));
-  const sceneHash = await hashFile(path.join(projectRoot, "Assets/_Project/Scene/Main_Auto.unity"));
+  const sceneHash = await hashFile(path.join(projectRoot,
+    groundingCase?.scene_path || "Assets/_Project/Scene/Main_Auto.unity"));
   const gitRevision = execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: projectRoot, encoding: "utf8"
   }).trim();
@@ -2359,7 +2408,8 @@ async function main() {
         mode === "vrm-character" ? "F14" :
         mode === "alternate-model" ? "F14" :
         mode === "product-ui" ? "F15" :
-        mode === "full-clip" || mode === "full-regression" || mode === "segments" ? "F10" :
+        mode === "full-clip" || mode === "grounding-case" ||
+          mode === "full-regression" || mode === "segments" ? "F10" :
         mode === "contact-capture" ? "F04,F05,F10,F11" :
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
@@ -2369,7 +2419,9 @@ async function main() {
       modelSha256: modelHash, sceneSha256: sceneHash
     },
     environmentConditions: {
-      unityVersion, scene: "Main_Auto", nodeVersion: process.versions.node,
+      unityVersion, scene: groundingCase
+        ? path.basename(groundingCase.scene_path, ".unity") : "Main_Auto",
+      nodeVersion: process.versions.node,
       gitRevision,
       workingTreeStatusSha256: createHash("sha256").update(workingTreeStatus).digest("hex")
     }
@@ -2383,6 +2435,7 @@ async function main() {
         : mode === "playback" ? await executePlayback(runId)
         : mode === "foot-live" ? await executeFootLive(runId)
         : mode === "full-clip" ? await executeFullClip(runId)
+        : mode === "grounding-case" ? await executeFullClip(runId, false, groundingCase)
         : mode === "contact-capture" ? await executeContactCapture(runId, contactSource,
           { fbxSha256: fbxHash, modelSha256: modelHash, sceneSha256: sceneHash })
         : mode === "alternate-model" ? await executeFullClip(runId, true)
@@ -2403,6 +2456,7 @@ async function main() {
           mode === "playback" ? "playback-runs" :
             mode === "foot-live" ? "foot-live-runs" :
             mode === "full-clip" ? "full-clip-runs" :
+            mode === "grounding-case" ? "full-clip-runs" :
             mode === "contact-capture" ? "contact-capture-runs" :
             mode === "full-regression" ? "full-regression-runs" :
             mode === "full-output" ? "full-output-runs" :
