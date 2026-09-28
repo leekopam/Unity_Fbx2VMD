@@ -16,6 +16,8 @@ namespace Fbx2Vmd.FBXImporter
         public string scene_path;
         public string fbx_file;
         public string model_name;
+        public int[] segment_starts;
+        public int[] segment_ends;
         public string vrm_file;
         public int[] capture_frames;
         public int[] side_capture_frames;

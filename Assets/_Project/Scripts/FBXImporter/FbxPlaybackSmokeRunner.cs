@@ -34,6 +34,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CapturePreselectionStateCommand = "capture_preselection_state";
         private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
         private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
+        private const string CaptureGroundingLiveFootEvidenceCommand = "capture_grounding_live_foot_evidence";
         private const string CaptureSatisfactionFullClipMetricsCommand = "capture_satisfaction_full_clip_metrics";
         private const string CaptureGroundingFullClipMetricsCommand = "capture_grounding_full_clip_metrics";
         private const string CaptureTetorisTestPrefabFullClipCommand = "capture_tetoris_testprefab_full_clip_metrics";
@@ -933,7 +934,9 @@ namespace Fbx2Vmd.FBXImporter
                     return FbxFullClipFootMetricsCapture.TryStart(fullPipeline, request.request_id,
                         request.run_id, out _fullClipMetrics, out message);
                 case CaptureGroundingFullClipMetricsCommand:
-                    return TryStartGroundingFullClip(request, out message);
+                    return TryStartGroundingCapture(request, false, out message);
+                case CaptureGroundingLiveFootEvidenceCommand:
+                    return TryStartGroundingCapture(request, true, out message);
                 case CaptureTetorisTestPrefabFullClipCommand:
                     return TryStartTestPrefabFullClip(request, out message);
                 case CaptureVrmBaselineCommand:
@@ -1572,8 +1575,8 @@ namespace Fbx2Vmd.FBXImporter
             return false;
         }
 
-        private static bool TryStartGroundingFullClip(
-            FbxPlaybackSmokeAutomationRequest request, out string message)
+        private static bool TryStartGroundingCapture(
+            FbxPlaybackSmokeAutomationRequest request, bool captureLive, out string message)
         {
             message = string.Empty;
             Scene scene = SceneManager.GetActiveScene();
@@ -1617,9 +1620,7 @@ namespace Fbx2Vmd.FBXImporter
                     message = "현재 대상 모델이 비활성 상태입니다.";
                     return false;
                 }
-                return FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
-                    request.run_id, out _fullClipMetrics, out message,
-                    request.fbx_file, "F10", lowerBodyOnly: request.lower_body_only);
+                return TryStartSelectedGroundingCapture(pipeline, request, captureLive, out message);
             }
 
             _alternateModelPipeline = pipeline;
@@ -1632,9 +1633,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (_originalModel != null) _originalModel.SetActive(false);
                 model.SetActive(true);
                 pipeline.targetCharacter = model;
-                return FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
-                    request.run_id, out _fullClipMetrics, out message,
-                    request.fbx_file, "F10", lowerBodyOnly: request.lower_body_only);
+                return TryStartSelectedGroundingCapture(pipeline, request, captureLive, out message);
             }
             catch (Exception error)
             {
@@ -1643,8 +1642,22 @@ namespace Fbx2Vmd.FBXImporter
             }
             finally
             {
-                if (_fullClipMetrics == null) RestoreAlternateModel();
+                if (captureLive ? _footLiveEvidence == null : _fullClipMetrics == null)
+                    RestoreAlternateModel();
             }
+        }
+
+        private static bool TryStartSelectedGroundingCapture(FBXVmdPipeline pipeline,
+            FbxPlaybackSmokeAutomationRequest request, bool captureLive, out string message)
+        {
+            if (captureLive)
+                return FbxFootLiveEvidenceCapture.TryStart(pipeline, request.request_id,
+                    request.run_id, out _footLiveEvidence, out message, request.fbx_file,
+                    request.scene_path, request.segment_starts, request.segment_ends,
+                    continuousPlayback: true);
+            return FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
+                request.run_id, out _fullClipMetrics, out message,
+                request.fbx_file, "F10", lowerBodyOnly: request.lower_body_only);
         }
 
         private static bool TryStartVrmLoadedCapture(
@@ -1819,6 +1832,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _footLiveEvidence.Dispose();
                 _footLiveEvidence = null;
+                RestoreAlternateModel();
                 ClearAutomationRequestState();
                 TryDeleteRequestFile();
             }
