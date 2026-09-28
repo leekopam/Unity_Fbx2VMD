@@ -209,6 +209,9 @@ function readFrames(state, csv) {
     const rearPointZ = Number(row.rear_point_z_m);
     const frontPointX = Number(row.front_point_x_m);
     const frontPointZ = Number(row.front_point_z_m);
+    const footX = Number(row.foot_x_m);
+    const footY = Number(row.foot_y_m);
+    const footZ = Number(row.foot_z_m);
     bySide[side].push({ frame, role: row.support_role,
       groundingStatus: row.grounding_status, hasGround: row.has_ground === "True",
       sourceFootY: Number(row.source_foot_y_m),
@@ -223,6 +226,9 @@ function readFrames(state, csv) {
       rearSignedMm: Number(row.rear_signed_mm),
       frontSignedMm: Number(row.front_signed_mm),
       footRotationStepDeg: Number(row.foot_rotation_step_deg),
+      footX, footY, footZ,
+      footPositionStepMm: previous ? Math.hypot(footX - previous.footX,
+        footY - previous.footY, footZ - previous.footZ) * 1000 : null,
       rearPointX, rearPointZ, frontPointX, frontPointZ,
       rearHorizontalStepMm: row.rear_step_mm === "" || !previous ? null :
         Math.hypot(rearPointX - previous.rearPointX,
@@ -258,6 +264,10 @@ function appendIssueEvents(events, segments, rows, classes, side, limits) {
       category === "support" && row.groundingStatus === "Applied" && row.hasGround &&
       Math.max(row.rearHorizontalStepMm ?? 0, row.frontHorizontalStepMm ?? 0) >=
         limits.sameVertexHorizontalStepMm },
+    { kind: "foot_bone_position_step_candidate", priority: 3, matches: row =>
+      row.role !== "released" && row.groundingStatus === "Applied" && row.hasGround &&
+      row.sourceFootSpeed <= limits.airborneSpeedMps &&
+      row.footPositionStepMm >= limits.sameVertexHorizontalStepMm },
     { kind: "foot_rotation_step_candidate", priority: 2, matches: (row, category) =>
       category === "support" && row.footRotationStepDeg >= limits.footRotationStepDeg }
   ];

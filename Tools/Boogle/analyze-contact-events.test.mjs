@@ -123,6 +123,22 @@ test("물리 이상·측정 불가를 국소 사건으로 기록하고 정지 �
     item.source_classification === "uncertain"));
 });
 
+test("지지 정점이 바뀌어도 발 본의 큰 위치 스텝을 기록한다", () => {
+  const lines = createCsv().trimEnd().split("\n");
+  for (let frame = 3; frame < 20; frame++) {
+    const index = frame * 2 + 2;
+    const cells = lines[index].split(",");
+    cells[columns.indexOf("foot_x_m")] = "0.08";
+    cells[columns.indexOf("rear_vertex")] = "1";
+    lines[index] = cells.join(",");
+  }
+  const result = analyzeContactEvents(state, `${lines.join("\n")}\n`);
+  assert.ok(result.events.some(item => item.kind === "foot_bone_position_step_candidate" &&
+    item.side === "right" && item.start_frame === 3));
+  assert.ok(result.events.every(item => item.kind !== "same_vertex_horizontal_step_candidate" ||
+    item.side !== "right"));
+});
+
 test("state.json의 접지 의도 추정과 분석 구간을 교차 대조한다", () => {
   const csv = createCsv();
   const enriched = { ...state, contact_intents: {
