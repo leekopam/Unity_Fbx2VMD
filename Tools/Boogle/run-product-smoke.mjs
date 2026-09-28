@@ -27,6 +27,7 @@ const command = "capture_satisfaction_quick_vmd_smoke_2s";
 const preselectionCommand = "capture_preselection_state";
 const playbackCommand = "capture_playback_seek_evidence";
 const footLiveCommand = "capture_tetoris_live_foot_evidence";
+const groundingLiveCommand = "capture_grounding_live_foot_evidence";
 const fullClipCommand = "capture_satisfaction_full_clip_metrics";
 const groundingFullClipCommand = "capture_grounding_full_clip_metrics";
 const alternateModelCommand = "capture_tetoris_testprefab_full_clip_metrics";
@@ -100,6 +101,12 @@ async function loadGroundingCase(filePath) {
       path.extname(value.fbx_file).toLowerCase() !== ".fbx" ||
       typeof value.model_name !== "string" || !value.model_name.trim() ||
       (value.lower_body_only !== undefined && typeof value.lower_body_only !== "boolean") ||
+      (value.segments !== undefined && (!Array.isArray(value.segments) ||
+        value.segments.length !== 2 || value.segments.some(pair =>
+          !Array.isArray(pair) || pair.length !== 2 ||
+          !pair.every(Number.isInteger) || pair[0] < 1 || pair[1] < pair[0]) ||
+        value.segments[1][0] <= value.segments[0][1] ||
+        value.segments.reduce((sum, [first, last]) => sum + last - first + 1, 0) > 180)) ||
       !modelRelative || modelRelative.startsWith("..") ||
       path.isAbsolute(modelRelative))
     throw new Error("하체 케이스의 씬·FBX·모델·모델 에셋 경로가 유효하지 않습니다.");
@@ -110,7 +117,7 @@ async function loadGroundingCase(filePath) {
   ]);
   return { scene_path: value.scene_path, fbx_file: value.fbx_file,
     model_name: value.model_name, model_asset_path: value.model_asset_path,
-    lower_body_only: value.lower_body_only === true };
+    lower_body_only: value.lower_body_only === true, segments: value.segments || null };
 }
 
 async function hasCompletePngWithin(filePath, directory) {
@@ -1142,7 +1149,11 @@ async function executeInvalidInput(runId) {
   return { ...result, requestId };
 }
 
-async function executeFootLive(runId) {
+async function executeFootLive(runId, groundingCase = null) {
+  const scenePath = groundingCase?.scene_path || "Assets/_Project/Scene/Main_Auto.unity";
+  const inputFile = groundingCase?.fbx_file || "tetoris_001.fbx";
+  const modelName = groundingCase?.model_name || "YYB Hatsune Miku";
+  const ranges = groundingCase?.segments || [[1525, 1565], [3769, 3822]];
   const sessionRoot = path.join(evidenceRoot, "foot-live-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
   const requestId = randomUUID();
@@ -1160,18 +1171,19 @@ async function executeFootLive(runId) {
   let result = { status: "INFRA_ERROR" };
   let failureStage = "preflight";
   try {
-    await access(path.join(projectRoot, "Assets/Resources/Import_FBX/tetoris_001.fbx"));
+    await access(path.join(projectRoot, "Assets/Resources/Import_FBX", inputFile));
     const baseline = await executeControl(runId, environmentCommand);
     steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
-        before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.scene_path !== scenePath ||
+        before.scene_dirty || (!groundingCase && before.model_name !== modelName) ||
         !before.model_active || before.has_prepared_motion || before.is_recording ||
         before.capture_framerate !== 0) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
-      const enter = await executeControl(runId, enterPlayCommand);
+      const enter = await executeControl(runId, enterPlayCommand,
+        groundingCase ? { scene_path: scenePath } : {});
       steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
       enteredPlay = enter.status === "PASS";
       if (!enteredPlay) result = { status: enter.status };
@@ -1179,7 +1191,12 @@ async function executeFootLive(runId) {
         result = { status: "BLOCKED", failureKind: "preflight" };
       else {
         await writeFile(requestPath, JSON.stringify({ request_id: requestId,
-          command: footLiveCommand, requested_command: footLiveCommand, run_id: runId
+          command: groundingCase ? groundingLiveCommand : footLiveCommand,
+          requested_command: groundingCase ? groundingLiveCommand : footLiveCommand,
+          run_id: runId,
+          ...(groundingCase ? { scene_path: scenePath, fbx_file: inputFile,
+            model_name: modelName, segment_starts: ranges.map(pair => pair[0]),
+            segment_ends: ranges.map(pair => pair[1]) } : {})
         }), { flag: "wx" });
         submitted = true;
         const startedAt = Date.now();
@@ -1204,7 +1221,6 @@ async function executeFootLive(runId) {
           if (path.relative(allowedRoot, statePath) !== "state.json")
             throw new Error("F09 상태 파일 경로가 실행 폴더를 벗어났습니다.");
           state = JSON.parse(await readFile(statePath, "utf8"));
-          const ranges = [[1525, 1565], [3769, 3822]];
           const expectedCount = ranges.reduce((sum, [first, last]) => sum + last - first + 1, 0);
           const seekKeys = new Set((state.seek_rows || []).map((row) =>
             `${row.segment_start}:${row.frame}:${row.side}`));
@@ -1231,8 +1247,11 @@ async function executeFootLive(runId) {
               } finally { await handle.close(); }
             }))).every(Boolean);
           const valid = ["partial", "completed"].includes(state.status) &&
-            state.input === "tetoris_001.fbx" && state.scene ===
-              "Assets/_Project/Scene/Main_Auto.unity" &&
+            state.input === inputFile && state.scene === scenePath &&
+            state.model === modelName &&
+            state.continuous_playback === Boolean(groundingCase) &&
+            JSON.stringify(state.starts) === JSON.stringify(ranges.map(pair => pair[0])) &&
+            JSON.stringify(state.ends) === JSON.stringify(ranges.map(pair => pair[1])) &&
             state.video_mapping_verified === false && seekComplete &&
             liveFrames.length > 0 && state.live_rows?.length === liveFrames.length * 2 &&
             JSON.stringify(state.missing_frames) === JSON.stringify(missing) && videosComplete;
@@ -1288,6 +1307,7 @@ async function executeFootLive(runId) {
       await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, result: result.status, failureStage, steps, before, after,
+      groundingCase,
       unityStatus, statePath: unityStatus?.foot_live_state_path || null,
       missingFrames: state?.missing_frames || null
     }, null, 2));
@@ -2345,10 +2365,10 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
 
 async function main() {
   const mode = process.argv[2] || "smoke";
-  if (!["smoke", "preselection", "playback", "foot-live", "full-clip", "grounding-case", "contact-capture", "full-regression", "full-output", "vrm-output", "vrm-character", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
-      process.argv.length > (mode === "smoke" ? 2 : ["recover", "vrm-character", "contact-capture", "grounding-case"].includes(mode) ? 4 : 3) ||
-      (mode === "grounding-case" && process.argv.length !== 4)) {
-    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|full-clip|grounding-case <케이스 JSON>|contact-capture <F10 실행 폴더>|full-regression|full-output|vrm-output|vrm-character [VRM 경로]|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
+  if (!["smoke", "preselection", "playback", "foot-live", "grounding-live", "full-clip", "grounding-case", "contact-capture", "full-regression", "full-output", "vrm-output", "vrm-character", "manual-compare", "alternate-model", "product-ui", "segments", "invalid-input", "environment", "suite", "recover"].includes(mode) ||
+      process.argv.length > (mode === "smoke" ? 2 : ["recover", "vrm-character", "contact-capture", "grounding-case", "grounding-live"].includes(mode) ? 4 : 3) ||
+      (["grounding-case", "grounding-live"].includes(mode) && process.argv.length !== 4)) {
+    throw new Error("사용법: node Tools/Boogle/run-product-smoke.mjs [preselection|playback|foot-live|grounding-live <케이스 JSON>|full-clip|grounding-case <케이스 JSON>|contact-capture <F10 실행 폴더>|full-regression|full-output|vrm-output|vrm-character [VRM 경로]|manual-compare|alternate-model|product-ui|segments|invalid-input|environment|suite|recover <runId>]");
   }
   if (Number(process.versions.node.split(".")[0]) !== 24) {
     throw new Error("Node.js 24가 필요합니다.");
@@ -2360,8 +2380,10 @@ async function main() {
     return;
   }
   await access(sdkRunnerPath);
-  const groundingCase = mode === "grounding-case"
+  const groundingCase = ["grounding-case", "grounding-live"].includes(mode)
     ? await loadGroundingCase(process.argv[3]) : null;
+  if (mode === "grounding-live" && (groundingCase.lower_body_only || !groundingCase.segments))
+    throw new Error("실제 재생 영상에는 두 구간과 Native 보정이 필요합니다.");
   const contactSource = mode === "contact-capture"
     ? await loadContactSource(path.resolve(process.argv[3] || "")) : null;
   const vrmInputPath = path.resolve(process.argv[3] || path.join(projectRoot,
@@ -2408,6 +2430,7 @@ async function main() {
         mode === "vrm-character" ? "F14" :
         mode === "alternate-model" ? "F14" :
         mode === "product-ui" ? "F15" :
+        mode === "grounding-live" ? "F09" :
         mode === "full-clip" || mode === "grounding-case" ||
           mode === "full-regression" || mode === "segments" ? "F10" :
         mode === "contact-capture" ? "F04,F05,F10,F11" :
@@ -2434,6 +2457,7 @@ async function main() {
         : mode === "preselection" ? await executePreselection(runId)
         : mode === "playback" ? await executePlayback(runId)
         : mode === "foot-live" ? await executeFootLive(runId)
+        : mode === "grounding-live" ? await executeFootLive(runId, groundingCase)
         : mode === "full-clip" ? await executeFullClip(runId)
         : mode === "grounding-case" ? await executeFullClip(runId, false, groundingCase)
         : mode === "contact-capture" ? await executeContactCapture(runId, contactSource,
@@ -2455,6 +2479,7 @@ async function main() {
         mode === "preselection" ? "preselection-runs" :
           mode === "playback" ? "playback-runs" :
             mode === "foot-live" ? "foot-live-runs" :
+            mode === "grounding-live" ? "foot-live-runs" :
             mode === "full-clip" ? "full-clip-runs" :
             mode === "grounding-case" ? "full-clip-runs" :
             mode === "contact-capture" ? "contact-capture-runs" :

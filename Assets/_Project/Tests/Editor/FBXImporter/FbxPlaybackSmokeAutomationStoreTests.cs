@@ -86,7 +86,9 @@ namespace Tests.Editor.FBXImporter
                 ("command", "capture_grounding_full_clip_metrics"),
                 ("scene_path", "Assets/_Project/Scene/Main_Recoding.unity"),
                 ("fbx_file", "tetoris_001.fbx"),
-                ("model_name", "testPrefab"));
+                ("model_name", "testPrefab"),
+                ("segment_starts", new[] { 216, 3858 }),
+                ("segment_ends", new[] { 238, 3870 }));
 
             Invoke(store, "SaveRequest", request);
             object loaded = Invoke(store, "ReadRequest");
@@ -95,6 +97,8 @@ namespace Tests.Editor.FBXImporter
                 Is.EqualTo("Assets/_Project/Scene/Main_Recoding.unity"));
             Assert.That(ReadField<string>(loaded, "fbx_file"), Is.EqualTo("tetoris_001.fbx"));
             Assert.That(ReadField<string>(loaded, "model_name"), Is.EqualTo("testPrefab"));
+            CollectionAssert.AreEqual(new[] { 216, 3858 }, ReadField<int[]>(loaded, "segment_starts"));
+            CollectionAssert.AreEqual(new[] { 238, 3870 }, ReadField<int[]>(loaded, "segment_ends"));
         }
 
         [Test]

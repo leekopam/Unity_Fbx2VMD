@@ -25,12 +25,13 @@ namespace Fbx2Vmd.FBXImporter
         private const string ScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const int VideoWidth = 1280;
         private const int VideoHeight = 720;
-        private static readonly int[] Starts = { 1525, 3769 };
-        private static readonly int[] Ends = { 1565, 3822 };
+        private const int RecorderPrerollFrames = 60;
+        private static readonly int[] DefaultStarts = { 1525, 3769 };
+        private static readonly int[] DefaultEnds = { 1565, 3822 };
         private static readonly BindingFlags MemberFlags = BindingFlags.Instance |
             BindingFlags.Public | BindingFlags.NonPublic;
 
-        private enum Phase { Importing, Preparing, Capturing, Finalizing, Finished }
+        private enum Phase { Importing, Preparing, Waiting, Capturing, Finalizing, Finished }
 
         private sealed class FrameEntry
         {
@@ -67,6 +68,11 @@ namespace Fbx2Vmd.FBXImporter
 
         private readonly FBXVmdPipeline _pipeline;
         private readonly string _directory;
+        private readonly string _scenePath;
+        private readonly string _inputFileName;
+        private readonly int[] _starts;
+        private readonly int[] _ends;
+        private readonly bool _continuousPlayback;
         private readonly string[] _videoPaths = new string[2];
         private readonly HashSet<int>[] _seen = { new HashSet<int>(), new HashSet<int>() };
         private readonly List<FrameEntry> _frames = new List<FrameEntry>();
@@ -90,10 +96,17 @@ namespace Fbx2Vmd.FBXImporter
         private MovieRecorderSettings _movieSettings;
         private Exception _renderError;
 
-        private FbxFootLiveEvidenceCapture(FBXVmdPipeline pipeline, string directory)
+        private FbxFootLiveEvidenceCapture(FBXVmdPipeline pipeline, string directory,
+            string scenePath, string inputFileName, int[] starts, int[] ends,
+            bool continuousPlayback)
         {
             _pipeline = pipeline;
             _directory = directory;
+            _scenePath = scenePath;
+            _inputFileName = inputFileName;
+            _starts = starts;
+            _ends = ends;
+            _continuousPlayback = continuousPlayback;
             StatePath = Path.Combine(directory, "state.json");
         }
 
@@ -104,26 +117,39 @@ namespace Fbx2Vmd.FBXImporter
         internal string FailureMessage { get; private set; } = string.Empty;
 
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
-            out FbxFootLiveEvidenceCapture capture, out string message)
+            out FbxFootLiveEvidenceCapture capture, out string message,
+            string inputFileName = InputFileName, string scenePath = ScenePath,
+            int[] starts = null, int[] ends = null, bool continuousPlayback = false)
         {
             capture = null;
             message = string.Empty;
+            starts = starts ?? DefaultStarts;
+            ends = ends ?? DefaultEnds;
             if (pipeline == null || !Guid.TryParse(requestId, out Guid requestGuid) ||
                 !Guid.TryParse(runId, out Guid runGuid) ||
-                !EditorApplication.isPlaying || SceneManager.GetActiveScene().path != ScenePath ||
+                (scenePath != ScenePath && scenePath !=
+                    "Assets/_Project/Scene/Main_Recoding.unity") ||
+                !EditorApplication.isPlaying || SceneManager.GetActiveScene().path != scenePath ||
                 pipeline.IsProcessing || pipeline.HasPreparedImportedMotion ||
                 pipeline.IsImportedMotionRecording || Time.captureFramerate != 0 ||
-                Camera.main == null || pipeline.targetCharacter == null)
+                Camera.main == null || pipeline.targetCharacter == null ||
+                Path.GetFileName(inputFileName) != inputFileName ||
+                !string.Equals(Path.GetExtension(inputFileName), ".fbx",
+                    StringComparison.OrdinalIgnoreCase) ||
+                starts.Length != 2 || ends.Length != 2 || starts[0] < 1 ||
+                starts[1] <= ends[0] ||
+                Enumerable.Range(0, 2).Any(index => ends[index] < starts[index]) ||
+                ends[0] - starts[0] + ends[1] - starts[1] + 2 > 180)
             {
-                message = "F09는 저장된 Main_Auto의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
+                message = "F09는 저장된 지원 씬의 비녹화 Play 상태와 두 유효한 구간이 필요합니다.";
                 return false;
             }
 
             string root = Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath;
-            string input = Path.Combine(root, "Assets", "Resources", "Import_FBX", InputFileName);
+            string input = Path.Combine(root, "Assets", "Resources", "Import_FBX", inputFileName);
             if (!File.Exists(input))
             {
-                message = $"F09 입력 FBX가 없습니다: {InputFileName}";
+                message = $"F09 입력 FBX가 없습니다: {inputFileName}";
                 return false;
             }
 
@@ -132,7 +158,9 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 Directory.CreateDirectory(directory);
-                capture = new FbxFootLiveEvidenceCapture(pipeline, directory);
+                capture = new FbxFootLiveEvidenceCapture(pipeline, directory,
+                    scenePath, inputFileName, (int[])starts.Clone(), (int[])ends.Clone(),
+                    continuousPlayback);
                 if (pipeline.TryStartFbxImportFromSharedSettings(input)) return true;
                 message = "F09 제품 FBX 가져오기 요청이 거부되었습니다.";
             }
@@ -151,7 +179,7 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 if (_renderError != null) throw _renderError;
-                if (!EditorApplication.isPlaying || SceneManager.GetActiveScene().path != ScenePath ||
+                if (!EditorApplication.isPlaying || SceneManager.GetActiveScene().path != _scenePath ||
                     _pipeline == null || Time.captureFramerate != 0)
                     throw new InvalidOperationException("Play·씬·프레임률 상태가 변경되었습니다.");
                 if (DateTime.UtcNow - _startedUtc > TimeSpan.FromMinutes(20))
@@ -164,7 +192,7 @@ namespace Fbx2Vmd.FBXImporter
                     case Phase.Importing:
                         if (_pipeline.IsProcessing || !_pipeline.HasPreparedImportedMotion ||
                             _pipeline.SessionState != FBXVmdPipeline.FBXSessionState.Ready) return;
-                        if (_pipeline.ImportedMotionLastFrameIndex < Ends[Ends.Length - 1] ||
+                        if (_pipeline.ImportedMotionLastFrameIndex < _ends[_ends.Length - 1] ||
                             !_pipeline.TryPlayImportedMotion())
                             throw new InvalidOperationException("F09 모션 길이 또는 재생 시작이 유효하지 않습니다.");
                         _phase = Phase.Preparing;
@@ -175,18 +203,52 @@ namespace Fbx2Vmd.FBXImporter
                         if (!_pipeline.TryPauseImportedMotion())
                             throw new InvalidOperationException("F09 준비 후 일시정지 실패");
                         InitializeSampling();
-                        StartSegment(0);
+                        if (_continuousPlayback)
+                        {
+                            // 앵커와 게이트 상태가 이전 프레임에 의존해 처음부터 연속 재생함.
+                            if (!_pipeline.TrySeekImportedMotionFrame(0) ||
+                                !_pipeline.TryPlayImportedMotion())
+                                throw new InvalidOperationException("F09 연속 재생 시작 실패");
+                            _phase = Phase.Waiting;
+                        }
+                        else StartSegment(0);
+                        break;
+                    case Phase.Waiting:
+                        if (!_pipeline.IsImportedMotionPlaying)
+                            throw new InvalidOperationException("F09 연속 재생이 중단되었습니다.");
+                        int startRecordingFrame = Math.Max(0,
+                            _starts[_segment] - RecorderPrerollFrames);
+                        if (_pipeline.ImportedMotionCurrentFrameIndex < startRecordingFrame) return;
+                        if (_pipeline.ImportedMotionCurrentFrameIndex >= _starts[_segment])
+                            throw new InvalidOperationException("F09 영상 시작 전 요청 구간을 지나쳤습니다.");
+                        StartVideo(_segment);
+                        Camera.onPostRender += CaptureRenderedFrame;
+                        _phase = Phase.Capturing;
                         break;
                     case Phase.Capturing:
                         if (!_segmentEndObserved &&
-                            _pipeline.ImportedMotionCurrentFrameIndex > Ends[_segment] + 10)
+                            _pipeline.ImportedMotionCurrentFrameIndex > _ends[_segment] + 10)
                             throw new InvalidOperationException("F09 Game View 렌더 프레임을 관측하지 못했습니다.");
                         if (!_segmentEndObserved) return;
                         StopVideo();
-                        _pipeline.TryPauseImportedMotion();
-                        if (_segment + 1 < Starts.Length) StartSegment(_segment + 1);
+                        if (_segment + 1 < _starts.Length)
+                        {
+                            if (_continuousPlayback)
+                            {
+                                _segment++;
+                                _segmentEndObserved = false;
+                                Array.Clear(_fixedRenderers, 0, _fixedRenderers.Length);
+                                _phase = Phase.Waiting;
+                            }
+                            else
+                            {
+                                _pipeline.TryPauseImportedMotion();
+                                StartSegment(_segment + 1);
+                            }
+                        }
                         else
                         {
+                            _pipeline.TryPauseImportedMotion();
                             CaptureSeekRows();
                             _finalizingStartedUtc = DateTime.UtcNow;
                             _phase = Phase.Finalizing;
@@ -230,10 +292,10 @@ namespace Fbx2Vmd.FBXImporter
         {
             _segment = index;
             _segmentEndObserved = false;
-            for (int side = 0; side < 2; side++)
-                for (int channel = 0; channel < 2; channel++)
-                    _fixedRenderers[side, channel] = null;
-            if (!_pipeline.TrySeekImportedMotionFrame(Starts[index] - 1) ||
+            Array.Clear(_fixedRenderers, 0, _fixedRenderers.Length);
+            // Recorder 초기화 중 짧은 요청 구간 전체가 지나갈 수 있어 앞 프레임부터 재생함.
+            int prerollFrame = Math.Max(0, _starts[index] - RecorderPrerollFrames - 1);
+            if (!_pipeline.TrySeekImportedMotionFrame(prerollFrame) ||
                 !(bool)Invoke(_driver, "PresentCurrentFrame"))
                 throw new InvalidOperationException("F09 구간 첫 프레임 탐색 실패");
             StartVideo(index);
@@ -246,7 +308,7 @@ namespace Fbx2Vmd.FBXImporter
         private void StartVideo(int index)
         {
             string stamp = DateTime.UtcNow.ToString("HHmmss", CultureInfo.InvariantCulture);
-            string name = $"when-{stamp}_where-MainAuto_who-YYB_what-{Starts[index]}-{Ends[index]}_why-F09_how-GameView";
+            string name = $"when-{stamp}_where-{Path.GetFileNameWithoutExtension(_scenePath)}_who-model_what-{_starts[index]}-{_ends[index]}_why-F09_how-GameView";
             string output = Path.Combine(_directory, name);
             if (output.Length + 4 >= 260)
                 throw new PathTooLongException("F09 영상 출력 경로가 Windows Recorder 한계를 넘습니다.");
@@ -296,38 +358,36 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 int frame = _pipeline.ImportedMotionCurrentFrameIndex;
-                if (frame >= Starts[_segment] && frame <= Ends[_segment] && _seen[_segment].Add(frame))
+                if (frame >= _starts[_segment] && frame <= _ends[_segment] && _seen[_segment].Add(frame))
                 {
                     float time = _pipeline.ImportedMotionCurrentTimeSeconds;
                     int observedIndex = _frames.Count;
                     _frames.Add(new FrameEntry
                     {
-                        segment_start = Starts[_segment], observed_index = observedIndex,
+                        segment_start = _starts[_segment], observed_index = observedIndex,
                         frame = frame, time_seconds = time,
                         wall_ms = _clock.ElapsedMilliseconds,
                         rendered_frame_count = Time.renderedFrameCount
                     });
-                    CaptureFootRows(Starts[_segment], observedIndex, frame, time, _liveRows);
+                    CaptureFootRows(_starts[_segment], observedIndex, frame, time, _liveRows);
                 }
-                if (frame >= Ends[_segment]) _segmentEndObserved = true;
+                if (frame >= _ends[_segment]) _segmentEndObserved = true;
             }
             catch (Exception error) { _renderError = error; }
         }
 
         private void CaptureSeekRows()
         {
-            for (int segment = 0; segment < Starts.Length; segment++)
+            for (int segment = 0; segment < _starts.Length; segment++)
             {
-                for (int side = 0; side < 2; side++)
-                    for (int channel = 0; channel < 2; channel++)
-                        _fixedRenderers[side, channel] = null;
-                for (int frame = Starts[segment]; frame <= Ends[segment]; frame++)
+                Array.Clear(_fixedRenderers, 0, _fixedRenderers.Length);
+                for (int frame = _starts[segment]; frame <= _ends[segment]; frame++)
                 {
                     if (!_pipeline.TrySeekImportedMotionFrame(frame) ||
                         !(bool)Invoke(_driver, "PresentCurrentFrame") ||
                         _pipeline.ImportedMotionCurrentFrameIndex != frame)
                         throw new InvalidOperationException($"F09 {frame}프레임 탐색 불일치");
-                    CaptureFootRows(Starts[segment], -1, frame,
+                    CaptureFootRows(_starts[segment], -1, frame,
                         _pipeline.ImportedMotionCurrentTimeSeconds, _seekRows);
                 }
             }
@@ -442,23 +502,26 @@ namespace Fbx2Vmd.FBXImporter
                 if (_pipeline != null && (_pipeline.IsImportedMotionPlaying ||
                     _pipeline.SessionState == FBXVmdPipeline.FBXSessionState.PreviewPaused))
                     _pipeline.TryStopImportedMotion();
-                int[][] missing = Starts.Select((start, index) =>
-                    Enumerable.Range(start, Ends[index] - start + 1)
+                int[][] missing = _starts.Select((start, index) =>
+                    Enumerable.Range(start, _ends[index] - start + 1)
                         .Where(frame => !_seen[index].Contains(frame)).ToArray()).ToArray();
+                int expectedRows = Enumerable.Range(0, _starts.Length)
+                    .Sum(index => _ends[index] - _starts[index] + 1) * 2;
                 HasEvidence = string.IsNullOrEmpty(stage) && _videoPaths.All(path =>
                     File.Exists(path) && new FileInfo(path).Length > 1024) &&
-                    _seen.All(group => group.Count > 0) && _seekRows.Count == 190;
+                    _seen.All(group => group.Count > 0) && _seekRows.Count == expectedRows;
                 string state = HasEvidence
                     ? (missing.Any(group => group.Length > 0) ? "partial" : "completed")
                     : "failed";
                 File.WriteAllText(StatePath, JsonConvert.SerializeObject(new
                 {
                     status = state, failure_stage = stage, failure_message = message,
-                    scene = ScenePath, input = InputFileName,
+                    scene = _scenePath, input = _inputFileName,
+                    continuous_playback = _continuousPlayback,
                     model = _pipeline?.targetCharacter != null ? _pipeline.targetCharacter.name : string.Empty,
                     clip_frame_rate = clipFrameRate,
                     source_to_target_scale = sourceScaleRatio,
-                    starts = Starts, ends = Ends, missing_frames = missing,
+                    starts = _starts, ends = _ends, missing_frames = missing,
                     video_paths = _videoPaths, live_frame_map = _frames,
                     video_mapping_verified = false,
                     live_rows = _liveRows, seek_rows = _seekRows,
