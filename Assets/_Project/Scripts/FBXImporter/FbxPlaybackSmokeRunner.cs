@@ -23,6 +23,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string MenuRoot = "Machine Spirit/FBX Smoke/";
         private const string MainAutoSceneName = "Main_Auto";
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string E2eModelName = "YYB Hatsune Miku";
         private const string MainRecordingSceneName = "Main_recoding";
         private const string ImportFbxRelativeDirectory = "Resources/Import_FBX";
@@ -34,6 +35,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
         private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
         private const string CaptureSatisfactionFullClipMetricsCommand = "capture_satisfaction_full_clip_metrics";
+        private const string CaptureGroundingFullClipMetricsCommand = "capture_grounding_full_clip_metrics";
         private const string CaptureTetorisTestPrefabFullClipCommand = "capture_tetoris_testprefab_full_clip_metrics";
         private const string CaptureVrmBaselineCommand = "capture_vrm_mmd_head_metrics";
         private const string CaptureVrmLoadedCommand = "capture_vrm_univrm_head_metrics";
@@ -776,10 +778,18 @@ namespace Fbx2Vmd.FBXImporter
                     bool targetPlay = isEnter;
                     Scene scene = SceneManager.GetActiveScene();
                     FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
-                    if (targetPlay && (scene.path != MainAutoScenePath || scene.isDirty ||
-                        pipeline == null || pipeline.targetCharacter == null ||
-                        pipeline.targetCharacter.name != E2eModelName))
-                        throw new InvalidOperationException("Main_Auto 씬을 저장된 Edit 상태로 준비해야 합니다.");
+                    string requestedScene = string.IsNullOrEmpty(request.scene_path)
+                        ? MainAutoScenePath : request.scene_path;
+                    Animator animator = pipeline?.targetCharacter != null
+                        ? pipeline.targetCharacter.GetComponentInChildren<Animator>(true) : null;
+                    if (targetPlay && ((requestedScene != MainAutoScenePath &&
+                            requestedScene != MainRecordingScenePath) ||
+                        scene.path != requestedScene || scene.isDirty ||
+                        pipeline?.targetCharacter == null || animator?.avatar == null ||
+                        !animator.avatar.isValid || !animator.avatar.isHuman ||
+                        (string.IsNullOrEmpty(request.scene_path) &&
+                            pipeline.targetCharacter.name != E2eModelName)))
+                        throw new InvalidOperationException("저장된 지원 씬과 유효한 Humanoid 모델을 준비해야 합니다.");
 
                     if (EditorApplication.isPlaying != targetPlay)
                     {
@@ -922,6 +932,8 @@ namespace Fbx2Vmd.FBXImporter
                             interactive: false, out message)) return false;
                     return FbxFullClipFootMetricsCapture.TryStart(fullPipeline, request.request_id,
                         request.run_id, out _fullClipMetrics, out message);
+                case CaptureGroundingFullClipMetricsCommand:
+                    return TryStartGroundingFullClip(request, out message);
                 case CaptureTetorisTestPrefabFullClipCommand:
                     return TryStartTestPrefabFullClip(request, out message);
                 case CaptureVrmBaselineCommand:
@@ -1558,6 +1570,81 @@ namespace Fbx2Vmd.FBXImporter
                 if (_fullClipMetrics == null) RestoreAlternateModel();
             }
             return false;
+        }
+
+        private static bool TryStartGroundingFullClip(
+            FbxPlaybackSmokeAutomationRequest request, out string message)
+        {
+            message = string.Empty;
+            Scene scene = SceneManager.GetActiveScene();
+            if ((request.scene_path != MainAutoScenePath &&
+                    request.scene_path != MainRecordingScenePath) ||
+                scene.path != request.scene_path || scene.isDirty ||
+                string.IsNullOrWhiteSpace(request.fbx_file) ||
+                Path.GetFileName(request.fbx_file) != request.fbx_file ||
+                !string.Equals(Path.GetExtension(request.fbx_file), ".fbx",
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(request.model_name))
+            {
+                message = "저장된 지원 씬, FBX 파일명, 모델명이 필요합니다.";
+                return false;
+            }
+
+            if (!TryGetFBXVmdPipeline(request.fbx_file, out FBXVmdPipeline pipeline,
+                    interactive: false, out message)) return false;
+            GameObject[] matches = scene.GetRootGameObjects()
+                .SelectMany(root => root.GetComponentsInChildren<Transform>(true))
+                .Where(transform => transform.name == request.model_name)
+                .Select(transform => transform.gameObject).ToArray();
+            if (matches.Length != 1)
+            {
+                message = "씬에서 이름이 일치하는 모델이 정확히 하나여야 합니다.";
+                return false;
+            }
+            GameObject model = matches[0];
+            // 전체 클립 수집기는 선택한 모델 루트의 Animator를 직접 사용함.
+            Animator animator = model.GetComponent<Animator>();
+            if (animator?.avatar == null || !animator.avatar.isValid ||
+                !animator.avatar.isHuman)
+            {
+                message = "선택한 모델의 Humanoid Avatar가 유효하지 않습니다.";
+                return false;
+            }
+            if (pipeline.targetCharacter == model)
+            {
+                if (!model.activeInHierarchy)
+                {
+                    message = "현재 대상 모델이 비활성 상태입니다.";
+                    return false;
+                }
+                return FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
+                    request.run_id, out _fullClipMetrics, out message,
+                    request.fbx_file, "F10", lowerBodyOnly: request.lower_body_only);
+            }
+
+            _alternateModelPipeline = pipeline;
+            _originalModel = pipeline.targetCharacter;
+            _alternateModel = model;
+            _originalModelWasActive = _originalModel != null && _originalModel.activeSelf;
+            _alternateModelWasActive = model.activeSelf;
+            try
+            {
+                if (_originalModel != null) _originalModel.SetActive(false);
+                model.SetActive(true);
+                pipeline.targetCharacter = model;
+                return FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
+                    request.run_id, out _fullClipMetrics, out message,
+                    request.fbx_file, "F10", lowerBodyOnly: request.lower_body_only);
+            }
+            catch (Exception error)
+            {
+                message = $"하체 계측 대상 전환 실패: {error.Message}";
+                return false;
+            }
+            finally
+            {
+                if (_fullClipMetrics == null) RestoreAlternateModel();
+            }
         }
 
         private static bool TryStartVrmLoadedCapture(
