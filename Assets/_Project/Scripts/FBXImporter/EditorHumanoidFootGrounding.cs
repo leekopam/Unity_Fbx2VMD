@@ -623,12 +623,14 @@ namespace Fbx2Vmd.FBXImporter
                         Mathf.Min(_activeWeights.x, _activeWeights.y));
                 }
                 if (!TryAlignSupportSurface(frame)) return false;
-                if (_activeWeights.x >= 0.999f && _activeWeights.y >= 0.999f)
+                if (_activeWeights.x > 0f && _activeWeights.y > 0f)
                     Diagnostic.pair_span_error_m = Mathf.Abs(
                         (_localContactPoints[1] - _localContactPoints[0]).magnitude * Foot.lossyScale.x -
                         Vector3.Distance(_anchors[0], _anchors[1]));
                 Vector3 weightedTarget = Vector3.zero;
+                Vector3 fullSupportTarget = Vector3.zero;
                 float totalWeight = 0f;
+                int fullSupportCount = 0;
                 for (int channel = 0; channel < 2; channel++)
                 {
                     if (_activeWeights[channel] <= 0f) continue;
@@ -638,10 +640,25 @@ namespace Fbx2Vmd.FBXImporter
                         return false;
                     weightedTarget += candidate * _activeWeights[channel];
                     totalWeight += _activeWeights[channel];
+                    if (_activeWeights[channel] < 0.999f) continue;
+                    fullSupportTarget = candidate;
+                    fullSupportCount++;
                 }
                 _support = Mathf.Max(_activeWeights.x, _activeWeights.y);
                 if (totalWeight > 0f)
-                    _target = Vector3.LerpUnclamped(_originalFootPosition, weightedTarget / totalWeight, _support);
+                {
+                    Vector3 target = weightedTarget / totalWeight;
+                    if (fullSupportCount == 1 && _activeWeights.x > 0f && _activeWeights.y > 0f &&
+                        Diagnostic.pair_span_error_m <= humanScale * SupportedContactErrorPerHumanScale)
+                    {
+                        // 지지점 간격이 양립할 때만 부분 지지가 완전 지지 목표를 밀어내지 않게 함.
+                        Vector3 partialPull = target - fullSupportTarget;
+                        float maximumPull = humanScale * SupportedContactErrorPerHumanScale * 0.9f;
+                        if (partialPull.magnitude > maximumPull)
+                            target = fullSupportTarget + partialPull.normalized * maximumPull;
+                    }
+                    _target = Vector3.LerpUnclamped(_originalFootPosition, target, _support);
+                }
                 Diagnostic.weighted_contact_error_m = CalculatePlannedContactError(_target);
                 if (!HumanoidSoleGroundConstraint.TryLiftAbovePlane(_target, _targetFootRotation,
                         Sampler.LocalSolePoints, Foot.lossyScale.x, _ground.point, _ground.normal,

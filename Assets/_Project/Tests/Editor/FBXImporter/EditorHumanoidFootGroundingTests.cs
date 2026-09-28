@@ -64,6 +64,75 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_PartialSupport_When_TargetsDisagree_Then_KeepsReachablePlantWithoutFootPop()
+        {
+            const string clipPath = "Assets/Resources/Import_FBX/tetoris_001.fbx";
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(clipPath);
+            if (source == null) Assert.Ignore("로컬 FBX 입력이 없는 환경에서는 실제 접촉 검증을 생략함");
+            AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath(clipPath).OfType<AnimationClip>()
+                .First(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal));
+            const string modelPath =
+                "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
+            GameObject model = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(modelPath));
+            var floor = new GameObject("부분 지지 간격 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
+            floor.transform.position = new Vector3(0f, 2.95f, 0f);
+            floor.AddComponent<BoxCollider>().size = new Vector3(40f, 0.1f, 40f);
+            object controller = Activator.CreateInstance(typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidMotionPlaybackController", true), true);
+            try
+            {
+                model.hideFlags = HideFlags.HideAndDontSave;
+                model.transform.position = new Vector3(0f, 3f, 0f);
+                foreach (MonoBehaviour script in model.GetComponentsInChildren<MonoBehaviour>(true))
+                    script.enabled = false;
+                Animator animator = model.GetComponentInChildren<Animator>(true);
+                animator.enabled = true;
+                Invoke(controller, "PrepareWithArmDirectionReference", animator, clip, source);
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                Vector3 previousLeft = Vector3.zero;
+                for (int frame = 215; frame <= 219; frame++)
+                {
+                    Invoke(controller, "Seek", frame / clip.frameRate);
+                    if (frame == 218) previousLeft = leftFoot.position;
+                }
+                AssertStatus(controller, "Applied");
+                object gate = Property(controller, "LastGroundingGate");
+                object right = Field(gate, "right");
+                Assert.That((float)Field(right, "pair_span_error_m"),
+                    Is.LessThan(animator.humanScale * 0.005f));
+                Assert.That(Vector3.Distance(previousLeft, leftFoot.position),
+                    Is.LessThan(animator.humanScale * 0.01f),
+                    "오른발의 부분 지지 때문에 왼발 교정이 되돌아가면 안 됨");
+
+                Vector3 previousRight = Vector3.zero;
+                for (int frame = 4330; frame <= 4343; frame++)
+                {
+                    Invoke(controller, "Seek", frame / clip.frameRate);
+                    if (frame == 4334)
+                    {
+                        AssertStatus(controller, "Fallback");
+                        gate = Property(controller, "LastGroundingGate");
+                        right = Field(gate, "right");
+                        Assert.That((float)Field(right, "pair_span_error_m"),
+                            Is.GreaterThan(animator.humanScale * 0.05f));
+                    }
+                    if (frame == 4342) previousRight = rightFoot.position;
+                }
+                Assert.That(Vector3.Distance(previousRight, rightFoot.position),
+                    Is.LessThan(animator.humanScale * 0.03f),
+                    "양립 불가능한 앞·뒤 지지가 발목을 크게 이동시키면 안 됨");
+            }
+            finally
+            {
+                ((IDisposable)controller).Dispose();
+                UnityEngine.Object.DestroyImmediate(model);
+                UnityEngine.Object.DestroyImmediate(floor);
+            }
+        }
+
+        [Test]
         public void Given_OverlappingContacts_When_SeekingAcrossTransitions_Then_PreservesSupportAndFractionalContinuity()
         {
             const string clipPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
