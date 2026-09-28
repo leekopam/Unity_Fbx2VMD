@@ -354,6 +354,14 @@ namespace Fbx2Vmd.FBXImporter
                 calculatedCorrections[failedContractIndex];
             errorMessage = $"{failure} renderer={failedContract.Renderer.name} " +
                 $"side={failedContract.Side} contract={failedContractIndex}";
+            errorMessage += " failedContractFolds=" + string.Join(",",
+                Enumerable.Range(0, contracts.Length)
+                    .Where(index => !successByContract[index])
+                    .Select(index => $"{index}:{contracts[index].Side}:" +
+                        (calculatedCorrections[index] == null
+                            ? "none"
+                            : calculatedCorrections[index]
+                                .ResidualSharpFoldCount.ToString())));
             if (failedCorrection != null)
             {
                 errorMessage +=
