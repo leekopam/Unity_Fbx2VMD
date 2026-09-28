@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compareManualCapture, linkOriginalCapture, readCsv } from "./manual-compare.mjs";
 import { collectProductArtifacts } from "./product-artifacts.mjs";
+import { buildFullClipMetrics } from "./full-clip-metrics.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const evidenceRoot = path.join(projectRoot, "Docs/Workflow/Local/evidence/boogle");
@@ -1419,7 +1420,8 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
                     500 / state.clip_frame_rate + 0.02 &&
                   Number.isFinite(Number(cells[2]));
               });
-            result = valid ? { status: "MANUAL_REVIEW_REQUIRED" } :
+            result = valid ? { status: "MANUAL_REVIEW_REQUIRED",
+              metrics: buildFullClipMetrics(state) } :
               { status: "FAIL", failureKind: "test_failure" };
             if (valid) {
               failureStage = "";
@@ -2440,6 +2442,10 @@ async function main() {
         mode === "preselection" ? "F01" : mode === "playback" ? "F02,F03,F04,F05,F11" :
           mode === "invalid-input" ? "F07" : "F02,F06",
       fbxSha256: fbxHash,
+      ...(["full-clip", "grounding-case", "alternate-model"].includes(mode)
+        ? { captureMode: mode,
+          lowerBodyOnly: String(mode === "alternate-model" || groundingCase?.lower_body_only === true) }
+        : {}),
       ...(contactSource ? { sourceRunId: contactSource.runId,
         sourceCsvSha256: contactSource.events.input.csv_sha256 } : {}),
       modelSha256: modelHash, sceneSha256: sceneHash
