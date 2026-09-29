@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { compareManualCapture, linkOriginalCapture, readCsv } from "./manual-compare.mjs";
 import { collectProductArtifacts } from "./product-artifacts.mjs";
 import { buildFullClipMetrics } from "./full-clip-metrics.mjs";
+import { probeMp4VideoFrameCount } from "./mp4-probe.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const evidenceRoot = path.join(projectRoot, "Docs/Workflow/Local/evidence/boogle");
@@ -52,6 +53,15 @@ const environmentFields = ["play_mode", "scene", "scene_path", "scene_dirty",
   "avatar_name", "avatar_valid", "is_processing", "has_prepared_motion",
   "is_playing_motion", "is_recording", "recorder_recording",
   "recorder_output_name", "recorder_last_saved_path", "capture_framerate", "time_scale"];
+
+// 씬의 기본 대상 모델은 버전 suffix가 붙는다(예: YYB Hatsune Miku_default_1.0ver).
+// 고정 모드에서는 "환경의 기본 모델인가"만 확인하므로 패밀리 접두사로 판정하고,
+// 케이스 JSON이 지정한 모델명 비교는 정확 일치를 유지한다.
+const defaultModelPrefix = "YYB Hatsune Miku";
+function isDefaultModelName(name) {
+  return name === defaultModelPrefix ||
+    (typeof name === "string" && name.startsWith(`${defaultModelPrefix}_`));
+}
 
 async function readOptional(pathToRead) {
   try {
@@ -947,7 +957,7 @@ async function executeContactCapture(runId, source, inputHashes) {
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.scene_dirty || !isDefaultModelName(before.model_name) ||
         before.has_prepared_motion || before.is_recording || before.capture_framerate !== 0) {
       result = { status: "BLOCKED" };
     } else {
@@ -1178,7 +1188,7 @@ async function executeFootLive(runId, groundingCase = null) {
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== scenePath ||
-        before.scene_dirty || (!groundingCase && before.model_name !== modelName) ||
+        before.scene_dirty || (!groundingCase && !isDefaultModelName(before.model_name)) ||
         !before.model_active || before.has_prepared_motion || before.is_recording ||
         before.capture_framerate !== 0) {
       result = { status: "BLOCKED", failureKind: "preflight" };
@@ -1235,25 +1245,32 @@ async function executeFootLive(runId, groundingCase = null) {
             (_, offset) => first + offset).filter((frame) => !liveKeys.has(`${first}:${frame}`)));
           const videoPaths = state.video_paths || [];
           const videosComplete = videoPaths.length === 2 && (await Promise.all(
-            videoPaths.map(async (video) => {
+            videoPaths.map(async (video, index) => {
               const resolved = path.resolve(video || "");
               if (path.relative(allowedRoot, resolved).startsWith("..") ||
                   path.isAbsolute(path.relative(allowedRoot, resolved))) return false;
-              const handle = await open(resolved, "r");
               try {
-                if ((await handle.stat()).size <= 1024) return false;
-                const header = Buffer.alloc(8);
-                await handle.read(header, 0, 8, 0);
-                return header.subarray(4).toString("ascii") === "ftyp";
-              } finally { await handle.close(); }
+                const handle = await open(resolved, "r");
+                try {
+                  if ((await handle.stat()).size <= 1024) return false;
+                  const header = Buffer.alloc(8);
+                  await handle.read(header, 0, 8, 0);
+                  if (header.subarray(4).toString("ascii") !== "ftyp") return false;
+                } finally { await handle.close(); }
+                // 스텝 캡처는 렌더 한 번=모션 한 프레임이고 Recorder 측 기록 수가
+                // 실제 MP4 샘플 수와 일치해야 영상 대응을 신뢰할 수 있음.
+                const recorded = state.video_recorded_counts?.[index];
+                return Number.isInteger(recorded) && recorded > 0 &&
+                  await probeMp4VideoFrameCount(resolved) === recorded;
+              } catch { return false; }
             }))).every(Boolean);
           const valid = ["partial", "completed"].includes(state.status) &&
             state.input === inputFile && state.scene === scenePath &&
-            state.model === modelName &&
+            (groundingCase ? state.model === modelName : isDefaultModelName(state.model)) &&
             state.continuous_playback === Boolean(groundingCase) &&
             JSON.stringify(state.starts) === JSON.stringify(ranges.map(pair => pair[0])) &&
             JSON.stringify(state.ends) === JSON.stringify(ranges.map(pair => pair[1])) &&
-            state.video_mapping_verified === false && seekComplete &&
+            state.video_mapping_verified === true && seekComplete &&
             liveFrames.length > 0 && state.live_rows?.length === liveFrames.length * 2 &&
             JSON.stringify(state.missing_frames) === JSON.stringify(missing) && videosComplete;
           const csvPath = path.join(allowedRoot, "live-foot.csv");
@@ -1349,7 +1366,7 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== scenePath ||
-        before.scene_dirty || (!groundingCase && before.model_name !== "YYB Hatsune Miku") ||
+        before.scene_dirty || (!groundingCase && !isDefaultModelName(before.model_name)) ||
         !before.model_active || before.has_prepared_motion || before.is_recording ||
         before.capture_framerate !== 0) {
       result = { status: "BLOCKED", failureKind: "preflight" };
@@ -1405,7 +1422,8 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
             const expected = (state.last_frame + 1) * 2;
             const valid = state.status === "metrics_complete_review_required" &&
               state.scene === scenePath && state.input === inputFile &&
-              state.model === modelName &&
+              (groundingCase || alternateModel ? state.model === modelName :
+                isDefaultModelName(state.model)) &&
               state.lower_body_only === (alternateModel || groundingCase?.lower_body_only === true) &&
               state.last_frame >= (groundingCase ? 1 : alternateModel ? 8706 : 1333) &&
               state.clip_frame_rate > 0 && state.processed_frames === state.last_frame + 1 &&
@@ -1511,7 +1529,7 @@ async function executeProductUi(runId, width, height) {
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.scene_dirty || !isDefaultModelName(before.model_name) ||
         !before.model_active || before.has_prepared_motion || before.is_recording ||
         before.capture_framerate !== 0) {
       result = { status: "BLOCKED", failureKind: "preflight" };
@@ -1593,7 +1611,7 @@ async function executeProductUi(runId, width, height) {
               }
             }
             const valid = state.status === "manual_review_required" && validSteps && validUiState &&
-              state.input === "Snake Hip Hop Dance.fbx" && state.model === "YYB Hatsune Miku" &&
+              state.input === "Snake Hip Hop Dance.fbx" && isDefaultModelName(state.model) &&
               state.auto_vmd_recording_suppressed === true &&
               state.requested_screen_width === width &&
               state.requested_screen_height === height &&
@@ -1684,7 +1702,7 @@ async function executeFullRegression(runId, namedOutput = false) {
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.scene_dirty || !isDefaultModelName(before.model_name) ||
         !before.model_active || !before.avatar_valid || before.is_processing ||
         before.has_prepared_motion || before.is_recording ||
         before.capture_framerate !== 0) {
@@ -1999,7 +2017,7 @@ async function executeSegments(runId) {
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.scene_dirty || !isDefaultModelName(before.model_name) ||
         !before.model_active || !before.avatar_valid || before.is_processing ||
         before.has_prepared_motion || before.is_recording ||
         before.capture_framerate !== 0) {
@@ -2071,7 +2089,7 @@ async function executeSuite(runId) {
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene !== "Main_Auto" ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-        before.scene_dirty || before.model_name !== "YYB Hatsune Miku" ||
+        before.scene_dirty || !isDefaultModelName(before.model_name) ||
         !before.model_active ||
         !before.avatar_valid || before.is_processing || before.has_prepared_motion ||
         before.is_recording || before.recorder_recording || before.capture_framerate !== 0) {
@@ -2249,7 +2267,7 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
       manifest.steps.push({ name: "before", status: before.status });
       if (before.status !== "PASS" || before.state?.play_mode ||
           before.state?.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
-          before.state?.scene_dirty || before.state?.model_name !== "YYB Hatsune Miku") {
+          before.state?.scene_dirty || !isDefaultModelName(before.state?.model_name)) {
         result = { status: "BLOCKED", reason: "저장된 Main_Auto Edit 상태가 필요함" };
       } else {
         const jobs = [
