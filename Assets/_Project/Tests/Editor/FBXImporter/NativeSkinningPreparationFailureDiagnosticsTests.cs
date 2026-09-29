@@ -21,6 +21,7 @@ namespace Tests.Editor.FBXImporter
         private const int MaximumPairsPerContract = 8;
 
         [TestCase("tetoris_001.fbx", 1)]
+        [TestCase("tetoris_001.fbx", 117)]
         [TestCase("satisfaction_2.fbx", 2)]
         [Explicit("로컬 FBX fixture가 필요한 실패 프레임 진단 계측입니다.")]
         public void Given_FailingFrame_When_PreparingNativeSkinning_Then_DumpsContractDiagnostics(
@@ -271,7 +272,7 @@ namespace Tests.Editor.FBXImporter
                 "TryCalculate", BindingFlags.Static | BindingFlags.NonPublic);
             Assert.That(configurationType, Is.Not.Null);
             Assert.That(tryCalculate, Is.Not.Null);
-            foreach (float ratio in new[] { 0.01f, 0.02f, 0.05f })
+            foreach (float ratio in new[] { 0.01f, 0.02f, 0.025f, 0.03f, 0.04f, 0.05f, 0.08f })
             {
                 object configuration = Activator.CreateInstance(
                     configurationType,

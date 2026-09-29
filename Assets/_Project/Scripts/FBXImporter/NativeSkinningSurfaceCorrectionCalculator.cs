@@ -119,7 +119,7 @@ namespace Fbx2Vmd.FBXImporter
         private const float OrientationSafetyFactor = 0.95f;
         private const float MinimumNormalSquaredMagnitude = 0.0000000000000001f;
         private static readonly CorrectionConfiguration StrongConfiguration =
-            new CorrectionConfiguration(640, 64, 32, 0.03f, 0.02f);
+            new CorrectionConfiguration(640, 64, 32, 0.03f, 0.055f);
         private static readonly CorrectionConfiguration FastConfiguration =
             new CorrectionConfiguration(80, 16, 0, 0.02f, 0.002512f);
 
