@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Profiling;
 using UnityEngine;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
@@ -18,6 +19,9 @@ namespace Fbx2Vmd.Profiling
         private static long _runStartGcBytes;
         private static float _lastStageMarkMs;
         private static long _lastStageGcBytes;
+        private static readonly List<float> _frameSamples = new List<float>();
+        private static ProfilerRecorder _gcReservedRecorder;
+        private static ProfilerRecorder _systemUsedRecorder;
         private static readonly Dictionary<string, ProfilingMetricSample> _metricIndex =
             new Dictionary<string, ProfilingMetricSample>();
 
@@ -42,6 +46,8 @@ namespace Fbx2Vmd.Profiling
             _lastStageMarkMs = 0f;
             _lastStageGcBytes = _runStartGcBytes;
             _metricIndex.Clear();
+            _frameSamples.Clear();
+            StartMemoryRecorders();
 
             string runStamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
             _current = new ProfilingRunRecord
@@ -140,10 +146,28 @@ namespace Fbx2Vmd.Profiling
             float ms = deltaTimeSeconds * 1000f;
             _current.sampledFrameCount++;
             _current.sampledFrameSumMs += ms;
+            _frameSamples.Add(ms);
             if (ms > _current.sampledFrameMaxMs)
             {
                 _current.sampledFrameMaxMs = ms;
             }
+            SampleMemoryPeak(_current);
+        }
+
+        /// <summary>
+        /// 런의 입력 컨텍스트를 기록합니다(비교 정당성 확보용). -1 이하 값은 미기록으로 둡니다.
+        /// </summary>
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        public static void SetContext(long inputBytes = -1, float clipLengthSec = -1f, int boneCount = -1)
+        {
+            if (_current == null)
+            {
+                return;
+            }
+            if (inputBytes >= 0) _current.inputBytes = inputBytes;
+            if (clipLengthSec >= 0f) _current.clipLengthSec = clipLengthSec;
+            if (boneCount >= 0) _current.boneCount = boneCount;
         }
 
         /// <summary>런을 마감하고 리포트를 저장합니다.</summary>
@@ -160,10 +184,13 @@ namespace Fbx2Vmd.Profiling
             _current.outcome = outcome ?? string.Empty;
             _current.totalMs = (float)_runWatch.Elapsed.TotalMilliseconds;
             _current.totalGcAllocBytes = GC.GetAllocatedBytesForCurrentThread() - _runStartGcBytes;
+            CaptureMemoryCounters(_current);
+            ComputeFramePercentiles(_current);
 
             try
             {
-                _current.analysis = ProfilingRunAnalyzer.Analyze(_current, LoadHistory(_current));
+                _current.analysis = ProfilingRunAnalyzer.Analyze(
+                    _current, LoadHistory(_current), ProfilingAnalysisThresholds.Load());
             }
             catch (Exception e)
             {
@@ -184,40 +211,107 @@ namespace Fbx2Vmd.Profiling
 
             _current = null;
             _metricIndex.Clear();
+            _frameSamples.Clear();
+            DisposeMemoryRecorders();
+        }
+
+        /// <summary>엔진 메모리 카운터를 런 동안 켭니다. 카운터명이 없는 환경이면 조용히 건너뜁니다.</summary>
+        private static void StartMemoryRecorders()
+        {
+            try
+            {
+                _gcReservedRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Reserved Memory");
+                _systemUsedRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "System Used Memory");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Profiling] 메모리 카운터 시작 실패(측정은 계속): {e.Message}");
+            }
+        }
+
+        /// <summary>프레임 경계에 갱신되는 카운터 값의 런 중 최대치를 누적합니다(피크 기준).</summary>
+        private static void SampleMemoryPeak(ProfilingRunRecord record)
+        {
+            try
+            {
+                if (_gcReservedRecorder.Valid && _gcReservedRecorder.LastValue > record.gcReservedBytes)
+                {
+                    record.gcReservedBytes = _gcReservedRecorder.LastValue;
+                }
+                if (_systemUsedRecorder.Valid && _systemUsedRecorder.LastValue > record.systemUsedBytes)
+                {
+                    record.systemUsedBytes = _systemUsedRecorder.LastValue;
+                }
+            }
+            catch { /* 카운터 읽기 실패는 계측을 막지 않음 */ }
+        }
+
+        private static void CaptureMemoryCounters(ProfilingRunRecord record)
+        {
+            try
+            {
+                if (_gcReservedRecorder.Valid && _gcReservedRecorder.LastValue > record.gcReservedBytes)
+                {
+                    record.gcReservedBytes = _gcReservedRecorder.LastValue;
+                }
+                if (_systemUsedRecorder.Valid && _systemUsedRecorder.LastValue > record.systemUsedBytes)
+                {
+                    record.systemUsedBytes = _systemUsedRecorder.LastValue;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Profiling] 메모리 카운터 읽기 실패: {e.Message}");
+            }
+        }
+
+        private static void DisposeMemoryRecorders()
+        {
+            if (_gcReservedRecorder.Valid)
+            {
+                _gcReservedRecorder.Dispose();
+            }
+            if (_systemUsedRecorder.Valid)
+            {
+                _systemUsedRecorder.Dispose();
+            }
+            _gcReservedRecorder = default;
+            _systemUsedRecorder = default;
+        }
+
+        /// <summary>프레임 샘플에서 p50/p95/p99를 계산합니다. 표본 10개 미만이면 생략합니다.</summary>
+        private static void ComputeFramePercentiles(ProfilingRunRecord record)
+        {
+            if (_frameSamples.Count < 10)
+            {
+                return;
+            }
+
+            var sorted = _frameSamples.ToArray();
+            Array.Sort(sorted);
+            record.frameP50Ms = Percentile(sorted, 0.50f);
+            record.frameP95Ms = Percentile(sorted, 0.95f);
+            record.frameP99Ms = Percentile(sorted, 0.99f);
+        }
+
+        private static float Percentile(float[] sorted, float fraction)
+        {
+            int index = Mathf.Clamp(Mathf.CeilToInt(sorted.Length * fraction) - 1, 0, sorted.Length - 1);
+            return sorted[index];
         }
 
         /// <summary>같은 라벨·머신의 최근 런 최대 20개를 로드합니다. 실패해도 빈 목록으로 진행합니다.</summary>
         private static List<ProfilingRunRecord> LoadHistory(ProfilingRunRecord current)
         {
-            var history = new List<ProfilingRunRecord>();
             try
             {
-                foreach (string path in ProfilingReportWriter.ListReports())
-                {
-                    if (history.Count >= 20)
-                    {
-                        break;
-                    }
-
-                    ProfilingRunRecord past = ProfilingReportWriter.Load(path);
-                    if (past == null || past.runId == current.runId)
-                    {
-                        continue;
-                    }
-                    if (!string.Equals(past.label, current.label, StringComparison.Ordinal) ||
-                        !string.Equals(past.deviceModel, current.deviceModel, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-                    history.Add(past);
-                }
+                return ProfilingReportWriter.LoadMatching(current, 20);
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[Profiling] 이력 로드 실패(분석은 이번 런만으로 진행): {e.Message}");
+                return new List<ProfilingRunRecord>();
             }
-
-            return history;
         }
 
         /// <summary>저장 없이 현재 런을 폐기합니다.</summary>
@@ -227,6 +321,8 @@ namespace Fbx2Vmd.Profiling
         {
             _current = null;
             _metricIndex.Clear();
+            _frameSamples.Clear();
+            DisposeMemoryRecorders();
         }
     }
 }

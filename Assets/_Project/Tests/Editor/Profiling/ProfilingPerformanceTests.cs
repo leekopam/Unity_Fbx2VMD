@@ -334,6 +334,92 @@ namespace Fbx2Vmd.Tests.Editor.Profiling
             Assert.AreEqual("B", aggregated[1].stage);
         }
 
+        [Test]
+        public void Analyzer_TrendRegression_IgnoresOutcomeStages()
+        {
+            // 종료 스테이지(Success/Failed/Cancelled)의 소요는 실패·종료 경로 처리 시간이라
+            // 런 간 비교 의미가 없으므로 트렌드 판정에서 제외한다.
+            var history = new List<ProfilingRunRecord>();
+            for (int i = 0; i < 4; i++)
+            {
+                var past = new ProfilingRunRecord();
+                past.stages.Add(new ProfilingStageSample { stage = "Failed", deltaMs = 100f });
+                past.stages.Add(new ProfilingStageSample { stage = "Retargeting", deltaMs = 100f });
+                history.Add(past);
+            }
+
+            var current = new ProfilingRunRecord { outcome = "Failed", totalMs = 600f };
+            current.stages.Add(new ProfilingStageSample { stage = "Retargeting", deltaMs = 200f });
+            current.stages.Add(new ProfilingStageSample { stage = "Failed", deltaMs = 400f });
+
+            var findings = ProfilingRunAnalyzer.Analyze(current, history)
+                .Where(f => f.kind == ProfilingRunAnalyzer.KindTrendRegression).ToList();
+            Assert.IsFalse(
+                findings.Any(f => f.stage == "Failed"),
+                "종료 스테이지가 트렌드 회귀로 잡혔습니다.");
+            Assert.IsTrue(
+                findings.Any(f => f.stage == "Retargeting"),
+                "일반 스테이지 회귀 판정이 함께 꺼졌습니다.");
+        }
+
+        [Test]
+        public void RunRecord_ContextAndFramePercentiles_AreWritten()
+        {
+            PipelineRunProfiler.BeginRun("context-selftest");
+            PipelineRunProfiler.SetContext(inputBytes: 2048, clipLengthSec: 3.25f, boneCount: 17);
+            for (int i = 0; i < 12; i++)
+            {
+                PipelineRunProfiler.SampleFrame(0.010f + i * 0.001f); // 10~21ms
+            }
+            PipelineRunProfiler.NoteStage("Success", "완료", isTerminal: true);
+
+            ProfilingRunRecord record =
+                ProfilingReportWriter.Load(PipelineRunProfiler.LastWrittenReportPath);
+            Assert.IsNotNull(record);
+            Assert.AreEqual(2048, record.inputBytes);
+            Assert.AreEqual(3.25f, record.clipLengthSec, 0.001f);
+            Assert.AreEqual(17, record.boneCount);
+            Assert.AreEqual(12, record.sampledFrameCount);
+            Assert.Greater(record.frameP50Ms, 0f);
+            Assert.LessOrEqual(record.frameP50Ms, record.frameP95Ms);
+            Assert.LessOrEqual(record.frameP95Ms, record.frameP99Ms);
+        }
+
+        [Test]
+        public void RunRecord_FewFrames_LeavesPercentilesZero()
+        {
+            PipelineRunProfiler.BeginRun("fewframes-selftest");
+            PipelineRunProfiler.SetContext(inputBytes: -1);
+            for (int i = 0; i < 5; i++)
+            {
+                PipelineRunProfiler.SampleFrame(0.016f);
+            }
+            PipelineRunProfiler.NoteStage("Success", "완료", isTerminal: true);
+
+            ProfilingRunRecord record =
+                ProfilingReportWriter.Load(PipelineRunProfiler.LastWrittenReportPath);
+            Assert.IsNotNull(record);
+            Assert.AreEqual(0f, record.frameP50Ms, "표본 10개 미만이면 분위수를 남기지 않아야 합니다.");
+            Assert.AreEqual(-1, record.inputBytes, "미기록 센티넬이 유지되어야 합니다.");
+        }
+
+        [Test]
+        public void Analyzer_RespectsCustomThresholds()
+        {
+            var record = new ProfilingRunRecord { outcome = "Success", totalMs = 1000f };
+            record.stages.Add(new ProfilingStageSample { stage = "LoadingFbx", deltaMs = 210f });
+
+            // 기본값(30% 점유)에서는 21%라 병목 아님 — 임계값을 낮추면 플래그되어야 한다.
+            Assert.IsFalse(
+                ProfilingRunAnalyzer.Analyze(record, null)
+                    .Any(f => f.kind == ProfilingRunAnalyzer.KindBottleneck));
+
+            var strict = new ProfilingAnalysisThresholds { bottleneckShareOfTotal = 0.1f };
+            Assert.IsTrue(
+                ProfilingRunAnalyzer.Analyze(record, null, strict)
+                    .Any(f => f.kind == ProfilingRunAnalyzer.KindBottleneck));
+        }
+
         private static float MedianOf(int runs, Action action)
         {
             var samples = new float[runs];

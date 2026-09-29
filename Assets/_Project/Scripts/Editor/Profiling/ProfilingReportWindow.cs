@@ -21,6 +21,9 @@ namespace Fbx2Vmd.Profiling.EditorTools
         private Vector2 _listScroll;
         private Vector2 _detailScroll;
         private GUIStyle _monoStyle;
+        private ProfilingAnalysisThresholds _thresholds;
+        private int _trendIndex = -1;
+        private List<string> _trendRows = new List<string>();
 
         [MenuItem(MenuPath)]
         public static void Open()
@@ -43,6 +46,8 @@ namespace Fbx2Vmd.Profiling.EditorTools
             _reportFiles = ProfilingReportWriter.ListReports();
             if (_leftIndex >= _reportFiles.Length) _leftIndex = 0;
             if (_rightIndex >= _reportFiles.Length) _rightIndex = -1;
+            _thresholds = ProfilingAnalysisThresholds.Load();
+            _trendIndex = -1;
         }
 
         private void OnGUI()
@@ -148,6 +153,7 @@ namespace Fbx2Vmd.Profiling.EditorTools
             {
                 DrawRunHeader(left, "기준");
                 DrawFindings(left);
+                DrawStageTrend(left);
                 if (right != null)
                 {
                     DrawRunHeader(right, "비교");
@@ -171,9 +177,27 @@ namespace Fbx2Vmd.Profiling.EditorTools
                 EditorStyles.miniLabel);
             if (run.sampledFrameCount > 0)
             {
+                string frame = $"프레임 {run.sampledFrameCount}개 | 평균 {run.sampledFrameSumMs / run.sampledFrameCount:F2}ms | 최대 {run.sampledFrameMaxMs:F2}ms";
+                if (run.frameP50Ms > 0f)
+                {
+                    frame += $" | p50 {run.frameP50Ms:F1} | p95 {run.frameP95Ms:F1} | p99 {run.frameP99Ms:F1}ms";
+                }
+                EditorGUILayout.LabelField(frame, EditorStyles.miniLabel);
+            }
+            if (run.gcReservedBytes > 0 || run.systemUsedBytes > 0)
+            {
                 EditorGUILayout.LabelField(
-                    $"프레임 {run.sampledFrameCount}개 | 평균 {run.sampledFrameSumMs / run.sampledFrameCount:F2}ms | 최대 {run.sampledFrameMaxMs:F2}ms",
+                    $"메모리 피크(엔진 카운터): GC Reserved {run.gcReservedBytes / (1024f * 1024f):F1}MB | System Used {run.systemUsedBytes / (1024f * 1024f):F1}MB",
                     EditorStyles.miniLabel);
+            }
+            // 미기록(-1) 필드는 표시하지 않는다.
+            var inputParts = new List<string>(3);
+            if (run.inputBytes >= 0) inputParts.Add($"입력 {run.inputBytes / (1024f * 1024f):F2}MB");
+            if (run.clipLengthSec >= 0f) inputParts.Add($"클립 {run.clipLengthSec:F1}초");
+            if (run.boneCount >= 0) inputParts.Add($"본/트랜스폼 {run.boneCount}개");
+            if (inputParts.Count > 0)
+            {
+                EditorGUILayout.LabelField(string.Join(" | ", inputParts), EditorStyles.miniLabel);
             }
         }
 
@@ -186,6 +210,12 @@ namespace Fbx2Vmd.Profiling.EditorTools
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("자동 분석", EditorStyles.boldLabel);
+            _thresholds ??= ProfilingAnalysisThresholds.Load();
+            EditorGUILayout.LabelField(
+                $"임계값: 병목>{_thresholds.bottleneckShareOfTotal:P0}&{_thresholds.bottleneckMinAbsMs:F0}ms | " +
+                $"트렌드>중앙값x{_thresholds.trendRegressionFactor:F1} 초과 & +{_thresholds.trendRegressionMinDeltaMs:F0}ms(표본≥{_thresholds.trendMinHistory}) | " +
+                $"프레임>평균x{_thresholds.frameSpikeFactor:F1}&{_thresholds.frameSpikeMinMs:F0}ms | GC>{_thresholds.gcSpikeMinMb:F0}MB",
+                EditorStyles.miniLabel);
             foreach (ProfilingFinding finding in run.analysis)
             {
                 var type = finding.severity == ProfilingRunAnalyzer.SeverityError
@@ -202,6 +232,78 @@ namespace Fbx2Vmd.Profiling.EditorTools
             }
 
             DrawJevDiagnosis();
+        }
+
+        /// <summary>같은 라벨·머신의 과거 런과 스테이지별 중앙값을 나란히 표시합니다.</summary>
+        private void DrawStageTrend(ProfilingRunRecord run)
+        {
+            if (_trendIndex != _leftIndex)
+            {
+                _trendIndex = _leftIndex;
+                _trendRows = BuildTrendRows(run);
+            }
+
+            if (_trendRows.Count == 0)
+            {
+                return;
+            }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("같은 라벨 추세 (이번 Δms / 과거 중앙값 / 배율)", EditorStyles.boldLabel);
+            foreach (string row in _trendRows)
+            {
+                EditorGUILayout.LabelField(row, _monoStyle);
+            }
+        }
+
+        private List<string> BuildTrendRows(ProfilingRunRecord run)
+        {
+            var rows = new List<string>();
+            var historyByStage = new Dictionary<string, List<float>>(StringComparer.Ordinal);
+            List<ProfilingRunRecord> history;
+            try { history = ProfilingReportWriter.LoadMatching(run); }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Profiling] 추세 이력 로드 실패: {e.Message}");
+                return rows;
+            }
+
+            int historyCount = 0;
+            foreach (ProfilingRunRecord past in history)
+            {
+                historyCount++;
+                foreach (ProfilingStageSample s in ProfilingRunAnalyzer.AggregateStagesByName(past.stages))
+                {
+                    if (ProfilingRunAnalyzer.IsInteractiveStage(s.stage) ||
+                        ProfilingRunAnalyzer.IsOutcomeStage(s.stage))
+                    {
+                        continue;
+                    }
+                    if (!historyByStage.TryGetValue(s.stage, out List<float> list))
+                    {
+                        list = new List<float>();
+                        historyByStage[s.stage] = list;
+                    }
+                    list.Add(s.deltaMs);
+                }
+            }
+
+            if (historyCount == 0)
+            {
+                return rows;
+            }
+
+            foreach (ProfilingStageSample s in ProfilingRunAnalyzer.AggregateStagesByName(run.stages))
+            {
+                if (!historyByStage.TryGetValue(s.stage, out List<float> samples))
+                {
+                    continue;
+                }
+                float median = ProfilingRunAnalyzer.Median(samples);
+                string ratio = median > 0.01f ? $"{s.deltaMs / median:F2}x" : "-";
+                rows.Add($"{s.stage}  |  {s.deltaMs:F1}  |  {median:F1} (n={samples.Count})  |  {ratio}");
+            }
+            return rows;
         }
 
         private void DrawJevDiagnosis()

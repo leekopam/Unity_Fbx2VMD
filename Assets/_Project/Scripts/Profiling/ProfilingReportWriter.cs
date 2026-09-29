@@ -78,6 +78,43 @@ namespace Fbx2Vmd.Profiling
             return JsonUtility.FromJson<ProfilingRunRecord>(File.ReadAllText(path));
         }
 
+        /// <summary>
+        /// 같은 라벨·머신의 과거 런을 최신순으로 최대 maxCount개 로드합니다.
+        /// 파이프라인 이력 분석과 리포트 창 추세 표시가 공용하는 필터입니다. 개별 파일 파싱 실패는 건너뜁니다.
+        /// </summary>
+        public static List<ProfilingRunRecord> LoadMatching(ProfilingRunRecord current, int maxCount = 20)
+        {
+            var history = new List<ProfilingRunRecord>();
+            if (current == null || maxCount <= 0)
+            {
+                return history;
+            }
+
+            foreach (string path in ListReports())
+            {
+                if (history.Count >= maxCount)
+                {
+                    break;
+                }
+
+                ProfilingRunRecord past;
+                try { past = Load(path); }
+                catch { continue; }
+                if (past == null || past.runId == current.runId)
+                {
+                    continue;
+                }
+                if (!string.Equals(past.label, current.label, StringComparison.Ordinal) ||
+                    !string.Equals(past.deviceModel, current.deviceModel, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                history.Add(past);
+            }
+
+            return history;
+        }
+
         internal static string SanitizeFileName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))

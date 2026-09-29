@@ -113,6 +113,11 @@ namespace Fbx2Vmd.FBXImporter
                 FBXVmdPipeline.FBXSessionState.Copied,
                 $"복제 완료: {Path.GetFileName(targetPath)}",
                 0.15f);
+            try
+            {
+                PipelineRunProfiler.SetContext(inputBytes: new FileInfo(targetPath).Length);
+            }
+            catch { /* 계측 컨텍스트 실패는 변환을 막지 않음 */ }
 
 #if UNITY_EDITOR
             ConfigureEditorImportSettingsIfNeeded(sourcePath, targetPath);
@@ -267,6 +272,9 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+            PipelineRunProfiler.SetContext(
+                clipLengthSec: targetClip.length,
+                boneCount: importedModel.GetComponentsInChildren<Transform>(true).Length);
             _pipeline.SetSessionState(
                 FBXVmdPipeline.FBXSessionState.AvatarReady,
                 "Humanoid Avatar 준비 완료",

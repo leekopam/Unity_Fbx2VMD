@@ -21,14 +21,9 @@ namespace Fbx2Vmd.Profiling
         public const string SeverityWarning = "Warning";
         public const string SeverityError = "Error";
 
-        private const float BottleneckShareOfTotal = 0.3f;
-        private const float BottleneckMinAbsMs = 200f;
-        private const float TrendRegressionFactor = 1.5f;
-        private const float TrendRegressionMinDeltaMs = 50f;
-        private const int TrendMinHistory = 3;
-        private const float FrameSpikeFactor = 2f;
-        private const float FrameSpikeMinMs = 33f;
-        private const long GcSpikeMinBytes = 10L * 1024L * 1024L;
+        // 기본값은 ProfilingAnalysisThresholds와 동일하게 유지한다(파일 없을 때의 폴백).
+        private static readonly ProfilingAnalysisThresholds DefaultThresholds =
+            new ProfilingAnalysisThresholds();
 
         /// <summary>
         /// 사용자 대기·프리뷰 상태입니다. 파이프라인 작업 구간이 아니므로 병목/트렌드/GC 판정에서 제외합니다.
@@ -37,6 +32,15 @@ namespace Fbx2Vmd.Profiling
         private static readonly HashSet<string> InteractiveStages = new HashSet<string>(StringComparer.Ordinal)
         {
             "Idle", "Ready", "PreviewPlaying", "PreviewPaused",
+        };
+
+        /// <summary>
+        /// 런 종료를 나타내는 결과 스테이지입니다. 실패·종료 경로의 소요는 런 간 비교 의미가 없어
+        /// 트렌드 판정에서 제외합니다(병목·GC 판정에는 실제 소요이므로 포함합니다).
+        /// </summary>
+        private static readonly HashSet<string> OutcomeStages = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Success", "Failed", "Cancelled", "AbortedByNewRun",
         };
 
         /// <summary>
@@ -80,9 +84,20 @@ namespace Fbx2Vmd.Profiling
             return result;
         }
 
-        private static bool IsInteractiveStage(string stage)
+        public static bool IsInteractiveStage(string stage)
         {
             return InteractiveStages.Contains(stage ?? string.Empty);
+        }
+
+        public static bool IsOutcomeStage(string stage)
+        {
+            return OutcomeStages.Contains(stage ?? string.Empty);
+        }
+
+        /// <summary>트렌드 판정에서 제외할 스테이지인지 판별합니다(사용자 대기 + 종료 스테이지).</summary>
+        private static bool SkipInTrend(string stage)
+        {
+            return IsInteractiveStage(stage) || IsOutcomeStage(stage);
         }
 
         /// <summary>
@@ -136,23 +151,26 @@ namespace Fbx2Vmd.Profiling
         /// 현재 런을 분석합니다. history에는 같은 라벨·머신의 과거 런(최신순 권장)을 넘기고, 없으면 null이나 빈 목록을 넘깁니다.
         /// </summary>
         public static List<ProfilingFinding> Analyze(
-            ProfilingRunRecord current, IReadOnlyList<ProfilingRunRecord> history)
+            ProfilingRunRecord current, IReadOnlyList<ProfilingRunRecord> history,
+            ProfilingAnalysisThresholds thresholds = null)
         {
+            thresholds ??= DefaultThresholds;
             var findings = new List<ProfilingFinding>();
             if (current == null)
             {
                 return findings;
             }
 
-            AnalyzeBottlenecks(current, findings);
-            AnalyzeTrend(current, history, findings);
+            AnalyzeBottlenecks(current, findings, thresholds);
+            AnalyzeTrend(current, history, findings, thresholds);
             AnalyzeFailure(current, findings);
-            AnalyzeFrameSpike(current, findings);
-            AnalyzeGcSpike(current, findings);
+            AnalyzeFrameSpike(current, findings, thresholds);
+            AnalyzeGcSpike(current, findings, thresholds);
             return findings;
         }
 
-        private static void AnalyzeBottlenecks(ProfilingRunRecord current, List<ProfilingFinding> findings)
+        private static void AnalyzeBottlenecks(ProfilingRunRecord current,
+            List<ProfilingFinding> findings, ProfilingAnalysisThresholds t)
         {
             if (current.stages == null || current.totalMs <= 0f)
             {
@@ -165,8 +183,8 @@ namespace Fbx2Vmd.Profiling
                 {
                     continue;
                 }
-                bool shareHit = stage.deltaMs >= current.totalMs * BottleneckShareOfTotal;
-                if (shareHit && stage.deltaMs >= BottleneckMinAbsMs)
+                bool shareHit = stage.deltaMs >= current.totalMs * t.bottleneckShareOfTotal;
+                if (shareHit && stage.deltaMs >= t.bottleneckMinAbsMs)
                 {
                     findings.Add(new ProfilingFinding
                     {
@@ -181,9 +199,10 @@ namespace Fbx2Vmd.Profiling
         }
 
         private static void AnalyzeTrend(
-            ProfilingRunRecord current, IReadOnlyList<ProfilingRunRecord> history, List<ProfilingFinding> findings)
+            ProfilingRunRecord current, IReadOnlyList<ProfilingRunRecord> history,
+            List<ProfilingFinding> findings, ProfilingAnalysisThresholds t)
         {
-            if (history == null || history.Count < TrendMinHistory || current.stages == null)
+            if (history == null || history.Count < t.trendMinHistory || current.stages == null)
             {
                 return;
             }
@@ -199,7 +218,7 @@ namespace Fbx2Vmd.Profiling
 
                 foreach (ProfilingStageSample stage in AggregateStagesByName(past.stages))
                 {
-                    if (IsInteractiveStage(stage.stage))
+                    if (SkipInTrend(stage.stage))
                     {
                         continue;
                     }
@@ -214,20 +233,20 @@ namespace Fbx2Vmd.Profiling
 
             foreach (ProfilingStageSample stage in AggregateStagesByName(current.stages))
             {
-                if (IsInteractiveStage(stage.stage))
+                if (SkipInTrend(stage.stage))
                 {
                     continue;
                 }
                 if (!historyByStage.TryGetValue(stage.stage, out List<float> samples) ||
-                    samples.Count < TrendMinHistory)
+                    samples.Count < t.trendMinHistory)
                 {
                     continue;
                 }
 
                 float median = Median(samples);
                 bool regressed =
-                    stage.deltaMs > median * TrendRegressionFactor &&
-                    stage.deltaMs - median >= TrendRegressionMinDeltaMs;
+                    stage.deltaMs > median * t.trendRegressionFactor &&
+                    stage.deltaMs - median >= t.trendRegressionMinDeltaMs;
                 if (regressed)
                 {
                     findings.Add(new ProfilingFinding
@@ -235,7 +254,7 @@ namespace Fbx2Vmd.Profiling
                         kind = KindTrendRegression,
                         severity = SeverityWarning,
                         stage = stage.stage,
-                        detail = $"트렌드 회귀: {stage.stage} {stage.deltaMs:F0}ms > 과거 중앙값 {median:F0}ms x {TrendRegressionFactor:F1} (표본 {samples.Count}회)",
+                        detail = $"트렌드 회귀: {stage.stage} {stage.deltaMs:F0}ms > 과거 중앙값 {median:F0}ms x {t.trendRegressionFactor:F1} (표본 {samples.Count}회)",
                         suggestedScopes = ScopesFor(stage.stage),
                     });
                 }
@@ -264,7 +283,8 @@ namespace Fbx2Vmd.Profiling
             });
         }
 
-        private static void AnalyzeFrameSpike(ProfilingRunRecord current, List<ProfilingFinding> findings)
+        private static void AnalyzeFrameSpike(ProfilingRunRecord current,
+            List<ProfilingFinding> findings, ProfilingAnalysisThresholds t)
         {
             if (current.sampledFrameCount <= 0 || current.sampledFrameSumMs <= 0f)
             {
@@ -272,34 +292,36 @@ namespace Fbx2Vmd.Profiling
             }
 
             float mean = current.sampledFrameSumMs / current.sampledFrameCount;
-            if (current.sampledFrameMaxMs > mean * FrameSpikeFactor &&
-                current.sampledFrameMaxMs > FrameSpikeMinMs)
+            if (current.sampledFrameMaxMs > mean * t.frameSpikeFactor &&
+                current.sampledFrameMaxMs > t.frameSpikeMinMs)
             {
                 findings.Add(new ProfilingFinding
                 {
                     kind = KindFrameSpike,
                     severity = SeverityWarning,
                     stage = string.Empty,
-                    detail = $"프레임 스파이크: 최대 {current.sampledFrameMaxMs:F1}ms > 평균 {mean:F1}ms x {FrameSpikeFactor:F1} ({current.sampledFrameCount}프레임)",
+                    detail = $"프레임 스파이크: 최대 {current.sampledFrameMaxMs:F1}ms > 평균 {mean:F1}ms x {t.frameSpikeFactor:F1} ({current.sampledFrameCount}프레임)",
                     suggestedScopes = new List<string>(FrameSpikeScopes),
                 });
             }
         }
 
-        private static void AnalyzeGcSpike(ProfilingRunRecord current, List<ProfilingFinding> findings)
+        private static void AnalyzeGcSpike(ProfilingRunRecord current,
+            List<ProfilingFinding> findings, ProfilingAnalysisThresholds t)
         {
             if (current.stages == null)
             {
                 return;
             }
 
+            long minBytes = (long)(t.gcSpikeMinMb * 1024f * 1024f);
             foreach (ProfilingStageSample stage in AggregateStagesByName(current.stages))
             {
                 if (IsInteractiveStage(stage.stage))
                 {
                     continue;
                 }
-                if (stage.gcDeltaBytes > GcSpikeMinBytes)
+                if (stage.gcDeltaBytes > minBytes)
                 {
                     findings.Add(new ProfilingFinding
                     {
@@ -307,6 +329,7 @@ namespace Fbx2Vmd.Profiling
                         severity = SeverityWarning,
                         stage = stage.stage,
                         detail = $"GC 스파이크: {stage.stage} +{stage.gcDeltaBytes / (1024f * 1024f):F1}MB",
+                        suggestedScopes = ScopesFor(stage.stage),
                     });
                 }
             }
@@ -323,7 +346,7 @@ namespace Fbx2Vmd.Profiling
             return scopes;
         }
 
-        private static float Median(List<float> samples)
+        public static float Median(List<float> samples)
         {
             var sorted = samples.OrderBy(v => v).ToArray();
             int mid = sorted.Length / 2;
