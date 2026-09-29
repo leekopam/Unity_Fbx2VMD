@@ -266,6 +266,15 @@ namespace Fbx2Vmd.FBXImporter
             _preprocessSession = null;
             Result = result;
 
+            if (result != null && result.CollectedFailureCount > 0)
+            {
+                Debug.LogWarning(
+                    "[NativePrepDump] 수집 모드 결과가 부분 보정입니다. " +
+                    $"건너뛴 실패 {result.CollectedFailureCount}건 — " +
+                    "native-prep-failures-*.log를 확인하세요.",
+                    this);
+            }
+
             try
             {
                 foreach (NativeSkinningRendererCorrection correction in
