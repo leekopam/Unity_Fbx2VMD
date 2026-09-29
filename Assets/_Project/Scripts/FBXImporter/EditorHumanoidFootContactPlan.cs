@@ -197,10 +197,16 @@ namespace Fbx2Vmd.FBXImporter
                             anchor = Vector3.MoveTowards(emitted[pair.Primary], anchor, anchorTrackStep);
                         int secondary = 1 - pair.Primary;
                         // 보조 접촉은 최종 주 앵커를 기준으로 정렬해 이동 상한에 따른 간격 불일치를 막음.
-                        // 핀 고정된 보조 접촉은 공동 정렬로 앵커를 덮어쓰지 않음.
-                        if (!states[secondary].Pinned)
+                        Vector3 secondaryAnchor = anchor +
+                            Quaternion.AngleAxis(yaw, Vector3.up) * pair.Offset;
+                        // 핀 고정은 원본 추종만 멈추며, 쌍 간격과 양립 불가한 앵커를 그대로 두지 않음.
+                        // 정합 위치로 한 번 접은 뒤 기준점을 현재 원본으로 옮겨 고정 상태를 유지함.
+                        bool secondaryMisaligned = states[secondary].Pinned &&
+                            Vector3.ProjectOnPlane(states[secondary].Anchor - secondaryAnchor,
+                                Vector3.up).magnitude > foot.lossyScale.x * 0.005f;
+                        if (!states[secondary].Pinned || secondaryMisaligned)
                         {
-                            states[secondary].Anchor = anchor + Quaternion.AngleAxis(yaw, Vector3.up) * pair.Offset;
+                            states[secondary].Anchor = secondaryAnchor;
                             states[secondary].SourcePoint = SourcePoint(secondary);
                         }
                         canAlign = true;

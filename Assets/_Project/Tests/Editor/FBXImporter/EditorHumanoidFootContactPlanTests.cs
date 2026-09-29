@@ -147,6 +147,61 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_PinnedSecondaryAnchorOffPairSpan_When_PairForms_Then_AnchorRealigns()
+        {
+            // 앞꿈치 접촉이 먼저 핀 고정된 뒤 뒤꿈치가 합류하면, 핀 위치가 쌍 간격과
+            // 양립 불가할 때 정합 위치로 한 번 보정되고 이후에는 다시 고정되어야 함.
+            using (Rig rig = CreateRig(out Transform foot))
+            {
+                const int frameCount = 6;
+                const float ratio = 1f;
+                var sources = new[] { new Vector3[frameCount], new Vector3[frameCount] };
+                var weights = new Vector2[frameCount];
+                for (int index = 0; index < frameCount; index++)
+                {
+                    sources[0][index] = Vector3.zero;
+                    sources[1][index] = Vector3.forward * 0.2f;
+                    // 프레임 0은 앞꿈치 단독, 이후 양쪽 접촉으로 쌍이 형성됨.
+                    weights[index] = index == 0 ? new Vector2(0f, 1f) : new Vector2(1f, 1f);
+                }
+                Assembly assembly = typeof(FBXVmdPipeline).Assembly;
+                Type policyType = assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootAnchorPolicy", true);
+                Array policies = Array.CreateInstance(policyType, frameCount);
+                object pinned = Enum.ToObject(policyType, 1);
+                for (int index = 0; index < frameCount; index++)
+                    policies.SetValue(pinned, index);
+                // 프레임 0에서만 발을 멀리 두어 앞꿈치 핀 앵커가 쌍 정합 위치에서 벗어나게 함.
+                Action<float> evaluate = time =>
+                {
+                    int frame = Mathf.RoundToInt(time * 60f);
+                    foot.SetPositionAndRotation(
+                        frame == 0 ? new Vector3(0f, 0f, 0.5f) : Vector3.zero,
+                        Quaternion.identity);
+                };
+                Type planType = assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+                MethodInfo build = planType.GetMethod("TryBuild", Flags);
+                object[] args = { foot, rig.Sampler, sources, weights, Quaternion.identity,
+                    ratio, 60f, frameCount / 60f, evaluate, null, null, null, policies, 0f, 0f };
+                Assert.That(build.Invoke(null, args), Is.True);
+                MethodInfo getSample = planType.GetMethod("GetSample", Flags);
+                Vector3 AnchorAt(int channel, float frame)
+                {
+                    object sample = getSample.Invoke(args[9], new object[] { channel, frame });
+                    return (Vector3)sample.GetType().GetField("Anchor", Flags).GetValue(sample);
+                }
+                // 쌍 형성 뒤 보조 앵커는 주 앵커와 실제 밑창 스팬(0.4m)만큼 떨어져야 함.
+                Vector3 rear = AnchorAt(0, 3f), front = AnchorAt(1, 3f);
+                Assert.That(Vector3.Distance(rear, front), Is.EqualTo(0.4f).Within(0.02f),
+                    "핀 고정 보조 앵커가 쌍 간격과 어긋나면 정합 위치로 보정되어야 함");
+                // 보정 뒤에는 다시 고정되어 프레임 간 움직이지 않아야 함.
+                Assert.That(Vector3.Distance(AnchorAt(1, 3f), AnchorAt(1, 4f)),
+                    Is.LessThan(0.000001f));
+            }
+        }
+
+        [Test]
         public void Given_ContactPointIdentityChange_When_Interpolating_Then_SwitchesDiscretely()
         {
             // 인접 프레임의 접촉점 신원이 다르면 지면과 무관한 가상점을 보간하지 않고
