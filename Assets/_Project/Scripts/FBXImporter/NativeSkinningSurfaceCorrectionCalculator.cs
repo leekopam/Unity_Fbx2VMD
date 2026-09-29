@@ -120,6 +120,9 @@ namespace Fbx2Vmd.FBXImporter
         private const float MinimumNormalSquaredMagnitude = 0.0000000000000001f;
         private static readonly CorrectionConfiguration StrongConfiguration =
             new CorrectionConfiguration(640, 64, 32, 0.03f, 0.055f);
+        // 예산 크기에 따라 수렴 지점이 달라지므로 국소 최적해 정체 시 축소 예산으로 재시도한다.
+        private static readonly CorrectionConfiguration StrongRetryConfiguration =
+            new CorrectionConfiguration(640, 64, 32, 0.03f, 0.02f);
         private static readonly CorrectionConfiguration FastConfiguration =
             new CorrectionConfiguration(80, 16, 0, 0.02f, 0.002512f);
 
@@ -173,14 +176,35 @@ namespace Fbx2Vmd.FBXImporter
             NativeSkinningSurfaceContract contract,
             out NativeSkinningSurfaceCorrectionResult result)
         {
-            return TryCalculate(
-                baselineVertices,
-                baselineVertices,
-                contract,
-                StrongConfiguration,
-                false,
-                false,
-                out result);
+            if (!TryCalculate(
+                    baselineVertices,
+                    baselineVertices,
+                    contract,
+                    StrongConfiguration,
+                    false,
+                    false,
+                    out result))
+            {
+                return false;
+            }
+            if (IsWithinQuality(result, contract, StrongConfiguration))
+            {
+                return true;
+            }
+            // 축소 예산 재시도가 더 엄격한 품질 게이트를 통과하면 그 결과를 채택한다.
+            if (TryCalculate(
+                    baselineVertices,
+                    baselineVertices,
+                    contract,
+                    StrongRetryConfiguration,
+                    false,
+                    false,
+                    out NativeSkinningSurfaceCorrectionResult retry) &&
+                IsWithinQuality(retry, contract, StrongRetryConfiguration))
+            {
+                result = retry;
+            }
+            return true;
         }
 
         internal static bool AreVerticesFinite(

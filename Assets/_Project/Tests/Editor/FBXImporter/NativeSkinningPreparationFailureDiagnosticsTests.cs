@@ -23,6 +23,7 @@ namespace Tests.Editor.FBXImporter
         [TestCase("tetoris_001.fbx", 1)]
         [TestCase("tetoris_001.fbx", 117)]
         [TestCase("tetoris_001.fbx", 153)]
+        [TestCase("tetoris_001.fbx", 562)]
         [TestCase("satisfaction_2.fbx", 2)]
         [Explicit("로컬 FBX fixture가 필요한 실패 프레임 진단 계측입니다.")]
         public void Given_FailingFrame_When_PreparingNativeSkinning_Then_DumpsContractDiagnostics(
