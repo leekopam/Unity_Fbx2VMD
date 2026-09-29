@@ -1,4 +1,5 @@
 using System;
+using Fbx2Vmd.Profiling;
 using Fbx2Vmd.Recording;
 using UnityEngine;
 
@@ -86,6 +87,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal bool Tick(float simulationDeltaTimeSeconds)
         {
+            using var perfScope = PerfScope.Measure("HumanoidMotionRecordingController.Tick");
             // Recorder가 첫 0자세를 기록할 때까지 시뮬레이션을 정지하므로 함께 대기함.
             if (!IsRecording || simulationDeltaTimeSeconds <= 0f)
                 return false;

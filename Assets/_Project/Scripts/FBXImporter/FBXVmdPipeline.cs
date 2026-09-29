@@ -8,6 +8,7 @@ using Fbx2Vmd.FileSystem;
 using Fbx2Vmd.Settings;
 using Fbx2Vmd.Recording;
 using Fbx2Vmd.Character;
+using Fbx2Vmd.Profiling;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -1797,6 +1798,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private void LateUpdate()
         {
+            PipelineRunProfiler.SampleFrame(Time.unscaledDeltaTime);
             if (!TickNativeSkinningCorrectionPreparation())
             {
                 TickHumanoidMotionPlayback(Time.unscaledDeltaTime);
@@ -2292,8 +2294,9 @@ namespace Fbx2Vmd.FBXImporter
             await _conversionCoordinator.ConvertAsync(new FBXConversionRequest(sourcePath));
         }
 
-        internal void BeginConversionSession()
+        internal void BeginConversionSession(string sourceLabel = null)
         {
+            PipelineRunProfiler.BeginRun(sourceLabel ?? string.Empty);
             EnsureServicesInitialized();
             CleanupHumanoidMotionPlayback();
             _idlePoseGuard?.Apply();
@@ -2669,6 +2672,12 @@ namespace Fbx2Vmd.FBXImporter
         internal void SetSessionState(FBXSessionState state, string message, float progress, bool shouldLog = true)
         {
             _sessionState = state;
+            PipelineRunProfiler.NoteStage(
+                state.ToString(),
+                message,
+                state == FBXSessionState.Success
+                || state == FBXSessionState.Failed
+                || state == FBXSessionState.Cancelled);
             LastSessionMessage = message ?? string.Empty;
             if (shouldLog)
             {
@@ -2789,6 +2798,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool TickNativeSkinningCorrectionPreparation()
         {
+            using var perfScope = PerfScope.Measure("FBXVmdPipeline.TickNativeSkinningCorrectionPreparation");
             if (_nativeSkinningCorrectionPlaybackDriver == null)
             {
                 return false;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Fbx2Vmd.Profiling;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -116,6 +117,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal bool BeginPreparation()
         {
+            using var perfScope = PerfScope.Measure("NativeSkinningCorrectionPlaybackDriver.BeginPreparation");
             if (!IsConfigured || IsPreparing)
             {
                 return false;

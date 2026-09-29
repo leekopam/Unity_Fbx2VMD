@@ -48,6 +48,10 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           # 손가락 근육 클램핑, VMD 명명 계약 등 FBX 없이 실행 가능한 테스트만 포함
           # PlayMode/Smoke 테스트는 FBX가 필요하므로 로컬에서만 실행한다
+          # 성능 회귀 게이팅은 Fbx2Vmd.Profiling.Editor.Tests(PerfBaselineGuard)가 담당한다.
+          # 베이스라인은 머신(deviceModel)별로 분리되어 CI 러너의 베이스라인이 없으면 첫 측정으로 통과한다.
+          # PerfScope 호출 비용에는 베이스라인 무관 절대 상한(100µs)이 적용된다.
+          # Assimp 네이티브 임포트 회귀 테스트는 Windows 전용 DLL이므로 Linux CI에서는 스킵된다.
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v6
@@ -56,3 +60,12 @@ jobs:
           name: EditMode-Test-Results
           path: test-results
           retention-days: 14
+
+      - name: Upload Profiling Reports
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: Profiling-Reports
+          path: Artifacts/Profiling
+          retention-days: 30
+          if-no-files-found: ignore

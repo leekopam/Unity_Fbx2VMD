@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Fbx2Vmd.Profiling;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -69,6 +70,7 @@ namespace Fbx2Vmd.FBXImporter
 
         public static void SetupHumanoid(GameObject targetRoot, Dictionary<string, string> explicitMapping)
         {
+            using var perfScope = PerfScope.Measure("HumanoidAvatarBuilder.SetupHumanoid");
             Animator animator = targetRoot.GetComponent<Animator>();
             if (animator == null) animator = targetRoot.AddComponent<Animator>();
 

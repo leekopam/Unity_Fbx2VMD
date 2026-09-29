@@ -714,7 +714,7 @@ namespace Tests.Editor.FBXImporter
                 "internal async void ProcessFBXAsync(string sourcePath)",
                 System.StringComparison.Ordinal);
             int entryEnd = pipelineSource.IndexOf(
-                "internal void BeginConversionSession()",
+                "internal void BeginConversionSession(",
                 entryStart,
                 System.StringComparison.Ordinal);
             string entrySource = pipelineSource.Substring(entryStart, entryEnd - entryStart);
@@ -768,7 +768,7 @@ namespace Tests.Editor.FBXImporter
 
             string[] orderedCalls =
             {
-                "_pipeline.BeginConversionSession();",
+                "_pipeline.BeginConversionSession(",
                 "ImportRuntimeModelAsync(",
                 "_pipeline.PrepareGhostModel(",
                 "TryPrepareRuntimeAnimation(",

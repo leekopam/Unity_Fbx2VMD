@@ -735,7 +735,7 @@ namespace Fbx2Vmd.FBXImporter
                 return await registeredCoordinator.RunSessionAsync(request);
             }
 
-            _pipeline.BeginConversionSession();
+            _pipeline.BeginConversionSession(System.IO.Path.GetFileName(request.SourcePath));
             FBXImportController importController = _importController ?? _pipeline.ImportController;
 
             try
