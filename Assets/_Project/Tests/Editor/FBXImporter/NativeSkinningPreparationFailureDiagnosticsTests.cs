@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -23,6 +24,7 @@ namespace Tests.Editor.FBXImporter
         [TestCase("tetoris_001.fbx", 1)]
         [TestCase("tetoris_001.fbx", 117)]
         [TestCase("tetoris_001.fbx", 153)]
+        [TestCase("tetoris_001.fbx", 553)]
         [TestCase("tetoris_001.fbx", 562)]
         [TestCase("satisfaction_2.fbx", 2)]
         [Explicit("로컬 FBX fixture가 필요한 실패 프레임 진단 계측입니다.")]
@@ -43,6 +45,14 @@ namespace Tests.Editor.FBXImporter
                     AssetDatabase.LoadAssetAtPath<GameObject>(clipAssetPath);
                 Invoke(controller, "PrepareWithArmDirectionReference",
                     animator, clip, sourceModel);
+                // 제품 경로(FBXVmdPipeline)는 지면 반응 접지를 켜고 준비하므로 동일하게 맞춤.
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                // 제품 준비 경로처럼 0번 프레임부터 순차 탐색해 접촉 유지 상태를 동일하게 누적함.
+                for (int frameIndex = 0; frameIndex < failingFrame; frameIndex++)
+                {
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frameIndex),
+                        Is.True, $"frame {frameIndex} 순차 탐색이 필요합니다.");
+                }
                 float timeSeconds = failingFrame / clip.frameRate;
                 var report = new StringBuilder();
                 report.Append(
@@ -79,7 +89,11 @@ namespace Tests.Editor.FBXImporter
                         renderer.BakeMesh(baked, false);
                         verticesByRenderer[renderer] = baked.vertices;
                     }
-                    int failingContractCount = DumpFailingContracts(
+                    // 제품 실패 로그의 대표 쌍(contract 0의 pair 182) 각도를 측정해 입력 동일성을 검증함.
+                DumpPairBaseline(contracts, verticesByRenderer, report);
+                    // 제품 경로가 덤프한 실패 입력이 있으면 EditMode 입력과 비교하고 동일 입력으로 솔버를 재현함.
+                    CompareWithProductDump(failingFrame, contracts, verticesByRenderer, report);
+                int failingContractCount = DumpFailingContracts(
                         contracts, verticesByRenderer, report);
                     Debug.Log(report.ToString());
                     Assert.That(failingContractCount, Is.Zero,
@@ -314,6 +328,51 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        // strain 한계 바인딩 여부를 확인하기 위해 신장 예산만 키워 재시도함.
+        private static void DumpStrainBudgetRetries(
+            Type calculatorType,
+            Vector3[] vertices,
+            object contract,
+            StringBuilder report)
+        {
+            Type configurationType = calculatorType.GetNestedType(
+                "CorrectionConfiguration", BindingFlags.NonPublic);
+            MethodInfo tryCalculate = calculatorType.GetMethod(
+                "TryCalculate", BindingFlags.Static | BindingFlags.NonPublic);
+            foreach (float strain in new[] { 0.035f, 0.04f, 0.05f, 0.08f })
+            {
+                object configuration = Activator.CreateInstance(
+                    configurationType,
+                    BindingFlags.Instance | BindingFlags.NonPublic,
+                    null,
+                    new object[] { 640, 64, 32, strain, 0.055f },
+                    null);
+                object[] retryArguments =
+                    { vertices, vertices, contract, configuration, false, false, null };
+                try
+                {
+                    bool calculated = (bool)tryCalculate.Invoke(null, retryArguments);
+                    object retry = retryArguments[6];
+                    if (!calculated || retry == null)
+                    {
+                        report.Append($"\n strainRetry[{strain:F3}]=uncalculated");
+                        continue;
+                    }
+                    report.Append(
+                        $"\n strainRetry[{strain:F3}]" +
+                        $" residual={ReadProperty<int>(retry, "ResidualSharpFoldCount")}" +
+                        $" new={ReadProperty<int>(retry, "NewSharpFoldCount")}" +
+                        $" maxDisp={ReadProperty<float>(retry, "MaximumVertexDisplacement"):F4}" +
+                        $" strain={ReadProperty<float>(retry, "MaximumEdgeLengthStrain"):F4}" +
+                        $" safe={ReadProperty<bool>(retry, "IsSafe")}");
+                }
+                catch (Exception exception)
+                {
+                    report.Append($"\n strainRetry[{strain:F3}]=threw:{exception.Message}");
+                }
+            }
+        }
+
         // 신규 접힘이 생긴 강한 보정 결과를 초기값으로 다시 계산해 해소 여부를 측정함.
         private static void DumpSecondPass(
             Type calculatorType,
@@ -429,6 +488,272 @@ namespace Tests.Editor.FBXImporter
                 newDumped++;
             }
             report.Append($" newFoldPairsDumped={newDumped}");
+        }
+
+        // 제품 실패 로그의 baseline 각도와 비교해 진단 입력이 제품과 같은지 판별함.
+        private static void DumpPairBaseline(
+            IReadOnlyList<object> contracts,
+            IReadOnlyDictionary<SkinnedMeshRenderer, Vector3[]> verticesByRenderer,
+            StringBuilder report)
+        {
+            foreach (object contract in contracts)
+            {
+                string side = ReadProperty<object>(contract, "Side")?.ToString();
+                int probeIndex = side == "Left" ? 182 : side == "Right" ? 286 : -1;
+                Array facePairs = ReadProperty<Array>(contract, "FacePairs");
+                if (probeIndex < 0 || facePairs.Length <= probeIndex)
+                {
+                    continue;
+                }
+                SkinnedMeshRenderer renderer =
+                    ReadProperty<SkinnedMeshRenderer>(contract, "Renderer");
+                Vector3[] vertices = verticesByRenderer[renderer];
+                object pair = facePairs.GetValue(probeIndex);
+                if (TryMeasureAngle(vertices, pair, out float baselineAngle))
+                {
+                    report.Append(
+                        $"\n probe {side} pair[{probeIndex}] base={baselineAngle:F2}" +
+                        $" rest={ReadProperty<float[]>(contract, "RestAnglesDegrees")[probeIndex]:F2}");
+                }
+                // 제품 경로와 동일한 강한 보정을 돌려 실패 쌍의 보정 각도를 직접 비교함.
+                Type calculatorType = RequireProductType(
+                    "NativeSkinningSurfaceCorrectionCalculator");
+                object[] strongArguments = { vertices, contract, null };
+                bool strongCalculated = (bool)InvokeStatic(
+                    calculatorType, "TryCalculateStrongValidatedFrame", strongArguments);
+                object strongCorrection = strongArguments[2];
+                if (!strongCalculated || strongCorrection == null)
+                {
+                    report.Append(
+                        $"\n probe {side} pair[{probeIndex}] strong=uncalculated");
+                    continue;
+                }
+                IReadOnlyList<Vector3> correctedVertices =
+                    (IReadOnlyList<Vector3>)ReadProperty<object>(
+                        strongCorrection, "CorrectedVertices");
+                report.Append(
+                    $"\n probe {side} pair[{probeIndex}]" +
+                    $" corr={(TryMeasureAngle(correctedVertices, pair, out float corrected) ? $"{corrected:F2}" : "n/a")}" +
+                    $" residual={ReadProperty<int>(strongCorrection, "ResidualSharpFoldCount")}" +
+                    $" maxDisp={ReadProperty<float>(strongCorrection, "MaximumVertexDisplacement"):F4}" +
+                    $" strain={ReadProperty<float>(strongCorrection, "MaximumEdgeLengthStrain"):F4}" +
+                    $" safe={ReadProperty<bool>(strongCorrection, "IsSafe")}" +
+                    $" quality={InvokeStatic(calculatorType, "IsWithinStrongQuality", new[] { strongCorrection, contract })}");
+            }
+        }
+
+        // 제품 경로가 덤프한 실패 입력을 읽어 EditMode 입력과 정점 단위로 비교하고
+        // 덤프 입력으로 강한 보정을 재현해 제품 실패 재현 여부를 확인함.
+        private static void CompareWithProductDump(
+            int failingFrame,
+            IReadOnlyList<object> contracts,
+            IReadOnlyDictionary<SkinnedMeshRenderer, Vector3[]> verticesByRenderer,
+            StringBuilder report)
+        {
+            string directory = Path.GetFullPath(Path.Combine(
+                Application.dataPath,
+                "../Docs/Workflow/Local/runtime/native-prep-dumps"));
+            foreach (object contract in contracts)
+            {
+                SkinnedMeshRenderer renderer =
+                    ReadProperty<SkinnedMeshRenderer>(contract, "Renderer");
+                string dumpPath = Path.Combine(directory,
+                    $"f{failingFrame}-{renderer.name}.bin");
+                if (!File.Exists(dumpPath))
+                {
+                    continue;
+                }
+
+                Vector3[] dumped;
+                using (var reader = new BinaryReader(File.OpenRead(dumpPath)))
+                {
+                    int count = reader.ReadInt32();
+                    dumped = new Vector3[count];
+                    for (int index = 0; index < count; index++)
+                    {
+                        dumped[index] = new Vector3(
+                            reader.ReadSingle(),
+                            reader.ReadSingle(),
+                            reader.ReadSingle());
+                    }
+                }
+                Vector3[] editModeVertices = verticesByRenderer[renderer];
+                if (dumped.Length != editModeVertices.Length)
+                {
+                    report.Append(
+                        $"\n dump[{renderer.name}] 길이 불일치 product={dumped.Length} edit={editModeVertices.Length}");
+                    continue;
+                }
+
+                // 정점 단위 최대 차이와 상위 인덱스를 기록함.
+                var diffs = Enumerable.Range(0, dumped.Length)
+                    .Select(index => (index, diff: Vector3.Distance(
+                        dumped[index], editModeVertices[index])))
+                    .OrderByDescending(entry => entry.diff)
+                    .ToArray();
+                report.Append(
+                    $"\n dump[{renderer.name}] maxDiff={diffs[0].diff:F6}" +
+                    $" diffCount(>1e-4)={diffs.Count(entry => entry.diff > 0.0001f)}/{dumped.Length}" +
+                    $" top={string.Join(",", diffs.Take(8).Select(entry => $"v{entry.index}:{entry.diff:F4}"))}");
+
+                // 제품 입력으로 강한 보정을 돌려 실패가 재현되는지 확인함.
+                Type calculatorType = RequireProductType(
+                    "NativeSkinningSurfaceCorrectionCalculator");
+                object[] strongArguments = { dumped, contract, null };
+                bool strongCalculated = (bool)InvokeStatic(
+                    calculatorType, "TryCalculateStrongValidatedFrame", strongArguments);
+                object strongCorrection = strongArguments[2];
+                if (!strongCalculated || strongCorrection == null)
+                {
+                    report.Append(
+                        $"\n dump[{renderer.name}] strong=uncalculated");
+                    continue;
+                }
+                report.Append(
+                    $"\n dump[{renderer.name}] strong" +
+                    $" residual={ReadProperty<int>(strongCorrection, "ResidualSharpFoldCount")}" +
+                    $" new={ReadProperty<int>(strongCorrection, "NewSharpFoldCount")}" +
+                    $" maxDisp={ReadProperty<float>(strongCorrection, "MaximumVertexDisplacement"):F4}" +
+                    $" strain={ReadProperty<float>(strongCorrection, "MaximumEdgeLengthStrain"):F4}" +
+                    $" quality={InvokeStatic(calculatorType, "IsWithinStrongQuality", new[] { strongCorrection, contract })}");
+
+                // 덤프 입력에서 실패하면 비율 스윕으로 해소 가능한 예산을 탐색함.
+                if (ReadProperty<int>(strongCorrection, "ResidualSharpFoldCount") > 0)
+                {
+                    DumpDisplacementBudgetRetries(
+                        calculatorType, dumped, contract, strongCorrection, report);
+                    DumpStrainBudgetRetries(
+                        calculatorType, dumped, contract, report);
+                }
+
+                // 임계 부근 쌍의 baseline 각도를 product 입력과 edit 입력에서 비교함.
+                Array facePairs = ReadProperty<Array>(contract, "FacePairs");
+                float[] restAngles =
+                    ReadProperty<float[]>(contract, "RestAnglesDegrees");
+                float maximumRestAngle = ReadConst<float>(
+                    "NativeSkinningSurfaceDefectDetector",
+                    "MaximumCorrectableRestAngleDegrees");
+                // 제품 실패 쌍(pair 182)의 덤프 baseline 각도를 직접 계측함.
+                string sideName = ReadProperty<object>(contract, "Side")?.ToString();
+                int probeIndex = sideName == "Left" ? 182 : sideName == "Right" ? 286 : -1;
+                if (probeIndex >= 0 && facePairs.Length > probeIndex &&
+                    TryMeasureAngle(dumped, facePairs.GetValue(probeIndex),
+                        out float dumpedProbeAngle))
+                {
+                    TryMeasureAngle(editModeVertices,
+                        facePairs.GetValue(probeIndex), out float editProbeAngle);
+                    report.Append(
+                        $"\n dump[{renderer.name}] probe pair[{probeIndex}]" +
+                        $" prodBase={dumpedProbeAngle:F2} editBase={editProbeAngle:F2}");
+                }
+                var diverging = new List<string>();
+                for (int pairIndex = 0; pairIndex < facePairs.Length; pairIndex++)
+                {
+                    if (restAngles[pairIndex] > maximumRestAngle ||
+                        !TryMeasureAngle(dumped, facePairs.GetValue(pairIndex),
+                            out float productAngle) ||
+                        !TryMeasureAngle(editModeVertices,
+                            facePairs.GetValue(pairIndex),
+                            out float editAngle))
+                    {
+                        continue;
+                    }
+                    if (Mathf.Abs(productAngle - editAngle) > 0.05f &&
+                        (productAngle > 140f || editAngle > 140f))
+                    {
+                        diverging.Add(
+                            $"p{pairIndex}:prod={productAngle:F2}/edit={editAngle:F2}");
+                    }
+                }
+                report.Append(
+                    $"\n dump[{renderer.name}] divergingPairs={diverging.Count}" +
+                    (diverging.Count > 0
+                        ? " " + string.Join(" ", diverging.Take(12))
+                        : string.Empty));
+
+                // 평행이동 민감도 분리: edit 입력을 product 오프셋만큼 이동시켜 솔버 재현 여부를 봄.
+                Vector3 offset = dumped[0] - editModeVertices[0];
+                Vector3[] shiftedEdit = editModeVertices
+                    .Select(vertex => vertex + offset)
+                    .ToArray();
+                object[] shiftedArguments = { shiftedEdit, contract, null };
+                bool shiftedCalculated = (bool)InvokeStatic(
+                    calculatorType, "TryCalculateStrongValidatedFrame",
+                    shiftedArguments);
+                object shiftedCorrection = shiftedArguments[2];
+                string shiftedStrong = shiftedCalculated && shiftedCorrection != null
+                    ? $"residual={ReadProperty<int>(shiftedCorrection, "ResidualSharpFoldCount")} maxDisp={ReadProperty<float>(shiftedCorrection, "MaximumVertexDisplacement"):F4} strain={ReadProperty<float>(shiftedCorrection, "MaximumEdgeLengthStrain"):F4} quality={InvokeStatic(calculatorType, "IsWithinStrongQuality", new[] { shiftedCorrection, contract })}"
+                    : "uncalculated";
+                report.Append(
+                    $"\n dump[{renderer.name}] shiftedEdit(offset={offset.magnitude:F4})" +
+                    $" strong={shiftedStrong}");
+
+                // 계약 평가 정점 범위에서의 pose 차이를 분리 측정함.
+                int[] evaluated =
+                    ReadProperty<int[]>(contract, "EvaluatedVertexIndices");
+                if (evaluated != null && evaluated.Length > 0)
+                {
+                    float armMax = evaluated.Max(index =>
+                        Vector3.Distance(dumped[index], editModeVertices[index]));
+                    var evaluatedSet = new HashSet<int>(evaluated);
+                    float otherMax = Enumerable.Range(0, dumped.Length)
+                        .Where(index => !evaluatedSet.Contains(index))
+                        .Max(index => Vector3.Distance(
+                            dumped[index], editModeVertices[index]));
+                    report.Append(
+                        $"\n dump[{renderer.name}] regionDiff" +
+                        $" evaluated={armMax:F4} other={otherMax:F4}" +
+                        $" evaluatedCount={evaluated.Length}");
+                }
+
+                // 강체 변환 여부: 정점 쌍 거리가 보존되면 product=edit+강체 변환.
+                int rigiditySamples = 0;
+                float rigidityMaxError = 0f;
+                var rng = new System.Random(182);
+                for (int sample = 0; sample < 200; sample++)
+                {
+                    int a = rng.Next(dumped.Length);
+                    int b = rng.Next(dumped.Length);
+                    if (a == b)
+                    {
+                        continue;
+                    }
+                    float error = Mathf.Abs(
+                        Vector3.Distance(dumped[a], dumped[b]) -
+                        Vector3.Distance(
+                            editModeVertices[a], editModeVertices[b]));
+                    rigidityMaxError = Mathf.Max(rigidityMaxError, error);
+                    rigiditySamples++;
+                }
+                report.Append(
+                    $"\n dump[{renderer.name}] rigidity" +
+                    $" samples={rigiditySamples} maxPairDistErr={rigidityMaxError:F5}");
+
+                // 회전 민감도: edit 정점을 임의 축으로 소량 회전 후 솔버 재현 여부.
+                Vector3 centroid = Vector3.zero;
+                foreach (Vector3 vertex in editModeVertices)
+                {
+                    centroid += vertex;
+                }
+                centroid /= editModeVertices.Length;
+                Quaternion probeRotation = Quaternion.AngleAxis(
+                    4f, Vector3.up);
+                Vector3[] rotatedEdit = editModeVertices
+                    .Select(vertex => centroid +
+                        probeRotation * (vertex - centroid))
+                    .ToArray();
+                object[] rotatedArguments = { rotatedEdit, contract, null };
+                bool rotatedCalculated = (bool)InvokeStatic(
+                    calculatorType, "TryCalculateStrongValidatedFrame",
+                    rotatedArguments);
+                object rotatedCorrection = rotatedArguments[2];
+                string rotatedStrong = rotatedCalculated && rotatedCorrection != null
+                    ? $"residual={ReadProperty<int>(rotatedCorrection, "ResidualSharpFoldCount")} maxDisp={ReadProperty<float>(rotatedCorrection, "MaximumVertexDisplacement"):F4} strain={ReadProperty<float>(rotatedCorrection, "MaximumEdgeLengthStrain"):F4} quality={InvokeStatic(calculatorType, "IsWithinStrongQuality", new[] { rotatedCorrection, contract })}"
+                    : "uncalculated";
+                report.Append(
+                    $"\n dump[{renderer.name}] rotatedEdit(4deg)" +
+                    $" strong={rotatedStrong}");
+            }
         }
 
         private static string DescribePairVertices(

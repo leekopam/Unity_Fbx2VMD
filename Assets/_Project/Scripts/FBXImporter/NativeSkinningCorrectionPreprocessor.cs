@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -362,6 +363,10 @@ namespace Fbx2Vmd.FBXImporter
                             ? "none"
                             : calculatedCorrections[index]
                                 .ResidualSharpFoldCount.ToString())));
+            TryDumpFailureBaselineVertices(
+                frameIndex,
+                failedContract.Renderer,
+                vertices);
             if (failedCorrection != null)
             {
                 errorMessage +=
@@ -404,6 +409,50 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
             return false;
+        }
+
+        // 진단용: 플래그 파일이 있을 때만 실패 프레임의 입력 정점을 덤프함.
+        private static void TryDumpFailureBaselineVertices(
+            int frameIndex,
+            SkinnedMeshRenderer renderer,
+            IReadOnlyList<Vector3> vertices)
+        {
+            try
+            {
+                string directory = Path.GetFullPath(Path.Combine(
+                    Application.dataPath,
+                    "../Docs/Workflow/Local/runtime/native-prep-dumps"));
+                if (!File.Exists(
+                        Path.Combine(directory, "native-prep-dump.flag")))
+                {
+                    return;
+                }
+                Directory.CreateDirectory(directory);
+                // GameObject 이름에는 파일명 비허용 문자(경로 구분자 포함)가 올 수 있어 정제한다.
+                string safeName = renderer != null ? renderer.name : "null";
+                foreach (char invalid in Path.GetInvalidFileNameChars())
+                {
+                    safeName = safeName.Replace(invalid, '_');
+                }
+                string path = Path.Combine(directory,
+                    $"f{frameIndex}-{safeName}.bin");
+                using var writer = new BinaryWriter(File.Create(path));
+                writer.Write(vertices.Count);
+                foreach (Vector3 vertex in vertices)
+                {
+                    writer.Write(vertex.x);
+                    writer.Write(vertex.y);
+                    writer.Write(vertex.z);
+                }
+                Debug.Log(
+                    $"[NativePrepDump] frame={frameIndex} renderer={renderer.name} " +
+                    $"verts={vertices.Count} path={path}");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"[NativePrepDump] 실패 입력 덤프 기록 실패: {exception.Message}");
+            }
         }
 
         private void Complete()
