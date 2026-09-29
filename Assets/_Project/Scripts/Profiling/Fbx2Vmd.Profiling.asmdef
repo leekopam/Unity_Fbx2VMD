@@ -1,0 +1,14 @@
+{
+    "name": "Fbx2Vmd.Profiling",
+    "rootNamespace": "Fbx2Vmd.Profiling",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

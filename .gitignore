@@ -127,6 +127,10 @@ crashlytics-build.properties
 Assets/_Project/FBX/
 Assets/Resources/Import_FBX/
 
+# CI 성능 테스트용 소형 FBX 픽스처만 예외로 추적한다.
+!Assets/_Project/Tests/PerfFixtures/
+!Assets/_Project/Tests/PerfFixtures/**
+
 # MMD4Mecanim iOS binary ignore
 Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 
@@ -284,6 +288,10 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 /CheckTextIntegrity.bat
 /scripts/harness/
 /artifacts/
+/Artifacts/
+
+# Playwright MCP 작업 산출물(스크린샷/스냅샷)은 추적하지 않는다.
+/.playwright-mcp/
 /DOCS/Workflow/Tools/Share/scripts/harness/
 /Docs/Workflow/Tools/Share/scripts/harness/
 /docs/Workflow/Tools/Share/scripts/harness/

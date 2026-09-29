@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using System.IO;
 using Fbx2Vmd.FileSystem;
+using Fbx2Vmd.Profiling;
 
 namespace Fbx2Vmd.FBXImporter
 {
@@ -31,6 +32,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal string CopyToControlledImportFolder(string sourcePath)
         {
+            using var perfScope = PerfScope.Measure("FBXImportController.CopyToControlledImportFolder");
             string targetDir = GetControlledImportDirectory();
             Directory.CreateDirectory(targetDir);
 
@@ -120,7 +122,12 @@ namespace Fbx2Vmd.FBXImporter
                 FBXVmdPipeline.FBXSessionState.LoadingFbx,
                 "FBX 로드 중",
                 0.25f);
-            GameObject importedModel = await _importModelAsync(targetPath);
+            GameObject importedModel;
+            // Assimp 네이티브 임포트는 워커 스레드에서 실행되므로 GC 지표는 호출 스레드 기준만 남는다(문서화된 한계).
+            using (PerfScope.Measure("FBXImportController.ImportModelAsync"))
+            {
+                importedModel = await _importModelAsync(targetPath);
+            }
             if (importedModel == null)
             {
                 return FBXModelImportResult.Fail("FBX 로드에 실패했습니다.");
@@ -131,6 +138,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static Dictionary<string, string> LoadBoneMappingRuntime()
         {
+            using var perfScope = PerfScope.Measure("FBXImportController.LoadBoneMappingRuntime");
             Dictionary<string, string> mapping = new Dictionary<string, string>();
             string loadName = Path.GetFileNameWithoutExtension(BONE_MAPPING_FILE);
             TextAsset mappingAsset = Resources.Load<TextAsset>(loadName);
@@ -270,6 +278,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static AnimationClip ExtractPrimaryClip(Animation ghostAnimation, bool shouldLogRuntimeAnimation)
         {
+            using var perfScope = PerfScope.Measure("FBXImportController.ExtractPrimaryClip");
             if (ghostAnimation == null || ghostAnimation.clip == null)
             {
                 return null;
@@ -298,6 +307,7 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
         internal void ConfigureEditorImportSettingsIfNeeded(string sourcePath, string targetPath)
         {
+            using var perfScope = PerfScope.Measure("FBXImportController.ConfigureEditorImportSettingsIfNeeded");
             if (ShouldConfigureEditorImportSettings(sourcePath, targetPath, Application.dataPath))
             {
                 ConfigureImportSettings(targetPath);

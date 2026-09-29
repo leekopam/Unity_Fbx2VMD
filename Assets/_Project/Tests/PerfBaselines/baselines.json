@@ -1,0 +1,16 @@
+{
+    "entries": [
+        {
+            "name": "Assimp.Inspect.TestFbx|MS-7D77 (Micro-Star International Co., Ltd.)",
+            "valueMs": 147.4403076171875
+        },
+        {
+            "name": "BoneMapping.Load|MS-7D77 (Micro-Star International Co., Ltd.)",
+            "valueMs": 0.4487999975681305
+        },
+        {
+            "name": "PerfScope.PerCall|MS-7D77 (Micro-Star International Co., Ltd.)",
+            "valueMs": 0.1889999955892563
+        }
+    ]
+}

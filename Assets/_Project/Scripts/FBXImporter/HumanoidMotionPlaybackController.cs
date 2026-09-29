@@ -1,4 +1,5 @@
 using System;
+using Fbx2Vmd.Profiling;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -296,6 +297,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal void Tick(float deltaTimeSeconds)
         {
+            using var perfScope = PerfScope.Measure("HumanoidMotionPlaybackController.Tick");
             ValidateTime(deltaTimeSeconds, nameof(deltaTimeSeconds));
             if (State != HumanoidMotionPlaybackState.Playing)
             {

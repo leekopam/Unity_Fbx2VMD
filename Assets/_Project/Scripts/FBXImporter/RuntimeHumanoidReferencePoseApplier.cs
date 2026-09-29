@@ -1,3 +1,4 @@
+using Fbx2Vmd.Profiling;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -8,6 +9,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static bool TryApply(GameObject root, AnimationClip clip)
         {
+            using var perfScope = PerfScope.Measure("RuntimeHumanoidReferencePoseApplier.TryApply");
             if (root == null || clip == null)
             {
                 return false;

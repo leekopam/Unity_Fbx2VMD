@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# CI 성능 픽스처는 바이너리로 고정한다(ASCII FBX라도 줄바꿈 정규화를 막는다).
+Assets/_Project/Tests/PerfFixtures/*.fbx binary
