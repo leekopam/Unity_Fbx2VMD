@@ -26,6 +26,7 @@ namespace Tests.Editor.FBXImporter
         [TestCase("tetoris_001.fbx", 153)]
         [TestCase("tetoris_001.fbx", 553)]
         [TestCase("tetoris_001.fbx", 562)]
+        [TestCase("tetoris_001.fbx", 563)]
         [TestCase("satisfaction_2.fbx", 2)]
         [Explicit("로컬 FBX fixture가 필요한 실패 프레임 진단 계측입니다.")]
         public void Given_FailingFrame_When_PreparingNativeSkinning_Then_DumpsContractDiagnostics(
@@ -339,7 +340,7 @@ namespace Tests.Editor.FBXImporter
                 "CorrectionConfiguration", BindingFlags.NonPublic);
             MethodInfo tryCalculate = calculatorType.GetMethod(
                 "TryCalculate", BindingFlags.Static | BindingFlags.NonPublic);
-            foreach (float strain in new[] { 0.035f, 0.04f, 0.05f, 0.08f })
+            foreach (float strain in new[] { 0.035f, 0.04f, 0.05f, 0.06f, 0.08f, 0.10f, 0.15f })
             {
                 object configuration = Activator.CreateInstance(
                     configurationType,

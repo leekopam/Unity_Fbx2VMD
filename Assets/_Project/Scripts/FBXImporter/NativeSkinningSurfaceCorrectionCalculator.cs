@@ -96,7 +96,7 @@ namespace Fbx2Vmd.FBXImporter
         private const float RestShapeActiveSetActivationMargin = 0.0005f;
         private const float RestShapeMaximumProjectionCorrection = 0.000025f;
         private const int RestShapeActiveSetProjectionPasses = 8;
-        private const int WorksetRingCount = 2;
+        private const int DefaultWorksetRingCount = 2;
         private const float DisplacementSmoothnessWeight = 1f;
         private const float DisplacementAttachmentWeight = 0.02f;
         private const float RestShapeRecoveryAttachmentWeight = 0.05f;
@@ -123,11 +123,12 @@ namespace Fbx2Vmd.FBXImporter
         // 예산 크기에 따라 수렴 지점이 달라지므로 국소 최적해 정체 시 축소 예산으로 재시도한다.
         private static readonly CorrectionConfiguration StrongRetryConfiguration =
             new CorrectionConfiguration(640, 64, 32, 0.03f, 0.02f);
-        // 반복 투영이 신장 경계에서 정체하는 경우가 있어 충분한 헤드룸으로 재검색한다.
+        // 반복 투영이 신장 경계에서 정체하는 경우가 있어 충분한 헤드룸과 넓은 workset으로 재검색한다.
+        // 2링은 변위가 좁은 영역에 집중돼 신장 한계에 먼저 도달하므로 3링으로 넓혀 분산한다.
         // 경계 근처(0.035)는 다시 경계에 갇히므로 0.05까지 벌려 경계 끌림을 벗어난다.
         // 수용 결과는 엄격한 게이트로 다시 검증하므로 실질 품질 기준은 유지된다.
         private static readonly CorrectionConfiguration StrongHeadroomConfiguration =
-            new CorrectionConfiguration(640, 64, 32, 0.05f, 0.055f);
+            new CorrectionConfiguration(640, 64, 32, 0.05f, 0.055f, 3);
         private static readonly CorrectionConfiguration FastConfiguration =
             new CorrectionConfiguration(80, 16, 0, 0.02f, 0.002512f);
 
@@ -507,7 +508,7 @@ namespace Fbx2Vmd.FBXImporter
                 baselineVertices,
                 contract,
                 activePairIndices,
-                WorksetRingCount);
+                configuration.WorksetRingCount);
             for (int iteration = 0;
                  iteration < configuration.LocalGlobalIterations;
                  iteration++)
@@ -2516,7 +2517,8 @@ namespace Fbx2Vmd.FBXImporter
                 int conjugateGradientIterations,
                 int edgeLengthProjectionIterations,
                 float maximumEdgeLengthStrain,
-                float maximumTotalDisplacementToArmLengthRatio)
+                float maximumTotalDisplacementToArmLengthRatio,
+                int worksetRingCount = DefaultWorksetRingCount)
             {
                 LocalGlobalIterations = localGlobalIterations;
                 ConjugateGradientIterations = conjugateGradientIterations;
@@ -2524,6 +2526,7 @@ namespace Fbx2Vmd.FBXImporter
                 MaximumEdgeLengthStrain = maximumEdgeLengthStrain;
                 MaximumTotalDisplacementToArmLengthRatio =
                     maximumTotalDisplacementToArmLengthRatio;
+                WorksetRingCount = worksetRingCount;
             }
 
             internal int LocalGlobalIterations { get; }
@@ -2531,6 +2534,7 @@ namespace Fbx2Vmd.FBXImporter
             internal int EdgeLengthProjectionIterations { get; }
             internal float MaximumEdgeLengthStrain { get; }
             internal float MaximumTotalDisplacementToArmLengthRatio { get; }
+            internal int WorksetRingCount { get; }
         }
 
         private readonly struct FrameEdge
