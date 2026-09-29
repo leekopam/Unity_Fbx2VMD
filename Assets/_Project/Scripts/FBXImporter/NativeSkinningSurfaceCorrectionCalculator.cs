@@ -842,8 +842,11 @@ namespace Fbx2Vmd.FBXImporter
             activeConstraintCount = 0;
             foreach (int pairIndex in workset.FacePairIndices)
             {
-                if (contract.RestAnglesDegrees[pairIndex] > RestSmoothAngleDegrees ||
-                    !activePairIndices.Contains(pairIndex))
+                if (!activePairIndices.Contains(pairIndex) ||
+                    !IsSharpFoldCorrectionEligible(
+                        baselineVertices,
+                        contract,
+                        pairIndex))
                 {
                     continue;
                 }
@@ -2054,7 +2057,10 @@ namespace Fbx2Vmd.FBXImporter
 
             foreach (int pairIndex in facePairIndices)
             {
-                if (contract.RestAnglesDegrees[pairIndex] > RestSmoothAngleDegrees ||
+                if (!IsSharpFoldCorrectionEligible(
+                        baselineVertices,
+                        contract,
+                        pairIndex) ||
                     !NativeSkinningSurfaceContractBuilder.TryMeasureAngle(
                         vertices,
                         contract.FacePairs[pairIndex],
@@ -2136,6 +2142,25 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
+        // rest 각도 상한을 넘는 자연 주름도 baseline에서 접히지 않았다면
+        // 보정 도중 임계값을 넘었을 때 되돌릴 제약 대상으로 인정한다.
+        // baseline이 이미 접힌 쌍은 계약이 허용한 상태이므로 건드리지 않는다.
+        private static bool IsSharpFoldCorrectionEligible(
+            IReadOnlyList<Vector3> baselineVertices,
+            NativeSkinningSurfaceContract contract,
+            int pairIndex)
+        {
+            if (contract.RestAnglesDegrees[pairIndex] <= RestSmoothAngleDegrees)
+            {
+                return true;
+            }
+            return NativeSkinningSurfaceContractBuilder.TryMeasureAngle(
+                       baselineVertices,
+                       contract.FacePairs[pairIndex],
+                       out float baselineAngleDegrees) &&
+                   baselineAngleDegrees <= SharpFoldAngleDegrees;
+        }
+
         private static void UpdateActiveCorrectionPairs(
             IReadOnlyList<Vector3> baselineVertices,
             IReadOnlyList<Vector3> currentVertices,
@@ -2158,13 +2183,15 @@ namespace Fbx2Vmd.FBXImporter
                     continue;
                 }
 
-                if (contract.RestAnglesDegrees[pairIndex] <=
-                        RestSmoothAngleDegrees &&
-                    NativeSkinningSurfaceContractBuilder.TryMeasureAngle(
+                if (NativeSkinningSurfaceContractBuilder.TryMeasureAngle(
                         currentVertices,
                         contract.FacePairs[pairIndex],
                         out float angleDegrees) &&
-                    angleDegrees > SharpFoldAngleDegrees)
+                    angleDegrees > SharpFoldAngleDegrees &&
+                    IsSharpFoldCorrectionEligible(
+                        baselineVertices,
+                        contract,
+                        pairIndex))
                 {
                     activePairIndices.Add(pairIndex);
                 }

@@ -22,6 +22,7 @@ namespace Tests.Editor.FBXImporter
 
         [TestCase("tetoris_001.fbx", 1)]
         [TestCase("tetoris_001.fbx", 117)]
+        [TestCase("tetoris_001.fbx", 153)]
         [TestCase("satisfaction_2.fbx", 2)]
         [Explicit("로컬 FBX fixture가 필요한 실패 프레임 진단 계측입니다.")]
         public void Given_FailingFrame_When_PreparingNativeSkinning_Then_DumpsContractDiagnostics(
@@ -254,7 +255,7 @@ namespace Tests.Editor.FBXImporter
             if (!passed && strongCorrection != null)
             {
                 DumpDisplacementBudgetRetries(
-                    calculatorType, vertices, contract, report);
+                    calculatorType, vertices, contract, strongCorrection, report);
             }
             return strongCorrection ?? fastCorrection;
         }
@@ -264,6 +265,7 @@ namespace Tests.Editor.FBXImporter
             Type calculatorType,
             Vector3[] vertices,
             object contract,
+            object strongCorrection,
             StringBuilder report)
         {
             Type configurationType = calculatorType.GetNestedType(
@@ -272,6 +274,11 @@ namespace Tests.Editor.FBXImporter
                 "TryCalculate", BindingFlags.Static | BindingFlags.NonPublic);
             Assert.That(configurationType, Is.Not.Null);
             Assert.That(tryCalculate, Is.Not.Null);
+            if (ReadProperty<int>(strongCorrection, "NewSharpFoldCount") > 0)
+            {
+                DumpSecondPass(calculatorType, tryCalculate, vertices,
+                    strongCorrection, contract, report);
+            }
             foreach (float ratio in new[] { 0.01f, 0.02f, 0.025f, 0.03f, 0.04f, 0.05f, 0.08f })
             {
                 object configuration = Activator.CreateInstance(
@@ -303,6 +310,39 @@ namespace Tests.Editor.FBXImporter
                 {
                     report.Append($"\n retry[ratio={ratio:F2}]=threw:{exception.Message}");
                 }
+            }
+        }
+
+        // 신규 접힘이 생긴 강한 보정 결과를 초기값으로 다시 계산해 해소 여부를 측정함.
+        private static void DumpSecondPass(
+            Type calculatorType,
+            MethodInfo tryCalculate,
+            Vector3[] baselineVertices,
+            object firstPass,
+            object contract,
+            StringBuilder report)
+        {
+            object strongConfiguration = ReadConst<object>(
+                "NativeSkinningSurfaceCorrectionCalculator", "StrongConfiguration");
+            var corrected = ((IReadOnlyList<Vector3>)ReadProperty<object>(
+                firstPass, "CorrectedVertices")).ToArray();
+            object[] arguments =
+                { baselineVertices, corrected, contract, strongConfiguration, false, false, null };
+            try
+            {
+                bool calculated = (bool)tryCalculate.Invoke(null, arguments);
+                object secondPass = arguments[6];
+                report.Append(calculated && secondPass != null
+                    ? $"\n secondpass residual={ReadProperty<int>(secondPass, "ResidualSharpFoldCount")}" +
+                      $" new={ReadProperty<int>(secondPass, "NewSharpFoldCount")}" +
+                      $" maxDisp={ReadProperty<float>(secondPass, "MaximumVertexDisplacement"):F4}" +
+                      $" strain={ReadProperty<float>(secondPass, "MaximumEdgeLengthStrain"):F4}" +
+                      $" safe={ReadProperty<bool>(secondPass, "IsSafe")}"
+                    : "\n secondpass=uncalculated");
+            }
+            catch (Exception exception)
+            {
+                report.Append($"\n secondpass=threw:{exception.Message}");
             }
         }
 
@@ -360,6 +400,34 @@ namespace Tests.Editor.FBXImporter
                 dumped++;
             }
             report.Append($" residualPairsDumped={dumped}");
+
+            // 잔존이 아닌 신규 접힘(기준 ≤150도 → 보정 후 >150도) 쌍도 따로 덤프한다.
+            int newDumped = 0;
+            for (int pairIndex = 0;
+                 pairIndex < facePairs.Length && newDumped < MaximumPairsPerContract;
+                 pairIndex++)
+            {
+                if (!TryMeasureAngle(correctedVertices, facePairs.GetValue(pairIndex),
+                        out float correctedNewAngle) ||
+                    correctedNewAngle <= minimumSharpAngle)
+                {
+                    continue;
+                }
+                TryMeasureAngle(baselineVertices, facePairs.GetValue(pairIndex),
+                    out float baselineNewAngle);
+                if (baselineNewAngle > minimumSharpAngle)
+                {
+                    continue;
+                }
+                report.Append(
+                    $"\n  newfold pair[{pairIndex}] rest={restAngles[pairIndex]:F2}" +
+                    $" base={baselineNewAngle:F2} corr={correctedNewAngle:F2}" +
+                    $" verts={DescribePairVertices(facePairs.GetValue(pairIndex), bones, boneWeights, lowerArmBoneIndex)}");
+                report.Append(
+                    $"\n    disp={DescribePairDisplacements(facePairs.GetValue(pairIndex), baselineVertices, correctedVertices, displacementLimit)}");
+                newDumped++;
+            }
+            report.Append($" newFoldPairsDumped={newDumped}");
         }
 
         private static string DescribePairVertices(
