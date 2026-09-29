@@ -2,6 +2,11 @@ name: Unity EditMode Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      update_baselines:
+        description: '성능 베이스라인 갱신 모드 — PerfBaselines 아티팩트로 baselines.json 반출'
+        type: boolean
+        default: false
   push:
     branches: [ main, prototype/Ricopam ]
   pull_request:
@@ -41,6 +46,10 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          # 수동 디스패치에서 update_baselines=true로 실행하면 러너 deviceModel 베이스라인이
+          # baselines.json에 기록되고 PerfBaselines 아티팩트로 반출된다. 받아서 커밋하면
+          # 이후 러너에서 상대 게이팅이 활성화된다.
+          FBX2VMD_PERF_UPDATE_BASELINE: ${{ github.event.inputs.update_baselines && '1' || '0' }}
         with:
           unityVersion: 2022.3.62f3
           testMode: editMode
@@ -67,5 +76,14 @@ jobs:
         with:
           name: Profiling-Reports
           path: Artifacts/Profiling
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Updated Baselines
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: PerfBaselines
+          path: Assets/_Project/Tests/PerfBaselines/baselines.json
           retention-days: 30
           if-no-files-found: ignore
