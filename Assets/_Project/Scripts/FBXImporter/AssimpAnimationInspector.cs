@@ -22,13 +22,14 @@ namespace Fbx2Vmd.FBXImporter
                 return report;
             }
 
-            if (!AssimpLibraryLoader.IsLoaded)
-            {
-                AssimpLibraryLoader.LoadLibrary();
-            }
-
             try
             {
+                // 네이티브 로딩(kernel32/assimp) 실패도 호출자 예외가 아니라 리포트의 ErrorMessage로 보고한다.
+                if (!AssimpLibraryLoader.IsLoaded)
+                {
+                    AssimpLibraryLoader.LoadLibrary();
+                }
+
                 using (AssimpContext importer = new AssimpContext())
                 {
                     importer.SetConfig(new Assimp.Configs.FBXPreservePivotsConfig(false));
