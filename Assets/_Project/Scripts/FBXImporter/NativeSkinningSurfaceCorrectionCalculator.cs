@@ -223,6 +223,22 @@ namespace Fbx2Vmd.FBXImporter
             {
                 result = headroom;
             }
+            // 예산과 무관하게 국소 최적해에 정체하는 입력이 있어
+            // 직전 결과를 초기 추정으로 재투입해 basin 이탈을 시도한다.
+            if (!IsWithinQuality(result, contract, StrongConfiguration) &&
+                result?.CorrectedVertices != null &&
+                TryCalculate(
+                    baselineVertices,
+                    result.CorrectedVertices,
+                    contract,
+                    StrongConfiguration,
+                    false,
+                    false,
+                    out NativeSkinningSurfaceCorrectionResult chained) &&
+                IsWithinQuality(chained, contract, StrongConfiguration))
+            {
+                result = chained;
+            }
             return true;
         }
 
