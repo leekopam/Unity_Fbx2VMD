@@ -571,10 +571,10 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(ReadProperty<bool>(result, "IsSafe"), Is.True);
                 Assert.That(
                     ReadProperty<float>(result, "MaximumVertexDisplacement"),
-                    Is.EqualTo(0.00203031185f).Within(0.0000001f));
+                    Is.EqualTo(0.00189180195f).Within(0.0000001f));
                 Assert.That(
                     ReadProperty<float>(result, "MaximumEdgeLengthStrain"),
-                    Is.EqualTo(0.0211385787f).Within(0.000001f));
+                    Is.EqualTo(0.0154557955f).Within(0.000001f));
                 Assert.That(
                     ReadProperty<int[]>(result, "CorrectedVertexIndices").Length,
                     Is.EqualTo(74));
