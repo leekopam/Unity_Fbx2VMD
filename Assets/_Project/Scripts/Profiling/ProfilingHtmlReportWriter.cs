@@ -99,6 +99,29 @@ namespace Fbx2Vmd.Profiling
                 sb.Append(" | 프레임 ").Append(run.sampledFrameCount).Append("개, 평균 ")
                     .Append(F(run.sampledFrameSumMs / run.sampledFrameCount)).Append("ms, 최대 ")
                     .Append(F(run.sampledFrameMaxMs)).Append("ms");
+                if (run.frameP50Ms > 0f)
+                {
+                    sb.Append(", p50 ").Append(F(run.frameP50Ms)).Append("/p95 ")
+                        .Append(F(run.frameP95Ms)).Append("/p99 ").Append(F(run.frameP99Ms)).Append("ms");
+                }
+            }
+            if (run.gcReservedBytes > 0 || run.systemUsedBytes > 0)
+            {
+                sb.Append(" | 메모리 피크 GC ").Append(F(run.gcReservedBytes / (1024f * 1024f)))
+                    .Append("MB / System ").Append(F(run.systemUsedBytes / (1024f * 1024f))).Append("MB");
+            }
+            // 미기록(-1) 필드는 표시하지 않는다.
+            if (run.inputBytes >= 0)
+            {
+                sb.Append(" | 입력 ").Append(F(run.inputBytes / (1024f * 1024f))).Append("MB");
+            }
+            if (run.clipLengthSec >= 0f)
+            {
+                sb.Append(" | 클립 ").Append(F(run.clipLengthSec)).Append("초");
+            }
+            if (run.boneCount >= 0)
+            {
+                sb.Append(" | 본 ").Append(run.boneCount).Append("개");
             }
             sb.Append("</div>");
 

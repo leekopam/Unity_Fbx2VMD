@@ -63,6 +63,17 @@ namespace Fbx2Vmd.Profiling
         public int sampledFrameCount;
         public float sampledFrameSumMs;
         public float sampledFrameMaxMs;
+        /// <summary>EndRun에서 프레임 샘플로 계산하는 분위수입니다.</summary>
+        public float frameP50Ms;
+        public float frameP95Ms;
+        public float frameP99Ms;
+        /// <summary>런 동안 관측된 ProfilerRecorder 메모리 카운터 최대값(프레임 경계 샘플, 워커 스레드 포함).</summary>
+        public long gcReservedBytes;
+        public long systemUsedBytes;
+        /// <summary>비교 정당성을 위한 입력 컨텍스트입니다. -1은 미기록입니다.</summary>
+        public long inputBytes = -1;
+        public float clipLengthSec = -1f;
+        public int boneCount = -1;
         public List<ProfilingStageSample> stages = new List<ProfilingStageSample>();
         public List<ProfilingMetricSample> metrics = new List<ProfilingMetricSample>();
         /// <summary>EndRun 시점에 ProfilingRunAnalyzer가 채우는 자동 분석 결과입니다.</summary>
