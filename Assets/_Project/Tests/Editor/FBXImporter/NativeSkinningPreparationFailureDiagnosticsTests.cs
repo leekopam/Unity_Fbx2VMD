@@ -295,13 +295,16 @@ namespace Tests.Editor.FBXImporter
                 DumpSecondPass(calculatorType, tryCalculate, vertices,
                     strongCorrection, contract, report);
             }
+            // Mono 기본 바인더는 선택적 인수를 채우지 않으므로 worksetRingCount 기본값을 명시한다.
+            int defaultRings = ReadConst<int>(
+                "NativeSkinningSurfaceCorrectionCalculator", "DefaultWorksetRingCount");
             foreach (float ratio in new[] { 0.01f, 0.02f, 0.025f, 0.03f, 0.04f, 0.05f, 0.08f })
             {
                 object configuration = Activator.CreateInstance(
                     configurationType,
                     BindingFlags.Instance | BindingFlags.NonPublic,
                     null,
-                    new object[] { 640, 64, 32, 0.03f, ratio },
+                    new object[] { 640, 64, 32, 0.03f, ratio, defaultRings },
                     null);
                 object[] retryArguments =
                     { vertices, vertices, contract, configuration, false, false, null };
@@ -340,13 +343,16 @@ namespace Tests.Editor.FBXImporter
                 "CorrectionConfiguration", BindingFlags.NonPublic);
             MethodInfo tryCalculate = calculatorType.GetMethod(
                 "TryCalculate", BindingFlags.Static | BindingFlags.NonPublic);
+            // Mono 기본 바인더는 선택적 인수를 채우지 않으므로 worksetRingCount 기본값을 명시한다.
+            int defaultRings = ReadConst<int>(
+                "NativeSkinningSurfaceCorrectionCalculator", "DefaultWorksetRingCount");
             foreach (float strain in new[] { 0.035f, 0.04f, 0.05f, 0.06f, 0.08f, 0.10f, 0.15f })
             {
                 object configuration = Activator.CreateInstance(
                     configurationType,
                     BindingFlags.Instance | BindingFlags.NonPublic,
                     null,
-                    new object[] { 640, 64, 32, strain, 0.055f },
+                    new object[] { 640, 64, 32, strain, 0.055f, defaultRings },
                     null);
                 object[] retryArguments =
                     { vertices, vertices, contract, configuration, false, false, null };

@@ -31,13 +31,15 @@ namespace Fbx2Vmd.FBXImporter
             int correctedFrameCount,
             int fallbackFrameCount,
             int correctionEntryCount,
-            NativeSkinningRendererCorrection[] rendererCorrections)
+            NativeSkinningRendererCorrection[] rendererCorrections,
+            int collectedFailureCount = 0)
         {
             FrameCount = frameCount;
             CorrectedFrameCount = correctedFrameCount;
             FallbackFrameCount = fallbackFrameCount;
             CorrectionEntryCount = correctionEntryCount;
             RendererCorrections = rendererCorrections;
+            CollectedFailureCount = collectedFailureCount;
         }
 
         internal int FrameCount { get; }
@@ -49,6 +51,11 @@ namespace Fbx2Vmd.FBXImporter
         internal int CorrectionEntryCount { get; }
 
         internal NativeSkinningRendererCorrection[] RendererCorrections { get; }
+
+        /// <summary>
+        /// 수집 모드에서 보정 없이 건너뛴 실패 수입니다. 0보다 크면 결과는 부분 보정입니다.
+        /// </summary>
+        internal int CollectedFailureCount { get; }
     }
 
     /// <summary>
@@ -434,7 +441,10 @@ namespace Fbx2Vmd.FBXImporter
             {
                 string directory = GetDiagnosticsDirectory();
                 Directory.CreateDirectory(directory);
-                string path = Path.Combine(directory, "native-prep-failures.log");
+                // 연속 런 간 덮어쓰기를 피하기 위해 타임스탬프를 붙인다.
+                string path = Path.Combine(
+                    directory,
+                    $"native-prep-failures-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
                 File.WriteAllLines(path, _collectedFailures);
                 Debug.LogWarning(
                     $"[NativePrepDump] 실패 {_collectedFailures.Count}건 수집 완료: {path}");
@@ -512,7 +522,8 @@ namespace Fbx2Vmd.FBXImporter
                 _correctedFrameCount,
                 _fallbackFrameCount,
                 _correctionEntryCount,
-                rendererCorrections);
+                rendererCorrections,
+                _collectedFailures.Count);
             IsComplete = true;
         }
 
