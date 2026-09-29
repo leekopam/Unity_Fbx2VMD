@@ -27,6 +27,7 @@ namespace Tests.Editor.FBXImporter
         [TestCase("tetoris_001.fbx", 553)]
         [TestCase("tetoris_001.fbx", 562)]
         [TestCase("tetoris_001.fbx", 563)]
+        [TestCase("tetoris_001.fbx", 8101)]
         [TestCase("satisfaction_2.fbx", 2)]
         [Explicit("로컬 FBX fixture가 필요한 실패 프레임 진단 계측입니다.")]
         public void Given_FailingFrame_When_PreparingNativeSkinning_Then_DumpsContractDiagnostics(
@@ -380,6 +381,87 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        // 잔여 접힘이 남은 결과를 초기값으로 재투입하거나 workset 링을 넓혀
+        // 수렴 정체(local optimum) 탈출 여부를 측정함.
+        private static void DumpChainAndRingRetries(
+            Type calculatorType,
+            Vector3[] baselineVertices,
+            object contract,
+            object firstCorrection,
+            StringBuilder report)
+        {
+            Type configurationType = calculatorType.GetNestedType(
+                "CorrectionConfiguration", BindingFlags.NonPublic);
+            MethodInfo tryCalculate = calculatorType.GetMethod(
+                "TryCalculate", BindingFlags.Static | BindingFlags.NonPublic);
+            var firstCorrected = ((IReadOnlyList<Vector3>)ReadProperty<object>(
+                firstCorrection, "CorrectedVertices")).ToArray();
+
+            // 2차 패스: 1차 보정 결과를 초기 추정으로 다시 계산함.
+            int defaultRings = ReadConst<int>(
+                "NativeSkinningSurfaceCorrectionCalculator", "DefaultWorksetRingCount");
+            foreach (float strain in new[] { 0.03f, 0.05f })
+            {
+                object configuration = Activator.CreateInstance(
+                    configurationType,
+                    BindingFlags.Instance | BindingFlags.NonPublic,
+                    null,
+                    new object[] { 640, 64, 32, strain, 0.055f, defaultRings },
+                    null);
+                object[] arguments =
+                    { baselineVertices, firstCorrected, contract, configuration, false, false, null };
+                try
+                {
+                    bool calculated = (bool)tryCalculate.Invoke(null, arguments);
+                    object second = arguments[6];
+                    report.Append(calculated && second != null
+                        ? $"\n chain[strain={strain:F2}]" +
+                          $" residual={ReadProperty<int>(second, "ResidualSharpFoldCount")}" +
+                          $" new={ReadProperty<int>(second, "NewSharpFoldCount")}" +
+                          $" maxDisp={ReadProperty<float>(second, "MaximumVertexDisplacement"):F4}" +
+                          $" strain={ReadProperty<float>(second, "MaximumEdgeLengthStrain"):F4}" +
+                          $" safe={ReadProperty<bool>(second, "IsSafe")}"
+                        : $"\n chain[strain={strain:F2}]=uncalculated");
+                }
+                catch (Exception exception)
+                {
+                    report.Append(
+                        $"\n chain[strain={strain:F2}]=threw:{exception.Message}");
+                }
+            }
+
+            // workset 링 스윕: 더 넓은 국소 영역에서 정체 해소 여부를 봄.
+            foreach (int rings in new[] { 3, 4, 5 })
+            {
+                object configuration = Activator.CreateInstance(
+                    configurationType,
+                    BindingFlags.Instance | BindingFlags.NonPublic,
+                    null,
+                    new object[] { 640, 64, 32, 0.05f, 0.055f, rings },
+                    null);
+                object[] arguments =
+                    { baselineVertices, baselineVertices, contract, configuration, false, false, null };
+                try
+                {
+                    bool calculated = (bool)tryCalculate.Invoke(null, arguments);
+                    object retry = arguments[6];
+                    report.Append(calculated && retry != null
+                        ? $"\n ringRetry[rings={rings}]" +
+                          $" residual={ReadProperty<int>(retry, "ResidualSharpFoldCount")}" +
+                          $" new={ReadProperty<int>(retry, "NewSharpFoldCount")}" +
+                          $" maxDisp={ReadProperty<float>(retry, "MaximumVertexDisplacement"):F4}" +
+                          $" strain={ReadProperty<float>(retry, "MaximumEdgeLengthStrain"):F4}" +
+                          $" safe={ReadProperty<bool>(retry, "IsSafe")}"
+                        : $"\n ringRetry[rings={rings}]=uncalculated");
+                }
+                catch (Exception exception)
+                {
+                    report.Append(
+                        $"\n ringRetry[rings={rings}]=threw:{exception.Message}");
+                }
+            }
+        }
+
         // 신규 접힘이 생긴 강한 보정 결과를 초기값으로 다시 계산해 해소 여부를 측정함.
         private static void DumpSecondPass(
             Type calculatorType,
@@ -631,6 +713,8 @@ namespace Tests.Editor.FBXImporter
                         calculatorType, dumped, contract, strongCorrection, report);
                     DumpStrainBudgetRetries(
                         calculatorType, dumped, contract, report);
+                    DumpChainAndRingRetries(
+                        calculatorType, dumped, contract, strongCorrection, report);
                 }
 
                 // 임계 부근 쌍의 baseline 각도를 product 입력과 edit 입력에서 비교함.
