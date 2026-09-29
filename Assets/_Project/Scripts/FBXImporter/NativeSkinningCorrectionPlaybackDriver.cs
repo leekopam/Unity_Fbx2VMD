@@ -144,12 +144,23 @@ namespace Fbx2Vmd.FBXImporter
                 _bakedMeshes.Add(renderer, bakedMesh);
             }
 
-            if (!NativeSkinningCorrectionPreprocessor.TryCreateSession(
-                    TotalFrameCount,
-                    _contracts,
-                    ReadFrameVertices,
-                    null,
-                    out _preprocessSession))
+            bool sessionCreated =
+                NativeSkinningCorrectionPreprocessor
+                    .IsFailureCollectionRequested()
+                    ? NativeSkinningCorrectionPreprocessor
+                        .TryCreateFailureCollectingSession(
+                            TotalFrameCount,
+                            _contracts,
+                            ReadFrameVertices,
+                            null,
+                            out _preprocessSession)
+                    : NativeSkinningCorrectionPreprocessor.TryCreateSession(
+                            TotalFrameCount,
+                            _contracts,
+                            ReadFrameVertices,
+                            null,
+                            out _preprocessSession);
+            if (!sessionCreated)
             {
                 return Fail("Native 보정 사전 계산 session을 만들지 못했습니다.");
             }

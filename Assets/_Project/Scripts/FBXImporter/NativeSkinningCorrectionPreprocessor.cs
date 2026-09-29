@@ -66,17 +66,22 @@ namespace Fbx2Vmd.FBXImporter
         private int _correctedFrameCount;
         private int _fallbackFrameCount;
         private int _correctionEntryCount;
+        // 진단용: 수집 모드에서 실패한 프레임의 오류 메시지 누적.
+        private readonly List<string> _collectedFailures = new List<string>();
+        private readonly bool _collectModeEnabled;
 
         internal NativeSkinningCorrectionPreprocessSession(
             int frameCount,
             RendererWork[] rendererWorks,
             Func<int, SkinnedMeshRenderer, Vector3[]> readFrameVertices,
-            Action<int, int> reportProgress)
+            Action<int, int> reportProgress,
+            bool collectFailures)
         {
             _frameCount = frameCount;
             _rendererWorks = rendererWorks;
             _readFrameVertices = readFrameVertices;
             _reportProgress = reportProgress;
+            _collectModeEnabled = collectFailures;
         }
 
         internal int ProcessedFrameCount { get; private set; }
@@ -122,6 +127,13 @@ namespace Fbx2Vmd.FBXImporter
                             out bool rendererUsedFallback,
                             out string errorMessage))
                     {
+                        // 수집 모드에서는 실패 프레임을 기록하고 보정 없이 계속 진행한다.
+                        if (_collectModeEnabled)
+                        {
+                            _collectedFailures.Add(
+                                $"renderer={work.Renderer.name} {errorMessage}");
+                            continue;
+                        }
                         return Fail(errorMessage);
                     }
                     usedFallback |= rendererUsedFallback;
@@ -411,6 +423,36 @@ namespace Fbx2Vmd.FBXImporter
             return false;
         }
 
+        // 수집 모드 완료 시 누적된 실패 목록을 로그 파일로 남긴다.
+        private void WriteCollectedFailures()
+        {
+            if (_collectedFailures.Count == 0)
+            {
+                return;
+            }
+            try
+            {
+                string directory = GetDiagnosticsDirectory();
+                Directory.CreateDirectory(directory);
+                string path = Path.Combine(directory, "native-prep-failures.log");
+                File.WriteAllLines(path, _collectedFailures);
+                Debug.LogWarning(
+                    $"[NativePrepDump] 실패 {_collectedFailures.Count}건 수집 완료: {path}");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"[NativePrepDump] 실패 목록 기록 실패: {exception.Message}");
+            }
+        }
+
+        internal static string GetDiagnosticsDirectory()
+        {
+            return Path.GetFullPath(Path.Combine(
+                Application.dataPath,
+                "../Docs/Workflow/Local/runtime/native-prep-dumps"));
+        }
+
         // 진단용: 플래그 파일이 있을 때만 실패 프레임의 입력 정점을 덤프함.
         private static void TryDumpFailureBaselineVertices(
             int frameIndex,
@@ -419,9 +461,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             try
             {
-                string directory = Path.GetFullPath(Path.Combine(
-                    Application.dataPath,
-                    "../Docs/Workflow/Local/runtime/native-prep-dumps"));
+                string directory = GetDiagnosticsDirectory();
                 if (!File.Exists(
                         Path.Combine(directory, "native-prep-dump.flag")))
                 {
@@ -457,6 +497,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private void Complete()
         {
+            WriteCollectedFailures();
             NativeSkinningRendererCorrection[] rendererCorrections =
                 _rendererWorks
                     .Where(work => work.Frames.Count > 0)
@@ -659,12 +700,55 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal static class NativeSkinningCorrectionPreprocessor
     {
+        // 진단용: 플래그 파일이 있으면 세션을 실패 수집 모드로 생성해야 함을 나타낸다.
+        internal static bool IsFailureCollectionRequested()
+        {
+            return File.Exists(Path.Combine(
+                NativeSkinningCorrectionPreprocessSession
+                    .GetDiagnosticsDirectory(),
+                "native-prep-collect.flag"));
+        }
+
+        // 진단용: 첫 실패에서 멈추지 않고 실패 프레임 전체를 수집하는 세션.
+        internal static bool TryCreateFailureCollectingSession(
+            int frameCount,
+            NativeSkinningSurfaceContract[] contracts,
+            Func<int, SkinnedMeshRenderer, Vector3[]> readFrameVertices,
+            Action<int, int> reportProgress,
+            out NativeSkinningCorrectionPreprocessSession session)
+        {
+            return TryCreateSessionCore(
+                frameCount,
+                contracts,
+                readFrameVertices,
+                reportProgress,
+                out session,
+                collectFailures: true);
+        }
+
         internal static bool TryCreateSession(
             int frameCount,
             NativeSkinningSurfaceContract[] contracts,
             Func<int, SkinnedMeshRenderer, Vector3[]> readFrameVertices,
             Action<int, int> reportProgress,
             out NativeSkinningCorrectionPreprocessSession session)
+        {
+            return TryCreateSessionCore(
+                frameCount,
+                contracts,
+                readFrameVertices,
+                reportProgress,
+                out session,
+                collectFailures: false);
+        }
+
+        private static bool TryCreateSessionCore(
+            int frameCount,
+            NativeSkinningSurfaceContract[] contracts,
+            Func<int, SkinnedMeshRenderer, Vector3[]> readFrameVertices,
+            Action<int, int> reportProgress,
+            out NativeSkinningCorrectionPreprocessSession session,
+            bool collectFailures)
         {
             session = null;
             if (frameCount <= 0 ||
@@ -705,7 +789,8 @@ namespace Fbx2Vmd.FBXImporter
                 frameCount,
                 works.ToArray(),
                 readFrameVertices,
-                reportProgress);
+                reportProgress,
+                collectFailures);
             return true;
         }
 
