@@ -123,10 +123,11 @@ namespace Fbx2Vmd.FBXImporter
         // 예산 크기에 따라 수렴 지점이 달라지므로 국소 최적해 정체 시 축소 예산으로 재시도한다.
         private static readonly CorrectionConfiguration StrongRetryConfiguration =
             new CorrectionConfiguration(640, 64, 32, 0.03f, 0.02f);
-        // 반복 투영이 신장 경계에서 정체하는 경우가 있어 소량 헤드룸으로 재검색한다.
+        // 반복 투영이 신장 경계에서 정체하는 경우가 있어 충분한 헤드룸으로 재검색한다.
+        // 경계 근처(0.035)는 다시 경계에 갇히므로 0.05까지 벌려 경계 끌림을 벗어난다.
         // 수용 결과는 엄격한 게이트로 다시 검증하므로 실질 품질 기준은 유지된다.
         private static readonly CorrectionConfiguration StrongHeadroomConfiguration =
-            new CorrectionConfiguration(640, 64, 32, 0.035f, 0.055f);
+            new CorrectionConfiguration(640, 64, 32, 0.05f, 0.055f);
         private static readonly CorrectionConfiguration FastConfiguration =
             new CorrectionConfiguration(80, 16, 0, 0.02f, 0.002512f);
 
