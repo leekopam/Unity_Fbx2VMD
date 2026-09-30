@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 
-namespace Tests.Editor.Common
+namespace Tests.Editor.CoroutineLifecycle
 {
     /// <summary>
     /// EditMode에서 코루틴(중첩 이너레이터 포함)을 수동으로 구동하는 펌프임.

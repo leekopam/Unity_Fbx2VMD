@@ -1,7 +1,7 @@
 using System.Collections;
 using NUnit.Framework;
 
-namespace Tests.Editor.Common
+namespace Tests.Editor.CoroutineLifecycle
 {
     /// <summary>
     /// 코루틴 구동 컴포넌트의 생명주기 불변식을 검증하는 테스트 템플릿임.
