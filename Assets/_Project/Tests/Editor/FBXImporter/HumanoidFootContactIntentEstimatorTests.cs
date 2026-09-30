@@ -91,6 +91,44 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ShortUncertainGapInSupport_When_Estimating_Then_MergesIntoOneIntent()
+        {
+            // 지지 도중 최소 지지 길이(0.1s)보다 짧은 불확실 틈새는 의미 있는 반대 위상을
+            // 담을 수 없으므로 하나의 지지로 병합함. satisfaction_2 왼발 런의
+            // 4~5프레임 갭으로 인한 Plant 섬 분단이 대표 케이스임.
+            List<Vector3> foot = Still(120);
+            for (int frame = 45; frame <= 48; frame++)
+            {
+                foot[frame] += Vector3.up * 0.02f;
+            }
+
+            object estimate = Estimate(foot);
+            List<object> left = Intents(estimate, "Left");
+            Assert.That(left.Count, Is.EqualTo(1));
+            Assert.That(Field(left[0], "Certainty").ToString(), Is.EqualTo("Uncertain"));
+            // 병합된 틈새는 확신을 낮추되 별도 불확실 구간으로는 남기지 않음.
+            List<Vector2Int> uncertain =
+                (List<Vector2Int>)Field(estimate, "LeftUncertainSpans");
+            Assert.That(uncertain.Exists(span =>
+                span.x <= 45 && span.y >= 49), Is.False);
+        }
+
+        [Test]
+        public void Given_LongUncertainGapInSupport_When_Estimating_Then_KeepsSplit()
+        {
+            // 최소 지지 길이 이상의 불확실 틈새는 여전히 구간을 갈라야 함.
+            List<Vector3> foot = Still(120);
+            for (int frame = 45; frame <= 51; frame++)
+            {
+                foot[frame] += Vector3.up * 0.02f;
+            }
+
+            object estimate = Estimate(foot);
+            List<object> left = Intents(estimate, "Left");
+            Assert.That(left.Count, Is.EqualTo(2));
+        }
+
+        [Test]
         public void Given_AirborneClip_When_Estimating_Then_NoIntents()
         {
             List<Vector3> foot = Still(90);
@@ -146,11 +184,61 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_PerfectPrediction_When_ScoringFrames_Then_F1IsOne()
+        {
+            // 표식 구간 전부를 지지로 맞힌 예측은 모든 지표가 1이어야 함.
+            var predicted = new bool[100];
+            for (int i = 10; i < 30; i++) predicted[i] = true;
+            var labels = new List<FbxIntentCalibration.LabelSpan>
+            {
+                new FbxIntentCalibration.LabelSpan(10, 29, true),
+                new FbxIntentCalibration.LabelSpan(40, 59, false),
+            };
+            var metrics = FbxIntentCalibration.ComputeFrameMetrics(
+                predicted, labels);
+            Assert.That(metrics.Precision, Is.EqualTo(1.0));
+            Assert.That(metrics.Recall, Is.EqualTo(1.0));
+            Assert.That(metrics.F1, Is.EqualTo(1.0));
+        }
+
+        [Test]
+        public void Given_MissedSupport_When_ScoringFrames_Then_RecallDrops()
+        {
+            // 지지 표식 구간의 절반만 맞히면 재현율이 0.5가 됨.
+            var predicted = new bool[100];
+            for (int i = 10; i < 20; i++) predicted[i] = true;
+            var labels = new List<FbxIntentCalibration.LabelSpan>
+            {
+                new FbxIntentCalibration.LabelSpan(10, 29, true),
+            };
+            var metrics = FbxIntentCalibration.ComputeFrameMetrics(
+                predicted, labels);
+            Assert.That(metrics.Recall, Is.EqualTo(0.5));
+            Assert.That(metrics.Precision, Is.EqualTo(1.0));
+        }
+
+        [Test]
+        public void Given_PredictedInsideAirborneLabel_When_ScoringFrames_Then_PrecisionDrops()
+        {
+            // 자유발 표식 구간에 지지를 예측하면 정밀도가 떨어짐.
+            var predicted = new bool[100];
+            for (int i = 0; i < 20; i++) predicted[i] = true;
+            var labels = new List<FbxIntentCalibration.LabelSpan>
+            {
+                new FbxIntentCalibration.LabelSpan(0, 9, true),
+                new FbxIntentCalibration.LabelSpan(10, 19, false),
+            };
+            var metrics = FbxIntentCalibration.ComputeFrameMetrics(
+                predicted, labels);
+            Assert.That(metrics.Precision, Is.EqualTo(0.5));
+            Assert.That(metrics.Recall, Is.EqualTo(1.0));
+        }
+
+        [Test]
         public void Given_InvalidInput_When_Estimating_Then_Throws()
         {
-            MethodInfo estimate = EstimatorType.GetMethod("Estimate", Flags);
             Assert.Throws<TargetInvocationException>(() =>
-                estimate.Invoke(null, new object[]
+                EstimateMethod().Invoke(null, new object[]
                     { Array.CreateInstance(SampleType, 1), FrameRate, HumanScale, null }));
         }
 
@@ -181,8 +269,16 @@ namespace Tests.Editor.FBXImporter
                     null), index);
             }
 
-            return EstimatorType.GetMethod("Estimate", Flags).Invoke(null,
+            return EstimateMethod().Invoke(null,
                 new object[] { samples, FrameRate, HumanScale, labels });
+        }
+
+        // Tuning 오버로드가 추가되어 이름만으로는 모호하므로 4인자 시그니처로 고름.
+        private static MethodInfo EstimateMethod()
+        {
+            return EstimatorType.GetMethods(Flags)
+                .First(m => m.Name == "Estimate" &&
+                    m.GetParameters().Length == 4);
         }
 
         private static object CreateLabel(int startFrame, int endFrameInclusive,
