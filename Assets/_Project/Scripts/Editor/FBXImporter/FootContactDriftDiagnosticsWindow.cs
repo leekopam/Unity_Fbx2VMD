@@ -35,6 +35,7 @@ namespace Fbx2Vmd.FBXImporter
         private bool _measureCorrected = true;
         private bool _disableComponents = true;
         private string _csvPath = "";
+        private string _gateCsvPath = "";
         private string _report = "";
         private Vector2 _scroll;
 
@@ -64,6 +65,7 @@ namespace Fbx2Vmd.FBXImporter
             _measureCorrected = EditorGUILayout.ToggleLeft("접촉 안정화 보정본 측정", _measureCorrected);
             _disableComponents = EditorGUILayout.ToggleLeft("인스턴스 컴포넌트 비활성화", _disableComponents);
             _csvPath = EditorGUILayout.TextField("CSV 출력 경로(비우면 생략)", _csvPath);
+            _gateCsvPath = EditorGUILayout.TextField("게이트 분해 CSV 경로(비우면 생략)", _gateCsvPath);
 
             using (new EditorGUI.DisabledScope(!_measureDirect && !_measureCorrected))
             {
@@ -125,6 +127,8 @@ namespace Fbx2Vmd.FBXImporter
                     controllers.Add(correctedController);
                     Invoke(correctedController, "PrepareWithArmDirectionReference",
                         correctedRig.Animator, clip, sourceAsset);
+                    // 제품 경로와 동일하게 지면 응답(다리 도달·골반 보정 게이트)을 켬.
+                    Invoke(correctedController, "SetGroundResponseEnabled", true);
                 }
 
                 int count = end - start + 1;
@@ -135,6 +139,16 @@ namespace Fbx2Vmd.FBXImporter
                 var correctedLeft = new List<Vector3>(count);
                 var correctedRight = new List<Vector3>(count);
                 var frames = new List<int>(count);
+                var sourceLeftFoot = new List<Vector3>(count);
+                var sourceLeftToes = new List<Vector3>(count);
+                var sourceRightFoot = new List<Vector3>(count);
+                var sourceRightToes = new List<Vector3>(count);
+                var correctedLeftFoot = new List<Vector3>(count);
+                var correctedLeftToes = new List<Vector3>(count);
+                var correctedRightFoot = new List<Vector3>(count);
+                var correctedRightToes = new List<Vector3>(count);
+                // 프레임별 게이트 내부 상태 스냅샷 — 진단 객체는 프레임마다 재사용되므로 즉시 복사함.
+                var gateRows = new List<string[]>(count);
 
                 for (int frame = start; frame <= end; frame++)
                 {
@@ -161,6 +175,14 @@ namespace Fbx2Vmd.FBXImporter
                     frames.Add(frame);
                     sourceLeft.Add(sourceRig.ContactPoint(isLeft: true));
                     sourceRight.Add(sourceRig.ContactPoint(isLeft: false));
+                    sourceRig.SupportPoints(isLeft: true,
+                        out Vector3 slf, out Vector3 slt);
+                    sourceRig.SupportPoints(isLeft: false,
+                        out Vector3 srf, out Vector3 srt);
+                    sourceLeftFoot.Add(slf);
+                    sourceLeftToes.Add(slt);
+                    sourceRightFoot.Add(srf);
+                    sourceRightToes.Add(srt);
                     if (directRig != null)
                     {
                         directLeft.Add(directRig.ContactPoint(isLeft: true));
@@ -170,6 +192,18 @@ namespace Fbx2Vmd.FBXImporter
                     {
                         correctedLeft.Add(correctedRig.ContactPoint(isLeft: true));
                         correctedRight.Add(correctedRig.ContactPoint(isLeft: false));
+                        correctedRig.SupportPoints(isLeft: true,
+                            out Vector3 clf, out Vector3 clt);
+                        correctedRig.SupportPoints(isLeft: false,
+                            out Vector3 crf, out Vector3 crt);
+                        correctedLeftFoot.Add(clf);
+                        correctedLeftToes.Add(clt);
+                        correctedRightFoot.Add(crf);
+                        correctedRightToes.Add(crt);
+                        if (!string.IsNullOrEmpty(_gateCsvPath))
+                        {
+                            gateRows.Add(CaptureGateRow(correctedController, frame));
+                        }
                     }
                 }
 
@@ -183,8 +217,16 @@ namespace Fbx2Vmd.FBXImporter
                 if (!string.IsNullOrEmpty(_csvPath))
                 {
                     WriteCsv(frames, sourceLeft, sourceRight, directLeft, directRight,
-                        correctedLeft, correctedRight);
+                        correctedLeft, correctedRight,
+                        sourceLeftFoot, sourceLeftToes, sourceRightFoot, sourceRightToes,
+                        correctedLeftFoot, correctedLeftToes,
+                        correctedRightFoot, correctedRightToes);
                     report.AppendLine($"CSV 기록: {_csvPath}");
+                }
+                if (gateRows.Count > 0)
+                {
+                    WriteGateCsv(gateRows, correctedController);
+                    report.AppendLine($"게이트 CSV 기록: {_gateCsvPath}");
                 }
 
                 _report = report.ToString();
@@ -323,23 +365,181 @@ namespace Fbx2Vmd.FBXImporter
             report.AppendLine();
         }
 
-        private static void AppendIntentReport(
-            StringBuilder report,
-            object correctedController,
-            int firstFrame,
-            int lastFrame)
+        // 게이트 수치 분해용 — HumanoidFootGroundingGate의 프레임 단위 필드명 고정 목록임.
+        private static readonly string[] GateScalarFields =
+        {
+            "measured", "evaluation_stage", "raw_pass", "held_pass", "used_physical_reach",
+            "pelvis_offset_m", "pelvis_maximum_offset_m", "target_error_m",
+            "sole_clearance_m", "supported_contact_error_m", "supported_contact_count",
+        };
+
+        // HumanoidFootGroundingLegDiagnostic의 필드명 고정 목록임.
+        private static readonly string[] LegDiagnosticFields =
+        {
+            "has_ground", "rear_point_id", "front_point_id", "mixed_ground_collider",
+            "contact_ground_misses", "maximum_ground_normal_angle_deg",
+            "maximum_anchor_ground_shift_m", "pair_span_error_m", "weighted_contact_error_m",
+            "lift_m", "lifted_contact_error_m", "foot_offset_m", "offset_contact_error_m",
+            "hip_to_target_m", "damped_reach_m", "physical_reach_m", "target_error_m",
+            "supported_contact_error_m", "supported_contact_count",
+        };
+
+        private sealed class IntentSpan
+        {
+            internal int Start;
+            internal int End;
+            internal string Mode;
+            internal string Certainty;
+        }
+
+        private static object GetIntentEstimate(object correctedController)
         {
             if (correctedController == null)
             {
-                return;
+                return null;
             }
 
             // 진단 전용 — 안정화기의 의도 구간 분단을 그대로 노출해 핀 섬 잔차 분석에 씀.
             FieldInfo field = correctedController.GetType().GetField(
                 "_footContactStabilizer", Flags);
             object stabilizer = field?.GetValue(correctedController);
-            object estimate = stabilizer?.GetType()
+            return stabilizer?.GetType()
                 .GetProperty("IntentEstimate", Flags)?.GetValue(stabilizer);
+        }
+
+        private static List<IntentSpan> CollectIntentSpans(object estimate, string listProperty)
+        {
+            var spans = new List<IntentSpan>();
+            var intents = estimate?.GetType().GetProperty(listProperty, Flags)
+                ?.GetValue(estimate) as System.Collections.IEnumerable;
+            if (intents == null)
+            {
+                return spans;
+            }
+
+            foreach (object intent in intents)
+            {
+                Type intentType = intent.GetType();
+                spans.Add(new IntentSpan
+                {
+                    Start = (int)intentType.GetProperty("StartFrame", Flags).GetValue(intent),
+                    End = (int)intentType.GetProperty("EndFrameExclusive", Flags).GetValue(intent),
+                    Mode = intentType.GetProperty("Mode", Flags).GetValue(intent)?.ToString() ?? "",
+                    Certainty = intentType.GetProperty("Certainty", Flags).GetValue(intent)?.ToString() ?? "",
+                });
+            }
+
+            return spans;
+        }
+
+        private static string[] CaptureGateRow(object controller, int frame)
+        {
+            var cells = new List<string>(
+                2 + GateScalarFields.Length + LegDiagnosticFields.Length * 2 + 4);
+            cells.Add(frame.ToString());
+            object status = controller.GetType()
+                .GetProperty("LastGroundingStatus", Flags)?.GetValue(controller);
+            cells.Add(status?.ToString() ?? "");
+            object gate = controller.GetType()
+                .GetProperty("LastGroundingGate", Flags)?.GetValue(controller);
+            foreach (string name in GateScalarFields)
+            {
+                cells.Add(FormatField(gate, name));
+            }
+            foreach (string name in LegDiagnosticFields)
+            {
+                cells.Add(FormatField(GetField(gate, "left"), name));
+            }
+            foreach (string name in LegDiagnosticFields)
+            {
+                cells.Add(FormatField(GetField(gate, "right"), name));
+            }
+
+            // 의도 라벨 4셀 — 측정 종료 후 기록 단계에서 프레임→구간 조인으로 채움.
+            cells.Add("");
+            cells.Add("");
+            cells.Add("");
+            cells.Add("");
+            return cells.ToArray();
+        }
+
+        private static object GetField(object owner, string name)
+        {
+            return owner?.GetType().GetField(name, Flags)?.GetValue(owner);
+        }
+
+        private static string FormatField(object owner, string name)
+        {
+            object value = GetField(owner, name);
+            switch (value)
+            {
+                case null:
+                    return "";
+                case bool flag:
+                    return flag ? "1" : "0";
+                case float number:
+                    return number.ToString("F6",
+                        System.Globalization.CultureInfo.InvariantCulture);
+                default:
+                    return value.ToString();
+            }
+        }
+
+        private void WriteGateCsv(List<string[]> rows, object correctedController)
+        {
+            var builder = new StringBuilder();
+            builder.Append("frame,grounding_status");
+            foreach (string name in GateScalarFields)
+            {
+                builder.Append(',').Append(name);
+            }
+            foreach (string name in LegDiagnosticFields)
+            {
+                builder.Append(",l_").Append(name);
+            }
+            foreach (string name in LegDiagnosticFields)
+            {
+                builder.Append(",r_").Append(name);
+            }
+            builder.Append(",l_mode,l_certainty,r_mode,r_certainty\n");
+
+            object estimate = GetIntentEstimate(correctedController);
+            List<IntentSpan> leftSpans = CollectIntentSpans(estimate, "Left");
+            List<IntentSpan> rightSpans = CollectIntentSpans(estimate, "Right");
+            foreach (string[] row in rows)
+            {
+                int frame = int.Parse(row[0],
+                    System.Globalization.CultureInfo.InvariantCulture);
+                IntentSpan left = leftSpans.Find(s => frame >= s.Start && frame < s.End);
+                IntentSpan right = rightSpans.Find(s => frame >= s.Start && frame < s.End);
+                row[row.Length - 4] = left?.Mode ?? "";
+                row[row.Length - 3] = left?.Certainty ?? "";
+                row[row.Length - 2] = right?.Mode ?? "";
+                row[row.Length - 1] = right?.Certainty ?? "";
+                builder.Append(string.Join(",", row)).Append('\n');
+            }
+
+            string directory = System.IO.Path.GetDirectoryName(_gateCsvPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                System.IO.Directory.CreateDirectory(directory);
+            }
+
+            System.IO.File.WriteAllText(_gateCsvPath, builder.ToString());
+        }
+
+        private static void AppendIntentReport(
+            StringBuilder report,
+            object correctedController,
+            int firstFrame,
+            int lastFrame)
+        {
+            object estimate = GetIntentEstimate(correctedController);
+            if (correctedController == null)
+            {
+                return;
+            }
+
             if (estimate == null)
             {
                 report.AppendLine("의도 추정 없음(보정본 미초기화)");
@@ -411,12 +611,24 @@ namespace Fbx2Vmd.FBXImporter
             IReadOnlyList<Vector3> directLeft,
             IReadOnlyList<Vector3> directRight,
             IReadOnlyList<Vector3> correctedLeft,
-            IReadOnlyList<Vector3> correctedRight)
+            IReadOnlyList<Vector3> correctedRight,
+            IReadOnlyList<Vector3> sourceLeftFoot,
+            IReadOnlyList<Vector3> sourceLeftToes,
+            IReadOnlyList<Vector3> sourceRightFoot,
+            IReadOnlyList<Vector3> sourceRightToes,
+            IReadOnlyList<Vector3> correctedLeftFoot,
+            IReadOnlyList<Vector3> correctedLeftToes,
+            IReadOnlyList<Vector3> correctedRightFoot,
+            IReadOnlyList<Vector3> correctedRightToes)
         {
             var builder = new StringBuilder();
             builder.AppendLine("frame,src_lx,src_ly,src_lz,src_rx,src_ry,src_rz," +
                 "dir_lx,dir_ly,dir_lz,dir_rx,dir_ry,dir_rz," +
-                "cor_lx,cor_ly,cor_lz,cor_rx,cor_ry,cor_rz");
+                "cor_lx,cor_ly,cor_lz,cor_rx,cor_ry,cor_rz," +
+                "src_lfx,src_lfy,src_lfz,src_ltx,src_lty,src_ltz," +
+                "src_rfx,src_rfy,src_rfz,src_rtx,src_rty,src_rtz," +
+                "cor_lfx,cor_lfy,cor_lfz,cor_ltx,cor_lty,cor_ltz," +
+                "cor_rfx,cor_rfy,cor_rfz,cor_rtx,cor_rty,cor_rtz");
             for (int index = 0; index < frames.Count; index++)
             {
                 builder.Append(frames[index]);
@@ -426,6 +638,14 @@ namespace Fbx2Vmd.FBXImporter
                 AppendPoint(builder, directRight.Count == frames.Count ? directRight[index] : (Vector3?)null);
                 AppendPoint(builder, correctedLeft.Count == frames.Count ? correctedLeft[index] : (Vector3?)null);
                 AppendPoint(builder, correctedRight.Count == frames.Count ? correctedRight[index] : (Vector3?)null);
+                AppendPoint(builder, sourceLeftFoot[index]);
+                AppendPoint(builder, sourceLeftToes[index]);
+                AppendPoint(builder, sourceRightFoot[index]);
+                AppendPoint(builder, sourceRightToes[index]);
+                AppendPoint(builder, correctedLeftFoot.Count == frames.Count ? correctedLeftFoot[index] : (Vector3?)null);
+                AppendPoint(builder, correctedLeftToes.Count == frames.Count ? correctedLeftToes[index] : (Vector3?)null);
+                AppendPoint(builder, correctedRightFoot.Count == frames.Count ? correctedRightFoot[index] : (Vector3?)null);
+                AppendPoint(builder, correctedRightToes.Count == frames.Count ? correctedRightToes[index] : (Vector3?)null);
                 builder.Append('\n');
             }
 
@@ -592,6 +812,13 @@ namespace Fbx2Vmd.FBXImporter
                 Transform foot = isLeft ? _leftFoot : _rightFoot;
                 Transform toes = isLeft ? _leftToes : _rightToes;
                 return (foot.position + toes.position) * 0.5f;
+            }
+
+            // 지지점 분리 캡처 — 롤 구간에서 발목 스윙과 발끝 슬립을 구분하기 위함.
+            internal void SupportPoints(bool isLeft, out Vector3 foot, out Vector3 toes)
+            {
+                foot = (isLeft ? _leftFoot : _rightFoot).position;
+                toes = (isLeft ? _leftToes : _rightToes).position;
             }
 
             private static Transform RequireBone(Animator animator, HumanBodyBones bone)
