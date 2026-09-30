@@ -87,6 +87,8 @@ namespace Fbx2Vmd.FBXImporter
                 return "대상에 Humanoid Animator가 없습니다.";
             if (_clip == null) return "애니메이션 클립을 선택하세요.";
             if (_firstFrame < 0) return "시작 프레임이 0보다 작습니다.";
+            if (_lastFrame >= 0 && _lastFrame < _firstFrame)
+                return "끝 프레임이 시작보다 빠릅니다.";
             return null;
         }
 
@@ -105,6 +107,11 @@ namespace Fbx2Vmd.FBXImporter
             int last = _lastFrame >= 0
                 ? Mathf.Min(_lastFrame, Mathf.CeilToInt(_clip.length * frameRate))
                 : Mathf.CeilToInt(_clip.length * frameRate);
+            if (last < _firstFrame)
+            {
+                _message = "클립 길이 안에 추출할 프레임 범위가 없습니다.";
+                return;
+            }
             var transforms = new Dictionary<HumanBodyBones, Transform>();
             foreach (HumanBodyBones bone in SelectedBones())
             {

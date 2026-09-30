@@ -118,6 +118,7 @@ namespace Fbx2Vmd.FBXImporter
                 return;
             }
             float frameRate = _clip.frameRate > 0f ? _clip.frameRate : 30f;
+            int clipLastFrame = Mathf.CeilToInt(_clip.length * frameRate);
             string outputDir = Path.Combine(
                 Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
                 "Docs", "Workflow", "Local", "video-compare",
@@ -141,7 +142,10 @@ namespace Fbx2Vmd.FBXImporter
                     {
                         // 참고 프레임 i ↔ 시각 i/영상fps ↔ 클립 프레임 i·클립fps/영상fps
                         // _fpsRatio는 영상/클립이므로 나눗셈으로 변환한다.
-                        int clipFrame = Mathf.RoundToInt(index / _fpsRatio + _frameOffset);
+                        // CSV의 clip_frame이 실제 샘플된 프레임과 같게 유효 범위로 클램프함.
+                        int clipFrame = Mathf.Clamp(
+                            Mathf.RoundToInt(index / _fpsRatio + _frameOffset),
+                            0, clipLastFrame);
                         float time = Mathf.Min(clipFrame / frameRate, _clip.length);
                         AnimationMode.SampleAnimationClip(_target, _clip, time);
                         string png = Path.Combine(outputDir, $"unity-{index:000000}-f{clipFrame}.png");
