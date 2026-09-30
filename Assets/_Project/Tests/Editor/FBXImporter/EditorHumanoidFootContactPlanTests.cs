@@ -131,18 +131,43 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RapidFreeAnchor_When_Tracking_Then_FreeMotionIsStepLimited()
+        public void Given_RapidFreeAnchor_When_Tracking_Then_LagIsBoundedAndSmooth()
         {
+            // 빠른 원본 추종은 프레임당 상한+갭 비례 회수로 제한해, 지연이 무한정 쌓여
+            // 이후 방침 경계에서 한 번에 방출되는 팝이 생기지 않게 함.
             using (Rig rig = CreateRig(out Transform foot))
             {
                 Vector3[] anchors = BuildAnchors(foot, rig.Sampler,
                     frameCount: 4, driftPerFrame: 0.01f,
                     policies: null, pinRelease: 0f, trackStep: 0.008f, ratio: 2f);
-                // 자유 구간 앵커 이동이 프레임당 상한(0.008)을 넘지 않음.
+                // 갭이 작은 초기 프레임은 엄격 상한이 적용됨.
                 Assert.That(Vector3.Distance(anchors[0], anchors[1]),
                     Is.EqualTo(0.008f).Within(0.000001f));
-                Assert.That(Vector3.Distance(anchors[0], anchors[3]),
-                    Is.EqualTo(0.024f).Within(0.000001f));
+                // 지연은 유한하게 유지되고 프레임 이동은 절대 상한(4×trackStep=0.032)을 넘지 않음.
+                for (int index = 2; index < anchors.Length; index++)
+                    Assert.That(Vector3.Distance(anchors[index - 1], anchors[index]),
+                        Is.LessThan(0.033f), $"프레임 {index - 1}→{index} 앵커가 절대 상한을 초과함");
+                // 추종이 멈추지 않고 목표 쪽으로 계속 진행함.
+                Assert.That(anchors[3].x - anchors[0].x, Is.GreaterThan(0.02f));
+            }
+        }
+
+        [Test]
+        public void Given_FreeToSlidingTransition_When_AnchorLags_Then_BoundaryStepIsStillLimited()
+        {
+            // 자유 구간에서 누적된 추종 지연이 Sliding 전환 순간 한 번에 방출되면
+            // 보정 궤적이 원시 리타깃 쪽으로 단프레임 점프한다. 경계 프레임의 이동은
+            // 비례 회수 범위 안에서만 커져야 하고 목표로 스냅해서는 안 됨.
+            using (Rig rig = CreateRig(out Transform foot))
+            {
+                Vector3[] anchors = BuildAnchors(foot, rig.Sampler,
+                    frameCount: 6, driftPerFrame: 0.01f,
+                    policies: new[] { 0, 0, 0, 2, 2, 2 }, pinRelease: 0f,
+                    trackStep: 0.008f, ratio: 2f);
+                for (int index = 1; index < anchors.Length; index++)
+                    Assert.That(Vector3.Distance(anchors[index - 1], anchors[index]),
+                        Is.LessThan(0.033f),
+                        $"프레임 {index - 1}→{index} 앵커가 절대 상한을 초과해 스냅함");
             }
         }
 
