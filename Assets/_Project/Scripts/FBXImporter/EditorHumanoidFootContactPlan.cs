@@ -279,10 +279,15 @@ namespace Fbx2Vmd.FBXImporter
             int primary = states[0].StartFrame <= states[1].StartFrame ? 0 : 1;
             Vector3 offset = Vector3.ProjectOnPlane(rotation * ((newFront - newRear) * foot.lossyScale.x), Vector3.up);
             if (offset.sqrMagnitude < 0.00000001f) return false;
-            Vector3 change = primary == 0 ? newRear - originalRear : newFront - originalFront;
-            // 핀 고정된 주 접촉의 앵커는 재정렬로 이동하지 않음.
-            if (!states[primary].Pinned)
-                states[primary].Anchor += Vector3.ProjectOnPlane(rotation * (change * foot.lossyScale.x), Vector3.up);
+            // 접촉 정점 신원이 바뀌면 앵커를 실제 정점 이동량만큼 옮겨 발 자세 연속을 유지함.
+            // 핀 고정 접촉도 보정하지 않으면 구 정점 위치의 앵커에 새 정점이 끌려가 팝이 됨.
+            // 정점이 그대로인 채널은 이동량이 0이라 영향이 없음.
+            for (int channel = 0; channel < 2; channel++)
+            {
+                Vector3 vertexShift = channel == 0 ? newRear - originalRear : newFront - originalFront;
+                states[channel].Anchor += Vector3.ProjectOnPlane(
+                    rotation * (vertexShift * foot.lossyScale.x), Vector3.up);
+            }
             states[0].Point = rear;
             states[1].Point = front;
             pair = new Pair(primary, direction, primary == 0 ? offset : -offset);

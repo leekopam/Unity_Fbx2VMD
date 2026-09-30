@@ -72,19 +72,10 @@ namespace Fbx2Vmd.FBXImporter
             for (int i = 0; i <= points.Length; i++)
             {
                 bool isSupported = false;
-                if (i < points.Length)
-                {
-                    // 왕복 움직임의 중앙 차분이 0이 되어도 정지로 오인하지 않도록 양쪽 속도를 확인함.
-                    float speed = Mathf.Max(
-                        Vector3.Distance(points[Mathf.Max(0, i - 1)], points[i]),
-                        Vector3.Distance(points[i], points[Mathf.Min(points.Length - 1, i + 1)])) * frameRate;
-                    if (!IsFinite(speed))
-                        return false;
-
-                    float thresholdRatio = start >= 0 ? ReleaseThresholdRatio : 1f;
-                    isSupported = points[i].y <= referenceHeight + heightTolerance * thresholdRatio &&
-                        speed <= speedLimit * thresholdRatio;
-                }
+                if (i < points.Length &&
+                    !EvaluateSupport(points, i, frameRate, referenceHeight, heightTolerance,
+                        speedLimit, start >= 0 ? ReleaseThresholdRatio : 1f, out isSupported))
+                    return false;
 
                 if (isSupported)
                 {
@@ -95,6 +86,30 @@ namespace Fbx2Vmd.FBXImporter
 
                 if (start < 0)
                     continue;
+
+                // 런 도중의 짧은 공백도 발끝이 지면 높이에 머물면 실제 이륙이 아닌
+                // 속도 지터로 보고 지지를 이어감. 이륙은 반드시 높이 상승을 동반함.
+                if (i < points.Length)
+                {
+                    int resume = i;
+                    bool resumeSupported = false;
+                    while (resume < points.Length && resume - i < minimumFrames &&
+                        points[resume].y <= referenceHeight + heightTolerance * ReleaseThresholdRatio)
+                    {
+                        if (!EvaluateSupport(points, resume, frameRate, referenceHeight,
+                                heightTolerance, speedLimit, ReleaseThresholdRatio,
+                                out resumeSupported))
+                            return false;
+                        if (resumeSupported)
+                            break;
+                        resume++;
+                    }
+                    if (resumeSupported && resume - i < minimumFrames)
+                    {
+                        i = resume - 1;
+                        continue;
+                    }
+                }
 
                 if (i - start >= minimumFrames)
                 {
@@ -123,6 +138,22 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 start = -1;
             }
+            return true;
+        }
+
+        // 왕복 움직임의 중앙 차분이 0이 되어도 정지로 오인하지 않도록 양쪽 속도를 확인함.
+        private static bool EvaluateSupport(Vector3[] points, int i, float frameRate,
+            float referenceHeight, float heightTolerance, float speedLimit,
+            float thresholdRatio, out bool supported)
+        {
+            supported = false;
+            float speed = Mathf.Max(
+                Vector3.Distance(points[Mathf.Max(0, i - 1)], points[i]),
+                Vector3.Distance(points[i], points[Mathf.Min(points.Length - 1, i + 1)])) * frameRate;
+            if (!IsFinite(speed))
+                return false;
+            supported = points[i].y <= referenceHeight + heightTolerance * thresholdRatio &&
+                speed <= speedLimit * thresholdRatio;
             return true;
         }
 

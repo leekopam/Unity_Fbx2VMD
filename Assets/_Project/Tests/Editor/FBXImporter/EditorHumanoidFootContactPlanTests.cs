@@ -202,6 +202,62 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_PinnedContactVertexSwitch_When_PairForms_Then_AnchorFollowsVertexDelta()
+        {
+            // 쌍 형성으로 핀 고정 주접촉의 정점이 바뀌면 앵커를 정점 이동량만큼 옮겨야
+            // 발 자세가 연속한다. 보정하지 않으면 새 정점이 구 정점 위치의 앵커로
+            // 끌려가 단프레임 팝이 됨.
+            using (Rig rig = CreateRig(out Transform foot))
+            {
+                const int frameCount = 6;
+                var sources = new[] { new Vector3[frameCount], new Vector3[frameCount] };
+                var weights = new Vector2[frameCount];
+                for (int index = 0; index < frameCount; index++)
+                {
+                    sources[0][index] = Vector3.zero;
+                    sources[1][index] = Vector3.forward * 0.2f;
+                    // 프레임 0은 앞쪽 단독, 이후 양쪽 접촉으로 쌍이 형성됨.
+                    weights[index] = index == 0 ? new Vector2(0f, 1f) : new Vector2(1f, 1f);
+                }
+                Assembly assembly = typeof(FBXVmdPipeline).Assembly;
+                Type policyType = assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootAnchorPolicy", true);
+                Array policies = Array.CreateInstance(policyType, frameCount);
+                object pinned = Enum.ToObject(policyType, 1);
+                for (int index = 0; index < frameCount; index++)
+                    policies.SetValue(pinned, index);
+                // 쌍 형성 프레임부터 발을 옆으로 기울여 앞쪽 최저 정점을 바꿈.
+                Quaternion rolled = Quaternion.AngleAxis(-30f, Vector3.forward);
+                Action<float> evaluate = time =>
+                {
+                    int frame = Mathf.RoundToInt(time * 60f);
+                    foot.SetPositionAndRotation(Vector3.zero,
+                        frame == 0 ? Quaternion.identity : rolled);
+                };
+                Type planType = assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+                MethodInfo build = planType.GetMethod("TryBuild", Flags);
+                object[] args = { foot, rig.Sampler, sources, weights, Quaternion.identity,
+                    1f, 60f, frameCount / 60f, evaluate, null, null, null, policies, 0f, 0f };
+                Assert.That(build.Invoke(null, args), Is.True);
+                MethodInfo getSample = planType.GetMethod("GetSample", Flags);
+                object SampleAt(int channel, float frame) =>
+                    getSample.Invoke(args[9], new object[] { channel, frame });
+                FieldInfo firstPoint = SampleAt(1, 0f).GetType().GetField("_firstPoint", Flags);
+                int before = (int)firstPoint.GetValue(SampleAt(1, 0f));
+                int after = (int)firstPoint.GetValue(SampleAt(1, 1f));
+                Assert.That(after, Is.Not.EqualTo(before),
+                    "전제: 기울어진 자세에서 쌍 형성 시 앞쪽 최저 정점이 바뀌어야 함");
+                Vector3 shift = (Vector3)SampleAt(1, 1f).GetType().GetField("Anchor", Flags).GetValue(SampleAt(1, 1f)) -
+                    (Vector3)SampleAt(1, 0f).GetType().GetField("Anchor", Flags).GetValue(SampleAt(1, 0f));
+                // 정점 이동(로컬 +x 0.1)을 기울어진 자세에 맞춰 회전시킨 수평 성분 ≈ 0.0866.
+                Assert.That(shift.x, Is.EqualTo(0.0866f).Within(0.01f),
+                    "정점 전환 시 앵커가 실제 정점 이동량만큼 이동해야 발 자세가 연속함");
+                Assert.That(Mathf.Abs(shift.z), Is.LessThan(0.01f));
+            }
+        }
+
+        [Test]
         public void Given_ContactPointIdentityChange_When_Interpolating_Then_SwitchesDiscretely()
         {
             // 인접 프레임의 접촉점 신원이 다르면 지면과 무관한 가상점을 보간하지 않고
