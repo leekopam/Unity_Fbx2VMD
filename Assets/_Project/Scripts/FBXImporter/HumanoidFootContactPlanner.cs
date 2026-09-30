@@ -398,22 +398,24 @@ namespace Fbx2Vmd.FBXImporter
                     CalculateCenteredSpeed(sourceToes, index, frameRate) <=
                     contactSpeedLimit;
             }
-            // 롤·슬라이드 구간은 중점이 들리거나 움직여 런 밖으로 빠지므로,
-            // 의도가 지지로 확정한 프레임은 발끝 착지만으로 접촉 런에 포함함.
-            // 런 밖이면 방침이 소비되지 않아 의도가 죽은 코드가 됨.
+            // 발끝이 바닥에 닿아있는 프레임은 의도·방침과 무관하게 접촉이다.
+            // 롤·슬라이드·정착 구간은 중점이 들리거나 움직여 런 밖으로 빠지는데,
+            // 그러면 확정 방침이 소비되지 않고 런 종료의 보정 해제가
+            // 발끝 잔류 접촉 안에서 일어나 전이 팝이 된다.
+            // 발끝 착지 프레임을 모두 런에 포함시켜 추종이 실제 리프트오프까지
+            // 이어지게 함. 단, 빠르게 상승 중인 발끝은 이륙 진행 중이므로 제외함.
             for (int index = 0; index < contactFrames.Length; index++)
             {
-                if (contactFrames[index])
+                if (contactFrames[index] ||
+                    sourceToes[index].y > toeContactHeight)
                 {
                     continue;
                 }
 
-                bool pinnedPivot = toePivot[index] &&
-                    policies[index] == HumanoidFootAnchorPolicy.Pinned;
-                bool slidingContact =
-                    policies[index] == HumanoidFootAnchorPolicy.Sliding &&
-                    sourceToes[index].y <= toeContactHeight;
-                if (pinnedPivot || slidingContact)
+                float toeRiseSpeed = index == 0
+                    ? 0f
+                    : (sourceToes[index].y - sourceToes[index - 1].y) * frameRate;
+                if (toeRiseSpeed <= contactSpeedLimit)
                 {
                     contactFrames[index] = true;
                 }

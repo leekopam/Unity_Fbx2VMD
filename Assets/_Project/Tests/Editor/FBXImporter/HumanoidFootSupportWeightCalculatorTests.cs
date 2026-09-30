@@ -33,7 +33,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(weights[20], Is.EqualTo(Vector2.right));
             Assert.That(weights[45], Is.EqualTo(Vector2.one));
             Assert.That(weights[75], Is.EqualTo(Vector2.up));
-            Assert.That(weights[95], Is.EqualTo(Vector2.zero));
+            Assert.That(weights[96], Is.EqualTo(Vector2.zero), "해제 블렌드 이후에는 비지지여야 함");
             for (int i = 1; i < weights.Length; i++)
                 Assert.That(Vector2.Distance(weights[i], weights[i - 1]), Is.LessThan(0.26f));
             CollectionAssert.AreEqual(weights, Build(rear, front));
@@ -49,6 +49,24 @@ namespace Tests.Editor.FBXImporter
             Assert.That(weights[20].x, Is.EqualTo(1f));
             Assert.That(weights.All(w => w.y == 0f), Is.True);
             CollectionAssert.AreEqual(original, rear);
+        }
+
+        [Test]
+        public void Given_SupportEndingAtLiftOff_When_Building_Then_ReleaseBlendStartsAfterLastSupportedFrame()
+        {
+            // 지지 런 안에서 미리 테이퍼하면 발이 아직 붙은 채로 원시 리타깃으로
+            // 복귀해 팝이 된다. 해제 블렌드는 마지막 지지 프레임 뒤에 와야 함.
+            var rear = Enumerable.Range(0, 60).Select(i => i < 30 ? Vector3.zero : Vector3.up).ToArray();
+            var front = Enumerable.Repeat(Vector3.up, 60).ToArray();
+            Vector2[] weights = Build(rear, front);
+            Assert.That(weights[29].x, Is.EqualTo(1f), "마지막 지지 프레임은 완전 지지여야 함");
+            Assert.That(weights[30].x, Is.GreaterThan(0.5f), "해제 블렌드는 리프트오프 프레임부터 시작해야 함");
+            Assert.That(weights[35].x, Is.LessThan(0.1f));
+            Assert.That(weights[36].x, Is.EqualTo(0f), "해제 블렌드는 blend 프레임 안에 끝나야 함");
+            Assert.That(weights[40].x, Is.EqualTo(0f));
+            for (int i = 31; i < 40; i++)
+                Assert.That(weights[i].x, Is.LessThanOrEqualTo(weights[i - 1].x + 0.001f),
+                    "해제 구간 가중치는 단조 감소해야 함");
         }
 
         [Test]
