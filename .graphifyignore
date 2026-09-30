@@ -1,0 +1,59 @@
+# Unity 생성물·캐시 — 그래프 입력으로 무의미하고 스캔 병목의 주 원인
+# (.gitignore의 Unity 섹션과 동일한 경계)
+Library/
+Temp/
+obj/
+Logs/
+Build/
+Builds/
+UserSettings/
+MemoryCaptures/
+Recordings/
+Screenshots/
+Captures/
+Videos/
+Artifacts/
+TestResults-*.log
+TestResults-*.xml
+
+# Unity 메타 파일 — 소스 구조와 무관한 병렬 데이터
+*.meta
+
+# graphify 자체 산출물 (도구는 graphify-out을 기본 제외하지만 명시)
+graphify-out/
+
+# QA 세션/증거 아티팩트 — 자동화가 대량 생성하는 프레임·로그 덤프
+Docs/Workflow/Local/ComparisonFrames/
+Docs/Workflow/Local/ComparisonLogs/
+Docs/Workflow/Local/ComparisonSessions/
+Docs/Workflow/Local/ComparisonReviews/
+Docs/Workflow/Local/JitterLogs/
+Docs/Workflow/Local/evidence/
+Docs/Workflow/Local/qa-evidence/
+Docs/Workflow/Local/ReferenceAnalysis/
+Docs/Workflow/Local/ReferenceFrames/
+Docs/Workflow/Local/MMDQASessions/
+Docs/Workflow/Local/ManualComparison/
+Docs/Workflow/Local/Screenshots/
+Docs/Workflow/Local/artifacts/
+Docs/Workflow/Local/ArtifactBackups/
+Docs/Workflow/Local/test-results/
+Docs/Workflow/Local/TestLogs/
+Docs/Workflow/Local/PlayerVerification/
+Docs/Workflow/Local/RecordingQuality/
+Docs/Workflow/Local/runtime/
+Docs/Workflow/Local/archive/
+
+# 외부 참조 덤프 — 프로젝트 소스가 아닌 참고용 SDK/프로젝트 스냅샷
+Docs/ref/
+
+# 미디어·모션·데이터 파일 — 코드 그래프에 기여하지 않는 대용량/바이너리
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.mp4
+*.vmd
+*.csv
+*.log
