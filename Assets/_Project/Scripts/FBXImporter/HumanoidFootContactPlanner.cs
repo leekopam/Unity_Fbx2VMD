@@ -75,6 +75,7 @@ namespace Fbx2Vmd.FBXImporter
         private const float MinimumQuaternionMagnitude = 0.000001f;
         private const float MinimumSegmentLength = 0.000001f;
         private const float MinimumHeightCorrectionPerHumanScale = 1f / 1000f;
+        private const float MinimumCorrectionSquaredMagnitude = 0.0000000001f;
         private const float ToeHeightWeight = 2f;
 
         internal static HumanoidFootContactPlan Build(
@@ -282,6 +283,17 @@ namespace Fbx2Vmd.FBXImporter
                     horizontalDirection.y * horizontalLength);
                 rootSpaceToeDirections[index] =
                     targetToSourceRotation * desiredWorldDirection;
+
+                // 발끝 방향 보정은 발목 축 회전으로 적용돼 발끝이 수평 이동하고
+                // 그 절반만큼 접촉 중점이 밀림. 접촉 보정이 걸린 프레임에서는
+                // 발목 목표에서 회전 유발 수평 이동의 절반을 빼 접촉 중점을 지킴.
+                if (rootSpaceCorrections[index].sqrMagnitude >
+                    MinimumCorrectionSquaredMagnitude)
+                {
+                    rootSpaceCorrections[index] += ToeRotationMidpointCompensation(
+                        targetSegment, desiredWorldDirection,
+                        targetToSourceRotation);
+                }
             }
 
             return rootSpaceToeDirections;
@@ -356,7 +368,175 @@ namespace Fbx2Vmd.FBXImporter
             return corrections;
         }
 
+        // 기본값은 기존 핀/해제/해제블렌드 구현 — 병합된 의도와 기존 핀 경로의
+        // 조합 효과를 분리 측정할 수 있게 실험 토글로만 열어둠.
+        // 오프라인 솔버는 FbxDiagnostics.RunAll의 -offlineSolver 인자나 EditMode
+        // 테스트에서만 켜고, 병합만으로 게이트 미달일 때 활성화를 검토함.
+        internal static bool UseOfflineContactSolver = false;
+
+        // 오프라인 제약 풀이의 반복 계수 — 접촉 프레임은 강하게 수렴하고
+        // 비접촉 프레임은 원본 상대이동을 유지하는 쪽으로 약하게 수렴함.
+        private const float ContactHardFactor = 0.9f;
+        private const float FollowSoftFactor = 0.05f;
+        private const int SolverIterationsPerFrame = 8;
+        private const int SolverMinimumIterations = 60;
+
         private static void ApplyContactRun(
+            IReadOnlyList<Vector3> sourcePoints,
+            IReadOnlyList<Vector3> targetPoints,
+            IReadOnlyList<bool> contactFrames,
+            Vector3[] corrections,
+            Quaternion sourceToTargetRotation,
+            Quaternion targetToSourceRotation,
+            int runStart,
+            int runEnd,
+            int releaseFrames,
+            HumanoidFootAnchorPolicy[] policies,
+            float pinReleaseDistance)
+        {
+            if (UseOfflineContactSolver)
+            {
+                ApplyContactRunOffline(
+                    sourcePoints, targetPoints, contactFrames, corrections,
+                    sourceToTargetRotation, targetToSourceRotation,
+                    runStart, runEnd, releaseFrames, policies, pinReleaseDistance);
+                return;
+            }
+
+            ApplyContactRunPinRelease(
+                sourcePoints, targetPoints, contactFrames, corrections,
+                sourceToTargetRotation, targetToSourceRotation,
+                runStart, runEnd, releaseFrames, policies, pinReleaseDistance);
+        }
+
+        /// <summary>
+        /// 클립 전체를 아는 오프라인 제약 풀이로 접촉 런을 보정함.
+        /// 런 안 각 프레임의 대상 접촉점을 입자로 보고 반복 수렴함:
+        ///   - 연속된 핀 프레임은 같은 수평 위치로 강하게 수렴(하드 제약)
+        ///   - 나머지 프레임은 원본의 프레임간 상대 이동을 유지(소프트 제약)
+        ///   - 런 첫 프레임은 진입 위치에 고정해 경계 연속성을 지킴
+        /// 섬 단위 핀 해제가 없으므로 누적 잔차가 생기지 않음.
+        /// </summary>
+        private static void ApplyContactRunOffline(
+            IReadOnlyList<Vector3> sourcePoints,
+            IReadOnlyList<Vector3> targetPoints,
+            IReadOnlyList<bool> contactFrames,
+            Vector3[] corrections,
+            Quaternion sourceToTargetRotation,
+            Quaternion targetToSourceRotation,
+            int runStart,
+            int runEnd,
+            int releaseFrames,
+            HumanoidFootAnchorPolicy[] policies,
+            float pinReleaseDistance)
+        {
+            int length = runEnd - runStart + 1;
+            var solved = new Vector3[length];
+            for (int k = 0; k < length; k++)
+            {
+                solved[k] = targetPoints[runStart + k];
+            }
+
+            // 핀 구간마다 원본 기준점을 잡아, 핀 안에서 원본이 실제로 크게 움직이면
+            // 의도 추정 오류로 보고 그 프레임의 핀을 해제(소프트)함.
+            var effectivePinned = new bool[length];
+            int pinStart = -1;
+            for (int k = 0; k <= length; k++)
+            {
+                bool isPin = k < length &&
+                    policies[runStart + k] == HumanoidFootAnchorPolicy.Pinned;
+                if (isPin && pinStart < 0) { pinStart = k; continue; }
+                if (isPin || pinStart < 0) { continue; }
+                Vector3 pinSource = sourcePoints[runStart + pinStart];
+                for (int j = pinStart; j < k; j++)
+                {
+                    effectivePinned[j] = pinReleaseDistance <= 0f ||
+                        HorizontalDistance(sourcePoints[runStart + j], pinSource) <
+                        pinReleaseDistance;
+                }
+                pinStart = -1;
+            }
+
+            Vector3 entryAnchor = solved[0];
+            int iterations = Mathf.Max(SolverMinimumIterations,
+                SolverIterationsPerFrame * length);
+            for (int iteration = 0; iteration < iterations; iteration++)
+            {
+                for (int k = 1; k < length; k++)
+                {
+                    if (effectivePinned[k - 1] && effectivePinned[k])
+                    {
+                        // 하드 제약: 연속 접촉 프레임을 수평 중점으로 수렴함.
+                        float midX = (solved[k - 1].x + solved[k].x) * 0.5f;
+                        float midZ = (solved[k - 1].z + solved[k].z) * 0.5f;
+                        solved[k - 1] = HorizontalLerp(
+                            solved[k - 1], midX, midZ, ContactHardFactor);
+                        solved[k] = HorizontalLerp(
+                            solved[k], midX, midZ, ContactHardFactor);
+                    }
+                    else
+                    {
+                        // 소프트 제약: 원본의 상대 이동을 유지하도록 쌍을 당김.
+                        Vector3 relative = sourceToTargetRotation *
+                            (sourcePoints[runStart + k] -
+                             sourcePoints[runStart + k - 1]);
+                        relative.y = 0f;
+                        Vector3 error = new Vector3(
+                            solved[k].x - solved[k - 1].x - relative.x,
+                            0f,
+                            solved[k].z - solved[k - 1].z - relative.z);
+                        Vector3 half = error * (FollowSoftFactor * 0.5f);
+                        solved[k - 1] = new Vector3(
+                            solved[k - 1].x + half.x, solved[k - 1].y,
+                            solved[k - 1].z + half.z);
+                        solved[k] = new Vector3(
+                            solved[k].x - half.x, solved[k].y,
+                            solved[k].z - half.z);
+                    }
+                }
+                // 런 진입 프레임을 고정해 보정 시작점의 연속성을 유지함.
+                solved[0] = new Vector3(entryAnchor.x, solved[0].y, entryAnchor.z);
+            }
+
+            for (int k = 0; k < length; k++)
+            {
+                int index = runStart + k;
+                Vector3 rootSpaceCorrection = targetToSourceRotation *
+                    (solved[k] - targetPoints[index]);
+                rootSpaceCorrection.y = 0f;
+                corrections[index] = rootSpaceCorrection;
+            }
+
+            ApplyReleaseBlend(corrections, contactFrames, runEnd, releaseFrames);
+        }
+
+        private static Vector3 HorizontalLerp(Vector3 from, float x, float z,
+            float t)
+        {
+            return new Vector3(
+                Mathf.Lerp(from.x, x, t), from.y, Mathf.Lerp(from.z, z, t));
+        }
+
+        /// <summary>
+        /// 발끝 방향 보정이 발목 축 회전으로 적용될 때 발끝이 수평 이동하고
+        /// 접촉 중점(발목·발끝 평균)이 그 절반만큼 밀림. 접촉 중점을 계획 위치에
+        /// 유지하려고 발목 보정에서 회전 유발 수평 이동의 절반을 뺌.
+        /// 수직 성분은 착지 자체의 발끝 하강이므로 보상하지 않음.
+        /// </summary>
+        internal static Vector3 ToeRotationMidpointCompensation(
+            Vector3 currentToeOffset,
+            Vector3 desiredToeOffset,
+            Quaternion targetToSourceRotation)
+        {
+            Vector3 horizontalDelta = desiredToeOffset - currentToeOffset;
+            horizontalDelta.y = 0f;
+            Vector3 rootSpace = targetToSourceRotation *
+                (horizontalDelta * -0.5f);
+            rootSpace.y = 0f;
+            return rootSpace;
+        }
+
+        private static void ApplyContactRunPinRelease(
             IReadOnlyList<Vector3> sourcePoints,
             IReadOnlyList<Vector3> targetPoints,
             IReadOnlyList<bool> contactFrames,
@@ -416,6 +596,16 @@ namespace Fbx2Vmd.FBXImporter
                 corrections[index] = rootSpaceCorrection;
             }
 
+            ApplyReleaseBlend(corrections, contactFrames, runEnd, releaseFrames);
+        }
+
+        // 런 끝 잔여 보정을 비접촉 프레임에 걸쳐 부드럽게 감쇠시킴.
+        private static void ApplyReleaseBlend(
+            Vector3[] corrections,
+            IReadOnlyList<bool> contactFrames,
+            int runEnd,
+            int releaseFrames)
+        {
             Vector3 releaseCorrection = corrections[runEnd];
             for (int releaseIndex = 1; releaseIndex <= releaseFrames; releaseIndex++)
             {

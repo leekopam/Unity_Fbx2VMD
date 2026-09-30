@@ -167,6 +167,131 @@ namespace Tests.Editor.FBXImporter
                 Is.LessThan(0.002f));
         }
 
+        [Test]
+        public void Given_ToeDirectionTurns_When_Compensating_Then_SubtractsHalfHorizontalDelta()
+        {
+            // 발끝 방향 보정은 발목 축 회전으로 적용돼 발끝이 수평 이동하고
+            // 그 절반만큼 접촉 중점이 밀림. 발목 보정에서 그 절반을 빼
+            // 접촉 중점이 계획 위치에 머물게 해야 함.
+            Vector3 compensation = InvokeToeRotationCompensation(
+                new Vector3(0.1f, 0f, 0f),
+                new Vector3(0f, 0f, 0.1f),
+                Quaternion.identity);
+            Assert.That(compensation.x, Is.EqualTo(0.05f).Within(0.000001f));
+            Assert.That(compensation.z, Is.EqualTo(-0.05f).Within(0.000001f));
+            Assert.That(compensation.y, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Given_ToeDirectionUnchanged_When_Compensating_Then_ReturnsZero()
+        {
+            Vector3 compensation = InvokeToeRotationCompensation(
+                new Vector3(0.1f, 0f, 0f),
+                new Vector3(0.1f, 0f, 0f),
+                Quaternion.identity);
+            Assert.That(compensation, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
+        public void Given_RotatedTarget_When_Compensating_Then_ReturnsRootSpaceDelta()
+        {
+            Vector3 compensation = InvokeToeRotationCompensation(
+                new Vector3(0.1f, 0f, 0f),
+                new Vector3(0f, 0f, 0.1f),
+                Quaternion.Euler(0f, 90f, 0f));
+            // 월드 보상 (+0.05,0,-0.05)에 소스 축 회전을 그대로 적용함.
+            Vector3 expected =
+                Quaternion.Euler(0f, 90f, 0f) *
+                new Vector3(0.05f, 0f, -0.05f);
+            Assert.That(compensation.x, Is.EqualTo(expected.x).Within(0.000001f));
+            Assert.That(compensation.z, Is.EqualTo(expected.z).Within(0.000001f));
+        }
+
+        [Test]
+        public void Given_OfflineSolverEnabled_When_SourceReturnsToAnchor_Then_RePinsTail()
+        {
+            // 기존 경로는 첫 해제 이후 런 끝까지 추종만 해 꼬리 잔차가 남지만,
+            // 오프라인 솔버는 원본이 핀 반경으로 돌아온 꼬리 구간을 다시 잠가
+            // 종점 잔차를 줄임. 대상이 정지해 보정량이 곧 보정 후 위치임.
+            Vector3[] source = CreatePoints(80, index => new Vector3(
+                index >= 15 && index <= 46 ? (index - 14) * 0.0015f :
+                index > 46 ? 0.048f - (index - 46) * 0.0015f : 0f, 0f, 0f));
+            Vector3[] target = CreatePoints(80, _ => Vector3.zero);
+            object intents = CreateEstimate(0, 80);
+
+            object solverPlan;
+            SetOfflineSolver(true);
+            try
+            {
+                solverPlan = BuildPlan(
+                    source, target, Quaternion.identity, intents);
+            }
+            finally
+            {
+                SetOfflineSolver(false);
+            }
+            object pinReleasePlan = BuildPlan(
+                source, target, Quaternion.identity, intents);
+
+            Assert.That(GetIntProperty(solverPlan, "LeftContactRunCount"),
+                Is.EqualTo(1));
+            float pinReleaseDrift = HorizontalCorrectionDelta(
+                pinReleasePlan, 0, 79);
+            float solverDrift = HorizontalCorrectionDelta(solverPlan, 0, 79);
+            Assert.That(pinReleaseDrift, Is.GreaterThan(0.01f));
+            Assert.That(solverDrift, Is.LessThan(pinReleaseDrift));
+            Assert.That(solverDrift, Is.LessThan(0.01f));
+        }
+
+        // 대상이 정지한 입력에서는 보정량이 곧 보정 후 위치 — 두 프레임의 수평 이동량을 잼.
+        private static float HorizontalCorrectionDelta(
+            object plan, int startFrame, int endFrame)
+        {
+            TryEvaluate(plan, startFrame / FrameRate, out Vector3 first);
+            TryEvaluate(plan, endFrame / FrameRate, out Vector3 last);
+            return Vector2.Distance(
+                new Vector2(first.x, first.z), new Vector2(last.x, last.z));
+        }
+
+        private static void SetOfflineSolver(bool enabled)
+        {
+            FieldInfo field = typeof(FBXVmdPipeline).Assembly
+                .GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootContactPlanner",
+                    throwOnError: true)
+                .GetField(
+                    "UseOfflineContactSolver",
+                    BindingFlags.Static | BindingFlags.Public |
+                    BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null,
+                "HumanoidFootContactPlanner.UseOfflineContactSolver 토글이 없습니다.");
+            field.SetValue(null, enabled);
+        }
+
+        private static Vector3 InvokeToeRotationCompensation(
+            Vector3 currentToeOffset,
+            Vector3 desiredToeOffset,
+            Quaternion targetToSourceRotation)
+        {
+            Assembly assembly = typeof(FBXVmdPipeline).Assembly;
+            MethodInfo method = assembly
+                .GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootContactPlanner",
+                    throwOnError: true)
+                .GetMethod(
+                    "ToeRotationMidpointCompensation",
+                    BindingFlags.Static | BindingFlags.Public |
+                    BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null,
+                "발끝 회전 보상 헬퍼가 HumanoidFootContactPlanner에 없습니다.");
+            return (Vector3)method.Invoke(
+                null,
+                new object[]
+                {
+                    currentToeOffset, desiredToeOffset, targetToSourceRotation
+                });
+        }
+
         private static object BuildPlan(
             Vector3[] source,
             Vector3[] target,
