@@ -141,6 +141,7 @@ namespace Tests.Editor.FBXImporter
             float rearWeight, float frontWeight, float expectedPitch)
         {
             CreateSampler();
+            Assert.That(Call("TrySample"), Is.EqualTo(true));
             Type grounding = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootGrounding", true);
             Type legType = grounding.GetNestedType("Leg", BindingFlags.NonPublic);
             object leg = Activator.CreateInstance(legType, Flags, null,
@@ -151,7 +152,7 @@ namespace Tests.Editor.FBXImporter
             legType.GetField("_targetFootRotation", Flags).SetValue(leg, Quaternion.AngleAxis(20f, Vector3.right));
             legType.GetField("_activeWeights", Flags).SetValue(leg, new Vector2(rearWeight, frontWeight));
 
-            Assert.That(legType.GetMethod("TryAlignSupportSurface", Flags).Invoke(leg, null), Is.True);
+            Assert.That(legType.GetMethod("TryAlignSupportSurface", Flags).Invoke(leg, new object[] { 0f }), Is.True);
             var result = (Quaternion)legType.GetField("_targetFootRotation", Flags).GetValue(leg);
             Assert.That(Quaternion.Angle(result, Quaternion.AngleAxis(expectedPitch, Vector3.right)), Is.LessThan(0.05f),
                 "반대쪽 지지 해제 여부로 남은 지지점 보정이 끊기거나 정상 발 구르기가 사라지면 안 됨");
