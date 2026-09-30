@@ -100,11 +100,25 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     for (int j = start; j < i; j++)
                     {
-                        // 구간 밖 공중 자세를 잡아두지 않도록 진입·해제 혼합을 지지 구간 안에 둠.
+                        // 진입 혼합만 지지 구간 안에 둠. 해제를 구간 안에서 시작하면
+                        // 발이 아직 지면에 붙은 채로 원시 리타깃으로 복귀해 팝이 됨.
                         float enter = start == 0 ? 1f : (j - start + 1f) / blendFrames;
-                        float leave = i == points.Length ? 1f : (i - j) / blendFrames;
-                        float weight = Mathf.Clamp01(Mathf.Min(enter, leave));
-                        result[j][channel] = weight * weight * (3f - 2f * weight);
+                        float weight = Mathf.Clamp01(enter);
+                        float smoothed = weight * weight * (3f - 2f * weight);
+                        if (smoothed > result[j][channel])
+                            result[j][channel] = smoothed;
+                    }
+
+                    // 해제 블렌드는 런 종료 뒤(실제 리프트오프 구간)에 배치해
+                    // 복귀 동작이 발이 뜨는 움직임에 겹치게 함. 뒤따르는 지지 런의
+                    // 진입 혼합과 겹치면 더 큰 값을 유지해 가중치가 움푹 꺼지지 않게 함.
+                    int releaseEnd = Mathf.Min(points.Length, i + Mathf.CeilToInt(blendFrames));
+                    for (int j = i; j < releaseEnd; j++)
+                    {
+                        float tail = Mathf.Clamp01((releaseEnd - j) / blendFrames);
+                        float smoothed = tail * tail * (3f - 2f * tail);
+                        if (smoothed > result[j][channel])
+                            result[j][channel] = smoothed;
                     }
                 }
                 start = -1;
