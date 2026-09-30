@@ -46,12 +46,46 @@ namespace Fbx2Vmd.ClothPhysics
         [Range(0, 3)]
         public int skirtFixedChainDepth = 0;
 
+        [Tooltip("스커트 프록시 메시 단순화 배율. 1.0 = 기본(체형 비례). 크면 입자 수가 줄어 성능↑ 디테일↓")]
+        [Range(0.5f, 3.0f)]
+        public float skirtReductionScale = 1.0f;
+
+        [Tooltip("스커트에 백스톱 적용 — 스킨 포즈 기준 내측 진입을 제한해 다리 관통을 막는다. " +
+                 "MC2 2.18.1에는 Penetration 제약이 없어 이것이 대체 수단. " +
+                 "옷이 다리 사이로 들어가는 정상 동작까지 딱딱해지면 끈다")]
+        public bool useSkirtBackstop = true;
+
+        [Tooltip("스커트 백스톱 허용 거리(m). 작을수록 스킨 포즈에 강하게 붙는다")]
+        [Min(0f)]
+        public float skirtBackstopDistance = 0.005f;
+
+        [Header("베이스라인 / 컬링")]
+        [Tooltip("공식 MC2 프리셋(JSON)을 베이스라인으로 먼저 가져와 관리 필드 외도 공식값으로 채운다. " +
+                 "끄면 기존 수작업 파라미터 경로만 사용")]
+        public bool usePresetBaseline = true;
+
+        [Tooltip("카메라 컬링 모드. AnimatorLinkage = 연동 Animator의 CullingMode를 따라감")]
+        public CullingSettings.CameraCullingMode cameraCullingMode =
+            CullingSettings.CameraCullingMode.AnimatorLinkage;
+
+        [Tooltip("이 거리(m)를 넘는 클로스 시뮬레이션을 끈다. 0 = 거리 컬링 끔(녹화·소규모 씬 기본값)")]
+        [Min(0f)]
+        public float distanceCullingMeters = 0f;
+
+        [Tooltip("거리 컬링 종료 직전 페이드 구간 비율(0~1)")]
+        [Range(0f, 1f)]
+        public float distanceCullingFadeRatio = 0.2f;
+
         [Header("런타임 옵션")]
         [Tooltip("MC2 Pre-build 사용. 활성화하려면 생성된 MagicaCloth 인스펙터에서 Pre-build 데이터도 함께 생성해야 함")]
         public bool usePreBuild = false;
 
         [Tooltip("비활성→활성 전환 시 클로스가 무효면 자동 재설정. MC2는 비활성 시 팀을 해제해 재활성만으로는 복구되지 않으므로 기본 켜기")]
         public bool autoRebuildOnEnable = true;
+
+        [Tooltip("다른 에셋이 PlayerLoop를 덮어써 MC2 시뮬레이션이 멈추는 경우를 대비해 " +
+                 "주기적으로 MagicaManager.InitCustomGameLoop()를 재호출한다 (등록 확인 후 누락 시에만 재등록)")]
+        public bool playerLoopGuard = true;
 
         [Header("결과 (읽기 전용)")]
         public List<ColliderComponent> generatedColliders = new List<ColliderComponent>();
@@ -254,10 +288,14 @@ namespace Fbx2Vmd.ClothPhysics
                         colResult.byCategory, 32);
                     var sr = SkirtClothBuilder.Create(
                         transform, smrs, skirtBoneDepths, skirtColliders, torso,
-                        skirtWeightThreshold, skirtFixedChainDepth);
+                        skirtWeightThreshold, skirtFixedChainDepth,
+                        skirtReductionScale, useSkirtBackstop, skirtBackstopDistance,
+                        usePresetBaseline);
                     if (sr.cloth != null)
                     {
                         sr.cloth.GetSerializeData2().preBuildData.enabled = usePreBuild;
+                        ApplyCulling(sr.cloth);
+                        sr.cloth.OnBuildComplete += HandleClothBuildComplete;
                         generatedCloths.Add(sr.cloth);
                         generatedParts.Add(HairPart.Unknown);
                         generatedIsLong.Add(false);
@@ -340,7 +378,7 @@ namespace Fbx2Vmd.ClothPhysics
             bool isLong = torso > 0f && maxLen >= torso * 0.8f;
 
             // 부위별 파라미터 템플릿 + 튜닝 배율
-            HairPhysicsParameters.Apply(part, sdata, torso, head, isLong, tuning);
+            HairPhysicsParameters.Apply(part, sdata, torso, head, isLong, tuning, usePresetBaseline);
 
             // 관련 콜라이더만 등록 (32개 제한 관리)
             // Pre-build 데이터는 SerializeData2에 위치 — 에디터에서 Pre-build 생성도 필요
@@ -349,6 +387,8 @@ namespace Fbx2Vmd.ClothPhysics
             var selected = HairPartColliderMapper.Select(categories, collidersByCategory, 32);
             sdata.colliderCollisionConstraint.colliderList.Clear();
             sdata.colliderCollisionConstraint.colliderList.AddRange(selected);
+            ApplyCulling(cloth);
+            cloth.OnBuildComplete += HandleClothBuildComplete;
 
             report.Add($"{part}: 체인 {chains.Count}개, 최대길이 {maxLen:F2}m, " +
                 $"콜라이더 {selected.Count}개{(isLong ? " [장발]" : "")}");
@@ -394,7 +434,8 @@ namespace Fbx2Vmd.ClothPhysics
                     continue; // MeshCloth(스커트)는 헤어 튜닝 적용 대상이 아님
                 var part = i < generatedParts.Count ? generatedParts[i] : HairPart.Unknown;
                 bool isLong = i < generatedIsLong.Count && generatedIsLong[i];
-                HairPhysicsParameters.Apply(part, cloth.SerializeData, torso, head, isLong, tuning);
+                HairPhysicsParameters.Apply(part, cloth.SerializeData, torso, head, isLong, tuning, usePresetBaseline);
+                ApplyCulling(cloth);
                 NotifyParameterChange(cloth);
                 applied++;
             }
@@ -435,6 +476,11 @@ namespace Fbx2Vmd.ClothPhysics
 
         void Update()
         {
+            // 다른 에셋이 PlayerLoop를 덮어쓰면 MC2 시뮬레이션이 조용히 멈춘다.
+            // InitCustomGameLoop는 이미 등록돼 있으면 즉시 반환하는 멱등 호출.
+            if (playerLoopGuard && Application.isPlaying && Time.frameCount % 120 == 0)
+                MagicaManager.InitCustomGameLoop();
+
             // 빌드 완료를 기다리던 지연 셋업 — 빌드 중 클로스가 없어지면 실행
             if (deferredSetup && !generatedCloths.Any(c =>
                     c != null && c.Process.IsState(ClothProcess.State_Build)))
@@ -464,6 +510,26 @@ namespace Fbx2Vmd.ClothPhysics
                 Debug.LogWarning($"[CharacterPhysicsSetup] 무효 클로스 {invalid}개 감지. " +
                     "ContextMenu '자동 물리 설정 실행'으로 재설정하거나 autoRebuildOnEnable을 켜세요.", this);
             }
+        }
+
+        /// <summary>생성 클로스에 컬링 옵션을 적용한다 (프리셋 JSON은 컬링을 저장하지 않아 여기서 설정).</summary>
+        void ApplyCulling(MagicaCloth cloth)
+        {
+            var culling = cloth.SerializeData.cullingSettings;
+            culling.cameraCullingMode = cameraCullingMode;
+            culling.distanceCullingLength.SetValue(distanceCullingMeters > 0f, distanceCullingMeters);
+            culling.distanceCullingFadeRatio = Mathf.Clamp01(distanceCullingFadeRatio);
+        }
+
+        /// <summary>클로스 비동기 빌드 실패를 리포트에 남긴다.</summary>
+        void HandleClothBuildComplete(MagicaCloth cloth, bool success)
+        {
+            if (success)
+                return;
+            string clothName = cloth != null ? cloth.name : "?";
+            lastReport = $"클로스 비동기 빌드 실패 ({clothName}) — " +
+                "SerializeData/메시 상태를 확인하세요";
+            Debug.LogWarning("[CharacterPhysicsSetup] " + lastReport, this);
         }
 
         /// <summary>플레이 중 파라미터 변경을 MC2에 알린다 (공식 API).</summary>
