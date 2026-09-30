@@ -96,7 +96,9 @@ namespace Fbx2Vmd.FBXImporter
             double evaluationTime = Mathf.Clamp(timeSeconds, 0f, clip.length);
             _clipPlayable.SetTime(evaluationTime);
             _graph.Evaluate(0f);
+#if UNITY_EDITOR
             ApplyEditorRootTranslation((float)evaluationTime);
+#endif
         }
 
         public void Dispose()
