@@ -34,9 +34,24 @@ namespace Fbx2Vmd.ClothPhysics
         [Header("흔들림 조정")]
         public HairTuning tuning = HairTuning.Default;
 
+        /// <summary>스커트 클로스 생성 방식</summary>
+        public enum SkirtMode
+        {
+            /// <summary>렌더러 메시에서 버텍스 속성을 계산해 MeshCloth 생성 (기존 경로)</summary>
+            MeshCloth = 0,
+            /// <summary>스커트 체인 루트를 루프 면으로 연결하는 BoneCloth 생성 (SequentialLoopMesh)</summary>
+            BoneClothLoop = 1,
+            /// <summary>루프 성립 가능(루트 3+)이면 BoneClothLoop, 아니면 MeshCloth 폴백</summary>
+            Auto = 2,
+        }
+
         [Header("스커트 옵션")]
-        [Tooltip("스커트 본 감지 시 MeshCloth를 자동 생성 (공식 런타임 vertexAttributeList 경로)")]
+        [Tooltip("스커트 본 감지 시 클로스를 자동 생성")]
         public bool autoSkirtCloth = true;
+
+        [Tooltip("스커트 생성 방식. BoneClothLoop는 본을 면으로 잇는 저부하 경로 " +
+                 "(프록시=본 수십 개, MeshCloth는 버텍스 수천~만). Auto는 루프 불가 시 MeshCloth 폴백")]
+        public SkirtMode skirtMode = SkirtMode.MeshCloth;
 
         [Tooltip("버텍스가 스커트로 분류되는 스커트 본 가중치 합 임계값")]
         [Range(0.1f, 1f)]
@@ -58,6 +73,13 @@ namespace Fbx2Vmd.ClothPhysics
         [Tooltip("스커트 백스톱 허용 거리(m). 작을수록 스킨 포즈에 강하게 붙는다")]
         [Min(0f)]
         public float skirtBackstopDistance = 0.005f;
+
+        [Tooltip("스커트 깊이 커브·포즈 반영 튜닝. MeshCloth/BoneClothLoop 경로에 공통 적용")]
+        public SkirtTuning skirtTuning = SkirtTuning.Default;
+
+        [Tooltip("클립이 스커트 본을 구동하지 않을 때(휴머노이드 변환 등) 커스텀 스키닝으로 " +
+                 "허리·다리 본에 자동 스키닝 — 백스톱/포즈 제약이 실제 자세를 따르게 함")]
+        public bool skirtSkinningFallback = true;
 
         [Header("베이스라인 / 컬링")]
         [Tooltip("공식 MC2 프리셋(JSON)을 베이스라인으로 먼저 가져와 관리 필드 외도 공식값으로 채운다. " +
@@ -272,7 +294,7 @@ namespace Fbx2Vmd.ClothPhysics
                 detect.skipped.AddRange(acc.skipped);
             }
 
-            // 스커트 본 감지 → MeshCloth 자동 생성 (vertexAttributeList로 고정/이동 자동 결정)
+            // 스커트 본 감지 → 클로스 자동 생성
             var skirtBoneDepths = SkirtClothBuilder.CollectSkirtBoneDepths(animator.transform);
             if (skirtBoneDepths.Count > 0)
             {
@@ -286,33 +308,97 @@ namespace Fbx2Vmd.ClothPhysics
                         ColliderCategory.Waist | ColliderCategory.Hips | ColliderCategory.Legs
                             | ColliderCategory.Feet | ColliderCategory.Hands,
                         colResult.byCategory, 32);
-                    var sr = SkirtClothBuilder.Create(
-                        transform, smrs, skirtBoneDepths, skirtColliders, torso,
-                        skirtWeightThreshold, skirtFixedChainDepth,
-                        skirtReductionScale, useSkirtBackstop, skirtBackstopDistance,
-                        usePresetBaseline);
-                    if (sr.cloth != null)
+
+                    // 스커트 본의 클립 구동 여부 판정 — 비구동이면 백스톱/포즈 제약의
+                    // 기준이 바인드 포즈에 고정되므로 커스텀 스키닝 폴백을 검토한다.
+                    var poseVerdict = SkirtAnimationProbe.EvaluateAnimator(
+                        animator, skirtBoneDepths.Keys.ToList(), out var poseDetail);
+                    bool tryCustomSkinning =
+                        poseVerdict == SkirtAnimationProbe.Verdict.Static && skirtSkinningFallback;
+                    var skinningBones = tryCustomSkinning
+                        ? SkirtAnimationProbe.ResolveSkinningBones(resolver)
+                        : null;
+                    void ReportSkirtPose(bool isBonePath)
                     {
-                        sr.cloth.GetSerializeData2().preBuildData.enabled = usePreBuild;
-                        ApplyCulling(sr.cloth);
-                        sr.cloth.OnBuildComplete += HandleClothBuildComplete;
-                        generatedCloths.Add(sr.cloth);
+                        if (poseVerdict != SkirtAnimationProbe.Verdict.Static)
+                            report.Add($"스커트 포즈 판정: {poseDetail}");
+                        else if (!skirtSkinningFallback)
+                            report.Add($"스커트 포즈 판정: {poseDetail} — 커스텀 스키닝 폴백 꺼짐");
+                        else if (isBonePath)
+                            // BoneCloth는 정점=본이라 애니메이션 포즈가 본 자체 —
+                            // 커스텀 스키닝(메시 정점 재스키닝)은 의미 없음
+                            report.Add($"스커트 포즈 판정: {poseDetail} — BoneCloth 경로는 커스텀 스키닝 불필요");
+                        else
+                            report.Add($"스커트 포즈 판정: {poseDetail} → 커스텀 스키닝 폴백");
+                    }
+
+                    // BoneCloth 루프 경로 — 정점=본이라 백스톱 전제(애니메이션 포즈)가 성립,
+                    // 프록시가 본 수십 개 수준이라 MeshCloth보다 부하가 낮다.
+                    MagicaCloth loopCloth = null;
+                    List<Transform> loopRoots = null;
+                    if (skirtMode != SkirtMode.MeshCloth)
+                    {
+                        loopRoots = SkirtBoneClothBuilder.CollectChainRootsOrdered(
+                            transform, skirtBoneDepths);
+                        if (SkirtBoneClothBuilder.CanBuildLoop(loopRoots))
+                        {
+                            loopCloth = SkirtBoneClothBuilder.Create(
+                                transform, loopRoots, skirtColliders,
+                                useSkirtBackstop, skirtBackstopDistance,
+                                usePresetBaseline, skirtTuning);
+                        }
+                    }
+
+                    if (loopCloth != null)
+                    {
+                        loopCloth.GetSerializeData2().preBuildData.enabled = usePreBuild;
+                        ApplyCulling(loopCloth);
+                        loopCloth.OnBuildComplete += HandleClothBuildComplete;
+                        generatedCloths.Add(loopCloth);
                         generatedParts.Add(HairPart.Unknown);
                         generatedIsLong.Add(false);
-                        report.Add($"스커트 MeshCloth 자동 생성: 고정 {sr.fixedVertexCount} + " +
-                            $"이동 {sr.moveVertexCount} 버텍스 ({sr.rendererCount}개 렌더러, " +
-                            $"콜라이더 {skirtColliders.Count}개)");
-                        if (sr.extractedMeshes.Count > 0)
-                            report.Add($"스커트 메시 추출 {sr.extractedMeshes.Count}개 " +
-                                "(65535 버텍스 한도 대응 — 원본 메시에서 스커트 삼각형 분리)");
+                        report.Add($"스커트 BoneCloth(SequentialLoopMesh) 자동 생성: " +
+                            $"체인 루트 {loopRoots.Count}개 (콜라이더 {skirtColliders.Count}개)");
+                        ReportSkirtPose(true);
                     }
                     else
                     {
-                        report.Add($"스커트 본 {skirtBoneDepths.Count}개 감지 — 스커트 버텍스를 찾지 못해 " +
-                            "MeshCloth 미생성 (메시가 스커트 본에 스키닝되지 않았거나 Read/Write 필요)");
+                        if (skirtMode == SkirtMode.BoneClothLoop)
+                            report.Add("BoneClothLoop 지정이나 루프 불성립(루트 3개 미만) — MeshCloth로 폴백");
+                        // MeshCloth 경로 (vertexAttributeList로 고정/이동 자동 결정)
+                        var sr = SkirtClothBuilder.Create(
+                            transform, smrs, skirtBoneDepths, skirtColliders, torso,
+                            skirtWeightThreshold, skirtFixedChainDepth,
+                            skirtReductionScale, useSkirtBackstop, skirtBackstopDistance,
+                            usePresetBaseline, skirtTuning);
+                        if (sr.cloth != null)
+                        {
+                            sr.cloth.GetSerializeData2().preBuildData.enabled = usePreBuild;
+                            if (skinningBones != null &&
+                                SkirtAnimationProbe.ApplyCustomSkinning(
+                                    sr.cloth.SerializeData, skinningBones) == 0)
+                                report.Add("경고: 커스텀 스키닝 폴백 요청됐으나 신체 본 해석 실패 — 폴백 불가");
+                            ApplyCulling(sr.cloth);
+                            sr.cloth.OnBuildComplete += HandleClothBuildComplete;
+                            generatedCloths.Add(sr.cloth);
+                            generatedParts.Add(HairPart.Unknown);
+                            generatedIsLong.Add(false);
+                            report.Add($"스커트 MeshCloth 자동 생성: 고정 {sr.fixedVertexCount} + " +
+                                $"이동 {sr.moveVertexCount} 버텍스 ({sr.rendererCount}개 렌더러, " +
+                                $"콜라이더 {skirtColliders.Count}개)");
+                            ReportSkirtPose(false);
+                            if (sr.extractedMeshes.Count > 0)
+                                report.Add($"스커트 메시 추출 {sr.extractedMeshes.Count}개 " +
+                                    "(65535 버텍스 한도 대응 — 원본 메시에서 스커트 삼각형 분리)");
+                        }
+                        else
+                        {
+                            report.Add($"스커트 본 {skirtBoneDepths.Count}개 감지 — 스커트 버텍스를 찾지 못해 " +
+                                "클로스 미생성 (메시가 스커트 본에 스키닝되지 않았거나 Read/Write 필요)");
+                        }
+                        foreach (var w in sr.warnings)
+                            report.Add("경고: " + w);
                     }
-                    foreach (var w in sr.warnings)
-                        report.Add("경고: " + w);
                 }
             }
 
@@ -551,6 +637,46 @@ namespace Fbx2Vmd.ClothPhysics
         }
 
 #if UNITY_EDITOR
+        /// <summary>
+        /// 현재 생성된 클로스 파라미터를 캐릭터 전용 프리셋 JSON으로 저장한다.
+        /// 저장 위치: Assets/Resources/PhysicsPresets/Character/{키}_{클로스명}.json
+        /// tuning/skirtTuning의 characterPresetKey에 같은 키를 입력하면 이 파일이
+        /// 공식 프리셋보다 우선 로드된다 (튜닝 결과의 캐릭터별 라이브러리화).
+        /// </summary>
+        [ContextMenu("생성 클로스를 캐릭터 프리셋으로 저장")]
+        void ExportCharacterPresets()
+        {
+            if (generatedCloths.Count == 0)
+            {
+                lastReport = "저장할 클로스가 없습니다. 자동 물리 설정을 먼저 실행하세요.";
+                Debug.LogWarning(lastReport, this);
+                return;
+            }
+            string key = tuning.characterPresetKey;
+            if (string.IsNullOrEmpty(key))
+                key = skirtTuning.characterPresetKey;
+            if (string.IsNullOrEmpty(key))
+                key = name;
+            string dir = System.IO.Path.Combine(
+                Application.dataPath, "Resources/PhysicsPresets/Character");
+            System.IO.Directory.CreateDirectory(dir);
+            int saved = 0;
+            foreach (var cloth in generatedCloths)
+            {
+                if (cloth == null)
+                    continue;
+                System.IO.File.WriteAllText(
+                    System.IO.Path.Combine(dir, $"{key}_{cloth.name}.json"),
+                    cloth.SerializeData.ExportJson());
+                saved++;
+            }
+            UnityEditor.AssetDatabase.Refresh();
+            lastReport = $"캐릭터 프리셋 {saved}개 저장 (키 '{key}') — " +
+                "Resources/PhysicsPresets/Character/. 적용하려면 " +
+                "characterPresetKey에 같은 키를 입력하세요.";
+            Debug.Log("[CharacterPhysicsSetup] " + lastReport, this);
+        }
+
         /// <summary>
         /// Avatar가 비어있을 때 모델 원본에서 Humanoid Avatar를 찾아 할당한다.
         /// 1순위: SkinnedMeshRenderer.sharedMesh의 원본 에셋(FBX) 안의 Avatar

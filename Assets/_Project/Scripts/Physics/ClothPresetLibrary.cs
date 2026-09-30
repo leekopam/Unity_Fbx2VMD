@@ -41,6 +41,26 @@ namespace Fbx2Vmd.ClothPhysics
             return sdata.ImportJson(json);
         }
 
+        /// <summary>
+        /// 캐릭터 전용 프리셋을 우선 시도한다.
+        /// 탐색 순서: Character/{키}_{클로스명} → Character/{키}_{프리셋명} → {프리셋명}.
+        /// 캐릭터 프리셋은 튜닝 결과를 ExportJson으로 저장한 것으로,
+        /// 아티스트가 다듬은 값이 있으면 공식 베이스라인보다 우선한다.
+        /// </summary>
+        public static bool TryImport(ClothSerializeData sdata, string presetName,
+            string characterKey, string clothName)
+        {
+            if (!string.IsNullOrEmpty(characterKey))
+            {
+                if (!string.IsNullOrEmpty(clothName) &&
+                    TryImport(sdata, $"Character/{characterKey}_{clothName}"))
+                    return true;
+                if (TryImport(sdata, $"Character/{characterKey}_{presetName}"))
+                    return true;
+            }
+            return TryImport(sdata, presetName);
+        }
+
         /// <summary>에디터 테스트·디버그용 캐시 초기화.</summary>
         public static void ClearCache() => cache.Clear();
     }

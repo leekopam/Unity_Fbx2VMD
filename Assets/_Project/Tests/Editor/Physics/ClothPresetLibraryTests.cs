@@ -62,6 +62,25 @@ namespace Tests.Editor.ClothPhysics
         }
 
         [Test]
+        public void Given_CharacterKeyWithoutFiles_When_TryImport_Then_FallsBackToBase()
+        {
+            var s = new ClothSerializeData();
+            bool ok = ClothPresetLibrary.TryImport(s, ClothPresetLibrary.Skirt,
+                "NoSuchCharacter", "MC2Cloth_Skirt");
+            Assert.IsTrue(ok, "캐릭터 프리셋이 없으면 공식 프리셋으로 폴백해야 한다");
+            Assert.That(s.gravity, Is.EqualTo(5.0f).Within(0.001f));
+        }
+
+        [Test]
+        public void Given_NullCharacterKey_When_TryImport_Then_BasePreset()
+        {
+            var s = new ClothSerializeData();
+            bool ok = ClothPresetLibrary.TryImport(s, ClothPresetLibrary.Skirt,
+                null, null);
+            Assert.IsTrue(ok);
+        }
+
+        [Test]
         public void Given_AllMappedPresets_When_TryImport_Then_AllFound()
         {
             // 자동화가 참조하는 프리셋 전부가 Resources에 존재하고 파싱되는지 확인
