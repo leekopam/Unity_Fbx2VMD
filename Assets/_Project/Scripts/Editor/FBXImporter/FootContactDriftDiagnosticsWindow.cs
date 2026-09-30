@@ -369,7 +369,18 @@ namespace Fbx2Vmd.FBXImporter
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (info == null)
                 throw new InvalidOperationException($"{method} 메서드가 없습니다.");
-            return info.Invoke(target, args);
+            try
+            {
+                return info.Invoke(target, args);
+            }
+            // 리플렉션 호출 예외는 TargetInvocationException으로 감싸지므로
+            // 진단 문구가 실제 실패 원인을 보여주게 언랩함.
+            catch (TargetInvocationException error)
+            {
+                throw new InvalidOperationException(
+                    $"{method} 실패: {error.InnerException?.Message ?? error.Message}",
+                    error.InnerException);
+            }
         }
 
         private static SeekDelegate CreateSeekDelegate(object controller)
