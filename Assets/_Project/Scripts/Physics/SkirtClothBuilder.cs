@@ -142,11 +142,11 @@ namespace Fbx2Vmd.ClothPhysics
         }
 
         /// <summary>
-        /// 스커트 버텍스를 참조하는 삼각형(3버텍스 모두 클로스 대상)만 모아
-        /// 전용 SkinnedMeshRenderer로 추출한다. 원본 메시는 클론 후 해당
+        /// 스커트 버텍스를 1개 이상 참조하는 삼각형을 모아 전용
+        /// SkinnedMeshRenderer로 추출한다. 원본 메시는 클론 후 해당
         /// 삼각형을 제거하고 원본 렌더러에 적용한다(에셋 자체는 변경하지 않음).
-        /// 경계 버텍스는 Fixed 속성으로 원래 스키닝 위치를 추적하므로
-        /// 본체 메시와의 이음매가 유지된다.
+        /// 혼합 삼각형의 무효 버텍스는 추출본에서 Fixed로 격상되므로
+        /// 본체의 인접 삼각형과 이음매 위치가 항상 일치한다(균열 방지).
         /// 반환된 렌더러의 모든 버텍스는 스커트 대상 — remappedAttrs는
         /// 추출 메시의 버텍스 순서에 맞춰 재배열된 속성이다.
         /// </summary>
@@ -179,9 +179,12 @@ namespace Fbx2Vmd.ClothPhysics
                 var tris = mesh.GetTriangles(s);
                 for (int i = 0; i < tris.Length; i += 3)
                 {
+                    // 1개 이상의 스커트 버텍스를 가진 삼각형도 추출 — 무효 버텍스는
+                    // 추출본에서 Fixed로 격상돼 본 스키닝 위치를 그대로 추적하므로
+                    // 본체의 인접 삼각형과 이음매가 어긋나지 않는다 (균열 방지)
                     bool skirt = !attrs[tris[i]].IsInvalid()
-                        && !attrs[tris[i + 1]].IsInvalid()
-                        && !attrs[tris[i + 2]].IsInvalid();
+                        || !attrs[tris[i + 1]].IsInvalid()
+                        || !attrs[tris[i + 2]].IsInvalid();
                     var dst = skirt ? extractTris[s] : remainTris[s];
                     dst.Add(tris[i]); dst.Add(tris[i + 1]); dst.Add(tris[i + 2]);
                     if (skirt)
@@ -209,7 +212,9 @@ namespace Fbx2Vmd.ClothPhysics
                 if (used[v])
                 {
                     newVerts[remap[v]] = verts[v];
-                    remappedAttrs[remap[v]] = attrs[v];
+                    // 혼합 삼각형의 무효 버텍스는 Fixed 격상 — 본체와 동일 위치 유지
+                    remappedAttrs[remap[v]] = attrs[v].IsInvalid()
+                        ? VertexAttribute.Fixed : attrs[v];
                 }
             newMesh.vertices = newVerts;
             CopyVertexChannel(mesh, newMesh, remap, used, vcnt, UVertexAttribute.Normal);
@@ -405,8 +410,13 @@ namespace Fbx2Vmd.ClothPhysics
             var inputs = new List<(SkinnedMeshRenderer smr, VertexAttribute[] attrs)>();
             foreach (var smr in renderers)
             {
-                if (smr == null || smr.sharedMesh == null)
+                if (smr == null)
                     continue;
+                if (smr.sharedMesh == null)
+                {
+                    result.warnings.Add($"{smr.name}: sharedMesh 없음 — 메시 소스(FBX/PMX) 미포함 에셋, MeshCloth 불가");
+                    continue;
+                }
                 if (!smr.sharedMesh.isReadable)
                 {
                     result.warnings.Add($"{smr.name}: 메시 Read/Write 비활성 — 임포터 설정에서 Read/Write Enabled 필요");
@@ -416,7 +426,10 @@ namespace Fbx2Vmd.ClothPhysics
                     smr, skirtBoneDepths, skirtWeightThreshold, fixedChainDepth,
                     out int fc, out int mc);
                 if (fc + mc == 0)
+                {
+                    result.warnings.Add($"{smr.name}: 스커트 본에 스키닝된 버텍스 0 — 스커트 가중치 미달(임계 {skirtWeightThreshold:F2})");
                     continue;
+                }
                 // MC2 렌더러 한도(65535) 초과 메시는 스커트 삼각형만 추출해 등록
                 if (smr.sharedMesh.vertexCount > MaxRendererVertices)
                 {
@@ -426,8 +439,16 @@ namespace Fbx2Vmd.ClothPhysics
                         result.warnings.Add($"{smr.name}: 스커트 삼각형 추출 실패");
                         continue;
                     }
+                    var newSmr = extracted.GetComponent<SkinnedMeshRenderer>();
+                    if (newSmr.sharedMesh.vertexCount > MaxRendererVertices)
+                    {
+                        // 추출본도 한도 초과 — MC2 등록 불가이므로 추출을 되돌린다
+                        result.warnings.Add($"{smr.name}: 추출 스커트 메시도 {MaxRendererVertices}버텍스 초과 — 메시 분할 필요");
+                        SkirtClothBuilder.CleanupExtractions(extracted.transform);
+                        continue;
+                    }
                     result.extractedMeshes.Add(extracted);
-                    inputs.Add((extracted.GetComponent<SkinnedMeshRenderer>(), remapped));
+                    inputs.Add((newSmr, remapped));
                 }
                 else
                 {
