@@ -195,7 +195,20 @@ namespace Fbx2Vmd.ClothPhysics
         public static void Apply(HairPart part, ClothSerializeData sdata, float torsoLength,
             Transform headBone, bool isLong, in HairTuning tuning)
         {
+            Apply(part, sdata, torsoLength, headBone, isLong, tuning, true);
+        }
+
+        /// <summary>
+        /// usePresetBaseline이면 공식 프리셋을 먼저 베이스라인으로 가져와
+        /// 템플릿이 다루지 않는 필드도 공식값으로 채운다. 템플릿 관리 필드는
+        /// 이후 ApplyXxx가 덮어쓰므로 의도된 델타만 남는다.
+        /// </summary>
+        public static void Apply(HairPart part, ClothSerializeData sdata, float torsoLength,
+            Transform headBone, bool isLong, in HairTuning tuning, bool usePresetBaseline)
+        {
             float unit = Mathf.Max(torsoLength, 0.1f) / 0.6f;
+            if (usePresetBaseline)
+                ClothPresetLibrary.TryImport(sdata, PresetName(part, isLong));
             switch (part)
             {
                 case HairPart.Front:
@@ -213,6 +226,21 @@ namespace Fbx2Vmd.ClothPhysics
                     break;
             }
             ApplyTuning(sdata, tuning);
+        }
+
+        /// <summary>부위에 대응하는 공식 프리셋 이름 (Resources/PhysicsPresets 기준).</summary>
+        static string PresetName(HairPart part, bool isLong)
+        {
+            switch (part)
+            {
+                case HairPart.Front:
+                case HairPart.Ahoge:
+                    return ClothPresetLibrary.FrontHair;
+                case HairPart.Accessory:
+                    return ClothPresetLibrary.Accessory;
+                default:
+                    return isLong ? ClothPresetLibrary.LongHair : ClothPresetLibrary.ShortHair;
+            }
         }
 
         /// <summary>

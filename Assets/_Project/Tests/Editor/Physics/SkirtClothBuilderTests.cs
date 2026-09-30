@@ -208,5 +208,76 @@ namespace Tests.Editor.ClothPhysics
             SkirtClothBuilder.CleanupExtractions(root);
             Assert.AreEqual(mesh, smr.sharedMesh, "CleanupExtractions가 원본 메시를 복원");
         }
+
+        [Test]
+        public void Given_BackstopOption_When_Create_Then_BackstopEnabled()
+        {
+            var (root, depths, chain0, chain1, leg) = BuildSkirtRig();
+            var bones = new[] { chain0[0], chain0[2] };
+            var smr = MakeSmr(bones, new[] { W(0, 1f), W(1, 1f) }, 2);
+
+            var result = SkirtClothBuilder.Create(
+                root, new[] { smr }, depths, new List<ColliderComponent>(), 0.6f,
+                0.5f, 0, 1.0f, true, 0.008f);
+
+            Assert.IsNotNull(result.cloth);
+            created.Add(result.cloth.gameObject);
+            var sdata = result.cloth.SerializeData;
+            Assert.IsTrue(sdata.motionConstraint.useBackstop);
+            Assert.That(sdata.motionConstraint.backstopDistance.value,
+                Is.EqualTo(0.008f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_NoBackstopOption_When_Create_Then_BackstopDisabled()
+        {
+            var (root, depths, chain0, chain1, leg) = BuildSkirtRig();
+            var bones = new[] { chain0[0], chain0[2] };
+            var smr = MakeSmr(bones, new[] { W(0, 1f), W(1, 1f) }, 2);
+
+            var result = SkirtClothBuilder.Create(
+                root, new[] { smr }, depths, new List<ColliderComponent>(), 0.6f,
+                0.5f, 0, 1.0f, false);
+
+            Assert.IsNotNull(result.cloth);
+            created.Add(result.cloth.gameObject);
+            Assert.IsFalse(result.cloth.SerializeData.motionConstraint.useBackstop);
+        }
+
+        [Test]
+        public void Given_ReductionScale2_When_Create_Then_DistancesDoubled()
+        {
+            var (root, depths, chain0, chain1, leg) = BuildSkirtRig();
+            var bones = new[] { chain0[0], chain0[2] };
+            var smr = MakeSmr(bones, new[] { W(0, 1f), W(1, 1f) }, 2);
+
+            var result = SkirtClothBuilder.Create(
+                root, new[] { smr }, depths, new List<ColliderComponent>(), 0.6f,
+                0.5f, 0, 2.0f, false);
+
+            Assert.IsNotNull(result.cloth);
+            created.Add(result.cloth.gameObject);
+            var sdata = result.cloth.SerializeData;
+            Assert.That(sdata.reductionSetting.simpleDistance,
+                Is.EqualTo(0.6f * 0.035f * 2.0f).Within(0.0001f));
+            Assert.That(sdata.reductionSetting.shapeDistance,
+                Is.EqualTo(0.6f * 0.04f * 2.0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void Given_Create_When_Complete_Then_TeleportKeepForRunawayGuard()
+        {
+            var (root, depths, chain0, chain1, leg) = BuildSkirtRig();
+            var bones = new[] { chain0[0], chain0[2] };
+            var smr = MakeSmr(bones, new[] { W(0, 1f), W(1, 1f) }, 2);
+
+            var result = SkirtClothBuilder.Create(
+                root, new[] { smr }, depths, new List<ColliderComponent>(), 0.6f, 0.5f, 0);
+
+            Assert.IsNotNull(result.cloth);
+            created.Add(result.cloth.gameObject);
+            Assert.AreEqual(InertiaConstraint.TeleportMode.Keep,
+                result.cloth.SerializeData.inertiaConstraint.teleportMode);
+        }
     }
 }
