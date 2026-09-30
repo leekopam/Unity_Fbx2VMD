@@ -30,9 +30,38 @@ namespace Fbx2Vmd.ClothPhysics
         [Tooltip("관성 배율. 작으면 캐릭터 급동작 시 머리카락이 덜 따라옴")]
         public float inertiaScale;
 
+        [Header("깊이 커브")]
+        [Range(0f, 2f)]
+        [Tooltip("복원 강성 커브의 끝단(깊이 1.0) 배율. 작으면 끝이 더 자유롭게 흔들림")]
+        public float tipStiffnessScale;
+
+        [Range(0f, 2f)]
+        [Tooltip("감쇠 커브의 끝단(깊이 1.0) 배율")]
+        public float tipDampingScale;
+
+        [Header("포즈/관성")]
+        [Range(0f, 1f)]
+        [Tooltip("애니메이션 포즈 반영률. 0=완전 시뮬레이션, 1=애니메이션 포즈 복원 기준. " +
+                 "VMD처럼 포즈가 확정된 클립은 0.5 전후가 안정적")]
+        public float animationPoseRatio;
+
+        [Tooltip("깊이 관성을 수동 설정 — 체인 깊이에 따른 관성 감쇠. 켜면 아래 값이 프리셋을 덮어씀")]
+        public bool overrideDepthInertia;
+
+        [Range(0f, 1f)]
+        [Tooltip("깊이 관성 — 클수록 체인 깊은 곳의 월드 관성 영향을 줄임")]
+        public float depthInertia;
+
+        [Header("캐릭터 프리셋")]
+        [Tooltip("캐릭터 전용 프리셋 키. 지정하면 Resources/PhysicsPresets/Character/" +
+                 "{키}_{클로스명|프리셋명}.json을 공식 프리셋보다 우선 로드")]
+        public string characterPresetKey;
+
         public static HairTuning Default => new HairTuning
         {
-            sway = 1f, dampingScale = 1f, gravityScale = 1f, radiusScale = 1f, inertiaScale = 1f
+            sway = 1f, dampingScale = 1f, gravityScale = 1f, radiusScale = 1f, inertiaScale = 1f,
+            tipStiffnessScale = 1f, tipDampingScale = 1f, animationPoseRatio = 0f,
+            overrideDepthInertia = false, depthInertia = 0.7f, characterPresetKey = null
         };
     }
 
@@ -208,7 +237,8 @@ namespace Fbx2Vmd.ClothPhysics
         {
             float unit = Mathf.Max(torsoLength, 0.1f) / 0.6f;
             if (usePresetBaseline)
-                ClothPresetLibrary.TryImport(sdata, PresetName(part, isLong));
+                ClothPresetLibrary.TryImport(sdata, PresetName(part, isLong),
+                    tuning.characterPresetKey, CharacterPhysicsSetup.ClothNamePrefix + part);
             switch (part)
             {
                 case HairPart.Front:
@@ -258,6 +288,30 @@ namespace Fbx2Vmd.ClothPhysics
                 Mathf.Clamp01(s.inertiaConstraint.worldInertia * t.inertiaScale);
             s.inertiaConstraint.localInertia =
                 Mathf.Clamp01(s.inertiaConstraint.localInertia * t.inertiaScale);
+            // 끝단 커브 조정 — 프로급 실루엣은 깊이별 강성 차이에서 나온다
+            ScaleCurveTip(s.angleRestorationConstraint.stiffness, t.tipStiffnessScale);
+            ScaleCurveTip(s.damping, t.tipDampingScale);
+            s.animationPoseRatio = Mathf.Clamp01(t.animationPoseRatio);
+            if (t.overrideDepthInertia)
+                s.inertiaConstraint.depthInertia = Mathf.Clamp01(t.depthInertia);
+        }
+
+        /// <summary>
+        /// 커브의 끝단(깊이 1.0)만 배율한다 — 키의 time이 깊이(0=루트, 1=끝).
+        /// 커브 미사용 시 플랫값 전체를 배율한다.
+        /// </summary>
+        internal static void ScaleCurveTip(CurveSerializeData c, float tipScale)
+        {
+            if (!c.useCurve || c.curve == null)
+            {
+                c.value = Mathf.Max(0f, c.value * tipScale);
+                return;
+            }
+            var keys = c.curve.keys;
+            for (int i = 0; i < keys.Length; i++)
+                keys[i].value = Mathf.Max(0f,
+                    keys[i].value * Mathf.Lerp(1f, tipScale, keys[i].time));
+            c.curve.keys = keys;
         }
 
         /// <summary>커브 직렬화 값의 기본값과 커브 키를 함께 배율한다.</summary>

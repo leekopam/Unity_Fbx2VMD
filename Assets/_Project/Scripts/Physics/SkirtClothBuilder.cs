@@ -20,6 +20,41 @@ namespace Fbx2Vmd.ClothPhysics
     }
 
     /// <summary>
+    /// 스커트 전용 튜닝값. 모든 기본값이 "템플릿 그대로"를 의미한다.
+    /// MeshCloth·BoneClothLoop 경로가 공유한다.
+    /// </summary>
+    [System.Serializable]
+    public struct SkirtTuning
+    {
+        [Header("깊이 커브")]
+        [Range(0f, 2f)]
+        [Tooltip("복원 강성 커브의 끝단(깊이 1.0) 배율. 작으면 스커트 끝이 더 자유롭게 회전해 실루엣이 산다")]
+        public float tipStiffnessScale;
+
+        [Header("포즈/관성")]
+        [Range(0f, 1f)]
+        [Tooltip("애니메이션 포즈 반영률. VMD처럼 포즈가 확정된 클립은 0.5 전후가 안정적")]
+        public float animationPoseRatio;
+
+        [Tooltip("깊이 관성을 수동 설정 (기본 템플릿 0.7 — 허리 근처 흔들림 억제)")]
+        public bool overrideDepthInertia;
+
+        [Range(0f, 1f)]
+        public float depthInertia;
+
+        [Header("캐릭터 프리셋")]
+        [Tooltip("캐릭터 전용 프리셋 키. 지정하면 Resources/PhysicsPresets/Character/" +
+                 "{키}_{클로스명|프리셋명}.json을 공식 프리셋보다 우선 로드")]
+        public string characterPresetKey;
+
+        public static SkirtTuning Default => new SkirtTuning
+        {
+            tipStiffnessScale = 1f, animationPoseRatio = 0f,
+            overrideDepthInertia = false, depthInertia = 0.7f, characterPresetKey = null
+        };
+    }
+
+    /// <summary>
     /// 스커트 본 체인과 스키닝 가중치로 MeshCloth를 자동 생성한다.
     /// MC2 공식 런타임 경로(ClothSerializeData2.vertexAttributeList)를 사용해
     /// 수동 버텍스 페인팅 없이 고정/이동 속성을 결정한다.
@@ -402,7 +437,8 @@ namespace Fbx2Vmd.ClothPhysics
             float reductionScale = 1.0f,
             bool useBackstop = false,
             float backstopDistance = 0.005f,
-            bool usePresetBaseline = true)
+            bool usePresetBaseline = true,
+            SkirtTuning? tuning = null)
         {
             var result = new Result
             {
@@ -472,7 +508,8 @@ namespace Fbx2Vmd.ClothPhysics
             sdata.clothType = ClothProcess.ClothType.MeshCloth;
             // 공식 Skirt 프리셋을 베이스라인으로 — 아래에서 관리하는 필드는 덮어쓴다.
             if (usePresetBaseline)
-                ClothPresetLibrary.TryImport(sdata, ClothPresetLibrary.Skirt);
+                ClothPresetLibrary.TryImport(sdata, ClothPresetLibrary.Skirt,
+                    tuning?.characterPresetKey, go.name);
             foreach (var (smr, _) in inputs)
                 sdata.sourceRenderers.Add(smr);
 
@@ -488,6 +525,27 @@ namespace Fbx2Vmd.ClothPhysics
                 sdata.reductionSetting.shapeDistance = torso * 0.04f * reductionScale;
             }
 
+            ApplySimParams(sdata, colliders, useBackstop, backstopDistance,
+                tuning ?? SkirtTuning.Default);
+
+            if (result.fixedVertexCount == 0)
+                result.warnings.Add("고정 버텍스 없음 — 스커트가 몸에서 떨어질 수 있음. fixedChainDepth 상향 검토");
+
+            result.cloth = cloth;
+            return result;
+        }
+
+        /// <summary>
+        /// 스커트 공통 시뮬레이션 파라미터 — MeshCloth·BoneCloth 루프 경로가 공유한다.
+        /// 공식 Skirt 프리셋을 베이스라인으로 두고 프로젝트 관리 필드를 덮어쓴다.
+        /// </summary>
+        internal static void ApplySimParams(
+            ClothSerializeData sdata,
+            List<ColliderComponent> colliders,
+            bool useBackstop,
+            float backstopDistance,
+            in SkirtTuning tuning)
+        {
             // 공식 MeshCloth_Skirt 프리셋 + 런타임 예제 파라미터
             sdata.updateMode = ClothUpdateMode.AnimatorLinkage;
             sdata.normalAxis = ClothNormalAxis.Up;
@@ -516,7 +574,12 @@ namespace Fbx2Vmd.ClothPhysics
 
             sdata.angleRestorationConstraint.useAngleRestoration = true;
             sdata.angleRestorationConstraint.stiffness.SetValue(0.2f, 1.0f, 0.5f, true);
+            HairPhysicsParameters.ScaleCurveTip(
+                sdata.angleRestorationConstraint.stiffness, tuning.tipStiffnessScale);
             sdata.angleRestorationConstraint.velocityAttenuation = 0.7f;
+            sdata.animationPoseRatio = Mathf.Clamp01(tuning.animationPoseRatio);
+            if (tuning.overrideDepthInertia)
+                sdata.inertiaConstraint.depthInertia = Mathf.Clamp01(tuning.depthInertia);
 
             sdata.angleLimitConstraint.useAngleLimit = true;
             sdata.angleLimitConstraint.limitAngle.SetValue(60.0f, 0.0f, 1.0f, true);
@@ -544,12 +607,6 @@ namespace Fbx2Vmd.ClothPhysics
             sdata.springConstraint.useSpring = true;
             sdata.springConstraint.springPower = 0.03f;
             sdata.springConstraint.limitDistance = 0.05f;
-
-            if (result.fixedVertexCount == 0)
-                result.warnings.Add("고정 버텍스 없음 — 스커트가 몸에서 떨어질 수 있음. fixedChainDepth 상향 검토");
-
-            result.cloth = cloth;
-            return result;
         }
     }
 }
