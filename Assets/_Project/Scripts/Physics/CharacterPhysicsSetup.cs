@@ -70,15 +70,43 @@ namespace Fbx2Vmd.ClothPhysics
         [ContextMenu("자동 물리 설정 실행")]
         public void Setup()
         {
-            if (Application.isPlaying && generatedCloths.Count > 0 && AllClothsAlive())
+            // 유효 클로스가 있어도 스커트 등 기대 생성물이 없으면 완전하지 않다 —
+            // 씬 직렬화 클로스만 유효한 플레이에서 런타임 전용 스커트가 영구 누락되는 것을 막는다.
+            if (Application.isPlaying && generatedCloths.Count > 0 &&
+                AllClothsAlive() && IsSetupComplete())
             {
                 lastReport = $"이미 설정 완료 상태 — 클로스 {generatedCloths.Count}개 유효/빌드 중 (재실행 생략). " +
                     "재생성하려면 '자동 생성 물리 제거' 후 실행하세요.";
                 Debug.Log("[CharacterPhysicsSetup] " + lastReport, this);
                 return;
             }
+            // 빌드 중인 클로스를 파괴하면 MC2 스타트업이 취소되므로 완료까지 지연한다.
+            if (Application.isPlaying && generatedCloths.Any(c =>
+                    c != null && c.Process.IsState(ClothProcess.State_Build)))
+            {
+                deferredSetup = true;
+                lastReport = "클로스 빌드 진행 중 — 완료 후 자동 재설정 예약";
+                Debug.Log("[CharacterPhysicsSetup] " + lastReport, this);
+                return;
+            }
             SetupInternal();
         }
+
+        /// <summary>기대 생성물이 전부 있는지 — 스커트 본이 있으면 MeshCloth 존재 여부까지 확인.</summary>
+        bool IsSetupComplete()
+        {
+            if (!autoSkirtCloth)
+                return true;
+            var animator = ResolveAnimator();
+            if (animator == null ||
+                SkirtClothBuilder.CollectSkirtBoneDepths(animator.transform).Count == 0)
+                return true; // 스커트 비대상 모델
+            return generatedCloths.Any(c =>
+                c != null && c.SerializeData.clothType == ClothProcess.ClothType.MeshCloth);
+        }
+
+        /// <summary>빌드 중 클로스가 있어 지연된 셋업 요청.</summary>
+        bool deferredSetup;
 
         /// <summary>기존 클로스가 있어도 강제로 재생성한다.</summary>
         public void Rebuild()
@@ -407,6 +435,14 @@ namespace Fbx2Vmd.ClothPhysics
 
         void Update()
         {
+            // 빌드 완료를 기다리던 지연 셋업 — 빌드 중 클로스가 없어지면 실행
+            if (deferredSetup && !generatedCloths.Any(c =>
+                    c != null && c.Process.IsState(ClothProcess.State_Build)))
+            {
+                deferredSetup = false;
+                SetupInternal();
+                return;
+            }
             if (integrityCheckDelay <= 0)
                 return;
             if (--integrityCheckDelay > 0)

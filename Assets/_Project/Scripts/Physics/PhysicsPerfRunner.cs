@@ -59,10 +59,20 @@ namespace Fbx2Vmd.ClothPhysics
         public long sceneLoadInitNs;
         public long sceneLoadPreBuildNs;
 
+        [Tooltip("시작 프레임 스파이크 분해용 — 시작부터 기록할 프레임 수")]
+        [Range(5, 120)]
+        public int startupProbeFrames = 40;
+
+        /// <summary>시작 프레임별 deltaTime(ms)·InitCloth/PreBuild 비용(ns) — 스파이크 원인 분해용</summary>
+        [System.NonSerialized] public float[] startupFrameMs = new float[0];
+        [System.NonSerialized] public long[] startupInitNs = new long[0];
+        [System.NonSerialized] public long[] startupPreBuildNs = new long[0];
+
         Coroutine routine;
         ProfilerRecorder sceneInitRecorder;
         ProfilerRecorder scenePreBuildRecorder;
         int sceneProbeFrames;
+        int startupFramesRecorded;
         // 계측 중 바꾼 setup.usePreBuild의 원복용 백업 — 코루틴 finally 외에
         // OnDisable 경로(코루틴 강제 종료)에서도 복원할 수 있게 필드로 둔다.
         bool usePreBuildPatched;
@@ -83,6 +93,25 @@ namespace Fbx2Vmd.ClothPhysics
 
         void Update()
         {
+            // 시작 N프레임의 프레임 시간·마커 비용 기록 — 첫 프레임 스파이크(셰이더/JIT/MC2) 분해용.
+            // 클로스 유효화와 무관하게 고정 프레임 수만큼 기록한다.
+            if (startupFramesRecorded < startupProbeFrames)
+            {
+                int i = startupFramesRecorded;
+                if (startupFrameMs.Length < startupProbeFrames)
+                {
+                    startupFrameMs = new float[startupProbeFrames];
+                    startupInitNs = new long[startupProbeFrames];
+                    startupPreBuildNs = new long[startupProbeFrames];
+                }
+                startupFrameMs[i] = Time.unscaledDeltaTime * 1000f;
+                if (sceneInitRecorder.Valid)
+                    startupInitNs[i] = sceneInitRecorder.LastValue;
+                if (scenePreBuildRecorder.Valid)
+                    startupPreBuildNs[i] = scenePreBuildRecorder.LastValue;
+                startupFramesRecorded++;
+            }
+
             // 씬 로드 시점의 직렬화 클로스 초기화를 계측 — 프리빌드 클로스의 init 비용은
             // 씬 로드에서 지불되므로 패스 계측으로는 잡을 수 없어 별도 추적한다.
             if (sceneLoadInitFrames >= 0)
@@ -141,6 +170,14 @@ namespace Fbx2Vmd.ClothPhysics
 
             var summary = new StringBuilder("[PhysicsPerfRunner] 계측 시작\n");
             summary.AppendLine($"sceneLoadInit: frames={sceneLoadInitFrames} initClothNs={sceneLoadInitNs} preBuildNs={sceneLoadPreBuildNs}");
+            // 시작 프레임 상위 3개 — 스파이크 프레임과 그 안의 MC2 비용 비중
+            var top = startupFrameMs
+                .Select((ms, i) => (ms, i))
+                .OrderByDescending(x => x.ms)
+                .Take(3);
+            foreach (var (ms, i) in top)
+                summary.AppendLine(
+                    $"startup frame[{i}]: {ms:F1}ms initClothNs={startupInitNs[i]} preBuildNs={startupPreBuildNs[i]}");
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
             // PipelineRunProfiler 호출은 에디터/Development Build에서만 컴파일된다
             summary.AppendLine("경고: 릴리즈 빌드라 계측이 비활성입니다. Development Build로 실행하세요.");

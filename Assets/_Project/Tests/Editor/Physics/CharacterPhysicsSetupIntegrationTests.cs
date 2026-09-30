@@ -102,6 +102,28 @@ namespace Tests.Editor.ClothPhysics
             Assert.That(setup.generatedCloths.Count, Is.EqualTo(firstCloths));
         }
 
+        /// <summary>
+        /// 완전성 판정 회귀: 스커트 본이 있는데 MeshCloth가 없으면 불완전으로
+        /// 판정해야 한다 — 씬 직렬화 헤어 클로스만 유효한 플레이에서 스킵돼
+        /// 런타임 전용 스커트가 영구 누락되는 사례의 재발 방지.
+        /// </summary>
+        [Test]
+        public void Given_SkirtBonesButNoMeshCloth_Then_SetupIsIncomplete()
+        {
+            var root = BuildGenericModel();
+            var setup = root.AddComponent<CharacterPhysicsSetup>();
+            var m = typeof(CharacterPhysicsSetup).GetMethod("IsSetupComplete",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(m, Is.Not.Null);
+
+            Assert.That((bool)m.Invoke(setup, null), Is.False,
+                "스커트 본 존재 + MeshCloth 부재 = 불완전으로 판정해야 합니다.");
+
+            setup.autoSkirtCloth = false;
+            Assert.That((bool)m.Invoke(setup, null), Is.True,
+                "autoSkirtCloth 꺼짐이면 스커트 없어도 완전입니다.");
+        }
+
         const string PronamaChanPrefabPath =
             "Assets/Plugins/VMDRecorderSample/Models/PronamaChan/PronamaChan.prefab";
 
