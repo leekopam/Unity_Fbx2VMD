@@ -167,6 +167,32 @@ namespace Tests.Editor.FBXImporter
                 Is.LessThan(0.002f));
         }
 
+        [Test]
+        public void Given_ToePivotRoll_When_Pinned_Then_ToeStaysAnchored()
+        {
+            // 롤 구간: 발끝은 바닥에 고정된 채 발목만 들림.
+            // 핀이 발끝을 기준으로 체결되면 보정 후 발끝(발목+보정+발끝 방향)이 고정됨.
+            Vector3[] sourceFeet = CreatePoints(70, index =>
+                new Vector3(0f, index >= 25 && index < 50 ? 0.09f : 0.04f, 0f));
+            Vector3[] sourceToes = CreatePoints(70, _ =>
+                new Vector3(0f, 0f, 0.12f));
+            Vector3[] targetFeet = CreatePoints(70, index =>
+                new Vector3(index * 0.002f, 0.04f, 0f));
+            Vector3[] targetToes = CreatePoints(70, index =>
+                new Vector3(index * 0.002f, 0f, 0.12f));
+
+            object plan = BuildPlanParts(sourceFeet, sourceToes,
+                targetFeet, targetToes, CreateEstimate(5, 60));
+
+            TryEvaluatePose(plan, 35f / FrameRate,
+                out Vector3 correctionA, out Vector3 directionA);
+            TryEvaluatePose(plan, 45f / FrameRate,
+                out Vector3 correctionB, out Vector3 directionB);
+            Vector3 toeA = targetFeet[35] + correctionA + directionA;
+            Vector3 toeB = targetFeet[45] + correctionB + directionB;
+            Assert.That(Vector3.Distance(toeA, toeB), Is.LessThan(0.001f));
+        }
+
         private static object BuildPlan(
             Vector3[] source,
             Vector3[] target,
@@ -177,14 +203,67 @@ namespace Tests.Editor.FBXImporter
             Type sampleType = assembly.GetType(
                 "Fbx2Vmd.FBXImporter.HumanoidFootContactSample",
                 throwOnError: true);
+            Array sourceSamples = CreateSamples(sampleType, source);
+            Array targetSamples = CreateSamples(sampleType, target);
+            return InvokeBuild(sourceSamples, targetSamples, intents, rotation);
+        }
+
+        private static object BuildPlanParts(
+            Vector3[] sourceFeet,
+            Vector3[] sourceToes,
+            Vector3[] targetFeet,
+            Vector3[] targetToes,
+            object intents)
+        {
+            Type sampleType = typeof(FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactSample",
+                throwOnError: true);
+            Array sourceSamples = CreateSamplesParts(
+                sampleType, sourceFeet, sourceToes);
+            Array targetSamples = CreateSamplesParts(
+                sampleType, targetFeet, targetToes);
+            return InvokeBuild(
+                sourceSamples, targetSamples, intents, Quaternion.identity);
+        }
+
+        private static Array CreateSamplesParts(
+            Type sampleType, Vector3[] feet, Vector3[] toes)
+        {
+            ConstructorInfo constructor = sampleType.GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: new[]
+                {
+                    typeof(Vector3), typeof(Vector3),
+                    typeof(Vector3), typeof(Vector3)
+                },
+                modifiers: null);
+            Assert.That(constructor, Is.Not.Null);
+            Array samples = Array.CreateInstance(sampleType, feet.Length);
+            for (int index = 0; index < feet.Length; index++)
+            {
+                samples.SetValue(
+                    constructor.Invoke(new object[]
+                    {
+                        feet[index], toes[index], feet[index], toes[index]
+                    }),
+                    index);
+            }
+
+            return samples;
+        }
+
+        private static object InvokeBuild(
+            Array sourceSamples, Array targetSamples, object intents,
+            Quaternion rotation)
+        {
+            Assembly assembly = typeof(FBXVmdPipeline).Assembly;
             Type plannerType = assembly.GetType(
                 "Fbx2Vmd.FBXImporter.HumanoidFootContactPlanner",
                 throwOnError: true);
             Type estimateType = assembly.GetType(
                 "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentEstimate",
                 throwOnError: true);
-            Array sourceSamples = CreateSamples(sampleType, source);
-            Array targetSamples = CreateSamples(sampleType, target);
             MethodInfo build = plannerType.GetMethod(
                 "Build",
                 BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
@@ -287,6 +366,25 @@ namespace Tests.Editor.FBXImporter
             bool result = (bool)evaluate.Invoke(plan, arguments);
             leftCorrection = (Vector3)arguments[1];
             return result;
+        }
+
+        private static void TryEvaluatePose(
+            object plan,
+            float timeSeconds,
+            out Vector3 leftCorrection,
+            out Vector3 leftToeDirection)
+        {
+            MethodInfo evaluate = plan.GetType().GetMethod(
+                "TryEvaluateSupportPose",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(evaluate, Is.Not.Null);
+            object[] arguments =
+            {
+                timeSeconds, Vector3.zero, Vector3.zero, Vector3.zero, Vector3.zero
+            };
+            Assert.That((bool)evaluate.Invoke(plan, arguments), Is.True);
+            leftCorrection = (Vector3)arguments[1];
+            leftToeDirection = (Vector3)arguments[3];
         }
 
         private static int GetIntProperty(object target, string propertyName)
