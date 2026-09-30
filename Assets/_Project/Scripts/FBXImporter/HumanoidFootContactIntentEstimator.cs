@@ -20,18 +20,57 @@ namespace Fbx2Vmd.FBXImporter
         private const float AirborneSpeedPerHumanScale = 0.2f;
         private const float ClipMotionPerHumanScale = 0.05f;
         private const float MinimumSupportDurationSeconds = 0.1f;
-        private const int NoiseGapFrames = 2;
 
         // 지지 구간 안에서 순수 수평 이동이 이 비율을 넘고 방향이 일치할 때만 미끄럼 의도로 봄.
         // 핀 해제 임계로도 재사용함.
         internal const float SlideDisplacementPerHumanScale = 0.02f;
         private const float SlideDirectionConsistency = 0.5f;
 
+        /// <summary>임계 캘리브레이션용 조정값 — 기본값은 위 상수와 같음.</summary>
+        internal readonly struct Tuning
+        {
+            internal Tuning(float supportHeight, float supportSpeed,
+                float airborneHeight, float airborneSpeed,
+                float slideDisplacement, float slideConsistency)
+            {
+                SupportHeightPerHumanScale = supportHeight;
+                SupportSpeedPerHumanScale = supportSpeed;
+                AirborneHeightPerHumanScale = airborneHeight;
+                AirborneSpeedPerHumanScale = airborneSpeed;
+                SlideDisplacementPerHumanScale = slideDisplacement;
+                SlideDirectionConsistency = slideConsistency;
+            }
+
+            internal float SupportHeightPerHumanScale { get; }
+            internal float SupportSpeedPerHumanScale { get; }
+            internal float AirborneHeightPerHumanScale { get; }
+            internal float AirborneSpeedPerHumanScale { get; }
+            internal float SlideDisplacementPerHumanScale { get; }
+            internal float SlideDirectionConsistency { get; }
+
+            // Tuning의 프로퍼티가 바깥 상수를 가리므로 바깥 타입명으로 한정함.
+            internal static Tuning Default => new Tuning(
+                HumanoidFootContactIntentEstimator.SupportHeightPerHumanScale,
+                HumanoidFootContactIntentEstimator.SupportSpeedPerHumanScale,
+                HumanoidFootContactIntentEstimator.AirborneHeightPerHumanScale,
+                HumanoidFootContactIntentEstimator.AirborneSpeedPerHumanScale,
+                HumanoidFootContactIntentEstimator.SlideDisplacementPerHumanScale,
+                HumanoidFootContactIntentEstimator.SlideDirectionConsistency);
+        }
+
         internal static HumanoidFootContactIntentEstimate Estimate(
             IReadOnlyList<HumanoidFootContactSample> samples,
             float frameRate,
             float humanScale,
-            HumanoidFootContactIntentLabelSet labels = null)
+            HumanoidFootContactIntentLabelSet labels = null) =>
+            Estimate(samples, frameRate, humanScale, labels, Tuning.Default);
+
+        internal static HumanoidFootContactIntentEstimate Estimate(
+            IReadOnlyList<HumanoidFootContactSample> samples,
+            float frameRate,
+            float humanScale,
+            HumanoidFootContactIntentLabelSet labels,
+            Tuning tuning)
         {
             if (samples == null || samples.Count < 2 ||
                 !IsFinite(frameRate) || frameRate <= 0f ||
@@ -74,10 +113,10 @@ namespace Fbx2Vmd.FBXImporter
                 maxRightFootY - minRightFootY >= humanScale * ClipMotionPerHumanScale;
             List<HumanoidFootContactIntent> left = EstimateFoot(
                 leftFeet, leftToes, frameRate, humanScale, true, hasClipMotion,
-                labels?.Left, out List<Vector2Int> leftUncertain);
+                labels?.Left, tuning, out List<Vector2Int> leftUncertain);
             List<HumanoidFootContactIntent> right = EstimateFoot(
                 rightFeet, rightToes, frameRate, humanScale, false, hasClipMotion,
-                labels?.Right, out List<Vector2Int> rightUncertain);
+                labels?.Right, tuning, out List<Vector2Int> rightUncertain);
             return new HumanoidFootContactIntentEstimate(
                 left, right, leftUncertain, rightUncertain);
         }
@@ -90,15 +129,16 @@ namespace Fbx2Vmd.FBXImporter
             bool isLeft,
             bool hasClipMotion,
             IReadOnlyList<HumanoidFootContactIntentLabel> labels,
+            Tuning tuning,
             out List<Vector2Int> uncertainSpans)
         {
             int count = feet.Length;
             float floorFoot = Percentile(feet, FloorPercentile);
             float floorToes = Percentile(toes, FloorPercentile);
-            float supportHeight = humanScale * SupportHeightPerHumanScale;
-            float supportSpeed = humanScale * SupportSpeedPerHumanScale;
-            float airborneHeight = humanScale * AirborneHeightPerHumanScale;
-            float airborneSpeed = humanScale * AirborneSpeedPerHumanScale;
+            float supportHeight = humanScale * tuning.SupportHeightPerHumanScale;
+            float supportSpeed = humanScale * tuning.SupportSpeedPerHumanScale;
+            float airborneHeight = humanScale * tuning.AirborneHeightPerHumanScale;
+            float airborneSpeed = humanScale * tuning.AirborneSpeedPerHumanScale;
             int minimumFrames = Mathf.Max(2,
                 Mathf.CeilToInt(frameRate * MinimumSupportDurationSeconds));
 
@@ -166,12 +206,14 @@ namespace Fbx2Vmd.FBXImporter
                     }
                 }
 
+                // 최소 지지 길이 이하의 불확실 틈새는 의미 있는 반대 위상을 담을 수
+                // 없으므로 같은 분류끼리 이어진 틈새는 잡음으로 보고 흡수함.
                 List<IntRange> spans = Ranges(classes);
                 for (int index = 1; index + 1 < spans.Count; index++)
                 {
                     IntRange gap = spans[index];
                     if (gap.Classification == FrameClass.Uncertain &&
-                        gap.Length <= NoiseGapFrames &&
+                        gap.Length <= minimumFrames &&
                         spans[index - 1].Classification == spans[index + 1].Classification &&
                         spans[index - 1].Classification != FrameClass.Uncertain)
                     {
@@ -196,7 +238,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (span.Classification == FrameClass.Support)
                 {
                     intents.Add(BuildIntent(feet, toes, preMerge, span,
-                        humanScale, isLeft, labels));
+                        humanScale, isLeft, labels, tuning));
                 }
                 else if (span.Classification == FrameClass.Uncertain)
                 {
@@ -214,7 +256,8 @@ namespace Fbx2Vmd.FBXImporter
             IntRange span,
             float humanScale,
             bool isLeft,
-            IReadOnlyList<HumanoidFootContactIntentLabel> labels)
+            IReadOnlyList<HumanoidFootContactIntentLabel> labels,
+            Tuning tuning)
         {
             Vector3 anchor = (feet[span.Start] + toes[span.Start]) * 0.5f;
             Vector2 net = HorizontalDelta(anchor,
@@ -240,8 +283,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             HumanoidFootContactIntentMode mode =
-                netLength >= humanScale * SlideDisplacementPerHumanScale &&
-                consistency >= SlideDirectionConsistency
+                netLength >= humanScale * tuning.SlideDisplacementPerHumanScale &&
+                consistency >= tuning.SlideDirectionConsistency
                     ? HumanoidFootContactIntentMode.Slide
                     : HumanoidFootContactIntentMode.Plant;
             // 겹치는 표식의 모드가 하나로 확정될 때만 자동 판정을 덮어씀.
@@ -251,6 +294,7 @@ namespace Fbx2Vmd.FBXImporter
             for (int index = span.Start; index <= span.End; index++)
             {
                 // 소음 틈새 병합으로 지지에 흡수된 프레임이 있으면 구간 전체를 불확실로 둠.
+                // 불확실 의도는 앵커 방침으로 래스터화되지 않아 이 구간은 핀을 걸지 않음.
                 if (classes[index] == FrameClass.Support) continue;
                 certainty = HumanoidFootContactIntentCertainty.Uncertain;
                 break;

@@ -67,7 +67,9 @@ function classifySide(rows, scale, frameRate, hasClipMotion) {
     airborneHeightM: scale * 0.05, airborneSpeedMps: scale * 0.2,
     floatingGapMm: scale * 20, penetrationMm: scale * 10,
     sameVertexHorizontalStepMm: scale * 30, footRotationStepDeg: 12,
-    minimumFrames, noiseGapFrames: 2 };
+    minimumFrames, noiseGapFrames: 2,
+    // C# 추정기와 동일: 최소 지지 길이보다 짧은 불확실 틈새는 지지 병합에 흡수함.
+    supportMergeGapFrames: minimumFrames };
   const classes = rows.map(row => {
     if (row.sourceFootSpeed === null || row.sourceToesSpeed === null)
       return "uncertain";
@@ -96,7 +98,7 @@ function classifySide(rows, scale, frameRate, hasClipMotion) {
   for (let index = 1; index + 1 < spans.length; index++) {
     const item = spans[index];
     if (item.classification === "uncertain" &&
-        item.end - item.start + 1 <= limits.noiseGapFrames &&
+        item.end - item.start + 1 <= limits.supportMergeGapFrames &&
         spans[index - 1].classification === spans[index + 1].classification &&
         spans[index - 1].classification !== "uncertain")
       classes.fill(spans[index - 1].classification, item.start, item.end + 1);
