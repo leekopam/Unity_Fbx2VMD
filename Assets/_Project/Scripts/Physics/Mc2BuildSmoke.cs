@@ -40,7 +40,7 @@ namespace Fbx2Vmd.ClothPhysics
                         total++;
                         if (c.IsValid()) valid++;
                     }
-                Debug.Log($"[MC2_SMOKE] managers={(MagicaManager.managers != null)} " +
+                Debug.Log($"[MC2_SMOKE] managers={(MagicaManager.Time != null)} " +
                     $"setups={setups.Length} cloths={total} valid={valid} " +
                     $"burst={(Unity.Burst.BurstCompiler.IsEnabled ? 1 : 0)}");
                 Destroy(gameObject);

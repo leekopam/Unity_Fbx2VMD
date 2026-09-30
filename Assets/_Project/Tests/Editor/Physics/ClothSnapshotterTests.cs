@@ -54,5 +54,34 @@ namespace Tests.Editor.ClothPhysics
             Assert.AreEqual("3.3", map["gravity"]);
             Assert.IsTrue(map.ContainsKey("animationPoseRatio"));
         }
+
+        [Test]
+        public void Given_CurveData_When_Capture_Then_CurveKeysRecorded()
+        {
+            var s = new ClothSerializeData();
+            s.damping.SetValue(0.5f, 1.0f, 0.3f, true);
+            var snap = ClothSnapshotter.Capture(s);
+            // 커브는 튜닝 값이므로 키·탄젠트까지 스냅샷에 남아야 한다
+            Assert.IsTrue(snap.TryGetValue("damping.curve", out var v),
+                "damping.curve 키가 스냅샷에 있어야 한다");
+            Assert.IsTrue(v.Contains("0.3"),
+                "커브 끝단 값(0.3)이 직렬화에 포함돼야 한다: " + v);
+        }
+
+        [Test]
+        public void Given_ChangedCurveKey_When_Diff_Then_ReportsCurveChange()
+        {
+            var s = new ClothSerializeData();
+            s.angleRestorationConstraint.stiffness.SetValue(0.2f, 1.0f, 0.5f, true);
+            var before = ClothSnapshotter.Capture(s);
+            var keys = s.angleRestorationConstraint.stiffness.curve.keys;
+            keys[keys.Length - 1].value = 0.1f; // 끝단 강성만 변경
+            s.angleRestorationConstraint.stiffness.curve.keys = keys;
+
+            var diffs = ClothSnapshotter.Diff(before, ClothSnapshotter.Capture(s));
+            Assert.IsTrue(
+                diffs.Exists(d => d.StartsWith("angleRestorationConstraint.stiffness.curve")),
+                "커브 키 변경이 diff에 잡혀야 한다: " + string.Join(", ", diffs));
+        }
     }
 }

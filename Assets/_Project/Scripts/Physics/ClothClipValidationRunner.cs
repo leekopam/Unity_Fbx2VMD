@@ -41,6 +41,8 @@ namespace Fbx2Vmd.ClothPhysics
 
         [System.NonSerialized] public string lastReport = "";
         [System.NonSerialized] public bool running;
+        /// <summary>현재 측정 중인 클립명 — 중단 로그의 진단용</summary>
+        [System.NonSerialized] public string currentClip;
 
         [System.Serializable]
         public class ClipResult
@@ -67,77 +69,112 @@ namespace Fbx2Vmd.ClothPhysics
                 return;
             }
             if (!running)
-                StartCoroutine(Run());
+                StartCoroutine(RunGuarded());
         }
 
-        IEnumerator Run()
+        /// <summary>
+        /// Unity는 코루틴이 예외로 죽을 때 Dispose/finally를 실행하지 않는다.
+        /// 반복자를 수동 구동해 예외를 잡고, Dispose로 Run 내부의 finally(그래프 정리)를
+        /// 강제 실행한다 — running 고정과 PlayableGraph 누수 방지.
+        /// </summary>
+        IEnumerator RunGuarded()
         {
             running = true;
+            var report = new Report { character = name };
+            var it = Run(report);
+            while (true)
+            {
+                object step;
+                try
+                {
+                    if (!it.MoveNext())
+                        break;
+                    step = it.Current;
+                }
+                catch (System.Exception e)
+                {
+                    lastReport = $"배치 중단 (클립 '{currentClip}'): {e.Message}";
+                    Debug.LogError("[ClothClipValidationRunner] " + lastReport, this);
+                    break;
+                }
+                yield return step;
+            }
+            (it as System.IDisposable)?.Dispose();
+            running = false;
+            if (report.clips.Count > 0)
+                WriteReport(report);
+        }
+
+        IEnumerator Run(Report report)
+        {
             if (setup == null) setup = GetComponent<CharacterPhysicsSetup>();
             if (probe == null) probe = GetComponent<PhysicsValidationProbe>();
             var animator = setup != null ? setup.targetAnimator : null;
             if (animator == null && setup != null)
                 animator = setup.GetComponentInChildren<Animator>(true);
-            var report = new Report { character = name };
 
             foreach (var clip in clips.Where(c => c != null))
             {
+                currentClip = clip.name;
                 var result = new ClipResult { clip = clip.name };
                 PlayableGraph graph = default;
-                if (animator != null)
+                try
                 {
-                    graph = PlayableGraph.Create("clothqa_" + clip.name);
-                    var playable = AnimationClipPlayable.Create(graph, clip);
-                    var output = AnimationPlayableOutput.Create(graph, "anim", animator);
-                    output.SetSourcePlayable(playable);
-                    graph.Play();
+                    if (animator != null)
+                    {
+                        graph = PlayableGraph.Create("clothqa_" + clip.name);
+                        var playable = AnimationClipPlayable.Create(graph, clip);
+                        var output = AnimationPlayableOutput.Create(graph, "anim", animator);
+                        output.SetSourcePlayable(playable);
+                        graph.Play();
+                    }
+
+                    // 시크 직후 급변 구간은 제외하고 프로브를 재무장한다
+                    setup?.ResetPhysics(true);
+                    probe?.RebuildTracking();
+                    probe?.ResetStats();
+                    yield return new WaitForSeconds(settleSeconds);
+                    probe?.RebuildTracking();
+                    probe?.ResetStats();
+
+                    float watch = Mathf.Min(secondsPerClip, Mathf.Max(clip.length, 0.5f));
+                    float t0 = Time.time;
+                    int frames = 0;
+                    while (Time.time - t0 < watch)
+                    {
+                        frames++;
+                        yield return null;
+                    }
+                    result.avgFrameMs = frames > 0 ? (Time.time - t0) * 1000f / frames : 0f;
+                    if (probe != null)
+                    {
+                        result.sampledFrames = probe.sampledFrames;
+                        result.worstExcessPenetrationMm = probe.worstPenetration * 1000f;
+                        result.warningFrames = probe.penetrationFrameCount;
+                        result.suspectedStuckBones = probe.suspectedStuckBoneCount;
+                        result.baselineWorstMm = probe.baselineWorstPenetration * 1000f;
+                    }
+                    if (setup != null)
+                        result.validCloths = setup.generatedCloths.Count(c => c != null && c.IsValid());
+
+                    if (captureGolden)
+                    {
+                        string dir = System.IO.Path.GetFullPath(goldenDir);
+                        System.IO.Directory.CreateDirectory(dir);
+                        string file = System.IO.Path.Combine(dir, $"{name}_{clip.name}.png");
+                        UnityEngine.ScreenCapture.CaptureScreenshot(file);
+                        result.golden = file;
+                        yield return null; // 캡처 완료 프레임
+                    }
                 }
-
-                // 시크 직후 급변 구간은 제외하고 프로브를 재무장한다
-                setup?.ResetPhysics(true);
-                probe?.RebuildTracking();
-                probe?.ResetStats();
-                yield return new WaitForSeconds(settleSeconds);
-                probe?.RebuildTracking();
-                probe?.ResetStats();
-
-                float watch = Mathf.Min(secondsPerClip, Mathf.Max(clip.length, 0.5f));
-                float t0 = Time.time;
-                int frames = 0;
-                while (Time.time - t0 < watch)
+                finally
                 {
-                    frames++;
-                    yield return null;
+                    if (graph.IsValid())
+                        graph.Destroy();
                 }
-                result.avgFrameMs = frames > 0 ? (Time.time - t0) * 1000f / frames : 0f;
-                if (probe != null)
-                {
-                    result.sampledFrames = probe.sampledFrames;
-                    result.worstExcessPenetrationMm = probe.worstPenetration * 1000f;
-                    result.warningFrames = probe.penetrationFrameCount;
-                    result.suspectedStuckBones = probe.suspectedStuckBoneCount;
-                    result.baselineWorstMm = probe.baselineWorstPenetration * 1000f;
-                }
-                if (setup != null)
-                    result.validCloths = setup.generatedCloths.Count(c => c != null && c.IsValid());
-
-                if (captureGolden)
-                {
-                    string dir = System.IO.Path.GetFullPath(goldenDir);
-                    System.IO.Directory.CreateDirectory(dir);
-                    string file = System.IO.Path.Combine(dir, $"{name}_{clip.name}.png");
-                    UnityEngine.ScreenCapture.CaptureScreenshot(file);
-                    result.golden = file;
-                    yield return null; // 캡처 완료 프레임
-                }
-
-                if (graph.IsValid())
-                    graph.Destroy();
                 report.clips.Add(result);
             }
-
-            WriteReport(report);
-            running = false;
+            currentClip = null;
         }
 
         void WriteReport(Report report)

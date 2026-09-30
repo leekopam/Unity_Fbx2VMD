@@ -53,6 +53,13 @@ namespace Fbx2Vmd.ClothPhysics
                         System.Globalization.CultureInfo.InvariantCulture);
                     continue;
                 }
+                // AnimationCurve는 공개 필드가 없는 래퍼라 재귀로는 아무것도
+                // 잡히지 않는다 — 깊이 커브 튜닝 값이므로 키·탄젠트까지 직렬화한다
+                if (v is AnimationCurve ac)
+                {
+                    map[key] = SerializeCurve(ac);
+                    continue;
+                }
                 // 참조·컬렉션은 구조 데이터 — 파라미터 스냅샷에서 제외
                 if (typeof(UnityEngine.Object).IsAssignableFrom(ft) ||
                     typeof(System.Collections.IList).IsAssignableFrom(ft) ||
@@ -62,6 +69,27 @@ namespace Fbx2Vmd.ClothPhysics
                 // 값형/설정 블록 — 재귀 평탄화로 필드 단위 diff를 확보한다
                 Flatten(v, key, map, depth + 1);
             }
+        }
+
+        /// <summary>
+        /// AnimationCurve를 랩 모드 + 키(시간/값/탄젠트/가중치/모드) 목록으로
+        /// 결정적 문자열화한다 — 커브 형상 변경이 diff에 잡히도록 한다.
+        /// </summary>
+        static string SerializeCurve(AnimationCurve c)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new StringBuilder()
+                .Append(c.preWrapMode).Append('|').Append(c.postWrapMode);
+            foreach (var k in c.keys)
+                sb.Append('|')
+                    .Append(k.time.ToString("R", inv)).Append(',')
+                    .Append(k.value.ToString("R", inv)).Append(',')
+                    .Append(k.inTangent.ToString("R", inv)).Append(',')
+                    .Append(k.outTangent.ToString("R", inv)).Append(',')
+                    .Append(k.inWeight.ToString("R", inv)).Append(',')
+                    .Append(k.outWeight.ToString("R", inv)).Append(',')
+                    .Append(k.weightedMode);
+            return sb.ToString();
         }
 
         /// <summary>두 스냅샷의 의미 있는 차이를 "키: 이전 → 이후" 목록으로 반환한다.</summary>

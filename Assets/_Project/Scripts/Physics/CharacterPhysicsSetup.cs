@@ -386,7 +386,6 @@ namespace Fbx2Vmd.ClothPhysics
                             report.Add($"스커트 MeshCloth 자동 생성: 고정 {sr.fixedVertexCount} + " +
                                 $"이동 {sr.moveVertexCount} 버텍스 ({sr.rendererCount}개 렌더러, " +
                                 $"콜라이더 {skirtColliders.Count}개)");
-                            ReportSkirtPose(false);
                             if (sr.extractedMeshes.Count > 0)
                                 report.Add($"스커트 메시 추출 {sr.extractedMeshes.Count}개 " +
                                     "(65535 버텍스 한도 대응 — 원본 메시에서 스커트 삼각형 분리)");
@@ -396,6 +395,7 @@ namespace Fbx2Vmd.ClothPhysics
                             report.Add($"스커트 본 {skirtBoneDepths.Count}개 감지 — 스커트 버텍스를 찾지 못해 " +
                                 "클로스 미생성 (메시가 스커트 본에 스키닝되지 않았거나 Read/Write 필요)");
                         }
+                        ReportSkirtPose(false);
                         foreach (var w in sr.warnings)
                             report.Add("경고: " + w);
                     }
