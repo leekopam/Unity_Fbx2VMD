@@ -150,9 +150,31 @@ namespace Fbx2Vmd.FBXImporter
                 targetRightToes[index] = target.RightToes;
             }
 
+            Quaternion targetToSourceRotation =
+                Quaternion.Inverse(normalizedRotation);
+            // 발끝 방향 세그먼트를 먼저 계산해야 핀 보정이 발끝 기준점을 쓸 수 있음.
+            Vector3[] leftToeSegments = BuildDesiredToeSegments(
+                sourceLeftFeet,
+                sourceLeftToes,
+                targetLeftFeet,
+                targetLeftToes,
+                normalizedSourceHumanScale,
+                normalizedTargetHumanScale,
+                normalizedRotation);
+            Vector3[] rightToeSegments = BuildDesiredToeSegments(
+                sourceRightFeet,
+                sourceRightToes,
+                targetRightFeet,
+                targetRightToes,
+                normalizedSourceHumanScale,
+                normalizedTargetHumanScale,
+                normalizedRotation);
             Vector3[] leftCorrections = BuildFootCorrections(
                 sourceLeft,
                 targetLeft,
+                sourceLeftToes,
+                targetLeftFeet,
+                leftToeSegments,
                 frameRate,
                 normalizedSourceHumanScale,
                 normalizedRotation,
@@ -163,6 +185,9 @@ namespace Fbx2Vmd.FBXImporter
             Vector3[] rightCorrections = BuildFootCorrections(
                 sourceRight,
                 targetRight,
+                sourceRightToes,
+                targetRightFeet,
+                rightToeSegments,
                 frameRate,
                 normalizedSourceHumanScale,
                 normalizedRotation,
@@ -170,7 +195,7 @@ namespace Fbx2Vmd.FBXImporter
                 releaseFrames,
                 intents?.Right,
                 out int rightRunCount);
-            Vector3[] leftToeDirections = ApplySupportPoseCorrections(
+            ApplySupportHeightCorrections(
                 sourceLeftFeet,
                 sourceLeftToes,
                 targetLeftFeet,
@@ -178,8 +203,8 @@ namespace Fbx2Vmd.FBXImporter
                 leftCorrections,
                 normalizedSourceHumanScale,
                 normalizedTargetHumanScale,
-                normalizedRotation);
-            Vector3[] rightToeDirections = ApplySupportPoseCorrections(
+                targetToSourceRotation);
+            ApplySupportHeightCorrections(
                 sourceRightFeet,
                 sourceRightToes,
                 targetRightFeet,
@@ -187,7 +212,19 @@ namespace Fbx2Vmd.FBXImporter
                 rightCorrections,
                 normalizedSourceHumanScale,
                 normalizedTargetHumanScale,
-                normalizedRotation);
+                targetToSourceRotation);
+            var leftToeDirections = new Vector3[leftToeSegments.Length];
+            var rightToeDirections = new Vector3[rightToeSegments.Length];
+            for (int index = 0; index < leftToeSegments.Length; index++)
+            {
+                leftToeDirections[index] =
+                    targetToSourceRotation * leftToeSegments[index];
+            }
+            for (int index = 0; index < rightToeSegments.Length; index++)
+            {
+                rightToeDirections[index] =
+                    targetToSourceRotation * rightToeSegments[index];
+            }
             return new HumanoidFootContactPlan(
                 leftCorrections,
                 rightCorrections,
@@ -198,12 +235,13 @@ namespace Fbx2Vmd.FBXImporter
                 rightRunCount);
         }
 
-        private static Vector3[] ApplySupportPoseCorrections(
+        // 발끝 세그먼트(발목→발끝 벡터)의 목표 형태를 대상 공간에 계산함.
+        // 핀 보정이 발끝 기준점을 쓰려면 위치 보정보다 먼저 필요함.
+        private static Vector3[] BuildDesiredToeSegments(
             IReadOnlyList<Vector3> sourceFeet,
             IReadOnlyList<Vector3> sourceToes,
             IReadOnlyList<Vector3> targetFeet,
             IReadOnlyList<Vector3> targetToes,
-            Vector3[] rootSpaceCorrections,
             float sourceHumanScale,
             float targetHumanScale,
             Quaternion sourceToTargetRotation)
@@ -213,8 +251,68 @@ namespace Fbx2Vmd.FBXImporter
             float sourceToesBaseline = CalculatePercentileHeight(sourceToes, 0.02f);
             float targetFootBaseline = CalculatePercentileHeight(targetFeet, 0.02f);
             float targetToesBaseline = CalculatePercentileHeight(targetToes, 0.02f);
-            Quaternion targetToSourceRotation = Quaternion.Inverse(sourceToTargetRotation);
-            var rootSpaceToeDirections = new Vector3[sourceFeet.Count];
+            var segments = new Vector3[sourceFeet.Count];
+
+            for (int index = 0; index < sourceFeet.Count; index++)
+            {
+                Vector3 targetSegment = targetToes[index] - targetFeet[index];
+                float targetSegmentLength = targetSegment.magnitude;
+                if (targetSegmentLength <= MinimumSegmentLength)
+                {
+                    continue;
+                }
+
+                float desiredFootHeight = targetFootBaseline +
+                    (sourceFeet[index].y - sourceFootBaseline) * scaleRatio;
+                float desiredToesHeight = targetToesBaseline +
+                    (sourceToes[index].y - sourceToesBaseline) * scaleRatio;
+                float desiredVerticalSeparation = Mathf.Clamp(
+                    desiredToesHeight - desiredFootHeight,
+                    -targetSegmentLength,
+                    targetSegmentLength);
+
+                Vector3 sourceSegment = sourceToes[index] - sourceFeet[index];
+                Vector3 mappedSourceDirection =
+                    sourceToTargetRotation * sourceSegment.normalized;
+                Vector2 horizontalDirection = new Vector2(
+                    mappedSourceDirection.x,
+                    mappedSourceDirection.z);
+                if (horizontalDirection.sqrMagnitude <= MinimumSegmentLength)
+                {
+                    horizontalDirection = new Vector2(
+                        targetSegment.x,
+                        targetSegment.z);
+                }
+
+                horizontalDirection.Normalize();
+                float horizontalLength = Mathf.Sqrt(Mathf.Max(
+                    0f,
+                    targetSegmentLength * targetSegmentLength -
+                    desiredVerticalSeparation * desiredVerticalSeparation));
+                segments[index] = new Vector3(
+                    horizontalDirection.x * horizontalLength,
+                    desiredVerticalSeparation,
+                    horizontalDirection.y * horizontalLength);
+            }
+
+            return segments;
+        }
+
+        private static void ApplySupportHeightCorrections(
+            IReadOnlyList<Vector3> sourceFeet,
+            IReadOnlyList<Vector3> sourceToes,
+            IReadOnlyList<Vector3> targetFeet,
+            IReadOnlyList<Vector3> targetToes,
+            Vector3[] rootSpaceCorrections,
+            float sourceHumanScale,
+            float targetHumanScale,
+            Quaternion targetToSourceRotation)
+        {
+            float scaleRatio = targetHumanScale / sourceHumanScale;
+            float sourceFootBaseline = CalculatePercentileHeight(sourceFeet, 0.02f);
+            float sourceToesBaseline = CalculatePercentileHeight(sourceToes, 0.02f);
+            float targetFootBaseline = CalculatePercentileHeight(targetFeet, 0.02f);
+            float targetToesBaseline = CalculatePercentileHeight(targetToes, 0.02f);
 
             for (int index = 0; index < sourceFeet.Count; index++)
             {
@@ -257,39 +355,15 @@ namespace Fbx2Vmd.FBXImporter
                     rootSpaceCorrections[index] += targetToSourceRotation *
                         (Vector3.up * heightCorrection);
                 }
-
-                Vector3 sourceSegment = sourceToes[index] - sourceFeet[index];
-                Vector3 mappedSourceDirection =
-                    sourceToTargetRotation * sourceSegment.normalized;
-                Vector2 horizontalDirection = new Vector2(
-                    mappedSourceDirection.x,
-                    mappedSourceDirection.z);
-                if (horizontalDirection.sqrMagnitude <= MinimumSegmentLength)
-                {
-                    horizontalDirection = new Vector2(
-                        targetSegment.x,
-                        targetSegment.z);
-                }
-
-                horizontalDirection.Normalize();
-                float horizontalLength = Mathf.Sqrt(Mathf.Max(
-                    0f,
-                    targetSegmentLength * targetSegmentLength -
-                    desiredVerticalSeparation * desiredVerticalSeparation));
-                Vector3 desiredWorldDirection = new Vector3(
-                    horizontalDirection.x * horizontalLength,
-                    desiredVerticalSeparation,
-                    horizontalDirection.y * horizontalLength);
-                rootSpaceToeDirections[index] =
-                    targetToSourceRotation * desiredWorldDirection;
             }
-
-            return rootSpaceToeDirections;
         }
 
         private static Vector3[] BuildFootCorrections(
             IReadOnlyList<Vector3> sourcePoints,
             IReadOnlyList<Vector3> targetPoints,
+            IReadOnlyList<Vector3> sourceToes,
+            IReadOnlyList<Vector3> targetFeet,
+            IReadOnlyList<Vector3> toeSegments,
             float frameRate,
             float sourceHumanScale,
             Quaternion sourceToTargetRotation,
@@ -312,6 +386,39 @@ namespace Fbx2Vmd.FBXImporter
                 frameRate,
                 contactHeight,
                 contactSpeedLimit);
+            // 발끝이 낮고 정지한 프레임의 지지점은 발끝임. 이 프레임에서는
+            // 발목이 움직여도(롤) 발끝을 고정해야 드리프트가 생기지 않음.
+            float toeContactHeight =
+                CalculatePercentileHeight(sourceToes, 0.02f) +
+                sourceHumanScale * ContactHeightMarginPerHumanScale;
+            var toePivot = new bool[sourcePoints.Count];
+            for (int index = 0; index < sourcePoints.Count; index++)
+            {
+                toePivot[index] = sourceToes[index].y <= toeContactHeight &&
+                    CalculateCenteredSpeed(sourceToes, index, frameRate) <=
+                    contactSpeedLimit;
+            }
+            // 롤·슬라이드 구간은 중점이 들리거나 움직여 런 밖으로 빠지므로,
+            // 의도가 지지로 확정한 프레임은 발끝 착지만으로 접촉 런에 포함함.
+            // 런 밖이면 방침이 소비되지 않아 의도가 죽은 코드가 됨.
+            for (int index = 0; index < contactFrames.Length; index++)
+            {
+                if (contactFrames[index])
+                {
+                    continue;
+                }
+
+                bool pinnedPivot = toePivot[index] &&
+                    policies[index] == HumanoidFootAnchorPolicy.Pinned;
+                bool slidingContact =
+                    policies[index] == HumanoidFootAnchorPolicy.Sliding &&
+                    sourceToes[index].y <= toeContactHeight;
+                if (pinnedPivot || slidingContact)
+                {
+                    contactFrames[index] = true;
+                }
+            }
+
             var corrections = new Vector3[sourcePoints.Count];
             Quaternion targetToSourceRotation =
                 Quaternion.Inverse(sourceToTargetRotation);
@@ -338,6 +445,9 @@ namespace Fbx2Vmd.FBXImporter
                     ApplyContactRun(
                         sourcePoints,
                         targetPoints,
+                        sourceToes,
+                        toeSegments,
+                        toePivot,
                         contactFrames,
                         corrections,
                         sourceToTargetRotation,
@@ -359,6 +469,9 @@ namespace Fbx2Vmd.FBXImporter
         private static void ApplyContactRun(
             IReadOnlyList<Vector3> sourcePoints,
             IReadOnlyList<Vector3> targetPoints,
+            IReadOnlyList<Vector3> sourceToes,
+            IReadOnlyList<Vector3> toeSegments,
+            IReadOnlyList<bool> toePivot,
             IReadOnlyList<bool> contactFrames,
             Vector3[] corrections,
             Quaternion sourceToTargetRotation,
@@ -369,49 +482,91 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidFootAnchorPolicy[] policies,
             float pinReleaseDistance)
         {
-            Vector3 sourceAnchor = sourcePoints[runStart];
-            Vector3 targetAnchor = targetPoints[runStart];
+            // 추종 궤적은 항상 발목·발끝 중점 기준(기존 동작과 동일).
+            // 핀은 롤 프레임에서 발끝을 고정점으로 잡되 중점 목표로 환산해
+            // 발목이 심은 발끝 주위를 회전하도록 함. 기준 전환은 핀 경계에서만
+            // 일어나고 모든 전이는 연속으로 유지됨.
+            Vector3 desiredVertex = targetPoints[runStart];
+            Vector3 previousSourceVertex = sourcePoints[runStart];
             bool pinned = false;
             bool pinBlocked = false;
-            Vector3 pinSource = Vector3.zero;
+            bool pinPivot = false;
+            Vector3 pinnedVertex = Vector3.zero;
+            Vector3 pinSourceVertex = Vector3.zero;
             for (int index = runStart; index <= runEnd; index++)
             {
-                Vector3 sourceDelta = sourcePoints[index] - sourceAnchor;
-                sourceDelta.y = 0f;
-                if (policies[index] == HumanoidFootAnchorPolicy.Pinned && !pinBlocked)
-                {
-                    if (!pinned)
-                    {
-                        // 핀 진입 시 지금까지 추종한 위치에 앵커를 접어 경계 위치를 유지함.
-                        targetAnchor += sourceToTargetRotation * sourceDelta;
-                        pinSource = sourcePoints[index];
-                        pinned = true;
-                    }
-                    else if (pinReleaseDistance > 0f &&
-                        HorizontalDistance(sourcePoints[index], pinSource) >= pinReleaseDistance)
-                    {
-                        // 원본이 핀 구간에서 실제로 움직이면 의도 추정 오류로 보고 추종을 재개하되
-                        // 해제 프레임에 앵커가 튀지 않도록 기준점을 현재 원본으로 넘김.
-                        pinned = false;
-                        pinBlocked = true;
-                        sourceAnchor = sourcePoints[index];
-                        sourceDelta = Vector3.zero;
-                    }
-                    if (pinned)
-                    {
-                        sourceAnchor = sourcePoints[index];
-                        sourceDelta = Vector3.zero;
-                    }
-                }
-                else
+                bool pivot = toePivot[index];
+                bool wantsPin =
+                    policies[index] == HumanoidFootAnchorPolicy.Pinned &&
+                    !pinBlocked;
+                // 방침이 Pinned가 아닌 프레임에서는 핀이 풀림.
+                if (pinned && !wantsPin)
                 {
                     pinned = false;
                 }
-                Vector3 desiredTargetPoint =
-                    targetAnchor + sourceToTargetRotation * sourceDelta;
-                Vector3 worldCorrection = desiredTargetPoint - targetPoints[index];
+
+                if (pinned)
+                {
+                    if (pivot != pinPivot)
+                    {
+                        // 핀 기준 전환: 같은 물리 위치로 환산해 팝을 막음.
+                        // 목표 자세에서 발끝은 중점보다 세그먼트 절반만큼 앞에 있음.
+                        pinnedVertex += toeSegments[index] * 0.5f *
+                            (pivot ? 1f : -1f);
+                        pinPivot = pivot;
+                        pinSourceVertex = pivot
+                            ? sourceToes[index]
+                            : sourcePoints[index];
+                    }
+
+                    // 발끝 핀은 중점 목표를 핀 발끝 - 세그먼트/2로 둬서
+                    // 롤 중 발목 회전을 허용하면서 발끝만 고정함.
+                    desiredVertex = pinPivot
+                        ? pinnedVertex - toeSegments[index] * 0.5f
+                        : pinnedVertex;
+                    Vector3 sourceVertex = pinPivot
+                        ? sourceToes[index]
+                        : sourcePoints[index];
+                    if (pinReleaseDistance > 0f &&
+                        HorizontalDistance(sourceVertex, pinSourceVertex) >=
+                            pinReleaseDistance)
+                    {
+                        // 원본 지지점이 핀 구간에서 실제로 움직이면 의도 추정
+                        // 오류로 보고 추종을 재개함. 해제 프레임 기준점은
+                        // 현재 원본으로 넘겨 앵커가 튀지 않게 함.
+                        pinned = false;
+                        pinBlocked = true;
+                    }
+
+                    // 핀 중에도 추종 기준은 매 프레임 갱신해 두어야
+                    // 해제 시점의 스텝이 핀 진입 누적치가 되지 않음.
+                    previousSourceVertex = sourcePoints[index];
+                }
+                else
+                {
+                    Vector3 step = sourcePoints[index] - previousSourceVertex;
+                    step.y = 0f;
+                    desiredVertex += sourceToTargetRotation * step;
+                    previousSourceVertex = sourcePoints[index];
+                    if (wantsPin)
+                    {
+                        // 핀 진입 시 추종 위치 그대로를 앵커로 삼아 경계 연속 유지.
+                        // 발끝이 심어진 프레임이면 발끝 기준으로 핀을 잡음.
+                        pinned = true;
+                        pinPivot = pivot;
+                        pinnedVertex = pivot
+                            ? desiredVertex + toeSegments[index] * 0.5f
+                            : desiredVertex;
+                        pinSourceVertex = pivot
+                            ? sourceToes[index]
+                            : sourcePoints[index];
+                    }
+                }
+
+                Vector3 worldCorrection = desiredVertex - targetPoints[index];
                 worldCorrection.y = 0f;
-                Vector3 rootSpaceCorrection = targetToSourceRotation * worldCorrection;
+                Vector3 rootSpaceCorrection =
+                    targetToSourceRotation * worldCorrection;
                 rootSpaceCorrection.y = 0f;
                 corrections[index] = rootSpaceCorrection;
             }
