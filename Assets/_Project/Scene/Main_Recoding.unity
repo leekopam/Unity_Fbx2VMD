@@ -3900,7 +3900,7 @@ MonoBehaviour:
   _useKnownMmdReferenceTiming: 0
   _RetargetPrewarmFrameCount: 6
   _additionalVmdCopyFolder: 
-  _motionVideoOutputFolder: C:/Users/flzhv/Downloads
+  _motionVideoOutputFolder: 
   _motionVideoFormat: 2
   _motionVideoFrameRate: 60
   _alphaRecordingHiddenObjects:
