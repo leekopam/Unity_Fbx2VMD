@@ -398,7 +398,11 @@ namespace Fbx2Vmd.ClothPhysics
             List<ColliderComponent> colliders,
             float torso,
             float skirtWeightThreshold,
-            int fixedChainDepth)
+            int fixedChainDepth,
+            float reductionScale = 1.0f,
+            bool useBackstop = false,
+            float backstopDistance = 0.005f,
+            bool usePresetBaseline = true)
         {
             var result = new Result
             {
@@ -466,6 +470,9 @@ namespace Fbx2Vmd.ClothPhysics
             var cloth = go.AddComponent<MagicaCloth>();
             var sdata = cloth.SerializeData;
             sdata.clothType = ClothProcess.ClothType.MeshCloth;
+            // 공식 Skirt 프리셋을 베이스라인으로 — 아래에서 관리하는 필드는 덮어쓴다.
+            if (usePresetBaseline)
+                ClothPresetLibrary.TryImport(sdata, ClothPresetLibrary.Skirt);
             foreach (var (smr, _) in inputs)
                 sdata.sourceRenderers.Add(smr);
 
@@ -477,8 +484,8 @@ namespace Fbx2Vmd.ClothPhysics
             // 프록시 메시 리덕션 — 체형 기준 ~3% (공식 예제 0.02m 내외)
             if (torso > 0f)
             {
-                sdata.reductionSetting.simpleDistance = torso * 0.035f;
-                sdata.reductionSetting.shapeDistance = torso * 0.04f;
+                sdata.reductionSetting.simpleDistance = torso * 0.035f * reductionScale;
+                sdata.reductionSetting.shapeDistance = torso * 0.04f * reductionScale;
             }
 
             // 공식 MeshCloth_Skirt 프리셋 + 런타임 예제 파라미터
@@ -498,6 +505,8 @@ namespace Fbx2Vmd.ClothPhysics
             inertia.depthInertia = 0.7f;
             inertia.centrifualAcceleration = 0.1f;
             inertia.particleSpeedLimit.SetValue(true, 4.0f);
+            // 헤어와 동일하게 Keep — 텔레포트 오감지보다 폭주 방지가 우선
+            inertia.teleportMode = InertiaConstraint.TeleportMode.Keep;
             inertia.teleportDistance = 0.5f;
             inertia.teleportRotation = 90.0f;
 
@@ -514,7 +523,17 @@ namespace Fbx2Vmd.ClothPhysics
             sdata.angleLimitConstraint.stiffness = 1.0f;
 
             sdata.motionConstraint.useMaxDistance = false;
-            sdata.motionConstraint.useBackstop = false;
+            // 백스톱: 스킨 포즈 기준 법선 내측 진입을 제한해 다리 관통을 막는다.
+            // 설치 버전(2.18.1)에 Penetration 제약이 없어 이것이 대체 수단.
+            // 스커트 옆살이 다리 사이로 들어가는 정상 동작도 제한될 수 있어
+            // 과하면 끄는 옵션으로 노출한다.
+            sdata.motionConstraint.useBackstop = useBackstop;
+            if (useBackstop)
+            {
+                sdata.motionConstraint.backstopRadius = 0.02f;
+                sdata.motionConstraint.backstopDistance.SetValue(
+                    Mathf.Max(0f, backstopDistance));
+            }
             sdata.motionConstraint.stiffness = 1.0f;
 
             sdata.colliderCollisionConstraint.mode = ColliderCollisionConstraint.Mode.Point;
