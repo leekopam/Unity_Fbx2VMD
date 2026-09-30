@@ -170,9 +170,12 @@ namespace Fbx2Vmd.FBXImporter
                 object estimateResult;
                 try
                 {
+                    // 표식은 정답지이므로 추정기 입력으로 넘기지 않음.
+                    // 주입하면 ApplyHumanLabels가 예측을 표식 값으로 덮어써
+                    // 모든 튜닝 조합의 F1이 1.0이 되어 비교가 무의미해짐.
                     estimateResult = estimate.Invoke(null,
                         new object[] { samples, frameRate, humanScale,
-                            labelSet, tuning });
+                            null, tuning });
                 }
                 // 리플렉션 호출 예외는 언랩해 실제 추정 실패 원인을 남김.
                 catch (TargetInvocationException error)
