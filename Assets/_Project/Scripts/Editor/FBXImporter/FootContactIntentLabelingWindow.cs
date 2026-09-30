@@ -108,7 +108,11 @@ namespace Fbx2Vmd.FBXImporter
                     _intentFiles.AddRange(Directory.GetFiles(
                         root, IntentFileName, SearchOption.AllDirectories));
                 }
-                catch (Exception) { }
+                catch (Exception error) when (error is IOException ||
+                    error is UnauthorizedAccessException)
+                {
+                    // 열거할 수 없는 하위 폴더는 건너뛰고 나머지 파일로 계속함.
+                }
             }
             _intentFiles.Sort(StringComparer.Ordinal);
             _selectedFile = 0;
