@@ -95,7 +95,9 @@ namespace MagicaCloth2
 
         protected void Awake()
         {
-            if (MagicaManager.initializationLocation == MagicaManager.InitializationLocation.Awake)
+            // 매니저 미초기화(플레이 경계·초기화 실패)에서는 Team 접근이 NRE가 되므로 건너뛴다
+            if (MagicaManager.initializationLocation == MagicaManager.InitializationLocation.Awake
+                && MagicaManager.IsPlaying())
             {
                 Process.Init();
                 MagicaManager.Team.RemoveMonitoringProcess(Process);
@@ -114,6 +116,9 @@ namespace MagicaCloth2
 
         protected void Start()
         {
+            // 매니저 미초기화(플레이 경계·초기화 실패)에서는 Team 접근이 NRE가 되므로 건너뛴다
+            if (!MagicaManager.IsPlaying())
+                return;
             if (MagicaManager.initializationLocation == MagicaManager.InitializationLocation.Start)
             {
                 Process.Init();

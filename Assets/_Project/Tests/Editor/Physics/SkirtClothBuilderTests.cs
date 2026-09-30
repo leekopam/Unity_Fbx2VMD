@@ -169,35 +169,40 @@ namespace Tests.Editor.ClothPhysics
             Assert.AreEqual(1.0f, sdata.triangleBendingConstraint.stiffness);
         }
 
-        /// <summary>삼각형이 있는 메시: 스커트 삼각형만 추출되고 원본에서 제거되는지 검증.</summary>
+        /// <summary>혼합 삼각형도 추출되고 무효 버텍스가 Fixed로 격상되는지 검증.</summary>
         [Test]
-        public void Given_MixedMesh_When_Extract_Then_OnlySkirtTrisMoved()
+        public void Given_MixedMesh_When_Extract_Then_MixedTrisMovedWithFixedBoundary()
         {
             var (root, depths, chain0, chain1, leg) = BuildSkirtRig();
             var bones = new[] { chain0[0], chain0[2], leg };
-            // v0,v1=스커트, v2=다리 — 삼각형 2개: (0,1,2) 혼합→잔여, (0,1,1)은 무효라
-            // 스커트 전용 삼각형 (0,1,3) 구성: v3도 스커트로 추가
+            // v0,v1=스커트, v2=다리(무효), v3=스커트 — 두 삼각형 모두 스커트 버텍스를
+            // 1개 이상 포함하므로 전부 추출되고, v2는 추출본에서 Fixed로 격상된다
             var weights = new[] { W(0, 1f), W(1, 1f), W(2, 1f), W(1, 1f) };
             var smr = MakeSmr(bones, weights, 4);
             smr.transform.SetParent(root, false); // 추출 GO는 원본 부모 아래로 생성됨
             var mesh = smr.sharedMesh;
             mesh.vertices = new[] { Vector3.zero, Vector3.one, Vector3.up, Vector3.right };
-            mesh.triangles = new[] { 0, 1, 2, 0, 1, 3 }; // 전자는 혼합(잔여), 후자는 스커트(추출)
+            mesh.triangles = new[] { 0, 1, 2, 0, 1, 3 };
 
             var attrs = SkirtClothBuilder.BuildVertexAttributes(
                 smr, depths, 0.5f, 0, out _, out _);
+            Assert.IsTrue(attrs[2].IsInvalid(), "v2는 스커트 무가중 — 무효");
+
             var extracted = SkirtClothBuilder.ExtractSkirtRenderer(
                 smr, attrs, out var remapped);
 
             Assert.IsNotNull(extracted);
             var newSmr = extracted.GetComponent<SkinnedMeshRenderer>();
-            Assert.AreEqual(3, newSmr.sharedMesh.vertexCount, "추출 메시는 스커트 버텍스만");
-            Assert.AreEqual(3, newSmr.sharedMesh.triangles.Length, "스커트 삼각형 1개만 추출");
-            Assert.AreEqual(3, smr.sharedMesh.triangles.Length, "원본은 잔여 삼각형만 남음");
+            Assert.AreEqual(4, newSmr.sharedMesh.vertexCount, "추출 메시는 경계 버텍스 포함");
+            Assert.AreEqual(6, newSmr.sharedMesh.triangles.Length, "두 삼각형 모두 추출");
+            Assert.AreEqual(0, smr.sharedMesh.triangles.Length, "원본에는 삼각형이 남지 않음");
             Assert.AreEqual(4, smr.sharedMesh.vertexCount, "원본 버텍스 수는 유지 (삼각형만 제거)");
             CollectionAssert.AreEqual(mesh.bindposes, newSmr.sharedMesh.bindposes);
             for (int i = 0; i < remapped.Length; i++)
                 Assert.IsFalse(remapped[i].IsInvalid(), "추출 메시는 전부 클로스 대상");
+            // 무효 버텍스(v2, remap 인덱스 2)는 Fixed로 격상
+            Assert.AreEqual(MagicaCloth2.VertexAttribute.Flag_Fixed, remapped[2].Value,
+                "혼합 삼각형의 무효 버텍스는 Fixed 격상");
 
             // 정리 시 원본 메시 복원
             SkirtClothBuilder.CleanupExtractions(root);
