@@ -89,6 +89,7 @@ namespace Fbx2Vmd.Profiling
                 last.deltaMs += nowMs - _lastStageMarkMs;
                 last.sinceRunStartMs = nowMs;
                 last.gcDeltaBytes += nowGc - _lastStageGcBytes;
+                last.calls++;
             }
             else
             {
@@ -99,6 +100,7 @@ namespace Fbx2Vmd.Profiling
                     sinceRunStartMs = nowMs,
                     deltaMs = nowMs - _lastStageMarkMs,
                     gcDeltaBytes = nowGc - _lastStageGcBytes,
+                    calls = 1,
                 });
             }
             _lastStageMarkMs = nowMs;
@@ -186,6 +188,7 @@ namespace Fbx2Vmd.Profiling
             _current.totalGcAllocBytes = GC.GetAllocatedBytesForCurrentThread() - _runStartGcBytes;
             CaptureMemoryCounters(_current);
             ComputeFramePercentiles(_current);
+            _current.frameSamplesMs = _frameSamples.ToArray();
 
             try
             {

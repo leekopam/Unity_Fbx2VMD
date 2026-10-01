@@ -168,12 +168,14 @@ namespace Fbx2Vmd.Profiling
                 maxDelta = Mathf.Max(maxDelta, s.deltaMs);
             }
 
-            sb.Append("<table><tr><th>스테이지</th><th>Δms</th><th>누적ms</th><th>ΔGC(KB)</th><th>비중</th><th>메시지</th></tr>");
+            sb.Append("<table><tr><th>스테이지</th><th>Δms</th><th>호출</th><th>누적ms</th><th>ΔGC(KB)</th><th>비중</th><th>메시지</th></tr>");
             foreach (ProfilingStageSample s in stages)
             {
                 int width = maxDelta > 0f ? Mathf.RoundToInt(s.deltaMs / maxDelta * 200f) : 0;
                 sb.Append("<tr><td>").Append(Escape(s.stage ?? string.Empty)).Append("</td><td>")
-                    .Append(F(s.deltaMs)).Append("</td><td>").Append(F(s.sinceRunStartMs)).Append("</td><td>")
+                    // 구 스키마(calls 필드 없음)는 0으로 역직렬화 — 분석기와 동일하게 1회로 간주해 표시한다.
+                    .Append(F(s.deltaMs)).Append("</td><td>").Append(Mathf.Max(1, s.calls)).Append("</td><td>")
+                    .Append(F(s.sinceRunStartMs)).Append("</td><td>")
                     .Append(F(s.gcDeltaBytes / 1024f)).Append("</td><td>")
                     .Append("<span class=\"bar\" style=\"width:").Append(width).Append("px\"></span></td><td>")
                     .Append(Escape(s.message ?? string.Empty)).Append("</td></tr>");
