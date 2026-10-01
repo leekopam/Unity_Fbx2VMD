@@ -76,5 +76,39 @@ namespace Tests.Editor.ClothPhysics
             Assert.That(s.inertiaConstraint.worldInertia, Is.LessThanOrEqualTo(1f));
             Assert.That(s.inertiaConstraint.localInertia, Is.LessThanOrEqualTo(1f));
         }
+
+        [Test]
+        public void Given_DefaultTuning_When_Apply_Then_SelfCollisionEnabled()
+        {
+            var s = new ClothSerializeData();
+            HairPhysicsParameters.Apply(HairPart.Tail, s, 0.6f, null, true, HairTuning.Default);
+            Assert.That(s.selfCollisionConstraint.selfMode,
+                Is.EqualTo(SelfCollisionConstraint.SelfCollisionMode.FullMesh));
+            Assert.That(s.selfCollisionConstraint.surfaceThickness.value, Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void Given_SelfCollisionOff_When_Apply_Then_SelfCollisionDisabled()
+        {
+            var t = HairTuning.Default;
+            t.useSelfCollision = false;
+            var s = new ClothSerializeData();
+            HairPhysicsParameters.Apply(HairPart.Tail, s, 0.6f, null, true, t);
+            Assert.That(s.selfCollisionConstraint.selfMode,
+                Is.EqualTo(SelfCollisionConstraint.SelfCollisionMode.None));
+        }
+
+        [Test]
+        public void Given_TorsoScale_When_Apply_Then_SelfCollisionThicknessScaled()
+        {
+            var small = new ClothSerializeData();
+            HairPhysicsParameters.Apply(HairPart.Tail, small, 0.6f, null, true, HairTuning.Default);
+            var large = new ClothSerializeData();
+            HairPhysicsParameters.Apply(HairPart.Tail, large, 1.2f, null, true, HairTuning.Default);
+            // torso 0.6→unit 1.0, 1.2→unit 2.0 — 자기 충돌 두께는 체형에 비례해야 한다
+            Assert.That(large.selfCollisionConstraint.surfaceThickness.value,
+                Is.EqualTo(small.selfCollisionConstraint.surfaceThickness.value * 2f)
+                    .Within(0.0005f));
+        }
     }
 }
