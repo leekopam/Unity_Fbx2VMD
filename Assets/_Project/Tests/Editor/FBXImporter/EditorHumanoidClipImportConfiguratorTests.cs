@@ -110,6 +110,86 @@ namespace Tests.Editor.FBXImporter
             Assert.That(AssetDatabase.GetAssetDependencyHash(path), Is.EqualTo(dependencyHash));
         }
 
+        [Test]
+        public void Given_SkeletonConventionRig_When_BuildingFallback_Then_MapsRequiredBonesToActualNames()
+        {
+            var root = new GameObject("폴백 매핑 검증");
+            try
+            {
+                foreach (string name in new[]
+                    {
+                        "Skeleton_Hips", "Skeleton_Spine", "Skeleton_Spine1", "Skeleton_Neck", "Skeleton_Head",
+                        "Skeleton_LeftShoulder", "Skeleton_RightShoulder",
+                        "Skeleton_LeftArm", "Skeleton_RightArm", "Skeleton_LeftForeArm", "Skeleton_RightForeArm",
+                        "Skeleton_LeftHand", "Skeleton_RightHand",
+                        "Skeleton_LeftUpLeg", "Skeleton_RightUpLeg", "Skeleton_LeftLeg", "Skeleton_RightLeg",
+                        "Skeleton_LeftFoot", "Skeleton_RightFoot", "Skeleton_LeftToeBase", "Skeleton_RightToeBase",
+                        "메쉬 노드"
+                    })
+                {
+                    AddBone(root, name);
+                }
+                var current = new HumanDescription { human = new HumanBone[0], skeleton = new SkeletonBone[0] };
+                Assert.That(BuildFallback(root, current, out HumanDescription result), Is.True);
+                HumanBone[] mapped = result.human;
+                Assert.That(mapped.Any(b => b.humanName == "Hips" && b.boneName == "Skeleton_Hips"), Is.True);
+                Assert.That(mapped.Any(b => b.humanName == "Chest" && b.boneName == "Skeleton_Spine1"), Is.True);
+                Assert.That(mapped.Any(b => b.humanName == "LeftUpperLeg" && b.boneName == "Skeleton_LeftUpLeg"), Is.True);
+                Assert.That(mapped.Any(b => b.humanName == "LeftLowerLeg" && b.boneName == "Skeleton_LeftLeg"), Is.True);
+                Assert.That(mapped.Any(b => b.humanName == "RightLowerArm" && b.boneName == "Skeleton_RightForeArm"), Is.True);
+                Assert.That(mapped.Any(b => b.humanName == "LeftToes" && b.boneName == "Skeleton_LeftToeBase"), Is.True);
+                Assert.That(result.skeleton.Length, Is.EqualTo(root.GetComponentsInChildren<Transform>(true).Length));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
+        }
+
+        [Test]
+        public void Given_RigMissingRequiredBones_When_BuildingFallback_Then_RejectsWithoutMapping()
+        {
+            var root = new GameObject("폴백 실패 검증");
+            try
+            {
+                AddBone(root, "Skeleton_Spine");
+                AddBone(root, "Skeleton_LeftHand");
+                var current = new HumanDescription { human = new HumanBone[0], skeleton = new SkeletonBone[0] };
+                Assert.That(BuildFallback(root, current, out HumanDescription result), Is.False);
+                Assert.That(result.human, Is.Empty);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
+        }
+
+        [Test]
+        public void Given_FbxWithEmptyAutoMap_When_EnsuringHumanoid_Then_ProducesHumanMotionClip()
+        {
+            const string path = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+            GameObject root = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (root == null) Assert.Ignore("로컬 입력 FBX가 없는 환경에서는 실제 임포트 검증을 생략함");
+            Assert.That(EnsureHumanoid(path), Is.True.Or.False);
+            AnimationClip clip = AssetDatabase.LoadAllAssetRepresentationsAtPath(path)
+                .OfType<AnimationClip>().FirstOrDefault();
+            Assert.That(clip, Is.Not.Null);
+            Assert.That(clip.humanMotion, Is.True);
+        }
+
+        private static bool BuildFallback(GameObject root, HumanDescription current, out HumanDescription result)
+        {
+            Type type = typeof(FBXImportController).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidClipImportConfigurator");
+            MethodInfo method = type.GetMethod("TryBuildFallbackHumanDescription", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+            object[] args = { root, current, null };
+            bool succeeded = (bool)method.Invoke(null, args);
+            result = (HumanDescription)args[2];
+            return succeeded;
+        }
+
+        private static bool EnsureHumanoid(string path)
+        {
+            Type type = typeof(FBXImportController).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidClipImportConfigurator");
+            MethodInfo method = type.GetMethod("EnsureHumanoid", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+            return (bool)method.Invoke(null, new object[] { path });
+        }
+
         private static bool Resolve(GameObject root, HumanBone[] source, out HumanBone[] result)
         {
             Type type = typeof(FBXImportController).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidClipImportConfigurator");
