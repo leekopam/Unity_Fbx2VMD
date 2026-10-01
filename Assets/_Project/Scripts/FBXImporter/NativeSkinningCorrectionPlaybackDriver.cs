@@ -135,6 +135,20 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return true;
             }
+            // 완료 직후 틱이 소비하기 전에 재요청되면 완료 처리부터 수행해 재계산을 막는다.
+            if (_preprocessSession != null)
+            {
+                if (_preprocessSession.IsFaulted)
+                {
+                    return Fail(_preprocessSession.FailureMessage);
+                }
+                if (!_preprocessSession.IsComplete)
+                {
+                    return false;
+                }
+                CompletePreparation(_preprocessSession.Result);
+                return IsReady;
+            }
 
             ResetTransientState();
             foreach (SkinnedMeshRenderer renderer in _contracts
