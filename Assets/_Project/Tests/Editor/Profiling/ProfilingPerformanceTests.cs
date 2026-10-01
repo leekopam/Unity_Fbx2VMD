@@ -430,6 +430,331 @@ namespace Fbx2Vmd.Tests.Editor.Profiling
                     .Any(f => f.kind == ProfilingRunAnalyzer.KindBottleneck));
         }
 
+        [Test]
+        public void RunRecord_FrameSamples_AreWritten()
+        {
+            PipelineRunProfiler.AbortRun();
+            PipelineRunProfiler.BeginRun("test-frameseries");
+            for (int i = 0; i < 12; i++)
+            {
+                PipelineRunProfiler.SampleFrame(0.020f + i * 0.001f);
+            }
+            PipelineRunProfiler.EndRun("Success");
+
+            var record = ProfilingReportWriter.Load(PipelineRunProfiler.LastWrittenReportPath);
+            Assert.IsNotNull(record);
+            Assert.IsNotNull(record.frameSamplesMs);
+            Assert.AreEqual(12, record.frameSamplesMs.Length);
+            Assert.AreEqual(20f, record.frameSamplesMs[0], 0.01f);
+        }
+
+        [Test]
+        public void RunRecord_OldReportWithoutFrameSamples_DeserializesEmpty()
+        {
+            var record = JsonUtility.FromJson<ProfilingRunRecord>("{}");
+            Assert.IsNotNull(record.frameSamplesMs);
+            Assert.AreEqual(0, record.frameSamplesMs.Length);
+        }
+
+        [Test]
+        public void Analyzer_FrameStats_ComputesRange()
+        {
+            float[] samples = { 10f, 20f, 30f, 40f, 50f };
+            var stats = ProfilingRunAnalyzer.FrameStats(samples, 1, 4);
+            Assert.AreEqual(3, stats.count);
+            Assert.AreEqual(30f, stats.meanMs, 0.001f);
+            Assert.AreEqual(20f, stats.minMs, 0.001f);
+            Assert.AreEqual(40f, stats.maxMs, 0.001f);
+            // p95는 기존 분위수와 같은 nearest-rank 규칙 — 3개 표본이면 최대값.
+            Assert.AreEqual(40f, stats.p95Ms, 0.001f);
+
+            // 범위 클램프: 경계 역전·초과도 안전해야 한다.
+            var clamped = ProfilingRunAnalyzer.FrameStats(samples, 4, 99);
+            Assert.AreEqual(1, clamped.count);
+            Assert.AreEqual(0, ProfilingRunAnalyzer.FrameStats(null, 0, 5).count);
+        }
+
+        [Test]
+        public void Thresholds_SaveLoad_Roundtrip()
+        {
+            string path = Path.Combine(
+                Path.GetTempPath(), "analysis-thresholds-test.json");
+            var thresholds = new ProfilingAnalysisThresholds
+            {
+                bottleneckShareOfTotal = 0.5f,
+                trendMinHistory = 5,
+            };
+            ProfilingAnalysisThresholds.Save(thresholds, path);
+
+            var loaded = JsonUtility.FromJson<ProfilingAnalysisThresholds>(
+                File.ReadAllText(path));
+            Assert.AreEqual(0.5f, loaded.bottleneckShareOfTotal);
+            Assert.AreEqual(5, loaded.trendMinHistory);
+            File.Delete(path);
+        }
+
+        [Test]
+        public void Thresholds_Sanitize_FixesInvalidValues()
+        {
+            var t = new ProfilingAnalysisThresholds
+            {
+                bottleneckShareOfTotal = float.NaN,
+                bottleneckMinAbsMs = float.NegativeInfinity,
+                trendRegressionFactor = -1f,
+                trendRegressionMinDeltaMs = 0f,
+                trendMinHistory = 0,
+                frameSpikeFactor = 0.5f,
+                frameSpikeMinMs = -10f,
+                gcSpikeMinMb = float.PositiveInfinity,
+            };
+            t.Sanitize();
+
+            Assert.IsFalse(float.IsNaN(t.bottleneckShareOfTotal), "NaN이 통과했습니다.");
+            Assert.AreEqual(0.3f, t.bottleneckShareOfTotal, "NaN은 기본값으로 복원되어야 합니다.");
+            Assert.AreEqual(200f, t.bottleneckMinAbsMs, "-Infinity는 기본값으로 복원되어야 합니다.");
+            Assert.AreEqual(1f, t.trendRegressionFactor, "배율 1 미만은 무의미하므로 보정되어야 합니다.");
+            Assert.AreEqual(1f, t.trendRegressionMinDeltaMs);
+            Assert.AreEqual(1, t.trendMinHistory);
+            Assert.AreEqual(1f, t.frameSpikeFactor);
+            Assert.AreEqual(1f, t.frameSpikeMinMs);
+            Assert.AreEqual(10f, t.gcSpikeMinMb, "+Infinity는 기본값으로 복원되어야 합니다.");
+
+            // 유효한 값은 유지되어야 한다.
+            var valid = new ProfilingAnalysisThresholds { bottleneckShareOfTotal = 0.5f };
+            valid.Sanitize();
+            Assert.AreEqual(0.5f, valid.bottleneckShareOfTotal);
+        }
+
+        [Test]
+        public void Writer_TryReadMeta_ReadsOutcomeOnly()
+        {
+            string dir = ProfilingReportWriter.OutputDirectory;
+            Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, "run-metatest-000000-x.json");
+            var record = new ProfilingRunRecord
+            {
+                runId = "metatest-000000",
+                label = "x",
+                outcome = "Failed",
+                startedUtc = "2026-09-29T12:00:00.0000000Z",
+            };
+            File.WriteAllText(path, JsonUtility.ToJson(record, true));
+            try
+            {
+                Assert.IsTrue(ProfilingReportWriter.TryReadMeta(
+                    path, out string outcome, out string startedUtc));
+                Assert.AreEqual("Failed", outcome);
+                Assert.AreEqual("2026-09-29T12:00:00.0000000Z", startedUtc);
+                Assert.IsFalse(ProfilingReportWriter.TryReadMeta(
+                    Path.Combine(dir, "run-metatest-missing.json"), out _, out _),
+                    "없는 파일은 false를 반환해야 합니다.");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Test]
+        public void Writer_TryGetRunTimestampUtc_ParsesFileName()
+        {
+            Assert.IsTrue(ProfilingReportWriter.TryGetRunTimestampUtc(
+                "C:/x/run-20260929-120000-abcdef-test.fbx.json", out DateTime utc));
+            Assert.AreEqual(new DateTime(2026, 9, 29, 12, 0, 0, DateTimeKind.Utc), utc);
+            Assert.IsFalse(ProfilingReportWriter.TryGetRunTimestampUtc(
+                "C:/x/random-name.json", out _), "규약 외 이름은 false여야 합니다.");
+        }
+
+        [Test]
+        public void Writer_IsHistoryMatch_RequiresLabelAndDevice()
+        {
+            var current = new ProfilingRunRecord
+            {
+                runId = "cur", label = "a.fbx", deviceModel = "RigA",
+            };
+            Assert.IsTrue(ProfilingReportWriter.IsHistoryMatch(
+                current, new ProfilingRunRecord
+                { runId = "past", label = "a.fbx", deviceModel = "RigA" }));
+            Assert.IsFalse(ProfilingReportWriter.IsHistoryMatch(
+                current, new ProfilingRunRecord
+                { runId = "cur", label = "a.fbx", deviceModel = "RigA" }),
+                "같은 runId(자기 자신)는 제외되어야 합니다.");
+            Assert.IsFalse(ProfilingReportWriter.IsHistoryMatch(
+                current, new ProfilingRunRecord
+                { runId = "past", label = "b.fbx", deviceModel = "RigA" }));
+            Assert.IsFalse(ProfilingReportWriter.IsHistoryMatch(
+                current, new ProfilingRunRecord
+                { runId = "past", label = "a.fbx", deviceModel = "RigB" }));
+            Assert.IsFalse(ProfilingReportWriter.IsHistoryMatch(current, null));
+        }
+
+        [Test]
+        public void Writer_GetHistoryCandidatePaths_FiltersByLabel()
+        {
+            string dir = ProfilingReportWriter.OutputDirectory;
+            Directory.CreateDirectory(dir);
+            string match = Path.Combine(dir, "run-20260929-120000-aaaaaa-candtest.fbx.json");
+            string other = Path.Combine(dir, "run-20260929-120100-bbbbbb-otherlabel.json");
+            File.WriteAllText(match, "{}");
+            File.WriteAllText(other, "{}");
+            try
+            {
+                var candidates = ProfilingReportWriter.GetHistoryCandidatePaths(
+                    new ProfilingRunRecord { label = "candtest.fbx" });
+                CollectionAssert.Contains(candidates, match);
+                CollectionAssert.DoesNotContain(candidates, other);
+            }
+            finally
+            {
+                File.Delete(match);
+                File.Delete(other);
+            }
+        }
+
+        [Test]
+        public void NoteStage_ConsecutiveSameStage_MergesAndCountsCalls()
+        {
+            PipelineRunProfiler.AbortRun();
+            PipelineRunProfiler.BeginRun("test-callcount");
+            PipelineRunProfiler.NoteStage("Retargeting", "진행 1", isTerminal: false);
+            PipelineRunProfiler.NoteStage("Retargeting", "진행 2", isTerminal: false);
+            PipelineRunProfiler.NoteStage("Retargeting", "진행 3", isTerminal: false);
+            PipelineRunProfiler.NoteStage("Success", "종료", isTerminal: true);
+
+            var record = ProfilingReportWriter.Load(PipelineRunProfiler.LastWrittenReportPath);
+            Assert.IsNotNull(record);
+            var retarget = record.stages.First(s => s.stage == "Retargeting");
+            Assert.AreEqual(3, retarget.calls, "하트비트 병합 시 호출 수가 누적되어야 합니다.");
+        }
+
+        [Test]
+        public void AggregateStages_SumsCalls_LegacySampleCountsAsOne()
+        {
+            var stages = new List<ProfilingStageSample>
+            {
+                new ProfilingStageSample { stage = "A", deltaMs = 1f, calls = 3 },
+                new ProfilingStageSample { stage = "A", deltaMs = 2f }, // 구 스키마: calls=0
+                new ProfilingStageSample { stage = "B", deltaMs = 4f },
+            };
+            var agg = ProfilingRunAnalyzer.AggregateStagesByName(stages);
+            Assert.AreEqual(2, agg.Count);
+            Assert.AreEqual(4, agg[0].calls, "병합 호출 수는 3+1(구 스키마 1회 간주)이어야 합니다.");
+            Assert.AreEqual(1, agg[1].calls);
+        }
+
+        [Test]
+        public void StageSample_Calls_SurvivesJsonRoundtrip()
+        {
+            var sample = new ProfilingStageSample { stage = "A", calls = 7 };
+            var clone = JsonUtility.FromJson<ProfilingStageSample>(JsonUtility.ToJson(sample));
+            Assert.AreEqual(7, clone.calls);
+        }
+
+        [Test]
+        public void AggregateStages_NullStageName_NormalizesToEmpty()
+        {
+            // 손상·수동 편집 리포트의 stage:null도 집계 결과가 딕셔너리 키로 쓸 수 있게 정규화한다.
+            var stages = new List<ProfilingStageSample>
+            {
+                new ProfilingStageSample { stage = null, deltaMs = 5f },
+                new ProfilingStageSample { stage = null, deltaMs = 3f },
+                null, // null 샘플도 건너뛰어야 한다
+                new ProfilingStageSample { stage = "A", deltaMs = 1f },
+            };
+
+            var agg = ProfilingRunAnalyzer.AggregateStagesByName(stages);
+
+            Assert.AreEqual(2, agg.Count);
+            Assert.AreEqual(string.Empty, agg[0].stage, "null 스테이지명은 빈 문자열로 정규화되어야 합니다.");
+            Assert.AreEqual(8f, agg[0].deltaMs, 0.001f);
+            Assert.AreEqual(2, agg[0].calls);
+
+            // 뷰어가 하는 것과 같은 딕셔너리 키 사용이 예외 없이 동작해야 한다.
+            var byStage = new Dictionary<string, ProfilingStageSample>(StringComparer.Ordinal);
+            foreach (ProfilingStageSample s in agg)
+            {
+                byStage[s.stage] = s;
+            }
+            Assert.IsTrue(byStage.ContainsKey(string.Empty));
+        }
+
+        [Test]
+        public void Analyze_NullStageName_DoesNotThrow()
+        {
+            var record = new ProfilingRunRecord { outcome = "Failed", totalMs = 100f };
+            record.stages.Add(new ProfilingStageSample { stage = null, deltaMs = 50f, message = null });
+            Assert.DoesNotThrow(() => ProfilingRunAnalyzer.Analyze(record, null));
+        }
+
+        [Test]
+        public void Analyzer_Median_NullOrEmpty_ReturnsZero()
+        {
+            Assert.AreEqual(0f, ProfilingRunAnalyzer.Median(null));
+            Assert.AreEqual(0f, ProfilingRunAnalyzer.Median(new List<float>()));
+            Assert.AreEqual(2f, ProfilingRunAnalyzer.Median(new List<float> { 1f, 2f, 3f }));
+        }
+
+        [Test]
+        public void Window_LoadJevDiagnosis_CachesAndDetectsChange()
+        {
+            // Assembly-CSharp-Editor 내부 타입이라 리플렉션으로 접근한다(기존 테스트 패턴과 동일).
+            Type windowType = Type.GetType(
+                "Fbx2Vmd.Profiling.EditorTools.ProfilingReportWindow, Assembly-CSharp-Editor");
+            Assert.IsNotNull(windowType, "ProfilingReportWindow 타입을 찾지 못했습니다.");
+            MethodInfo loadMethod = windowType.GetMethod(
+                "LoadJevDiagnosis", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(loadMethod, "LoadJevDiagnosis를 찾지 못했습니다.");
+
+            string dir = Path.Combine(Path.GetTempPath(), "jevcache-test");
+            Directory.CreateDirectory(dir);
+            string reportPath = Path.Combine(dir, "run-20260929-120000-jevtest-x.json");
+            string jevPath = Path.Combine(dir, "run-20260929-120000-jevtest-x.jev.json");
+            File.WriteAllText(reportPath, "{}");
+            File.WriteAllText(jevPath, "{\"status\":\"ok\",\"model\":\"m1\",\"entries\":[]}");
+
+            var window = ScriptableObject.CreateInstance(windowType);
+            try
+            {
+                windowType.GetField("_reportFiles",
+                        BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(window, new[] { reportPath });
+
+                object first = loadMethod.Invoke(window, new object[] { 0 });
+                Assert.IsNotNull(first, "jev.json이 있으면 진단을 반환해야 합니다.");
+                Assert.AreEqual("m1", first.GetType().GetField("model").GetValue(first));
+
+                // 캐시 유효 구간(0.5s) 안에서는 파일이 삭제돼도 캐시 값이 반환된다 — 재읽기가 없음의 증거.
+                File.Delete(jevPath);
+                object cached = loadMethod.Invoke(window, new object[] { 0 });
+                Assert.AreSame(first, cached, "스로틀 구간 안에서는 디스크 재읽기 없이 캐시를 써야 합니다.");
+
+                // 스로틀 경과 후 삭제가 감지된다.
+                System.Threading.Thread.Sleep(600);
+                Assert.IsNull(loadMethod.Invoke(window, new object[] { 0 }),
+                    "삭제된 사이드카는 스로틀 경과 후 null이어야 합니다.");
+
+                // 재생성되면 새 내용이 로드된다.
+                File.WriteAllText(jevPath, "{\"status\":\"ok\",\"model\":\"m2\",\"entries\":[]}");
+                System.Threading.Thread.Sleep(600);
+                object reloaded = loadMethod.Invoke(window, new object[] { 0 });
+                Assert.IsNotNull(reloaded);
+                Assert.AreEqual("m2", reloaded.GetType().GetField("model").GetValue(reloaded));
+
+                // 손상된 JSON은 GUI 스레드에서 예외 없이 처리되어야 한다
+                // (JsonUtility는 빈 객체를 반환할 수 있으므로 DrawJevDiagnosis 측이 entries==null을 걸러낸다).
+                File.WriteAllText(jevPath, "{ not-json !!");
+                System.Threading.Thread.Sleep(600);
+                Assert.DoesNotThrow(() => loadMethod.Invoke(window, new object[] { 0 }));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(window);
+                File.Delete(reportPath);
+                File.Delete(jevPath);
+                Directory.Delete(dir);
+            }
+        }
+
         private static float MedianOf(int runs, Action action)
         {
             var samples = new float[runs];
