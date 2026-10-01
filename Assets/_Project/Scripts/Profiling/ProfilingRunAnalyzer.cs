@@ -46,7 +46,8 @@ namespace Fbx2Vmd.Profiling
         /// <summary>
         /// 동일 이름의 스테이지 샘플을 첫 등장 순서대로 하나로 합산합니다.
         /// 구 버전 리포트의 프레임 단위 하트비트(동일 스테이지 수천 샘플)도 정상 판정하기 위한 호환층입니다.
-        /// deltaMs/gcDeltaBytes는 합산, message는 마지막 값을 씁니다.
+        /// deltaMs/gcDeltaBytes/calls는 합산, message는 마지막 값을 씁니다.
+        /// calls가 0인 구 스키마 샘플은 호출 1회로 간주합니다.
         /// </summary>
         public static List<ProfilingStageSample> AggregateStagesByName(IReadOnlyList<ProfilingStageSample> stages)
         {
@@ -65,7 +66,8 @@ namespace Fbx2Vmd.Profiling
                     {
                         agg = new ProfilingStageSample
                         {
-                            stage = s.stage,
+                            // 손상된 리포트의 null 스테이지명도 정규화해 호출측 딕셔너리 키 사용을 보장한다.
+                            stage = key,
                             sinceRunStartMs = s.sinceRunStartMs,
                         };
                         byStage[key] = agg;
@@ -74,6 +76,7 @@ namespace Fbx2Vmd.Profiling
                     agg.message = s.message;
                     agg.deltaMs += s.deltaMs;
                     agg.gcDeltaBytes += s.gcDeltaBytes;
+                    agg.calls += Math.Max(1, s.calls);
                 }
             }
             var result = new List<ProfilingStageSample>(order.Count);
@@ -348,11 +351,61 @@ namespace Fbx2Vmd.Profiling
 
         public static float Median(List<float> samples)
         {
+            if (samples == null || samples.Count == 0)
+            {
+                return 0f;
+            }
             var sorted = samples.OrderBy(v => v).ToArray();
             int mid = sorted.Length / 2;
             return sorted.Length % 2 == 0
                 ? (sorted[mid - 1] + sorted[mid]) * 0.5f
                 : sorted[mid];
+        }
+
+        /// <summary>프레임 시간 범위 선택의 집계 결과입니다.</summary>
+        public struct FrameRangeStats
+        {
+            public int count;
+            public float minMs;
+            public float maxMs;
+            public float meanMs;
+            public float p95Ms;
+        }
+
+        /// <summary>frameSamplesMs의 [startInclusive, endExclusive) 구간 집계입니다. 범위는 내부에서 클램프합니다.</summary>
+        public static FrameRangeStats FrameStats(float[] samples, int startInclusive, int endExclusive)
+        {
+            var stats = new FrameRangeStats();
+            if (samples == null || samples.Length == 0)
+            {
+                return stats;
+            }
+
+            int start = Math.Max(0, Math.Min(startInclusive, endExclusive));
+            int end = Math.Min(samples.Length, Math.Max(startInclusive, endExclusive));
+            if (start >= end)
+            {
+                return stats;
+            }
+
+            float sum = 0f;
+            stats.minMs = float.MaxValue;
+            stats.maxMs = float.MinValue;
+            var sorted = new float[end - start];
+            for (int i = start; i < end; i++)
+            {
+                float v = samples[i];
+                sorted[i - start] = v;
+                sum += v;
+                stats.minMs = Math.Min(stats.minMs, v);
+                stats.maxMs = Math.Max(stats.maxMs, v);
+            }
+            stats.count = end - start;
+            stats.meanMs = sum / stats.count;
+            Array.Sort(sorted);
+            stats.p95Ms = sorted[Math.Clamp(
+                (int)Math.Ceiling(sorted.Length * 0.95) - 1, 0, sorted.Length - 1)];
+            return stats;
         }
     }
 }

@@ -9,6 +9,15 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal sealed class EditorHumanoidFootContactPlan
     {
+        // 방출 앵커가 목표에 뒤처진 갭을 비율로 회수하되 절대 상한을 두어
+        // 방침 전환·핀 시작 경계에서도 프레임당 이동이 제한된 채 유지되게 함.
+        private const float AnchorCatchUpFraction = 0.34f;
+        private const float AnchorCatchUpStepFactor = 4f;
+        // 이 프레임 수를 넘는 공백 뒤의 재획득은 새 착지로 보고 앵커를 재샘플함.
+        private const int MaxReacquireGapFrames = 6;
+        // 재획득 시드는 소멸 직전 발이 실제로 앵커에 붙어 있던 경우에만 유효함.
+        // 감쇠 중 소멸하면 발은 이미 원시 위치로 돌아간 뒤라 옛 앵커 부활이 팝이 됨.
+        private const float MinReacquireSeedWeight = 0.9f;
         private readonly Frame[][] _frames;
         internal int UnresolvedPairCount { get; private set; }
         internal string FirstIssue { get; private set; }
@@ -99,6 +108,9 @@ namespace Fbx2Vmd.FBXImporter
             var emitted = new Vector3[2];
             var emittedValid = new bool[2];
             var emittedContact = new Contact[2];
+            var emittedPoint = new[] { -1, -1 };
+            var emittedFrame = new int[2];
+            var emittedWeight = new float[2];
             for (int frame = 0; frame < weights.Length; frame++)
             {
                 Vector3 SourcePoint(int channel) => sourceFrames == null ? source[channel][frame] :
@@ -118,6 +130,19 @@ namespace Fbx2Vmd.FBXImporter
                     {
                         if (!TrySample() || !sampler.TrySelectContact(channel == 1, Vector3.up,
                                 out int point, out Vector3 anchor)) return false;
+                        // 짧은 재획득이면 직전 방출 앵커에 정점 간 물리 변위를 더해 시드하여
+                        // 새 정점이 재샘플 위치로 발을 끌어당기는 팝을 방지함.
+                        if (emittedValid[channel] &&
+                            emittedWeight[channel] >= MinReacquireSeedWeight &&
+                            frame - emittedFrame[channel] <= MaxReacquireGapFrames &&
+                            emittedPoint[channel] >= 0 &&
+                            sampler.TryGetLocalPoint(emittedPoint[channel], out Vector3 previousLocal) &&
+                            sampler.TryGetLocalPoint(point, out Vector3 currentLocal))
+                        {
+                            anchor = emitted[channel] + Vector3.ProjectOnPlane(
+                                foot.rotation * ((currentLocal - previousLocal) * foot.lossyScale.x),
+                                Vector3.up);
+                        }
                         if (!TryUpdateOffset(channel, point)) return false;
                         states[channel] = new Contact(frame, point, anchor, SourcePoint(channel));
                     }
@@ -191,10 +216,10 @@ namespace Fbx2Vmd.FBXImporter
                             if (Vector3.Distance(anchorShift, pointShift) <= foot.lossyScale.x * 0.005f)
                                 preservedPrimary = pair.Primary;
                         }
-                        if (anchorTrackStep > 0f && primaryPolicy == HumanoidFootAnchorPolicy.Free &&
-                            emittedValid[pair.Primary] && emittedContact[pair.Primary] == states[pair.Primary] &&
+                        if (anchorTrackStep > 0f && emittedValid[pair.Primary] &&
+                            emittedContact[pair.Primary] == states[pair.Primary] &&
                             preservedPrimary != pair.Primary)
-                            anchor = Vector3.MoveTowards(emitted[pair.Primary], anchor, anchorTrackStep);
+                            anchor = MoveEmittedAnchor(emitted[pair.Primary], anchor, anchorTrackStep);
                         int secondary = 1 - pair.Primary;
                         // 보조 접촉은 최종 주 앵커를 기준으로 정렬해 이동 상한에 따른 간격 불일치를 막음.
                         Vector3 secondaryAnchor = anchor +
@@ -222,8 +247,7 @@ namespace Fbx2Vmd.FBXImporter
                     if (states[channel] == null)
                     {
                         result._frames[channel][frame] = new Frame(-1, Vector3.zero, false);
-                        emittedValid[channel] = false;
-                        emittedContact[channel] = null;
+                        // 직전 방출 앵커·정점을 유지해 짧은 재획득 시드에 사용함.
                         continue;
                     }
                     HumanoidFootAnchorPolicy policy = anchorPolicies == null
@@ -231,16 +255,35 @@ namespace Fbx2Vmd.FBXImporter
                         : anchorPolicies[frame];
                     Vector3 anchor = states[channel].GetAnchor(
                         SourcePoint(channel), sourceRotation, scaleRatio);
-                    // 자유 구간의 동일 정점 이동만 제한하고, 정점 교체에 필요한 앵커 이동은 보존함.
-                    if (anchorTrackStep > 0f && policy == HumanoidFootAnchorPolicy.Free &&
-                        emittedValid[channel] && emittedContact[channel] == states[channel] &&
+                    // 정점이 바뀐 프레임은 방출 기준점을 정점 이동량만큼 먼저 옮겨
+                    // 같은 물리 위치끼리 비교하도록 함.
+                    if (emittedValid[channel] && emittedContact[channel] == states[channel] &&
+                        frame > 0 && TrySample() &&
+                        result._frames[channel][frame - 1].Point >= 0 &&
+                        result._frames[channel][frame - 1].Point != states[channel].Point &&
+                        sampler.TryGetLocalPoint(result._frames[channel][frame - 1].Point,
+                            out Vector3 replacedLocal) &&
+                        sampler.TryGetLocalPoint(states[channel].Point, out Vector3 currentLocal))
+                    {
+                        emitted[channel] += Vector3.ProjectOnPlane(
+                            foot.rotation * ((currentLocal - replacedLocal) * foot.lossyScale.x),
+                            Vector3.up);
+                    }
+                    // 방출 앵커는 프레임당 상한+갭 비례 회수로만 움직여 방침 전환·핀 시작
+                    // 경계에서 누적 지연이 한 번에 방출되는 팝을 막음.
+                    // 정점 교체의 실제 이동과 어울리는 앵커 이동은 예외로 둠.
+                    if (anchorTrackStep > 0f && emittedValid[channel] &&
+                        emittedContact[channel] == states[channel] &&
                         preservedPrimary != channel)
-                        anchor = Vector3.MoveTowards(emitted[channel], anchor, anchorTrackStep);
+                        anchor = MoveEmittedAnchor(emitted[channel], anchor, anchorTrackStep);
                     result._frames[channel][frame] =
                         new Frame(states[channel].Point, anchor, canAlign);
                     emitted[channel] = anchor;
                     emittedValid[channel] = true;
                     emittedContact[channel] = states[channel];
+                    emittedPoint[channel] = states[channel].Point;
+                    emittedFrame[channel] = frame;
+                    emittedWeight[channel] = weights[frame][channel];
                 }
             }
             plan = result;
@@ -279,10 +322,15 @@ namespace Fbx2Vmd.FBXImporter
             int primary = states[0].StartFrame <= states[1].StartFrame ? 0 : 1;
             Vector3 offset = Vector3.ProjectOnPlane(rotation * ((newFront - newRear) * foot.lossyScale.x), Vector3.up);
             if (offset.sqrMagnitude < 0.00000001f) return false;
-            Vector3 change = primary == 0 ? newRear - originalRear : newFront - originalFront;
-            // 핀 고정된 주 접촉의 앵커는 재정렬로 이동하지 않음.
-            if (!states[primary].Pinned)
-                states[primary].Anchor += Vector3.ProjectOnPlane(rotation * (change * foot.lossyScale.x), Vector3.up);
+            // 접촉 정점 신원이 바뀌면 앵커를 실제 정점 이동량만큼 옮겨 발 자세 연속을 유지함.
+            // 핀 고정 접촉도 보정하지 않으면 구 정점 위치의 앵커에 새 정점이 끌려가 팝이 됨.
+            // 정점이 그대로인 채널은 이동량이 0이라 영향이 없음.
+            for (int channel = 0; channel < 2; channel++)
+            {
+                Vector3 vertexShift = channel == 0 ? newRear - originalRear : newFront - originalFront;
+                states[channel].Anchor += Vector3.ProjectOnPlane(
+                    rotation * (vertexShift * foot.lossyScale.x), Vector3.up);
+            }
             states[0].Point = rear;
             states[1].Point = front;
             pair = new Pair(primary, direction, primary == 0 ? offset : -offset);
@@ -333,6 +381,14 @@ namespace Fbx2Vmd.FBXImporter
             Evaluate(best, out rear, out front);
             rotation = Quaternion.AngleAxis(best, axis) * original;
             return true;
+        }
+
+        // 추종 지연은 갭 비율로 회수하되 프레임 이동 절대 상한을 넘기지 않음.
+        private static Vector3 MoveEmittedAnchor(Vector3 emitted, Vector3 target, float trackStep)
+        {
+            float step = Mathf.Clamp(Vector3.Distance(emitted, target) * AnchorCatchUpFraction,
+                trackStep, trackStep * AnchorCatchUpStepFactor);
+            return Vector3.MoveTowards(emitted, target, step);
         }
 
         private void RecordIssue(int frame, string reason)

@@ -131,18 +131,43 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RapidFreeAnchor_When_Tracking_Then_FreeMotionIsStepLimited()
+        public void Given_RapidFreeAnchor_When_Tracking_Then_LagIsBoundedAndSmooth()
         {
+            // 빠른 원본 추종은 프레임당 상한+갭 비례 회수로 제한해, 지연이 무한정 쌓여
+            // 이후 방침 경계에서 한 번에 방출되는 팝이 생기지 않게 함.
             using (Rig rig = CreateRig(out Transform foot))
             {
                 Vector3[] anchors = BuildAnchors(foot, rig.Sampler,
                     frameCount: 4, driftPerFrame: 0.01f,
                     policies: null, pinRelease: 0f, trackStep: 0.008f, ratio: 2f);
-                // 자유 구간 앵커 이동이 프레임당 상한(0.008)을 넘지 않음.
+                // 갭이 작은 초기 프레임은 엄격 상한이 적용됨.
                 Assert.That(Vector3.Distance(anchors[0], anchors[1]),
                     Is.EqualTo(0.008f).Within(0.000001f));
-                Assert.That(Vector3.Distance(anchors[0], anchors[3]),
-                    Is.EqualTo(0.024f).Within(0.000001f));
+                // 지연은 유한하게 유지되고 프레임 이동은 절대 상한(4×trackStep=0.032)을 넘지 않음.
+                for (int index = 2; index < anchors.Length; index++)
+                    Assert.That(Vector3.Distance(anchors[index - 1], anchors[index]),
+                        Is.LessThan(0.033f), $"프레임 {index - 1}→{index} 앵커가 절대 상한을 초과함");
+                // 추종이 멈추지 않고 목표 쪽으로 계속 진행함.
+                Assert.That(anchors[3].x - anchors[0].x, Is.GreaterThan(0.02f));
+            }
+        }
+
+        [Test]
+        public void Given_FreeToSlidingTransition_When_AnchorLags_Then_BoundaryStepIsStillLimited()
+        {
+            // 자유 구간에서 누적된 추종 지연이 Sliding 전환 순간 한 번에 방출되면
+            // 보정 궤적이 원시 리타깃 쪽으로 단프레임 점프한다. 경계 프레임의 이동은
+            // 비례 회수 범위 안에서만 커져야 하고 목표로 스냅해서는 안 됨.
+            using (Rig rig = CreateRig(out Transform foot))
+            {
+                Vector3[] anchors = BuildAnchors(foot, rig.Sampler,
+                    frameCount: 6, driftPerFrame: 0.01f,
+                    policies: new[] { 0, 0, 0, 2, 2, 2 }, pinRelease: 0f,
+                    trackStep: 0.008f, ratio: 2f);
+                for (int index = 1; index < anchors.Length; index++)
+                    Assert.That(Vector3.Distance(anchors[index - 1], anchors[index]),
+                        Is.LessThan(0.033f),
+                        $"프레임 {index - 1}→{index} 앵커가 절대 상한을 초과해 스냅함");
             }
         }
 
@@ -198,6 +223,62 @@ namespace Tests.Editor.FBXImporter
                 // 보정 뒤에는 다시 고정되어 프레임 간 움직이지 않아야 함.
                 Assert.That(Vector3.Distance(AnchorAt(1, 3f), AnchorAt(1, 4f)),
                     Is.LessThan(0.000001f));
+            }
+        }
+
+        [Test]
+        public void Given_PinnedContactVertexSwitch_When_PairForms_Then_AnchorFollowsVertexDelta()
+        {
+            // 쌍 형성으로 핀 고정 주접촉의 정점이 바뀌면 앵커를 정점 이동량만큼 옮겨야
+            // 발 자세가 연속한다. 보정하지 않으면 새 정점이 구 정점 위치의 앵커로
+            // 끌려가 단프레임 팝이 됨.
+            using (Rig rig = CreateRig(out Transform foot))
+            {
+                const int frameCount = 6;
+                var sources = new[] { new Vector3[frameCount], new Vector3[frameCount] };
+                var weights = new Vector2[frameCount];
+                for (int index = 0; index < frameCount; index++)
+                {
+                    sources[0][index] = Vector3.zero;
+                    sources[1][index] = Vector3.forward * 0.2f;
+                    // 프레임 0은 앞쪽 단독, 이후 양쪽 접촉으로 쌍이 형성됨.
+                    weights[index] = index == 0 ? new Vector2(0f, 1f) : new Vector2(1f, 1f);
+                }
+                Assembly assembly = typeof(FBXVmdPipeline).Assembly;
+                Type policyType = assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootAnchorPolicy", true);
+                Array policies = Array.CreateInstance(policyType, frameCount);
+                object pinned = Enum.ToObject(policyType, 1);
+                for (int index = 0; index < frameCount; index++)
+                    policies.SetValue(pinned, index);
+                // 쌍 형성 프레임부터 발을 옆으로 기울여 앞쪽 최저 정점을 바꿈.
+                Quaternion rolled = Quaternion.AngleAxis(-30f, Vector3.forward);
+                Action<float> evaluate = time =>
+                {
+                    int frame = Mathf.RoundToInt(time * 60f);
+                    foot.SetPositionAndRotation(Vector3.zero,
+                        frame == 0 ? Quaternion.identity : rolled);
+                };
+                Type planType = assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+                MethodInfo build = planType.GetMethod("TryBuild", Flags);
+                object[] args = { foot, rig.Sampler, sources, weights, Quaternion.identity,
+                    1f, 60f, frameCount / 60f, evaluate, null, null, null, policies, 0f, 0f };
+                Assert.That(build.Invoke(null, args), Is.True);
+                MethodInfo getSample = planType.GetMethod("GetSample", Flags);
+                object SampleAt(int channel, float frame) =>
+                    getSample.Invoke(args[9], new object[] { channel, frame });
+                FieldInfo firstPoint = SampleAt(1, 0f).GetType().GetField("_firstPoint", Flags);
+                int before = (int)firstPoint.GetValue(SampleAt(1, 0f));
+                int after = (int)firstPoint.GetValue(SampleAt(1, 1f));
+                Assert.That(after, Is.Not.EqualTo(before),
+                    "전제: 기울어진 자세에서 쌍 형성 시 앞쪽 최저 정점이 바뀌어야 함");
+                Vector3 shift = (Vector3)SampleAt(1, 1f).GetType().GetField("Anchor", Flags).GetValue(SampleAt(1, 1f)) -
+                    (Vector3)SampleAt(1, 0f).GetType().GetField("Anchor", Flags).GetValue(SampleAt(1, 0f));
+                // 정점 이동(로컬 +x 0.1)을 기울어진 자세에 맞춰 회전시킨 수평 성분 ≈ 0.0866.
+                Assert.That(shift.x, Is.EqualTo(0.0866f).Within(0.01f),
+                    "정점 전환 시 앵커가 실제 정점 이동량만큼 이동해야 발 자세가 연속함");
+                Assert.That(Mathf.Abs(shift.z), Is.LessThan(0.01f));
             }
         }
 

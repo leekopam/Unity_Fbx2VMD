@@ -79,6 +79,25 @@ namespace Fbx2Vmd.Tests.Editor.Profiling
         }
 
         [Test]
+        public void Html_LegacyStageCalls_DisplayedAsOne()
+        {
+            // 구 스키마 리포트는 calls=0으로 역직렬화 — 스테이지는 최소 1회 호출이므로 1로 표시한다.
+            var record = new ProfilingRunRecord
+            {
+                runId = "20260929-120000-legacy",
+                label = "legacy.fbx",
+                outcome = "Success",
+            };
+            record.stages.Add(new ProfilingStageSample { stage = "Old", deltaMs = 1f });
+
+            string html = ProfilingHtmlReportWriter.BuildHtml(new[] { record });
+
+            StringAssert.Contains("<td>1</td>", html);
+            Assert.IsFalse(html.Contains("<td>0</td>"),
+                "구 스키마 스테이지의 호출 수가 0으로 표시되었습니다.");
+        }
+
+        [Test]
         public void Trace_EmitsStageCompleteEvents_WithMicrosecondTimings()
         {
             string json = ProfilingTraceExporter.BuildTraceJson(MakeRecord());

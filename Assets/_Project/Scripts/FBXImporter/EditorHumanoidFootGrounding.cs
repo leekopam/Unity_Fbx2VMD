@@ -395,6 +395,10 @@ namespace Fbx2Vmd.FBXImporter
             private Vector3 _upperToKnee, _kneeToFoot, _originalFootPosition, _target;
             private float _support, _clearance, _maximumReach;
             private RaycastHit _ground;
+            // 착지 램프 중 목표 발 회전의 프레임당 변화 상한에 사용하는 직전 상태임.
+            private Quaternion _prevTargetFootRotation;
+            private float _prevSupport;
+            private bool _hasPrevTargetRot;
 
             internal bool HasGround { get; private set; }
             internal readonly HumanoidFootGroundingLegDiagnostic Diagnostic = new HumanoidFootGroundingLegDiagnostic();
@@ -623,6 +627,15 @@ namespace Fbx2Vmd.FBXImporter
                         Mathf.Min(_activeWeights.x, _activeWeights.y));
                 }
                 if (!TryAlignSupportSurface(frame)) return false;
+                // 착지 램프 중 발 회전의 프레임당 변화를 제한해 발끝 팝 성분을 분산함.
+                // 지지가 상승하는 부분 지지 구간에만 적용해 완전 지지·해제·슬라이드의
+                // 정상 회전을 방해하지 않음.
+                if (_hasPrevTargetRot && _support < 0.999f && _support > _prevSupport + 0.0001f)
+                    _targetFootRotation = Quaternion.RotateTowards(_prevTargetFootRotation,
+                        _targetFootRotation, 2.5f);
+                _prevTargetFootRotation = _targetFootRotation;
+                _hasPrevTargetRot = true;
+                _prevSupport = _support;
                 if (_activeWeights.x > 0f && _activeWeights.y > 0f)
                     Diagnostic.pair_span_error_m = Mathf.Abs(
                         (_localContactPoints[1] - _localContactPoints[0]).magnitude * Foot.lossyScale.x -

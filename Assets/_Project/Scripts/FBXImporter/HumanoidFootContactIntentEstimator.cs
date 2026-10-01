@@ -10,7 +10,7 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal static class HumanoidFootContactIntentEstimator
     {
-        private enum FrameClass { Uncertain, Support, Airborne }
+        private enum FrameClass { Uncertain, Support, Slide, Airborne }
 
         private const float FloorPercentile = 0.1f;
         private const float SupportHeightPerHumanScale = 0.015f;
@@ -18,6 +18,9 @@ namespace Fbx2Vmd.FBXImporter
         internal const float SupportSpeedPerHumanScale = 0.05f;
         private const float AirborneHeightPerHumanScale = 0.05f;
         private const float AirborneSpeedPerHumanScale = 0.2f;
+        // 롤 스탠스 증거: 발목-발끝 세그먼트의 수직 비율이 이 값을 넘으면
+        // 발이 발끝 축으로 충분히 기운 것(평지 ~0.5, 롤 37도 이상 ~0.6).
+        private const float RollPitchRatio = 0.6f;
         private const float ClipMotionPerHumanScale = 0.05f;
         private const float MinimumSupportDurationSeconds = 0.1f;
 
@@ -156,10 +159,32 @@ namespace Fbx2Vmd.FBXImporter
                 float toesHeight = toes[index].y - floorToes;
                 float footSpeed = Vector3.Distance(feet[index - 1], feet[index]) * frameRate;
                 float toesSpeed = Vector3.Distance(toes[index - 1], toes[index]) * frameRate;
-                if (footHeight <= supportHeight && toesHeight <= supportHeight &&
-                    footSpeed <= supportSpeed && toesSpeed <= supportSpeed)
+                // 발끝이 실제 지지 기관임. 발끝이 낮고 정지한 동안 발목도
+                // 정지했으면 평지지, 발목이 발끝 위로 들린(피치 간극) 상태는
+                // 발끝 축 롤로 보고 둘 다 지지로 인정함.
+                // 발이 평평한데 발목만 움직이는 끌기·정착은 지지로 보지 않음.
+                bool footPlanted =
+                    footHeight <= supportHeight && footSpeed <= supportSpeed;
+                float segmentLength = Vector3.Distance(feet[index], toes[index]);
+                bool rollEvidence = segmentLength > 0.0001f &&
+                    (feet[index].y - toes[index].y) / segmentLength >=
+                    RollPitchRatio;
+                // 발끝이 바닥에 닿은 채 수평으로 미끄러지는 프레임은 접촉이지만
+                // 고정 지지가 아니므로 별도 Slide로 분류해 핀을 걸지 않음.
+                float toesHorizontalSpeed =
+                    HorizontalDelta(toes[index - 1], toes[index]).magnitude *
+                    frameRate;
+                bool toeSliding =
+                    toesHeight <= supportHeight && toesSpeed <= airborneSpeed &&
+                    toesHorizontalSpeed > supportSpeed;
+                if (toesHeight <= supportHeight && toesSpeed <= supportSpeed &&
+                    (footPlanted || rollEvidence))
                 {
                     classes[index] = FrameClass.Support;
+                }
+                else if (toeSliding)
+                {
+                    classes[index] = FrameClass.Slide;
                 }
                 else if (footHeight >= airborneHeight && toesHeight >= airborneHeight &&
                          footSpeed >= airborneSpeed && toesSpeed >= airborneSpeed)
@@ -235,7 +260,8 @@ namespace Fbx2Vmd.FBXImporter
             uncertainSpans = new List<Vector2Int>();
             foreach (IntRange span in Ranges(classes))
             {
-                if (span.Classification == FrameClass.Support)
+                if (span.Classification == FrameClass.Support ||
+                    span.Classification == FrameClass.Slide)
                 {
                     intents.Add(BuildIntent(feet, toes, preMerge, span,
                         humanScale, isLeft, labels, tuning));
@@ -283,8 +309,9 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             HumanoidFootContactIntentMode mode =
-                netLength >= humanScale * tuning.SlideDisplacementPerHumanScale &&
-                consistency >= tuning.SlideDirectionConsistency
+                span.Classification == FrameClass.Slide ||
+                (netLength >= humanScale * tuning.SlideDisplacementPerHumanScale &&
+                    consistency >= tuning.SlideDirectionConsistency)
                     ? HumanoidFootContactIntentMode.Slide
                     : HumanoidFootContactIntentMode.Plant;
             // 겹치는 표식의 모드가 하나로 확정될 때만 자동 판정을 덮어씀.
@@ -295,7 +322,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 // 소음 틈새 병합으로 지지에 흡수된 프레임이 있으면 구간 전체를 불확실로 둠.
                 // 불확실 의도는 앵커 방침으로 래스터화되지 않아 이 구간은 핀을 걸지 않음.
-                if (classes[index] == FrameClass.Support) continue;
+                if (classes[index] == span.Classification) continue;
                 certainty = HumanoidFootContactIntentCertainty.Uncertain;
                 break;
             }

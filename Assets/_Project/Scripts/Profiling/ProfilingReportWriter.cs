@@ -51,18 +51,22 @@ namespace Fbx2Vmd.Profiling
             }
 
             // trace·jev 사이드카도 run-*.json 패턴에 걸리므로 파일명 규약으로 걸러낸다.
+            // 라벨이 ".trace"/".jev"로 끝나는 정상 리포트를 숨기지 않도록
+            // 같은 이름의 리포트 파일이 있는 경우에만 사이드카로 판정한다.
             string[] files = Directory.GetFiles(OutputDirectory, "run-*.json");
             Array.Sort(files, StringComparer.OrdinalIgnoreCase);
             Array.Reverse(files);
+            var allFiles = new HashSet<string>(files, StringComparer.OrdinalIgnoreCase);
 
             var reports = new List<string>(files.Length);
             foreach (string file in files)
             {
-                if (!file.EndsWith(".trace.json", StringComparison.OrdinalIgnoreCase) &&
-                    !file.EndsWith(".jev.json", StringComparison.OrdinalIgnoreCase))
+                if (IsSidecar(file, ".trace.json", allFiles) ||
+                    IsSidecar(file, ".jev.json", allFiles))
                 {
-                    reports.Add(file);
+                    continue;
                 }
+                reports.Add(file);
             }
 
             return reports.ToArray();
@@ -90,7 +94,7 @@ namespace Fbx2Vmd.Profiling
                 return history;
             }
 
-            foreach (string path in ListReports())
+            foreach (string path in GetHistoryCandidatePaths(current))
             {
                 if (history.Count >= maxCount)
                 {
@@ -100,12 +104,7 @@ namespace Fbx2Vmd.Profiling
                 ProfilingRunRecord past;
                 try { past = Load(path); }
                 catch { continue; }
-                if (past == null || past.runId == current.runId)
-                {
-                    continue;
-                }
-                if (!string.Equals(past.label, current.label, StringComparison.Ordinal) ||
-                    !string.Equals(past.deviceModel, current.deviceModel, StringComparison.Ordinal))
+                if (!IsHistoryMatch(current, past))
                 {
                     continue;
                 }
@@ -113,6 +112,109 @@ namespace Fbx2Vmd.Profiling
             }
 
             return history;
+        }
+
+        /// <summary>
+        /// 파일명 규약(run-{id}-{label}.json)으로 이력 후보 경로만 걸러냅니다(파싱 없음).
+        /// 뷰어의 증분 스캔이 1차 필터로 사용하며, 정확한 일치 여부는 IsHistoryMatch로 확인합니다.
+        /// </summary>
+        public static List<string> GetHistoryCandidatePaths(ProfilingRunRecord current)
+        {
+            var paths = new List<string>();
+            if (current == null)
+            {
+                return paths;
+            }
+
+            string needle = SanitizeFileName(current.label);
+            foreach (string path in ListReports())
+            {
+                if (!string.IsNullOrEmpty(needle) &&
+                    Path.GetFileNameWithoutExtension(path)
+                        .IndexOf(needle, StringComparison.Ordinal) < 0)
+                {
+                    continue;
+                }
+                paths.Add(path);
+            }
+            return paths;
+        }
+
+        /// <summary>이력 비교의 정확한 일치 조건입니다(같은 라벨·머신, 자기 자신 제외).</summary>
+        public static bool IsHistoryMatch(ProfilingRunRecord current, ProfilingRunRecord past)
+        {
+            return current != null && past != null &&
+                past.runId != current.runId &&
+                string.Equals(past.label, current.label, StringComparison.Ordinal) &&
+                string.Equals(past.deviceModel, current.deviceModel, StringComparison.Ordinal);
+        }
+
+        /// <summary>리포트에서 outcome/startedUtc만 읽습니다(목록 필터 스캔용 경량 파싱).</summary>
+        public static bool TryReadMeta(string path, out string outcome, out string startedUtc)
+        {
+            outcome = null;
+            startedUtc = null;
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    return false;
+                }
+                var stub = JsonUtility.FromJson<MetaStub>(File.ReadAllText(path));
+                if (stub == null)
+                {
+                    return false;
+                }
+                outcome = stub.outcome;
+                startedUtc = stub.startedUtc;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>run-yyyyMMdd-HHmmss-xxxx-label 파일명 규약에서 런 시작 시각(UTC)을 읽습니다.</summary>
+        public static bool TryGetRunTimestampUtc(string path, out DateTime utc)
+        {
+            utc = default;
+            string name = Path.GetFileNameWithoutExtension(path);
+            if (string.IsNullOrEmpty(name) || name.Length < 19 ||
+                !name.StartsWith("run-", StringComparison.Ordinal))
+            {
+                return false;
+            }
+            return DateTime.TryParseExact(
+                name.Substring(4, 15),
+                "yyyyMMdd-HHmmss",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal |
+                    System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out utc);
+        }
+
+        [Serializable]
+        private class MetaStub
+        {
+            public string outcome;
+            public string startedUtc;
+        }
+
+        /// <summary>
+        /// 파일이 run-*{suffix} 형태의 사이드카인지 판정합니다.
+        /// 접미사를 제거한 리포트 본체가 같은 목록에 있을 때만 사이드카로 봅니다.
+        /// </summary>
+        private static bool IsSidecar(
+            string file, string suffix, HashSet<string> allFiles)
+        {
+            if (!file.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            string reportBody =
+                file.Substring(0, file.Length - suffix.Length) + ".json";
+            return allFiles.Contains(reportBody);
         }
 
         internal static string SanitizeFileName(string name)

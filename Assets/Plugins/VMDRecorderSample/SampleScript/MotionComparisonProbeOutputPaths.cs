@@ -460,6 +460,13 @@ internal static class MotionComparisonProbeOutputPaths
         return (evidenceBaseName ?? "") + BuildMetricsCsvExtension();
     }
 
+    public static string BuildSideContactCsvPath(string screenshotPath)
+    {
+        return string.IsNullOrEmpty(screenshotPath)
+            ? ""
+            : Path.ChangeExtension(screenshotPath, BuildMetricsCsvExtension());
+    }
+
     public static string BuildMmdModelScreenshotPath(string screenshotPath)
     {
         if (string.IsNullOrEmpty(screenshotPath))

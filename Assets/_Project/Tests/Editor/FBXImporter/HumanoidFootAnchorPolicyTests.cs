@@ -65,13 +65,13 @@ namespace Tests.Editor.FBXImporter
             // 진입은 TouchdownLockFrames 안에 완전 잠금됨. 감지되지 않은 채널은 만들지 않음.
             var weights = new[]
             {
-                new Vector2(0.2f, 0f), new Vector2(0.2f, 0f), new Vector2(0.2f, 0f),
+                new Vector2(0.05f, 0f), new Vector2(0.05f, 0f), new Vector2(0.05f, 0f),
                 new Vector2(0f, 0f), new Vector2(1f, 0f)
             };
             ApplyTouchdownLock(weights, new[] { CreateIntent(0, 3, 0, 0) });
-            Assert.That(weights[0].x, Is.EqualTo(0.5f).Within(0.000001f));
-            Assert.That(weights[1].x, Is.EqualTo(1f));
-            Assert.That(weights[2].x, Is.EqualTo(1f));
+            Assert.That(weights[0].x, Is.EqualTo(0.1f).Within(0.000001f));
+            Assert.That(weights[1].x, Is.EqualTo(0.2f).Within(0.000001f));
+            Assert.That(weights[2].x, Is.EqualTo(0.3f).Within(0.000001f));
             Assert.That(weights[0].y, Is.EqualTo(0f));
             Assert.That(weights[3].x, Is.EqualTo(0f));
             Assert.That(weights[4].x, Is.EqualTo(1f));
