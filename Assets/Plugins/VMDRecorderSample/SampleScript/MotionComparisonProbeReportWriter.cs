@@ -803,6 +803,19 @@ public static class MotionComparisonProbeReportWriter
         File.AppendAllText(filePath, csvLine + Environment.NewLine, Encoding.UTF8);
     }
 
+    public static bool WriteSideContactCsv(string screenshotPath, string contactCsv)
+    {
+        string filePath = MotionComparisonProbeOutputPaths.BuildSideContactCsvPath(screenshotPath);
+        if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(contactCsv))
+        {
+            return false;
+        }
+
+        EnsureParentDirectoryExists(filePath);
+        File.WriteAllText(filePath, contactCsv, Encoding.UTF8);
+        return File.Exists(filePath);
+    }
+
     public static bool WriteScreenshotPngBytes(string filePath, byte[] pngBytes)
     {
         if (string.IsNullOrEmpty(filePath) || pngBytes == null || pngBytes.Length == 0)

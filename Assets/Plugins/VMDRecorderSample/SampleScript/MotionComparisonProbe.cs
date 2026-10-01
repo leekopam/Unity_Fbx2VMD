@@ -3187,8 +3187,7 @@ public class MotionComparisonProbe : MonoBehaviour
                 FormatContactValue((leftY - groundY) * 1000f),
                 FormatContactValue((rightY - groundY) * 1000f)
             }) + Environment.NewLine;
-        System.IO.File.WriteAllText(System.IO.Path.ChangeExtension(screenshotPath, ".csv"),
-            contactCsv);
+        MotionComparisonProbeReportWriter.WriteSideContactCsv(screenshotPath, contactCsv);
     }
 
     private static float CaptureSoleMinimumY(Animator animator, Transform foot)
