@@ -16844,6 +16844,15 @@ MonoBehaviour:
     gravityScale: 1
     radiusScale: 1
     inertiaScale: 1
+    tipStiffnessScale: 1
+    tipDampingScale: 1
+    animationPoseRatio: 0
+    overrideDepthInertia: 0
+    depthInertia: 0.7
+    useSelfCollision: 1
+    selfCollisionScale: 1
+    useMutualCollision: 1
+    characterPresetKey:
   usePreBuild: 0
   autoRebuildOnEnable: 1
   generatedColliders:
