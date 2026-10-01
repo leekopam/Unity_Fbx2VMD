@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Fbx2Vmd.Profiling;
 using UnityEngine;
 
@@ -25,6 +26,14 @@ namespace Fbx2Vmd.FBXImporter
         private Renderer[] _hiddenRenderers = Array.Empty<Renderer>();
         private bool[] _rendererEnabledStates = Array.Empty<bool>();
         private bool _hasCapturedRendererStates;
+        // 병렬 준비: 메인스레드가 스냅샷을 캡처해 큐에 넣으면 워커 Task가 배치로 계산한다.
+        private const int MaxPendingPreparedFrames = 48;
+        private const int MaxCapturesPerTick = 8;
+        private const int SolveBatchFrameCount = 24;
+        private int _nextCaptureFrame;
+        private readonly Queue<NativeSkinningPreparedFrame> _pendingPreparedFrames =
+            new Queue<NativeSkinningPreparedFrame>();
+        private Task _solveTask;
 
         internal bool IsConfigured =>
             _playbackController != null &&
@@ -175,6 +184,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             _preprocessSession?.Cancel();
             _preprocessSession = null;
+            ClearPreparationPipeline();
             _playbackController?.Stop();
             RestoreRendererStates();
             DestroyBakedMeshes();
@@ -202,6 +212,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             _preprocessSession?.Cancel();
             _preprocessSession = null;
+            ClearPreparationPipeline();
             RestoreRendererStates();
             DestroyBakedMeshes();
             DisposePresenters();
@@ -229,7 +240,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (IsPreparing)
             {
-                ProcessNextPreparationFrame();
+                ProcessPreparationTick();
                 return;
             }
             if (IsReady)
@@ -238,15 +249,14 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        private void ProcessNextPreparationFrame()
+        // 매 틱: 완료 감지 → 스냅샷 캡처(메인스레드) → 병렬 솔버 배치 가동.
+        private void ProcessPreparationTick()
         {
-            int frameIndex = _preprocessSession.ProcessedFrameCount;
-            if (!_playbackController.SeekFrame(frameIndex))
+            if (_solveTask != null && _solveTask.IsCompleted)
             {
-                Fail($"Native 보정 준비 중 frame {frameIndex}을 재생하지 못했습니다.");
-                return;
+                _solveTask = null;
             }
-            if (!_preprocessSession.TryProcessNextFrame())
+            if (_preprocessSession.IsFaulted)
             {
                 Fail(_preprocessSession.FailureMessage);
                 return;
@@ -254,7 +264,94 @@ namespace Fbx2Vmd.FBXImporter
             if (_preprocessSession.IsComplete)
             {
                 CompletePreparation(_preprocessSession.Result);
+                return;
             }
+
+            // Seek + Bake + 본 변환은 Unity API라 메인스레드에서만 가능 — 틱당 상한까지 캡처.
+            int capturedCount = 0;
+            while (_nextCaptureFrame < TotalFrameCount &&
+                   _pendingPreparedFrames.Count < MaxPendingPreparedFrames &&
+                   capturedCount < MaxCapturesPerTick)
+            {
+                if (!CapturePreparedFrame(_nextCaptureFrame))
+                {
+                    return;
+                }
+                _nextCaptureFrame++;
+                capturedCount++;
+            }
+
+            // 대기 중인 스냅샷을 배치로 워커 솔버에 넘긴다.
+            if (_solveTask == null && _pendingPreparedFrames.Count > 0)
+            {
+                int batchCount = Math.Min(
+                    SolveBatchFrameCount,
+                    _pendingPreparedFrames.Count);
+                var batch = new List<NativeSkinningPreparedFrame>(batchCount);
+                for (int index = 0; index < batchCount; index++)
+                {
+                    batch.Add(_pendingPreparedFrames.Dequeue());
+                }
+                NativeSkinningCorrectionPreprocessSession session =
+                    _preprocessSession;
+                _solveTask = Task.Run(
+                    () => session.TryProcessPreparedFrames(batch));
+            }
+        }
+
+        // 프레임 하나의 솔버 입력(스키닝 정점 + 본 변환)을 메인스레드에서 캡처함.
+        private bool CapturePreparedFrame(int frameIndex)
+        {
+            if (!_playbackController.SeekFrame(frameIndex))
+            {
+                Fail($"Native 보정 준비 중 frame {frameIndex}을 재생하지 못했습니다.");
+                return false;
+            }
+
+            var baselineVertices =
+                new Dictionary<SkinnedMeshRenderer, Vector3[]>();
+            var boneTransforms = new Dictionary<
+                SkinnedMeshRenderer,
+                NativeSkinningDualQuaternionTransform[]>();
+            foreach (SkinnedMeshRenderer renderer in _contracts
+                         .Select(contract => contract.Renderer)
+                         .Distinct())
+            {
+                if (renderer == null || renderer.sharedMesh == null)
+                {
+                    Fail("사전 계산 중 Renderer 토폴로지가 변경됐습니다.");
+                    return false;
+                }
+                if (!_bakedMeshes.TryGetValue(renderer, out Mesh bakedMesh))
+                {
+                    Fail("Native 보정 대상 Renderer가 사라졌습니다.");
+                    return false;
+                }
+                renderer.BakeMesh(bakedMesh, false);
+                baselineVertices[renderer] =
+                    (Vector3[])bakedMesh.vertices.Clone();
+                // 솔버가 워커에서 돌므로 본 변환도 미리 표본화해 둔다.
+                if (!NativeSkinningBoneTransformSampler.TrySample(
+                        renderer,
+                        out Matrix4x4[] skinningMatrices) ||
+                    !NativeSkinningDualQuaternionVertexCalculator
+                        .TryBuildTransforms(
+                            skinningMatrices,
+                            out NativeSkinningDualQuaternionTransform[]
+                                transforms))
+                {
+                    Fail(
+                        $"Native 보정 준비 중 frame {frameIndex}의 " +
+                        "스키닝 본 자세를 변환하지 못했습니다.");
+                    return false;
+                }
+                boneTransforms[renderer] = transforms;
+            }
+            _pendingPreparedFrames.Enqueue(new NativeSkinningPreparedFrame(
+                frameIndex,
+                baselineVertices,
+                boneTransforms));
+            return true;
         }
 
         private void CompletePreparation(
@@ -356,6 +453,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             _preprocessSession?.Cancel();
             _preprocessSession = null;
+            ClearPreparationPipeline();
             _playbackController?.Stop();
             RestoreRendererStates();
             DestroyBakedMeshes();
@@ -373,6 +471,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             _preprocessSession?.Cancel();
             _preprocessSession = null;
+            ClearPreparationPipeline();
             RestoreRendererStates();
             DestroyBakedMeshes();
             DisposePresenters();
@@ -380,6 +479,14 @@ namespace Fbx2Vmd.FBXImporter
             IsFaulted = false;
             FailureMessage = string.Empty;
             Result = null;
+        }
+
+        // 파이프라인의 순서 상태를 비운다. 진행 중인 솔버 작업은 세션 취소로 종료된다.
+        private void ClearPreparationPipeline()
+        {
+            _nextCaptureFrame = 0;
+            _pendingPreparedFrames.Clear();
+            _solveTask = null;
         }
 
         private void DestroyBakedMeshes()
