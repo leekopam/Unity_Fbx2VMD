@@ -311,6 +311,180 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_PreparedFrames_When_ProcessingInParallel_Then_MatchesSequentialResult()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+            var bakedMesh = new Mesh();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
+                    Is.True);
+                renderer.BakeMesh(bakedMesh, false);
+                Vector3[] baselineVertices = bakedMesh.vertices;
+                Array contracts = CreateContractArray(contract);
+                Func<int, SkinnedMeshRenderer, Vector3[]> frameReader =
+                    (_, _) => baselineVertices.ToArray();
+
+                // 순차 기준 세션 — 같은 정점으로 두 프레임을 처리한다.
+                object sequential = CreateSession(2, contracts, frameReader);
+                Assert.That((bool)Invoke(sequential, "TryProcessNextFrame"), Is.True);
+                Assert.That((bool)Invoke(sequential, "TryProcessNextFrame"), Is.True);
+                Assert.That(ReadProperty<bool>(sequential, "IsComplete"), Is.True);
+                object sequentialResult = ReadProperty<object>(sequential, "Result");
+
+                // 병렬 세션용 스냅샷(정점 + 본 변환)을 리플렉션으로 미리 표본화한다.
+                Type transformArrayType = RequireProductType(
+                        "NativeSkinningDualQuaternionTransform")
+                    .MakeArrayType();
+                object boneTransforms =
+                    SampleBoneTransforms(renderer, transformArrayType);
+                Type preparedType = RequireProductType(
+                    "NativeSkinningPreparedFrame");
+                Type vertexDictionaryType = typeof(
+                        System.Collections.Generic.Dictionary<,>)
+                    .MakeGenericType(
+                        typeof(SkinnedMeshRenderer),
+                        typeof(Vector3[]));
+                Type transformDictionaryType = typeof(
+                        System.Collections.Generic.Dictionary<,>)
+                    .MakeGenericType(
+                        typeof(SkinnedMeshRenderer),
+                        transformArrayType);
+                IList preparedFrames = (IList)Activator.CreateInstance(
+                    typeof(System.Collections.Generic.List<>)
+                        .MakeGenericType(preparedType));
+                for (int index = 0; index < 2; index++)
+                {
+                    IDictionary vertexDictionary =
+                        (IDictionary)Activator.CreateInstance(vertexDictionaryType);
+                    vertexDictionary[renderer] = baselineVertices.ToArray();
+                    IDictionary transformDictionary =
+                        (IDictionary)Activator.CreateInstance(
+                            transformDictionaryType);
+                    transformDictionary[renderer] = boneTransforms;
+                    preparedFrames.Add(Activator.CreateInstance(
+                        preparedType,
+                        BindingFlags.Instance |
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic,
+                        null,
+                        new object[]
+                        {
+                            index,
+                            vertexDictionary,
+                            transformDictionary
+                        },
+                        null));
+                }
+
+                object parallel = CreateSession(2, contracts, frameReader);
+                Assert.That(
+                    (bool)Invoke(
+                        parallel,
+                        "TryProcessPreparedFrames",
+                        preparedFrames),
+                    Is.True);
+                Assert.That(ReadProperty<bool>(parallel, "IsComplete"), Is.True);
+                object parallelResult = ReadProperty<object>(parallel, "Result");
+
+                foreach (string property in new[]
+                         {
+                             "FrameCount",
+                             "CorrectedFrameCount",
+                             "FallbackFrameCount",
+                             "CorrectionEntryCount",
+                             "CollectedFailureCount"
+                         })
+                {
+                    Assert.That(
+                        ReadProperty<int>(parallelResult, property),
+                        Is.EqualTo(
+                            ReadProperty<int>(sequentialResult, property)),
+                        property);
+                }
+
+                Array sequentialCorrections = ReadProperty<Array>(
+                    sequentialResult,
+                    "RendererCorrections");
+                Array parallelCorrections = ReadProperty<Array>(
+                    parallelResult,
+                    "RendererCorrections");
+                Assert.That(
+                    parallelCorrections.Length,
+                    Is.EqualTo(sequentialCorrections.Length));
+                object sequentialCache = ReadProperty<object>(
+                    sequentialCorrections.GetValue(0),
+                    "Cache");
+                object parallelCache = ReadProperty<object>(
+                    parallelCorrections.GetValue(0),
+                    "Cache");
+                var sequentialVertices = baselineVertices.ToList();
+                var parallelVertices = baselineVertices.ToList();
+                object[] sequentialArguments = { 0, sequentialVertices, 0 };
+                object[] parallelArguments = { 0, parallelVertices, 0 };
+                Assert.That(
+                    (bool)Invoke(sequentialCache, "TryApply", sequentialArguments),
+                    Is.True);
+                Assert.That(
+                    (bool)Invoke(parallelCache, "TryApply", parallelArguments),
+                    Is.True);
+                Assert.That(parallelArguments[2], Is.EqualTo(sequentialArguments[2]));
+                Assert.That(parallelVertices, Is.EqualTo(sequentialVertices));
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(bakedMesh);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        private static object SampleBoneTransforms(
+            SkinnedMeshRenderer renderer,
+            Type transformArrayType)
+        {
+            MethodInfo sampleMethod = RequireProductType(
+                    "NativeSkinningBoneTransformSampler")
+                .GetMethod(
+                    "TrySample",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(sampleMethod, Is.Not.Null);
+            object[] sampleArguments = { renderer, null };
+            Assert.That(
+                (bool)sampleMethod.Invoke(null, sampleArguments),
+                Is.True);
+            MethodInfo buildMethod = RequireProductType(
+                    "NativeSkinningDualQuaternionVertexCalculator")
+                .GetMethod(
+                    "TryBuildTransforms",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(buildMethod, Is.Not.Null);
+            object[] buildArguments = { sampleArguments[1], null };
+            Assert.That(
+                (bool)buildMethod.Invoke(null, buildArguments),
+                Is.True);
+            object transforms = buildArguments[1];
+            Assert.That(transforms.GetType(), Is.EqualTo(transformArrayType));
+            return transforms;
+        }
+
         [Test, Explicit("제품 사전계산기의 전체 clip 정량 계약을 검증할 때 실행합니다.")]
         public void Given_FullClip_When_Preprocessing_Then_MatchesValidatedCacheOracle()
         {
