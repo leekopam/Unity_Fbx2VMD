@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, copyFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { access, appendFile, copyFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compareManualCapture, linkOriginalCapture, readCsv } from "./manual-compare.mjs";
@@ -198,6 +198,7 @@ async function executeControl(runId, controlCommand, requestFields = {}, timeout
   const sessionRoot = path.join(evidenceRoot, "control-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
   const requestId = randomUUID();
+  const startedAt = Date.now();
   const traceOffset = (await stat(tracePath).catch(() => ({ size: 0 }))).size;
   let status = null;
   let state = null;
@@ -214,7 +215,6 @@ async function executeControl(runId, controlCommand, requestFields = {}, timeout
         run_id: runId, ...requestFields
       }), { flag: "wx" });
       submitted = true;
-      const startedAt = Date.now();
       while (Date.now() - startedAt < timeoutMs) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         const candidate = await readStatus();
@@ -272,7 +272,8 @@ async function executeControl(runId, controlCommand, requestFields = {}, timeout
       failureStage, status, state, terminal
     }, null, 2));
   }
-  return { ...result, state, requestId, terminal, unityStatus: status };
+  return { ...result, state, requestId, terminal, unityStatus: status,
+    elapsedMs: Date.now() - startedAt };
 }
 
 async function executeSmoke(runId, options = {}) {
@@ -953,7 +954,7 @@ async function executeContactCapture(runId, source, inputHashes) {
   let result = { status: "INFRA_ERROR" };
   try {
     const baseline = await executeControl(runId, environmentCommand);
-    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId, elapsed_ms: baseline.elapsedMs ?? null });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
@@ -962,7 +963,7 @@ async function executeContactCapture(runId, source, inputHashes) {
       result = { status: "BLOCKED" };
     } else {
       const enter = await executeControl(runId, enterPlayCommand);
-      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId, elapsed_ms: enter.elapsedMs ?? null });
       enteredPlay = enter.status === "PASS";
       if (!enteredPlay) result = { status: enter.status };
       else {
@@ -971,8 +972,11 @@ async function executeContactCapture(runId, source, inputHashes) {
             window.id.startsWith("known-") ? window.points[0] :
               window.id === "normal-control-candidate" ? window.points[0] :
                 window.points[1]))].sort((a, b) => a - b);
+        const playbackStartedAt = Date.now();
         playback = await executePlayback(runId, plan.frames, sideFrames);
-        steps.push({ name: "capture", status: playback.status, requestId: playback.requestId });
+        playback.elapsedMs = Date.now() - playbackStartedAt;
+        steps.push({ name: "capture", status: playback.status, requestId: playback.requestId,
+          elapsed_ms: playback.elapsedMs });
         result = { status: playback.status };
         if (playback.status === "MANUAL_REVIEW_REQUIRED") {
           const captureManifest = JSON.parse(await readFile(path.join(evidenceRoot,
@@ -1031,12 +1035,12 @@ async function executeContactCapture(runId, source, inputHashes) {
   } finally {
     if (enteredPlay && (!playback || playback.terminal)) {
       const exit = await executeControl(runId, exitPlayCommand);
-      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
       if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
     }
     if (!playback || playback.terminal) {
       const final = await executeControl(runId, environmentCommand);
-      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      steps.push({ name: "after", status: final.status, requestId: final.requestId, elapsed_ms: final.elapsedMs ?? null });
       after = final.state;
       environmentRestored = !!before && final.status === "PASS" &&
         environmentFields.every(field =>
@@ -1184,7 +1188,7 @@ async function executeFootLive(runId, groundingCase = null) {
   try {
     await access(path.join(projectRoot, "Assets/Resources/Import_FBX", inputFile));
     const baseline = await executeControl(runId, environmentCommand);
-    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId, elapsed_ms: baseline.elapsedMs ?? null });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== scenePath ||
@@ -1195,7 +1199,7 @@ async function executeFootLive(runId, groundingCase = null) {
     } else {
       const enter = await executeControl(runId, enterPlayCommand,
         groundingCase ? { scene_path: scenePath } : {});
-      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId, elapsed_ms: enter.elapsedMs ?? null });
       enteredPlay = enter.status === "PASS";
       if (!enteredPlay) result = { status: enter.status };
       else if (await readOptional(requestPath) || (await readStatus())?.status === "running")
@@ -1306,12 +1310,12 @@ async function executeFootLive(runId, groundingCase = null) {
     }
     if (enteredPlay && (!submitted || terminal)) {
       const exit = await executeControl(runId, exitPlayCommand);
-      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
       if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
     }
     if (!submitted || terminal) {
       const final = await executeControl(runId, environmentCommand);
-      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      steps.push({ name: "after", status: final.status, requestId: final.requestId, elapsed_ms: final.elapsedMs ?? null });
       after = final.state;
       if (!before || final.status !== "PASS" ||
           !environmentFields.every((field) =>
@@ -1362,7 +1366,7 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
   try {
     await access(path.join(projectRoot, "Assets/Resources/Import_FBX", inputFile));
     const baseline = await executeControl(runId, environmentCommand);
-    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId, elapsed_ms: baseline.elapsedMs ?? null });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== scenePath ||
@@ -1373,7 +1377,7 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
     } else {
       const enter = await executeControl(runId, enterPlayCommand,
         groundingCase ? { scene_path: scenePath } : {});
-      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId, elapsed_ms: enter.elapsedMs ?? null });
       enteredPlay = enter.status === "PASS";
       if (!enteredPlay) result = { status: enter.status };
       else if (await readOptional(requestPath) || (await readStatus())?.status === "running")
@@ -1472,12 +1476,12 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
     }
     if (enteredPlay && (!submitted || terminal)) {
       const exit = await executeControl(runId, exitPlayCommand);
-      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
       if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
     }
     if (!submitted || terminal) {
       const final = await executeControl(runId, environmentCommand);
-      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      steps.push({ name: "after", status: final.status, requestId: final.requestId, elapsed_ms: final.elapsedMs ?? null });
       after = final.state;
       if (!before || final.status !== "PASS" ||
           !environmentFields.every((field) =>
@@ -1525,7 +1529,7 @@ async function executeProductUi(runId, width, height) {
   try {
     await access(path.join(projectRoot, "Assets/Resources/Import_FBX/Snake Hip Hop Dance.fbx"));
     const baseline = await executeControl(runId, environmentCommand);
-    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId, elapsed_ms: baseline.elapsedMs ?? null });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
@@ -1535,7 +1539,7 @@ async function executeProductUi(runId, width, height) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
       const enter = await executeControl(runId, enterPlayCommand);
-      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId, elapsed_ms: enter.elapsedMs ?? null });
       enteredPlay = enter.status === "PASS";
       if (!enteredPlay) result = { status: enter.status };
       else if (await readOptional(requestPath) || (await readStatus())?.status === "running")
@@ -1638,12 +1642,12 @@ async function executeProductUi(runId, width, height) {
     }
     if (enteredPlay && (!submitted || terminal)) {
       const exit = await executeControl(runId, exitPlayCommand);
-      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
       if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
     }
     if (!submitted || terminal) {
       const final = await executeControl(runId, environmentCommand);
-      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      steps.push({ name: "after", status: final.status, requestId: final.requestId, elapsed_ms: final.elapsedMs ?? null });
       after = final.state;
       if (!before || final.status !== "PASS" ||
           !environmentFields.every((field) =>
@@ -1698,7 +1702,7 @@ async function executeFullRegression(runId, namedOutput = false) {
   let result = { status: "INFRA_ERROR" };
   try {
     const baseline = await executeControl(runId, environmentCommand);
-    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId, elapsed_ms: baseline.elapsedMs ?? null });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
@@ -1709,10 +1713,11 @@ async function executeFullRegression(runId, namedOutput = false) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
       const enter = await executeControl(runId, enterPlayCommand);
-      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId, elapsed_ms: enter.elapsedMs ?? null });
       enteredPlay = enter.status === "PASS";
       result = enter;
       if (enteredPlay) {
+        const smokeStartedAt = Date.now();
         smoke = await executeSmoke(runId, {
           command: namedOutput ? fullNamedVmdCommand : fullRegressionCommand,
           outputPath: namedOutput ? outputPath : fullRegressionOutputPath,
@@ -1722,8 +1727,10 @@ async function executeFullRegression(runId, namedOutput = false) {
           timeoutMs: 3600000,
           visualReview: true
         });
+        smoke.elapsedMs = Date.now() - smokeStartedAt;
         steps.push({ name: namedOutput ? "F12_VMD" : "F10_208s",
-          status: smoke.status, requestId: smoke.requestId });
+          status: smoke.status, requestId: smoke.requestId,
+          elapsed_ms: smoke.elapsedMs });
         result = smoke;
       }
     }
@@ -1732,18 +1739,21 @@ async function executeFullRegression(runId, namedOutput = false) {
   } finally {
     if (enteredPlay && (!smoke || smoke.terminal)) {
       const exit = await executeControl(runId, exitPlayCommand);
-      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
       if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
     }
     if (namedOutput && smoke?.terminal && smoke.status === "MANUAL_REVIEW_REQUIRED" &&
         steps.some((step) => step.name === "exit_play" && step.status === "PASS")) {
+      const vrmStartedAt = Date.now();
       vrm = await executeVrmOutput(runId);
-      steps.push({ name: "F12_VRM", status: vrm.status, requestId: vrm.requestId });
+      vrm.elapsedMs = Date.now() - vrmStartedAt;
+      steps.push({ name: "F12_VRM", status: vrm.status, requestId: vrm.requestId,
+        elapsed_ms: vrm.elapsedMs });
       if (vrm.status !== "MANUAL_REVIEW_REQUIRED") result = { status: vrm.status };
     }
     if (!enteredPlay || !smoke || smoke.terminal) {
       const final = await executeControl(runId, environmentCommand);
-      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      steps.push({ name: "after", status: final.status, requestId: final.requestId, elapsed_ms: final.elapsedMs ?? null });
       after = final.state;
       if (!before || final.status !== "PASS" || !environmentFields.every((field) =>
         JSON.stringify(before[field]) === JSON.stringify(after?.[field])) ||
@@ -2013,7 +2023,7 @@ async function executeSegments(runId) {
   let result = { status: "INFRA_ERROR" };
   try {
     const baseline = await executeControl(runId, environmentCommand);
-    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId });
+    steps.push({ name: "before", status: baseline.status, requestId: baseline.requestId, elapsed_ms: baseline.elapsedMs ?? null });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
@@ -2024,11 +2034,12 @@ async function executeSegments(runId) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
       const enter = await executeControl(runId, enterPlayCommand);
-      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId });
+      steps.push({ name: "enter_play", status: enter.status, requestId: enter.requestId, elapsed_ms: enter.elapsedMs ?? null });
       enteredPlay = enter.status === "PASS";
       result = enter;
       if (enteredPlay) {
         for (const [name, segmentCommand, prefix] of segmentCases) {
+          const stepStartedAt = Date.now();
           const step = await executeSmoke(runId, {
             command: segmentCommand,
             outputPath: path.join(projectRoot, "Assets/VMDRecorderSample", `${prefix}.vmd`),
@@ -2038,8 +2049,10 @@ async function executeSegments(runId) {
             timeoutMs: 900000,
             visualReview: true
           });
-          steps.push({ name, status: step.status, requestId: step.requestId,
-            terminal: step.terminal, restored: step.restored });
+          step.elapsedMs = Date.now() - stepStartedAt;
+          steps.push({ name, status: step.status, requestId: step.requestId, elapsed_ms: step.elapsedMs ?? null,
+            terminal: step.terminal, restored: step.restored,
+            elapsed_ms: step.elapsedMs });
           result = step;
           if (step.status !== "MANUAL_REVIEW_REQUIRED") break;
         }
@@ -2052,12 +2065,12 @@ async function executeSegments(runId) {
       (await readStatus())?.status === "running";
     if (enteredPlay && !requestActive) {
       const exit = await executeControl(runId, exitPlayCommand);
-      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId });
+      steps.push({ name: "exit_play", status: exit.status, requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
       if (exit.status !== "PASS") result = { status: "INFRA_ERROR" };
     }
     if (before && !requestActive) {
       const final = await executeControl(runId, environmentCommand);
-      steps.push({ name: "after", status: final.status, requestId: final.requestId });
+      steps.push({ name: "after", status: final.status, requestId: final.requestId, elapsed_ms: final.elapsedMs ?? null });
       after = final.state;
       if (final.status !== "PASS" || !environmentFields.every((field) =>
         JSON.stringify(before[field]) === JSON.stringify(after?.[field])) ||
@@ -2084,7 +2097,7 @@ async function executeSuite(runId) {
   let cleanupError = null;
   try {
     const baseline = await executeControl(runId, environmentCommand);
-    steps.push({ name: "F08_before", status: baseline.status, requestId: baseline.requestId });
+    steps.push({ name: "F08_before", status: baseline.status, requestId: baseline.requestId, elapsed_ms: baseline.elapsedMs ?? null });
     before = baseline.state;
     if (baseline.status !== "PASS" || !before || before.play_mode ||
         before.scene !== "Main_Auto" ||
@@ -2096,7 +2109,7 @@ async function executeSuite(runId) {
       result = { status: "BLOCKED", failureKind: "preflight" };
     } else {
       const enter = await executeControl(runId, enterPlayCommand);
-      steps.push({ name: "F08_enter_play", status: enter.status, requestId: enter.requestId });
+      steps.push({ name: "F08_enter_play", status: enter.status, requestId: enter.requestId, elapsed_ms: enter.elapsedMs ?? null });
       enteredPlay = enter.status === "PASS";
       result = enter.status === "PASS" ? { status: "PASS" } : enter;
       if (enteredPlay) {
@@ -2106,8 +2119,10 @@ async function executeSuite(runId) {
           ["F02_F03_F04_F05_F11", executePlayback, ["MANUAL_REVIEW_REQUIRED"]],
           ["F06", executeSmoke, ["PASS"]]
         ]) {
+          const stepStartedAt = Date.now();
           const step = await run(runId);
-          steps.push({ name, status: step.status, requestId: step.requestId });
+          steps.push({ name, status: step.status, requestId: step.requestId,
+            elapsed_ms: step.elapsedMs ?? Date.now() - stepStartedAt });
           if (!allowed.includes(step.status)) {
             result = step;
             break;
@@ -2127,13 +2142,13 @@ async function executeSuite(runId) {
       const needsRecovery = steps.some((step) => step.status === "TIMED_OUT");
       if (enteredPlay && !needsRecovery && !pending && latest?.status !== "running") {
         const exit = await executeControl(runId, exitPlayCommand);
-        steps.push({ name: "F08_exit_play", status: exit.status, requestId: exit.requestId });
+        steps.push({ name: "F08_exit_play", status: exit.status, requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
         if (exit.status !== "PASS") result = exit;
       }
       if (!needsRecovery && !await readOptional(requestPath) &&
           (await readStatus())?.status !== "running") {
         const finalState = await executeControl(runId, environmentCommand);
-        steps.push({ name: "F08_after", status: finalState.status, requestId: finalState.requestId });
+        steps.push({ name: "F08_after", status: finalState.status, requestId: finalState.requestId, elapsed_ms: finalState.elapsedMs ?? null });
         after = finalState.state;
       }
       const stateRestored = !!before && !!after && environmentFields.every((field) =>
@@ -2229,7 +2244,7 @@ async function recoverSuite(runId) {
   if (current.state.play_mode) {
     const exit = await executeControl(runId, exitPlayCommand);
     manifest.steps.push({ name: "F08_recovery_exit_play", status: exit.status,
-      requestId: exit.requestId });
+      requestId: exit.requestId, elapsed_ms: exit.elapsedMs ?? null });
     if (exit.status !== "PASS") {
       await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
       return { status: exit.status, restored: false };
@@ -2237,7 +2252,7 @@ async function recoverSuite(runId) {
   }
   const finalState = await executeControl(runId, environmentCommand);
   manifest.steps.push({ name: "F08_recovery_after", status: finalState.status,
-    requestId: finalState.requestId });
+    requestId: finalState.requestId, elapsed_ms: finalState.elapsedMs ?? null });
   manifest.after = finalState.state;
   manifest.outputHashAfter = await hashFile(outputPath);
   manifest.metaHashAfter = await hashFile(`${outputPath}.meta`);
@@ -2264,7 +2279,7 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
     if (vrmHash !== "missing" && path.extname(vrmFile).toLowerCase() === ".vrm") {
       const before = await executeControl(runId, environmentCommand);
       manifest.before = before.state;
-      manifest.steps.push({ name: "before", status: before.status });
+      manifest.steps.push({ name: "before", status: before.status, elapsed_ms: before.elapsedMs ?? null });
       if (before.status !== "PASS" || before.state?.play_mode ||
           before.state?.scene_path !== "Assets/_Project/Scene/Main_Auto.unity" ||
           before.state?.scene_dirty || !isDefaultModelName(before.state?.model_name)) {
@@ -2277,7 +2292,7 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
         const states = {};
         for (const job of jobs) {
           const enter = await executeControl(runId, enterPlayCommand);
-          manifest.steps.push({ name: `${job.name}_enter`, status: enter.status });
+          manifest.steps.push({ name: `${job.name}_enter`, status: enter.status, elapsed_ms: enter.elapsedMs ?? null });
           if (enter.status !== "PASS") {
             result = { status: "INFRA_ERROR", reason: "Unity Play 진입 실패" };
             break;
@@ -2285,7 +2300,8 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
           enteredPlay = true;
           const capture = await executeControl(runId, job.command, job.fields, 1200000);
           manifest.steps.push({ name: job.name, status: capture.status,
-            requestId: capture.requestId, failureStage: capture.unityStatus?.failure_stage });
+            requestId: capture.requestId, failureStage: capture.unityStatus?.failure_stage,
+            elapsed_ms: capture.elapsedMs ?? null });
           if (job.name === "univrm" && capture.unityStatus?.capture_path) {
             const importPath = capture.unityStatus.capture_path;
             const requestRoot = path.join(evidenceRoot, "vrm-character", runId,
@@ -2305,7 +2321,7 @@ async function executeVrmCharacterComparison(runId, vrmFile) {
           }
           if (capture.terminal) {
             const exit = await executeControl(runId, exitPlayCommand);
-            manifest.steps.push({ name: `${job.name}_exit`, status: exit.status });
+            manifest.steps.push({ name: `${job.name}_exit`, status: exit.status, elapsed_ms: exit.elapsedMs ?? null });
             enteredPlay = exit.status !== "PASS";
           }
           if (capture.status !== "PASS" || enteredPlay) {
@@ -2534,6 +2550,23 @@ async function main() {
       return { status: "INFRA_ERROR", failureCode: "artifact_invalid" };
     }
   });
+  // E2E 판정을 통합 검증 기록에 남겨 verify_gate·핸드오프가 같은 파일을 읽게 함.
+  try {
+    const reportDir = path.join(projectRoot,
+      "Docs/Workflow/Local/artifacts/harness");
+    await mkdir(reportDir, { recursive: true });
+    await appendFile(path.join(reportDir, "verification-report.jsonl"),
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        cmd: `run-product-smoke ${mode}`,
+        verdict: run.status,
+        passed: run.status === "PASS",
+        runId: run.runId
+      }) + "\n");
+  } catch (error) {
+    process.stderr.write(
+      `통합 검증 리포트 기록 실패(판정 무영향): ${error.message}\n`);
+  }
   process.stdout.write(`${JSON.stringify({
     projectId: run.projectId, runId: run.runId, status: run.status,
     sealedPath: run.sealedPath
