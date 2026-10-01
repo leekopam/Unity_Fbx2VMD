@@ -17,6 +17,7 @@ namespace Fbx2Vmd.Profiling
         private static ProfilingRunRecord _current;
         private static Stopwatch _runWatch;
         private static long _runStartGcBytes;
+        private static long _runStartTotalAllocBytes;
         private static float _lastStageMarkMs;
         private static long _lastStageGcBytes;
         private static readonly List<float> _frameSamples = new List<float>();
@@ -43,6 +44,9 @@ namespace Fbx2Vmd.Profiling
             _runWatch = Stopwatch.StartNew();
             // Unity 2022의 GC 카운터는 현재 스레드 기준이라 워커 스레드 할당은 잡히지 않는다(한계로 문서화).
             _runStartGcBytes = GC.GetAllocatedBytesForCurrentThread();
+            // 워커 스레드 할당을 잡기 위해 프로세스 전체 할당량도 별도로 누적한다.
+            // 에디터 세션에서는 런과 무관한 ambient 할당(에디터 루프·임포트 워커 등)이 섞인다.
+            _runStartTotalAllocBytes = GC.GetTotalAllocatedBytes(false);
             _lastStageMarkMs = 0f;
             _lastStageGcBytes = _runStartGcBytes;
             _metricIndex.Clear();
@@ -186,6 +190,8 @@ namespace Fbx2Vmd.Profiling
             _current.outcome = outcome ?? string.Empty;
             _current.totalMs = (float)_runWatch.Elapsed.TotalMilliseconds;
             _current.totalGcAllocBytes = GC.GetAllocatedBytesForCurrentThread() - _runStartGcBytes;
+            _current.totalAllocAllThreadsBytes =
+                GC.GetTotalAllocatedBytes(false) - _runStartTotalAllocBytes;
             CaptureMemoryCounters(_current);
             ComputeFramePercentiles(_current);
             _current.frameSamplesMs = _frameSamples.ToArray();

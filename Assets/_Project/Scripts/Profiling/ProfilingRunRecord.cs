@@ -62,6 +62,8 @@ namespace Fbx2Vmd.Profiling
         public string outcome;
         public float totalMs;
         public long totalGcAllocBytes;
+        /// <summary>GC.GetTotalAllocatedBytes 기준 런 전체 할당입니다. 워커 스레드 포함 — 병렬 경로의 할당도 잡힙니다.</summary>
+        public long totalAllocAllThreadsBytes;
         public int sampledFrameCount;
         public float sampledFrameSumMs;
         public float sampledFrameMaxMs;
