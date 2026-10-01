@@ -51,6 +51,8 @@ namespace Fbx2Vmd.FBXImporter
         /// <summary>
         /// 배치 진입점. -clipPath 또는 -clipList(; 또는 | 구분)로 클립을 받고
         /// -targetPath/-firstFrame/-lastFrame/-outputDir/-offlineSolver 인자를 읽음.
+        /// -dumpRuns 1이면 런별 정책·분류 진단 CSV, -traceStart/-traceEnd로 지정한
+        /// 프레임 구간의 궤적·추정기 입력 트레이스 CSV를 클립 폴더에 남김.
         /// 클립이 여러 개면 클립별 하위 폴더에 요약을 쓰고 batch-summary.json을 집계함.
         /// 한 클립이 실패해도 나머지를 계속 측정해 회귀 세트 전체 그림을 남김.
         /// </summary>
@@ -295,11 +297,20 @@ namespace Fbx2Vmd.FBXImporter
                 if (!string.IsNullOrEmpty(diagnosticsDir))
                 {
                     // 보정 컨트롤러가 살아 있는 동안 plan·의도를 꺼내 런별 원인을 남김.
-                    WriteRunDiagnostics(report.Runs, correctedController,
-                        sourceL, sourceR, directL, directR, correctL, correctR,
-                        srcFootL, srcToeL, srcFootR, srcToeR,
-                        frameRate, firstFrame, clipPath, diagnosticsDir,
-                        traceStart, traceEnd);
+                    // 덤프 실패가 측정 리포트를 침몰시키지 않게 격리함.
+                    try
+                    {
+                        WriteRunDiagnostics(report.Runs, correctedController,
+                            sourceL, sourceR, directL, directR, correctL, correctR,
+                            srcFootL, srcToeL, srcFootR, srcToeR,
+                            frameRate, firstFrame, clipPath, diagnosticsDir,
+                            traceStart, traceEnd);
+                    }
+                    catch (Exception dumpError)
+                    {
+                        Debug.LogWarning(
+                            $"런 진단 덤프 실패(측정은 정상): {dumpError.Message}");
+                    }
                 }
                 report.Completed = true;
             }
@@ -595,7 +606,7 @@ namespace Fbx2Vmd.FBXImporter
                     bool[] uncertain = run.IsLeft ? leftUncertain : rightUncertain;
                     Vector3[] direct = run.IsLeft ? directLeft : directRight;
                     Vector3[] corrected = run.IsLeft ? correctedLeft : correctedRight;
-                    int pinned = 0, sliding = 0, uncovered = 0;
+                    int pinned = 0, sliding = 0;
                     int uncertainCount = 0, airborneCount = 0;
                     float sum = 0f, max = 0f;
                     float appliedSum = 0f, appliedMax = 0f;
@@ -603,16 +614,16 @@ namespace Fbx2Vmd.FBXImporter
                     {
                         int i = frame - firstFrame;
                         if (i < 0) continue;
-                        if (i < policies.Length)
+                        // 정책·불확실 배열은 절대 클립 프레임으로 인덱싱됨.
+                        if (frame < policies.Length)
                         {
-                            if (policies[i] == "Pinned") pinned++;
-                            else if (policies[i] == "Sliding") sliding++;
+                            if (policies[frame] == "Pinned") pinned++;
+                            else if (policies[frame] == "Sliding") sliding++;
                             else
                             {
-                                uncovered++;
                                 // Confident 외 프레임을 추정기 분류로 세분화함.
                                 // 불확실 구간에 속하면 Uncertain, 아니면 Airborne.
-                                if (i < uncertain.Length && uncertain[i])
+                                if (frame < uncertain.Length && uncertain[frame])
                                     uncertainCount++;
                                 else
                                     airborneCount++;
@@ -650,13 +661,19 @@ namespace Fbx2Vmd.FBXImporter
             if (traceStart >= 0 && srcFootLeft != null)
             {
                 // 추정기와 같은 바닥·임계 — 스태빌라이저의 SourceHumanScale을 재사용함.
-                float humanScale = (float)Convert.ChangeType(stabilizer.GetType()
-                    .GetProperty("SourceHumanScale", flags)
-                    .GetValue(stabilizer), typeof(float));
+                PropertyInfo scaleProp = stabilizer.GetType()
+                    .GetProperty("SourceHumanScale", flags);
+                if (scaleProp == null)
+                {
+                    Debug.LogWarning(
+                        "SourceHumanScale을 찾지 못해 트레이스를 건너뜁니다.");
+                    return;
+                }
+                float humanScale = (float)Convert.ChangeType(
+                    scaleProp.GetValue(stabilizer), typeof(float));
                 WriteTrace(outputDir, clipPath, frameRate, firstFrame,
                     traceStart, traceEnd, humanScale,
                     leftPolicies, rightPolicies,
-                    leftUncertain, rightUncertain,
                     sourceLeft, sourceRight, directLeft, directRight,
                     correctedLeft, correctedRight,
                     srcFootLeft, srcToeLeft, srcFootRight, srcToeRight,
@@ -668,7 +685,6 @@ namespace Fbx2Vmd.FBXImporter
             float frameRate, int firstFrame, int traceStart, int traceEnd,
             float humanScale,
             string[] leftPolicies, string[] rightPolicies,
-            bool[] leftUncertain, bool[] rightUncertain,
             Vector3[] sourceLeft, Vector3[] sourceRight,
             Vector3[] directLeft, Vector3[] directRight,
             Vector3[] correctedLeft, Vector3[] correctedRight,
@@ -681,6 +697,8 @@ namespace Fbx2Vmd.FBXImporter
             // 추정기 상수와 같은 기준으로 프레임 분류를 재계산해 차단 항목을 노출함.
             float supportHeight = humanScale * 0.015f;
             float supportSpeed = humanScale * 0.05f;
+            float airborneHeight = humanScale * 0.05f;
+            float airborneSpeed = humanScale * 0.2f;
             float floorFL = FloorY(footLeft), floorTL = FloorY(toeLeft);
             float floorFR = FloorY(footRight), floorTR = FloorY(toeRight);
             using (var tw = new StreamWriter(tracePath, false,
@@ -702,16 +720,18 @@ namespace Fbx2Vmd.FBXImporter
                     Vector3 cl = (Vector3)evalArgs[1];
                     Vector3 cr = (Vector3)evalArgs[2];
                     string clsL = EstimatorClass(footLeft, toeLeft, i,
-                        floorFL, floorTL, supportHeight, supportSpeed, frameRate);
+                        floorFL, floorTL, supportHeight, supportSpeed,
+                        airborneHeight, airborneSpeed, frameRate);
                     string clsR = EstimatorClass(footRight, toeRight, i,
-                        floorFR, floorTR, supportHeight, supportSpeed, frameRate);
+                        floorFR, floorTR, supportHeight, supportSpeed,
+                        airborneHeight, airborneSpeed, frameRate);
                     tw.WriteLine(string.Format(CultureInfo.InvariantCulture,
                         "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}," +
                         "{11},{12},{13},{14},{15},{16},{17},{18},{19}," +
                         "{20},{21},{22},{23},{24}",
                         frame,
-                        i < leftPolicies.Length ? leftPolicies[i] : "-",
-                        i < rightPolicies.Length ? rightPolicies[i] : "-",
+                        frame < leftPolicies.Length ? leftPolicies[frame] : "-",
+                        frame < rightPolicies.Length ? rightPolicies[frame] : "-",
                         sourceLeft[i].x, sourceLeft[i].z,
                         correctedLeft[i].x, correctedLeft[i].z,
                         cl.x, cl.z,
@@ -730,10 +750,11 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
-        // 추정기의 프레임 분류와 같은 임계로 지지 여부를 재계산함(S/A/U).
+        // 추정기의 프레임 분류와 같은 임계로 지지/자유발/불확실을 재계산함(S/A/U).
         private static string EstimatorClass(Vector3[] feet, Vector3[] toes,
             int i, float floorFoot, float floorToes,
-            float supportHeight, float supportSpeed, float frameRate)
+            float supportHeight, float supportSpeed,
+            float airborneHeight, float airborneSpeed, float frameRate)
         {
             if (i <= 0) return "U";
             float footHeight = feet[i].y - floorFoot;
@@ -742,9 +763,13 @@ namespace Fbx2Vmd.FBXImporter
             float toesSpeed = Vector3.Distance(toes[i - 1], toes[i]) * frameRate;
             if (footHeight <= supportHeight && toesHeight <= supportHeight &&
                 footSpeed <= supportSpeed && toesSpeed <= supportSpeed) return "S";
+            if (footHeight >= airborneHeight && toesHeight >= airborneHeight &&
+                footSpeed >= airborneSpeed && toesSpeed >= airborneSpeed) return "A";
             return "U";
         }
 
+        // 측정 창 안의 10%분위 바닥 — -firstFrame>0 구간 측정이면 추정기가 쓰는
+        // 전체 클립 바닥과 어긋날 수 있어 trace의 클래스는 근사 판정임.
         private static float FloorY(Vector3[] points)
         {
             var heights = new float[points.Length];
