@@ -71,6 +71,9 @@ namespace Fbx2Vmd.FBXImporter
                     ParseInt(GetArgument("-offlineSolver"), 0) != 0);
                 // -dumpRuns 1이면 런별 정책·보정량 진단 CSV를 함께 남김.
                 bool dumpRuns = ParseInt(GetArgument("-dumpRuns"), 0) != 0;
+                // -traceStart/-traceEnd로 지정한 구간의 프레임별 궤적을 덤프함.
+                int traceStart = ParseInt(GetArgument("-traceStart"), -1);
+                int traceEnd = ParseInt(GetArgument("-traceEnd"), -1);
 
                 var batch = new List<ClipResult>();
                 bool allPassed = true;
@@ -85,7 +88,9 @@ namespace Fbx2Vmd.FBXImporter
                     {
                         entry.Report = MeasureFootContactDrift(
                             clipPath, targetPath, firstFrame, lastFrame, clipDir,
-                            diagnosticsDir: dumpRuns ? clipDir : null);
+                            diagnosticsDir: dumpRuns || traceStart >= 0
+                                ? clipDir : null,
+                            traceStart: traceStart, traceEnd: traceEnd);
                         WriteSummaryJson(entry.Report, clipDir, clipPath,
                             targetPath, firstFrame, lastFrame);
                         Debug.Log(entry.Report.GatePassed
@@ -200,7 +205,8 @@ namespace Fbx2Vmd.FBXImporter
             int lastFrame,
             string outputDir,
             Func<int, int, int, bool> progress = null,
-            string diagnosticsDir = null)
+            string diagnosticsDir = null,
+            int traceStart = -1, int traceEnd = -1)
         {
             var report = new DriftReport();
             GameObject sourceTarget = null, directTarget = null, correctedTarget = null;
@@ -245,6 +251,14 @@ namespace Fbx2Vmd.FBXImporter
                 var sourceL = new Vector3[count]; var sourceR = new Vector3[count];
                 var directL = new Vector3[count]; var directR = new Vector3[count];
                 var correctL = new Vector3[count]; var correctR = new Vector3[count];
+                // 트레이스용 — 추정기와 같은 발목/발끝 분리 표본.
+                Vector3[] srcFootL = null, srcToeL = null,
+                    srcFootR = null, srcToeR = null;
+                if (traceStart >= 0)
+                {
+                    srcFootL = new Vector3[count]; srcToeL = new Vector3[count];
+                    srcFootR = new Vector3[count]; srcToeR = new Vector3[count];
+                }
 
                 for (int frame = firstFrame; frame <= last; frame++)
                 {
@@ -254,6 +268,11 @@ namespace Fbx2Vmd.FBXImporter
                     int i = frame - firstFrame;
                     sourceL[i] = ContactPoint(src, true);
                     sourceR[i] = ContactPoint(src, false);
+                    if (srcFootL != null)
+                    {
+                        srcFootL[i] = src[0].position; srcToeL[i] = src[1].position;
+                        srcFootR[i] = src[2].position; srcToeR[i] = src[3].position;
+                    }
                     directL[i] = ContactPoint(dir, true);
                     directR[i] = ContactPoint(dir, false);
                     correctL[i] = ContactPoint(cor, true);
@@ -277,8 +296,10 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     // 보정 컨트롤러가 살아 있는 동안 plan·의도를 꺼내 런별 원인을 남김.
                     WriteRunDiagnostics(report.Runs, correctedController,
-                        directL, directR, correctL, correctR,
-                        frameRate, firstFrame, clipPath, diagnosticsDir);
+                        sourceL, sourceR, directL, directR, correctL, correctR,
+                        srcFootL, srcToeL, srcFootR, srcToeR,
+                        frameRate, firstFrame, clipPath, diagnosticsDir,
+                        traceStart, traceEnd);
                 }
                 report.Completed = true;
             }
@@ -529,10 +550,14 @@ namespace Fbx2Vmd.FBXImporter
         // 게이트 초과 원인(핀 부재·핀 차단·오정책)을 구분하게 함.
         private static void WriteRunDiagnostics(List<RunResult> runs,
             object correctedController,
+            Vector3[] sourceLeft, Vector3[] sourceRight,
             Vector3[] directLeft, Vector3[] directRight,
             Vector3[] correctedLeft, Vector3[] correctedRight,
+            Vector3[] srcFootLeft, Vector3[] srcToeLeft,
+            Vector3[] srcFootRight, Vector3[] srcToeRight,
             float frameRate, int firstFrame,
-            string clipPath, string outputDir)
+            string clipPath, string outputDir,
+            int traceStart = -1, int traceEnd = -1)
         {
             Directory.CreateDirectory(outputDir);
             string path = Path.Combine(outputDir,
@@ -553,21 +578,25 @@ namespace Fbx2Vmd.FBXImporter
             // 의도 구간을 프레임별 정책으로 펼침 — 플래너의 Rasterize와 동일 규칙.
             var leftPolicies = RasterizePolicyNames(intents, "Left", runs);
             var rightPolicies = RasterizePolicyNames(intents, "Right", runs);
+            var leftUncertain = UncertainSpanMask(intents, "Left", runs);
+            var rightUncertain = UncertainSpanMask(intents, "Right", runs);
 
             var evalArgs = new object[] { 0f, Vector3.zero, Vector3.zero };
             using (var writer = new StreamWriter(path, false,
                 new UTF8Encoding(false)))
             {
                 writer.WriteLine("side,start,end,additional_m," +
-                    "pinned_frames,sliding_frames,uncovered_frames," +
-                    "mean_correction_m,max_correction_m," +
+                    "pinned_frames,sliding_frames,uncertain_frames," +
+                    "airborne_frames,mean_correction_m,max_correction_m," +
                     "mean_applied_delta_m,max_applied_delta_m");
                 foreach (RunResult run in runs)
                 {
                     string[] policies = run.IsLeft ? leftPolicies : rightPolicies;
+                    bool[] uncertain = run.IsLeft ? leftUncertain : rightUncertain;
                     Vector3[] direct = run.IsLeft ? directLeft : directRight;
                     Vector3[] corrected = run.IsLeft ? correctedLeft : correctedRight;
                     int pinned = 0, sliding = 0, uncovered = 0;
+                    int uncertainCount = 0, airborneCount = 0;
                     float sum = 0f, max = 0f;
                     float appliedSum = 0f, appliedMax = 0f;
                     for (int frame = run.Start; frame <= run.End; frame++)
@@ -578,7 +607,16 @@ namespace Fbx2Vmd.FBXImporter
                         {
                             if (policies[i] == "Pinned") pinned++;
                             else if (policies[i] == "Sliding") sliding++;
-                            else uncovered++;
+                            else
+                            {
+                                uncovered++;
+                                // Confident 외 프레임을 추정기 분류로 세분화함.
+                                // 불확실 구간에 속하면 Uncertain, 아니면 Airborne.
+                                if (i < uncertain.Length && uncertain[i])
+                                    uncertainCount++;
+                                else
+                                    airborneCount++;
+                            }
                         }
                         evalArgs[0] = frame / frameRate;
                         tryEvaluate.Invoke(plan, evalArgs);
@@ -600,12 +638,119 @@ namespace Fbx2Vmd.FBXImporter
                     float mean = frames > 0 ? sum / frames : 0f;
                     float appliedMean = frames > 0 ? appliedSum / frames : 0f;
                     writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
+                        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11}",
                         run.IsLeft ? "left" : "right", run.Start, run.End,
-                        run.Additional, pinned, sliding, uncovered,
-                        mean, max, appliedMean, appliedMax));
+                        run.Additional, pinned, sliding, uncertainCount,
+                        airborneCount, mean, max, appliedMean, appliedMax));
                 }
             }
+
+            // -traceStart/-traceEnd 구간의 프레임별 궤적과 추정기 입력량을 덤프해
+            // Free 추종 수렴 여부와 Uncertain 분류의 차단 조건을 함께 검사함.
+            if (traceStart >= 0 && srcFootLeft != null)
+            {
+                // 추정기와 같은 바닥·임계 — 스태빌라이저의 SourceHumanScale을 재사용함.
+                float humanScale = (float)Convert.ChangeType(stabilizer.GetType()
+                    .GetProperty("SourceHumanScale", flags)
+                    .GetValue(stabilizer), typeof(float));
+                WriteTrace(outputDir, clipPath, frameRate, firstFrame,
+                    traceStart, traceEnd, humanScale,
+                    leftPolicies, rightPolicies,
+                    leftUncertain, rightUncertain,
+                    sourceLeft, sourceRight, directLeft, directRight,
+                    correctedLeft, correctedRight,
+                    srcFootLeft, srcToeLeft, srcFootRight, srcToeRight,
+                    plan, tryEvaluate, evalArgs);
+            }
+        }
+
+        private static void WriteTrace(string outputDir, string clipPath,
+            float frameRate, int firstFrame, int traceStart, int traceEnd,
+            float humanScale,
+            string[] leftPolicies, string[] rightPolicies,
+            bool[] leftUncertain, bool[] rightUncertain,
+            Vector3[] sourceLeft, Vector3[] sourceRight,
+            Vector3[] directLeft, Vector3[] directRight,
+            Vector3[] correctedLeft, Vector3[] correctedRight,
+            Vector3[] footLeft, Vector3[] toeLeft,
+            Vector3[] footRight, Vector3[] toeRight,
+            object plan, MethodInfo tryEvaluate, object[] evalArgs)
+        {
+            string tracePath = Path.Combine(outputDir,
+                $"{Path.GetFileNameWithoutExtension(clipPath)}-trace.csv");
+            // 추정기 상수와 같은 기준으로 프레임 분류를 재계산해 차단 항목을 노출함.
+            float supportHeight = humanScale * 0.015f;
+            float supportSpeed = humanScale * 0.05f;
+            float floorFL = FloorY(footLeft), floorTL = FloorY(toeLeft);
+            float floorFR = FloorY(footRight), floorTR = FloorY(toeRight);
+            using (var tw = new StreamWriter(tracePath, false,
+                new UTF8Encoding(false)))
+            {
+                tw.WriteLine("frame,policy_l,policy_r," +
+                    "src_l_x,src_l_z,cor_l_x,cor_l_z,plan_l_x,plan_l_z," +
+                    "l_foot_h,l_toe_h,l_foot_v,l_toe_v,l_class," +
+                    "src_r_x,src_r_z,cor_r_x,cor_r_z,plan_r_x,plan_r_z," +
+                    "r_foot_h,r_toe_h,r_foot_v,r_toe_v,r_class");
+                int last = traceEnd < 0 ? firstFrame + sourceLeft.Length - 1
+                    : traceEnd;
+                for (int frame = traceStart; frame <= last; frame++)
+                {
+                    int i = frame - firstFrame;
+                    if (i < 0 || i >= sourceLeft.Length) continue;
+                    evalArgs[0] = frame / frameRate;
+                    tryEvaluate.Invoke(plan, evalArgs);
+                    Vector3 cl = (Vector3)evalArgs[1];
+                    Vector3 cr = (Vector3)evalArgs[2];
+                    string clsL = EstimatorClass(footLeft, toeLeft, i,
+                        floorFL, floorTL, supportHeight, supportSpeed, frameRate);
+                    string clsR = EstimatorClass(footRight, toeRight, i,
+                        floorFR, floorTR, supportHeight, supportSpeed, frameRate);
+                    tw.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}," +
+                        "{11},{12},{13},{14},{15},{16},{17},{18},{19}," +
+                        "{20},{21},{22},{23},{24}",
+                        frame,
+                        i < leftPolicies.Length ? leftPolicies[i] : "-",
+                        i < rightPolicies.Length ? rightPolicies[i] : "-",
+                        sourceLeft[i].x, sourceLeft[i].z,
+                        correctedLeft[i].x, correctedLeft[i].z,
+                        cl.x, cl.z,
+                        footLeft[i].y - floorFL, toeLeft[i].y - floorTL,
+                        i > 0 ? Vector3.Distance(footLeft[i - 1], footLeft[i]) * frameRate : 0f,
+                        i > 0 ? Vector3.Distance(toeLeft[i - 1], toeLeft[i]) * frameRate : 0f,
+                        clsL,
+                        sourceRight[i].x, sourceRight[i].z,
+                        correctedRight[i].x, correctedRight[i].z,
+                        cr.x, cr.z,
+                        footRight[i].y - floorFR, toeRight[i].y - floorTR,
+                        i > 0 ? Vector3.Distance(footRight[i - 1], footRight[i]) * frameRate : 0f,
+                        i > 0 ? Vector3.Distance(toeRight[i - 1], toeRight[i]) * frameRate : 0f,
+                        clsR));
+                }
+            }
+        }
+
+        // 추정기의 프레임 분류와 같은 임계로 지지 여부를 재계산함(S/A/U).
+        private static string EstimatorClass(Vector3[] feet, Vector3[] toes,
+            int i, float floorFoot, float floorToes,
+            float supportHeight, float supportSpeed, float frameRate)
+        {
+            if (i <= 0) return "U";
+            float footHeight = feet[i].y - floorFoot;
+            float toesHeight = toes[i].y - floorToes;
+            float footSpeed = Vector3.Distance(feet[i - 1], feet[i]) * frameRate;
+            float toesSpeed = Vector3.Distance(toes[i - 1], toes[i]) * frameRate;
+            if (footHeight <= supportHeight && toesHeight <= supportHeight &&
+                footSpeed <= supportSpeed && toesSpeed <= supportSpeed) return "S";
+            return "U";
+        }
+
+        private static float FloorY(Vector3[] points)
+        {
+            var heights = new float[points.Length];
+            for (int i = 0; i < points.Length; i++) heights[i] = points[i].y;
+            Array.Sort(heights);
+            return heights[(int)((heights.Length - 1) * 0.1f)];
         }
 
         // 추정 결과의 해당 발 의도 구간을 프레임별 정책 이름 배열로 펼침.
@@ -638,6 +783,31 @@ namespace Fbx2Vmd.FBXImporter
                 for (int i = start; i < end; i++) names[i] = name;
             }
             return names;
+        }
+
+        // 추정 결과의 불확실 구간을 프레임 마스크로 펼침.
+        // Confident도 아니고 불확실 구간도 아닌 프레임은 Airborne으로 해석 가능함.
+        private static bool[] UncertainSpanMask(object estimate, string side,
+            List<RunResult> runs)
+        {
+            int frameCount = runs.Count == 0 ? 0 : runs.Max(r => r.End) + 1;
+            var mask = new bool[Mathf.Max(1, frameCount + 1)];
+            if (estimate == null) return mask;
+            var flags = BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic;
+            var spans = (System.Collections.IEnumerable)estimate.GetType()
+                .GetProperty(side + "UncertainSpans", flags)?.GetValue(estimate);
+            if (spans == null) return mask;
+            foreach (object span in spans)
+            {
+                Vector2Int range = (Vector2Int)span;
+                for (int i = Mathf.Max(0, range.x);
+                    i < Mathf.Min(mask.Length, range.y); i++)
+                {
+                    mask[i] = true;
+                }
+            }
+            return mask;
         }
 
         // 접촉 솔버 선택은 본체 어셈블리의 internal 상태 — 리플렉션으로만 토글함.
