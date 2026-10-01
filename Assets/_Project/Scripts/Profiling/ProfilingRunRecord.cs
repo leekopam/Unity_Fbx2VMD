@@ -14,6 +14,8 @@ namespace Fbx2Vmd.Profiling
         public float sinceRunStartMs;
         public float deltaMs;
         public long gcDeltaBytes;
+        /// <summary>이 샘플에 병합된 NoteStage 호출 수입니다. 구 리포트(필드 없음)는 0으로 읽히며 집계 시 1로 간주합니다.</summary>
+        public int calls;
     }
 
     /// <summary>
@@ -74,6 +76,8 @@ namespace Fbx2Vmd.Profiling
         public long inputBytes = -1;
         public float clipLengthSec = -1f;
         public int boneCount = -1;
+        /// <summary>런 동안 수집한 프레임 시간 샘플(ms)입니다. 뷰어 차트·범위 집계용으로 보존합니다.</summary>
+        public float[] frameSamplesMs = new float[0];
         public List<ProfilingStageSample> stages = new List<ProfilingStageSample>();
         public List<ProfilingMetricSample> metrics = new List<ProfilingMetricSample>();
         /// <summary>EndRun 시점에 ProfilingRunAnalyzer가 채우는 자동 분석 결과입니다.</summary>

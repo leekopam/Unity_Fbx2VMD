@@ -112,11 +112,14 @@ namespace Tests.Editor.FBXImporter
                     Invoke(controller, "Seek", frame / clip.frameRate);
                     if (frame == 4334)
                     {
-                        AssertStatus(controller, "Fallback");
+                        // 지지면 정렬 보정 도입 후 이 프레임은 앞·뒤 지지 간격이 양립해
+                        // Fallback이 아니라 정상 Applied로 수렴해야 함. 간격 오차가
+                        // 작게 유지되는지 함께 검증해 거절 회피가 아님을 확인함.
+                        AssertStatus(controller, "Applied");
                         gate = Property(controller, "LastGroundingGate");
                         right = Field(gate, "right");
                         Assert.That((float)Field(right, "pair_span_error_m"),
-                            Is.GreaterThan(animator.humanScale * 0.05f));
+                            Is.LessThan(animator.humanScale * 0.005f));
                     }
                     if (frame == 4342) previousRight = rightFoot.position;
                 }

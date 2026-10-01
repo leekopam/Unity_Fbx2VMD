@@ -135,6 +135,20 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return true;
             }
+            // 완료 직후 틱이 소비하기 전에 재요청되면 완료 처리부터 수행해 재계산을 막는다.
+            if (_preprocessSession != null)
+            {
+                if (_preprocessSession.IsFaulted)
+                {
+                    return Fail(_preprocessSession.FailureMessage);
+                }
+                if (!_preprocessSession.IsComplete)
+                {
+                    return false;
+                }
+                CompletePreparation(_preprocessSession.Result);
+                return IsReady;
+            }
 
             ResetTransientState();
             foreach (SkinnedMeshRenderer renderer in _contracts
@@ -238,7 +252,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private void LateUpdate()
         {
-            if (IsPreparing)
+            // 워커가 세션을 완료하는 순간 IsFinished가 되어 IsPreparing이 꺼지므로,
+            // 완료 감지(CompletePreparation)까지 세션 생존 동안 틱을 유지한다.
+            if (_preprocessSession != null)
             {
                 ProcessPreparationTick();
                 return;

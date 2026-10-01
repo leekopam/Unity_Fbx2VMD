@@ -33,7 +33,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(weights[20], Is.EqualTo(Vector2.right));
             Assert.That(weights[45], Is.EqualTo(Vector2.one));
             Assert.That(weights[75], Is.EqualTo(Vector2.up));
-            Assert.That(weights[95], Is.EqualTo(Vector2.zero));
+            Assert.That(weights[96], Is.EqualTo(Vector2.zero), "해제 블렌드 이후에는 비지지여야 함");
             for (int i = 1; i < weights.Length; i++)
                 Assert.That(Vector2.Distance(weights[i], weights[i - 1]), Is.LessThan(0.26f));
             CollectionAssert.AreEqual(weights, Build(rear, front));
@@ -49,6 +49,54 @@ namespace Tests.Editor.FBXImporter
             Assert.That(weights[20].x, Is.EqualTo(1f));
             Assert.That(weights.All(w => w.y == 0f), Is.True);
             CollectionAssert.AreEqual(original, rear);
+        }
+
+        [Test]
+        public void Given_SupportEndingAtLiftOff_When_Building_Then_ReleaseBlendStartsAfterLastSupportedFrame()
+        {
+            // 지지 런 안에서 미리 테이퍼하면 발이 아직 붙은 채로 원시 리타깃으로
+            // 복귀해 팝이 된다. 해제 블렌드는 마지막 지지 프레임 뒤에 와야 함.
+            var rear = Enumerable.Range(0, 60).Select(i => i < 30 ? Vector3.zero : Vector3.up).ToArray();
+            var front = Enumerable.Repeat(Vector3.up, 60).ToArray();
+            Vector2[] weights = Build(rear, front);
+            Assert.That(weights[29].x, Is.EqualTo(1f), "마지막 지지 프레임은 완전 지지여야 함");
+            Assert.That(weights[30].x, Is.GreaterThan(0.5f), "해제 블렌드는 리프트오프 프레임부터 시작해야 함");
+            Assert.That(weights[35].x, Is.LessThan(0.1f));
+            Assert.That(weights[36].x, Is.EqualTo(0f), "해제 블렌드는 blend 프레임 안에 끝나야 함");
+            Assert.That(weights[40].x, Is.EqualTo(0f));
+            for (int i = 31; i < 40; i++)
+                Assert.That(weights[i].x, Is.LessThanOrEqualTo(weights[i - 1].x + 0.001f),
+                    "해제 구간 가중치는 단조 감소해야 함");
+        }
+
+        [Test]
+        public void Given_ShortLowGapInsideRun_When_Building_Then_BridgesSpeedJitter()
+        {
+            // 런 중간의 짧은 속도 스파이크(높이는 지면 유지)는 실제 이륙이 아니므로
+            // 런을 끊으면 지지 중에 가중치가 꺼져 보정이 풀렸다가 재체결되는 팝이 됨.
+            var rear = Enumerable.Repeat(Vector3.zero, 60).ToArray();
+            var front = Enumerable.Range(0, 60).Select(i =>
+                i < 30 ? Vector3.zero :
+                i <= 32 ? new Vector3(0.05f * (i - 29), 0f, 0f) :
+                new Vector3(0.15f, 0f, 0f)).ToArray();
+            Vector2[] weights = Build(rear, front);
+            for (int i = 29; i <= 33; i++)
+                Assert.That(weights[i].y, Is.EqualTo(1f),
+                    $"높이가 낮게 유지된 짧은 공백 프레임 {i}은 지지가 이어져야 함");
+        }
+
+        [Test]
+        public void Given_ShortHighGapInsideRun_When_Building_Then_DoesNotBridge()
+        {
+            // 같은 길이의 공백이라도 발끝이 실제로 들렸으면 이륙으로 보고 런을 분리함.
+            var rear = Enumerable.Repeat(Vector3.zero, 60).ToArray();
+            var front = Enumerable.Range(0, 60).Select(i =>
+                i < 30 ? Vector3.zero :
+                i <= 32 ? new Vector3(0.05f * (i - 29), 0.1f, 0f) :
+                new Vector3(0.15f, 0f, 0f)).ToArray();
+            Vector2[] weights = Build(rear, front);
+            Assert.That(weights[31].y, Is.LessThan(0.9f),
+                "높이가 오른 공백은 런을 분리해 해제·진입 블렌드가 들어가야 함");
         }
 
         [Test]

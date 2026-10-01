@@ -314,6 +314,249 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        // 임시 진단: 악화 접촉 런 구간의 의도·방침·발/발끝 상태를 CSV로 덤프함.
+        [Test]
+        public void Given_SatisfactionClip_When_DumpingIntentDiagnostics_Then_WritesCsv()
+        {
+            RequireLocalFixture();
+            EnsureHumanoidClipImport();
+            GameObject sourceTarget = InstantiateAsset(ClipAssetPath, "Intent Diagnostic Source");
+            GameObject correctedTarget = InstantiateAsset(TargetAssetPath, "Intent Diagnostic Corrected");
+            object sourceController = CreateController();
+            object correctedController = CreateController();
+            try
+            {
+                AnimationClip clip = LoadHumanoidClip();
+                GameObject sourceAsset = AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath);
+                var sourceRig = new LowerBodyRig(RequireHumanoidAnimator(sourceTarget));
+                var correctedRig = new LowerBodyRig(RequireHumanoidAnimator(correctedTarget));
+                Invoke(sourceController, "Prepare", sourceRig.Animator, clip);
+                Invoke(
+                    correctedController,
+                    "PrepareWithArmDirectionReference",
+                    correctedRig.Animator,
+                    clip,
+                    sourceAsset);
+                SeekDelegate sourceSeek = CreateSeekDelegate(sourceController);
+                SeekDelegate correctedSeek = CreateSeekDelegate(correctedController);
+                float frameRate = clip.frameRate > 0f ? clip.frameRate : 60f;
+                int lastFrameIndex = Mathf.CeilToInt(clip.length * frameRate);
+                var leftFeet = new List<Vector3>();
+                var leftToes = new List<Vector3>();
+                var rightFeet = new List<Vector3>();
+                var rightToes = new List<Vector3>();
+                var corrLeftFeet = new List<Vector3>();
+                var corrLeftToes = new List<Vector3>();
+                var corrRightFeet = new List<Vector3>();
+                var corrRightToes = new List<Vector3>();
+                for (int frameIndex = 0; frameIndex <= lastFrameIndex; frameIndex++)
+                {
+                    float timeSeconds = Mathf.Min(frameIndex / frameRate, clip.length);
+                    Assert.That(sourceSeek(timeSeconds), Is.True);
+                    Assert.That(correctedSeek(timeSeconds), Is.True);
+                    sourceRig.CaptureFootSupportPoints(
+                        isLeft: true, out Vector3 lf, out Vector3 lt);
+                    sourceRig.CaptureFootSupportPoints(
+                        isLeft: false, out Vector3 rf, out Vector3 rt);
+                    correctedRig.CaptureFootSupportPoints(
+                        isLeft: true, out Vector3 clf, out Vector3 clt);
+                    correctedRig.CaptureFootSupportPoints(
+                        isLeft: false, out Vector3 crf, out Vector3 crt);
+                    leftFeet.Add(lf);
+                    leftToes.Add(lt);
+                    rightFeet.Add(rf);
+                    rightToes.Add(rt);
+                    corrLeftFeet.Add(clf);
+                    corrLeftToes.Add(clt);
+                    corrRightFeet.Add(crf);
+                    corrRightToes.Add(crt);
+                }
+
+                Type sampleType = typeof(FBXVmdPipeline).Assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootContactSample", true);
+                Type estimatorType = typeof(FBXVmdPipeline).Assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentEstimator", true);
+                Type resolverType = typeof(FBXVmdPipeline).Assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootAnchorPolicyResolver", true);
+
+                var samples = (System.Collections.IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(sampleType));
+                ConstructorInfo sampleCtor = sampleType.GetConstructors(
+                    BindingFlags.Instance | BindingFlags.NonPublic)
+                    .First(ctor => ctor.GetParameters().Length == 4);
+                for (int index = 0; index < leftFeet.Count; index++)
+                {
+                    samples.Add(sampleCtor.Invoke(new object[]
+                    {
+                        leftFeet[index], leftToes[index],
+                        rightFeet[index], rightToes[index]
+                    }));
+                }
+
+                float scale = sourceRig.Animator.humanScale;
+                object estimate = estimatorType.GetMethod(
+                        "Estimate", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, new object[] { samples, frameRate, scale, null });
+                System.Collections.IEnumerable leftIntents =
+                    (System.Collections.IEnumerable)Prop(estimate, "Left");
+                System.Collections.IEnumerable rightIntents =
+                    (System.Collections.IEnumerable)Prop(estimate, "Right");
+                object[] leftIntentArray = leftIntents.Cast<object>().ToArray();
+                object[] rightIntentArray = rightIntents.Cast<object>().ToArray();
+                Type intentType = typeof(FBXVmdPipeline).Assembly.GetType(
+                    "Fbx2Vmd.FBXImporter.HumanoidFootContactIntent", true);
+                var leftIntentList = (System.Collections.IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(intentType));
+                var rightIntentList = (System.Collections.IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(intentType));
+                foreach (object intent in leftIntentArray) leftIntentList.Add(intent);
+                foreach (object intent in rightIntentArray) rightIntentList.Add(intent);
+                object leftPoliciesObj = resolverType.GetMethod(
+                        "Rasterize", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, new object[] { leftIntentList, samples.Count });
+                object rightPoliciesObj = resolverType.GetMethod(
+                        "Rasterize", BindingFlags.Static | BindingFlags.NonPublic)
+                    .Invoke(null, new object[] { rightIntentList, samples.Count });
+                string[] leftPolicies = ((Array)leftPoliciesObj)
+                    .Cast<object>().Select(p => p.ToString()).ToArray();
+                string[] rightPolicies = ((Array)rightPoliciesObj)
+                    .Cast<object>().Select(p => p.ToString()).ToArray();
+
+                string intentPath = System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(), "satisfaction-intents.csv");
+                using (var writer = new System.IO.StreamWriter(intentPath))
+                {
+                    writer.WriteLine("side,start,end_excl,mode,certainty,clipStart,anchor");
+                    foreach (object intent in leftIntentArray)
+                    {
+                        writer.WriteLine("L," + IntentRow(intent));
+                    }
+
+                    foreach (object intent in rightIntentArray)
+                    {
+                        writer.WriteLine("R," + IntentRow(intent));
+                    }
+                }
+
+                float supportHeight = scale * 0.015f;
+                float supportSpeed = scale * 0.05f;
+                float floorLFoot = PercentileY(leftFeet, 0.1f);
+                float floorLToes = PercentileY(leftToes, 0.1f);
+                float floorRFoot = PercentileY(rightFeet, 0.1f);
+                float floorRToes = PercentileY(rightToes, 0.1f);
+                float midContactHeight = PercentileY(
+                    Midpoints(rightFeet, rightToes), 0.02f) + 0.03f;
+
+                var windows = new[]
+                {
+                    new[] { 3700, 3800 }, new[] { 4000, 4400 },
+                    new[] { 8700, 9050 }, new[] { 10880, 10980 }
+                };
+                string framesPath = System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(), "satisfaction-frames.csv");
+                using (var writer = new System.IO.StreamWriter(framesPath))
+                {
+                    writer.WriteLine(
+                        "frame,side,footH_mm,toeH_mm,footSpd_mm_s,toeSpd_mm_s," +
+                        "oldSupport,newSupportRaw,policy,midContactH_mm," +
+                        "srcMidX,srcMidZ,corrMidX,corrMidZ,corrToeX,corrToeZ");
+                    foreach (int[] window in windows)
+                    {
+                        for (int frameIndex = window[0];
+                             frameIndex <= Mathf.Min(window[1], lastFrameIndex);
+                             frameIndex++)
+                        {
+                            for (int side = 0; side < 2; side++)
+                            {
+                                bool isLeft = side == 0;
+                                var feet = isLeft ? leftFeet : rightFeet;
+                                var toes = isLeft ? leftToes : rightToes;
+                                var cFeet = isLeft ? corrLeftFeet : corrRightFeet;
+                                var cToes = isLeft ? corrLeftToes : corrRightToes;
+                                float floorF = isLeft ? floorLFoot : floorRFoot;
+                                float floorT = isLeft ? floorLToes : floorRToes;
+                                string policy = isLeft
+                                    ? leftPolicies[frameIndex]
+                                    : rightPolicies[frameIndex];
+                                Vector3 srcMid = (feet[frameIndex] + toes[frameIndex]) * 0.5f;
+                                Vector3 corrMid = (cFeet[frameIndex] + cToes[frameIndex]) * 0.5f;
+                                Vector3 corrToe = cToes[frameIndex];
+                                float footH = feet[frameIndex].y - floorF;
+                                float toeH = toes[frameIndex].y - floorT;
+                                float footSpd = frameIndex == 0 ? 0f :
+                                    Vector3.Distance(feet[frameIndex - 1], feet[frameIndex]) *
+                                    frameRate;
+                                float toeSpd = frameIndex == 0 ? 0f :
+                                    Vector3.Distance(toes[frameIndex - 1], toes[frameIndex]) *
+                                    frameRate;
+                                bool oldSupport =
+                                    footH <= supportHeight && toeH <= supportHeight &&
+                                    footSpd <= supportSpeed && toeSpd <= supportSpeed;
+                                bool newSupport =
+                                    toeH <= supportHeight && toeSpd <= supportSpeed;
+                                writer.WriteLine(
+                                    $"{frameIndex},{(isLeft ? "L" : "R")}," +
+                                    $"{footH * 1000f:F1},{toeH * 1000f:F1}," +
+                                    $"{footSpd * 1000f:F1},{toeSpd * 1000f:F1}," +
+                                    $"{(oldSupport ? 1 : 0)},{(newSupport ? 1 : 0)}," +
+                                    $"{policy},{midContactHeight * 1000f:F1}," +
+                                    $"{srcMid.x:F4},{srcMid.z:F4}," +
+                                    $"{corrMid.x:F4},{corrMid.z:F4}," +
+                                    $"{corrToe.x:F4},{corrToe.z:F4}");
+                            }
+                        }
+                    }
+                }
+
+                Debug.Log(
+                    $"[IntentDiag] intents={intentPath} frames={framesPath} " +
+                    $"leftIntents={leftIntentArray.Length} " +
+                    $"rightIntents={rightIntentArray.Length}");
+            }
+            finally
+            {
+                DisposeController(sourceController);
+                DisposeController(correctedController);
+                UnityEngine.Object.DestroyImmediate(sourceTarget);
+                UnityEngine.Object.DestroyImmediate(correctedTarget);
+            }
+        }
+
+        private static string IntentRow(object intent)
+        {
+            Vector3 anchor = (Vector3)Prop(intent, "Anchor");
+            return $"{Prop(intent, "StartFrame")},{Prop(intent, "EndFrameExclusive")}," +
+                $"{Prop(intent, "Mode")},{Prop(intent, "Certainty")}," +
+                $"{Prop(intent, "StartsAtClipStart")}," +
+                $"{anchor.x:F4};{anchor.y:F4};{anchor.z:F4}";
+        }
+
+        private static object Prop(object target, string name)
+        {
+            return target.GetType()
+                .GetProperty(name, BindingFlags.Instance | BindingFlags.Public |
+                    BindingFlags.NonPublic)
+                .GetValue(target);
+        }
+
+        private static float PercentileY(IReadOnlyList<Vector3> points, float fraction)
+        {
+            float[] heights = points.Select(point => point.y).OrderBy(v => v).ToArray();
+            return heights[(int)((heights.Length - 1) * fraction)];
+        }
+
+        private static List<Vector3> Midpoints(
+            IReadOnlyList<Vector3> feet, IReadOnlyList<Vector3> toes)
+        {
+            var result = new List<Vector3>(feet.Count);
+            for (int index = 0; index < feet.Count; index++)
+            {
+                result.Add((feet[index] + toes[index]) * 0.5f);
+            }
+
+            return result;
+        }
+
         private static UpperBodyCorrectionMetrics MeasureArmDirectionCorrectionIsolation(
             object controller,
             LowerBodyRig rig,

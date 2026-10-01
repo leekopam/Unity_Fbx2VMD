@@ -235,6 +235,62 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ToePlantedRoll_When_Estimating_Then_ReportsSupport()
+        {
+            // 롤 스탠스: 발끝은 바닥에 고정된 채 발목만 들려 움직임.
+            // 발목-발끝 피치 간극이 롤 증거로 인정되면 지지로 봐야 함.
+            var leftFoot = Still(90);
+            var leftToes = new List<Vector3>(90);
+            for (int index = 0; index < 90; index++)
+            {
+                leftToes.Add(new Vector3(0.1f, -0.05f, 0.3f));
+            }
+            for (int frame = 30; frame < 60; frame++)
+            {
+                // 발목이 지지 높이 위로 올라가고 수평 이동도 발생(옛 조건이면 Uncertain).
+                leftFoot[frame] = new Vector3(
+                    0.1f + 0.001f * (frame - 30), 0.04f, 0.2f);
+            }
+
+            object estimate = EstimateParts(leftFoot, leftToes);
+            List<object> left = Intents(estimate, "Left");
+            Assert.That(left.Count, Is.EqualTo(1));
+            Assert.That(Field(left[0], "StartFrame"), Is.LessThanOrEqualTo(30));
+            Assert.That(Field(left[0], "EndFrameExclusive"),
+                Is.GreaterThanOrEqualTo(60));
+            Assert.That(Field(left[0], "Mode").ToString(), Is.EqualTo("Plant"));
+        }
+
+        [Test]
+        public void Given_ToeDragSlide_When_Estimating_Then_ReportsSlide()
+        {
+            // 발끝이 바닥을 누른 채 지지 속도 이상으로 수평 이동하는 구간은
+            // 접촉이지만 고정 지지가 아니므로 Slide 의도로 봐야 함.
+            var leftFoot = Still(90);
+            var leftToes = new List<Vector3>(90);
+            for (int index = 0; index < 90; index++)
+            {
+                leftToes.Add(new Vector3(0.1f, -0.05f, 0.3f));
+            }
+            for (int frame = 30; frame < 60; frame++)
+            {
+                float offset = frame - 30;
+                // 발끝 78mm/s 수평 활주 + 발목 들림 — 지지 판정은 실패하지만 접촉임.
+                leftToes[frame] = new Vector3(
+                    0.1f + 0.0013f * offset, -0.05f, 0.3f);
+                leftFoot[frame] = new Vector3(
+                    0.1f + 0.002f * offset, 0.06f, 0.2f);
+            }
+
+            object estimate = EstimateParts(leftFoot, leftToes);
+            List<object> left = Intents(estimate, "Left");
+            Assert.That(left.Exists(intent =>
+                Field(intent, "Mode").ToString() == "Slide" &&
+                (int)Field(intent, "StartFrame") >= 30 &&
+                (int)Field(intent, "EndFrameExclusive") >= 55), Is.True);
+        }
+
+        [Test]
         public void Given_InvalidInput_When_Estimating_Then_Throws()
         {
             Assert.Throws<TargetInvocationException>(() =>
@@ -279,6 +335,26 @@ namespace Tests.Editor.FBXImporter
             return EstimatorType.GetMethods(Flags)
                 .First(m => m.Name == "Estimate" &&
                     m.GetParameters().Length == 4);
+        }
+
+        private static object EstimateParts(List<Vector3> leftFoot,
+            List<Vector3> leftToes)
+        {
+            int count = leftFoot.Count;
+            Array samples = Array.CreateInstance(SampleType, count);
+            for (int index = 0; index < count; index++)
+            {
+                Vector3 right = Vector3.up * (0.3f + 0.004f * index) +
+                    Vector3.left * 0.1f;
+                samples.SetValue(Activator.CreateInstance(
+                    SampleType, Flags, null,
+                    new object[] { leftFoot[index], leftToes[index],
+                        right, right + Vector3.forward * 0.1f },
+                    null), index);
+            }
+
+            return EstimateMethod().Invoke(null,
+                new object[] { samples, FrameRate, HumanScale, null });
         }
 
         private static object CreateLabel(int startFrame, int endFrameInclusive,
