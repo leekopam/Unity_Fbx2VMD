@@ -69,6 +69,8 @@ namespace Fbx2Vmd.FBXImporter
                 // 오프라인 접촉 솔버 실험 경로를 게이트 측정에 포함할 수 있게 인자로 토글함.
                 SetOfflineContactSolver(
                     ParseInt(GetArgument("-offlineSolver"), 0) != 0);
+                // -dumpRuns 1이면 런별 정책·보정량 진단 CSV를 함께 남김.
+                bool dumpRuns = ParseInt(GetArgument("-dumpRuns"), 0) != 0;
 
                 var batch = new List<ClipResult>();
                 bool allPassed = true;
@@ -82,7 +84,8 @@ namespace Fbx2Vmd.FBXImporter
                     try
                     {
                         entry.Report = MeasureFootContactDrift(
-                            clipPath, targetPath, firstFrame, lastFrame, clipDir);
+                            clipPath, targetPath, firstFrame, lastFrame, clipDir,
+                            diagnosticsDir: dumpRuns ? clipDir : null);
                         WriteSummaryJson(entry.Report, clipDir, clipPath,
                             targetPath, firstFrame, lastFrame);
                         Debug.Log(entry.Report.GatePassed
@@ -196,7 +199,8 @@ namespace Fbx2Vmd.FBXImporter
             int firstFrame,
             int lastFrame,
             string outputDir,
-            Func<int, int, int, bool> progress = null)
+            Func<int, int, int, bool> progress = null,
+            string diagnosticsDir = null)
         {
             var report = new DriftReport();
             GameObject sourceTarget = null, directTarget = null, correctedTarget = null;
@@ -269,6 +273,13 @@ namespace Fbx2Vmd.FBXImporter
                     report.Runs.Max(r => r.Additional);
                 report.GatePassed = report.WorstAdditional <= GateMeters;
                 report.CsvPath = WriteCsv(report.Runs, clipPath, outputDir);
+                if (!string.IsNullOrEmpty(diagnosticsDir))
+                {
+                    // 보정 컨트롤러가 살아 있는 동안 plan·의도를 꺼내 런별 원인을 남김.
+                    WriteRunDiagnostics(report.Runs, correctedController,
+                        directL, directR, correctL, correctR,
+                        frameRate, firstFrame, clipPath, diagnosticsDir);
+                }
                 report.Completed = true;
             }
             finally
@@ -512,6 +523,121 @@ namespace Fbx2Vmd.FBXImporter
                 throw new InvalidOperationException(
                     $"Humanoid 클립이 없습니다: {path}");
             return clip;
+        }
+
+        // 런별로 플래너 앵커 정책 분포와 plan 보정량을 덤프해
+        // 게이트 초과 원인(핀 부재·핀 차단·오정책)을 구분하게 함.
+        private static void WriteRunDiagnostics(List<RunResult> runs,
+            object correctedController,
+            Vector3[] directLeft, Vector3[] directRight,
+            Vector3[] correctedLeft, Vector3[] correctedRight,
+            float frameRate, int firstFrame,
+            string clipPath, string outputDir)
+        {
+            Directory.CreateDirectory(outputDir);
+            string path = Path.Combine(outputDir,
+                $"{Path.GetFileNameWithoutExtension(clipPath)}-run-diagnostics.csv");
+            var flags = BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic;
+
+            object stabilizer = correctedController.GetType()
+                .GetField("_footContactStabilizer", flags)
+                .GetValue(correctedController);
+            object plan = stabilizer.GetType()
+                .GetField("_plan", flags).GetValue(stabilizer);
+            object intents = stabilizer.GetType()
+                .GetProperty("IntentEstimate", flags).GetValue(stabilizer);
+            if (plan == null) return;
+
+            MethodInfo tryEvaluate = plan.GetType().GetMethod("TryEvaluate", flags);
+            // 의도 구간을 프레임별 정책으로 펼침 — 플래너의 Rasterize와 동일 규칙.
+            var leftPolicies = RasterizePolicyNames(intents, "Left", runs);
+            var rightPolicies = RasterizePolicyNames(intents, "Right", runs);
+
+            var evalArgs = new object[] { 0f, Vector3.zero, Vector3.zero };
+            using (var writer = new StreamWriter(path, false,
+                new UTF8Encoding(false)))
+            {
+                writer.WriteLine("side,start,end,additional_m," +
+                    "pinned_frames,sliding_frames,uncovered_frames," +
+                    "mean_correction_m,max_correction_m," +
+                    "mean_applied_delta_m,max_applied_delta_m");
+                foreach (RunResult run in runs)
+                {
+                    string[] policies = run.IsLeft ? leftPolicies : rightPolicies;
+                    Vector3[] direct = run.IsLeft ? directLeft : directRight;
+                    Vector3[] corrected = run.IsLeft ? correctedLeft : correctedRight;
+                    int pinned = 0, sliding = 0, uncovered = 0;
+                    float sum = 0f, max = 0f;
+                    float appliedSum = 0f, appliedMax = 0f;
+                    for (int frame = run.Start; frame <= run.End; frame++)
+                    {
+                        int i = frame - firstFrame;
+                        if (i < 0) continue;
+                        if (i < policies.Length)
+                        {
+                            if (policies[i] == "Pinned") pinned++;
+                            else if (policies[i] == "Sliding") sliding++;
+                            else uncovered++;
+                        }
+                        evalArgs[0] = frame / frameRate;
+                        tryEvaluate.Invoke(plan, evalArgs);
+                        float magnitude =
+                            ((Vector3)evalArgs[run.IsLeft ? 1 : 2]).magnitude;
+                        sum += magnitude;
+                        if (magnitude > max) max = magnitude;
+                        if (i < direct.Length && i < corrected.Length)
+                        {
+                            // plan이 출력한 보정과 실제 궤적 변화를 따로 재서
+                            // 보정이 적용됐는지 여부를 구분함.
+                            float appliedDelta = Vector3.Distance(
+                                corrected[i], direct[i]);
+                            appliedSum += appliedDelta;
+                            if (appliedDelta > appliedMax) appliedMax = appliedDelta;
+                        }
+                    }
+                    int frames = run.End - run.Start + 1;
+                    float mean = frames > 0 ? sum / frames : 0f;
+                    float appliedMean = frames > 0 ? appliedSum / frames : 0f;
+                    writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                        "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}",
+                        run.IsLeft ? "left" : "right", run.Start, run.End,
+                        run.Additional, pinned, sliding, uncovered,
+                        mean, max, appliedMean, appliedMax));
+                }
+            }
+        }
+
+        // 추정 결과의 해당 발 의도 구간을 프레임별 정책 이름 배열로 펼침.
+        // Confident 구간만 Pinned/Sliding, 나머지는 Free — 플래너와 동일 규칙.
+        private static string[] RasterizePolicyNames(object estimate,
+            string side, List<RunResult> runs)
+        {
+            int frameCount = runs.Count == 0 ? 0 : runs.Max(r => r.End) + 1;
+            var names = new string[Mathf.Max(1, frameCount + 1)];
+            for (int i = 0; i < names.Length; i++) names[i] = "Free";
+            if (estimate == null) return names;
+            var flags = BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic;
+            var intents = (System.Collections.IEnumerable)estimate.GetType()
+                .GetProperty(side, flags)?.GetValue(estimate);
+            if (intents == null) return names;
+            foreach (object intent in intents)
+            {
+                Type type = intent.GetType();
+                string certainty = type.GetProperty("Certainty", flags)
+                    .GetValue(intent).ToString();
+                if (certainty != "Confident") continue;
+                int start = Mathf.Max(0, (int)type
+                    .GetProperty("StartFrame", flags).GetValue(intent));
+                int end = Mathf.Min(names.Length, (int)type
+                    .GetProperty("EndFrameExclusive", flags).GetValue(intent));
+                string mode = type.GetProperty("Mode", flags)
+                    .GetValue(intent).ToString();
+                string name = mode == "Slide" ? "Sliding" : "Pinned";
+                for (int i = start; i < end; i++) names[i] = name;
+            }
+            return names;
         }
 
         // 접촉 솔버 선택은 본체 어셈블리의 internal 상태 — 리플렉션으로만 토글함.
