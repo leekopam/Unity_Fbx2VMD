@@ -1796,6 +1796,31 @@ namespace Fbx2Vmd.FBXImporter
             _idlePoseGuard.Initialize();
         }
 
+        /// <summary>
+        /// targetCharacter가 Awake 이후 외부 경로(캐릭터 라이브러리 등)로 교체됐을 때
+        /// Idle Pose Guard를 새 대상으로 다시 초기화한다.
+        /// 편집 모드에서는 컴포넌트가 없으면 임의로 추가하지 않고 건너뛴다.
+        /// </summary>
+        public void RebindIdlePoseGuard()
+        {
+            if (_idlePoseGuard == null)
+            {
+                _idlePoseGuard = GetComponent<TargetIdlePoseGuard>();
+            }
+
+            if (_idlePoseGuard == null)
+            {
+                if (!Application.isPlaying)
+                {
+                    return;
+                }
+                _idlePoseGuard = gameObject.AddComponent<TargetIdlePoseGuard>();
+            }
+
+            _idlePoseGuard.SetTargetCharacter(targetCharacter);
+            _idlePoseGuard.Initialize();
+        }
+
         private void LateUpdate()
         {
             PipelineRunProfiler.SampleFrame(Time.unscaledDeltaTime);
