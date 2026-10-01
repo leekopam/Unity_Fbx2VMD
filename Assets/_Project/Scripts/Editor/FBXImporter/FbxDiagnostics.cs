@@ -48,7 +48,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private delegate bool SeekDelegate(float timeSeconds);
 
-        /// <summary>배치 진입점. -clipPath/-targetPath/-firstFrame/-lastFrame/-outputDir/-offlineSolver 인자를 읽음.</summary>
+        /// <summary>
+        /// 배치 진입점. -clipPath 또는 -clipList(; 또는 | 구분)로 클립을 받고
+        /// -targetPath/-firstFrame/-lastFrame/-outputDir/-offlineSolver 인자를 읽음.
+        /// 클립이 여러 개면 클립별 하위 폴더에 요약을 쓰고 batch-summary.json을 집계함.
+        /// 한 클립이 실패해도 나머지를 계속 측정해 회귀 세트 전체 그림을 남김.
+        /// </summary>
         public static void RunAll()
         {
             string outputDir = Path.Combine(
@@ -56,7 +61,7 @@ namespace Fbx2Vmd.FBXImporter
                 "drift-diagnostics", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
             try
             {
-                string clipPath = GetArgument("-clipPath") ?? DefaultClipPath;
+                string[] clipPaths = ParseClipList();
                 string targetPath = GetArgument("-targetPath") ?? DefaultTargetPath;
                 int firstFrame = ParseInt(GetArgument("-firstFrame"), 0);
                 int lastFrame = ParseInt(GetArgument("-lastFrame"), -1);
@@ -65,14 +70,42 @@ namespace Fbx2Vmd.FBXImporter
                 SetOfflineContactSolver(
                     ParseInt(GetArgument("-offlineSolver"), 0) != 0);
 
-                DriftReport report = MeasureFootContactDrift(
-                    clipPath, targetPath, firstFrame, lastFrame, outputDir);
-                WriteSummaryJson(report, outputDir, clipPath, targetPath,
-                    firstFrame, lastFrame);
-                Debug.Log(report.GatePassed
-                    ? $"[FbxDiagnostics] 게이트 통과: {report.WorstAdditional:F4}m"
-                    : $"[FbxDiagnostics] 게이트 초과: {report.WorstAdditional:F4}m");
-                EditorApplication.Exit(report.GatePassed ? 0 : 1);
+                var batch = new List<ClipResult>();
+                bool allPassed = true;
+                foreach (string clipPath in clipPaths)
+                {
+                    string clipDir = clipPaths.Length > 1
+                        ? Path.Combine(outputDir,
+                            Path.GetFileNameWithoutExtension(clipPath))
+                        : outputDir;
+                    var entry = new ClipResult { Clip = clipPath };
+                    try
+                    {
+                        entry.Report = MeasureFootContactDrift(
+                            clipPath, targetPath, firstFrame, lastFrame, clipDir);
+                        WriteSummaryJson(entry.Report, clipDir, clipPath,
+                            targetPath, firstFrame, lastFrame);
+                        Debug.Log(entry.Report.GatePassed
+                            ? $"[FbxDiagnostics] 게이트 통과: {clipPath} {entry.Report.WorstAdditional:F4}m"
+                            : $"[FbxDiagnostics] 게이트 초과: {clipPath} {entry.Report.WorstAdditional:F4}m");
+                        allPassed &= entry.Report.GatePassed;
+                    }
+                    catch (Exception clipError)
+                    {
+                        entry.Error = clipError.Message;
+                        allPassed = false;
+                        Debug.LogError(
+                            $"[FbxDiagnostics] {clipPath} 측정 실패: {clipError.Message}");
+                    }
+                    batch.Add(entry);
+                }
+
+                if (clipPaths.Length > 1)
+                {
+                    WriteBatchSummaryJson(batch, outputDir, targetPath,
+                        firstFrame, lastFrame);
+                }
+                EditorApplication.Exit(allPassed ? 0 : 1);
             }
             catch (Exception error)
             {
@@ -82,6 +115,58 @@ namespace Fbx2Vmd.FBXImporter
                 Debug.LogError($"[FbxDiagnostics] 측정 실패: {error.Message}");
                 EditorApplication.Exit(2);
             }
+        }
+
+        private sealed class ClipResult
+        {
+            internal string Clip;
+            internal DriftReport Report;
+            internal string Error;
+        }
+
+        private static string[] ParseClipList()
+        {
+            string list = GetArgument("-clipList");
+            if (string.IsNullOrEmpty(list))
+                return new[] { GetArgument("-clipPath") ?? DefaultClipPath };
+            return list.Split(new[] { ';', '|' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(c => c.Trim())
+                .Where(c => c.Length > 0)
+                .ToArray();
+        }
+
+        private static void WriteBatchSummaryJson(List<ClipResult> batch,
+            string outputDir, string targetPath, int firstFrame, int lastFrame)
+        {
+            Directory.CreateDirectory(outputDir);
+            var clipsJson = new StringBuilder();
+            foreach (ClipResult entry in batch)
+            {
+                if (clipsJson.Length > 0) clipsJson.Append(',');
+                if (entry.Report != null)
+                {
+                    clipsJson.Append(string.Format(CultureInfo.InvariantCulture,
+                        "{{\"clip\":\"{0}\",\"worst_additional_m\":{1}," +
+                        "\"gate_passed\":{2},\"runs\":{3}}}",
+                        EscapeJson(entry.Clip), entry.Report.WorstAdditional,
+                        entry.Report.GatePassed ? "true" : "false",
+                        entry.Report.Runs.Count));
+                }
+                else
+                {
+                    clipsJson.Append(string.Format(CultureInfo.InvariantCulture,
+                        "{{\"clip\":\"{0}\",\"gate_passed\":false," +
+                        "\"error\":\"{1}\"}}",
+                        EscapeJson(entry.Clip), EscapeJson(entry.Error)));
+                }
+            }
+            File.WriteAllText(Path.Combine(outputDir, "batch-summary.json"),
+                string.Format(CultureInfo.InvariantCulture,
+                    "{{\"target\":\"{0}\",\"first_frame\":{1},\"last_frame\":{2}," +
+                    "\"gate_m\":{3},\"clips\":[{4}],\"all_passed\":{5}}}",
+                    EscapeJson(targetPath), firstFrame, lastFrame, GateMeters,
+                    clipsJson, batch.All(e => e.Report != null && e.Report.GatePassed)
+                        ? "true" : "false"));
         }
 
         private static string GetArgument(string name)
