@@ -52,6 +52,17 @@ namespace Fbx2Vmd.ClothPhysics
         [Tooltip("깊이 관성 — 클수록 체인 깊은 곳의 월드 관성 영향을 줄임")]
         public float depthInertia;
 
+        [Header("꼬임 방지")]
+        [Tooltip("같은 클로스 내 체인끼리의 자기 충돌 — 긴 머리카락 다발이 서로 엉키는 걸 막는다. 계산 부하 증가")]
+        public bool useSelfCollision;
+
+        [Range(0.5f, 2f)]
+        [Tooltip("자기 충돌 두께 배율. 크면 다발 사이 간격이 넓어짐")]
+        public float selfCollisionScale;
+
+        [Tooltip("부위별 클로스끼리 상호 충돌 — 루트 본이 가장 많은 클로스를 앵커로 별형 연결")]
+        public bool useMutualCollision;
+
         [Header("캐릭터 프리셋")]
         [Tooltip("캐릭터 전용 프리셋 키. 지정하면 Resources/PhysicsPresets/Character/" +
                  "{키}_{클로스명|프리셋명}.json을 공식 프리셋보다 우선 로드")]
@@ -61,7 +72,9 @@ namespace Fbx2Vmd.ClothPhysics
         {
             sway = 1f, dampingScale = 1f, gravityScale = 1f, radiusScale = 1f, inertiaScale = 1f,
             tipStiffnessScale = 1f, tipDampingScale = 1f, animationPoseRatio = 0f,
-            overrideDepthInertia = false, depthInertia = 0.7f, characterPresetKey = null
+            overrideDepthInertia = false, depthInertia = 0.7f,
+            useSelfCollision = true, selfCollisionScale = 1f, useMutualCollision = true,
+            characterPresetKey = null
         };
     }
 
@@ -255,7 +268,7 @@ namespace Fbx2Vmd.ClothPhysics
                         ApplyShortHair(sdata, unit);
                     break;
             }
-            ApplyTuning(sdata, tuning);
+            ApplyTuning(sdata, tuning, unit);
         }
 
         /// <summary>부위에 대응하는 공식 프리셋 이름 (Resources/PhysicsPresets 기준).</summary>
@@ -277,7 +290,7 @@ namespace Fbx2Vmd.ClothPhysics
         /// 템플릿 위에 사용자 배율을 곱한다.
         /// sway는 복원 강성과 감쇠를 역비례로 조정한다(흔들림 ↑ = 강성·감쇠 ↓).
         /// </summary>
-        static void ApplyTuning(ClothSerializeData s, in HairTuning t)
+        static void ApplyTuning(ClothSerializeData s, in HairTuning t, float unit)
         {
             float inv = 1f / Mathf.Max(t.sway, 0.05f);
             ScaleCurve(s.angleRestorationConstraint.stiffness, inv, 1f);
@@ -294,6 +307,19 @@ namespace Fbx2Vmd.ClothPhysics
             s.animationPoseRatio = Mathf.Clamp01(t.animationPoseRatio);
             if (t.overrideDepthInertia)
                 s.inertiaConstraint.depthInertia = Mathf.Clamp01(t.depthInertia);
+            // 자기 충돌 — BoneCloth는 Edge-Edge 조합으로 같은 클로스 내 체인 엉킴을 막는다
+            // (MC2 베타 기능, 부하 높음). 두께는 쌍방 합산이라 절반 수준으로 잡는다.
+            var self = s.selfCollisionConstraint;
+            if (t.useSelfCollision)
+            {
+                self.selfMode = SelfCollisionConstraint.SelfCollisionMode.FullMesh;
+                self.surfaceThickness.SetValue(
+                    0.005f * unit * Mathf.Max(t.selfCollisionScale, 0.1f));
+            }
+            else
+            {
+                self.selfMode = SelfCollisionConstraint.SelfCollisionMode.None;
+            }
         }
 
         /// <summary>

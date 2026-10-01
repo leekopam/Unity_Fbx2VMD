@@ -158,7 +158,8 @@ namespace Fbx2Vmd.ClothPhysics
                 SkirtClothBuilder.CollectSkirtBoneDepths(animator.transform).Count == 0)
                 return true; // 스커트 비대상 모델
             return generatedCloths.Any(c =>
-                c != null && c.SerializeData.clothType == ClothProcess.ClothType.MeshCloth);
+                c != null && (c.SerializeData.clothType == ClothProcess.ClothType.MeshCloth ||
+                    c.name == ClothNamePrefix + "SkirtLoop"));
         }
 
         /// <summary>빌드 중 클로스가 있어 지연된 셋업 요청.</summary>
@@ -412,6 +413,9 @@ namespace Fbx2Vmd.ClothPhysics
                     generatedCloths.Add(cloth);
             }
 
+            // 4. 머리카락 클로스 간 상호 충돌 배선 (꼬임 방지)
+            WireHairMutualCollision(report);
+
             report.Add($"BoneCloth {generatedCloths.Count}개 생성");
             graceUntilFrame = Time.frameCount + RebuildGraceFrames;
             Finish(report);
@@ -516,8 +520,8 @@ namespace Fbx2Vmd.ClothPhysics
             for (int i = 0; i < generatedCloths.Count; i++)
             {
                 var cloth = generatedCloths[i];
-                if (cloth == null || cloth.SerializeData.clothType != ClothProcess.ClothType.BoneCloth)
-                    continue; // MeshCloth(스커트)는 헤어 튜닝 적용 대상이 아님
+                if (!IsHairCloth(cloth))
+                    continue; // MeshCloth·BoneClothLoop 스커트는 헤어 튜닝 적용 대상이 아님
                 var part = i < generatedParts.Count ? generatedParts[i] : HairPart.Unknown;
                 bool isLong = i < generatedIsLong.Count && generatedIsLong[i];
                 HairPhysicsParameters.Apply(part, cloth.SerializeData, torso, head, isLong, tuning, usePresetBaseline);
@@ -525,9 +529,61 @@ namespace Fbx2Vmd.ClothPhysics
                 NotifyParameterChange(cloth);
                 applied++;
             }
+            var wireReport = new List<string>();
+            WireHairMutualCollision(wireReport);
             lastReport = $"튜닝 재적용 완료: {applied}개 클로스 " +
-                $"(sway={tuning.sway:F2}, damp={tuning.dampingScale:F2}, grav={tuning.gravityScale:F2})";
+                $"(sway={tuning.sway:F2}, damp={tuning.dampingScale:F2}, grav={tuning.gravityScale:F2})" +
+                (wireReport.Count > 0 ? "\n" + string.Join("\n", wireReport) : "");
             Debug.Log("[CharacterPhysicsSetup] " + lastReport, this);
+        }
+
+        /// <summary>
+        /// 머리카락 클로스끼리 상호 충돌을 별형으로 연결한다.
+        /// MC2는 클로스당 상대를 1개만 지정 가능(한쪽만 설정하면 됨) → 루트 본이
+        /// 가장 많은 클로스(주모발)를 앵커로 삼고 나머지가 그쪽으로 충돌하게 한다.
+        /// 스커트 클로스(MC2Cloth_Skirt*)는 대상에서 제외.
+        /// </summary>
+        /// <summary>
+        /// 머리카락용 클로스인지 — 스커트(MC2Cloth_Skirt*)는 BoneClothLoop여도 제외한다.
+        /// </summary>
+        static bool IsHairCloth(MagicaCloth c)
+        {
+            return c != null &&
+                c.name.StartsWith(ClothNamePrefix) &&
+                !c.name.StartsWith(ClothNamePrefix + "Skirt") &&
+                c.SerializeData.clothType == ClothProcess.ClothType.BoneCloth;
+        }
+
+        void WireHairMutualCollision(List<string> report)
+        {
+            var hairs = generatedCloths.Where(IsHairCloth).ToList();
+
+            // 재적용 대비 — 기존 상호 충돌 연결을 먼저 해제
+            foreach (var c in hairs)
+            {
+                var sc = c.SerializeData.selfCollisionConstraint;
+                sc.syncMode = SelfCollisionConstraint.SelfCollisionMode.None;
+                sc.syncPartner = null;
+            }
+            if (!tuning.useMutualCollision || hairs.Count < 2)
+                return;
+
+            var anchor = hairs.OrderByDescending(c => c.SerializeData.rootBones.Count).First();
+            int linked = 0;
+            foreach (var c in hairs)
+            {
+                var sc = c.SerializeData.selfCollisionConstraint;
+                sc.clothMass = 1.0f; // 낮은 값은 떨림 유발 — 공식 예제와 동일하게 최대 질량
+                if (c == anchor)
+                    continue;
+                sc.syncMode = SelfCollisionConstraint.SelfCollisionMode.FullMesh;
+                sc.syncPartner = anchor;
+                NotifyParameterChange(c);
+                linked++;
+            }
+            NotifyParameterChange(anchor);
+            if (linked > 0)
+                report.Add($"머리카락 상호 충돌: 앵커 {anchor.name} 기준 {linked}개 클로스 연결");
         }
 
         /// <summary>

@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Linq;
 using Fbx2Vmd.ClothPhysics;
+using MagicaCloth2;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -122,6 +124,84 @@ namespace Tests.Editor.ClothPhysics
             setup.autoSkirtCloth = false;
             Assert.That((bool)m.Invoke(setup, null), Is.True,
                 "autoSkirtCloth 꺼짐이면 스커트 없어도 완전입니다.");
+        }
+
+        /// <summary>
+        /// 상호 충돌 배선 회귀: 앵커(루트 본 최다 클로스)를 제외한 모든 헤어 클로스가
+        /// 같은 앵커를 syncPartner로 선언해야 한다 — 앵커는 선언하지 않는다(한쪽만 설정).
+        /// </summary>
+        [Test]
+        public void Given_GenericRig_When_Setup_Then_MutualCollisionStarWired()
+        {
+            var root = BuildGenericModel();
+            var setup = root.AddComponent<CharacterPhysicsSetup>();
+            setup.Setup();
+
+            var hairs = setup.generatedCloths
+                .Where(c => c != null && !c.name.Contains("Skirt")).ToList();
+            Assert.That(hairs.Count, Is.GreaterThanOrEqualTo(2),
+                "상호 충돌 검증에는 헤어 클로스 2개 이상이 필요합니다.\n" + setup.lastReport);
+
+            var withSync = hairs.Where(c =>
+                c.SerializeData.selfCollisionConstraint.syncMode ==
+                SelfCollisionConstraint.SelfCollisionMode.FullMesh).ToList();
+            Assert.That(withSync.Count, Is.EqualTo(hairs.Count - 1),
+                "앵커를 제외한 전 클로스가 상호 충돌을 선언해야 합니다.");
+
+            var anchor = withSync[0].SerializeData.selfCollisionConstraint.syncPartner;
+            Assert.That(anchor, Is.Not.Null);
+            Assert.That(withSync.All(c =>
+                    c.SerializeData.selfCollisionConstraint.syncPartner == anchor),
+                Is.True, "별형 연결 — 모든 파트너가 같은 앵커를 가리켜야 합니다.");
+            Assert.That(anchor.SerializeData.selfCollisionConstraint.syncMode,
+                Is.EqualTo(SelfCollisionConstraint.SelfCollisionMode.None),
+                "앵커는 상호 충돌을 선언하지 않아야 합니다(한쪽만 설정).");
+        }
+
+        [Test]
+        public void Given_MutualCollisionOff_When_Setup_Then_NoSyncPartners()
+        {
+            var root = BuildGenericModel();
+            var setup = root.AddComponent<CharacterPhysicsSetup>();
+            var t = setup.tuning;
+            t.useMutualCollision = false;
+            setup.tuning = t;
+            setup.Setup();
+
+            foreach (var c in setup.generatedCloths)
+                Assert.That(c.SerializeData.selfCollisionConstraint.syncMode,
+                    Is.EqualTo(SelfCollisionConstraint.SelfCollisionMode.None),
+                    $"{c.name}: 상호 충돌이 꺼져 있으면 syncMode는 None이어야 합니다.");
+        }
+
+        /// <summary>
+        /// 스커트 누수 회귀: BoneClothLoop 스커트 클로스는 헤어 상호 충돌 대상이 아니다 —
+        /// syncPartner로 잡히면 스커트가 머리카락에 충돌하게 된다.
+        /// </summary>
+        [Test]
+        public void Given_GenericRig_When_Setup_Then_SkirtNotInMutualCollision()
+        {
+            var root = BuildGenericModel();
+            var setup = root.AddComponent<CharacterPhysicsSetup>();
+            setup.skirtMode = CharacterPhysicsSetup.SkirtMode.BoneClothLoop;
+            // 루프는 체인 루트 3개 필요 — 스커트 체인을 2개 더 추가해 총 3개로 맞춘다
+            var hips = root.transform.Find("Hips");
+            var sk3 = Bone("skirt_side_01", hips, new Vector3(-0.1f, 0.9f, 0));
+            Bone("skirt_side_02", sk3, new Vector3(-0.12f, 0.7f, 0));
+            var sk4 = Bone("skirt_back_01", hips, new Vector3(0f, 0.9f, -0.1f));
+            Bone("skirt_back_02", sk4, new Vector3(0f, 0.7f, -0.12f));
+            setup.Setup();
+
+            var skirtLoop = setup.generatedCloths
+                .FirstOrDefault(c => c != null && c.name == "MC2Cloth_SkirtLoop");
+            Assert.That(skirtLoop, Is.Not.Null,
+                "스커트 루프 클로스가 생성돼야 합니다.\n" + setup.lastReport);
+            Assert.That(skirtLoop.SerializeData.selfCollisionConstraint.syncMode,
+                Is.EqualTo(SelfCollisionConstraint.SelfCollisionMode.None));
+            Assert.That(setup.generatedCloths
+                    .Where(c => c != null)
+                    .All(c => c.SerializeData.selfCollisionConstraint.syncPartner != skirtLoop),
+                Is.True, "어느 클로스도 스커트 루프를 상호 충돌 상대로 지정하면 안 됩니다.");
         }
 
         const string PronamaChanPrefabPath =
