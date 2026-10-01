@@ -22,10 +22,10 @@ namespace Fbx2Vmd.FBXImporter
     internal static class HumanoidFootAnchorPolicyResolver
     {
         // 진입은 이 프레임 수 안에 완전 잠금하고 이탈은 기존 해제 곡선만 사용해 비대칭 전이를 구현함.
-        // 착지 직전 발이 지면 위에 떠 있을 때 1~2프레임 낙하가 팝으로 보이므로
-        // 완전 잠금까지 6프레임을 두어 낙하를 프레임당 수mm로 분산함.
+        // 착지 직전 발이 지면 위에 떠 있을 때 단기 낙하가 팝으로 보이므로
+        // 완전 잠금까지 10프레임을 두어 첫 적용 스텝을 ~10%로 낮춤.
         // 지면 관통 방지는 별도의 밑창 리프트 제약이 담당하므로 진입 완화가 안전함.
-        internal const int TouchdownLockFrames = 6;
+        internal const int TouchdownLockFrames = 10;
 
         internal static HumanoidFootAnchorPolicy[] Rasterize(
             IReadOnlyList<HumanoidFootContactIntent> intents, int frameCount)
