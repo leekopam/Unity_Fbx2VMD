@@ -68,6 +68,7 @@ namespace Fbx2Vmd.LipSync
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            StemAudioPreview.Stop();
             EditorUtility.ClearProgressBar();
         }
 
@@ -136,13 +137,18 @@ namespace Fbx2Vmd.LipSync
                     SetMessage("분리 실패: " + result.error, MessageType.Error);
                 }
             }
+            // 미리듣기가 자연 종료하면 버튼 라벨을 "듣기"로 되돌린다.
+            if (StemAudioPreview.ClearIfFinished())
+            {
+                Repaint();
+            }
         }
 
         private void OnGUI()
         {
             EditorGUILayout.LabelField("1. 음원 → 보컬/BGM 분리", EditorStyles.boldLabel);
             DrawPathRow("원본 음원", ref _sourceAudioPath, "mp3/wav/flac/m4a 선택",
-                "wav;mp3;flac;m4a;ogg");
+                "wav;mp3;flac;m4a;ogg", preview: true);
             _engine = (VocalStemSeparator.Engine)EditorGUILayout.EnumPopup("분리 엔진", _engine);
             _model = EditorGUILayout.TextField("모델", _model);
             EditorGUILayout.BeginHorizontal();
@@ -187,7 +193,8 @@ namespace Fbx2Vmd.LipSync
 
             EditorGUILayout.Space(10);
             EditorGUILayout.LabelField("2. 보컬 → 립싱크 클립 베이크", EditorStyles.boldLabel);
-            DrawPathRow("보컬 WAV", ref _vocalWavPath, "분리된 보컬 wav 선택", "wav");
+            DrawPathRow("보컬 WAV", ref _vocalWavPath, "분리된 보컬 wav 선택", "wav",
+                preview: true);
             _profile = (Profile)EditorGUILayout.ObjectField("uLipSync 프로필", _profile, typeof(Profile), false);
             EditorGUILayout.BeginHorizontal();
             _targetCharacter = (GameObject)EditorGUILayout.ObjectField(
@@ -212,10 +219,8 @@ namespace Fbx2Vmd.LipSync
             }
 
             EditorGUILayout.Space(8);
-            if (!string.IsNullOrEmpty(_bgmWavPath))
-            {
-                EditorGUILayout.LabelField("녹화용 BGM", _bgmWavPath, EditorStyles.wordWrappedMiniLabel);
-            }
+            DrawPathRow("녹화용 BGM", ref _bgmWavPath, "분리된 BGM wav 선택", "wav",
+                preview: true);
             DrawStatusLabel();
         }
 
@@ -333,7 +338,8 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
-        private void DrawPathRow(string label, ref string path, string title, string extensions)
+        private void DrawPathRow(string label, ref string path, string title,
+            string extensions, bool preview = false)
         {
             EditorGUILayout.BeginHorizontal();
             path = EditorGUILayout.TextField(label, path);
@@ -343,6 +349,19 @@ namespace Fbx2Vmd.LipSync
                 if (!string.IsNullOrEmpty(picked))
                 {
                     path = picked;
+                }
+            }
+            if (preview)
+            {
+                bool playing = StemAudioPreview.PlayingPath == path
+                    && StemAudioPreview.IsPlaying();
+                if (GUILayout.Button(playing ? "정지" : "듣기", GUILayout.Width(40)))
+                {
+                    string error = StemAudioPreview.Toggle(path);
+                    if (error != null)
+                    {
+                        SetMessage(error, MessageType.Warning);
+                    }
                 }
             }
             EditorGUILayout.EndHorizontal();

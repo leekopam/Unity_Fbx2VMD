@@ -218,6 +218,53 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.AreNotEqual(h1, PythonEnvProvisioner.RequirementsHash("a==2.0\n"));
         }
 
+        // ---------- 스템 미리듣기 로더 판별 ----------
+
+        [Test]
+        public void StemPreview_프로젝트안파일은AssetDatabase()
+        {
+            Assert.AreEqual(StemAudioPreview.Loader.AssetDatabase,
+                StemAudioPreview.Classify("Assets/_Project/x.mp3"));
+            string underAssets = Path.GetFullPath(
+                Path.Combine(UnityEngine.Application.dataPath, "stem.wav"));
+            Assert.AreEqual(StemAudioPreview.Loader.AssetDatabase,
+                StemAudioPreview.Classify(underAssets));
+        }
+
+        [Test]
+        public void StemPreview_프로젝트안이어도Assets밖은Wav()
+        {
+            // 임포터는 Assets/ 아래만 본다 — Tools/ 같은 형제 폴더의 wav는 파일 로더로.
+            string toolsWav = Path.GetFullPath(
+                Path.Combine(UnityEngine.Application.dataPath, "../Tools/LipSync/x.wav"));
+            Assert.AreEqual(StemAudioPreview.Loader.WavFile,
+                StemAudioPreview.Classify(toolsWav));
+        }
+
+        [Test]
+        public void StemPreview_프로젝트밖은Wav만()
+        {
+            string tmp = Path.Combine(Path.GetTempPath(), "stem.wav");
+            Assert.AreEqual(StemAudioPreview.Loader.WavFile,
+                StemAudioPreview.Classify(tmp));
+            Assert.AreEqual(StemAudioPreview.Loader.Unsupported,
+                StemAudioPreview.Classify(Path.ChangeExtension(tmp, ".mp3")));
+            Assert.AreEqual(StemAudioPreview.Loader.Unsupported,
+                StemAudioPreview.Classify(null));
+            Assert.AreEqual(StemAudioPreview.Loader.Unsupported,
+                StemAudioPreview.Classify(""));
+        }
+
+        [Test]
+        public void StemPreview_없는파일은에러반환()
+        {
+            string missing = Path.Combine(Path.GetTempPath(),
+                "no_such_stem_" + Path.GetRandomFileName() + ".wav");
+            string error = StemAudioPreview.Toggle(missing);
+            Assert.IsNotEmpty(error);
+            Assert.IsNull(StemAudioPreview.PlayingPath);
+        }
+
         private static byte[] BuildExtensibleWavBytes(int subFormatTag, int bits,
             int channels, int freq, short[] pcm16 = null, float[] float32 = null)
         {
