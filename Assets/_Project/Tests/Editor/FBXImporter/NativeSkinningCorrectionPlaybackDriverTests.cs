@@ -177,6 +177,9 @@ namespace Tests.Editor.FBXImporter
                      ReadProperty<bool>(driver, "IsPreparing");
                      step++)
                 {
+                    // 병렬 준비는 워커 Task가 배치를 계산하므로, 동기 펌프는
+                    // 진행 중인 배치 완료를 기다려야 틱이 실제 진전을 만든다.
+                    WaitForSolveTask(driver);
                     Invoke(driver, "LateUpdate");
                 }
                 stopwatch.Stop();
@@ -261,6 +264,14 @@ namespace Tests.Editor.FBXImporter
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"{fieldName} 필드가 필요합니다.");
             return (T)field.GetValue(target);
+        }
+
+        private static void WaitForSolveTask(object driver)
+        {
+            if (ReadField<object>(driver, "_solveTask") is System.Threading.Tasks.Task task)
+            {
+                task.Wait();
+            }
         }
 
         private static void DisposeController(object controller)

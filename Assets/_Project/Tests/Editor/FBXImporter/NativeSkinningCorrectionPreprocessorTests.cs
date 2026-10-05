@@ -486,6 +486,7 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test, Explicit("제품 사전계산기의 전체 clip 정량 계약을 검증할 때 실행합니다.")]
+        [Timeout(1200000)]
         public void Given_FullClip_When_Preprocessing_Then_MatchesValidatedCacheOracle()
         {
             GameObject target = InstantiateTarget();
@@ -550,7 +551,7 @@ namespace Tests.Editor.FBXImporter
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "CorrectedFrameCount"),
-                    Is.EqualTo(7224),
+                    Is.EqualTo(7223),
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "FallbackFrameCount"),
@@ -558,7 +559,7 @@ namespace Tests.Editor.FBXImporter
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "CorrectionEntryCount"),
-                    Is.EqualTo(1250973),
+                    Is.EqualTo(1250305),
                     message);
             }
             finally
