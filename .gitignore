@@ -131,6 +131,70 @@ Assets/Resources/Import_FBX/
 !Assets/_Project/Tests/PerfFixtures/
 !Assets/_Project/Tests/PerfFixtures/**
 
+# 음원 소스는 절대 업로드하지 않는다 (분리 결과물·원본·샘플 포함).
+*.wav
+*.wav.meta
+*.mp3
+*.mp3.meta
+*.ogg
+*.ogg.meta
+*.aif
+*.aif.meta
+*.aiff
+*.aiff.meta
+*.flac
+*.flac.meta
+*.m4a
+*.m4a.meta
+
+# 캐릭터 모델 데이터(MMD/VRM 등)는 업로드하지 않는다.
+*.pmx
+*.pmx.meta
+*.pmd
+*.pmd.meta
+
+# 음원 분리 도구가 내려받는 모델 가중치/캐시는 업로드하지 않는다.
+*.ckpt
+*.ckpt.meta
+*.pt
+*.pt.meta
+*.onnx
+*.onnx.meta
+*.th
+*.th.meta
+
+# 립싱크 등 파이프라인 생성 산출물(보컬 스템, 베이크 클립)은 로컬 전용.
+/Assets/Generated/
+/Assets/Generated.meta
+
+# 유료/재배포 불가 에셋과 캐릭터 레퍼런스는 Git 추적 대상이 아니다.
+/Assets/Plugins/RootMotion/
+/Assets/Plugins/RootMotion.meta
+/Assets/MMD4Mecanim/
+/Assets/MMD4Mecanim.meta
+/Assets/Plugins/VMDRecorderSample/
+/Assets/Plugins/VMDRecorderSample.meta
+/Assets/_ManualReference/
+/Assets/_ManualReference.meta
+/Assets/_Project/Model/
+/Assets/_Project/Model.meta
+# 캐릭터 모델에서 생성된 클로스 프리빌드 데이터도 캐릭터 정보이므로 제외.
+/Assets/_Project/Physics/PreBuild/
+/Assets/_Project/Physics/PreBuild.meta
+
+# uLipSync 임베디드 패키지의 샘플(유니티짱 에셋·보이스 음원)은 업로드하지 않는다.
+# 에디터 종료 후 Samples → Samples~ 로 이름을 바꾸면 Unity가 임포트하지 않는다.
+/Packages/com.hecomi.ulipsync/Samples/
+/Packages/com.hecomi.ulipsync/Samples.meta
+
+# JetBrains Rider/IDEA 설정
+/.idea/
+
+# Python 로컬 환경(venv)은 업로드하지 않는다.
+**/.venv/
+**/venv/
+**/venv.meta
+
 # MMD4Mecanim iOS binary ignore
 Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 
