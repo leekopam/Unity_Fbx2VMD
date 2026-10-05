@@ -204,6 +204,9 @@ namespace Fbx2Vmd.LipSync
                 result.error = $"음원 파일이 없습니다: {inputPath}";
                 return result;
             }
+            // 상대 경로가 WorkingDirectory와 이중으로 붙지 않도록 절대 경로로 정규화한다.
+            inputPath = Path.GetFullPath(inputPath);
+            outputDir = Path.GetFullPath(outputDir);
             try
             {
                 Directory.CreateDirectory(outputDir);
