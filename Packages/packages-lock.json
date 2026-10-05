@@ -24,6 +24,15 @@
       },
       "hash": "c14de1e6dc01ab42d2bb358730cff954bce0ce6b"
     },
+    "com.hecomi.ulipsync": {
+      "version": "file:com.hecomi.ulipsync",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.unity.burst": "1.4.11",
+        "com.unity.mathematics": "1.2.5"
+      }
+    },
     "com.unity.ai.navigation": {
       "version": "1.1.6",
       "depth": 0,
