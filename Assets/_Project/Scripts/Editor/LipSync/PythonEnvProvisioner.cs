@@ -85,6 +85,8 @@ namespace Fbx2Vmd.LipSync
             return new Dictionary<string, string>
             {
                 { "TORCH_HOME", torch },
+                // demucs가 HF 허브로 폴백할 때도 캐시가 프로젝트 로컬에 머물도록 한다.
+                { "HF_HOME", Path.Combine(ModelsDir(projectRoot), "hf") },
                 { "PYTHONUTF8", "1" },
                 { "PIP_DISABLE_PIP_VERSION_CHECK", "1" },
             };
