@@ -15,6 +15,8 @@ namespace Fbx2Vmd.LipSync
         private static AnimationClip _clip;
         private static GameObject _target;
         private static double _startTime;
+        private static bool _subscribed;
+        private static bool _enteredMode; // 우리가 연 AnimationMode인지 — 타 도구 세션을 끊지 않기 위해 추적
 
         public static bool IsPlaying => _clip != null;
         public static AnimationClip Clip => _clip;
@@ -47,38 +49,44 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
-        /// <summary>클립 재생 시작. 끝까지 재생하면 자동 정지한다.</summary>
-        public static void Start(AnimationClip clip, GameObject target)
+        /// <summary>클립 재생 시작. 끝까지 재생하면 자동 정지한다.
+        /// 다른 도구가 이미 AnimationMode를 사용 중이면 false를 반환하고 아무것도 건드리지 않는다.</summary>
+        public static bool Start(AnimationClip clip, GameObject target)
         {
             Stop();
-            if (clip == null || target == null)
+            if (clip == null || target == null || AnimationMode.InAnimationMode())
             {
-                return;
+                return false;
             }
+            AnimationMode.StartAnimationMode();
+            _enteredMode = true;
             _clip = clip;
             _target = target;
             _startTime = EditorApplication.timeSinceStartup;
-            AnimationMode.StartAnimationMode();
             SessionState.SetBool(SessionKey, true);
             EditorApplication.update += Tick;
+            _subscribed = true;
             Tick();
+            return true;
         }
 
-        /// <summary>재생 정지 — 샘플링된 포즈/모프를 원래 값으로 복원한다.</summary>
+        /// <summary>재생 정지 — 샘플링된 포즈/모프를 원래 값으로 복원한다.
+        /// 클립 에셋이 재생 중 파괴되어도 정리가 항상 실행되도록 상태와 무관하게 정리한다.</summary>
         public static void Stop()
         {
-            if (_clip == null)
-            {
-                return;
-            }
             _clip = null;
             _target = null;
             SessionState.SetBool(SessionKey, false);
-            EditorApplication.update -= Tick;
-            if (AnimationMode.InAnimationMode())
+            if (_subscribed)
+            {
+                EditorApplication.update -= Tick;
+                _subscribed = false;
+            }
+            if (_enteredMode && AnimationMode.InAnimationMode())
             {
                 AnimationMode.StopAnimationMode();
             }
+            _enteredMode = false;
         }
 
         private static void Tick()

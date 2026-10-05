@@ -266,7 +266,8 @@ namespace Fbx2Vmd.LipSync
             _previewWithAudio = EditorGUILayout.Toggle("보컬 동시 재생", _previewWithAudio);
             bool previewPlaying = LipSyncClipPreview.IsPlaying;
             using (new EditorGUI.DisabledScope(
-                !previewPlaying && (_previewClip == null || _targetCharacter == null)))
+                !previewPlaying && (_previewClip == null || _targetCharacter == null
+                    || EditorApplication.isPlaying)))
             {
                 if (GUILayout.Button(previewPlaying ? "정지" : "캐릭터에 재생"))
                 {
@@ -278,9 +279,10 @@ namespace Fbx2Vmd.LipSync
                     {
                         StartClipPreview();
                     }
+                    previewPlaying = LipSyncClipPreview.IsPlaying; // 정지 후 stale 상태로 접근 방지
                 }
             }
-            if (previewPlaying)
+            if (previewPlaying && LipSyncClipPreview.Clip != null)
             {
                 Rect r = EditorGUILayout.GetControlRect(false, 18f);
                 float len = Mathf.Max(LipSyncClipPreview.Clip.length, 0.001f);
@@ -441,12 +443,16 @@ namespace Fbx2Vmd.LipSync
         /// <summary>립싱크 클립을 에디트 모드로 캐릭터에 재생한다(AnimationMode, 정지 시 복원).</summary>
         private void StartClipPreview()
         {
-            LipSyncClipPreview.Start(_previewClip, _targetCharacter);
-            if (!LipSyncClipPreview.IsPlaying)
+            if (!LipSyncClipPreview.Start(_previewClip, _targetCharacter))
             {
-                return; // 클립/대상이 없으면 Start가 무시됨
+                SetMessage("다른 도구가 애니메이션 미리보기를 사용 중입니다.", MessageType.Warning);
+                return;
             }
-            if (_previewWithAudio && !string.IsNullOrEmpty(_vocalWavPath))
+            // Toggle은 재생 중이면 '정지'로 동작하므로, 이미 같은 보컬이 흐르고 있으면 건드리지 않는다.
+            bool vocalAlreadyPlaying = StemAudioPreview.PlayingPath == _vocalWavPath
+                && StemAudioPreview.IsPlaying();
+            if (_previewWithAudio && !vocalAlreadyPlaying
+                && !string.IsNullOrEmpty(_vocalWavPath))
             {
                 string error = StemAudioPreview.Toggle(_vocalWavPath);
                 if (error != null)
