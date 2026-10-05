@@ -461,6 +461,123 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.AreEqual(1, warnings.Count, "없는 SMR 경로는 경고로 보고해야 함");
         }
 
+        // ---------- 비VRM 모델(모음 모프 스캔) ----------
+
+        [Test]
+        public void PhonemeForShapeName_MMD와영문_모음인식()
+        {
+            Assert.AreEqual("A", VocalLipSyncBaker.PhonemeForShapeName("88.xあ"));
+            Assert.AreEqual("I", VocalLipSyncBaker.PhonemeForShapeName("92.xい"));
+            Assert.AreEqual("U", VocalLipSyncBaker.PhonemeForShapeName("97.xう"));
+            Assert.AreEqual("E", VocalLipSyncBaker.PhonemeForShapeName("98.xえ"));
+            Assert.AreEqual("O", VocalLipSyncBaker.PhonemeForShapeName("99.xお"));
+            Assert.AreEqual("A", VocalLipSyncBaker.PhonemeForShapeName("mouth_a"));
+            Assert.AreEqual("A", VocalLipSyncBaker.PhonemeForShapeName("A"));
+            // 변형/무관 모프는 배제 — 실제 미쿠 모델에서 잡힌 오매치 포함
+            Assert.IsNull(VocalLipSyncBaker.PhonemeForShapeName("89.xあ２"));
+            Assert.IsNull(VocalLipSyncBaker.PhonemeForShapeName("13.まばたき"));
+            Assert.IsNull(VocalLipSyncBaker.PhonemeForShapeName("14.笑い"));   // 'い'로 끝나지만 표정
+            Assert.IsNull(VocalLipSyncBaker.PhonemeForShapeName("85.Earphone switch A"));
+            Assert.IsNull(VocalLipSyncBaker.PhonemeForShapeName("meta"));
+            Assert.IsNull(VocalLipSyncBaker.PhonemeForShapeName(null));
+        }
+
+        [Test]
+        public void BakeClip_비VRM모델_모음모프자동바인딩()
+        {
+            // VRM 프록시 없이 MMD식 모프명만 가진 캐릭터
+            var root = new GameObject("MmdChar");
+            var face = new GameObject("Face");
+            face.transform.SetParent(root.transform, false);
+            _cleanup.Add(root);
+            var mesh = new Mesh { name = "mmd" };
+            mesh.vertices = new[] { Vector3.zero };
+            string[] shapes = { "88.xあ", "92.xい", "97.xう", "98.xえ", "99.xお",
+                "89.xあ２", "13.まばたき" };
+            foreach (string s in shapes)
+            {
+                mesh.AddBlendShapeFrame(s, 100f,
+                    new Vector3[1], new Vector3[1], new Vector3[1]);
+            }
+            _cleanup.Add(mesh);
+            face.AddComponent<SkinnedMeshRenderer>().sharedMesh = mesh;
+
+            var bindings = VocalLipSyncBaker.ResolveVowelBindings(root);
+            Assert.AreEqual(5, bindings.Count, "모음 5종만 잡혀야 함(変형・변형・無관 제외)");
+            foreach (var b in bindings)
+            {
+                Assert.AreEqual("Face", b.relativePath);
+                Assert.AreEqual(100f, b.weight);
+            }
+
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            data.duration = 1f / 60f;
+            data.frames.Add(new uLipSync.BakedFrame
+            {
+                volume = 0.5f,
+                phonemes = new List<uLipSync.BakedPhonemeRatio>
+                {
+                    new uLipSync.BakedPhonemeRatio { phoneme = "A", ratio = 1f },
+                },
+            });
+
+            var warnings = new List<string>();
+            AnimationClip clip = VocalLipSyncBaker.BakeClip(data, root, 0.02f, warnings);
+            _cleanup.Add(clip);
+            var curves = UnityEditor.AnimationUtility.GetCurveBindings(clip);
+            Assert.AreEqual(5, curves.Length, "모음 5개 커브가 생성돼야 함");
+            Assert.IsTrue(System.Linq.Enumerable.Any(curves,
+                c => c.propertyName == "blendShape.88.xあ"));
+        }
+
+        [Test]
+        public void BakeClip_모프없는모델은예외()
+        {
+            var root = new GameObject("NoShapes");
+            _cleanup.Add(root);
+            var mesh = new Mesh { name = "plain" };
+            mesh.vertices = new[] { Vector3.zero };
+            _cleanup.Add(mesh);
+            root.AddComponent<SkinnedMeshRenderer>().sharedMesh = mesh;
+
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            data.duration = 1f / 60f;
+            data.frames.Add(new uLipSync.BakedFrame { volume = 0.5f });
+
+            Assert.Throws<System.ArgumentException>(
+                () => VocalLipSyncBaker.BakeClip(data, root));
+        }
+
+        [Test]
+        public void BakeClip_모음일부만있으면_누락경고()
+        {
+            // 'あ'만 있는 모델 — 클립은 만들되 나머지 음소 누락을 경고해야 함
+            var root = new GameObject("Partial");
+            _cleanup.Add(root);
+            var mesh = new Mesh { name = "m" };
+            mesh.vertices = new[] { Vector3.zero };
+            mesh.AddBlendShapeFrame("あ", 100f, new Vector3[1], new Vector3[1], new Vector3[1]);
+            _cleanup.Add(mesh);
+            root.AddComponent<SkinnedMeshRenderer>().sharedMesh = mesh;
+
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            data.duration = 1f / 60f;
+            data.frames.Add(new uLipSync.BakedFrame
+            {
+                volume = 0.5f,
+                phonemes = new List<uLipSync.BakedPhonemeRatio>(),
+            });
+
+            var warnings = new List<string>();
+            AnimationClip clip = VocalLipSyncBaker.BakeClip(data, root, 0.02f, warnings);
+            _cleanup.Add(clip);
+            Assert.AreEqual(1, UnityEditor.AnimationUtility.GetCurveBindings(clip).Length);
+            Assert.AreEqual(4, warnings.Count, "I/U/E/O 4개 누락 경고");
+        }
+
         private (VRMBlendShapeProxy proxy, BlendShapeAvatar avatar) BuildProxyWithAClip()
         {
             var root = new GameObject("Root");

@@ -7,7 +7,7 @@ namespace Fbx2Vmd.LipSync
 {
     /// <summary>
     /// 보컬 AudioClip을 uLipSync로 60fps 분석해 BakedData를 만들고,
-    /// VRM BlendShapeAvatar의 모음 클립 바인딩을 해석해 AnimationClip으로 굽는다.
+    /// VRM(BlendShapeAvatar) 또는 비VRM(SMR 모음 모프 자동 스캔) 바인딩을 해석해 AnimationClip으로 굽는다.
     /// 굽힌 클립은 Face SMR의 blendShape.* 커브라서 녹화/프리뷰 경로와 바로 호환된다.
     /// </summary>
     public static class VocalLipSyncBaker
@@ -87,6 +87,15 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
+        /// <summary>해석된 단일 바인딩 — SMR 상대 경로, 모프명, 음소, 가중치.</summary>
+        public struct ResolvedBinding
+        {
+            public string relativePath;
+            public string shapeName;
+            public string phoneme;
+            public float weight;
+        }
+
         /// <summary>
         /// BakedData를 VRM BlendShapeAvatar 바인딩으로 해석해 AnimationClip을 만든다.
         /// curve 키는 "blendShape.&lt;SMR 블렌드셰이프명&gt;", 경로는 클립의 RelativePath 기준.
@@ -106,13 +115,11 @@ namespace Fbx2Vmd.LipSync
             {
                 throw new ArgumentException("캐릭터에 VRMBlendShapeProxy/BlendShapeAvatar가 없습니다.", nameof(proxy));
             }
-
-            var clip = new AnimationClip
+            var bindings = new List<ResolvedBinding>();
+            if (proxy.BlendShapeAvatar.Clips == null)
             {
-                frameRate = BakeFrameRate,
-                legacy = false,
-            };
-
+                return BakeClipFromBindings(data, bindings, minVolumeGate);
+            }
             foreach (BlendShapeClip shapeClip in proxy.BlendShapeAvatar.Clips)
             {
                 string phoneme = PhonemeForPreset(shapeClip.Preset);
@@ -120,7 +127,6 @@ namespace Fbx2Vmd.LipSync
                 {
                     continue;
                 }
-
                 foreach (BlendShapeBinding binding in shapeClip.Values)
                 {
                     Transform target = proxy.transform.Find(binding.RelativePath);
@@ -131,15 +137,188 @@ namespace Fbx2Vmd.LipSync
                         warnings?.Add($"블렌드셰이프 대상을 찾지 못했습니다: {binding.RelativePath}[{binding.Index}]");
                         continue;
                     }
-                    string shapeName = smr.sharedMesh.GetBlendShapeName(binding.Index);
-                    var curve = BuildCurve(data, phoneme, binding.Weight, minVolumeGate);
-                    if (curve.length == 0)
+                    bindings.Add(new ResolvedBinding
                     {
-                        continue;
-                    }
-                    clip.SetCurve(binding.RelativePath, typeof(SkinnedMeshRenderer),
-                        "blendShape." + shapeName, curve);
+                        relativePath = binding.RelativePath,
+                        shapeName = smr.sharedMesh.GetBlendShapeName(binding.Index),
+                        phoneme = phoneme,
+                        weight = binding.Weight,
+                    });
                 }
+            }
+            return BakeClipFromBindings(data, bindings, minVolumeGate);
+        }
+
+        /// <summary>
+        /// 캐릭터 루트 기준 베이크 — VRM 프록시가 있으면 아바타 바인딩을 쓰고,
+        /// 없으면 MMD식 모음 모프명(あ/い/う/え/お, a/i/u/e/o 꼬리)을 스캔해 자동 바인딩한다.
+        /// </summary>
+        public static AnimationClip BakeClip(
+            uLipSync.BakedData data,
+            GameObject characterRoot,
+            float minVolumeGate = 0.02f,
+            IList<string> warnings = null)
+        {
+            VRMBlendShapeProxy proxy = FindProxy(characterRoot);
+            if (proxy != null)
+            {
+                return BakeClip(data, proxy, minVolumeGate, warnings);
+            }
+            var bindings = ResolveVowelBindings(characterRoot);
+            if (bindings.Count == 0)
+            {
+                throw new ArgumentException(
+                    "대상에 VRMBlendShapeProxy가 없고 모음 블렌드셰이프(あ/い/う/え/お)도 찾지 못했습니다.",
+                    nameof(characterRoot));
+            }
+            // 부분 커버리지도 결과는 만들되, 누락 음소는 경고로 보고한다.
+            var found = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ResolvedBinding b in bindings)
+            {
+                found.Add(b.phoneme);
+            }
+            foreach (string p in new[] { "A", "I", "U", "E", "O" })
+            {
+                if (!found.Contains(p))
+                {
+                    warnings?.Add($"모음 모프를 찾지 못했습니다: {p}");
+                }
+            }
+            return BakeClipFromBindings(data, bindings, minVolumeGate);
+        }
+
+        /// <summary>
+        /// 비VRM 모델용 모음 바인딩 스캔. SMR 모프명에서 꼬리 모음 문자를 찾는다.
+        /// "88.xあ"·"あ" 같은 MMD 명명과 "mouth_a"/"A" 같은 영문 명명을 인식한다.
+        /// 각 음소당 첫 매치만 쓰고, 변형(あ２ 등 숫자 꼬리)은 끝 문자가 모음이 아니라 자연 배제된다.
+        /// </summary>
+        public static List<ResolvedBinding> ResolveVowelBindings(GameObject characterRoot)
+        {
+            var result = new List<ResolvedBinding>();
+            if (characterRoot == null)
+            {
+                return result;
+            }
+            var found = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var smr in characterRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr.sharedMesh == null)
+                {
+                    continue;
+                }
+                string path = GetRelativePath(smr.transform, characterRoot.transform);
+                for (int i = 0; i < smr.sharedMesh.blendShapeCount; i++)
+                {
+                    string phoneme = PhonemeForShapeName(smr.sharedMesh.GetBlendShapeName(i));
+                    if (phoneme == null || !found.Add(phoneme))
+                    {
+                        continue; // 음소당 첫 매치만
+                    }
+                    result.Add(new ResolvedBinding
+                    {
+                        relativePath = path,
+                        shapeName = smr.sharedMesh.GetBlendShapeName(i),
+                        phoneme = phoneme,
+                        weight = 100f,
+                    });
+                }
+            }
+            return result;
+        }
+
+        /// <summary>모프명 끝 문자를 음소로 해석한다. 선행 숫자/점 접두는 제거.
+        /// 일본어 모음은 "xあ"형 접두(x·_·공백만)까지만 인정해 "笑い" 같은 표정 모프를 배제한다.
+        /// 영문은 단독 글자 또는 _/x 접두만 인정해 "switch A"·"meta" 오매치를 막는다.</summary>
+        internal static string PhonemeForShapeName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
+            // "88.xあ" → "xあ": 선행 숫자와 점을 벗겨 변형 접두만 남긴다.
+            int s = 0;
+            while (s < name.Length && (char.IsDigit(name[s]) || name[s] == '.'))
+            {
+                s++;
+            }
+            string stripped = name.Substring(s);
+            if (stripped.Length == 0)
+            {
+                return null;
+            }
+            char last = stripped[stripped.Length - 1];
+            string jp;
+            switch (last)
+            {
+                case 'あ': jp = "A"; break;
+                case 'い': jp = "I"; break;
+                case 'う': jp = "U"; break;
+                case 'え': jp = "E"; break;
+                case 'お': jp = "O"; break;
+                default: jp = null; break;
+            }
+            if (jp != null)
+            {
+                // 모음 단독이거나 앞부분이 x/_/공백 접두일 때만(笑い·なごみ 등 배제).
+                string prefix = stripped.Substring(0, stripped.Length - 1);
+                bool ok = true;
+                foreach (char c in prefix)
+                {
+                    if (c != 'x' && c != 'X' && c != '_' && c != ' ')
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+                return ok ? jp : null;
+            }
+            char lower = char.ToLowerInvariant(last);
+            string ph = lower == 'a' ? "A" : lower == 'i' ? "I" : lower == 'u' ? "U"
+                : lower == 'e' ? "E" : lower == 'o' ? "O" : null;
+            if (ph != null && (stripped.Length == 1
+                || stripped[stripped.Length - 2] == '_'
+                || stripped[stripped.Length - 2] == 'x'
+                || stripped[stripped.Length - 2] == 'X'))
+            {
+                return ph;
+            }
+            return null;
+        }
+
+        private static string GetRelativePath(Transform target, Transform root)
+        {
+            var parts = new List<string>();
+            for (Transform t = target; t != null && t != root; t = t.parent)
+            {
+                parts.Insert(0, t.name);
+            }
+            return string.Join("/", parts);
+        }
+
+        /// <summary>해석된 바인딩 목록으로 AnimationClip을 만든다(공통 코어).</summary>
+        private static AnimationClip BakeClipFromBindings(
+            uLipSync.BakedData data,
+            List<ResolvedBinding> bindings,
+            float minVolumeGate)
+        {
+            if (data == null || !data.isValid)
+            {
+                throw new ArgumentException("베이크 데이터가 비어 있습니다.", nameof(data));
+            }
+            var clip = new AnimationClip
+            {
+                frameRate = BakeFrameRate,
+                legacy = false,
+            };
+            foreach (ResolvedBinding b in bindings)
+            {
+                var curve = BuildCurve(data, b.phoneme, b.weight, minVolumeGate);
+                if (curve.length == 0)
+                {
+                    continue;
+                }
+                clip.SetCurve(b.relativePath, typeof(SkinnedMeshRenderer),
+                    "blendShape." + b.shapeName, curve);
             }
             return clip;
         }

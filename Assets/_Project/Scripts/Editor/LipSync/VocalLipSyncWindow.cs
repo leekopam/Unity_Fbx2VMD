@@ -5,7 +5,6 @@ using Fbx2Vmd.FBXImporter;
 using UnityEditor;
 using UnityEngine;
 using uLipSync;
-using VRM;
 
 namespace Fbx2Vmd.LipSync
 {
@@ -320,10 +319,9 @@ namespace Fbx2Vmd.LipSync
                     SetMessage("uLipSync 프로필을 지정하세요.", MessageType.Error);
                     return;
                 }
-                VRMBlendShapeProxy proxy = VocalLipSyncBaker.FindProxy(_targetCharacter);
-                if (proxy == null)
+                if (_targetCharacter == null)
                 {
-                    SetMessage("대상 캐릭터에 VRMBlendShapeProxy가 없습니다.", MessageType.Error);
+                    SetMessage("대상 캐릭터를 지정하세요.", MessageType.Error);
                     return;
                 }
 
@@ -336,7 +334,9 @@ namespace Fbx2Vmd.LipSync
 
                 BakedData data = VocalLipSyncBaker.BakeAnalysis(vocal, _profile);
                 var warnings = new System.Collections.Generic.List<string>();
-                AnimationClip clip = VocalLipSyncBaker.BakeClip(data, proxy, _minVolumeGate, warnings);
+                // VRM 프록시가 없는 모델(MMD 등)은 모음 모프명을 스캔해 자동 바인딩한다.
+                AnimationClip clip = VocalLipSyncBaker.BakeClip(
+                    data, _targetCharacter, _minVolumeGate, warnings);
                 clip.name = Path.GetFileNameWithoutExtension(_vocalWavPath) + "_lipsync";
 
                 string saveDir = Path.Combine(_outputDir, "clips");
