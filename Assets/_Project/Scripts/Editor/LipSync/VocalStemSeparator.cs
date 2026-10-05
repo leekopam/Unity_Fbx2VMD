@@ -46,8 +46,10 @@ namespace Fbx2Vmd.LipSync
             switch (engine)
             {
                 case Engine.AudioSeparator:
-                    // -m audio_separator 형태로 호출한다(스크립트 경로 불필요).
-                    return "-m audio_separator " + Quote(inputPath)
+                    // audio-separator는 __main__이 없어 -m으로 못 쓴다.
+                    // console entry(audio_separator.utils.cli:main)를 -c로 호출한다.
+                    return "-c \"from audio_separator.utils.cli import main; main()\" "
+                        + Quote(inputPath)
                         + " --output_dir " + Quote(outputDir)
                         + " --output_format wav"
                         + (string.IsNullOrEmpty(model)

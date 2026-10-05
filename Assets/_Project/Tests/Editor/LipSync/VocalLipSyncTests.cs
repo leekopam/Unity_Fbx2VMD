@@ -36,7 +36,7 @@ namespace Fbx2Vmd.Tests.LipSync
             string args = VocalStemSeparator.BuildArguments(
                 VocalStemSeparator.Engine.AudioSeparator,
                 "C:\\음악\\song a.mp3", "D:\\out dir", "model.ckpt");
-            StringAssert.Contains("-m audio_separator", args);
+            StringAssert.Contains("audio_separator.utils.cli", args);
             StringAssert.Contains("\"C:\\음악\\song a.mp3\"", args);
             StringAssert.Contains("--output_dir \"D:\\out dir\"", args);
             StringAssert.Contains("--model_filename \"model.ckpt\"", args);
