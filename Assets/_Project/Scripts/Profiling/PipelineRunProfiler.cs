@@ -46,7 +46,7 @@ namespace Fbx2Vmd.Profiling
             _runStartGcBytes = GC.GetAllocatedBytesForCurrentThread();
             // 워커 스레드 할당을 잡기 위해 프로세스 전체 할당량도 별도로 누적한다.
             // 에디터 세션에서는 런과 무관한 ambient 할당(에디터 루프·임포트 워커 등)이 섞인다.
-            _runStartTotalAllocBytes = GC.GetTotalAllocatedBytes(false);
+            _runStartTotalAllocBytes = CaptureTotalAllocatedBytes();
             _lastStageMarkMs = 0f;
             _lastStageGcBytes = _runStartGcBytes;
             _metricIndex.Clear();
@@ -190,8 +190,11 @@ namespace Fbx2Vmd.Profiling
             _current.outcome = outcome ?? string.Empty;
             _current.totalMs = (float)_runWatch.Elapsed.TotalMilliseconds;
             _current.totalGcAllocBytes = GC.GetAllocatedBytesForCurrentThread() - _runStartGcBytes;
+            long totalAllocEnd = CaptureTotalAllocatedBytes();
             _current.totalAllocAllThreadsBytes =
-                GC.GetTotalAllocatedBytes(false) - _runStartTotalAllocBytes;
+                _runStartTotalAllocBytes < 0 || totalAllocEnd < 0
+                    ? -1
+                    : totalAllocEnd - _runStartTotalAllocBytes;
             CaptureMemoryCounters(_current);
             ComputeFramePercentiles(_current);
             _current.frameSamplesMs = _frameSamples.ToArray();
@@ -222,6 +225,37 @@ namespace Fbx2Vmd.Profiling
             _metricIndex.Clear();
             _frameSamples.Clear();
             DisposeMemoryRecorders();
+        }
+
+        // Unity 2022의 .NET Standard 2.1 BCL에는 GC.GetTotalAllocatedBytes가 없어
+        // 직접 호출하면 컴파일이 안 된다. 런타임에 있을 때만 리플렉션으로 호출하고
+        // 없으면 지표를 미지원(-1)으로 기록한다(신버전 런타임에서는 자동으로 살아남).
+        private static readonly System.Reflection.MethodInfo
+            s_totalAllocatedBytesGetter = typeof(GC).GetMethod(
+                "GetTotalAllocatedBytes",
+                System.Reflection.BindingFlags.Static |
+                System.Reflection.BindingFlags.Public);
+
+        /// <summary>
+        /// 프로세스 전체 누적 할당량. GC.GetTotalAllocatedBytes가 없는
+        /// 런타임이면 -1을 돌려준다.
+        /// </summary>
+        private static long CaptureTotalAllocatedBytes()
+        {
+            if (s_totalAllocatedBytesGetter == null)
+            {
+                return -1;
+            }
+
+            try
+            {
+                return (long)s_totalAllocatedBytesGetter.Invoke(
+                    null, new object[] { false });
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
         }
 
         /// <summary>엔진 메모리 카운터를 런 동안 켭니다. 카운터명이 없는 환경이면 조용히 건너뜁니다.</summary>

@@ -62,7 +62,7 @@ namespace Fbx2Vmd.Profiling
         public string outcome;
         public float totalMs;
         public long totalGcAllocBytes;
-        /// <summary>GC.GetTotalAllocatedBytes 기준 런 전체 할당입니다. 워커 스레드 포함 — 병렬 경로의 할당도 잡힙니다.</summary>
+        /// <summary>프로세스 전체 누적 할당(GC.GetTotalAllocatedBytes) 기준 런 할당입니다. 워커 스레드 포함 — 병렬 경로의 할당도 잡힙니다. 현재 Unity BCL에 API가 없어 -1로 기록됩니다.</summary>
         public long totalAllocAllThreadsBytes;
         public int sampledFrameCount;
         public float sampledFrameSumMs;
