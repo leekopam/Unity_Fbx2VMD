@@ -16853,6 +16853,23 @@ MonoBehaviour:
     selfCollisionScale: 1
     useMutualCollision: 1
     characterPresetKey:
+  hairBackend: 0
+  springProfile:
+    enabled: 0
+    frequency: 5
+    dampingRatio: 0.5
+    animationBlend:
+      type: 4
+    poseStiffness:
+      type: 2
+    bendAngleCap:
+      type: 1
+    maxBendAngleDeg: 180
+    collisionRadius:
+      type: 4
+    maxCollisionRadius: 0.02
+    gravity: 0
+    interChainCollision: 0
   usePreBuild: 0
   autoRebuildOnEnable: 1
   generatedColliders:

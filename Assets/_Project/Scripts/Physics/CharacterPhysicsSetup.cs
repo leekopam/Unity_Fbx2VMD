@@ -34,6 +34,14 @@ namespace Fbx2Vmd.ClothPhysics
         [Header("흔들림 조정")]
         public HairTuning tuning = HairTuning.Default;
 
+        [Header("머리카락 백엔드")]
+        [Tooltip("머리카락 다이내믹스 엔진. 본 스프링 에셋은 에셋 임포트 시에만 동작하고 미설치면 MC2로 폴백")]
+        public HairDynamicsBackend hairBackend = HairDynamicsBackend.MagicaCloth2;
+
+        [Tooltip("본 스프링 식 머리카락 파라미터. enabled면 프리셋+tuning 결과 위에 " +
+                 "스프링 의미론으로 덮어쓰고, 본 스프링 에셋 백엔드에서는 그대로 주입된다")]
+        public HairSpringProfile springProfile = HairSpringProfile.Default;
+
         /// <summary>스커트 클로스 생성 방식</summary>
         public enum SkirtMode
         {
@@ -128,7 +136,9 @@ namespace Fbx2Vmd.ClothPhysics
         {
             // 유효 클로스가 있어도 스커트 등 기대 생성물이 없으면 완전하지 않다 —
             // 씬 직렬화 클로스만 유효한 플레이에서 런타임 전용 스커트가 영구 누락되는 것을 막는다.
-            if (Application.isPlaying && generatedCloths.Count > 0 &&
+            if (Application.isPlaying &&
+                (generatedCloths.Count > 0 ||
+                 SpringHairBackend.FindProduct(transform) != null) &&
                 AllClothsAlive() && IsSetupComplete())
             {
                 lastReport = $"이미 설정 완료 상태 — 클로스 {generatedCloths.Count}개 유효/빌드 중 (재실행 생략). " +
@@ -403,20 +413,36 @@ namespace Fbx2Vmd.ClothPhysics
                 }
             }
 
-            // 3. 부위별 BoneCloth 생성
+            // 3. 부위별 머리카락 다이내믹스 생성 — 백엔드에 따라 MC2 BoneCloth 또는 본 스프링 에셋
             var groups = detect.chains.GroupBy(c => c.part);
-            foreach (var group in groups)
+            bool springPath = hairBackend == HairDynamicsBackend.SpringBones;
+            if (springPath)
             {
-                var cloth = CreateHairCloth(
-                    group.Key, group.ToList(), colResult.byCategory, torso, head, report);
-                if (cloth != null)
-                    generatedCloths.Add(cloth);
+                var springGo = SpringHairBackend.Build(
+                    transform, detect.chains, springProfile, report, colResult.colliders);
+                if (springGo == null)
+                {
+                    report.Add(SpringHairBackend.Available
+                        ? "본 스프링용 머리카락 체인이 없음 — MC2 BoneCloth로 폴백"
+                        : "본 스프링 에셋 미설치 — MC2 BoneCloth로 폴백");
+                    springPath = false;
+                }
+            }
+            if (!springPath)
+            {
+                foreach (var group in groups)
+                {
+                    var cloth = CreateHairCloth(
+                        group.Key, group.ToList(), colResult.byCategory, torso, head, report);
+                    if (cloth != null)
+                        generatedCloths.Add(cloth);
+                }
+
+                // 4. 머리카락 클로스 간 상호 충돌 배선 (꼬임 방지)
+                WireHairMutualCollision(report);
             }
 
-            // 4. 머리카락 클로스 간 상호 충돌 배선 (꼬임 방지)
-            WireHairMutualCollision(report);
-
-            report.Add($"BoneCloth {generatedCloths.Count}개 생성");
+            report.Add($"머리카락 다이내믹스 생성: {(springPath ? "본 스프링 에셋 1개" : $"BoneCloth {generatedCloths.Count}개")}");
             graceUntilFrame = Time.frameCount + RebuildGraceFrames;
             Finish(report);
         }
@@ -467,8 +493,9 @@ namespace Fbx2Vmd.ClothPhysics
             float maxLen = chains.Max(c => c.worldLength);
             bool isLong = torso > 0f && maxLen >= torso * 0.8f;
 
-            // 부위별 파라미터 템플릿 + 튜닝 배율
-            HairPhysicsParameters.Apply(part, sdata, torso, head, isLong, tuning, usePresetBaseline);
+            // 부위별 파라미터 템플릿 + 튜닝 배율 (+ Boing 프로파일 오버라이드)
+            HairPhysicsParameters.Apply(part, sdata, torso, head, isLong, tuning,
+                usePresetBaseline, springProfile);
 
             // 관련 콜라이더만 등록 (32개 제한 관리)
             // Pre-build 데이터는 SerializeData2에 위치 — 에디터에서 Pre-build 생성도 필요
@@ -494,6 +521,23 @@ namespace Fbx2Vmd.ClothPhysics
         [ContextMenu("흔들림 파라미터 재적용")]
         public void ReapplyParameters()
         {
+            // 본 스프링 에셋 백엔드는 클로스가 아니라 본 스프링 체인 컴포넌트에 파라미터가 산다.
+            if (hairBackend == HairDynamicsBackend.SpringBones)
+            {
+                if (SpringHairBackend.ReapplyExisting(transform, springProfile))
+                {
+                    lastReport = "본 스프링 에셋 파라미터 재적용 완료";
+                    Debug.Log("[CharacterPhysicsSetup] " + lastReport, this);
+                }
+                else
+                {
+                    lastReport = SpringHairBackend.Available
+                        ? "재적용할 본 스프링 에셋 생성물이 없습니다. 자동 물리 설정을 먼저 실행하세요."
+                        : "본 스프링 에셋 미설치 — 현재 MC2 경로가 동작 중입니다.";
+                    Debug.LogWarning(lastReport, this);
+                }
+                return;
+            }
             if (generatedCloths.Count == 0)
             {
                 lastReport = "재적용할 클로스가 없습니다. 자동 물리 설정을 먼저 실행하세요.";
@@ -524,7 +568,8 @@ namespace Fbx2Vmd.ClothPhysics
                     continue; // MeshCloth·BoneClothLoop 스커트는 헤어 튜닝 적용 대상이 아님
                 var part = i < generatedParts.Count ? generatedParts[i] : HairPart.Unknown;
                 bool isLong = i < generatedIsLong.Count && generatedIsLong[i];
-                HairPhysicsParameters.Apply(part, cloth.SerializeData, torso, head, isLong, tuning, usePresetBaseline);
+                HairPhysicsParameters.Apply(part, cloth.SerializeData, torso, head, isLong, tuning,
+                    usePresetBaseline, springProfile);
                 ApplyCulling(cloth);
                 NotifyParameterChange(cloth);
                 applied++;
@@ -565,7 +610,10 @@ namespace Fbx2Vmd.ClothPhysics
                 sc.syncMode = SelfCollisionConstraint.SelfCollisionMode.None;
                 sc.syncPartner = null;
             }
-            if (!tuning.useMutualCollision || hairs.Count < 2)
+            bool mutualOn = springProfile.enabled
+                ? springProfile.interChainCollision
+                : tuning.useMutualCollision;
+            if (!mutualOn || hairs.Count < 2)
                 return;
 
             var anchor = hairs.OrderByDescending(c => c.SerializeData.rootBones.Count).First();
