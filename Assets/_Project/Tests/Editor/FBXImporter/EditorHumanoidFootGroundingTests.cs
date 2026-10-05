@@ -45,7 +45,11 @@ namespace Tests.Editor.FBXImporter
                         animator.enabled = true;
                         Invoke(controller, "PrepareWithArmDirectionReference", animator, clip, source);
                         Invoke(controller, "SetGroundResponseEnabled", true);
-                        Invoke(controller, "Seek", 929f / clip.frameRate);
+                        // 프레임 1073은 왼발 슬라이드 의도 구간 — 계획 지지점이 앵커에서
+                        // 벗어나는 동안 실제 밑창은 앵커에 닿아 있어 두 지표가 갈라짐.
+                        // (핀 정확도가 개선된 뒤 프레임 929는 계획이 앵커와 일치해
+                        // 구분 검증이 성립하지 않음)
+                        Invoke(controller, "Seek", 1073f / clip.frameRate);
                         object gate = Property(controller, "LastGroundingGate");
                         object left = Field(gate, "left");
                         float threshold = animator.humanScale * 0.005f;

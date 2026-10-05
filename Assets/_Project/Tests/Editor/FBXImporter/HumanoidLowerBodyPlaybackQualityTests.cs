@@ -394,8 +394,11 @@ namespace Tests.Editor.FBXImporter
                 }
 
                 float scale = sourceRig.Animator.humanScale;
-                object estimate = estimatorType.GetMethod(
-                        "Estimate", BindingFlags.Static | BindingFlags.NonPublic)
+                // Estimate에는 Tuning 오버로드가 있어 이름만으로는 모호하다.
+                object estimate = estimatorType.GetMethods(
+                        BindingFlags.Static | BindingFlags.NonPublic)
+                    .First(m => m.Name == "Estimate" &&
+                        m.GetParameters().Length == 4)
                     .Invoke(null, new object[] { samples, frameRate, scale, null });
                 System.Collections.IEnumerable leftIntents =
                     (System.Collections.IEnumerable)Prop(estimate, "Left");

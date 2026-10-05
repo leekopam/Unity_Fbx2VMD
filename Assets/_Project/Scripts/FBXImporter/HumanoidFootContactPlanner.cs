@@ -219,11 +219,23 @@ namespace Fbx2Vmd.FBXImporter
             {
                 leftToeDirections[index] =
                     targetToSourceRotation * leftToeSegments[index];
+                // 발끝 방향 보정은 발목 축 회전으로 적용돼 발끝이 수평 이동하고
+                // 그 절반만큼 접촉 중점이 밀림. 모든 프레임에서 발목 보정에
+                // 회전 유발 수평 이동의 절반을 빼 "중점 = 기준 중점 + 보정"
+                // 불변식을 지킴. 방향 델타가 0이면 보상도 0이라 게이트 불필요.
+                leftCorrections[index] += ToeRotationMidpointCompensation(
+                    targetLeftToes[index] - targetLeftFeet[index],
+                    leftToeSegments[index],
+                    targetToSourceRotation);
             }
             for (int index = 0; index < rightToeSegments.Length; index++)
             {
                 rightToeDirections[index] =
                     targetToSourceRotation * rightToeSegments[index];
+                rightCorrections[index] += ToeRotationMidpointCompensation(
+                    targetRightToes[index] - targetRightFeet[index],
+                    rightToeSegments[index],
+                    targetToSourceRotation);
             }
             return new HumanoidFootContactPlan(
                 leftCorrections,
@@ -512,6 +524,12 @@ namespace Fbx2Vmd.FBXImporter
             // 일어나고 모든 전이는 연속으로 유지됨.
             Vector3 desiredVertex = targetPoints[runStart];
             Vector3 previousSourceVertex = sourcePoints[runStart];
+            // 핀과 무관하게 원본 스텝을 계속 누적하는 순수 추종 궤적.
+            // 핀 해제 시 이 궤적으로 수렴해야 런 끝점이 원본 총이동과 일치함.
+            Vector3 followVertex = desiredVertex;
+            // 핀 해제 직후 남은 위치 차 — releaseFrames에 걸쳐 0으로 블렌드함.
+            Vector3 releaseResidual = Vector3.zero;
+            int framesSinceRelease = int.MaxValue;
             bool pinned = false;
             bool pinBlocked = false;
             bool pinPivot = false;
@@ -523,11 +541,20 @@ namespace Fbx2Vmd.FBXImporter
                 bool wantsPin =
                     policies[index] == HumanoidFootAnchorPolicy.Pinned &&
                     !pinBlocked;
+                bool released = pinned && !wantsPin;
+
                 // 방침이 Pinned가 아닌 프레임에서는 핀이 풀림.
-                if (pinned && !wantsPin)
+                if (released)
                 {
                     pinned = false;
                 }
+
+                // 순수 추종 궤적은 핀 여부와 무관하게 매 프레임 전진함.
+                // 핀 기간의 원본 이동까지 누적해야 해제 수렴 끝점이 맞음.
+                Vector3 step = sourcePoints[index] - previousSourceVertex;
+                step.y = 0f;
+                followVertex += sourceToTargetRotation * step;
+                previousSourceVertex = sourcePoints[index];
 
                 if (pinned)
                 {
@@ -556,22 +583,43 @@ namespace Fbx2Vmd.FBXImporter
                             pinReleaseDistance)
                     {
                         // 원본 지지점이 핀 구간에서 실제로 움직이면 의도 추정
-                        // 오류로 보고 추종을 재개함. 해제 프레임 기준점은
-                        // 현재 원본으로 넘겨 앵커가 튀지 않게 함.
+                        // 오류로 보고 추종을 재개함.
                         pinned = false;
                         pinBlocked = true;
+                        // 이 프레임은 핀 목표로 적용되므로 잔차 캡처를 여기서 함.
+                        releaseResidual = desiredVertex - followVertex;
+                        framesSinceRelease = 0;
                     }
-
-                    // 핀 중에도 추종 기준은 매 프레임 갱신해 두어야
-                    // 해제 시점의 스텝이 핀 진입 누적치가 되지 않음.
-                    previousSourceVertex = sourcePoints[index];
                 }
                 else
                 {
-                    Vector3 step = sourcePoints[index] - previousSourceVertex;
-                    step.y = 0f;
-                    desiredVertex += sourceToTargetRotation * step;
-                    previousSourceVertex = sourcePoints[index];
+                    if (released)
+                    {
+                        // 핀이 풀린 프레임의 잔차를 잡아 추종 궤적까지
+                        // 블렌드할 양으로 남김. 즉시 점프하면 팝이 됨.
+                        releaseResidual = desiredVertex - followVertex;
+                        framesSinceRelease = 0;
+                    }
+                    else if (framesSinceRelease <= releaseFrames)
+                    {
+                        framesSinceRelease++;
+                    }
+
+                    if (framesSinceRelease > releaseFrames)
+                    {
+                        desiredVertex = followVertex;
+                    }
+                    else
+                    {
+                        float blendT = releaseFrames > 0
+                            ? Mathf.Clamp01(
+                                framesSinceRelease / (releaseFrames + 1f))
+                            : 1f;
+                        float smooth = blendT * blendT * (3f - 2f * blendT);
+                        desiredVertex =
+                            followVertex + releaseResidual * (1f - smooth);
+                    }
+
                     if (wantsPin)
                     {
                         // 핀 진입 시 추종 위치 그대로를 앵커로 삼아 경계 연속 유지.
