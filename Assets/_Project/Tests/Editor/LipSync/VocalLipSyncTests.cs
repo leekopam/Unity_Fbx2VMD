@@ -578,6 +578,66 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.AreEqual(4, warnings.Count, "I/U/E/O 4개 누락 경고");
         }
 
+        // ---------- 클립 미리보기 재생 ----------
+
+        [Test]
+        public void ClipPreview_재생시모프적용_정지시복원()
+        {
+            var root = new GameObject("PrevChar");
+            _cleanup.Add(root);
+            var mesh = new Mesh { name = "m" };
+            mesh.vertices = new[] { Vector3.zero };
+            mesh.AddBlendShapeFrame("あ", 100f, new Vector3[1], new Vector3[1], new Vector3[1]);
+            _cleanup.Add(mesh);
+            var smr = root.AddComponent<SkinnedMeshRenderer>();
+            smr.sharedMesh = mesh;
+
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            data.duration = 2f / 60f; // 2프레임 — 길이 0 클립은 재생 상태가 즉시 끝나므로
+            data.frames.Add(new uLipSync.BakedFrame
+            {
+                volume = 1f,
+                phonemes = new List<uLipSync.BakedPhonemeRatio>
+                {
+                    new uLipSync.BakedPhonemeRatio { phoneme = "A", ratio = 1f },
+                },
+            });
+            data.frames.Add(new uLipSync.BakedFrame
+            {
+                volume = 1f,
+                phonemes = new List<uLipSync.BakedPhonemeRatio>
+                {
+                    new uLipSync.BakedPhonemeRatio { phoneme = "A", ratio = 1f },
+                },
+            });
+            AnimationClip clip = VocalLipSyncBaker.BakeClip(data, root);
+            _cleanup.Add(clip);
+
+            try
+            {
+                LipSyncClipPreview.Start(clip, root);
+                Assert.IsTrue(LipSyncClipPreview.IsPlaying);
+                Assert.IsTrue(UnityEditor.AnimationMode.InAnimationMode());
+                Assert.Greater(smr.GetBlendShapeWeight(0), 50f,
+                    "재생 시작 시 첫 프레임 모프 가중치가 적용돼야 함");
+            }
+            finally
+            {
+                LipSyncClipPreview.Stop();
+            }
+            Assert.IsFalse(LipSyncClipPreview.IsPlaying);
+            Assert.IsFalse(UnityEditor.AnimationMode.InAnimationMode());
+            Assert.AreEqual(0f, smr.GetBlendShapeWeight(0), "정지 후 원래 가중치로 복원돼야 함");
+        }
+
+        [Test]
+        public void ClipPreview_null입력은무시()
+        {
+            LipSyncClipPreview.Start(null, null);
+            Assert.IsFalse(LipSyncClipPreview.IsPlaying);
+        }
+
         private (VRMBlendShapeProxy proxy, BlendShapeAvatar avatar) BuildProxyWithAClip()
         {
             var root = new GameObject("Root");

@@ -28,11 +28,14 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private Profile _profile;
         [SerializeField] private GameObject _targetCharacter;
         [SerializeField] private float _minVolumeGate = 0.02f;
+        [SerializeField] private AnimationClip _previewClip;
+        [SerializeField] private bool _previewWithAudio = true;
 
         private Task<VocalStemSeparator.Result> _separating;
         private Task<PythonEnvProvisioner.Result> _provisioning;
         private System.Threading.CancellationTokenSource _cts;
         private bool _separateAfterProvision;
+        private bool _previewWasPlaying;
         private string _message = "";
         private MessageType _messageType = MessageType.Info;
         private float _sepProgress; // 분리 진행률 0~1 (워커 스레드에서 갱신)
@@ -68,6 +71,7 @@ namespace Fbx2Vmd.LipSync
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            LipSyncClipPreview.Stop();
             StemAudioPreview.Stop();
             EditorUtility.ClearProgressBar();
         }
@@ -143,6 +147,18 @@ namespace Fbx2Vmd.LipSync
             {
                 Repaint();
             }
+            // 클립 미리보기: 진행 바 갱신 + 끝까지 재생돼 자동 정지되면 음성도 정리한다.
+            bool previewPlaying = LipSyncClipPreview.IsPlaying;
+            if (previewPlaying)
+            {
+                Repaint();
+            }
+            if (_previewWasPlaying && !previewPlaying)
+            {
+                StemAudioPreview.Stop();
+                Repaint();
+            }
+            _previewWasPlaying = previewPlaying;
             // 분리 중엔 진행률 바 갱신을 위해 매 프레임 다시 그린다.
             if (_separating != null)
             {
@@ -242,6 +258,36 @@ namespace Fbx2Vmd.LipSync
             EditorGUILayout.Space(8);
             DrawPathRow("녹화용 BGM", ref _bgmWavPath, "분리된 BGM wav 선택", "wav",
                 preview: true);
+
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("3. 클립 재생 테스트", EditorStyles.boldLabel);
+            _previewClip = (AnimationClip)EditorGUILayout.ObjectField(
+                "립싱크 클립", _previewClip, typeof(AnimationClip), false);
+            _previewWithAudio = EditorGUILayout.Toggle("보컬 동시 재생", _previewWithAudio);
+            bool previewPlaying = LipSyncClipPreview.IsPlaying;
+            using (new EditorGUI.DisabledScope(
+                !previewPlaying && (_previewClip == null || _targetCharacter == null)))
+            {
+                if (GUILayout.Button(previewPlaying ? "정지" : "캐릭터에 재생"))
+                {
+                    if (previewPlaying)
+                    {
+                        StopClipPreview();
+                    }
+                    else
+                    {
+                        StartClipPreview();
+                    }
+                }
+            }
+            if (previewPlaying)
+            {
+                Rect r = EditorGUILayout.GetControlRect(false, 18f);
+                float len = Mathf.Max(LipSyncClipPreview.Clip.length, 0.001f);
+                EditorGUI.ProgressBar(r, LipSyncClipPreview.Time / len,
+                    $"재생 중… {LipSyncClipPreview.Time:F1} / {len:F1} s");
+            }
+
             DrawStatusLabel();
         }
 
@@ -347,6 +393,7 @@ namespace Fbx2Vmd.LipSync
                 AssetDatabase.SaveAssets();
                 DestroyImmediate(vocal);
                 DestroyImmediate(data);
+                _previewClip = clip;
 
                 string extra = warnings.Count > 0 ? $" (경고 {warnings.Count}건)" : "";
                 SetMessage($"클립 저장: {assetPath}{extra}", MessageType.Info);
@@ -389,6 +436,31 @@ namespace Fbx2Vmd.LipSync
                 }
             }
             EditorGUILayout.EndHorizontal();
+        }
+
+        /// <summary>립싱크 클립을 에디트 모드로 캐릭터에 재생한다(AnimationMode, 정지 시 복원).</summary>
+        private void StartClipPreview()
+        {
+            LipSyncClipPreview.Start(_previewClip, _targetCharacter);
+            if (!LipSyncClipPreview.IsPlaying)
+            {
+                return; // 클립/대상이 없으면 Start가 무시됨
+            }
+            if (_previewWithAudio && !string.IsNullOrEmpty(_vocalWavPath))
+            {
+                string error = StemAudioPreview.Toggle(_vocalWavPath);
+                if (error != null)
+                {
+                    SetMessage(error, MessageType.Warning);
+                }
+            }
+            SetMessage("클립 재생 중... 정지하면 원래 포즈로 복원됩니다.", MessageType.Info);
+        }
+
+        private void StopClipPreview()
+        {
+            LipSyncClipPreview.Stop();
+            StemAudioPreview.Stop();
         }
 
         private void SetMessage(string message, MessageType type)
