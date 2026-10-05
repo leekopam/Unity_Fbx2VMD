@@ -205,10 +205,11 @@ namespace Fbx2Vmd.LipSync
                 return result;
             }
             // 상대 경로가 WorkingDirectory와 이중으로 붙지 않도록 절대 경로로 정규화한다.
+            // outputDir 정규화도 try 안에 둬서 잘못된 경로 문자열이 예외가 아닌 result.error가 되게 한다.
             inputPath = Path.GetFullPath(inputPath);
-            outputDir = Path.GetFullPath(outputDir);
             try
             {
+                outputDir = Path.GetFullPath(outputDir);
                 Directory.CreateDirectory(outputDir);
             }
             catch (Exception error)
