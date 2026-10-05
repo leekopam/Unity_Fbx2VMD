@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Fbx2Vmd.LipSync
@@ -36,8 +37,10 @@ namespace Fbx2Vmd.LipSync
 
         /// <summary>
         /// 엔진별 CLI 인자열을 만든다. program은 python 또는 audio-separator 실행 파일.
+        /// modelDir을 주면 모델 캐시를 그 폴더에 고정한다(audio-separator 전용).
         /// </summary>
-        public static string BuildArguments(Engine engine, string inputPath, string outputDir, string model)
+        public static string BuildArguments(Engine engine, string inputPath, string outputDir,
+            string model, string modelDir = null)
         {
             switch (engine)
             {
@@ -48,7 +51,10 @@ namespace Fbx2Vmd.LipSync
                         + " --output_format wav"
                         + (string.IsNullOrEmpty(model)
                             ? string.Empty
-                            : " --model_filename " + Quote(model));
+                            : " --model_filename " + Quote(model))
+                        + (string.IsNullOrEmpty(modelDir)
+                            ? string.Empty
+                            : " --model_file_dir " + Quote(modelDir));
                 case Engine.Demucs:
                     return "-m demucs --two-stems=vocals"
                         + " -n " + (string.IsNullOrEmpty(model) ? DefaultDemucsModel : model)
@@ -141,7 +147,7 @@ namespace Fbx2Vmd.LipSync
         {
             string module = engine == Engine.Demucs ? "demucs" : "audio_separator";
             int code = RunSync(pythonPath,
-                "-c \"import " + module + "\"", null, out string output, 30);
+                "-c \"import " + module + "\"", null, out string output, 120);
             if (code == 0)
             {
                 error = string.Empty;
@@ -154,13 +160,20 @@ namespace Fbx2Vmd.LipSync
 
         /// <summary>분리를 백그라운드에서 실행한다. 호출부는 Task 완료를 폴링한다.</summary>
         public static Task<Result> SeparateAsync(Engine engine, string pythonPath,
-            string inputPath, string outputDir, string model)
+            string inputPath, string outputDir, string model,
+            CancellationToken ct = default,
+            IReadOnlyDictionary<string, string> env = null,
+            string modelDir = null)
         {
-            return Task.Run(() => Separate(engine, pythonPath, inputPath, outputDir, model));
+            return Task.Run(() => Separate(
+                engine, pythonPath, inputPath, outputDir, model, ct, env, modelDir), ct);
         }
 
         public static Result Separate(Engine engine, string pythonPath,
-            string inputPath, string outputDir, string model)
+            string inputPath, string outputDir, string model,
+            CancellationToken ct = default,
+            IReadOnlyDictionary<string, string> env = null,
+            string modelDir = null)
         {
             var result = new Result();
             if (string.IsNullOrEmpty(pythonPath) || !File.Exists(pythonPath))
@@ -175,8 +188,9 @@ namespace Fbx2Vmd.LipSync
             }
             Directory.CreateDirectory(outputDir);
 
-            string args = BuildArguments(engine, inputPath, outputDir, model);
-            int code = RunSync(pythonPath, args, outputDir, out string output, timeoutSec: 1800);
+            string args = BuildArguments(engine, inputPath, outputDir, model, modelDir);
+            int code = RunSync(pythonPath, args, outputDir, out string output,
+                timeoutSec: 3600, ct: ct, env: env);
             result.logTail = Tail(output, 4000);
             if (code != 0)
             {
@@ -195,8 +209,13 @@ namespace Fbx2Vmd.LipSync
             return result;
         }
 
-        private static int RunSync(string program, string arguments, string workDir,
-            out string output, int timeoutSec)
+        /// <summary>
+        /// 동기 프로세스 실행 — 프로비저너와 공유한다. ct 취소 시 프로세스를 죽인다.
+        /// env를 주면 기존 환경변수 위에 덮어쓴다(모델 캐시 경로 고정 등).
+        /// </summary>
+        internal static int RunSync(string program, string arguments, string workDir,
+            out string output, int timeoutSec, CancellationToken ct = default,
+            IReadOnlyDictionary<string, string> env = null)
         {
             var startInfo = new ProcessStartInfo
             {
@@ -210,6 +229,13 @@ namespace Fbx2Vmd.LipSync
                 StandardOutputEncoding = Encoding.UTF8,
                 StandardErrorEncoding = Encoding.UTF8,
             };
+            if (env != null)
+            {
+                foreach (var kv in env)
+                {
+                    startInfo.EnvironmentVariables[kv.Key] = kv.Value;
+                }
+            }
             var sb = new StringBuilder();
             try
             {
@@ -220,20 +246,50 @@ namespace Fbx2Vmd.LipSync
                     process.ErrorDataReceived += (s, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
-                    if (!process.WaitForExit(timeoutSec * 1000))
+                    using (ct.Register(() => TryKill(process)))
                     {
-                        process.Kill();
-                        output = sb + "\n[timeout]";
+                        if (!process.WaitForExit(timeoutSec * 1000))
+                        {
+                            TryKill(process);
+                            output = sb + "\n[timeout]";
+                            return -1;
+                        }
+                    }
+                    // 비동기 출력 핸들러의 잔여 라인까지 플러시되길 한 번 더 기다린다.
+                    process.WaitForExit();
+                    output = sb.ToString();
+                    if (ct.IsCancellationRequested)
+                    {
+                        output += "\n[cancelled]";
                         return -1;
                     }
-                    output = sb.ToString();
                     return process.ExitCode;
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                output = sb + "\n[cancelled]";
+                return -1;
             }
             catch (Exception error)
             {
                 output = error.ToString();
                 return -2;
+            }
+        }
+
+        private static void TryKill(Process process)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                }
+            }
+            catch (Exception)
+            {
+                // 이미 종료된 프로세스는 무시한다.
             }
         }
 

@@ -31,8 +31,15 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private float _minVolumeGate = 0.02f;
 
         private Task<VocalStemSeparator.Result> _separating;
+        private Task<PythonEnvProvisioner.Result> _provisioning;
+        private System.Threading.CancellationTokenSource _cts;
+        private bool _separateAfterProvision;
         private string _message = "";
         private MessageType _messageType = MessageType.Info;
+
+        /// <summary>프로젝트 루트 — Assets의 부모.</summary>
+        private static string ProjectRoot =>
+            Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
 
         [MenuItem("Tools/FBXImporter/보컬 립싱크")]
         private static void Open()
@@ -44,7 +51,12 @@ namespace Fbx2Vmd.LipSync
         {
             if (string.IsNullOrEmpty(_pythonPath))
             {
-                _pythonPath = VocalStemSeparator.FindPython() ?? "";
+                // 프로비저닝된 venv가 이미 있으면 그걸 우선 쓴다.
+                string venvPy = PythonEnvProvisioner.VenvPythonPath(
+                    PythonEnvProvisioner.VenvDir(ProjectRoot));
+                _pythonPath = File.Exists(venvPy)
+                    ? venvPy
+                    : VocalStemSeparator.FindPython() ?? "";
             }
             if (_profile == null)
             {
@@ -52,8 +64,39 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
+        private void OnDisable()
+        {
+            _cts?.Cancel();
+            _cts?.Dispose();
+        }
+
         private void Update()
         {
+            if (_provisioning != null && _provisioning.IsCompleted)
+            {
+                PythonEnvProvisioner.Result prov = _provisioning.IsFaulted
+                    ? new PythonEnvProvisioner.Result { error = _provisioning.Exception?.GetBaseException().Message }
+                    : _provisioning.Result;
+                _provisioning = null;
+                bool runSeparate = _separateAfterProvision;
+                _separateAfterProvision = false;
+                if (prov.success)
+                {
+                    _pythonPath = prov.pythonExe;
+                    SetMessage(prov.reused
+                        ? "Python 환경 확인 — 기존 venv 재사용"
+                        : "Python 환경 설치 완료 — " + prov.venvDir, MessageType.Info);
+                    if (runSeparate)
+                    {
+                        StartSeparation();
+                    }
+                }
+                else
+                {
+                    EditorUtility.ClearProgressBar();
+                    SetMessage("Python 환경 준비 실패: " + prov.error, MessageType.Error);
+                }
+            }
             if (_separating != null && _separating.IsCompleted)
             {
                 VocalStemSeparator.Result result = _separating.IsFaulted
@@ -82,12 +125,21 @@ namespace Fbx2Vmd.LipSync
             _engine = (VocalStemSeparator.Engine)EditorGUILayout.EnumPopup("분리 엔진", _engine);
             _model = EditorGUILayout.TextField("모델", _model);
             EditorGUILayout.BeginHorizontal();
-            _pythonPath = EditorGUILayout.TextField("python 경로", _pythonPath);
-            if (GUILayout.Button("자동 탐색", GUILayout.Width(80)))
+            using (new EditorGUI.DisabledScope(_provisioning != null))
             {
-                _pythonPath = VocalStemSeparator.FindPython() ?? _pythonPath;
+                _pythonPath = EditorGUILayout.TextField("python 경로", _pythonPath);
+            }
+            if (GUILayout.Button("환경 자동 준비", GUILayout.Width(100)))
+            {
+                StartProvisioning(false);
             }
             EditorGUILayout.EndHorizontal();
+            if (_provisioning != null)
+            {
+                EditorGUILayout.LabelField(
+                    "python venv 생성 + 패키지 설치 중(최초 수 분 소요)...",
+                    EditorStyles.miniLabel);
+            }
             EditorGUILayout.BeginHorizontal();
             _outputDir = EditorGUILayout.TextField("출력 폴더", _outputDir);
             if (GUILayout.Button("...", GUILayout.Width(30)))
@@ -97,11 +149,18 @@ namespace Fbx2Vmd.LipSync
             }
             EditorGUILayout.EndHorizontal();
 
-            using (new EditorGUI.DisabledScope(_separating != null))
+            using (new EditorGUI.DisabledScope(_separating != null || _provisioning != null))
             {
                 if (GUILayout.Button("보컬/BGM 분리"))
                 {
                     StartSeparation();
+                }
+            }
+            if (_separating != null || _provisioning != null)
+            {
+                if (GUILayout.Button("취소"))
+                {
+                    _cts?.Cancel();
                 }
             }
 
@@ -139,6 +198,23 @@ namespace Fbx2Vmd.LipSync
             DrawStatusLabel();
         }
 
+        private void StartProvisioning(bool separateAfter)
+        {
+            _separateAfterProvision = separateAfter;
+            RenewCts();
+            _provisioning = PythonEnvProvisioner.EnsureReadyAsync(
+                ProjectRoot, _engine, _cts.Token);
+            EditorUtility.DisplayProgressBar("Python 환경 준비",
+                "venv 생성/패키지 설치 중(최초 수 분 소요)...", 0.3f);
+            SetMessage("Python 환경 준비 중...", MessageType.Info);
+        }
+
+        private void RenewCts()
+        {
+            _cts?.Dispose();
+            _cts = new System.Threading.CancellationTokenSource();
+        }
+
         private void StartSeparation()
         {
             if (string.IsNullOrEmpty(_sourceAudioPath) || !File.Exists(_sourceAudioPath))
@@ -146,14 +222,25 @@ namespace Fbx2Vmd.LipSync
                 SetMessage("원본 음원 파일이 없습니다.", MessageType.Error);
                 return;
             }
+            // python 경로가 비었거나 파일이 없으면 환경 자동 준비부터 돌린다.
+            if (string.IsNullOrEmpty(_pythonPath) || !File.Exists(_pythonPath))
+            {
+                StartProvisioning(true);
+                return;
+            }
             if (!VocalStemSeparator.CheckInstalled(_engine, _pythonPath, out string installError))
             {
-                SetMessage(installError, MessageType.Error);
+                // 수동 지정 python에 패키지가 없으면 프로젝트 venv를 자동 준비한다.
+                SetMessage(installError + "\n→ 프로젝트 venv를 자동 준비합니다.", MessageType.Warning);
+                StartProvisioning(true);
                 return;
             }
             Directory.CreateDirectory(_outputDir);
+            RenewCts();
             _separating = VocalStemSeparator.SeparateAsync(
-                _engine, _pythonPath, _sourceAudioPath, _outputDir, _model);
+                _engine, _pythonPath, _sourceAudioPath, _outputDir, _model,
+                _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
+                PythonEnvProvisioner.ModelsDir(ProjectRoot));
             EditorUtility.DisplayProgressBar("보컬 분리", "오디오 스템 분리 중(수 분 소요)...", 0.5f);
             SetMessage("분리 실행 중...", MessageType.Info);
         }

@@ -147,6 +147,122 @@ namespace Fbx2Vmd.Tests.LipSync
             StringAssert.Contains("지원하지 않는", error);
         }
 
+        [Test]
+        public void WavParse_ExtensiblePcm16_SubFormat으로읽기()
+        {
+            // torchaudio/soundfile 계열이 내보내는 WAVE_FORMAT_EXTENSIBLE(0xFFFE) +
+            // SubFormat PCM GUID. demucs 출력에서 흔한 형태다.
+            var bytes = BuildExtensibleWavBytes(subFormatTag: 1, bits: 16,
+                channels: 1, freq: 44100,
+                pcm16: new short[] { 0, 10000, -10000 });
+            AudioClip clip = WavFileReader.Parse(bytes, "ext", out string error);
+            _cleanup.Add(clip);
+
+            Assert.IsNotNull(clip, error);
+            Assert.AreEqual(44100, clip.frequency);
+            Assert.AreEqual(3, clip.samples);
+            var data = new float[3];
+            clip.GetData(data, 0);
+            Assert.AreEqual(10000f / 32768f, data[1], 1e-4f);
+        }
+
+        [Test]
+        public void WavParse_ExtensibleFloat32_SubFormat으로읽기()
+        {
+            var bytes = BuildExtensibleWavBytes(subFormatTag: 3, bits: 32,
+                channels: 2, freq: 48000,
+                float32: new float[] { 0f, 0.5f, -0.5f, 1f });
+            AudioClip clip = WavFileReader.Parse(bytes, "extf", out string error);
+            _cleanup.Add(clip);
+
+            Assert.IsNotNull(clip, error);
+            Assert.AreEqual(2, clip.channels);
+            Assert.AreEqual(2, clip.samples);
+            var data = new float[4];
+            clip.GetData(data, 0);
+            Assert.AreEqual(0.5f, data[1], 1e-6f);
+            Assert.AreEqual(-0.5f, data[2], 1e-6f);
+        }
+
+        // ---------- 프로비저너 순수 함수 ----------
+
+        [Test]
+        public void Provisioner_엔진별파일명_구분()
+        {
+            StringAssert.Contains("audio-separator",
+                PythonEnvProvisioner.RequirementsFileName(
+                    VocalStemSeparator.Engine.AudioSeparator));
+            StringAssert.Contains("demucs",
+                PythonEnvProvisioner.RequirementsFileName(
+                    VocalStemSeparator.Engine.Demucs));
+            Assert.AreNotEqual(
+                PythonEnvProvisioner.MarkerFileName(VocalStemSeparator.Engine.AudioSeparator),
+                PythonEnvProvisioner.MarkerFileName(VocalStemSeparator.Engine.Demucs));
+        }
+
+        [Test]
+        public void Provisioner_venv경로와파이썬경로()
+        {
+            string venv = PythonEnvProvisioner.VenvDir("C:\\proj");
+            StringAssert.Contains(Path.Combine("Tools", "LipSync"), venv);
+            string py = PythonEnvProvisioner.VenvPythonPath(venv);
+            StringAssert.Contains("Scripts", py);
+            StringAssert.EndsWith("python.exe", py);
+        }
+
+        [Test]
+        public void Provisioner_해시는결정적_내용다르면다름()
+        {
+            string h1 = PythonEnvProvisioner.RequirementsHash("a==1.0\n");
+            Assert.AreEqual(h1, PythonEnvProvisioner.RequirementsHash("a==1.0\n"));
+            Assert.AreNotEqual(h1, PythonEnvProvisioner.RequirementsHash("a==2.0\n"));
+        }
+
+        private static byte[] BuildExtensibleWavBytes(int subFormatTag, int bits,
+            int channels, int freq, short[] pcm16 = null, float[] float32 = null)
+        {
+            // fmt(40B, tag=0xFFFE) + data 청크로 구성한 EXTENSIBLE WAV.
+            using (var ms = new MemoryStream())
+            using (var w = new BinaryWriter(ms))
+            {
+                int bytesPerSample = bits / 8;
+                int sampleCount = pcm16?.Length ?? float32?.Length ?? 0;
+                int dataSize = sampleCount * bytesPerSample;
+                int byteRate = freq * channels * bytesPerSample;
+                int blockAlign = channels * bytesPerSample;
+
+                w.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+                w.Write(4 + (8 + 40) + (8 + dataSize));
+                w.Write(System.Text.Encoding.ASCII.GetBytes("WAVE"));
+                w.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
+                w.Write(40);
+                w.Write(unchecked((short)0xFFFE));
+                w.Write((short)channels);
+                w.Write(freq);
+                w.Write(byteRate);
+                w.Write((short)blockAlign);
+                w.Write((short)bits);
+                w.Write((short)22);           // cbSize
+                w.Write((short)bits);         // validBitsPerSample
+                w.Write(channels == 1 ? 0x4 : 0x3); // channelMask
+                w.Write(subFormatTag);        // SubFormat GUID Data1(앞 2B=실제 포맷)
+                w.Write((short)0);
+                w.Write(new byte[] { 0x00, 0x00, 0x00, 0x10, 0x80, 0x00,
+                                     0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 });
+                w.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+                w.Write(dataSize);
+                if (pcm16 != null)
+                {
+                    foreach (short s in pcm16) w.Write(s);
+                }
+                else
+                {
+                    foreach (float f in float32) w.Write(f);
+                }
+                return ms.ToArray();
+            }
+        }
+
         // ---------- 커브 생성 ----------
 
         [Test]

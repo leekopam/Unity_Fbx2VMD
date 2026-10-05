@@ -62,6 +62,11 @@ namespace Fbx2Vmd.LipSync
                     channels = BitConverter.ToInt16(bytes, body + 2);
                     frequency = BitConverter.ToInt32(bytes, body + 4);
                     bitsPerSample = BitConverter.ToInt16(bytes, body + 14);
+                    // WAVE_FORMAT_EXTENSIBLE(0xFFFE) — SubFormat GUID 앞 2바이트가 실제 포맷
+                    if (formatTag == unchecked((short)0xFFFE) && chunkSize >= 40)
+                    {
+                        formatTag = BitConverter.ToInt16(bytes, body + 24);
+                    }
                 }
                 else if (chunkId == 0x61746164) // "data"
                 {

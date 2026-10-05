@@ -200,6 +200,9 @@ Assets/Resources/Import_FBX.meta
 **/venv/
 **/venv.meta
 
+# 보컬 분리 모델 캐시(수백MB 체크포인트/토치 허브)는 업로드하지 않는다.
+/Tools/LipSync/.models/
+
 # MMD4Mecanim iOS binary ignore
 Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 
