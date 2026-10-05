@@ -55,8 +55,9 @@ namespace Fbx2Vmd.LipSync
                 {
                     break; // 음수 크기는 손상 파일 — offset 정체로 인한 무한루프 방지
                 }
-                if (body + chunkSize > bytes.Length)
+                if (chunkSize > bytes.Length - body)
                 {
+                    // body+chunkSize 대신 이 형태로 비교해 int 오버플로를 피한다.
                     chunkSize = bytes.Length - body;
                 }
 

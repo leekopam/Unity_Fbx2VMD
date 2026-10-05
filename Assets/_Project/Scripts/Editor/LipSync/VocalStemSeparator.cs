@@ -92,6 +92,10 @@ namespace Fbx2Vmd.LipSync
 
             foreach (string f in files)
             {
+                if (vocalPath != null && instrumentalPath != null)
+                {
+                    break; // 최신순 정렬이라 첫 매치가 최신 — 둘 다 찾으면 종료
+                }
                 string name = Path.GetFileName(f);
                 if (engine == Engine.Demucs)
                 {
@@ -101,25 +105,27 @@ namespace Fbx2Vmd.LipSync
                     bool nameMatch = string.Equals(parent, baseName, StringComparison.OrdinalIgnoreCase);
                     if (name.Equals("vocals.wav", StringComparison.OrdinalIgnoreCase) && nameMatch)
                     {
-                        vocalPath = f;
+                        vocalPath ??= f;
                     }
                     else if (name.Equals("no_vocals.wav", StringComparison.OrdinalIgnoreCase) && nameMatch)
                     {
-                        instrumentalPath = f;
+                        instrumentalPath ??= f;
                     }
                 }
                 else
                 {
                     // audio-separator: <곡명>_(Vocals)_<모델>.wav / _(Instrumental)_
-                    if (name.IndexOf("(Vocals)", StringComparison.OrdinalIgnoreCase) >= 0
-                        && name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                    // baseName 뒤에 반드시 '_'가 와야 해서 song→song2 오매치를 막는다.
+                    bool nameMatch = name.StartsWith(baseName + "_", StringComparison.OrdinalIgnoreCase);
+                    if (nameMatch
+                        && name.IndexOf("(Vocals)", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        vocalPath = f;
+                        vocalPath ??= f;
                     }
-                    else if (name.IndexOf("(Instrumental)", StringComparison.OrdinalIgnoreCase) >= 0
-                        && name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                    else if (nameMatch
+                        && name.IndexOf("(Instrumental)", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        instrumentalPath = f;
+                        instrumentalPath ??= f;
                     }
                 }
             }
@@ -198,10 +204,19 @@ namespace Fbx2Vmd.LipSync
                 result.error = $"음원 파일이 없습니다: {inputPath}";
                 return result;
             }
-            Directory.CreateDirectory(outputDir);
+            try
+            {
+                Directory.CreateDirectory(outputDir);
+            }
+            catch (Exception error)
+            {
+                result.error = $"출력 폴더를 만들 수 없습니다: {error.Message}";
+                return result;
+            }
 
             string args = BuildArguments(engine, inputPath, outputDir, model, modelDir);
-            DateTime runStartUtc = DateTime.UtcNow;
+            // FAT32/exFAT의 mtime 2초 단위 때문에 실행 시각보다 살짝 여유를 둔다.
+            DateTime runStartUtc = DateTime.UtcNow.AddSeconds(-2);
             int code = RunSync(pythonPath, args, outputDir, out string output,
                 timeoutSec: 3600, ct: ct, env: env);
             result.logTail = Tail(output, 4000);
@@ -312,7 +327,7 @@ namespace Fbx2Vmd.LipSync
                 // 손자 프로세스까지 끝내려고 Windows taskkill /T를 먼저 쓴다.
                 try
                 {
-                    var killer = Process.Start(new ProcessStartInfo
+                    using (var killer = Process.Start(new ProcessStartInfo
                     {
                         FileName = "taskkill",
                         Arguments = $"/PID {process.Id} /T /F",
@@ -320,8 +335,10 @@ namespace Fbx2Vmd.LipSync
                         CreateNoWindow = true,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true
-                    });
-                    killer?.WaitForExit(5000);
+                    }))
+                    {
+                        killer?.WaitForExit(5000);
+                    }
                 }
                 catch (Exception)
                 {

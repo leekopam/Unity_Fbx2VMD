@@ -99,6 +99,10 @@ namespace Fbx2Vmd.LipSync
                         StartSeparation();
                     }
                 }
+                else if (cancelled)
+                {
+                    SetMessage("Python 환경 준비가 취소됐습니다.", MessageType.Info);
+                }
                 else
                 {
                     SetMessage("Python 환경 준비 실패: " + prov.error, MessageType.Error);
@@ -122,6 +126,10 @@ namespace Fbx2Vmd.LipSync
                     _vocalWavPath = result.vocalPath;
                     _bgmWavPath = result.instrumentalPath ?? "";
                     SetMessage($"분리 완료 — 보컬: {Path.GetFileName(_vocalWavPath)}", MessageType.Info);
+                }
+                else if (cancelled)
+                {
+                    SetMessage("분리가 취소됐습니다.", MessageType.Info);
                 }
                 else
                 {
