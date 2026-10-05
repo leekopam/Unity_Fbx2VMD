@@ -127,7 +127,9 @@ crashlytics-build.properties
 *.FBX
 *.[fF][bB][xX].meta
 Assets/_Project/FBX/
+Assets/_Project/FBX.meta
 Assets/Resources/Import_FBX/
+Assets/Resources/Import_FBX.meta
 
 # CI 성능 테스트용 소형 FBX 픽스처만 예외로 추적한다.
 !Assets/_Project/Tests/PerfFixtures/
@@ -176,6 +178,7 @@ Assets/Resources/Import_FBX/
 /Assets/MMD4Mecanim.meta
 /Assets/Plugins/VMDRecorderSample/
 /Assets/Plugins/VMDRecorderSample.meta
+/Assets/VMDRecorderSample.meta
 /Assets/_ManualReference/
 /Assets/_ManualReference.meta
 /Assets/_Project/Model/
