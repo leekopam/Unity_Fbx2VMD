@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -46,13 +48,13 @@ namespace Fbx2Vmd.LipSync
 
         public static string VenvDir(string projectRoot)
         {
-            return Path.Combine(projectRoot, ToolDir, ".venv");
+            return Path.Combine(projectRoot, "Tools", "LipSync", ".venv");
         }
 
         /// <summary>분리 모델/토치 허브 캐시. Git·Assets 밖에 둔다.</summary>
         public static string ModelsDir(string projectRoot)
         {
-            return Path.Combine(projectRoot, ToolDir, ".models");
+            return Path.Combine(projectRoot, "Tools", "LipSync", ".models");
         }
 
         /// <summary>venv 안의 python 실행 파일 경로(Windows 기준).</summary>
@@ -116,7 +118,7 @@ namespace Fbx2Vmd.LipSync
             foreach (string dir in dirs)
             {
                 string py = Path.Combine(dir, "py.exe");
-                if (File.Exists(py))
+                if (IsUsableBasePython(py, "-3"))
                 {
                     program = py;
                     prefixArgs = "-3";
@@ -128,7 +130,7 @@ namespace Fbx2Vmd.LipSync
                 foreach (string name in new[] { "python.exe", "python3.exe" })
                 {
                     string candidate = Path.Combine(dir, name);
-                    if (File.Exists(candidate))
+                    if (IsUsableBasePython(candidate, string.Empty))
                     {
                         program = candidate;
                         return true;
@@ -137,6 +139,52 @@ namespace Fbx2Vmd.LipSync
             }
             program = null;
             return false;
+        }
+
+        /// <summary>후보가 실제 실행 가능한 Python>=3.10인지 확인한다.
+        /// Microsoft Store 스텁(WindowsApps)은 존재하지만 실행이 안 되므로 제외.</summary>
+        private static bool IsUsableBasePython(string program, string prefixArgs)
+        {
+            if (string.IsNullOrEmpty(program) || !File.Exists(program))
+            {
+                return false;
+            }
+            if (program.IndexOf("\\Microsoft\\WindowsApps\\", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return false;
+            }
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = program,
+                    Arguments = (string.IsNullOrEmpty(prefixArgs) ? "" : prefixArgs + " ") + "--version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using (var p = Process.Start(startInfo))
+                {
+                    if (p == null || !p.WaitForExit(10000) || p.ExitCode != 0)
+                    {
+                        return false;
+                    }
+                    string text = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+                    var m = Regex.Match(text, @"Python\s+(\d+)\.(\d+)");
+                    if (!m.Success)
+                    {
+                        return false;
+                    }
+                    int major = int.Parse(m.Groups[1].Value);
+                    int minor = int.Parse(m.Groups[2].Value);
+                    return major > 3 || (major == 3 && minor >= 10);
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>백그라운드 Task로 환경 준비를 돌린다. 호출부는 완료를 폴링한다.</summary>

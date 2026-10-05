@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,9 +66,11 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
-        /// <summary>출력 디렉터리에서 보컬/반주 파일을 찾는다. 순수 함수라 테스트 가능.</summary>
+        /// <summary>출력 디렉터리에서 보컬/반주 파일을 찾는다. 순수 함수라 테스트 가능.
+        /// minWriteUtc를 주면 그 시각 이후에 기록된 파일만 대상으로 삼아 이전 실행 산출물을 배제한다.</summary>
         public static void ResolveOutputs(Engine engine, string outputDir, string inputPath,
-            out string vocalPath, out string instrumentalPath)
+            out string vocalPath, out string instrumentalPath,
+            DateTime? minWriteUtc = null)
         {
             vocalPath = null;
             instrumentalPath = null;
@@ -78,6 +81,12 @@ namespace Fbx2Vmd.LipSync
 
             string baseName = Path.GetFileNameWithoutExtension(inputPath);
             var files = new List<string>(Directory.GetFiles(outputDir, "*.wav", SearchOption.AllDirectories));
+            if (minWriteUtc.HasValue)
+            {
+                files = files.Where(f => File.GetLastWriteTimeUtc(f) >= minWriteUtc.Value).ToList();
+            }
+            // 이전 실행의 stale 파일이 남아 있을 수 있으니 최신 기록 파일을 우선한다.
+            files.Sort((a, b) => File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a)));
 
             foreach (string f in files)
             {
@@ -85,13 +94,14 @@ namespace Fbx2Vmd.LipSync
                 if (engine == Engine.Demucs)
                 {
                     // demucs: <out>/<model>/<곡명>/vocals.wav, no_vocals.wav
-                    if (name.Equals("vocals.wav", StringComparison.OrdinalIgnoreCase)
-                        && f.Contains(baseName))
+                    // 곡명은 부모 디렉터리명과 정확히 일치해야 한다(경로 부분 문자열 오매치 방지).
+                    string parent = Path.GetFileName(Path.GetDirectoryName(f));
+                    bool nameMatch = string.Equals(parent, baseName, StringComparison.OrdinalIgnoreCase);
+                    if (name.Equals("vocals.wav", StringComparison.OrdinalIgnoreCase) && nameMatch)
                     {
                         vocalPath = f;
                     }
-                    else if (name.Equals("no_vocals.wav", StringComparison.OrdinalIgnoreCase)
-                        && f.Contains(baseName))
+                    else if (name.Equals("no_vocals.wav", StringComparison.OrdinalIgnoreCase) && nameMatch)
                     {
                         instrumentalPath = f;
                     }
@@ -189,6 +199,7 @@ namespace Fbx2Vmd.LipSync
             Directory.CreateDirectory(outputDir);
 
             string args = BuildArguments(engine, inputPath, outputDir, model, modelDir);
+            DateTime runStartUtc = DateTime.UtcNow;
             int code = RunSync(pythonPath, args, outputDir, out string output,
                 timeoutSec: 3600, ct: ct, env: env);
             result.logTail = Tail(output, 4000);
@@ -199,7 +210,8 @@ namespace Fbx2Vmd.LipSync
             }
 
             ResolveOutputs(engine, outputDir, inputPath,
-                out result.vocalPath, out result.instrumentalPath);
+                out result.vocalPath, out result.instrumentalPath,
+                minWriteUtc: runStartUtc);
             if (result.vocalPath == null)
             {
                 result.error = "분리는 성공했으나 보컬 출력을 찾지 못했습니다:\n" + result.logTail;
@@ -290,6 +302,29 @@ namespace Fbx2Vmd.LipSync
         {
             try
             {
+                if (process.HasExited)
+                {
+                    return;
+                }
+                // Process.Kill은 직계 프로세스만 종료하므로 demucs 워커 같은
+                // 손자 프로세스까지 끝내려고 Windows taskkill /T를 먼저 쓴다.
+                try
+                {
+                    var killer = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "taskkill",
+                        Arguments = $"/PID {process.Id} /T /F",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    });
+                    killer?.WaitForExit(5000);
+                }
+                catch (Exception)
+                {
+                    // taskkill 실패 시 직계 종료로 폴백한다.
+                }
                 if (!process.HasExited)
                 {
                     process.Kill();
