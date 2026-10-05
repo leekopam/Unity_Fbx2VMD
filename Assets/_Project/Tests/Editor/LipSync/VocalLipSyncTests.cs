@@ -265,6 +265,34 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.IsNull(StemAudioPreview.PlayingPath);
         }
 
+        // ---------- 분리 진행률 파싱 ----------
+
+        [Test]
+        public void ReportProgress_tqdm퍼센트를파싱()
+        {
+            float last = -1f;
+            VocalStemSeparator.ReportProgress(" 42%|████      | 3/7 [00:05<00:07]", p => last = p);
+            Assert.AreEqual(0.42f, last, 0.001f);
+        }
+
+        [Test]
+        public void ReportProgress_여러퍼센트는마지막것()
+        {
+            // \r로 이어진 tqdm 갱신이 한 라인으로 오면 마지막 %를 쓴다.
+            float last = -1f;
+            VocalStemSeparator.ReportProgress("\r 10%|#|\r 55%|#####|\r 99%|#########|", p => last = p);
+            Assert.AreEqual(0.99f, last, 0.001f);
+        }
+
+        [Test]
+        public void ReportProgress_퍼센트없으면무시_콜백null도무시()
+        {
+            bool called = false;
+            VocalStemSeparator.ReportProgress("loading model...", p => called = true);
+            Assert.IsFalse(called);
+            VocalStemSeparator.ReportProgress("50%", null); // 예외 없어야 함
+        }
+
         private static byte[] BuildExtensibleWavBytes(int subFormatTag, int bits,
             int channels, int freq, short[] pcm16 = null, float[] float32 = null)
         {

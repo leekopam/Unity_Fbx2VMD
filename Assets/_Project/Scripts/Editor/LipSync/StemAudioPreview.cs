@@ -113,7 +113,8 @@ namespace Fbx2Vmd.LipSync
         public static bool IsPlaying()
         {
             Resolve();
-            return _isPlaying != null && (bool)_isPlaying.Invoke(null, null);
+            return _isPlaying != null
+                && _isPlaying.Invoke(null, null) is bool playing && playing;
         }
 
         /// <summary>자연 종료 시 상태를 비운다. 상태가 바뀌었으면 true.</summary>
@@ -151,8 +152,13 @@ namespace Fbx2Vmd.LipSync
                     }
                     return clip;
                 case Loader.WavFile:
-                    _ownsClip = true;
-                    return WavFileReader.Load(path, out error);
+                    // 성공 확인 후에 소유권을 표시한다 — 실패 시 잔여 상태 방지.
+                    var wavClip = WavFileReader.Load(path, out error);
+                    if (wavClip != null)
+                    {
+                        _ownsClip = true;
+                    }
+                    return wavClip;
                 default:
                     error = "미리듣기는 WAV 또는 프로젝트 내 오디오 파일만 지원합니다.";
                     return null;
@@ -160,8 +166,8 @@ namespace Fbx2Vmd.LipSync
         }
 
         /// <summary>
-        /// AudioUtil은 Unity 버전별로 이름이 다르다 — 2022는 PlayPreviewClip,
-        /// 2023+는 PlayClip. 정지/재생중 확인도 같은 패턴으로 탐색한다.
+        /// AudioUtil의 프리뷰 API는 Unity 버전별로 이름이 갈린다
+        /// (PreviewClip 계열과 Clip 계열이 공존/개명됐다) — 양쪽 이름을 모두 탐색한다.
         /// </summary>
         static void Resolve()
         {

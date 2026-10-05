@@ -36,6 +36,7 @@ namespace Fbx2Vmd.LipSync
         private bool _separateAfterProvision;
         private string _message = "";
         private MessageType _messageType = MessageType.Info;
+        private float _sepProgress; // 분리 진행률 0~1 (워커 스레드에서 갱신)
 
         /// <summary>프로젝트 루트 — Assets의 부모.</summary>
         private static string ProjectRoot =>
@@ -121,6 +122,7 @@ namespace Fbx2Vmd.LipSync
                     }
                     : _separating.Result;
                 _separating = null;
+                _sepProgress = 0f;
                 EditorUtility.ClearProgressBar();
                 if (result.success)
                 {
@@ -141,6 +143,14 @@ namespace Fbx2Vmd.LipSync
             if (StemAudioPreview.ClearIfFinished())
             {
                 Repaint();
+            }
+            // 분리 중엔 진행률 바 갱신을 위해 매 프레임 다시 그린다.
+            if (_separating != null)
+            {
+                Repaint();
+                EditorUtility.DisplayProgressBar("보컬 분리",
+                    _sepProgress > 0f ? "오디오 스템 분리 중…" : "모델 로딩/입력 분석 중…",
+                    _sepProgress > 0f ? _sepProgress : 0.05f);
             }
         }
 
@@ -189,6 +199,18 @@ namespace Fbx2Vmd.LipSync
                 {
                     _cts?.Cancel();
                 }
+            }
+            if (_separating != null)
+            {
+                // tqdm 퍼센트가 아직 안 잡히면 준비 단계로 표시한다.
+                Rect rect = EditorGUILayout.GetControlRect(false, 18f);
+                float shown = _sepProgress > 0f
+                    ? _sepProgress
+                    : Mathf.PingPong((float)EditorApplication.timeSinceStartup * 0.3f, 1f);
+                string label = _sepProgress > 0f
+                    ? $"분리 중… {(_sepProgress * 100f):F0}%"
+                    : "분리 준비 중…(모델 로딩/입력 분석)";
+                EditorGUI.ProgressBar(rect, shown, label);
             }
 
             EditorGUILayout.Space(10);
@@ -274,10 +296,12 @@ namespace Fbx2Vmd.LipSync
             }
             Directory.CreateDirectory(_outputDir);
             RenewCts();
+            _sepProgress = 0f;
             _separating = VocalStemSeparator.SeparateAsync(
                 _engine, _pythonPath, _sourceAudioPath, _outputDir, _model,
                 _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
-                PythonEnvProvisioner.ModelsDir(ProjectRoot));
+                PythonEnvProvisioner.ModelsDir(ProjectRoot),
+                p => _sepProgress = p);
             EditorUtility.DisplayProgressBar("보컬 분리", "오디오 스템 분리 중(수 분 소요)...", 0.5f);
             SetMessage("분리 실행 중...", MessageType.Info);
         }

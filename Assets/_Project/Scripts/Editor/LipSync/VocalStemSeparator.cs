@@ -176,22 +176,24 @@ namespace Fbx2Vmd.LipSync
             return false;
         }
 
-        /// <summary>분리를 백그라운드에서 실행한다. 호출부는 Task 완료를 폴링한다.</summary>
+        /// <summary>분리를 백그라운드에서 실행한다. 호출부는 Task 완료를 폴링한다.
+        /// onProgress(0~1)는 출력 로그의 tqdm 진행률을 파싱해 워커 스레드에서 통지한다.</summary>
         public static Task<Result> SeparateAsync(Engine engine, string pythonPath,
             string inputPath, string outputDir, string model,
             CancellationToken ct = default,
             IReadOnlyDictionary<string, string> env = null,
-            string modelDir = null)
+            string modelDir = null, Action<float> onProgress = null)
         {
             return Task.Run(() => Separate(
-                engine, pythonPath, inputPath, outputDir, model, ct, env, modelDir), ct);
+                engine, pythonPath, inputPath, outputDir, model, ct, env, modelDir,
+                onProgress), ct);
         }
 
         public static Result Separate(Engine engine, string pythonPath,
             string inputPath, string outputDir, string model,
             CancellationToken ct = default,
             IReadOnlyDictionary<string, string> env = null,
-            string modelDir = null)
+            string modelDir = null, Action<float> onProgress = null)
         {
             var result = new Result();
             if (string.IsNullOrEmpty(pythonPath) || !File.Exists(pythonPath))
@@ -222,7 +224,7 @@ namespace Fbx2Vmd.LipSync
             // FAT32/exFAT의 mtime 2초 단위 때문에 실행 시각보다 살짝 여유를 둔다.
             DateTime runStartUtc = DateTime.UtcNow.AddSeconds(-2);
             int code = RunSync(pythonPath, args, outputDir, out string output,
-                timeoutSec: 3600, ct: ct, env: env);
+                timeoutSec: 3600, ct: ct, env: env, onProgress: onProgress);
             result.logTail = Tail(output, 4000);
             if (code != 0)
             {
@@ -245,10 +247,12 @@ namespace Fbx2Vmd.LipSync
         /// <summary>
         /// 동기 프로세스 실행 — 프로비저너와 공유한다. ct 취소 시 프로세스를 죽인다.
         /// env를 주면 기존 환경변수 위에 덮어쓴다(모델 캐시 경로 고정 등).
+        /// onProgress가 있으면 출력 라인의 tqdm "NN%"를 파싱해 0~1로 통지한다.
         /// </summary>
         internal static int RunSync(string program, string arguments, string workDir,
             out string output, int timeoutSec, CancellationToken ct = default,
-            IReadOnlyDictionary<string, string> env = null)
+            IReadOnlyDictionary<string, string> env = null,
+            Action<float> onProgress = null)
         {
             var startInfo = new ProcessStartInfo
             {
@@ -279,11 +283,15 @@ namespace Fbx2Vmd.LipSync
                     // 두 핸들러는 별도 스레드에서 오므로 Append는 lock으로 직렬화한다.
                     process.OutputDataReceived += (s, e) =>
                     {
-                        if (e.Data != null) lock (sbLock) sb.AppendLine(e.Data);
+                        if (e.Data == null) return;
+                        lock (sbLock) sb.AppendLine(e.Data);
+                        ReportProgress(e.Data, onProgress);
                     };
                     process.ErrorDataReceived += (s, e) =>
                     {
-                        if (e.Data != null) lock (sbLock) sb.AppendLine(e.Data);
+                        if (e.Data == null) return;
+                        lock (sbLock) sb.AppendLine(e.Data);
+                        ReportProgress(e.Data, onProgress);
                     };
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
@@ -316,6 +324,29 @@ namespace Fbx2Vmd.LipSync
             {
                 output = error.ToString();
                 return -2;
+            }
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex ProgressPattern =
+            new System.Text.RegularExpressions.Regex(@"(\d{1,3})\s*%",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        /// <summary>tqdm 라인(` 45%|██|` — \r로 이어진 갱신이 한 덩어리로 올 수 있음)에서
+        /// 마지막 퍼센트를 읽어 진행률로 통지한다. 퍼센트가 없으면 아무 것도 안 한다.</summary>
+        internal static void ReportProgress(string line, Action<float> onProgress)
+        {
+            if (onProgress == null || string.IsNullOrEmpty(line))
+            {
+                return;
+            }
+            var matches = ProgressPattern.Matches(line);
+            if (matches.Count == 0)
+            {
+                return;
+            }
+            if (int.TryParse(matches[matches.Count - 1].Groups[1].Value, out int pct))
+            {
+                onProgress(Math.Min(1f, Math.Max(0f, pct / 100f)));
             }
         }
 
