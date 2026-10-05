@@ -68,18 +68,26 @@ namespace Fbx2Vmd.LipSync
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            EditorUtility.ClearProgressBar();
         }
 
         private void Update()
         {
             if (_provisioning != null && _provisioning.IsCompleted)
             {
-                PythonEnvProvisioner.Result prov = _provisioning.IsFaulted
-                    ? new PythonEnvProvisioner.Result { error = _provisioning.Exception?.GetBaseException().Message }
+                bool cancelled = _provisioning.IsCanceled;
+                PythonEnvProvisioner.Result prov = cancelled || _provisioning.IsFaulted
+                    ? new PythonEnvProvisioner.Result
+                    {
+                        error = cancelled
+                            ? "사용자가 취소했습니다."
+                            : _provisioning.Exception?.GetBaseException().Message
+                    }
                     : _provisioning.Result;
                 _provisioning = null;
                 bool runSeparate = _separateAfterProvision;
                 _separateAfterProvision = false;
+                EditorUtility.ClearProgressBar();
                 if (prov.success)
                 {
                     _pythonPath = prov.pythonExe;
@@ -93,14 +101,19 @@ namespace Fbx2Vmd.LipSync
                 }
                 else
                 {
-                    EditorUtility.ClearProgressBar();
                     SetMessage("Python 환경 준비 실패: " + prov.error, MessageType.Error);
                 }
             }
             if (_separating != null && _separating.IsCompleted)
             {
-                VocalStemSeparator.Result result = _separating.IsFaulted
-                    ? new VocalStemSeparator.Result { error = _separating.Exception?.GetBaseException().Message }
+                bool cancelled = _separating.IsCanceled;
+                VocalStemSeparator.Result result = cancelled || _separating.IsFaulted
+                    ? new VocalStemSeparator.Result
+                    {
+                        error = cancelled
+                            ? "사용자가 취소했습니다."
+                            : _separating.Exception?.GetBaseException().Message
+                    }
                     : _separating.Result;
                 _separating = null;
                 EditorUtility.ClearProgressBar();
@@ -125,13 +138,13 @@ namespace Fbx2Vmd.LipSync
             _engine = (VocalStemSeparator.Engine)EditorGUILayout.EnumPopup("분리 엔진", _engine);
             _model = EditorGUILayout.TextField("모델", _model);
             EditorGUILayout.BeginHorizontal();
-            using (new EditorGUI.DisabledScope(_provisioning != null))
+            using (new EditorGUI.DisabledScope(_provisioning != null || _separating != null))
             {
                 _pythonPath = EditorGUILayout.TextField("python 경로", _pythonPath);
-            }
-            if (GUILayout.Button("환경 자동 준비", GUILayout.Width(100)))
-            {
-                StartProvisioning(false);
+                if (GUILayout.Button("환경 자동 준비", GUILayout.Width(100)))
+                {
+                    StartProvisioning(false);
+                }
             }
             EditorGUILayout.EndHorizontal();
             if (_provisioning != null)
@@ -200,6 +213,10 @@ namespace Fbx2Vmd.LipSync
 
         private void StartProvisioning(bool separateAfter)
         {
+            if (_provisioning != null || _separating != null)
+            {
+                return; // 진행 중 재진입 — 실행 중 Task의 CTS 폐기·동시 설치 방지
+            }
             _separateAfterProvision = separateAfter;
             RenewCts();
             _provisioning = PythonEnvProvisioner.EnsureReadyAsync(
@@ -228,7 +245,14 @@ namespace Fbx2Vmd.LipSync
                 StartProvisioning(true);
                 return;
             }
-            if (!VocalStemSeparator.CheckInstalled(_engine, _pythonPath, out string installError))
+            // 프로비저닝된 venv는 EnsureReady에서 이미 import 검증을 마쳤으므로
+            // 메인스레드 동기 import 검사(최대 수 초 블로킹)를 생략한다.
+            bool isProvisionedVenv = string.Equals(
+                _pythonPath,
+                PythonEnvProvisioner.VenvPythonPath(PythonEnvProvisioner.VenvDir(ProjectRoot)),
+                System.StringComparison.OrdinalIgnoreCase);
+            if (!isProvisionedVenv
+                && !VocalStemSeparator.CheckInstalled(_engine, _pythonPath, out string installError))
             {
                 // 수동 지정 python에 패키지가 없으면 프로젝트 venv를 자동 준비한다.
                 SetMessage(installError + "\n→ 프로젝트 venv를 자동 준비합니다.", MessageType.Warning);

@@ -246,9 +246,9 @@ namespace Fbx2Vmd.Tests.LipSync
                 w.Write((short)bits);         // validBitsPerSample
                 w.Write(channels == 1 ? 0x4 : 0x3); // channelMask
                 w.Write(subFormatTag);        // SubFormat GUID Data1(앞 2B=실제 포맷)
-                w.Write((short)0);
-                w.Write(new byte[] { 0x00, 0x00, 0x00, 0x10, 0x80, 0x00,
-                                     0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 });
+                w.Write((short)0);            // Data2
+                w.Write(new byte[] { 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA,
+                                     0x00, 0x38, 0x9B, 0x71 }); // Data3+Data4(10B)
                 w.Write(System.Text.Encoding.ASCII.GetBytes("data"));
                 w.Write(dataSize);
                 if (pcm16 != null)

@@ -237,13 +237,21 @@ namespace Fbx2Vmd.LipSync
                 }
             }
             var sb = new StringBuilder();
+            var sbLock = new object();
             try
             {
                 using (var process = Process.Start(startInfo))
                 {
                     // stdout/stderr를 동시에 비동기로 읽어 버퍼 데드락을 막는다.
-                    process.OutputDataReceived += (s, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
-                    process.ErrorDataReceived += (s, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+                    // 두 핸들러는 별도 스레드에서 오므로 Append는 lock으로 직렬화한다.
+                    process.OutputDataReceived += (s, e) =>
+                    {
+                        if (e.Data != null) lock (sbLock) sb.AppendLine(e.Data);
+                    };
+                    process.ErrorDataReceived += (s, e) =>
+                    {
+                        if (e.Data != null) lock (sbLock) sb.AppendLine(e.Data);
+                    };
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
                     using (ct.Register(() => TryKill(process)))
@@ -251,13 +259,13 @@ namespace Fbx2Vmd.LipSync
                         if (!process.WaitForExit(timeoutSec * 1000))
                         {
                             TryKill(process);
-                            output = sb + "\n[timeout]";
+                            lock (sbLock) output = sb + "\n[timeout]";
                             return -1;
                         }
                     }
                     // 비동기 출력 핸들러의 잔여 라인까지 플러시되길 한 번 더 기다린다.
                     process.WaitForExit();
-                    output = sb.ToString();
+                    lock (sbLock) output = sb.ToString();
                     if (ct.IsCancellationRequested)
                     {
                         output += "\n[cancelled]";
@@ -268,7 +276,7 @@ namespace Fbx2Vmd.LipSync
             }
             catch (OperationCanceledException)
             {
-                output = sb + "\n[cancelled]";
+                lock (sbLock) output = sb + "\n[cancelled]";
                 return -1;
             }
             catch (Exception error)

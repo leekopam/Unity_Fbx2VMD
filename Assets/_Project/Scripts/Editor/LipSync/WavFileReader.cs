@@ -51,12 +51,16 @@ namespace Fbx2Vmd.LipSync
                 int chunkId = BitConverter.ToInt32(bytes, offset);
                 int chunkSize = BitConverter.ToInt32(bytes, offset + 4);
                 int body = offset + 8;
+                if (chunkSize < 0)
+                {
+                    break; // 음수 크기는 손상 파일 — offset 정체로 인한 무한루프 방지
+                }
                 if (body + chunkSize > bytes.Length)
                 {
                     chunkSize = bytes.Length - body;
                 }
 
-                if (chunkId == 0x20746D66) // "fmt "
+                if (chunkId == 0x20746D66 && chunkSize >= 16) // "fmt "
                 {
                     formatTag = BitConverter.ToInt16(bytes, body);
                     channels = BitConverter.ToInt16(bytes, body + 2);
@@ -104,7 +108,7 @@ namespace Fbx2Vmd.LipSync
             }
             else
             {
-                error = $"지원하지 않는 WAV 포맷(format={formatTag}, bits={bitsPerSample}). PCM16 또는 float32만 지원합니다.";
+                error = $"지원하지 않는 WAV 포맷(format=0x{formatTag & 0xFFFF:X4}, bits={bitsPerSample}). PCM16 또는 float32만 지원합니다.";
                 return null;
             }
 
