@@ -340,6 +340,8 @@ namespace Fbx2Vmd.LipSync
             float dt = 1f / BakeFrameRate;
             float kneeEnd = Mathf.Min(minVolumeGate * 2f, 1f);
             float kneeRange = Mathf.Max(kneeEnd - minVolumeGate, 1e-6f);
+            // 1.0은 영구 피크홀드라 입이 안 닫힌다 — 문서 계약(0~0.95)에 맞게 상한 클램프.
+            float damp = Mathf.Clamp(releaseDamp, 0f, 0.95f);
             float smoothed = 0f;
             for (int i = 0; i < data.frames.Count; i++)
             {
@@ -359,7 +361,7 @@ namespace Fbx2Vmd.LipSync
                     info.phonemeRatios.TryGetValue(phoneme, out ratio);
                 }
                 float raw = ratio * volume * bindingWeight;
-                smoothed = Mathf.Max(raw, smoothed * Mathf.Clamp01(releaseDamp));
+                smoothed = Mathf.Max(raw, smoothed * damp);
                 keys.Add(new Keyframe(i * dt, smoothed));
             }
             return new AnimationCurve(keys.ToArray());
