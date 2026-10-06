@@ -106,6 +106,95 @@ namespace Fbx2Vmd.Tests.LipSync
             }
         }
 
+        [Test]
+        public void ResolveStemOutput_괄호경계매칭()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "lipsync_stem_" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try
+            {
+                // 디리버브 패스: 목표는 _(dry)_, _(No dry)_는 버려야 한다.
+                string dry = Path.Combine(dir, "song_(Vocals)_sep_(dry)_dereverb.wav");
+                string nodry = Path.Combine(dir, "song_(Vocals)_sep_(No dry)_dereverb.wav");
+                File.WriteAllText(dry, "x");
+                File.WriteAllText(nodry, "x");
+                File.SetLastWriteTimeUtc(dry, System.DateTime.UtcNow);
+                File.SetLastWriteTimeUtc(nodry, System.DateTime.UtcNow);
+
+                string got = VocalStemSeparator.ResolveStemOutput(dir,
+                    Path.Combine(dir, "song_(Vocals)_sep.wav"), "dry",
+                    System.DateTime.UtcNow.AddMinutes(-1));
+                Assert.AreEqual(dry, got);
+
+                // 카라오케 패스: 마지막 괄호 그룹만 비교하므로 입력 파일명 속 _(Vocals)_는 무시되고
+                // _(Instrumental)_ 산출물은 제외된다. 입력 파일 자체는 mtime을 과거로 돌려 배제.
+                File.SetLastWriteTimeUtc(dry, System.DateTime.UtcNow.AddMinutes(-10));
+                string lead = Path.Combine(dir, "song_(Vocals)_sep_(dry)_dereverb_(Vocals)_karaoke.wav");
+                string back = Path.Combine(dir, "song_(Vocals)_sep_(dry)_dereverb_(Instrumental)_karaoke.wav");
+                File.WriteAllText(lead, "x");
+                File.WriteAllText(back, "x");
+                File.SetLastWriteTimeUtc(lead, System.DateTime.UtcNow);
+                File.SetLastWriteTimeUtc(back, System.DateTime.UtcNow);
+
+                got = VocalStemSeparator.ResolveStemOutput(dir, dry, "Vocals",
+                    System.DateTime.UtcNow.AddMinutes(-1));
+                Assert.AreEqual(lead, got);
+            }
+            finally
+            {
+                Directory.Delete(dir, true);
+            }
+        }
+
+        [Test]
+        public void ResolveStemOutput_시간필터로이전패스배제()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "lipsync_stem_" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try
+            {
+                // 이전 패스 산출물(mtime 과거)과 새 산출물이 같은 스템 키워드를 가질 때 새 것을 골라야 한다.
+                string oldFile = Path.Combine(dir, "song_(dry)_old.wav");
+                string newFile = Path.Combine(dir, "song_(dry)_new.wav");
+                File.WriteAllText(oldFile, "x");
+                File.WriteAllText(newFile, "x");
+                File.SetLastWriteTimeUtc(oldFile, System.DateTime.UtcNow.AddMinutes(-10));
+                File.SetLastWriteTimeUtc(newFile, System.DateTime.UtcNow);
+
+                string got = VocalStemSeparator.ResolveStemOutput(dir,
+                    Path.Combine(dir, "song.wav"), "dry",
+                    System.DateTime.UtcNow.AddMinutes(-1));
+                Assert.AreEqual(newFile, got);
+            }
+            finally
+            {
+                Directory.Delete(dir, true);
+            }
+        }
+
+        [Test]
+        public void MoveTo_기존파일덮어쓰기()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "lipsync_move_" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string src = Path.Combine(dir, "a.wav");
+                string dst = Path.Combine(dir, "b.wav");
+                File.WriteAllText(src, "new");
+                File.WriteAllText(dst, "old");
+                Assert.AreEqual(dst, VocalStemSeparator.MoveTo(src, dst));
+                Assert.IsFalse(File.Exists(src));
+                Assert.AreEqual("new", File.ReadAllText(dst));
+                // src == dst면 그대로 유지
+                Assert.AreEqual(dst, VocalStemSeparator.MoveTo(dst, dst));
+            }
+            finally
+            {
+                Directory.Delete(dir, true);
+            }
+        }
+
         // ---------- WAV 파서 ----------
 
         [Test]

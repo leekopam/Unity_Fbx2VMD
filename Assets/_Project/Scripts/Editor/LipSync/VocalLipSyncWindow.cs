@@ -25,6 +25,8 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private string _outputDir = DefaultOutputDir;
         [SerializeField] private string _vocalWavPath = "";
         [SerializeField] private string _bgmWavPath = "";
+        [SerializeField] private string _rawVocalWavPath = "";
+        [SerializeField] private bool _cleanVocal = true;
         [SerializeField] private Profile _profile;
         [SerializeField] private GameObject _targetCharacter;
         [SerializeField] private float _minVolumeGate = 0.02f;
@@ -33,6 +35,8 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private bool _previewWithAudio = true;
 
         private Task<VocalStemSeparator.Result> _separating;
+        private Task<VocalStemSeparator.Result> _cleaning;
+        private string _cleanStage = ""; // 정제 체인 현재 패스 라벨
         private Task<PythonEnvProvisioner.Result> _provisioning;
         private System.Threading.CancellationTokenSource _cts;
         private bool _separateAfterProvision;
@@ -130,9 +134,19 @@ namespace Fbx2Vmd.LipSync
                 EditorUtility.ClearProgressBar();
                 if (result.success)
                 {
-                    _vocalWavPath = result.vocalPath;
                     _bgmWavPath = result.instrumentalPath ?? "";
-                    SetMessage($"분리 완료 — 보컬: {Path.GetFileName(_vocalWavPath)}", MessageType.Info);
+                    // 정제 체인은 audio-separator 전용 — demucs 보컬에 걸면 확정 실패한다.
+                    if (_cleanVocal && _engine == VocalStemSeparator.Engine.AudioSeparator)
+                    {
+                        _rawVocalWavPath = result.vocalPath;
+                        StartCleanup();
+                    }
+                    else
+                    {
+                        _vocalWavPath = result.vocalPath;
+                        _rawVocalWavPath = "";
+                        SetMessage($"분리 완료 — 보컬: {Path.GetFileName(_vocalWavPath)}", MessageType.Info);
+                    }
                 }
                 else if (cancelled)
                 {
@@ -141,6 +155,39 @@ namespace Fbx2Vmd.LipSync
                 else
                 {
                     SetMessage("분리 실패: " + result.error, MessageType.Error);
+                }
+            }
+            if (_cleaning != null && _cleaning.IsCompleted)
+            {
+                bool cancelled = _cleaning.IsCanceled;
+                VocalStemSeparator.Result result = cancelled || _cleaning.IsFaulted
+                    ? new VocalStemSeparator.Result
+                    {
+                        error = cancelled
+                            ? "사용자가 취소했습니다."
+                            : _cleaning.Exception?.GetBaseException().Message
+                    }
+                    : _cleaning.Result;
+                _cleaning = null;
+                _sepProgress = 0f;
+                EditorUtility.ClearProgressBar();
+                if (result.success)
+                {
+                    _vocalWavPath = result.vocalPath;
+                    SetMessage($"정제 완료 — 분석용 보컬: {Path.GetFileName(_vocalWavPath)}", MessageType.Info);
+                }
+                else if (cancelled)
+                {
+                    // 취소해도 원본 보컬로 베이크할 수 있게 복원한다.
+                    _vocalWavPath = _rawVocalWavPath;
+                    _cleanStage = "";
+                    SetMessage("보컬 정제가 취소됐습니다.", MessageType.Info);
+                }
+                else
+                {
+                    // 정제 실패 시 원본 보컬로라도 진행할 수 있게 폴백한다.
+                    _vocalWavPath = _rawVocalWavPath;
+                    SetMessage("정제 실패(원본 보컬로 대체): " + result.error, MessageType.Warning);
                 }
             }
             // 미리듣기가 자연 종료하면 버튼 라벨을 "듣기"로 되돌린다.
@@ -160,12 +207,15 @@ namespace Fbx2Vmd.LipSync
                 Repaint();
             }
             _previewWasPlaying = previewPlaying;
-            // 분리 중엔 진행률 바 갱신을 위해 매 프레임 다시 그린다.
-            if (_separating != null)
+            // 분리·정제 중엔 진행률 바 갱신을 위해 매 프레임 다시 그린다.
+            if (_separating != null || _cleaning != null)
             {
                 Repaint();
-                EditorUtility.DisplayProgressBar("보컬 분리",
-                    _sepProgress > 0f ? "오디오 스템 분리 중…" : "모델 로딩/입력 분석 중…",
+                string title = _separating != null ? "보컬 분리" : "보컬 정제";
+                string stage = _separating != null
+                    ? (_sepProgress > 0f ? "오디오 스템 분리 중…" : "모델 로딩/입력 분석 중…")
+                    : (string.IsNullOrEmpty(_cleanStage) ? "보컬 정제 중…" : _cleanStage + " 중…");
+                EditorUtility.DisplayProgressBar(title, stage,
                     _sepProgress > 0f ? _sepProgress : 0.05f);
             }
         }
@@ -177,8 +227,16 @@ namespace Fbx2Vmd.LipSync
                 "wav;mp3;flac;m4a;ogg", preview: true);
             _engine = (VocalStemSeparator.Engine)EditorGUILayout.EnumPopup("분리 엔진", _engine);
             _model = EditorGUILayout.TextField("모델", _model);
+            using (new EditorGUI.DisabledScope(_engine != VocalStemSeparator.Engine.AudioSeparator))
+            {
+                _cleanVocal = EditorGUILayout.Toggle(
+                    new GUIContent("보컬 정제",
+                        "분리된 보컬에 디리버브 → 코러스 제거 → 디노이즈를 순서대로 적용해 립싱크용 리드 보컬만 남긴다"),
+                    _cleanVocal);
+            }
             EditorGUILayout.BeginHorizontal();
-            using (new EditorGUI.DisabledScope(_provisioning != null || _separating != null))
+            using (new EditorGUI.DisabledScope(
+                _provisioning != null || _separating != null || _cleaning != null))
             {
                 _pythonPath = EditorGUILayout.TextField("python 경로", _pythonPath);
                 if (GUILayout.Button("환경 자동 준비", GUILayout.Width(100)))
@@ -202,30 +260,35 @@ namespace Fbx2Vmd.LipSync
             }
             EditorGUILayout.EndHorizontal();
 
-            using (new EditorGUI.DisabledScope(_separating != null || _provisioning != null))
+            using (new EditorGUI.DisabledScope(
+                _separating != null || _cleaning != null || _provisioning != null))
             {
                 if (GUILayout.Button("보컬/BGM 분리"))
                 {
                     StartSeparation();
                 }
             }
-            if (_separating != null || _provisioning != null)
+            if (_separating != null || _cleaning != null || _provisioning != null)
             {
                 if (GUILayout.Button("취소"))
                 {
                     _cts?.Cancel();
                 }
             }
-            if (_separating != null)
+            if (_separating != null || _cleaning != null)
             {
                 // tqdm 퍼센트가 아직 안 잡히면 준비 단계로 표시한다.
                 Rect rect = EditorGUILayout.GetControlRect(false, 18f);
                 float shown = _sepProgress > 0f
                     ? _sepProgress
                     : Mathf.PingPong((float)EditorApplication.timeSinceStartup * 0.3f, 1f);
-                string label = _sepProgress > 0f
-                    ? $"분리 중… {(_sepProgress * 100f):F0}%"
-                    : "분리 준비 중…(모델 로딩/입력 분석)";
+                string label = _separating != null
+                    ? (_sepProgress > 0f
+                        ? $"분리 중… {(_sepProgress * 100f):F0}%"
+                        : "분리 준비 중…(모델 로딩/입력 분석)")
+                    : (_sepProgress > 0f
+                        ? $"{_cleanStage} 중… {(_sepProgress * 100f):F0}%"
+                        : "정제 준비 중…(모델 로딩)");
                 EditorGUI.ProgressBar(rect, shown, label);
             }
 
@@ -233,6 +296,11 @@ namespace Fbx2Vmd.LipSync
             EditorGUILayout.LabelField("2. 보컬 → 립싱크 클립 베이크", EditorStyles.boldLabel);
             DrawPathRow("보컬 WAV", ref _vocalWavPath, "분리된 보컬 wav 선택", "wav",
                 preview: true);
+            if (!string.IsNullOrEmpty(_rawVocalWavPath))
+            {
+                DrawPathRow("정제 전 보컬", ref _rawVocalWavPath, "정제 전 보컬 wav", "wav",
+                    preview: true);
+            }
             _profile = (Profile)EditorGUILayout.ObjectField("uLipSync 프로필", _profile, typeof(Profile), false);
             EditorGUILayout.BeginHorizontal();
             _targetCharacter = (GameObject)EditorGUILayout.ObjectField(
@@ -249,7 +317,7 @@ namespace Fbx2Vmd.LipSync
             _minVolumeGate = EditorGUILayout.Slider("무음 게이트", _minVolumeGate, 0f, 0.2f);
             _releaseDamp = EditorGUILayout.Slider("감쇄(노이즈/여운)", _releaseDamp, 0f, 0.95f);
 
-            using (new EditorGUI.DisabledScope(_separating != null))
+            using (new EditorGUI.DisabledScope(_separating != null || _cleaning != null))
             {
                 if (GUILayout.Button("립싱크 베이크 + 클립 저장"))
                 {
@@ -297,7 +365,7 @@ namespace Fbx2Vmd.LipSync
 
         private void StartProvisioning(bool separateAfter)
         {
-            if (_provisioning != null || _separating != null)
+            if (_provisioning != null || _separating != null || _cleaning != null)
             {
                 return; // 진행 중 재진입 — 실행 중 Task의 CTS 폐기·동시 설치 방지
             }
@@ -353,6 +421,20 @@ namespace Fbx2Vmd.LipSync
                 p => _sepProgress = p);
             EditorUtility.DisplayProgressBar("보컬 분리", "오디오 스템 분리 중(수 분 소요)...", 0.5f);
             SetMessage("분리 실행 중...", MessageType.Info);
+        }
+
+        /// <summary>분리된 보컬에 정제 체인(디리버브→코러스 제거→디노이즈)을 돌린다.</summary>
+        private void StartCleanup()
+        {
+            _sepProgress = 0f;
+            _cleanStage = "";
+            _cleaning = VocalStemSeparator.CleanVocalAsync(
+                _pythonPath, _rawVocalWavPath, _outputDir,
+                null, _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
+                PythonEnvProvisioner.ModelsDir(ProjectRoot),
+                p => _sepProgress = p,
+                s => _cleanStage = s);
+            SetMessage("분리 완료 — 보컬 정제(잔향/코러스/노이즈) 중...", MessageType.Info);
         }
 
         private void Bake()

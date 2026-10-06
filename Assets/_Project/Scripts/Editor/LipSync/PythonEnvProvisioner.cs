@@ -226,6 +226,7 @@ namespace Fbx2Vmd.LipSync
                 result.success = true;
                 result.reused = true;
                 result.pythonExe = pyExe;
+                TryEnableGpuTorch(pyExe, env, ct);
                 return result;
             }
 
@@ -277,7 +278,78 @@ namespace Fbx2Vmd.LipSync
             File.WriteAllText(markerPath, reqHash + "\n");
             result.success = true;
             result.pythonExe = pyExe;
+            TryEnableGpuTorch(pyExe, env, ct);
             return result;
+        }
+
+        // cu130 채널에서 torch/torchvision/torchaudio가 같은 세대로 존재하는 최신 조합.
+        // (cu126/cu128은 torchaudio가 2.11에서 멈춰 있고 torch 2.14용 조합이 없다)
+        private const string GpuTorchIndexUrl = "https://download.pytorch.org/whl/cu130";
+        private const string GpuTorchVersion = "2.11.0+cu130";
+        private const string GpuTorchVisionVersion = "0.26.0+cu130";
+        private const string GpuTorchAudioVersion = "2.11.0+cu130";
+
+        /// <summary>GPU 판정 마커 — 확정 결과("cuda"/"nogpu")를 기록해 매 실행 재검사를 피한다.
+        /// GPU를 나중에 장착하면 이 파일을 지우면 된다. 설치 실패 시엔 쓰지 않아 다음 실행에 재시도한다.</summary>
+        private static string GpuMarkerPath(string pyExe)
+        {
+            return Path.Combine(Path.GetDirectoryName(pyExe), ".gpu-torch");
+        }
+
+        /// <summary>NVIDIA GPU가 있고 torch가 CPU 빌드면 CUDA 빌드로 승격한다.
+        /// 실패해도 CPU 경로로 계속 쓸 수 있으므로 프로비저닝을 실패시키지 않는다.</summary>
+        internal static void TryEnableGpuTorch(string pyExe,
+            IReadOnlyDictionary<string, string> env, CancellationToken ct)
+        {
+            string marker = GpuMarkerPath(pyExe);
+            if (File.Exists(marker))
+            {
+                return; // 이전 실행에서 판정 확정 — nvidia-smi/torch import 재검사 비용 절약
+            }
+            if (!HasNvidiaGpu(env, ct))
+            {
+                File.WriteAllText(marker, "nogpu\n");
+                return;
+            }
+            if (IsTorchCudaAvailable(pyExe, env, ct))
+            {
+                File.WriteAllText(marker, "cuda\n");
+                return;
+            }
+            VocalStemSeparator.RunSync(pyExe,
+                "-m pip install"
+                + " torch==" + GpuTorchVersion
+                + " torchvision==" + GpuTorchVisionVersion
+                + " torchaudio==" + GpuTorchAudioVersion
+                + " --index-url " + GpuTorchIndexUrl,
+                null, out string installLog, 3600, ct, env);
+            if (IsTorchCudaAvailable(pyExe, env, ct))
+            {
+                File.WriteAllText(marker, "cuda\n");
+            }
+            else
+            {
+                UnityEngine.Debug.LogWarning(
+                    "[LipSync] CUDA torch 설치는 됐지만 GPU 인식이 안 됩니다. CPU로 진행합니다.\n"
+                    + Tail(installLog));
+            }
+        }
+
+        /// <summary>nvidia-smi가 응답하면 CUDA 가능 GPU가 있는 것으로 본다.</summary>
+        private static bool HasNvidiaGpu(IReadOnlyDictionary<string, string> env,
+            CancellationToken ct)
+        {
+            return VocalStemSeparator.RunSync("nvidia-smi", "-L", null,
+                out _, 15, ct, env) == 0;
+        }
+
+        /// <summary>venv torch가 CUDA를 인식하는지 확인한다.</summary>
+        private static bool IsTorchCudaAvailable(string pyExe,
+            IReadOnlyDictionary<string, string> env, CancellationToken ct)
+        {
+            return VocalStemSeparator.RunSync(pyExe,
+                "-c \"import torch,sys;sys.exit(0 if torch.cuda.is_available() else 1)\"",
+                null, out _, 120, ct, env) == 0;
         }
 
         /// <summary>venv python에서 엔진 모듈 import가 되는지 확인한다.</summary>

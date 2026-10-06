@@ -27,6 +27,40 @@ namespace Fbx2Vmd.LipSync
         public const string DefaultDemucsModel = "htdemucs_ft";
         public const string PythonPathEnv = "UNITY_FBX2VMD_PYTHON";
 
+        /// <summary>보컬 정제 1패스 — model을 input에 적용해 stemKeyword 스템을 다음 입력으로 넘긴다.</summary>
+        public sealed class CleanupStep
+        {
+            public readonly string model;
+            /// <summary>출력 파일명 `_(스템)_`에 넣을 키워드(모델 yaml의 instruments 값).</summary>
+            public readonly string stemKeyword;
+            /// <summary>진행률 라벨(디리버브/리드 추출/디노이즈 등).</summary>
+            public readonly string label;
+
+            public CleanupStep(string model, string stemKeyword, string label)
+            {
+                this.model = model;
+                this.stemKeyword = stemKeyword;
+                this.label = label;
+            }
+        }
+
+        /// <summary>
+        /// 기본 정제 체인 — UVR 권장 순서(디리버브 → 리드 추출 → 디노이즈)를 따른다.
+        /// 스템명은 각 모델 config yaml의 instruments/target_instrument로 확인했다.
+        /// </summary>
+        public static readonly CleanupStep[] DefaultCleanupSteps =
+        {
+            // dry = 리버브+에코 제거된 보컬(Sucial De-Reverb-Echo V2)
+            new CleanupStep("dereverb-echo_mel_band_roformer_sdr_13.4843_v2.ckpt",
+                "dry", "잔향/에코 제거"),
+            // Vocals = 리드 보컬만(Gabox Karaoke V2 — 백킹 보컬은 Instrumental로 분리)
+            new CleanupStep("mel_band_roformer_karaoke_gabox_v2.ckpt",
+                "Vocals", "코러스 분리"),
+            // dry = 노이즈 제거(Aufr33 denoise, 단일 스템 모델)
+            new CleanupStep("denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt",
+                "dry", "노이즈 제거"),
+        };
+
         public sealed class Result
         {
             public bool success;
@@ -242,6 +276,174 @@ namespace Fbx2Vmd.LipSync
             }
             result.success = true;
             return result;
+        }
+
+        /// <summary>
+        /// 분리된 보컬에 정제 체인을 순서대로 적용한다(디리버브 → 리드 추출 → 디노이즈).
+        /// 각 패스의 목표 스템을 다음 패스 입력으로 넘기고, 결과는 vocalPath에 담는다.
+        /// onProgress는 전체 체인 기준 0~1(패스 i는 (i+p)/steps.Length로 환산).
+        /// onStage가 있으면 각 패스 시작 시 라벨을 통지한다.
+        /// </summary>
+        public static Result CleanVocal(string pythonPath, string vocalPath,
+            string outputDir, CleanupStep[] steps = null,
+            CancellationToken ct = default,
+            IReadOnlyDictionary<string, string> env = null,
+            string modelDir = null,
+            Action<float> onProgress = null,
+            Action<string> onStage = null)
+        {
+            var result = new Result();
+            if (string.IsNullOrEmpty(pythonPath) || !File.Exists(pythonPath))
+            {
+                result.error = "python 실행 파일을 찾을 수 없습니다.";
+                return result;
+            }
+            if (!File.Exists(vocalPath))
+            {
+                result.error = $"보컬 파일이 없습니다: {vocalPath}";
+                return result;
+            }
+            if (steps == null || steps.Length == 0)
+            {
+                steps = DefaultCleanupSteps;
+            }
+            try
+            {
+                outputDir = Path.GetFullPath(outputDir);
+                Directory.CreateDirectory(outputDir);
+            }
+            catch (Exception error)
+            {
+                result.error = $"출력 폴더를 만들 수 없습니다: {error.Message}";
+                return result;
+            }
+
+            string input = Path.GetFullPath(vocalPath);
+            var log = new StringBuilder();
+            for (int i = 0; i < steps.Length; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                CleanupStep step = steps[i];
+                onStage?.Invoke(step.label);
+                DateTime runStartUtc = DateTime.UtcNow.AddSeconds(-2);
+                string args = BuildArguments(Engine.AudioSeparator, input, outputDir,
+                    step.model, modelDir);
+                // 패스 진행률을 전체 체인 범위로 환산해 통지한다.
+                int pass = i;
+                int code = RunSync(pythonPath, args, outputDir, out string output,
+                    timeoutSec: 3600, ct: ct, env: env,
+                    onProgress: onProgress == null
+                        ? null
+                        : p => onProgress((pass + p) / steps.Length));
+                log.AppendLine(output);
+                if (code != 0)
+                {
+                    ct.ThrowIfCancellationRequested(); // 취소로 죽은 프로세스는 실패가 아니라 취소로 보고
+                    result.error = $"보컬 정제 실패({step.label}, exit {code}):\n{Tail(output, 4000)}";
+                    result.logTail = Tail(log.ToString(), 4000);
+                    return result;
+                }
+
+                input = ResolveStemOutput(outputDir, input, step.stemKeyword, runStartUtc);
+                if (input == null)
+                {
+                    result.error = $"정제 패스({step.label})가 목표 스템 '{step.stemKeyword}'을 출력하지 못했습니다.";
+                    result.logTail = Tail(log.ToString(), 4000);
+                    return result;
+                }
+                // 체인 출력명에 직전 스템명이 계속 누적돼(…_(Vocals)_…_(dry)_…) MAX_PATH를
+                // 넘을 수 있으므로 다음 패스 입력은 짧은 고정명으로 옮겨 둔다.
+                // (audio-separator가 선행 '_'를 제거하므로 고정명에 언더스코어 접두는 쓰지 않는다)
+                input = MoveTo(input, Path.Combine(outputDir, $"clean_pass{i + 1}.wav"));
+            }
+            onProgress?.Invoke(1f);
+            // 최종 결과물만 원래 곡명 기준의 짧은 이름으로 남긴다.
+            string baseName = Path.GetFileNameWithoutExtension(Path.GetFileName(vocalPath));
+            if (baseName.Length > 60)
+            {
+                baseName = baseName.Substring(0, 60);
+            }
+            result.vocalPath = MoveTo(input,
+                Path.Combine(outputDir, baseName + "_vocal_clean.wav"));
+            result.success = true;
+            result.logTail = Tail(log.ToString(), 4000);
+            return result;
+        }
+
+        public static Task<Result> CleanVocalAsync(string pythonPath, string vocalPath,
+            string outputDir, CleanupStep[] steps = null,
+            CancellationToken ct = default,
+            IReadOnlyDictionary<string, string> env = null,
+            string modelDir = null,
+            Action<float> onProgress = null,
+            Action<string> onStage = null)
+        {
+            return Task.Run(() => CleanVocal(pythonPath, vocalPath, outputDir, steps,
+                ct, env, modelDir, onProgress, onStage), ct);
+        }
+
+        /// <summary>
+        /// 한 패스의 출력에서 목표 스템 wav를 고른다.
+        /// audio-separator 출력명은 `&lt;입력&gt;_(스템)_&lt;모델&gt;.wav`이므로
+        /// 마지막 `_(...)_` 그룹이 스템이다 — 입력명에 이미 스템명이 들어가 있어도
+        /// 마지막 그룹만 비교하면 오매치가 없다(예: `_(No dry)_`는 `dry`와 다름).
+        /// minWriteUtc 이후 기록된 파일만 대상으로 해 이전 실행 산출물을 배제한다.
+        /// </summary>
+        public static string ResolveStemOutput(string outputDir, string inputPath,
+            string stemKeyword, DateTime minWriteUtc)
+        {
+            if (!Directory.Exists(outputDir))
+            {
+                return null;
+            }
+            string inputBase = Path.GetFileNameWithoutExtension(
+                Path.GetFileName(inputPath));
+            string best = null;
+            DateTime bestTime = DateTime.MinValue;
+            foreach (string f in Directory.GetFiles(outputDir, "*.wav",
+                SearchOption.AllDirectories))
+            {
+                string name = Path.GetFileNameWithoutExtension(f);
+                // 출력명은 `<입력명>_(스템)_<모델>` — 입력명 뒤에 반드시 '_'가 와야 오매치가 없다.
+                if (!name.StartsWith(inputBase + "_", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                int open = name.LastIndexOf("_(", StringComparison.Ordinal);
+                int close = open < 0 ? -1 : name.IndexOf(")_", open + 2,
+                    StringComparison.Ordinal);
+                if (open < 0 || close < 0)
+                {
+                    continue;
+                }
+                string stem = name.Substring(open + 2, close - open - 2);
+                if (!string.Equals(stem, stemKeyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                DateTime t = File.GetLastWriteTimeUtc(f);
+                if (t >= minWriteUtc && t > bestTime)
+                {
+                    best = f;
+                    bestTime = t;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>src를 dst로 이동한다. dst가 있으면 덮어쓰고, src==dst면 그대로 둔다.</summary>
+        internal static string MoveTo(string src, string dst)
+        {
+            if (string.Equals(src, dst, StringComparison.OrdinalIgnoreCase))
+            {
+                return src;
+            }
+            if (File.Exists(dst))
+            {
+                File.Delete(dst);
+            }
+            File.Move(src, dst);
+            return dst;
         }
 
         /// <summary>
