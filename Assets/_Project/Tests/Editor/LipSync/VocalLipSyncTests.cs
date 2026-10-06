@@ -354,6 +354,31 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.IsNull(StemAudioPreview.PlayingPath);
         }
 
+        [Test]
+        public void StemPreview_미임포트Assets안Wav는직접파싱폴백()
+        {
+            // 외부 프로세스가 방금 쓴 wav는 임포트 전이라 AssetDatabase가 못 읽는다 — WAV 파서 폴백으로 재생돼야 한다.
+            string dir = Path.Combine(UnityEngine.Application.dataPath,
+                "Generated/LipSync/preview_test_" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            string wav = Path.Combine(dir, "unimported.wav");
+            File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
+                new short[] { 0, 16000, -16000, 0 }));
+            try
+            {
+                Assert.AreEqual(StemAudioPreview.Loader.AssetDatabase,
+                    StemAudioPreview.Classify(wav));
+                string error = StemAudioPreview.Toggle(wav);
+                Assert.IsNull(error);
+                Assert.AreEqual(wav, StemAudioPreview.PlayingPath);
+            }
+            finally
+            {
+                StemAudioPreview.Stop();
+                Directory.Delete(dir, true);
+            }
+        }
+
         // ---------- 분리 진행률 파싱 ----------
 
         [Test]

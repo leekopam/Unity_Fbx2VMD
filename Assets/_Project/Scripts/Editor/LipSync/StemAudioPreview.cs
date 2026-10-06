@@ -146,6 +146,19 @@ namespace Fbx2Vmd.LipSync
                         ? normalized
                         : FileUtil.GetProjectRelativePath(normalized);
                     var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(rel);
+                    if (clip == null
+                        && string.Equals(Path.GetExtension(path), ".wav",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        // 외부 프로세스가 방금 쓴 wav는 아직 임포트 전이라 AssetDatabase가 null을 준다.
+                        // WAV는 직접 파싱이 가능하므로 폴백으로 재생한다.
+                        var fallback = WavFileReader.Load(path, out error);
+                        if (fallback != null)
+                        {
+                            _ownsClip = true;
+                        }
+                        return fallback;
+                    }
                     if (clip == null)
                     {
                         error = "오디오로 임포트되지 않았습니다: " + rel;
