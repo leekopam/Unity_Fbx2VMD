@@ -28,6 +28,7 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private Profile _profile;
         [SerializeField] private GameObject _targetCharacter;
         [SerializeField] private float _minVolumeGate = 0.02f;
+        [SerializeField] private float _releaseDamp = 0.35f; // 입 닫힘/잡음 하강 감쇠(0=끔)
         [SerializeField] private AnimationClip _previewClip;
         [SerializeField] private bool _previewWithAudio = true;
 
@@ -246,6 +247,7 @@ namespace Fbx2Vmd.LipSync
             }
             EditorGUILayout.EndHorizontal();
             _minVolumeGate = EditorGUILayout.Slider("무음 게이트", _minVolumeGate, 0f, 0.2f);
+            _releaseDamp = EditorGUILayout.Slider("감쇄(노이즈/여운)", _releaseDamp, 0f, 0.95f);
 
             using (new EditorGUI.DisabledScope(_separating != null))
             {
@@ -384,7 +386,7 @@ namespace Fbx2Vmd.LipSync
                 var warnings = new System.Collections.Generic.List<string>();
                 // VRM 프록시가 없는 모델(MMD 등)은 모음 모프명을 스캔해 자동 바인딩한다.
                 AnimationClip clip = VocalLipSyncBaker.BakeClip(
-                    data, _targetCharacter, _minVolumeGate, warnings);
+                    data, _targetCharacter, _minVolumeGate, warnings, _releaseDamp);
                 clip.name = Path.GetFileNameWithoutExtension(_vocalWavPath) + "_lipsync";
 
                 string saveDir = Path.Combine(_outputDir, "clips");

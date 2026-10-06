@@ -638,6 +638,72 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.IsFalse(LipSyncClipPreview.IsPlaying);
         }
 
+        // ---------- 노이즈 감쇠(소프트 니 + 릴리즈) ----------
+
+        [Test]
+        public void BuildCurve_소프트니_게이트근처감쇠()
+        {
+            // GetLipSyncInfo가 raw volume을 log10→[-2.5,-1.5] 구간으로 정규화한다.
+            // normVol 0.15를 얻으려면 raw = 10^(-2.35) ≈ 0.00447.
+            // gate=0.1 → 니 밴드 0.1~0.2, 팩터 0.5 → 값 = 1×(0.15×0.5)×100 = 7.5
+            var clip = BakeAOnlyClip(new[] { 0.00447f }, gate: 0.1f, releaseDamp: 0f);
+            var curve = UnityEditor.AnimationUtility.GetEditorCurve(
+                clip, UnityEditor.AnimationUtility.GetCurveBindings(clip)[0]);
+            Assert.AreEqual(7.5f, curve.Evaluate(0f), 0.2f, "소프트 니로 게이트 직상 신호는 절반 감쇠");
+        }
+
+        [Test]
+        public void BuildCurve_릴리즈감쇄_하강만스무딩()
+        {
+            // 피크 후 무음 — releaseDamp=0.5면 다음 프레임에 50% 잔존, 어택(상승)은 즉시
+            var clip = BakeAOnlyClip(new[] { 1f, 0f, 0f }, gate: 0.02f, releaseDamp: 0.5f);
+            var curve = UnityEditor.AnimationUtility.GetEditorCurve(
+                clip, UnityEditor.AnimationUtility.GetCurveBindings(clip)[0]);
+            float dt = 1f / 60f;
+            Assert.AreEqual(100f, curve.Evaluate(0f), 1f);         // 어택 즉시
+            Assert.AreEqual(50f, curve.Evaluate(dt), 1f);          // 감쇄 1단계
+            Assert.AreEqual(25f, curve.Evaluate(dt * 2f), 1f);     // 감쇄 2단계
+        }
+
+        [Test]
+        public void BuildCurve_감쇄없으면_즉시0()
+        {
+            var clip = BakeAOnlyClip(new[] { 1f, 0f }, gate: 0.02f, releaseDamp: 0f);
+            var curve = UnityEditor.AnimationUtility.GetEditorCurve(
+                clip, UnityEditor.AnimationUtility.GetCurveBindings(clip)[0]);
+            Assert.AreEqual(0f, curve.Evaluate(1f / 60f), "감쇄 없으면 무음 프레임 즉시 0");
+        }
+
+        /// <summary>'あ' 모프 하나만 가진 모델에 A=1 음소 데이터를 베이크한다.</summary>
+        private AnimationClip BakeAOnlyClip(float[] volumes, float gate, float releaseDamp)
+        {
+            var root = new GameObject("DampChar");
+            _cleanup.Add(root);
+            var mesh = new Mesh { name = "m" };
+            mesh.vertices = new[] { Vector3.zero };
+            mesh.AddBlendShapeFrame("あ", 100f, new Vector3[1], new Vector3[1], new Vector3[1]);
+            _cleanup.Add(mesh);
+            root.AddComponent<SkinnedMeshRenderer>().sharedMesh = mesh;
+
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            data.duration = volumes.Length / 60f;
+            foreach (float v in volumes)
+            {
+                data.frames.Add(new uLipSync.BakedFrame
+                {
+                    volume = v,
+                    phonemes = new List<uLipSync.BakedPhonemeRatio>
+                    {
+                        new uLipSync.BakedPhonemeRatio { phoneme = "A", ratio = 1f },
+                    },
+                });
+            }
+            var clip = VocalLipSyncBaker.BakeClip(data, root, gate, null, releaseDamp);
+            _cleanup.Add(clip);
+            return clip;
+        }
+
         private (VRMBlendShapeProxy proxy, BlendShapeAvatar avatar) BuildProxyWithAClip()
         {
             var root = new GameObject("Root");

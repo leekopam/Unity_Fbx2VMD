@@ -105,7 +105,8 @@ namespace Fbx2Vmd.LipSync
             uLipSync.BakedData data,
             VRMBlendShapeProxy proxy,
             float minVolumeGate = 0.02f,
-            IList<string> warnings = null)
+            IList<string> warnings = null,
+            float releaseDamp = 0f)
         {
             if (data == null || !data.isValid)
             {
@@ -118,7 +119,7 @@ namespace Fbx2Vmd.LipSync
             var bindings = new List<ResolvedBinding>();
             if (proxy.BlendShapeAvatar.Clips == null)
             {
-                return BakeClipFromBindings(data, bindings, minVolumeGate);
+                return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp);
             }
             foreach (BlendShapeClip shapeClip in proxy.BlendShapeAvatar.Clips)
             {
@@ -146,7 +147,7 @@ namespace Fbx2Vmd.LipSync
                     });
                 }
             }
-            return BakeClipFromBindings(data, bindings, minVolumeGate);
+            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp);
         }
 
         /// <summary>
@@ -157,12 +158,13 @@ namespace Fbx2Vmd.LipSync
             uLipSync.BakedData data,
             GameObject characterRoot,
             float minVolumeGate = 0.02f,
-            IList<string> warnings = null)
+            IList<string> warnings = null,
+            float releaseDamp = 0f)
         {
             VRMBlendShapeProxy proxy = FindProxy(characterRoot);
             if (proxy != null)
             {
-                return BakeClip(data, proxy, minVolumeGate, warnings);
+                return BakeClip(data, proxy, minVolumeGate, warnings, releaseDamp);
             }
             var bindings = ResolveVowelBindings(characterRoot);
             if (bindings.Count == 0)
@@ -184,7 +186,7 @@ namespace Fbx2Vmd.LipSync
                     warnings?.Add($"모음 모프를 찾지 못했습니다: {p}");
                 }
             }
-            return BakeClipFromBindings(data, bindings, minVolumeGate);
+            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp);
         }
 
         /// <summary>
@@ -299,7 +301,8 @@ namespace Fbx2Vmd.LipSync
         private static AnimationClip BakeClipFromBindings(
             uLipSync.BakedData data,
             List<ResolvedBinding> bindings,
-            float minVolumeGate)
+            float minVolumeGate,
+            float releaseDamp)
         {
             if (data == null || !data.isValid)
             {
@@ -312,7 +315,7 @@ namespace Fbx2Vmd.LipSync
             };
             foreach (ResolvedBinding b in bindings)
             {
-                var curve = BuildCurve(data, b.phoneme, b.weight, minVolumeGate);
+                var curve = BuildCurve(data, b.phoneme, b.weight, minVolumeGate, releaseDamp);
                 if (curve.length == 0)
                 {
                     continue;
@@ -323,23 +326,41 @@ namespace Fbx2Vmd.LipSync
             return clip;
         }
 
-        /// <summary>한 음소의 시간축 커브를 만든다. 값 = 음소비율 × 정규화 음량 × 바인딩 가중치(0~100).</summary>
+        /// <summary>
+        /// 한 음소의 시간축 커브를 만든다. 값 = 음소비율 × 정규화 음량 × 바인딩 가중치(0~100).
+        /// 게이트~2×게이트 구간은 소프트 니로 선형 감쇠해 경계 근처 노이즈 블립을 억제한다.
+        /// releaseDamp(0~0.95)가 0보다 크면 하강을 지수 감쇠해 잡음성 떨림과 급격한 입 닫힘을 완화한다.
+        /// 어택은 즉시 추종해 발음 타이밍을 보존한다.
+        /// </summary>
         private static AnimationCurve BuildCurve(
-            uLipSync.BakedData data, string phoneme, float bindingWeight, float minVolumeGate)
+            uLipSync.BakedData data, string phoneme, float bindingWeight,
+            float minVolumeGate, float releaseDamp)
         {
             var keys = new List<Keyframe>();
             float dt = 1f / BakeFrameRate;
+            float kneeEnd = Mathf.Min(minVolumeGate * 2f, 1f);
+            float kneeRange = Mathf.Max(kneeEnd - minVolumeGate, 1e-6f);
+            float smoothed = 0f;
             for (int i = 0; i < data.frames.Count; i++)
             {
                 var info = uLipSync.BakedData.GetLipSyncInfo(data.frames[i]);
-                float volume = info.volume >= minVolumeGate ? info.volume : 0f;
+                float volume = info.volume;
+                if (volume <= minVolumeGate)
+                {
+                    volume = 0f;
+                }
+                else if (volume < kneeEnd)
+                {
+                    volume *= (volume - minVolumeGate) / kneeRange; // 소프트 니 감쇠
+                }
                 float ratio = 0f;
                 if (info.phonemeRatios != null)
                 {
                     info.phonemeRatios.TryGetValue(phoneme, out ratio);
                 }
-                float value = ratio * volume * bindingWeight;
-                keys.Add(new Keyframe(i * dt, value));
+                float raw = ratio * volume * bindingWeight;
+                smoothed = Mathf.Max(raw, smoothed * Mathf.Clamp01(releaseDamp));
+                keys.Add(new Keyframe(i * dt, smoothed));
             }
             return new AnimationCurve(keys.ToArray());
         }
