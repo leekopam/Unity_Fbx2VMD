@@ -379,6 +379,28 @@ namespace Fbx2Vmd.Tests.LipSync
             }
         }
 
+        [Test]
+        public void StemPreview_Seek는위치를이동한다()
+        {
+            // 진행바용 자체 시간 추적 검증 — Seek 후 PositionSec이 목표 위치를 돌려줘야 한다.
+            string wav = Path.Combine(Path.GetTempPath(),
+                "seek_" + Path.GetRandomFileName() + ".wav");
+            File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
+                new short[16000])); // 2초 무음
+            try
+            {
+                Assert.IsNull(StemAudioPreview.Toggle(wav));
+                StemAudioPreview.Seek(1.2f);
+                Assert.AreEqual(1.2f, StemAudioPreview.PositionSec, 0.1f);
+                Assert.IsTrue(StemAudioPreview.IsPlaying());
+            }
+            finally
+            {
+                StemAudioPreview.Stop();
+                File.Delete(wav);
+            }
+        }
+
         // ---------- 분리 진행률 파싱 ----------
 
         [Test]

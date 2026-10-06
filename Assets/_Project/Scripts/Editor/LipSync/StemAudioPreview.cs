@@ -27,11 +27,35 @@ namespace Fbx2Vmd.LipSync
 
         static AudioClip _clip;
         static bool _ownsClip; // WavFileReader로 만든 클립만 정지 시 파괴
+        static double _startTime;   // 재생(또는 마지막 시크) 시각
+        static double _offsetSec;   // 마지막 시크 기준 시작 위치(초)
 
         static MethodInfo _play;
         static MethodInfo _stopAll;
         static MethodInfo _isPlaying;
+        static MethodInfo _setSamplePos;
         static bool _resolved;
+
+        /// <summary>클립 길이(초). 재생 중이 아니면 0.</summary>
+        public static float DurationSec => _clip != null ? _clip.length : 0f;
+
+        /// <summary>
+        /// 재생 위치(초). AudioUtil의 위치 게터는 버전에 따라 항상 0을 돌려주는
+        /// 경우가 있어 신뢰할 수 없으므로 자체 경과시간으로 추적한다.
+        /// </summary>
+        public static float PositionSec
+        {
+            get
+            {
+                if (_clip == null)
+                {
+                    return 0f;
+                }
+                double pos = _offsetSec
+                    + (EditorApplication.timeSinceStartup - _startTime);
+                return Mathf.Clamp((float)pos, 0f, _clip.length);
+            }
+        }
 
         /// <summary>
         /// 경로의 로더를 판별한다.
@@ -91,8 +115,62 @@ namespace Fbx2Vmd.LipSync
 
             _clip = clip;
             PlayingPath = path;
+            // 씬 뷰의 오디오 토글이 꺼져 있으면 프리뷰가 무음이다(IsPlaying은 true로
+            // 보고되지만 실제 출력이 없음) — 재생 전에 켜 둔다.
+            EnsureSceneAudio();
+            _offsetSec = 0;
+            _startTime = EditorApplication.timeSinceStartup;
             _play.Invoke(null, new object[] { clip, 0, false });
             return null;
+        }
+
+        /// <summary>
+        /// 재생 위치를 지정 초로 이동한다. 재생 중이 아니면 아무것도 하지 않는다.
+        /// </summary>
+        public static void Seek(float seconds)
+        {
+            if (_clip == null)
+            {
+                return;
+            }
+            Resolve();
+            float t = Mathf.Clamp(seconds, 0f, _clip.length);
+            int sample = Mathf.Clamp((int)(t * _clip.frequency), 0, _clip.samples - 1);
+            if (_setSamplePos != null)
+            {
+                _setSamplePos.Invoke(null, new object[] { _clip, sample });
+            }
+            // 시크 API가 없는 버전이거나 자연 종료 상태에서 시크한 경우
+            // (프리뷰가 멈춰 있으면) 해당 샘플부터 재생을 재개한다.
+            bool playing = _isPlaying?.Invoke(null, null) is bool p && p;
+            if (_setSamplePos == null || !playing)
+            {
+                _play?.Invoke(null, new object[] { _clip, sample, false });
+            }
+            _offsetSec = t;
+            _startTime = EditorApplication.timeSinceStartup;
+        }
+
+        /// <summary>
+        /// 씬 뷰의 오디오 재생 토글을 켠다. Unity의 프리뷰 클립 출력은
+        /// SceneView의 스피커 토글(audioPlay)을 통과하므로 꺼져 있으면 무음이다.
+        /// </summary>
+        static void EnsureSceneAudio()
+        {
+            // audioPlay는 버전에 따라 internal이라 리플렉션으로 접근한다.
+            PropertyInfo ap = typeof(SceneView).GetProperty("audioPlay",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (ap == null || !ap.CanWrite)
+            {
+                return;
+            }
+            foreach (SceneView sv in SceneView.sceneViews)
+            {
+                if (ap.GetValue(sv) is bool on && !on)
+                {
+                    ap.SetValue(sv, true);
+                }
+            }
         }
 
         /// <summary>재생을 멈추고 로드한 클립을 해제한다.</summary>
@@ -106,6 +184,7 @@ namespace Fbx2Vmd.LipSync
             }
             _clip = null;
             _ownsClip = false;
+            _offsetSec = 0;
             PlayingPath = null;
         }
 
@@ -113,8 +192,11 @@ namespace Fbx2Vmd.LipSync
         public static bool IsPlaying()
         {
             Resolve();
-            return _isPlaying != null
-                && _isPlaying.Invoke(null, null) is bool playing && playing;
+            bool playing = _isPlaying != null
+                && _isPlaying.Invoke(null, null) is bool p && p;
+            // 프리뷰 API가 종료 후에도 true를 유지하는 경우가 있어
+            // 추적 위치가 끝에 도달했으면 정지로 간주한다.
+            return playing && _clip != null && PositionSec < _clip.length;
         }
 
         /// <summary>자연 종료 시 상태를 비운다. 상태가 바뀌었으면 true.</summary>
@@ -215,6 +297,14 @@ namespace Fbx2Vmd.LipSync
                     && ps.Length == 0)
                 {
                     _isPlaying = m;
+                }
+                else if ((m.Name == "SetPreviewClipSamplePosition"
+                        || m.Name == "SetClipSamplePosition")
+                    && ps.Length == 2
+                    && ps[0].ParameterType == typeof(AudioClip)
+                    && ps[1].ParameterType == typeof(int))
+                {
+                    _setSamplePos = m;
                 }
             }
         }

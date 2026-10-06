@@ -195,6 +195,11 @@ namespace Fbx2Vmd.LipSync
             {
                 Repaint();
             }
+            // 재생 중엔 진행바가 따라가도록 매 프레임 다시 그린다.
+            if (StemAudioPreview.PlayingPath != null && StemAudioPreview.IsPlaying())
+            {
+                Repaint();
+            }
             // 클립 미리보기: 진행 바 갱신 + 끝까지 재생돼 자동 정지되면 음성도 정리한다.
             bool previewPlaying = LipSyncClipPreview.IsPlaying;
             if (previewPlaying)
@@ -354,10 +359,24 @@ namespace Fbx2Vmd.LipSync
             }
             if (previewPlaying && LipSyncClipPreview.Clip != null)
             {
-                Rect r = EditorGUILayout.GetControlRect(false, 18f);
                 float len = Mathf.Max(LipSyncClipPreview.Clip.length, 0.001f);
-                EditorGUI.ProgressBar(r, LipSyncClipPreview.Time / len,
-                    $"재생 중… {LipSyncClipPreview.Time:F1} / {len:F1} s");
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("위치", GUILayout.Width(EditorGUIUtility.labelWidth));
+                EditorGUI.BeginChangeCheck();
+                float t = GUILayout.HorizontalSlider(LipSyncClipPreview.Time, 0f, len);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    LipSyncClipPreview.Seek(t);
+                    // 보컬 동시 재생 중이면 같은 위치로 맞춰 입모양과 소리를 같이 확인한다.
+                    if (StemAudioPreview.PlayingPath == _vocalWavPath
+                        && StemAudioPreview.IsPlaying())
+                    {
+                        StemAudioPreview.Seek(t);
+                    }
+                }
+                EditorGUILayout.LabelField(
+                    $"{LipSyncClipPreview.Time:F1}/{len:F1}s", GUILayout.Width(95));
+                EditorGUILayout.EndHorizontal();
             }
 
             DrawStatusLabel();
@@ -508,9 +527,10 @@ namespace Fbx2Vmd.LipSync
                     path = picked;
                 }
             }
+            bool playing = false;
             if (preview)
             {
-                bool playing = StemAudioPreview.PlayingPath == path
+                playing = StemAudioPreview.PlayingPath == path
                     && StemAudioPreview.IsPlaying();
                 if (GUILayout.Button(playing ? "정지" : "듣기", GUILayout.Width(40)))
                 {
@@ -519,9 +539,30 @@ namespace Fbx2Vmd.LipSync
                     {
                         SetMessage(error, MessageType.Warning);
                     }
+                    playing = StemAudioPreview.PlayingPath == path
+                        && StemAudioPreview.IsPlaying();
                 }
             }
             EditorGUILayout.EndHorizontal();
+            // 재생 중인 행은 드래그로 특정 구간을 바로 확인할 수 있는 진행바를 단다.
+            if (playing)
+            {
+                float dur = Mathf.Max(StemAudioPreview.DurationSec, 0.001f);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("", GUILayout.Width(EditorGUIUtility.labelWidth));
+                // 변경 체크로 사용자 드래그일 때만 시크 — 매 프레임 재시킹 방지.
+                EditorGUI.BeginChangeCheck();
+                float pos = GUILayout.HorizontalSlider(
+                    StemAudioPreview.PositionSec, 0f, dur);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    StemAudioPreview.Seek(pos);
+                }
+                EditorGUILayout.LabelField(
+                    $"{StemAudioPreview.PositionSec:F1}/{dur:F1}s",
+                    GUILayout.Width(95));
+                EditorGUILayout.EndHorizontal();
+            }
         }
 
         /// <summary>립싱크 클립을 에디트 모드로 캐릭터에 재생한다(AnimationMode, 정지 시 복원).</summary>

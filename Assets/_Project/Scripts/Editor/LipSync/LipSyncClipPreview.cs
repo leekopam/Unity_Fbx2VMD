@@ -89,6 +89,18 @@ namespace Fbx2Vmd.LipSync
             _enteredMode = false;
         }
 
+        /// <summary>재생 위치를 지정 초로 이동하고 즉시 샘플링한다. 재생 중이 아니면 무시.</summary>
+        public static void Seek(float time)
+        {
+            if (_clip == null || _target == null)
+            {
+                return;
+            }
+            _startTime = EditorApplication.timeSinceStartup
+                - Mathf.Clamp(time, 0f, _clip.length);
+            Tick();
+        }
+
         private static void Tick()
         {
             if (_clip == null || _target == null)
