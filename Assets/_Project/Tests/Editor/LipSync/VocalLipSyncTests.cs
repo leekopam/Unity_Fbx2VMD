@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using Fbx2Vmd.LipSync;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using VRM;
 
@@ -355,9 +356,10 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
-        public void StemPreview_미임포트Assets안Wav는직접파싱폴백()
+        public void StemPreview_미임포트Assets안Wav도재생된다()
         {
-            // 외부 프로세스가 방금 쓴 wav는 임포트 전이라 AssetDatabase가 못 읽는다 — WAV 파서 폴백으로 재생돼야 한다.
+            // 외부 프로세스가 방금 쓴 wav는 임포트 전이라 AssetDatabase가 못 읽는다 —
+            // 외부 호스트는 임포트 여부와 무관하게 파일을 직접 재생한다.
             string dir = Path.Combine(UnityEngine.Application.dataPath,
                 "Generated/LipSync/preview_test_" + Path.GetRandomFileName());
             Directory.CreateDirectory(dir);
@@ -380,13 +382,43 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
+        public void StemPreview_호스트재생은위치가실제로진행한다()
+        {
+            // E2E: 위치가 호스트(MediaPlayer)의 실측 보고라는 게 핵심 —
+            // 0에서 멈춰있으면 출력이 실제로 안 나가는 것(Unity AudioUtil 무음 회귀 방지).
+            string wav = Path.Combine(Path.GetTempPath(),
+                "e2e_play_" + Path.GetRandomFileName() + ".wav");
+            File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
+                new short[24000])); // 3초
+            try
+            {
+                Assert.IsNull(StemAudioPreview.Toggle(wav));
+                // 메인 스레드 블록으로 Heartbeat가 굶으므로 hb 유효시간(8s)보다 짧게 잡는다.
+                double deadline = EditorApplication.timeSinceStartup + 6.0;
+                while (StemAudioPreview.PositionSec < 0.3f
+                    && EditorApplication.timeSinceStartup < deadline)
+                {
+                    System.Threading.Thread.Sleep(50);
+                }
+                Assert.Greater(StemAudioPreview.PositionSec, 0.3f,
+                    "호스트 재생 위치가 진행하지 않음 — 소리가 실제로 나지 않는 상태");
+                Assert.IsTrue(StemAudioPreview.IsPlaying());
+            }
+            finally
+            {
+                StemAudioPreview.Stop();
+                File.Delete(wav);
+            }
+        }
+
+        [Test]
         public void StemPreview_Seek는위치를이동한다()
         {
             // 진행바용 자체 시간 추적 검증 — Seek 후 PositionSec이 목표 위치를 돌려줘야 한다.
             string wav = Path.Combine(Path.GetTempPath(),
                 "seek_" + Path.GetRandomFileName() + ".wav");
             File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
-                new short[16000])); // 2초 무음
+                new short[32000])); // 4초 무음 — 호스트 기동 시간을 고려한 여유
             try
             {
                 Assert.IsNull(StemAudioPreview.Toggle(wav));
