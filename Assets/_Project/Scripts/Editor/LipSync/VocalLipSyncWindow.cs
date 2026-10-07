@@ -586,7 +586,8 @@ namespace Fbx2Vmd.LipSync
         {
             if (!LipSyncClipPreview.Start(_previewClip, _targetCharacter))
             {
-                SetMessage("다른 도구가 애니메이션 미리보기를 사용 중입니다.", MessageType.Warning);
+                SetMessage(LipSyncClipPreview.LastError
+                    ?? "다른 도구가 애니메이션 미리보기를 사용 중입니다.", MessageType.Warning);
                 return;
             }
             // Toggle은 재생 중이면 '정지'로 동작하므로, 이미 같은 보컬이 흐르고 있으면 건드리지 않는다.

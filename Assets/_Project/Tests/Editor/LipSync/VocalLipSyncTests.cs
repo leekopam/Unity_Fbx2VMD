@@ -870,6 +870,69 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.IsFalse(LipSyncClipPreview.IsPlaying);
         }
 
+        [Test]
+        public void ClipPreview_자식경로모프는포즈를건드리지않는다()
+        {
+            // 회귀: 루트 통째 샘플링 시 AnimationMode가 미적용 본/트랜스폼을 리셋해
+            // 캐릭터가 바닥 아래로 무너졌다. 잎 오브젝트 샘플링으로 바뀐 뒤에는
+            // 루트·자식 트랜스폼이 미리보기 전과 동일해야 한다.
+            var root = new GameObject("PrevChar");
+            _cleanup.Add(root);
+            root.transform.position = new Vector3(1f, 2f, 3f);
+            var face = new GameObject("Face");
+            face.transform.SetParent(root.transform, false);
+            face.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+            var mesh = new Mesh { name = "m" };
+            mesh.vertices = new[] { Vector3.zero };
+            mesh.AddBlendShapeFrame("あ", 100f, new Vector3[1], new Vector3[1], new Vector3[1]);
+            _cleanup.Add(mesh);
+            var smr = face.AddComponent<SkinnedMeshRenderer>();
+            smr.sharedMesh = mesh;
+
+            var clip = new AnimationClip();
+            _cleanup.Add(clip);
+            clip.SetCurve("Face", typeof(SkinnedMeshRenderer), "blendShape.あ",
+                AnimationCurve.Constant(0f, 1f, 100f));
+
+            try
+            {
+                Assert.IsTrue(LipSyncClipPreview.Start(clip, root));
+                LipSyncClipPreview.Seek(0.5f);
+                Assert.AreEqual(100f, smr.GetBlendShapeWeight(0), 1f, "자식 경로 모프가 적용돼야 함");
+                Assert.AreEqual(new Vector3(1f, 2f, 3f), root.transform.position, "루트 위치 불변");
+                Assert.AreEqual(new Vector3(0f, 0.5f, 0f), face.transform.localPosition, "자식 위치 불변");
+            }
+            finally
+            {
+                LipSyncClipPreview.Stop();
+            }
+            Assert.AreEqual(0f, smr.GetBlendShapeWeight(0), "정지 후 모프 복원");
+        }
+
+        [Test]
+        public void ClipPreview_확인불가경로는재생거부()
+        {
+            var root = new GameObject("PrevChar");
+            _cleanup.Add(root);
+            var clip = new AnimationClip();
+            _cleanup.Add(clip);
+            clip.SetCurve("MissingPath", typeof(SkinnedMeshRenderer), "blendShape.あ",
+                AnimationCurve.Constant(0f, 1f, 100f));
+
+            UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                Assert.IsFalse(LipSyncClipPreview.Start(clip, root), "확인되는 바인딩이 없으면 false");
+                Assert.IsFalse(LipSyncClipPreview.IsPlaying);
+                Assert.IsFalse(UnityEditor.AnimationMode.InAnimationMode(),
+                    "재생 거부 시 AnimationMode를 남기면 안 됨");
+            }
+            finally
+            {
+                UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
+            }
+        }
+
         // ---------- 노이즈 감쇠(소프트 니 + 릴리즈) ----------
 
         [Test]
