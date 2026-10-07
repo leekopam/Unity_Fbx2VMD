@@ -433,6 +433,63 @@ namespace Fbx2Vmd.Tests.LipSync
             }
         }
 
+        [Test]
+        public void StemPreview_Stop은경로와상태를지운다()
+        {
+            // UI가 Stop 후 이전 경로를 재생 중으로 잘못 표시하지 않는지 검증.
+            string wav = Path.Combine(Path.GetTempPath(),
+                "stop_" + Path.GetRandomFileName() + ".wav");
+            File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
+                new short[16000])); // 2초
+            try
+            {
+                Assert.IsNull(StemAudioPreview.Toggle(wav));
+                Assert.AreEqual(wav, StemAudioPreview.PlayingPath);
+                StemAudioPreview.Stop();
+                Assert.IsNull(StemAudioPreview.PlayingPath);
+                Assert.IsFalse(StemAudioPreview.IsPlaying());
+                Assert.AreEqual(0f, StemAudioPreview.PositionSec);
+            }
+            finally
+            {
+                File.Delete(wav);
+            }
+        }
+
+        [Test]
+        public void StemPreview_자연종료후Seek은다시재생한다()
+        {
+            // 끝까지 재생된 뒤 호스트가 playing=0을 보고해도,
+            // 진행바를 끌어 시크하면 그 위치부터 다시 재생돼야 한다.
+            string wav = Path.Combine(Path.GetTempPath(),
+                "finish_" + Path.GetRandomFileName() + ".wav");
+            File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
+                new short[8000])); // 1초 — 자연 종료 유도
+            try
+            {
+                Assert.IsNull(StemAudioPreview.Toggle(wav));
+                // 호스트가 종료 보고할 시간 확보(hb 유효시간보단 짧게)
+                double deadline = EditorApplication.timeSinceStartup + 5.0;
+                while (StemAudioPreview.IsPlaying()
+                    && EditorApplication.timeSinceStartup < deadline)
+                {
+                    System.Threading.Thread.Sleep(100);
+                }
+                Assert.IsFalse(StemAudioPreview.IsPlaying(), "1초 wav가 종료되지 않음");
+                Assert.IsTrue(StemAudioPreview.ClearIfFinished(), "종료 상태 정리가 안 됨");
+                // 종료 정리 후 같은 파일 시크 — 다시 재생 상태여야 한다.
+                Assert.IsNull(StemAudioPreview.Toggle(wav));
+                StemAudioPreview.Seek(0.2f);
+                Assert.AreEqual(0.2f, StemAudioPreview.PositionSec, 0.1f);
+                Assert.IsTrue(StemAudioPreview.IsPlaying());
+            }
+            finally
+            {
+                StemAudioPreview.Stop();
+                File.Delete(wav);
+            }
+        }
+
         // ---------- 분리 진행률 파싱 ----------
 
         [Test]

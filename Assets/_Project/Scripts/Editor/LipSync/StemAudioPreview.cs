@@ -283,7 +283,7 @@ namespace Fbx2Vmd.LipSync
             catch (Exception e)
             {
                 _hostError = "명령 전송 실패: " + e.Message;
-                Debug.LogWarning("[StemAudioPreview] " + _hostError);
+                UnityEngine.Debug.LogWarning("[StemAudioPreview] " + _hostError);
             }
         }
 
@@ -352,7 +352,7 @@ namespace Fbx2Vmd.LipSync
                         if (val.Length > 0 && _hostError != val)
                         {
                             _hostError = val;
-                            Debug.LogWarning("[StemAudioPreview] 호스트 오류: " + val);
+                            UnityEngine.Debug.LogWarning("[StemAudioPreview] 호스트 오류: " + val);
                         }
                         break;
                 }
