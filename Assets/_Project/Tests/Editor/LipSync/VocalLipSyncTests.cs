@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Fbx2Vmd.LipSync;
 using NUnit.Framework;
 using UnityEditor;
@@ -50,6 +51,129 @@ namespace Fbx2Vmd.Tests.LipSync
                 VocalStemSeparator.Engine.Demucs, "in.mp3", "out", "");
             StringAssert.Contains("-m demucs --two-stems=vocals", args);
             StringAssert.Contains(VocalStemSeparator.DefaultDemucsModel, args);
+        }
+
+        [Test]
+        public void BuildArguments_앙상블프리셋은모델인자를생략한다()
+        {
+            // --ensemble_preset은 --model_filename이 기본값일 때만 발동하므로
+            // 프리셋 지정 시 모델 인자가 나오면 안 된다.
+            string args = VocalStemSeparator.BuildArguments(
+                VocalStemSeparator.Engine.AudioSeparator,
+                "C:\\음악\\song.mp3", "D:\\out", null, null, "karaoke");
+            StringAssert.Contains("--ensemble_preset \"karaoke\"", args);
+            Assert.IsFalse(args.Contains("--model_filename"), args);
+        }
+
+        [Test]
+        public void 기본체인_첫패스는카라오케프리셋_원곡입력()
+        {
+            // 리드 추출은 분리 보컬이 아니라 원곡에 걸어야 1차 분리 손실이 안 누적된다.
+            var step = VocalStemSeparator.DefaultCleanupSteps[0];
+            Assert.AreEqual("karaoke", step.ensemblePreset);
+            Assert.IsTrue(step.useOriginalMix);
+            Assert.AreEqual("Vocals", step.stemKeyword);
+        }
+
+        [Test]
+        public void ResolveStemOutput_앙상블프리셋출력명도인식한다()
+        {
+            // 앙상블 출력명은 `<곡>_(Vocals)_preset_karaoke.wav` 형태다.
+            string dir = Path.Combine(Path.GetTempPath(), "lipsync_stem_" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string lead = Path.Combine(dir, "song_(Vocals)_preset_karaoke.wav");
+                string rest = Path.Combine(dir, "song_(Instrumental)_preset_karaoke.wav");
+                File.WriteAllText(lead, "x");
+                File.WriteAllText(rest, "x");
+                File.SetLastWriteTimeUtc(lead, System.DateTime.UtcNow);
+                File.SetLastWriteTimeUtc(rest, System.DateTime.UtcNow);
+
+                string got = VocalStemSeparator.ResolveStemOutput(dir,
+                    Path.Combine(dir, "song.wav"), "Vocals",
+                    System.DateTime.UtcNow.AddMinutes(-1));
+                Assert.AreEqual(lead, got);
+            }
+            finally
+            {
+                Directory.Delete(dir, true);
+            }
+        }
+
+        // ---------- 보컬 살베지 머지 ----------
+
+        private static float[] Tone(int frames, int channels, float amplitude)
+        {
+            var data = new float[frames * channels];
+            for (int i = 0; i < frames; i++)
+            {
+                float v = amplitude * Mathf.Sin(i * 0.05f);
+                for (int c = 0; c < channels; c++)
+                {
+                    data[i * channels + c] = v;
+                }
+            }
+            return data;
+        }
+
+        [Test]
+        public void MergeBuffers_침묵구간은보컬로채운다()
+        {
+            int win = VocalSalvageMerger.WindowFrames;
+            // 3윈도우: [소리][침묵][소리], 보컬 스템은 전 구간 소리.
+            var clean = Tone(win, 1, 0.2f)
+                .Concat(new float[win])
+                .Concat(Tone(win, 1, 0.2f)).ToArray();
+            var salvage = Tone(win * 3, 1, 0.2f);
+
+            float[] merged = VocalSalvageMerger.MergeBuffers(clean, salvage, 1,
+                out float filledRatio);
+
+            Assert.AreEqual(1f / 3f, filledRatio, 0.01f);
+            // 중간 윈도우 중앙은 보컬 스템 × 게인으로 채워져야 한다.
+            int mid = win + win / 2;
+            Assert.Greater(Mathf.Abs(merged[mid]), 0.01f);
+            // 양끝 윈도우는 원본 그대로다.
+            Assert.AreEqual(clean[0], merged[0]);
+            Assert.AreEqual(clean[win * 2], merged[win * 2]);
+        }
+
+        [Test]
+        public void MergeBuffers_정상구간은건드리지않는다()
+        {
+            int win = VocalSalvageMerger.WindowFrames;
+            var clean = Tone(win * 2, 1, 0.2f);
+            var salvage = Tone(win * 2, 1, 0.2f);
+            float[] merged = VocalSalvageMerger.MergeBuffers(clean, salvage, 1,
+                out float filledRatio);
+            Assert.AreEqual(0f, filledRatio);
+            CollectionAssert.AreEqual(clean, merged);
+        }
+
+        [Test]
+        public void MergeBuffers_둘다침묵이면그대로다()
+        {
+            int win = VocalSalvageMerger.WindowFrames;
+            var clean = new float[win * 2];
+            var salvage = new float[win * 2];
+            float[] merged = VocalSalvageMerger.MergeBuffers(clean, salvage, 1,
+                out float filledRatio);
+            Assert.AreEqual(0f, filledRatio);
+        }
+
+        [Test]
+        public void MergeBuffers_스테레오도동작한다()
+        {
+            int win = VocalSalvageMerger.WindowFrames;
+            var clean = new float[win * 2 * 2]; // 2윈도우 × 2채널 침묵
+            var salvage = Tone(win * 2, 2, 0.2f);
+            float[] merged = VocalSalvageMerger.MergeBuffers(clean, salvage, 2,
+                out float filledRatio);
+            Assert.AreEqual(1f, filledRatio);
+            // 양 끝 128프레임은 페이드 구간이므로 윈도우 중앙 샘플을 검증한다.
+            int center = (win + win / 2) * 2;
+            Assert.Greater(Mathf.Abs(merged[center]), 0.01f);
         }
 
         [Test]

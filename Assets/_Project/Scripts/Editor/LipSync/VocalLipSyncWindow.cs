@@ -174,7 +174,14 @@ namespace Fbx2Vmd.LipSync
                 if (result.success)
                 {
                     _vocalWavPath = result.vocalPath;
-                    SetMessage($"정제 완료 — 분석용 보컬: {Path.GetFileName(_vocalWavPath)}", MessageType.Info);
+                    foreach (string warning in result.warnings)
+                    {
+                        UnityEngine.Debug.LogWarning("[보컬 정제] " + warning);
+                    }
+                    string suffix = result.warnings.Count > 0
+                        ? $" (주의 {result.warnings.Count}건 — 콘솔 확인)"
+                        : "";
+                    SetMessage($"정제 완료 — 분석용 보컬: {Path.GetFileName(_vocalWavPath)}{suffix}", MessageType.Info);
                 }
                 else if (cancelled)
                 {
@@ -252,7 +259,7 @@ namespace Fbx2Vmd.LipSync
             {
                 _cleanVocal = EditorGUILayout.Toggle(
                     new GUIContent("보컬 정제",
-                        "분리된 보컬에 디리버브 → 코러스 제거 → 디노이즈를 순서대로 적용해 립싱크용 리드 보컬만 남긴다"),
+                        "원곡에서 리드 보컬만 추출(카라오케 앙상블) → 잔향/에코 제거 → 노이즈 제거. 립싱크용 리드 보컬만 남긴다"),
                     _cleanVocal);
             }
             EditorGUILayout.BeginHorizontal();
@@ -468,7 +475,9 @@ namespace Fbx2Vmd.LipSync
                 null, _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
                 PythonEnvProvisioner.ModelsDir(ProjectRoot),
                 p => _sepProgress = p,
-                s => _cleanStage = s);
+                s => _cleanStage = s,
+                originalMixPath: _sourceAudioPath,
+                salvageSourcePath: _rawVocalWavPath);
             SetMessage("분리 완료 — 보컬 정제(잔향/코러스/노이즈) 중...", MessageType.Info);
         }
 

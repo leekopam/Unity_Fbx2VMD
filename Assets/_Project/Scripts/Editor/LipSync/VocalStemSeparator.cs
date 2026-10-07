@@ -27,7 +27,9 @@ namespace Fbx2Vmd.LipSync
         public const string DefaultDemucsModel = "htdemucs_ft";
         public const string PythonPathEnv = "UNITY_FBX2VMD_PYTHON";
 
-        /// <summary>보컬 정제 1패스 — model을 input에 적용해 stemKeyword 스템을 다음 입력으로 넘긴다.</summary>
+        /// <summary>보컬 정제 1패스 — model을 input에 적용해 stemKeyword 스템을 다음 입력으로 넘긴다.
+        /// ensemblePreset이 있으면 단일 모델 대신 앙상블 프리셋으로 돌린다.
+        /// useOriginalMix이면 이 패스 입력은 체인 출력이 아니라 원곡이다.</summary>
         public sealed class CleanupStep
         {
             public readonly string model;
@@ -35,27 +37,38 @@ namespace Fbx2Vmd.LipSync
             public readonly string stemKeyword;
             /// <summary>진행률 라벨(디리버브/리드 추출/디노이즈 등).</summary>
             public readonly string label;
+            /// <summary>audio-separator ensemble preset 이름(karaoke 등). 지정 시 model 무시.</summary>
+            public readonly string ensemblePreset;
+            /// <summary>분리 보컬이 아니라 원곡을 이 패스 입력으로 쓸지 여부.</summary>
+            public readonly bool useOriginalMix;
 
-            public CleanupStep(string model, string stemKeyword, string label)
+            public CleanupStep(string model, string stemKeyword, string label,
+                string ensemblePreset = null, bool useOriginalMix = false)
             {
                 this.model = model;
                 this.stemKeyword = stemKeyword;
                 this.label = label;
+                this.ensemblePreset = ensemblePreset;
+                this.useOriginalMix = useOriginalMix;
             }
         }
 
         /// <summary>
-        /// 기본 정제 체인 — UVR 권장 순서(디리버브 → 리드 추출 → 디노이즈)를 따른다.
+        /// 기본 정제 체인 — 리드 추출(원곡 직접) → 디리버브 → 디노이즈.
+        /// 카라오케 모델은 풀 믹스 입력 기준으로 학습됐고, 분리 보컬을 거치면
+        /// 1차 분리에서 잘린 리드는 복구 불가라(MVSEP 리드 SDR ~0.2↓) 원곡에 직접 건다.
         /// 스템명은 각 모델 config yaml의 instruments/target_instrument로 확인했다.
         /// </summary>
         public static readonly CleanupStep[] DefaultCleanupSteps =
         {
-            // dry = 리버브+에코 제거된 보컬(Sucial De-Reverb-Echo V2)
-            new CleanupStep("dereverb-echo_mel_band_roformer_sdr_13.4843_v2.ckpt",
-                "dry", "잔향/에코 제거"),
-            // Vocals = 리드 보컬만(Gabox Karaoke V2 — 백킹 보컬은 Instrumental로 분리)
-            new CleanupStep("mel_band_roformer_karaoke_gabox_v2.ckpt",
-                "Vocals", "코러스 분리"),
+            // Vocals = 리드 보컬만. karaoke 프리셋 = 멜밴드 카라오케 3종(aufr33/viperx,
+            // gabox_v2, becruily)의 avg_wave 앙상블 — 단일 모델 대비 코러스 잔류가 적다.
+            new CleanupStep(null, "Vocals", "코러스 분리(원곡)",
+                ensemblePreset: "karaoke", useOriginalMix: true),
+            // noreverb = 잔향+에코 제거(anvuew BS-Roformer). 비중앙 화성도 함께 걸러져
+            // 스테레오 코러스 잔류를 추가로 줄인다.
+            new CleanupStep("deverb_bs_roformer_8_384dim_10depth.ckpt",
+                "noreverb", "잔향/에코 제거"),
             // dry = 노이즈 제거(Aufr33 denoise, 단일 스템 모델)
             new CleanupStep("denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt",
                 "dry", "노이즈 제거"),
@@ -68,6 +81,8 @@ namespace Fbx2Vmd.LipSync
             public string instrumentalPath = string.Empty;
             public string error = string.Empty;
             public string logTail = string.Empty;
+            /// <summary>치명적이지 않은 주의 사항(살베지 실패, 결과 이상 등).</summary>
+            public readonly List<string> warnings = new List<string>();
         }
 
         /// <summary>
@@ -75,18 +90,23 @@ namespace Fbx2Vmd.LipSync
         /// modelDir을 주면 모델 캐시를 그 폴더에 고정한다(audio-separator 전용).
         /// </summary>
         public static string BuildArguments(Engine engine, string inputPath, string outputDir,
-            string model, string modelDir = null)
+            string model, string modelDir = null, string ensemblePreset = null)
         {
             switch (engine)
             {
                 case Engine.AudioSeparator:
                     // audio-separator는 __main__이 없어 -m으로 못 쓴다.
                     // console entry(audio_separator.utils.cli:main)를 -c로 호출한다.
+                    // --ensemble_preset은 --model_filename 미지정(기본값)일 때만 발동하므로
+                    // 프리셋 사용 시 모델 인자를 생략한다.
                     return "-c \"from audio_separator.utils.cli import main; main()\" "
                         + Quote(inputPath)
                         + " --output_dir " + Quote(outputDir)
                         + " --output_format wav"
-                        + (string.IsNullOrEmpty(model)
+                        + (string.IsNullOrEmpty(ensemblePreset)
+                            ? string.Empty
+                            : " --ensemble_preset " + Quote(ensemblePreset))
+                        + (string.IsNullOrEmpty(model) || !string.IsNullOrEmpty(ensemblePreset)
                             ? string.Empty
                             : " --model_filename " + Quote(model))
                         + (string.IsNullOrEmpty(modelDir)
@@ -279,8 +299,10 @@ namespace Fbx2Vmd.LipSync
         }
 
         /// <summary>
-        /// 분리된 보컬에 정제 체인을 순서대로 적용한다(디리버브 → 리드 추출 → 디노이즈).
-        /// 각 패스의 목표 스템을 다음 패스 입력으로 넘기고, 결과는 vocalPath에 담는다.
+        /// 정제 체인을 순서대로 적용한다(리드 추출 → 디리버브 → 디노이즈).
+        /// vocalPath는 분리된 보컬 — 살베지 소스와 최종 파일명 기준으로 쓴다.
+        /// originalMixPath는 useOriginalMix 패스의 입력으로 쓰는 원곡이다.
+        /// salvageSourcePath를 주면 체인 완료 후 과감쇠로 지워진 구간을 해당 보컬로 채운다.
         /// onProgress는 전체 체인 기준 0~1(패스 i는 (i+p)/steps.Length로 환산).
         /// onStage가 있으면 각 패스 시작 시 라벨을 통지한다.
         /// </summary>
@@ -290,7 +312,9 @@ namespace Fbx2Vmd.LipSync
             IReadOnlyDictionary<string, string> env = null,
             string modelDir = null,
             Action<float> onProgress = null,
-            Action<string> onStage = null)
+            Action<string> onStage = null,
+            string originalMixPath = null,
+            string salvageSourcePath = null)
         {
             var result = new Result();
             if (string.IsNullOrEmpty(pythonPath) || !File.Exists(pythonPath))
@@ -326,8 +350,13 @@ namespace Fbx2Vmd.LipSync
                 CleanupStep step = steps[i];
                 onStage?.Invoke(step.label);
                 DateTime runStartUtc = DateTime.UtcNow.AddSeconds(-2);
-                string args = BuildArguments(Engine.AudioSeparator, input, outputDir,
-                    step.model, modelDir);
+                // useOriginalMix 패스는 체인 중간 결과가 아니라 원곡을 입력으로 쓴다.
+                string stepInput = step.useOriginalMix
+                    && !string.IsNullOrEmpty(originalMixPath)
+                        ? Path.GetFullPath(originalMixPath)
+                        : input;
+                string args = BuildArguments(Engine.AudioSeparator, stepInput, outputDir,
+                    step.model, modelDir, step.ensemblePreset);
                 // 패스 진행률을 전체 체인 범위로 환산해 통지한다.
                 int pass = i;
                 int code = RunSync(pythonPath, args, outputDir, out string output,
@@ -344,7 +373,7 @@ namespace Fbx2Vmd.LipSync
                     return result;
                 }
 
-                input = ResolveStemOutput(outputDir, input, step.stemKeyword, runStartUtc);
+                input = ResolveStemOutput(outputDir, stepInput, step.stemKeyword, runStartUtc);
                 if (input == null)
                 {
                     result.error = $"정제 패스({step.label})가 목표 스템 '{step.stemKeyword}'을 출력하지 못했습니다.";
@@ -365,6 +394,29 @@ namespace Fbx2Vmd.LipSync
             }
             result.vocalPath = MoveTo(input,
                 Path.Combine(outputDir, baseName + "_vocal_clean.wav"));
+
+            // 과감쇠로 지워진 구간을 분리 보컬로 채운다 — 립싱크엔 잔류 코러스보다
+            // 리드 소실이 더 치명적이라 침묵 구간만 보수적으로 회수한다.
+            if (!string.IsNullOrEmpty(salvageSourcePath))
+            {
+                string merged = VocalSalvageMerger.Merge(
+                    result.vocalPath, salvageSourcePath,
+                    Path.Combine(outputDir, baseName + "_vocal_lead.wav"),
+                    out float filledRatio, out string salvageError);
+                if (merged != null)
+                {
+                    result.vocalPath = merged;
+                    if (filledRatio > 0f)
+                    {
+                        result.warnings.Add(
+                            $"살베지: 과감쇠 구간 {filledRatio:P0}를 보컬 스템으로 채웠습니다.");
+                    }
+                }
+                else if (!string.IsNullOrEmpty(salvageError))
+                {
+                    result.warnings.Add("살베지 건너뜀: " + salvageError);
+                }
+            }
             result.success = true;
             result.logTail = Tail(log.ToString(), 4000);
             return result;
@@ -376,10 +428,13 @@ namespace Fbx2Vmd.LipSync
             IReadOnlyDictionary<string, string> env = null,
             string modelDir = null,
             Action<float> onProgress = null,
-            Action<string> onStage = null)
+            Action<string> onStage = null,
+            string originalMixPath = null,
+            string salvageSourcePath = null)
         {
             return Task.Run(() => CleanVocal(pythonPath, vocalPath, outputDir, steps,
-                ct, env, modelDir, onProgress, onStage), ct);
+                ct, env, modelDir, onProgress, onStage,
+                originalMixPath, salvageSourcePath), ct);
         }
 
         /// <summary>
