@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,6 +7,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using VRM;
+using Object = UnityEngine.Object;
 
 namespace Fbx2Vmd.Tests.LipSync
 {
@@ -1205,6 +1207,48 @@ namespace Fbx2Vmd.Tests.LipSync
                 }
                 return ms.ToArray();
             }
+        }
+
+        // ---------- wav2vec2 음소 CSV → BakedData ----------
+
+        [Test]
+        public void CsvToBakedData_모음확률을음소비율로옮긴다()
+        {
+            var csv = "{\"model\":\"m\",\"sr\":16000,\"fps\": 60.0}\n"
+                + "0.10,0.8,0.05,0.05,0.05,0.05\n"
+                + "0.10,0.05,0.05,0.8,0.05,0.05\n"
+                + "0.10,0.05,0.05,0.05,0.05,0.8\n";
+            var data = Wav2VecPhonemeExtractor.CsvToBakedData(csv, 3f / 60f);
+            _cleanup.Add(data);
+            Assert.AreEqual(3, data.frames.Count);
+            var info = uLipSync.BakedData.GetLipSyncInfo(data.frames[0]);
+            Assert.AreEqual("A", info.phoneme);
+            Assert.Greater(info.phonemeRatios["A"], 0.7f);
+            Assert.AreEqual("U", uLipSync.BakedData.GetLipSyncInfo(data.frames[1]).phoneme);
+            Assert.AreEqual("O", uLipSync.BakedData.GetLipSyncInfo(data.frames[2]).phoneme);
+        }
+
+        [Test]
+        public void CsvToBakedData_다른fps는보간한다()
+        {
+            // 30fps 2프레임을 60fps로 펼치면 4프레임 — 경계 인덱스 매핑 확인.
+            // json.dumps는 "fps": 30.0처럼 콜론 뒤 공백을 넣는다(회귀 고정).
+            var csv = "{\"fps\": 30.0}\n"
+                + "0.10,1.0,0,0,0,0\n"
+                + "0.10,0,1.0,0,0,0\n";
+            var data = Wav2VecPhonemeExtractor.CsvToBakedData(csv, 4f / 60f);
+            _cleanup.Add(data);
+            Assert.AreEqual(4, data.frames.Count);
+            Assert.AreEqual("I", uLipSync.BakedData.GetLipSyncInfo(data.frames[3]).phoneme);
+        }
+
+        [Test]
+        public void CsvToBakedData_빈CSV는예외()
+        {
+            Assert.Throws<InvalidOperationException>(
+                () => Wav2VecPhonemeExtractor.CsvToBakedData("{\"fps\":50}\n", 1f));
+            Assert.Throws<ArgumentException>(
+                () => Wav2VecPhonemeExtractor.CsvToBakedData("", 1f));
         }
     }
 }

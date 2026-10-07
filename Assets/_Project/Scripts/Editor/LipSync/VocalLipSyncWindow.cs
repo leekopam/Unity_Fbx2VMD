@@ -31,6 +31,7 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private GameObject _targetCharacter;
         [SerializeField] private float _minVolumeGate = 0.02f;
         [SerializeField] private float _releaseDamp = 0.35f; // 입 닫힘/잡음 하강 감쇠(0=끔)
+        [SerializeField] private bool _useWav2VecPhonemes; // DL 음소 분석 경로
         [SerializeField] private AnimationClip _previewClip;
         [SerializeField] private bool _previewWithAudio = true;
 
@@ -344,6 +345,9 @@ namespace Fbx2Vmd.LipSync
             EditorGUILayout.EndHorizontal();
             _minVolumeGate = EditorGUILayout.Slider("무음 게이트", _minVolumeGate, 0f, 0.2f);
             _releaseDamp = EditorGUILayout.Slider("감쇄(노이즈/여운)", _releaseDamp, 0f, 0.95f);
+            _useWav2VecPhonemes = EditorGUILayout.ToggleLeft(
+                "wav2vec2 음소 분석 사용(코러스 잔류에 강함, uLipSync 대신)",
+                _useWav2VecPhonemes);
 
             using (new EditorGUI.DisabledScope(_separating != null || _cleaning != null))
             {
@@ -508,7 +512,34 @@ namespace Fbx2Vmd.LipSync
                     return;
                 }
 
-                BakedData data = VocalLipSyncBaker.BakeAnalysis(vocal, _profile);
+                BakedData data;
+                if (_useWav2VecPhonemes)
+                {
+                    // wav2vec2-IPA 음소 추출 — 코러스 잔류/노이즈에 강한 DL 분석 경로.
+                    string csvPath = Path.Combine(_outputDir,
+                        Path.GetFileNameWithoutExtension(_vocalWavPath) + "_phonemes.csv");
+                    Directory.CreateDirectory(_outputDir);
+                    if (string.IsNullOrEmpty(_pythonPath) || !File.Exists(_pythonPath))
+                    {
+                        SetMessage("python 경로가 없습니다. 환경 준비를 먼저 실행하세요.", MessageType.Error);
+                        DestroyImmediate(vocal);
+                        return;
+                    }
+                    if (!Wav2VecPhonemeExtractor.Extract(_pythonPath, ProjectRoot,
+                            _vocalWavPath, csvPath,
+                            PythonEnvProvisioner.ProcessEnv(ProjectRoot), out string extractError))
+                    {
+                        SetMessage(extractError, MessageType.Error);
+                        DestroyImmediate(vocal);
+                        return;
+                    }
+                    data = Wav2VecPhonemeExtractor.CsvToBakedData(
+                        File.ReadAllText(csvPath), vocal.length);
+                }
+                else
+                {
+                    data = VocalLipSyncBaker.BakeAnalysis(vocal, _profile);
+                }
                 var warnings = new System.Collections.Generic.List<string>();
                 // VRM 프록시가 없는 모델(MMD 등)은 모음 모프명을 스캔해 자동 바인딩한다.
                 AnimationClip clip = VocalLipSyncBaker.BakeClip(
