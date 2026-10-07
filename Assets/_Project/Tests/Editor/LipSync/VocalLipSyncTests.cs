@@ -356,10 +356,11 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
+        [Platform("Win")] // NAudio는 Windows 전용 — Linux CI에서는 스킵
         public void StemPreview_미임포트Assets안Wav도재생된다()
         {
             // 외부 프로세스가 방금 쓴 wav는 임포트 전이라 AssetDatabase가 못 읽는다 —
-            // 외부 호스트는 임포트 여부와 무관하게 파일을 직접 재생한다.
+            // NAudio는 임포트 여부와 무관하게 파일을 직접 재생한다.
             string dir = Path.Combine(UnityEngine.Application.dataPath,
                 "Generated/LipSync/preview_test_" + Path.GetRandomFileName());
             Directory.CreateDirectory(dir);
@@ -382,10 +383,12 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
-        public void StemPreview_호스트재생은위치가실제로진행한다()
+        [Platform("Win")] // NAudio는 Windows 전용 — Linux CI에서는 스킵
+        public void StemPreview_재생은위치가실제로진행한다()
         {
-            // E2E: 위치가 호스트(MediaPlayer)의 실측 보고라는 게 핵심 —
+            // E2E: 위치가 NAudio 리더의 실측 보고라는 게 핵심 —
             // 0에서 멈춰있으면 출력이 실제로 안 나가는 것(Unity AudioUtil 무음 회귀 방지).
+            // NAudio는 자체 스레드에서 재생하므로 메인 스레드 블록과 무관하게 진행한다.
             string wav = Path.Combine(Path.GetTempPath(),
                 "e2e_play_" + Path.GetRandomFileName() + ".wav");
             File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
@@ -393,15 +396,16 @@ namespace Fbx2Vmd.Tests.LipSync
             try
             {
                 Assert.IsNull(StemAudioPreview.Toggle(wav));
-                // 메인 스레드 블록으로 Heartbeat가 굶으므로 hb 유효시간(8s)보다 짧게 잡는다.
+                // MediaFoundationReader.CurrentTime은 출력 버퍼(~0.3s) 단위로만
+                // 갱신되므로 정확히 경계값을 돌려줄 수 있다 — 다음 버킷까지 기다린다.
                 double deadline = EditorApplication.timeSinceStartup + 6.0;
-                while (StemAudioPreview.PositionSec < 0.3f
+                while (StemAudioPreview.PositionSec <= 0.35f
                     && EditorApplication.timeSinceStartup < deadline)
                 {
                     System.Threading.Thread.Sleep(50);
                 }
-                Assert.Greater(StemAudioPreview.PositionSec, 0.3f,
-                    "호스트 재생 위치가 진행하지 않음 — 소리가 실제로 나지 않는 상태");
+                Assert.Greater(StemAudioPreview.PositionSec, 0.35f,
+                    "재생 위치가 진행하지 않음 — 소리가 실제로 나지 않는 상태");
                 Assert.IsTrue(StemAudioPreview.IsPlaying());
             }
             finally
@@ -412,13 +416,14 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
+        [Platform("Win")] // NAudio는 Windows 전용 — Linux CI에서는 스킵
         public void StemPreview_Seek는위치를이동한다()
         {
             // 진행바용 자체 시간 추적 검증 — Seek 후 PositionSec이 목표 위치를 돌려줘야 한다.
             string wav = Path.Combine(Path.GetTempPath(),
                 "seek_" + Path.GetRandomFileName() + ".wav");
             File.WriteAllBytes(wav, BuildWavBytes(1, 16, 1, 8000,
-                new short[32000])); // 4초 무음 — 호스트 기동 시간을 고려한 여유
+                new short[32000])); // 4초 무음 — 재생 상태 확인용 여유 길이
             try
             {
                 Assert.IsNull(StemAudioPreview.Toggle(wav));
@@ -434,6 +439,7 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
+        [Platform("Win")] // NAudio는 Windows 전용 — Linux CI에서는 스킵
         public void StemPreview_Stop은경로와상태를지운다()
         {
             // UI가 Stop 후 이전 경로를 재생 중으로 잘못 표시하지 않는지 검증.
@@ -457,9 +463,10 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
+        [Platform("Win")] // NAudio는 Windows 전용 — Linux CI에서는 스킵
         public void StemPreview_자연종료후Seek은다시재생한다()
         {
-            // 끝까지 재생된 뒤 호스트가 playing=0을 보고해도,
+            // 끝까지 재생된 뒤(PlaybackStopped)에도
             // 진행바를 끌어 시크하면 그 위치부터 다시 재생돼야 한다.
             string wav = Path.Combine(Path.GetTempPath(),
                 "finish_" + Path.GetRandomFileName() + ".wav");
@@ -468,7 +475,7 @@ namespace Fbx2Vmd.Tests.LipSync
             try
             {
                 Assert.IsNull(StemAudioPreview.Toggle(wav));
-                // 호스트가 종료 보고할 시간 확보(hb 유효시간보단 짧게)
+                // 자연 종료 이벤트가 올 시간 확보
                 double deadline = EditorApplication.timeSinceStartup + 5.0;
                 while (StemAudioPreview.IsPlaying()
                     && EditorApplication.timeSinceStartup < deadline)

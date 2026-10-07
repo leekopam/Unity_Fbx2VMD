@@ -230,6 +230,22 @@ namespace Fbx2Vmd.LipSync
             EditorGUILayout.LabelField("1. 음원 → 보컬/BGM 분리", EditorStyles.boldLabel);
             DrawPathRow("원본 음원", ref _sourceAudioPath, "mp3/wav/flac/m4a 선택",
                 "wav;mp3;flac;m4a;ogg", preview: true);
+            // 듣기 출력 장치 — 기본 장치와 실제로 듣는 장치가 다르면 소리가 안 들린다.
+            string[] devices = StemAudioPreview.GetOutputDeviceNames();
+            if (devices.Length > 0)
+            {
+                // 이름 목록의 index 0은 매퍼(-1) — 표시 인덱스와 장치 번호가 1 어긋난다.
+                // 저장된 장치가 제거되면 번호가 범위 밖일 수 있으니 클램프한다.
+                int next = EditorGUILayout.Popup(
+                    new GUIContent("출력 장치",
+                        "듣기 소리가 나갈 장치. 소리가 안 나오면 실제로 듣는 장치를 선택"),
+                    Mathf.Clamp(StemAudioPreview.SelectedDeviceNumber + 1,
+                        0, devices.Length - 1), devices);
+                if (next - 1 != StemAudioPreview.SelectedDeviceNumber)
+                {
+                    StemAudioPreview.SelectedDeviceNumber = next - 1;
+                }
+            }
             _engine = (VocalStemSeparator.Engine)EditorGUILayout.EnumPopup("분리 엔진", _engine);
             _model = EditorGUILayout.TextField("모델", _model);
             using (new EditorGUI.DisabledScope(_engine != VocalStemSeparator.Engine.AudioSeparator))

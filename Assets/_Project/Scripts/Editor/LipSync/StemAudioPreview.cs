@@ -1,6 +1,6 @@
 using System;
-using System.Diagnostics;
 using System.IO;
+using NAudio.Wave;
 using UnityEditor;
 using UnityEngine;
 
@@ -9,10 +9,10 @@ namespace Fbx2Vmd.LipSync
     /// <summary>
     /// 분리된 스템/원본 음원을 에디터에서 미리듣기한다.
     /// Unity의 AudioUtil 프리뷰는 출력이 나지 않는 환경이 있어(IsPlaying=true인데
-    /// 실제 무음) 외부 호스트 프로세스(Tools/LipSync/preview_host.ps1, WPF
-    /// MediaPlayer)로 OS 기본 디바이스에 직접 재생한다.
-    /// 위치/길이는 호스트가 status 파일로 실측 보고하므로 진행바가 실제 재생과
-    /// 일치한다. 한 번에 하나만 재생한다.
+    /// 실제 무음) NAudio를 에디터 내에서 직접 재생한다 — 실제 사운드 출력이며
+    /// 위치/길이를 MediaFoundationReader에서 실측으로 읽는다.
+    /// 출력 장치는 WinMM 출력 장치 중에서 선택할 수 있다
+    /// (기본 장치와 실제로 듣는 장치가 다를 때의 무음 방지). 한 번에 하나만 재생한다.
     /// </summary>
     [InitializeOnLoad]
     public static class StemAudioPreview
@@ -25,26 +25,39 @@ namespace Fbx2Vmd.LipSync
             WavFile = 2,       // 프로젝트 밖 — PCM WAV만
         }
 
+        const int MaxOutputRetries = 3;
+        const string DeviceNumPrefKey = "Fbx2Vmd.LipSync.PreviewDevice";
+        const string DeviceNamePrefKey = "Fbx2Vmd.LipSync.PreviewDeviceName";
+
         /// <summary>현재 재생 중인 경로. 없으면 null.</summary>
         public static string PlayingPath { get; private set; }
 
-        static Process _host;
-        static string _dir;       // 호스트 인스턴스별 고유 cmd/status/hb 디렉터리
-        static int _seq;          // 명령 일련번호(중복 실행 방지)
-        static double _lastHb;
-        static float _posSec;
-        static float _durSec;
-        static float _probedDurSec; // 호스트 보고 전 wav 길이
-        static bool _hostPlaying;
-        static double _statusReadAt;
-        static double _posHoldUntil; // Seek 직후 호스트의 stale pos로 덮어쓰지 않게 보류 시간
-        static string _hostError;
+        static MediaFoundationReader _reader; // wav/mp3/m4a 모두 지원
+        static WaveOutEvent _out;
+        static bool _finished;                // 자연 종료 감지(PlaybackStopped 이벤트)
+        static int _outputRetries;            // 출력 스레드 사망 시 재시작 횟수
+        static bool _retryPending;            // winmm 스레드 → 메인 스레드 재시작 요청
+
+        // winmm 콜백 스레드(PlaybackStopped)와 메인 스레드의 공유 상태 직렬화.
+        // lock 안에서는 참조/플래그만 다루고 waveOut 호출은 절대 하지 않는다 —
+        // waveOutReset이 콜백 스레드 완료를 기다리므로 lock을 잡은 채 호출하면 교착한다.
+        static readonly object _gate = new object();
+
+        // 장치 이름 캐시 — OnGUI마다 장치당 P/Invoke + 마샬링을 하지 않게 한다.
+        static string[] _deviceNameCache;
+        static double _deviceNameCacheAt;
+        const double DeviceCacheTtlSec = 5.0;
 
         static StemAudioPreview()
         {
-            // 도메인이 살아 있는 동안 하트비트를 유지한다 — 호스트는 hb가
-            // 8초 이상 정체되면 자동 종료하므로 리로드/종료 시 고아 프로세스가 안 생긴다.
-            EditorApplication.update += Heartbeat;
+            // 도메인 리로드/에디터 종료 시 NAudio 스레드가 살아 남지 않게 정리한다.
+            // 주의: waveOutReset은 메인 스레드를 블록할 수 있어 리로드 경로에서는
+            // 백그라운드로 넘긴다 — 재생 중 리로드하면 에디터가 멈출 수 있다.
+            AssemblyReloadEvents.beforeAssemblyReload += StopAsync;
+            EditorApplication.quitting += StopAsync;
+            // 출력 사망 재시작은 메인 스레드에서 처리 — 콜백 스레드에서 정적 상태를
+            // 바꾸지 않는다.
+            EditorApplication.update += PumpRetry;
         }
 
         /// <summary>클립 길이(초). 재생 중이 아니면 0.</summary>
@@ -52,18 +65,26 @@ namespace Fbx2Vmd.LipSync
         {
             get
             {
-                RefreshStatus();
-                return _durSec > 0f ? _durSec : _probedDurSec;
+                var r = _reader;
+                if (r == null)
+                {
+                    return 0f;
+                }
+                try { return (float)r.TotalTime.TotalSeconds; } catch { return 0f; }
             }
         }
 
-        /// <summary>재생 위치(초) — 호스트 실측값.</summary>
+        /// <summary>재생 위치(초) — 리더 실측값.</summary>
         public static float PositionSec
         {
             get
             {
-                RefreshStatus();
-                return _posSec;
+                var r = _reader;
+                if (r == null)
+                {
+                    return 0f;
+                }
+                try { return (float)r.CurrentTime.TotalSeconds; } catch { return 0f; }
             }
         }
 
@@ -114,26 +135,19 @@ namespace Fbx2Vmd.LipSync
             {
                 return "파일이 없습니다: " + path;
             }
-            // 외부 호스트는 wav/mp3/m4a 등 MediaPlayer가 아는 포맷을 전부 재생한다.
-            string error = EnsureHost();
+
+            string error = StartPlayback(path, 0f);
             if (error != null)
             {
                 return error;
             }
-
             PlayingPath = path;
-            _probedDurSec = ProbeDuration(path);
-            _posSec = 0f;
-            _durSec = 0f;
-            _hostPlaying = true;
-            // 호스트는 외부 프로세스라 프로젝트 상대 경로를 모른다 — 절대 경로로 보낸다.
-            Send("play|0|" + Path.GetFullPath(path));
             return null;
         }
 
         /// <summary>
         /// 재생 위치를 지정 초로 이동한다. 재생 중이 아니면 아무것도 하지 않는다.
-        /// 종료/정지 상태에서 시크하면 그 위치부터 다시 재생된다.
+        /// 자연 종료 상태에서 시크하면 그 위치부터 다시 재생된다.
         /// </summary>
         public static void Seek(float seconds)
         {
@@ -142,44 +156,97 @@ namespace Fbx2Vmd.LipSync
                 return;
             }
             float t = Mathf.Max(0f, seconds);
-            float dur = DurationSec; // 호스트 보고 전엔 프로브 길이로 상한을 잡는다.
-            if (dur > 0f)
+            if (DurationSec > 0f)
             {
-                t = Mathf.Min(t, dur);
+                t = Mathf.Min(t, DurationSec);
             }
-            Send("seek|" + (int)(t * 1000));
-            _posSec = t;
-            _hostPlaying = true;
-            // 호스트가 시크를 처리해 status가 따라잡기까지 이전 위치로 덮어쓰지 않는다.
-            _posHoldUntil = EditorApplication.timeSinceStartup + 0.5;
+            var reader = _reader;
+            var output = _out;
+            if (reader == null || output == null)
+            {
+                // 도달하면 정리가 반만 된 상태 — 같은 파일을 해당 위치부터 다시 연다.
+                if (File.Exists(PlayingPath))
+                {
+                    StartPlayback(PlayingPath, t);
+                }
+                return;
+            }
+            try
+            {
+                reader.CurrentTime = TimeSpan.FromSeconds(t);
+            }
+            catch { return; }
+            _finished = false;
+            if (output.PlaybackState != PlaybackState.Playing)
+            {
+                try { output.Play(); } catch { }
+            }
         }
 
         /// <summary>재생을 멈춘다.</summary>
         public static void Stop()
         {
-            if (_host != null && !_host.HasExited)
+            WaveOutEvent outToKill;
+            MediaFoundationReader readerToKill;
+            lock (_gate)
             {
-                Send("stop");
+                PlayingPath = null;
+                _finished = false;
+                _retryPending = false;
+                _outputRetries = MaxOutputRetries; // 진행 중 재시도 요청 차단
+                outToKill = _out;
+                readerToKill = _reader;
+                _out = null;
+                _reader = null;
             }
-            PlayingPath = null;
-            _hostPlaying = false;
-            _posSec = 0f;
-            _durSec = 0f;
-            _probedDurSec = 0f;
-            _posHoldUntil = 0;
-            _hostError = null;
+            // winmm 호출은 lock 밖에서 — 콜백 스레드와의 교착 방지.
+            try { outToKill?.Stop(); } catch { }
+            try { outToKill?.Dispose(); } catch { }
+            try { readerToKill?.Dispose(); } catch { }
         }
 
-        /// <summary>재생 중인지 — 호스트 상태 파일 기준.</summary>
+        /// <summary>리로드 경로용 — winmm 정리를 백그라운드로 넘겨 메인 스레드를 블록하지 않는다.</summary>
+        static void StopAsync()
+        {
+            WaveOutEvent outToKill;
+            MediaFoundationReader readerToKill;
+            lock (_gate)
+            {
+                PlayingPath = null;
+                _finished = false;
+                _retryPending = false;
+                _outputRetries = MaxOutputRetries;
+                outToKill = _out;
+                readerToKill = _reader;
+                _out = null;
+                _reader = null;
+            }
+            if (outToKill == null && readerToKill == null)
+            {
+                return;
+            }
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try { outToKill?.Stop(); } catch { }
+                try { outToKill?.Dispose(); } catch { }
+                try { readerToKill?.Dispose(); } catch { }
+            });
+        }
+
+        /// <summary>재생 중인지 — 실제 재생 상태 기준.</summary>
         public static bool IsPlaying()
         {
-            RefreshStatus();
-            if (!_hostPlaying || PlayingPath == null)
+            var output = _out;
+            if (output == null || PlayingPath == null || _finished)
+            {
+                return false;
+            }
+            if (output.PlaybackState != PlaybackState.Playing)
             {
                 return false;
             }
             float dur = DurationSec;
-            return dur <= 0f || _posSec < dur;
+            return dur <= 0f || PositionSec < dur;
         }
 
         /// <summary>자연 종료 시 상태를 비운다. 상태가 바뀌었으면 true.</summary>
@@ -193,216 +260,250 @@ namespace Fbx2Vmd.LipSync
             return true;
         }
 
-        // ---------- 호스트 프로세스 ----------
+        // ---------- 출력 장치 선택 ----------
 
-        static string EnsureHost()
+        /// <summary>WinMM 출력 장치 이름 목록. index -1은 사운드 매퍼(기본 장치 추적).</summary>
+        public static string[] GetOutputDeviceNames()
         {
-            if (_host != null && !_host.HasExited)
+            double now = EditorApplication.timeSinceStartup;
+            if (_deviceNameCache != null && now - _deviceNameCacheAt < DeviceCacheTtlSec)
             {
-                return null;
+                return _deviceNameCache;
             }
-            string script = Path.GetFullPath(Path.Combine(
-                Application.dataPath, "../Tools/LipSync/preview_host.ps1"));
-            if (!File.Exists(script))
-            {
-                return "미리듣기 호스트가 없습니다: " + script;
-            }
-            // 인스턴스마다 고유 디렉터리 — 리로드 후 8초 내 재기동해도 구 호스트의
-            // hb 갱신과 충돌하지 않는다(구 호스트는 정체 감지로 자동 종료).
-            _dir = Path.Combine(Path.GetTempPath(), "lipsync_preview_"
-                + Process.GetCurrentProcess().Id + "_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            var names = new System.Collections.Generic.List<string>();
             try
             {
-                Directory.CreateDirectory(_dir);
-                File.WriteAllText(HbPath, DateTime.Now.Ticks.ToString());
-            }
-            catch (Exception e)
-            {
-                return "미리듣기 작업 디렉터리를 만들지 못했습니다: " + e.Message;
-            }
-            _lastHb = EditorApplication.timeSinceStartup;
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = "-NoProfile -STA -ExecutionPolicy Bypass"
-                    + " -WindowStyle Hidden -File \"" + script
-                    + "\" -Dir \"" + _dir + "\"",
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            };
-            try
-            {
-                _host = Process.Start(psi);
-            }
-            catch (Exception e)
-            {
-                _host = null;
-                return "미리듣기 호스트를 실행하지 못했습니다: " + e.Message;
-            }
-            if (_host == null)
-            {
-                return "미리듣기 호스트를 시작하지 못했습니다.";
-            }
-            // 호스트가 첫 status를 쓸 때까지 최대 4초 기다린다.
-            double deadline = EditorApplication.timeSinceStartup + 4.0;
-            while (EditorApplication.timeSinceStartup < deadline)
-            {
-                if (File.Exists(StatusPath))
+                int n = WaveInterop.waveOutGetNumDevs();
+                for (int i = -1; i < n; i++)
                 {
-                    return null;
-                }
-                if (_host.HasExited)
-                {
-                    break;
-                }
-                System.Threading.Thread.Sleep(50);
-            }
-            KillHost();
-            return "미리듣기 호스트를 시작하지 못했습니다.";
-        }
-
-        static void Send(string command)
-        {
-            if (_dir == null)
-            {
-                return;
-            }
-            _seq++;
-            try
-            {
-                // 임시 파일 + 원자적 이동 — 호스트가 부분만 쓰인 명령을 읽지 않게 한다.
-                string tmp = Path.Combine(_dir, "cmd.tmp");
-                File.WriteAllText(tmp, _seq + "|" + command);
-                if (File.Exists(CmdPath))
-                {
-                    File.Delete(CmdPath);
-                }
-                File.Move(tmp, CmdPath);
-            }
-            catch (Exception e)
-            {
-                _hostError = "명령 전송 실패: " + e.Message;
-                UnityEngine.Debug.LogWarning("[StemAudioPreview] " + _hostError);
-            }
-        }
-
-        static string CmdPath => Path.Combine(_dir, "cmd.txt");
-        static string StatusPath => Path.Combine(_dir, "status.txt");
-        static string HbPath => Path.Combine(_dir, "hb.txt");
-
-        /// <summary>상태 파일을 50ms마다 한 번씩 읽어 위치/길이/재생을 갱신한다.</summary>
-        static void RefreshStatus()
-        {
-            // 정지 직후 status에 아직 playing=1이 남아 있을 수 있으므로
-            // 재생할 대상이 없으면 읽지 않는다.
-            if (PlayingPath == null)
-            {
-                _hostPlaying = false;
-                return;
-            }
-            // 호스트가 죽었으면 마지막 status 파일이 남아 있어도 재생 중으로 간주하지 않는다.
-            if (_host != null && _host.HasExited)
-            {
-                _hostPlaying = false;
-                return;
-            }
-            if (_dir == null
-                || EditorApplication.timeSinceStartup - _statusReadAt < 0.05)
-            {
-                return;
-            }
-            _statusReadAt = EditorApplication.timeSinceStartup;
-            string text;
-            try
-            {
-                text = File.ReadAllText(StatusPath);
-            }
-            catch
-            {
-                return; // 호스트가 아직 안 썼거나 종료 중 — 이전 값 유지
-            }
-            foreach (string kv in text.Trim().Split(';'))
-            {
-                int eq = kv.IndexOf('=');
-                if (eq <= 0)
-                {
-                    continue;
-                }
-                string val = kv.Substring(eq + 1);
-                switch (kv.Substring(0, eq))
-                {
-                    case "pos":
-                        if (EditorApplication.timeSinceStartup >= _posHoldUntil)
-                        {
-                            int.TryParse(val, out int ms);
-                            _posSec = ms / 1000f;
-                        }
-                        break;
-                    case "dur": int.TryParse(val, out int dms); if (dms > 0) _durSec = dms / 1000f; break;
-                    case "playing":
-                        // 시크 직후 홀드 중엔 호스트의 이전 상태로 덮어쓰지 않는다.
-                        if (EditorApplication.timeSinceStartup >= _posHoldUntil)
-                        {
-                            _hostPlaying = val == "1";
-                        }
-                        break;
-                    case "err":
-                        // 호스트 보고 오류는 로그로 표면화 — "재생 중인데 무음" 재발 방지.
-                        if (val.Length > 0 && _hostError != val)
-                        {
-                            _hostError = val;
-                            UnityEngine.Debug.LogWarning("[StemAudioPreview] 호스트 오류: " + val);
-                        }
-                        break;
-                }
-            }
-        }
-
-        static void Heartbeat()
-        {
-            if (_host == null || _host.HasExited || _dir == null)
-            {
-                return;
-            }
-            if (EditorApplication.timeSinceStartup - _lastHb < 1.0)
-            {
-                return;
-            }
-            _lastHb = EditorApplication.timeSinceStartup;
-            try { File.WriteAllText(HbPath, DateTime.Now.Ticks.ToString()); }
-            catch { /* 호스트가 디렉터리를 정리했으면 무시 */ }
-        }
-
-        static void KillHost()
-        {
-            try
-            {
-                if (_host != null && !_host.HasExited)
-                {
-                    _host.Kill();
+                    var caps = new WaveOutCapabilities();
+                    WaveInterop.waveOutGetDevCaps(new IntPtr(i), out caps,
+                        System.Runtime.InteropServices.Marshal.SizeOf(caps));
+                    names.Add(i == -1
+                        ? caps.ProductName + " (Windows 기본 장치)"
+                        : caps.ProductName);
                 }
             }
             catch { }
-            _host = null;
+            _deviceNameCache = names.ToArray();
+            _deviceNameCacheAt = now;
+            return _deviceNameCache;
         }
 
-        /// <summary>wav는 헤더 파싱으로 즉시 길이를 알고, 나머지는 호스트 보고를 기다린다.</summary>
-        static float ProbeDuration(string path)
+        /// <summary>선택된 WinMM 장치 번호. -1이면 Windows 기본 장치(사운드 매퍼).</summary>
+        public static int SelectedDeviceNumber
         {
-            if (!string.Equals(Path.GetExtension(path), ".wav",
-                    StringComparison.OrdinalIgnoreCase))
+            get { return EditorPrefs.GetInt(DeviceNumPrefKey, -1); }
+            set
             {
-                return 0f;
+                EditorPrefs.SetInt(DeviceNumPrefKey, value);
+                // 장치 순번은 탈착으로 바뀌므로 이름도 함께 저장해 불일치를 감지한다.
+                EditorPrefs.SetString(DeviceNamePrefKey, GetDeviceName(value) ?? "");
             }
-            var clip = WavFileReader.Load(path, out _);
-            if (clip == null)
+        }
+
+        /// <summary>해당 번호 장치의 현재 이름. 장치가 없으면 null.</summary>
+        static string GetDeviceName(int deviceNumber)
+        {
+            try
             {
-                return 0f;
+                if (deviceNumber < -1 || deviceNumber >= WaveInterop.waveOutGetNumDevs())
+                {
+                    return null;
+                }
+                var caps = new WaveOutCapabilities();
+                WaveInterop.waveOutGetDevCaps(new IntPtr(deviceNumber), out caps,
+                    System.Runtime.InteropServices.Marshal.SizeOf(caps));
+                return caps.ProductName;
             }
-            float len = clip.length;
-            UnityEngine.Object.DestroyImmediate(clip);
-            return len;
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// 재생에 사용할 장치 번호. 저장된 이름과 현재 이름이 다르면(장치 재배열)
+        /// 같은 이름의 장치를 찾고, 못 찾으면 매퍼(-1)로 폴백한다.
+        /// </summary>
+        static int ResolveDeviceNumber()
+        {
+            int num = SelectedDeviceNumber;
+            if (num == -1)
+            {
+                return -1;
+            }
+            string savedName = EditorPrefs.GetString(DeviceNamePrefKey, "");
+            string currentName = GetDeviceName(num);
+            if (currentName == savedName)
+            {
+                return num;
+            }
+            if (!string.IsNullOrEmpty(savedName))
+            {
+                try
+                {
+                    int n = WaveInterop.waveOutGetNumDevs();
+                    for (int i = 0; i < n; i++)
+                    {
+                        var caps = new WaveOutCapabilities();
+                        WaveInterop.waveOutGetDevCaps(new IntPtr(i), out caps,
+                            System.Runtime.InteropServices.Marshal.SizeOf(caps));
+                        if (caps.ProductName == savedName)
+                        {
+                            return i;
+                        }
+                    }
+                }
+                catch { }
+            }
+            return -1; // 장치를 못 찾으면 Windows 기본 장치로 폴백
+        }
+
+        // ---------- 내부 ----------
+
+        static string StartPlayback(string path, float startSec)
+        {
+            MediaFoundationReader reader;
+            try
+            {
+                reader = new MediaFoundationReader(Path.GetFullPath(path));
+            }
+            catch (Exception e)
+            {
+                return "오디오를 열지 못했습니다: " + e.Message;
+            }
+            WaveOutEvent output = null;
+            try
+            {
+                // Mono의 waveOut 콜백 지터를 흡수하게 버퍼를 넉넉히 — 기본값(2개)은
+                // 버퍼 언더런 시 WaveHeaderUnprepared로 출력 스레드가 죽는다.
+                output = new WaveOutEvent
+                {
+                    DeviceNumber = ResolveDeviceNumber(),
+                    DesiredLatency = 200,
+                    NumberOfBuffers = 5,
+                };
+                output.PlaybackStopped += OnPlaybackStopped;
+                if (startSec > 0f)
+                {
+                    reader.CurrentTime = TimeSpan.FromSeconds(startSec);
+                }
+                output.Init(reader);
+            }
+            catch (Exception e)
+            {
+                try { output?.Dispose(); } catch { }
+                try { reader.Dispose(); } catch { }
+                return "재생을 시작하지 못했습니다: " + e.Message;
+            }
+            lock (_gate)
+            {
+                _reader = reader;
+                _out = output;
+                _finished = false;
+                _outputRetries = 0;
+            }
+            try
+            {
+                output.Play();
+            }
+            catch (Exception e)
+            {
+                lock (_gate) { _out = null; _reader = null; }
+                try { output.Dispose(); } catch { }
+                try { reader.Dispose(); } catch { }
+                return "재생을 시작하지 못했습니다: " + e.Message;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// winmm 재생 스레드 콜백 — 플래그만 세우고 실제 재시작은 메인 스레드
+        /// (EditorApplication.update → PumpRetry)에서 한다. 여기서 Unity API나
+        /// 출력 객체를 만들면 스레드 경합이 생긴다.
+        /// </summary>
+        static void OnPlaybackStopped(object sender, StoppedEventArgs e)
+        {
+            lock (_gate)
+            {
+                // Stop() 직후 새 재생이 시작된 경우 구 출력의 이벤트가 새 상태를
+                // 오염시키지 않게 한다.
+                if (!ReferenceEquals(sender, _out))
+                {
+                    return;
+                }
+                // Mono에서 WaveOutEvent는 간헐적으로 WaveHeaderUnprepared로 출력
+                // 스레드가 죽는다 — 남은 구간이 있으면 재시작을 요청한다.
+                if (e.Exception != null && PlayingPath != null
+                    && _reader != null && _outputRetries < MaxOutputRetries)
+                {
+                    _outputRetries++;
+                    _retryPending = true;
+                    return;
+                }
+                _finished = true;
+            }
+            if (e.Exception != null)
+            {
+                UnityEngine.Debug.LogWarning(
+                    "[StemAudioPreview] 재생 오류: " + e.Exception.Message);
+            }
+        }
+
+        /// <summary>메인 스레드(update)에서 죽은 출력을 재생성해 이어서 재생한다.</summary>
+        static void PumpRetry()
+        {
+            MediaFoundationReader reader;
+            string path;
+            lock (_gate)
+            {
+                if (!_retryPending)
+                {
+                    return;
+                }
+                _retryPending = false;
+                reader = _reader;
+                path = PlayingPath;
+                // 재시도 조건 재확인 — 요청 후 Stop/Seek이 끼어들었을 수 있다.
+                if (reader == null || path == null || _finished)
+                {
+                    return;
+                }
+                if (PositionSec >= DurationSec - 0.05f)
+                {
+                    _finished = true;
+                    return;
+                }
+            }
+            var fresh = new WaveOutEvent
+            {
+                DeviceNumber = ResolveDeviceNumber(),
+                DesiredLatency = 200,
+                NumberOfBuffers = 5,
+            };
+            fresh.PlaybackStopped += OnPlaybackStopped;
+            try
+            {
+                fresh.Init(reader);
+            }
+            catch (Exception ex)
+            {
+                try { fresh.Dispose(); } catch { }
+                UnityEngine.Debug.LogWarning(
+                    "[StemAudioPreview] 출력 재시작 실패: " + ex.Message);
+                lock (_gate) { _finished = true; }
+                return;
+            }
+            lock (_gate)
+            {
+                // 그 사이 Stop()이 _out을 비웠을 수 있다 — 비어 있을 때만 교체.
+                if (PlayingPath == null)
+                {
+                    _finished = true;
+                    try { fresh.Dispose(); } catch { }
+                    return;
+                }
+                _out = fresh;
+            }
+            try { fresh.Play(); } catch { }
         }
     }
 }
