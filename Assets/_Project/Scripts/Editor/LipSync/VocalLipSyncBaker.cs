@@ -119,7 +119,7 @@ namespace Fbx2Vmd.LipSync
             var bindings = new List<ResolvedBinding>();
             if (proxy.BlendShapeAvatar.Clips == null)
             {
-                return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp);
+                return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp, warnings);
             }
             foreach (BlendShapeClip shapeClip in proxy.BlendShapeAvatar.Clips)
             {
@@ -147,7 +147,7 @@ namespace Fbx2Vmd.LipSync
                     });
                 }
             }
-            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp);
+            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp, warnings);
         }
 
         /// <summary>
@@ -186,7 +186,7 @@ namespace Fbx2Vmd.LipSync
                     warnings?.Add($"모음 모프를 찾지 못했습니다: {p}");
                 }
             }
-            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp);
+            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp, warnings);
         }
 
         /// <summary>
@@ -302,7 +302,8 @@ namespace Fbx2Vmd.LipSync
             uLipSync.BakedData data,
             List<ResolvedBinding> bindings,
             float minVolumeGate,
-            float releaseDamp)
+            float releaseDamp,
+            IList<string> warnings = null)
         {
             if (data == null || !data.isValid)
             {
@@ -313,6 +314,8 @@ namespace Fbx2Vmd.LipSync
                 frameRate = BakeFrameRate,
                 legacy = false,
             };
+            int curveCount = 0;
+            float maxValue = 0f;
             foreach (ResolvedBinding b in bindings)
             {
                 var curve = BuildCurve(data, b.phoneme, b.weight, minVolumeGate, releaseDamp);
@@ -322,6 +325,20 @@ namespace Fbx2Vmd.LipSync
                 }
                 clip.SetCurve(b.relativePath, typeof(SkinnedMeshRenderer),
                     "blendShape." + b.shapeName, curve);
+                curveCount++;
+                foreach (Keyframe k in curve.keys)
+                {
+                    maxValue = Mathf.Max(maxValue, Mathf.Abs(k.value));
+                }
+            }
+            // 키는 있는데 값이 전부 0인 "빈 베이크"는 재생해도 입이 안 움직이므로 원인 추적 전에 알린다.
+            if (curveCount == 0)
+            {
+                warnings?.Add("베이크 결과 애니메이션 커브가 하나도 없습니다. 블렌드셰이프 바인딩을 확인하세요.");
+            }
+            else if (maxValue < 0.01f)
+            {
+                warnings?.Add("베이크 결과 모든 모프 가중치가 0입니다. 입력이 무음이거나 음소 분석이 비어 있을 수 있습니다.");
             }
             return clip;
         }

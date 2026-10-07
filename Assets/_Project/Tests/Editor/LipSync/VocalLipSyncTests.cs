@@ -690,7 +690,10 @@ namespace Fbx2Vmd.Tests.LipSync
             var warnings = new List<string>();
             AnimationClip clip = VocalLipSyncBaker.BakeClip(data, proxy, 0.02f, warnings);
             _cleanup.Add(clip);
-            Assert.AreEqual(1, warnings.Count, "없는 SMR 경로는 경고로 보고해야 함");
+            Assert.IsTrue(warnings.Exists(w => w.Contains("블렌드셰이프 대상을 찾지 못했습니다")),
+                "없는 SMR 경로는 경고로 보고해야 함: " + string.Join("|", warnings));
+            Assert.IsTrue(warnings.Exists(w => w.Contains("커브가 하나도 없습니다")),
+                "적용 가능한 커브가 0이면 별도 경고해야 함: " + string.Join("|", warnings));
         }
 
         // ---------- 비VRM 모델(모음 모프 스캔) ----------
@@ -807,7 +810,8 @@ namespace Fbx2Vmd.Tests.LipSync
             AnimationClip clip = VocalLipSyncBaker.BakeClip(data, root, 0.02f, warnings);
             _cleanup.Add(clip);
             Assert.AreEqual(1, UnityEditor.AnimationUtility.GetCurveBindings(clip).Length);
-            Assert.AreEqual(4, warnings.Count, "I/U/E/O 4개 누락 경고");
+            int missing = warnings.FindAll(w => w.Contains("모음 모프를 찾지 못했습니다")).Count;
+            Assert.AreEqual(4, missing, "I/U/E/O 4개 누락 경고: " + string.Join("|", warnings));
         }
 
         // ---------- 클립 미리보기 재생 ----------
@@ -969,8 +973,20 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.AreEqual(0f, curve.Evaluate(1f / 60f), "감쇄 없으면 무음 프레임 즉시 0");
         }
 
+        [Test]
+        public void BakeClip_전량0결과는경고()
+        {
+            // 회귀: 키는 있는데 값이 전부 0인 빈 베이크가 조용히 저장됐다(재생해도 입이 안 움직임).
+            var warnings = new List<string>();
+            var clip = BakeAOnlyClip(new[] { 0f, 0f, 0f }, gate: 0.02f, releaseDamp: 0f, warnings);
+            _cleanup.Add(clip);
+            Assert.IsTrue(warnings.Exists(w => w.Contains("모든 모프 가중치가 0")),
+                "전량 0 베이크는 경고로 표면화돼야 함: " + string.Join("|", warnings));
+        }
+
         /// <summary>'あ' 모프 하나만 가진 모델에 A=1 음소 데이터를 베이크한다.</summary>
-        private AnimationClip BakeAOnlyClip(float[] volumes, float gate, float releaseDamp)
+        private AnimationClip BakeAOnlyClip(float[] volumes, float gate, float releaseDamp,
+            IList<string> warnings = null)
         {
             var root = new GameObject("DampChar");
             _cleanup.Add(root);
@@ -994,7 +1010,7 @@ namespace Fbx2Vmd.Tests.LipSync
                     },
                 });
             }
-            var clip = VocalLipSyncBaker.BakeClip(data, root, gate, null, releaseDamp);
+            var clip = VocalLipSyncBaker.BakeClip(data, root, gate, warnings, releaseDamp);
             _cleanup.Add(clip);
             return clip;
         }
