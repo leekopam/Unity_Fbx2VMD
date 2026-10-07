@@ -1250,5 +1250,25 @@ namespace Fbx2Vmd.Tests.LipSync
             Assert.Throws<ArgumentException>(
                 () => Wav2VecPhonemeExtractor.CsvToBakedData("", 1f));
         }
+
+        [Test]
+        public void CsvToBakedData_NaN과Inf는0으로정제한다()
+        {
+            // float.TryParse는 "nan"/"inf"를 NaN/Infinity로 파싱한다 — 커브 유입 차단 확인.
+            var csv = "{\"fps\": 60.0}\n"
+                + "nan,1.0,0,0,0,0\n"
+                + "0.10,inf,0,1.0,0,0\n";
+            var data = Wav2VecPhonemeExtractor.CsvToBakedData(csv, 2f / 60f);
+            _cleanup.Add(data);
+            Assert.AreEqual(0f, data.frames[0].volume);
+            foreach (var frame in data.frames)
+            {
+                foreach (var p in frame.phonemes)
+                {
+                    Assert.IsFalse(float.IsNaN(p.ratio) || float.IsInfinity(p.ratio),
+                        $"{p.phoneme} 비율에 비정상 값 유입");
+                }
+            }
+        }
     }
 }

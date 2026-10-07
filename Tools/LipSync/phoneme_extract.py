@@ -86,10 +86,21 @@ def main():
 
     n_frames = probs.shape[0]
     groups = np.zeros((n_frames, 5))
+    long_ids = []
     for idx, tok in id2tok.items():
-        g = groups_map.get(tok.strip())
+        text = tok.strip()
+        g = groups_map.get(text)
         if g is not None:
             groups[:, "aiueo".index(g)] += probs[:, idx]
+        elif text == "ー":
+            long_ids.append(idx)
+    # 장음(ー)은 앞 모음의 연장이라 직전 프레임의 모음 벡터를 이어받는다.
+    # 매핑에 넣지 않으면 노래의 지속 모음 구간이 자음 취급돼 입이 닫힌다.
+    if long_ids:
+        longp = probs[:, long_ids].sum(axis=1)
+        for i in range(1, n_frames):
+            if longp[i] > groups[i].max():
+                groups[i] = groups[i - 1]
     # 모음 덩어리가 충분한 프레임은 지배 모음이 모프를 온전히 구동하게
     # 모음 내 정규화한다. 임계 미만(자음/불확실)은 전부 0 → 입 닫힘.
     vsum = groups.sum(axis=1, keepdims=True)

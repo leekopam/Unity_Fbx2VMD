@@ -494,7 +494,8 @@ namespace Fbx2Vmd.LipSync
                     SetMessage("보컬 WAV가 없습니다.", MessageType.Error);
                     return;
                 }
-                if (_profile == null)
+                // 프로필은 uLipSync 분석 경로에서만 필요하다(wav2vec2는 미사용).
+                if (_profile == null && !_useWav2VecPhonemes)
                 {
                     SetMessage("uLipSync 프로필을 지정하세요.", MessageType.Error);
                     return;

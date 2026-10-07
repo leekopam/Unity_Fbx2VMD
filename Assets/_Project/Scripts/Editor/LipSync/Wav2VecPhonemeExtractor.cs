@@ -29,8 +29,12 @@ namespace Fbx2Vmd.LipSync
                 error = "추출 스크립트가 없습니다: " + script;
                 return false;
             }
+            // 상대 경로가 자식 프로세스 WorkingDirectory 기준으로 이중 해석되지 않게 정규화한다.
+            wavPath = Path.GetFullPath(wavPath);
+            outputCsv = Path.GetFullPath(outputCsv);
             string args = Quote(script)
                 + " " + Quote(wavPath)
+                + " --model " + Quote(DefaultModel)
                 + " --output " + Quote(outputCsv);
             int code = VocalStemSeparator.RunSync(pythonPath, args,
                 Path.GetDirectoryName(outputCsv), out string log,
@@ -86,6 +90,11 @@ namespace Fbx2Vmd.LipSync
                 {
                     float.TryParse(parts[c], NumberStyles.Float,
                         CultureInfo.InvariantCulture, out row[c]);
+                    // "nan"/"inf" 문자열이 파싱돼 커브로 새어나가는 것을 막는다.
+                    if (float.IsNaN(row[c]) || float.IsInfinity(row[c]))
+                    {
+                        row[c] = 0f;
+                    }
                 }
                 rows.Add(row);
             }
