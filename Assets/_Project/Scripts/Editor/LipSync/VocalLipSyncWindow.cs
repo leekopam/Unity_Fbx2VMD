@@ -603,17 +603,24 @@ namespace Fbx2Vmd.LipSync
                     SetMessage(wavError, MessageType.Error);
                     return;
                 }
+                BakedData data = null;
                 try
                 {
-                    FinishBake(vocal, VocalLipSyncBaker.BakeAnalysis(vocal, _profile),
-                        _vocalWavPath, _outputDir);
+                    data = VocalLipSyncBaker.BakeAnalysis(vocal, _profile);
+                    FinishBake(vocal, data, _vocalWavPath, _outputDir);
+                    vocal = null;
+                    data = null; // FinishBake가 파괴했으므로 소유권 해제
                 }
                 catch
                 {
-                    // BakeAnalysis/FinishBake 예외 시 로드된 클립이 도메인 리로드까지 누수된다.
+                    // 예외 경로에서도 wav2vec2 경로와 동일하게 임시 객체를 정리한다.
                     if (vocal != null)
                     {
                         DestroyImmediate(vocal);
+                    }
+                    if (data != null)
+                    {
+                        DestroyImmediate(data);
                     }
                     throw;
                 }
