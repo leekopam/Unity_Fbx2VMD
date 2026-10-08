@@ -50,7 +50,9 @@ test("layout CSS keeps the 1265x675 reference frame and separates onboarding fro
   assert.match(css, /--reference-height:\s*675px;/);
   assert.match(css, /html,\s*body\s*{[\s\S]*height:\s*100%;[\s\S]*overflow:\s*hidden;/);
   assert.match(css, /\.settings-app\s*{[\s\S]*height:\s*100vh;[\s\S]*overflow:\s*hidden;/);
-  assert.match(css, /grid-template-columns:\s*56px 249px minmax\(640px, 1fr\);/);
+  assert.match(css, /grid-template-columns:\s*var\(--rail-width\) var\(--sidebar-width\) minmax\(640px, 1fr\);/);
+  assert.match(css, /--rail-width:\s*56px;/);
+  assert.match(css, /--sidebar-width:\s*249px;/);
   assert.match(css, /\.content-pane\s*{[\s\S]*overflow-y:\s*auto;/);
   assert.match(css, /\.onboarding-card\s*{[\s\S]*border-radius:\s*8px;/);
   assert.match(css, /\.tree-status\s*{[\s\S]*display:\s*none;/);

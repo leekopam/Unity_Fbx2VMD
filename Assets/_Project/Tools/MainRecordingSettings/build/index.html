@@ -7,44 +7,79 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="settings-app">
+    <main class="settings-app" data-theme="dark">
       <div class="app-shell" data-shell="main-recording-settings" data-active-panel="onboarding">
         <nav class="rail" aria-label="설정 도구">
-          <button class="rail-button rail-button-active" type="button" aria-label="홈">
-            <span class="rail-cube" aria-hidden="true"></span>
+          <button class="rail-button" type="button" aria-label="패키지">
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.2 6.5 3.6L12 11.4 5.5 7.8 12 4.2ZM5 9.5l6 3.4v6.9l-6-3.4V9.5Zm14 0v6.9l-6 3.4v-6.9l6-3.4Z"/></svg>
           </button>
-          <button class="rail-button" type="button" aria-label="계산 도구">
-            <span class="rail-symbol" aria-hidden="true">S</span>
+          <button class="rail-button" type="button" aria-label="노드 그래프">
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4a2.5 2.5 0 0 1 2.4 3.1l3.4 3.4a2.5 2.5 0 1 1-1.4 1.5l-3.4-3.4a2.5 2.5 0 0 1-2 0L7.6 12a2.5 2.5 0 1 1-1.4-1.5l3.4-3.4A2.5 2.5 0 0 1 12 4Zm0 14a2.5 2.5 0 0 1 2.5 2.5h-5A2.5 2.5 0 0 1 12 18Z"/></svg>
           </button>
           <button class="rail-button" type="button" aria-label="조명 도구">
-            <span class="rail-symbol" aria-hidden="true">L</span>
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2Zm-2 18h4a2 2 0 0 1-4 0Z"/></svg>
+          </button>
+          <button class="rail-button rail-button-active" type="button" aria-label="캐릭터">
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 9c3.3 0 6 1.8 6 4v3H6v-3c0-2.2 2.7-4 6-4Z"/></svg>
+          </button>
+          <button class="rail-button rail-button-dot" type="button" aria-label="메시지">
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 0-1Zm3 5h10v1.5H7V9Zm0 3.5h7V14H7v-1.5Z"/></svg>
           </button>
           <div class="rail-spacer" aria-hidden="true"></div>
-          <button class="rail-button rail-button-dot" type="button" aria-label="메시지">
-            <span class="rail-symbol" aria-hidden="true">M</span>
-          </button>
-          <button class="rail-button" type="button" aria-label="도움말">
-            <span class="rail-symbol" aria-hidden="true">?</span>
+          <button class="rail-button rail-menu" id="railMenuButton" type="button" aria-label="메뉴" aria-haspopup="menu" aria-expanded="false" aria-controls="railMenuPopup">
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m19.4 13 .1-1-.1-1 2.1-1.7-2-3.4-2.5 1a7.6 7.6 0 0 0-1.7-1L15 4h-4l-.4 2.9a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.4L6.5 12l-.1 1 .1 1-2.1 1.7 2 3.4 2.5-1a7.6 7.6 0 0 0 1.7 1l.3 2.9h4l.4-2.9a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.4L17.5 13l1.9 0ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/></svg>
+            <span class="rail-menu-label" aria-hidden="true">메뉴</span>
           </button>
         </nav>
 
+        <div class="rail-menu-popup" id="railMenuPopup" role="menu" aria-label="앱 메뉴" hidden>
+          <div class="menu-context-name">FBX2VMD</div>
+          <div class="menu-divider"></div>
+          <div class="menu-group">
+            <button class="menu-item" type="button">
+              <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.2 6.6 3.7L12 11.6 5.4 7.9 12 4.2ZM5 9.7l6 3.3v6.8l-6-3.4V9.7Zm8 10.1V13l6-3.3v6.7l-6 3.4Z"/></svg>
+              <span>데이터 폴더 열기</span>
+            </button>
+            <button class="menu-item" type="button">
+              <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h2v16h16v2H3V3Zm5 13-1.4-1.4L11 10l3 3 5.4-5.4L20.8 9 14 15.8l-3-3L8 16Z"/></svg>
+              <span>로그 폴더 열기</span>
+            </button>
+          </div>
+          <div class="menu-divider"></div>
+          <div class="menu-group">
+            <button class="menu-item" type="button" id="menuOpenSettings">
+              <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m19.4 13 .1-1-.1-1 2.1-1.7-2-3.4-2.5 1a7.6 7.6 0 0 0-1.7-1L15 4h-4l-.4 2.9a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.4L6.5 12l-.1 1 .1 1-2.1 1.7 2 3.4 2.5-1a7.6 7.6 0 0 0 1.7 1l.3 2.9h4l.4-2.9a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.4L17.5 13l1.9 0ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/></svg>
+              <span>설정</span>
+              <svg class="menu-chevron" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4 9 6Z"/></svg>
+            </button>
+            <button class="menu-item menu-theme" id="themeMenuToggle" type="button" role="menuitemcheckbox" aria-checked="true">
+              <svg class="menu-icon menu-icon-accent" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg>
+              <span id="themeMenuLabel">다크 모드</span>
+              <span class="menu-right">
+                <span class="theme-status" id="themeStatusBadge">ON</span>
+                <span class="theme-track" aria-hidden="true"><span class="theme-knob"></span></span>
+              </span>
+            </button>
+          </div>
+        </div>
+
         <aside class="sidebar" aria-label="장면 계층">
           <button class="sidebar-heading active" type="button" aria-current="page" data-panel-target="onboarding">
-            <span class="sidebar-icon" aria-hidden="true">O</span>
+            <svg class="sidebar-icon-img" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Zm-1.5 6.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm3 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm-5.4 4.4c.8 1.7 2.3 2.6 3.9 2.6s3.1-.9 3.9-2.6l-1.2-.7c-.6 1.2-1.6 1.9-2.7 1.9s-2.1-.7-2.7-1.9l-1.2.7Z"/></svg>
             <span>Onboarding Assistant</span>
           </button>
 
           <section class="tree-section" aria-labelledby="treeCamera">
-            <h2 id="treeCamera">시네마토그래피</h2>
+            <h2 id="treeCamera"><span class="tree-chev" aria-hidden="true"></span>시네마토그래피</h2>
             <button class="tree-item" type="button" data-panel-target="camera" aria-controls="cameraSettingsPanel">
               <span class="tree-icon camera-icon" aria-hidden="true"></span>
               <span>Camera 1</span>
-              <span class="tree-status" aria-hidden="true"></span>
+              <svg class="tree-trailing" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h11a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Zm14 3.5 4-2.5v10l-4-2.5v-5Z"/></svg>
             </button>
           </section>
 
           <section class="tree-section" aria-labelledby="treeEnvironment">
-            <h2 id="treeEnvironment">환경</h2>
+            <h2 id="treeEnvironment"><span class="tree-chev" aria-hidden="true"></span>환경</h2>
             <button class="tree-item" type="button">
               <span class="tree-icon cube-icon" aria-hidden="true"></span>
               <span>Environment</span>
@@ -55,26 +90,60 @@
             </button>
           </section>
 
-          <section class="tree-section" aria-labelledby="treeDeveloper">
-            <h2 id="treeDeveloper">개발자 모드</h2>
+          <section class="tree-section" aria-labelledby="treeCharacter">
+            <h2 id="treeCharacter"><span class="tree-chev" aria-hidden="true"></span>캐릭터</h2>
+            <button class="tree-item" type="button">
+              <span class="tree-icon person-icon" aria-hidden="true"></span>
+              <span>Character 1</span>
+              <span class="tree-badge-active">활성</span>
+            </button>
+            <button class="tree-item tree-item-nested" type="button" data-panel-target="upperbody" aria-controls="upperBodyPanel">
+              <span class="tree-icon bolt-icon" aria-hidden="true"></span>
+              <span>상체 보정 파이프라인</span>
+              <span class="tree-status" aria-hidden="true"></span>
+            </button>
+            <button class="tree-item tree-item-nested" type="button" data-panel-target="lowerbody" aria-controls="lowerBodyPanel">
+              <span class="tree-icon bolt-icon" aria-hidden="true"></span>
+              <span>하체 보정 파이프라인</span>
+              <span class="tree-status" aria-hidden="true"></span>
+            </button>
+            <button class="tree-item tree-item-nested" type="button" data-panel-target="physics" aria-controls="physicsPanel">
+              <span class="tree-icon wand-icon" aria-hidden="true"></span>
+              <span>캐릭터 물리 파이프라인</span>
+              <span class="tree-status" aria-hidden="true"></span>
+            </button>
+          </section>
+
+          <section class="tree-section" aria-labelledby="treeDeveloper" data-dev-only hidden>
+            <h2 id="treeDeveloper"><span class="tree-chev" aria-hidden="true"></span>개발자 모드</h2>
             <button class="tree-item" type="button" data-panel-target="developer" aria-controls="developerPanel">
               <span class="tree-icon cube-icon" aria-hidden="true"></span>
               <span>E2E Workbench</span>
             </button>
           </section>
 
-          <div class="sidebar-actions" aria-label="편집 도구">
-            <button type="button" aria-label="추가">+</button>
-            <button type="button" aria-label="제거">-</button>
-            <button type="button" aria-label="복제">::</button>
-            <button type="button" aria-label="편집">/</button>
-            <button type="button" aria-label="더 보기">...</button>
+          <div class="dev-mode-bar">
+            <span>개발자 모드</span>
+            <button id="devModeSwitch" class="switch" type="button" role="switch" aria-checked="false" aria-label="개발자 모드">
+              <span class="switch-knob" aria-hidden="true"></span>
+            </button>
           </div>
         </aside>
 
         <section class="content-pane" aria-labelledby="settingsTitle">
           <header class="content-header">
             <h1 id="settingsTitle">Onboarding Assistant</h1>
+            <div class="lb-head-actions" id="panelActions">
+              <select class="lb-preset" id="panelPresetSelect" aria-label="프리셋 선택"></select>
+              <button class="lb-btn lb-btn-solid" type="button" title="설정 프로필 저장">
+                <svg class="lb-btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 3h13l5 5v13H3V3Zm4 2v5h8V5H7Zm-2 14h14V10l-4-4v6H7V6H5v13Zm7-9a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg>
+                <span>프로필 저장</span>
+              </button>
+              <button class="lb-btn" type="button" title="설정 불러오기">
+                <svg class="lb-btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 7 8h3v6h4V8h3l-5-5ZM5 14v7h14v-7h-2v5H7v-5H5Z"/></svg>
+                <span>불러오기</span>
+              </button>
+            </div>
             <div id="statusBadge" class="status-badge" data-status="idle" aria-label="WebSocket 연결 상태" aria-live="polite">
               <span class="status-dot" aria-hidden="true"></span>
               <span id="statusText">연결 안 됨</span>
@@ -182,6 +251,1233 @@
             </details>
           </section>
 
+          <section id="lowerBodyPanel" class="panel-view lowerbody-panel" data-panel-view="lowerbody" aria-labelledby="settingsTitle" hidden>
+            <div class="lb-main">
+              <hr class="lb-divider" />
+
+              <article class="lb-card" id="lbFootLock">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>발 미끄럼 방지</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="발 미끄럼 방지 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <div class="lb-seg" data-default="on" role="group" aria-label="발 미끄럼 방지 사용">
+                      <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                      <button type="button" data-val="on" aria-pressed="true">예</button>
+                    </div>
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <p class="lb-desc">접지 판정된 발의 수평(X/Z) 미끄러짐(스케이팅)을 실시간 억제합니다.</p>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">보정 강도</span>
+                      <button class="lb-row-reset" type="button" aria-label="보정 강도 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">낮으면 춤 동작 보존, 높으면 스케이팅 감소</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="1" step="0.01" value="0.45" data-default="0.45" data-decimals="2" aria-label="보정 강도" />
+                      <span class="lb-value"><span class="lb-val">0.45</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">프레임당 최대 보정</span>
+                      <button class="lb-row-reset" type="button" aria-label="프레임당 최대 보정 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">X/Z 루트 보정 상한 (m 단위)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="0.1" step="0.001" value="0.025" data-default="0.025" data-decimals="3" aria-label="프레임당 최대 보정" />
+                      <span class="lb-value"><span class="lb-val">0.025</span><span class="lb-unit">m</span></span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card" id="lbGrounding">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>접지 보정 안정화</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="접지 보정 안정화 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <div class="lb-seg" data-default="on" role="group" aria-label="접지 보정 안정화 사용">
+                      <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                      <button type="button" data-val="on" aria-pressed="true">예</button>
+                    </div>
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <p class="lb-desc">급격한 바닥 판정 변화로 인한 발 떨림 및 지터링 현상을 완화합니다.</p>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">반영 비율</span>
+                      <button class="lb-row-reset" type="button" aria-label="반영 비율 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">목표 접지값을 현재 위치에 반영하는 스무딩 비율</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="1" step="0.01" value="0.25" data-default="0.25" data-decimals="2" aria-label="반영 비율" />
+                      <span class="lb-value"><span class="lb-val">0.25</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">떨림 무시 폭</span>
+                      <button class="lb-row-reset" type="button" aria-label="떨림 무시 폭 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">이 값 이하의 미세한 발바닥 진동 및 노이즈 무시</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="0.02" step="0.001" value="0.005" data-default="0.005" data-decimals="3" aria-label="떨림 무시 폭" />
+                      <span class="lb-value"><span class="lb-val">0.005</span></span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card" id="lbHeight">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>높이 및 보폭 보정</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="높이 및 보폭 보정 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">높이 보정</span>
+                      <button class="lb-row-reset" type="button" aria-label="높이 보정 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">미터 단위 오프셋 (예: 0.02 = 2cm 올림, 밀착/하이힐 대응)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="-0.2" max="0.2" step="0.005" value="0" data-default="0" data-decimals="2" aria-label="높이 보정" />
+                      <span class="lb-value"><span class="lb-val">0.00</span><span class="lb-unit">m</span></span>
+                    </div>
+                  </div>
+                  <hr class="lb-param-divider" />
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">보폭 비율</span>
+                      <button class="lb-row-reset" type="button" aria-label="보폭 비율 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">캐릭터 발이 과하게 벌어지거나 미끄러질 때 조절</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0.5" max="2" step="0.01" value="1" data-default="1" data-decimals="2" aria-label="보폭 비율" />
+                      <span class="lb-value"><span class="lb-val">1.00</span></span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card" id="lbRootSpike">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>Root 순간이동 방지</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="Root 순간이동 방지 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <div class="lb-seg" data-default="on" role="group" aria-label="Root 순간이동 방지 사용">
+                      <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                      <button type="button" data-val="on" aria-pressed="true">예</button>
+                    </div>
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <p class="lb-desc">트래커 튐이나 네트워크 패킷 누락으로 인한 좌표 스파이크를 제한합니다.</p>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">프레임당 Root 이동 제한</span>
+                      <button class="lb-row-reset" type="button" aria-label="Root 이동 제한 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">한 프레임에 허용되는 루트 이동의 최대 거리</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="1" step="0.01" value="0.25" data-default="0.25" data-decimals="2" aria-label="프레임당 Root 이동 제한" />
+                      <span class="lb-value"><span class="lb-val">0.25</span><span class="lb-unit">m</span></span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card" id="lbFootPlant">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>바닥 안착 보정</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="바닥 안착 보정 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <div class="lb-seg" data-default="on" role="group" aria-label="바닥 안착 보정 사용">
+                      <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                      <button type="button" data-val="on" aria-pressed="true">예</button>
+                    </div>
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <p class="lb-desc">공중에 뜬 발을 바닥에 자연스럽게 안착시킵니다.</p>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">안착 보정 강도</span>
+                      <button class="lb-row-reset" type="button" aria-label="안착 보정 강도 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">발바닥을 바닥 평면에 붙이는 비율</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="1" step="0.01" value="0.5" data-default="0.5" data-decimals="2" aria-label="안착 보정 강도" />
+                      <span class="lb-value"><span class="lb-val">0.50</span></span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <div class="lb-dev-group" data-dev-only hidden>
+                <div class="lb-dev-title">개발자 모드</div>
+
+                <article class="lb-card lb-card-dev" id="lbAnimRef">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>Animator 레퍼런스</h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="Animator 레퍼런스 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <p class="lb-desc lb-desc-warn">기준 Animator 포즈와 비교하는 보정 레버입니다. 결과가 망가질 수 있으므로 기본 권장값 유지를 권장합니다.</p>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">발 방향 보정 (localRotation)</span>
+                        <p class="lb-hint">레퍼런스 발 로컬 회전으로 블렌딩하는 비율</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1" step="0.01" value="0" data-default="0" data-decimals="2" aria-label="발 방향 보정" />
+                        <span class="lb-value"><span class="lb-val">0.00</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">다리 세그먼트 방향</span>
+                        <p class="lb-hint">허벅지/정강이 방향을 레퍼런스 축으로 정렬</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1" step="0.01" value="0" data-default="0" data-decimals="2" aria-label="다리 세그먼트 방향" />
+                        <span class="lb-value"><span class="lb-val">0.00</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="lb-card lb-card-dev" id="lbGroundExp">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>접지 세부 실험</h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="접지 세부 실험 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <p class="lb-desc lb-desc-warn">실험적 접지 경로입니다. Final IK 기반 보정 및 outlier 제거를 포함합니다.</p>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">Final IK 접지 실험</span>
+                        <p class="lb-hint">대체 접지 경로 (권장: 끔)</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="off" role="group" aria-label="Final IK 접지 실험">
+                          <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="false">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">렌더러 접지 outlier 제거</span>
+                        <p class="lb-hint">프레임 간 접지 높이 이상치를 스파이크로 간주해 제외</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="0.5" step="0.01" value="0.12" data-default="0.12" data-decimals="2" aria-label="렌더러 접지 outlier 제거" />
+                        <span class="lb-value"><span class="lb-val">0.12</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="lb-card lb-card-dev" id="lbDebug">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>디버그 및 로그</h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="디버그 및 로그 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">뼈 매핑 로그</span>
+                        <p class="lb-hint">임포트 시 본 매핑 결과를 콘솔에 출력</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="off" role="group" aria-label="뼈 매핑 로그">
+                          <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="false">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">런타임 애니메이션 로그</span>
+                        <p class="lb-hint">프레임별 보정량 진단 로그 (성능 저하 가능)</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="off" role="group" aria-label="런타임 애니메이션 로그">
+                          <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="false">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">프레임 게이트 시작</span>
+                        <p class="lb-hint">보정 적용 시작 프레임 (진단용)</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="300" step="1" value="0" data-default="0" data-decimals="0" aria-label="프레임 게이트 시작" />
+                        <span class="lb-value"><span class="lb-val">0</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <nav class="lb-anchor" aria-label="섹션 바로가기">
+              <ul class="lb-toc-list">
+                <li class="lb-toc-group">
+                  <a class="lb-toc-link active" href="#lbFootLock">
+                    <span class="lb-toc-indicator" aria-hidden="true"></span><span>일반 보정</span>
+                  </a>
+                  <ul class="lb-toc-sub">
+                    <li><a class="lb-toc-sublink" href="#lbFootLock">• 발 미끄럼 방지</a></li>
+                    <li><a class="lb-toc-sublink" href="#lbGrounding">• 접지 보정 안정화</a></li>
+                    <li><a class="lb-toc-sublink" href="#lbHeight">• 높이 및 보폭 보정</a></li>
+                    <li><a class="lb-toc-sublink" href="#lbRootSpike">• Root 순간이동 방지</a></li>
+                    <li><a class="lb-toc-sublink" href="#lbFootPlant">• 바닥 안착 보정</a></li>
+                  </ul>
+                </li>
+                <li class="lb-toc-group" data-dev-only hidden>
+                  <a class="lb-toc-link" href="#lbAnimRef">
+                    <span class="lb-toc-indicator" aria-hidden="true"></span><span>개발자 모드</span>
+                  </a>
+                  <ul class="lb-toc-sub">
+                    <li><a class="lb-toc-sublink" href="#lbAnimRef">• Animator 레퍼런스</a></li>
+                    <li><a class="lb-toc-sublink" href="#lbGroundExp">• 접지 세부 실험</a></li>
+                    <li><a class="lb-toc-sublink" href="#lbDebug">• 디버그 및 로그</a></li>
+                  </ul>
+                </li>
+              </ul>
+            </nav>
+          </section>
+
+          <section id="upperBodyPanel" class="panel-view lowerbody-panel" data-panel-view="upperbody" aria-labelledby="settingsTitle" hidden>
+            <div class="lb-main">
+              <hr class="lb-divider" />
+
+              <article class="lb-card" id="ubFingerScales">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>손가락 및 엄지 굽힘·벌림 스케일</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="손가락 스케일 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">손가락 굽힘 스케일</span>
+                      <button class="lb-row-reset" type="button" aria-label="손가락 굽힘 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">손가락 관절 굽힘 전체 강도 배율</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="손가락 굽힘 스케일" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">손가락 벌림 스케일</span>
+                      <button class="lb-row-reset" type="button" aria-label="손가락 벌림 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">손가락 사이 벌어짐 (부채꼴 펼침 폭 제어)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="손가락 벌림 스케일" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">엄지 굽힘 스케일</span>
+                      <button class="lb-row-reset" type="button" aria-label="엄지 굽힘 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">엄지 손가락 관절 굽힘 강도 배율</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="엄지 굽힘 스케일" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">엄지 벌림 스케일</span>
+                      <button class="lb-row-reset" type="button" aria-label="엄지 벌림 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">엄지-손바닥 벌어짐 (웹빙 외전 반경)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="엄지 벌림 스케일" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card" id="ubThumbTune">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>엄지 미세 조정 및 Smart Curve</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="엄지 미세 조정 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">엄지 Smart Curve</span>
+                      <p class="lb-hint">엄지 과다 굽힘 프레임 감쇠 (극한 각도에서 자연스러운 곡률 유지)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="on" data-controls="subThumbSmartCurve" role="group" aria-label="엄지 Smart Curve">
+                        <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="true">예</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-subblock" id="subThumbSmartCurve">
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">감쇠 강도</span>
+                        <button class="lb-row-reset" type="button" aria-label="감쇠 강도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">비선형 임계치 이상에서 적용되는 억제율</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1" step="0.05" value="0.5" data-default="0.5" data-decimals="2" aria-label="감쇠 강도" />
+                        <span class="lb-value"><span class="lb-val">0.50</span></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">엄지 굽힘 오프셋</span>
+                      <button class="lb-row-reset" type="button" aria-label="엄지 오프셋 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">엄지가 과하게 말리거나 펴질 때 기본 자세 미세 조정</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="-1" max="1" step="0.05" value="0" data-default="0" data-decimals="2" aria-label="엄지 굽힘 오프셋" />
+                      <span class="lb-value"><span class="lb-val">0.00</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">오른손 엄지 회전 미러링</span>
+                      <p class="lb-hint">MMD·VMD 리깅 구조의 오른손 로컬 Z-Roll 역방향 자동 일치</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="on" role="group" aria-label="오른손 엄지 미러링">
+                        <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="true">예</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card collapsed" id="ubArmTwist">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>팔 Twist 보정 (소매 찌그러짐 방지)</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="팔 Twist 보정 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">기능 활성화</span>
+                      <p class="lb-hint">보조 트위스트 본(UpperArmTwist, ForearmTwist)으로 회전 분산 적용</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="on" data-controls="subArmTwist" role="group" aria-label="팔 Twist 보정 사용">
+                        <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="true">예</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-subblock" id="subArmTwist">
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">상완 영향도</span>
+                        <button class="lb-row-reset" type="button" aria-label="상완 영향도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">어깨-팔꿈치 사이 꼬임 분배 비율</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1" step="0.05" value="0.35" data-default="0.35" data-decimals="2" aria-label="상완 영향도" />
+                        <span class="lb-value"><span class="lb-val">0.35</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">전완/손목 영향도</span>
+                        <button class="lb-row-reset" type="button" aria-label="전완 영향도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">손목 회전 시 전완 보조본 흡수율</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1" step="0.05" value="0.75" data-default="0.75" data-decimals="2" aria-label="전완/손목 영향도" />
+                        <span class="lb-value"><span class="lb-val">0.75</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">상완 최대 각도</span>
+                        <button class="lb-row-reset" type="button" aria-label="상완 최대 각도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">상완 트위스트 한계각</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="90" step="1" value="45" data-default="45" data-decimals="0" data-suffix="°" aria-label="상완 최대 각도" />
+                        <span class="lb-value"><span class="lb-val">45</span><span class="lb-unit">°</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">전완/손목 최대 각도</span>
+                        <button class="lb-row-reset" type="button" aria-label="전완 최대 각도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">전완 트위스트 안전 임계값</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="120" step="1" value="75" data-default="75" data-decimals="0" data-suffix="°" aria-label="전완/손목 최대 각도" />
+                        <span class="lb-value"><span class="lb-val">75</span><span class="lb-unit">°</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card collapsed" id="ubSleeveAnchor">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>소매 Anchor 보정</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="소매 Anchor 보정 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">기능 활성화</span>
+                      <p class="lb-hint">상완 회전을 소매·어깨 캡 보조본에 구속 전달하여 어깨 부근 소매 무너짐 방지</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="on" data-controls="subSleeveAnchor" role="group" aria-label="소매 Anchor 보정 사용">
+                        <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="true">예</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-subblock" id="subSleeveAnchor">
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">소매 상단 영향도</span>
+                        <button class="lb-row-reset" type="button" aria-label="소매 영향도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">상완 숄더 슬리브 앵커 가중치 (권장 0.85)</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1" step="0.05" value="0.85" data-default="0.85" data-decimals="2" aria-label="소매 상단 영향도" />
+                        <span class="lb-value"><span class="lb-val">0.85</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">어깨 캡 영향도</span>
+                        <button class="lb-row-reset" type="button" aria-label="어깨 캡 영향도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">견봉 보조 캡 본 추종 강도 (외투 디자인 전용)</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1" step="0.05" value="0" data-default="0" data-decimals="2" aria-label="어깨 캡 영향도" />
+                        <span class="lb-value"><span class="lb-val">0.00</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">최대 따라가기 각도</span>
+                        <button class="lb-row-reset" type="button" aria-label="최대 각도 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">팔 들어올림 시 클램핑되는 최대 상한선</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="120" step="1" value="85" data-default="85" data-decimals="0" data-suffix="°" aria-label="최대 따라가기 각도" />
+                        <span class="lb-value"><span class="lb-val">85</span><span class="lb-unit">°</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <div class="lb-dev-group" data-dev-only hidden>
+                <div class="lb-dev-title">개발자 모드</div>
+
+                <article class="lb-card lb-card-dev collapsed" id="ubDevAnimRef">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>수동 Animator 레퍼런스 진단 (A/B Test)</h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="Animator 레퍼런스 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <p class="lb-desc lb-desc-warn">Unity Humanoid 매핑 엔진과 자체 리타기팅 커널 간의 프레임별 로컬 축 편차 런타임 비교</p>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">손가락 기준 Animator 동기화</span>
+                        <p class="lb-hint">Unity Humanoid Rig 손가락 데이터를 바이패스하지 않고 로컬 트랜스폼 직접 덮어쓰기</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="off" role="group" aria-label="손가락 Animator 동기화">
+                          <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="false">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">엄지·손목 localRotation 기준 정합</span>
+                        <p class="lb-hint">Wrist 롤링과 Thumb 피치가 중첩될 때 쿼터니언 정규화 오차 강제 보정</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="엄지 손목 기준 정합">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="lb-card lb-card-dev" id="ubDevExperiment">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>실험 옵션 및 특수 경로</h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="실험 옵션 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <p class="lb-desc lb-desc-warn">스윙 리미트 및 Animation Rigging 패키지 상호 작용 솔버를 활성화합니다.</p>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">Arm Direction Retarget 실험 알고리즘</span>
+                        <p class="lb-hint">원통형 극벡터(Pole Vector)를 동적으로 재계산하여 전완 굽힘 방향 강제 수렴</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="Arm Direction Retarget 실험">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="lb-card lb-card-dev" id="ubDevYybAux">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>YYB 보조본 내부 구조 (Thumb0 / 손꿈치 / 웹빙)</h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="YYB 보조본 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <p class="lb-desc lb-desc-warn">YYB 모델 고유의 복합 손가락 힌지 본 계층(Thumb0, Palm Aux, FingerRoot)을 바인딩합니다.</p>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">Thumb0 독립 동기화</span>
+                        <p class="lb-hint">기본 Humanoid Rig에 매핑되지 않는 Thumb0 본을 손목 회전의 28%로 비례 인터폴레이션</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="Thumb0 독립 동기화">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="lb-card lb-card-dev collapsed" id="ubDevDebug">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>디버그 시각화 및 로그 프로브</h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="디버그 프로브 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <p class="lb-desc lb-desc-warn">상체 본 기즈모 뷰포트 렌더링 플래그 및 콘솔 스트림 상세도를 설정합니다.</p>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">손가락 힌지 및 트위스트 축 기즈모 표시</span>
+                        <p class="lb-hint">뷰포트 오버레이에 20개 손가락 관절별 X/Y/Z 회전 호 투사</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="off" role="group" aria-label="기즈모 표시">
+                          <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="false">예</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <nav class="lb-anchor" aria-label="섹션 바로가기">
+              <ul class="lb-toc-list">
+                <li class="lb-toc-group">
+                  <a class="lb-toc-link active" href="#ubFingerScales">
+                    <span class="lb-toc-indicator" aria-hidden="true"></span><span>일반 보정</span>
+                  </a>
+                  <ul class="lb-toc-sub">
+                    <li><a class="lb-toc-sublink" href="#ubFingerScales">• 손가락/엄지 스케일</a></li>
+                    <li><a class="lb-toc-sublink" href="#ubThumbTune">• 엄지 미세 조정</a></li>
+                    <li><a class="lb-toc-sublink" href="#ubArmTwist">• 팔 Twist 보정</a></li>
+                    <li><a class="lb-toc-sublink" href="#ubSleeveAnchor">• 소매 Anchor 보정</a></li>
+                  </ul>
+                </li>
+                <li class="lb-toc-group" data-dev-only hidden>
+                  <a class="lb-toc-link" href="#ubDevAnimRef">
+                    <span class="lb-toc-indicator" aria-hidden="true"></span><span>개발자 모드</span>
+                  </a>
+                  <ul class="lb-toc-sub">
+                    <li><a class="lb-toc-sublink" href="#ubDevAnimRef">• Animator 레퍼런스</a></li>
+                    <li><a class="lb-toc-sublink" href="#ubDevExperiment">• 실험 옵션 및 경로</a></li>
+                    <li><a class="lb-toc-sublink" href="#ubDevYybAux">• YYB 보조본 내부 구조</a></li>
+                    <li><a class="lb-toc-sublink" href="#ubDevDebug">• 디버그 및 로그</a></li>
+                  </ul>
+                </li>
+              </ul>
+            </nav>
+          </section>
+
+          <section id="physicsPanel" class="panel-view lowerbody-panel" data-panel-view="physics" aria-labelledby="settingsTitle" hidden>
+            <div class="lb-main">
+              <hr class="lb-divider" />
+
+              <div class="lb-toolbar">
+                <button id="phAutoSetup" class="lb-btn lb-btn-solid" type="button">
+                  <span>자동 설정·본 매핑</span>
+                </button>
+                <div class="lb-toolbar-right">
+                  <button id="phReapply" class="lb-btn lb-btn-mini" type="button" title="흔들림 파라미터 런타임 재적용">흔들림 재적용</button>
+                  <button id="phResetSim" class="lb-btn lb-btn-mini" type="button" title="파티클 궤적 및 속도 즉시 0 리셋">시뮬레이션 리셋</button>
+                  <button id="phRebuild" class="lb-btn lb-btn-mini" type="button" title="메쉬 버텍스 프록시 재구축">클로스 재생성</button>
+                </div>
+              </div>
+
+              <article class="lb-card" id="phMotion">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>전체 흔들림 및 모션 튜닝</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="모션 튜닝 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">흔들림 강도</span>
+                      <button class="lb-row-reset" type="button" aria-label="흔들림 강도 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">0 = 고정 정지, 1 = 물리 표준, 2 = 매우 부드러운 강조</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="흔들림 강도" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">감쇠 배율</span>
+                      <button class="lb-row-reset" type="button" aria-label="감쇠 배율 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">클수록 흔들림이 빨리 멈추고 잔진동이 사라집니다</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="감쇠 배율" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">중력 배율</span>
+                      <button class="lb-row-reset" type="button" aria-label="중력 배율 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">클수록 무겁게 아래로 처지며 깃발 효과가 억제됩니다</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="중력 배율" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">관성 배율</span>
+                      <button class="lb-row-reset" type="button" aria-label="관성 배율 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">작으면 급회전·이동 시 메쉬가 튀지 않고 안정적으로 추종</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0.5" max="1.5" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="관성 배율" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">애니메이션 포즈 반영률</span>
+                      <button class="lb-row-reset" type="button" aria-label="포즈 반영률 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">0 = 100% 순수 물리 반응, VMD 클립 격렬 댄스 시 0.5 권장</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="1" step="0.05" value="0" data-default="0" data-decimals="2" aria-label="애니메이션 포즈 반영률" />
+                      <span class="lb-value"><span class="lb-val">0.00</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">자기 충돌 방지</span>
+                      <p class="lb-hint">긴 머리 다발 간 얽힘 방지 (활성화 시 CPU 연산량 약간 증가)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="off" role="group" aria-label="자기 충돌 방지">
+                        <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="false">예</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">활성화 시 자동 재설정</span>
+                      <p class="lb-hint">오브젝트 가시화 및 씬 전환 시 런타임 클로스 메쉬 자동 재생성</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="on" role="group" aria-label="활성화 시 자동 재설정">
+                        <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="true">예</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card" id="phSkirt">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>스커트 클로스 설정</h3>
+                    <button class="lb-reset" type="button" data-lb-reset aria-label="스커트 설정 초기화" title="이 섹션 초기화">↺</button>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">스커트 클로스 자동 생성</span>
+                      <p class="lb-hint">휴머노이드 하체 및 본 태그를 판별하여 스커트 영역 자동 빌드</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="on" role="group" aria-label="스커트 자동 생성">
+                        <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="true">예</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">스커트 생성 방식</span>
+                      <p class="lb-hint">MeshCloth(부드럽고 정확) / BoneClothLoop(본 기반 경량)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg lb-seg-wide" data-default="mesh" role="group" aria-label="스커트 생성 방식">
+                        <button type="button" data-val="mesh" aria-pressed="true">MeshCloth</button>
+                        <button type="button" data-val="bone" aria-pressed="false">BoneLoop</button>
+                        <button type="button" data-val="auto" aria-pressed="false">Auto</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">다리 관통 방지 백스톱 <span class="lb-tag">MC2</span></span>
+                      <p class="lb-hint">다리 허벅지 캡슐 콜라이더 내부로 스커트가 말려 들어가는 현상 강제 저지</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg" data-default="on" role="group" aria-label="다리 관통 방지 백스톱">
+                        <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                        <button type="button" data-val="on" aria-pressed="true">예</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">스커트 디테일</span>
+                      <button class="lb-row-reset" type="button" aria-label="스커트 디테일 초기화" title="기본값으로 초기화">↺</button>
+                      <p class="lb-hint">가상 파티클 그리드 밀도 배율 (낮을수록 초경량 저사양 모드)</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0.5" max="2" step="0.1" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="스커트 디테일" />
+                      <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                    </div>
+                  </div>
+                  <div class="lb-param">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name lb-sub">거리 컬링</span>
+                      <button class="lb-row-reset" type="button" aria-label="거리 컬링 초기화" title="기본값 비활성 복원">↺</button>
+                      <p class="lb-hint">카메라로부터 설정 거리 이상 멀어지면 클로스 시뮬레이션 일시 슬립</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <input type="range" class="lb-slider" min="0" max="20" step="1" value="0" data-default="0" data-decimals="0" data-suffix="m" data-zero-label="비활성" aria-label="거리 컬링" />
+                      <span class="lb-value"><span class="lb-val">비활성</span></span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="lb-card" id="phHair">
+                <header class="lb-card-head">
+                  <div class="lb-card-title">
+                    <span class="lb-status" aria-hidden="true"></span>
+                    <h3>머리카락 물리 백엔드</h3>
+                  </div>
+                  <div class="lb-card-controls">
+                    <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                  </div>
+                </header>
+                <div class="lb-card-body">
+                  <div class="lb-param lb-param-toggle">
+                    <div class="lb-param-label">
+                      <span class="lb-param-name">헤어 솔버 백엔드 선택</span>
+                      <p class="lb-hint">기본 권장: MagicaCloth2 Bone/Mesh 복합 모드</p>
+                    </div>
+                    <div class="lb-param-ctl">
+                      <div class="lb-seg lb-seg-wide" id="hairBackendSeg" data-default="mc2" role="group" aria-label="헤어 솔버 백엔드">
+                        <button type="button" data-val="mc2" aria-pressed="true">MagicaCloth2 (기본)</button>
+                        <button type="button" data-val="boing" aria-pressed="false">SpringBones (Boing)</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="lb-alert" id="boingFallbackBadge" hidden>
+                    <div>
+                      <strong>BoingBones 에셋 미설치 상태 감지</strong>
+                      <p>프로젝트에 Boing Physics 패키지가 없어 안정성을 위해 MagicaCloth2 경로로 자동 안전 폴백(Fallback) 처리됩니다.</p>
+                    </div>
+                  </div>
+                  <div class="lb-status-card">
+                    <div class="lb-status-card-main">
+                      <span class="lb-param-name">자동 탐지된 머리카락 본 체인</span>
+                      <span class="lb-status-card-sub">Front: 4, Side: 8, Back: 14 체인 (총 26 클러스터)</span>
+                    </div>
+                    <span class="lb-chip-ok">정상 매핑됨</span>
+                  </div>
+                </div>
+              </article>
+
+              <div class="lb-dev-group" data-dev-only hidden>
+                <div class="lb-dev-title">개발자 모드</div>
+
+                <article class="lb-card lb-card-dev" id="phBoing">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>Boing 스프링 프로파일 <span class="lb-dim">(실험적 이중 경로)</span></h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="Boing 프로파일 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name">스프링 프로파일 사용 (enabled)</span>
+                        <p class="lb-hint">Boing 물리 인스턴스 런타임 활성화</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="스프링 프로파일 사용">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">진동수 (frequency)</span>
+                        <button class="lb-row-reset" type="button" aria-label="진동수 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">본 탄성 왕복 속도 (높을수록 단단한 텐션)</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="10" step="0.2" value="5" data-default="5" data-decimals="2" data-suffix=" Hz" aria-label="진동수" />
+                        <span class="lb-value"><span class="lb-val">5.00</span><span class="lb-unit">Hz</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">감쇠비 (dampingRatio)</span>
+                        <button class="lb-row-reset" type="button" aria-label="감쇠비 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">1.0 = 임계 감쇠 (튕김 없음), 0.5 = 쫀득한 잔여 튕김</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="1.5" step="0.05" value="0.5" data-default="0.5" data-decimals="2" aria-label="감쇠비" />
+                        <span class="lb-value"><span class="lb-val">0.50</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">최대 굽힘각 (maxBendAngleDeg)</span>
+                        <button class="lb-row-reset" type="button" aria-label="굽힘각 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">각 세그먼트가 꺾일 수 있는 절대 한계 각도</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0" max="180" step="5" value="180" data-default="180" data-decimals="0" data-suffix="°" aria-label="최대 굽힘각" />
+                        <span class="lb-value"><span class="lb-val">180</span><span class="lb-unit">°</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name">체인 상호 충돌 (interChainCollision)</span>
+                        <p class="lb-hint">서로 다른 Boing 스프링 체인 간 볼록 캡슐 충돌 판정 계산</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="off" role="group" aria-label="체인 상호 충돌">
+                          <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="false">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-curve-grid">
+                      <div class="lb-curve-item">
+                        <span class="lb-param-name">애니메이션 혼합 커브</span>
+                        <select class="lb-select" aria-label="애니메이션 혼합 커브">
+                          <option selected>RootOneTailZero</option>
+                          <option>LinearFadeOut</option>
+                          <option>ConstantHalf</option>
+                          <option>CustomCurve</option>
+                        </select>
+                      </div>
+                      <div class="lb-curve-item">
+                        <span class="lb-param-name">포즈 강성 커브</span>
+                        <select class="lb-select" aria-label="포즈 강성 커브">
+                          <option selected>ConstantZero</option>
+                          <option>RootStiffTailLoose</option>
+                          <option>UniformStiff</option>
+                        </select>
+                      </div>
+                      <div class="lb-curve-item">
+                        <span class="lb-param-name">굽힘 상한 커브</span>
+                        <select class="lb-select" aria-label="굽힘 상한 커브">
+                          <option selected>ConstantOne</option>
+                          <option>QuadraticDamp</option>
+                          <option>ExponentialCap</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="lb-card lb-card-dev" id="phCollider">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>콜라이더 및 본 분류 내부 설정 <span class="lb-dim">(Colliders &amp; Rig)</span></h3>
+                      <button class="lb-reset" type="button" data-lb-reset aria-label="콜라이더 설정 초기화" title="이 섹션 초기화">↺</button>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name">신체 대칭 콜라이더 적용 (useSymmetry)</span>
+                        <p class="lb-hint">좌우 팔, 다리, 가슴 콜라이더 반경 및 위치 강제 대칭 복제</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="신체 대칭 콜라이더">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name">다리 콜라이더 포함 (includeLegs)</span>
+                        <p class="lb-hint">스커트 및 롱헤어 충돌용 상·하퇴부 캡슐 본 생성</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="다리 콜라이더 포함">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">콜라이더 반경 배율 (colliderRadiusScale)</span>
+                        <button class="lb-row-reset" type="button" aria-label="콜라이더 반경 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">전체 신체 부위 자동 산출 콜라이더 볼륨 배율 튜닝</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0.5" max="2" step="0.05" value="1" data-default="1" data-decimals="2" data-suffix="x" aria-label="콜라이더 반경 배율" />
+                        <span class="lb-value"><span class="lb-val">1.00</span><span class="lb-unit">x</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name">미식별 본 포함 진단 (includeUnknownBones)</span>
+                        <p class="lb-hint">표준 네이밍 규칙에 걸리지 않은 액세서리 본을 스프링 후보에 포함</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="off" role="group" aria-label="미식별 본 포함">
+                          <button type="button" data-val="off" aria-pressed="true">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="false">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name">공식 프리셋 베이스라인 사용 (usePresetBaseline)</span>
+                        <p class="lb-hint">공인 휴머노이드 표준 바디 피직스 기본 프로필 매핑</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="프리셋 베이스라인">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-danger-row">
+                      <button id="phClearGenerated" class="lb-btn-danger" type="button">생성물 초기화 (파괴적)</button>
+                      <button id="phExportJson" class="lb-btn lb-btn-mini" type="button">캐릭터 프리셋 JSON보내기</button>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="lb-card lb-card-dev" id="phQa">
+                  <header class="lb-card-head">
+                    <div class="lb-card-title">
+                      <h3>QA 진단 및 시뮬레이션 검증 <span class="lb-dim">(Validation &amp; Benchmarking)</span></h3>
+                    </div>
+                    <div class="lb-card-controls">
+                      <button class="lb-chev-btn" type="button" data-lb-collapse aria-label="섹션 접기"><span class="lb-chev-up" aria-hidden="true"></span></button>
+                    </div>
+                  </header>
+                  <div class="lb-card-body">
+                    <div class="lb-param lb-param-toggle">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name">관통 및 걸림 계측 프로브 <span class="lb-pulse" aria-hidden="true"></span></span>
+                        <p class="lb-hint">실시간 콜라이더 관통 깊이 및 역전 현상 런타임 추적 모니터링</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <div class="lb-seg" data-default="on" role="group" aria-label="관통 계측 프로브">
+                          <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                          <button type="button" data-val="on" aria-pressed="true">예</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="lb-param">
+                      <div class="lb-param-label">
+                        <span class="lb-param-name lb-sub">관통 경고 깊이 임계치</span>
+                        <button class="lb-row-reset" type="button" aria-label="관통 임계치 초기화" title="기본값으로 초기화">↺</button>
+                        <p class="lb-hint">경고를 트리거할 파티클 깊이 한계값</p>
+                      </div>
+                      <div class="lb-param-ctl">
+                        <input type="range" class="lb-slider" min="0.001" max="0.02" step="0.001" value="0.005" data-default="0.005" data-decimals="3" data-suffix="m" aria-label="관통 경고 깊이 임계치" />
+                        <span class="lb-value"><span class="lb-val">0.005</span><span class="lb-unit">m</span></span>
+                      </div>
+                    </div>
+                    <div class="lb-status-card">
+                      <div class="lb-status-card-main">
+                        <span class="lb-param-name">최근 검증 결과 상태 피드백</span>
+                        <span class="lb-status-card-sub">진단 통과 (최대 관통 0.001m / 메시 결함 0건 감지)</span>
+                      </div>
+                      <span class="lb-chip-ok">PASS (정상)</span>
+                    </div>
+                    <div class="lb-qa-row">
+                      <button id="phRunValidation" class="lb-btn lb-btn-qa" type="button">표준 검증 모션 시퀀스 재생 (120° 회전)</button>
+                      <button id="phRunBenchmark" class="lb-btn lb-btn-qa" type="button">프레임 성능 벤치마크 (180 프레임)</button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <nav class="lb-anchor" aria-label="섹션 바로가기">
+              <ul class="lb-toc-list">
+                <li class="lb-toc-group">
+                  <a class="lb-toc-link active" href="#phMotion">
+                    <span class="lb-toc-indicator" aria-hidden="true"></span><span>일반 설정</span>
+                  </a>
+                  <ul class="lb-toc-sub">
+                    <li><a class="lb-toc-sublink" href="#phMotion">• 전체 흔들림 및 모션 튜닝</a></li>
+                    <li><a class="lb-toc-sublink" href="#phSkirt">• 스커트 클로스 설정</a></li>
+                    <li><a class="lb-toc-sublink" href="#phHair">• 머리카락 물리 백엔드</a></li>
+                  </ul>
+                </li>
+                <li class="lb-toc-group" data-dev-only hidden>
+                  <a class="lb-toc-link" href="#phBoing">
+                    <span class="lb-toc-indicator" aria-hidden="true"></span><span>개발자 모드</span>
+                  </a>
+                  <ul class="lb-toc-sub">
+                    <li><a class="lb-toc-sublink" href="#phBoing">• Boing 스프링 프로파일</a></li>
+                    <li><a class="lb-toc-sublink" href="#phCollider">• 콜라이더 및 본 분류</a></li>
+                    <li><a class="lb-toc-sublink" href="#phQa">• QA 진단 및 검증</a></li>
+                  </ul>
+                </li>
+              </ul>
+            </nav>
+          </section>
+
           <section id="developerPanel" class="panel-view developer-panel" data-panel-view="developer" aria-labelledby="developerTitle" hidden>
             <div class="detail-header">
               <p class="detail-kicker">개발자 모드</p>
@@ -194,8 +1490,40 @@
           </section>
         </section>
 
+      <div class="lb-modal" id="settingsModal" hidden>
+        <div class="lb-modal-backdrop" id="settingsModalBackdrop"></div>
+        <div class="lb-modal-box" role="dialog" aria-modal="true" aria-label="설정">
+          <div class="lb-modal-head">
+            <span>설정</span>
+            <button class="lb-modal-close" id="settingsModalClose" type="button" aria-label="닫기">×</button>
+          </div>
+          <div class="lb-modal-body">
+            <nav class="lb-modal-nav" aria-label="설정 카테고리">
+              <button class="lb-modal-nav-item active" type="button">일반</button>
+            </nav>
+            <div class="lb-modal-content">
+              <label class="lb-modal-field">
+                <span class="lb-modal-label">언어</span>
+                <select class="lb-select">
+                  <option selected>한국어</option>
+                  <option>English</option>
+                  <option>日本語</option>
+                </select>
+              </label>
+              <div class="lb-modal-field">
+                <span class="lb-modal-label">시작할 때 에디터를 실행</span>
+                <div class="lb-seg lb-seg-full" data-default="on" role="group" aria-label="시작 시 에디터 실행">
+                  <button type="button" data-val="off" aria-pressed="false">아니요</button>
+                  <button type="button" data-val="on" aria-pressed="true">예</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       </div>
     </main>
     <script type="module" src="../client/settingsUi.js"></script>
+    <script type="module" src="../client/lowerBodyUi.js"></script>
   </body>
 </html>

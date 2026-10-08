@@ -14,6 +14,38 @@ const statusLabels = {
   error: "연결 오류"
 };
 
+// 패널 전환 시 상단 헤더에 표시할 제목
+const panelTitles = {
+  onboarding: "Onboarding Assistant",
+  camera: "Camera 1",
+  upperbody: "상체 보정 파라미터",
+  lowerbody: "하체 보정 파라미터",
+  physics: "캐릭터 물리 파라미터",
+  developer: "개발자 모드"
+};
+
+// 패널별 프리셋 셀렉트 옵션 (프로토타입 디자인 기준)
+const panelPresets = {
+  lowerbody: [
+    "프리셋: 기본값 (권장 설정)",
+    "발 미끄럼 방지 중심",
+    "댄스 모션 보존 모드",
+    "사용자 정의"
+  ],
+  upperbody: [
+    "기본값 (표준 리타기팅)",
+    "손가락 정밀 표현 (V-Tuber 특화)",
+    "모션캡처 고각 회전 소매 보호",
+    "YYB 롱슬리브 최적화"
+  ],
+  physics: [
+    "프리셋: 기본값 (권장 설정)",
+    "가볍게 / 실시간 성능 우선",
+    "고품질 / 디테일 시뮬레이션",
+    "사용자 커스텀 세팅"
+  ]
+};
+
 export function bootstrapSettingsUi(root = document, {
   workbenchLoadTimeoutMs = 15000,
   createWebSocketChannel
@@ -154,6 +186,13 @@ export function bootstrapSettingsUi(root = document, {
     }
 
     elements.shell.dataset.activePanel = panelName;
+    const title = panelTitles[panelName];
+    const titleElement = elements.shell.querySelector?.("#settingsTitle");
+    if (title && titleElement) {
+      titleElement.textContent = title;
+    }
+    applyPresetOptions(panelName);
+
     for (const target of panelTargets) {
       const isActive = target.dataset.panelTarget === panelName;
       setPanelTargetState(target, isActive);
@@ -235,6 +274,19 @@ export function bootstrapSettingsUi(root = document, {
     elements.workbenchStatus.textContent = message;
     if (elements.workbenchRetry) {
       elements.workbenchRetry.hidden = false;
+    }
+  }
+
+  // 활성 패널에 맞는 프리셋 목록을 셀렉트에 채운다.
+  function applyPresetOptions(panelName) {
+    const select = elements.shell?.querySelector?.("#panelPresetSelect");
+    const options = panelPresets[panelName];
+    if (!select || !options) return;
+    select.innerHTML = "";
+    for (const label of options) {
+      const option = document.createElement("option");
+      option.textContent = label;
+      select.appendChild(option);
     }
   }
 

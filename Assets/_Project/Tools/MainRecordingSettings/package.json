@@ -11,6 +11,8 @@
   "scripts": {
     "bridge:e2e": "node scripts/runBridgeE2e.mjs",
     "boogle": "node node_modules/boogle-sdk/dist/cli.js",
+    "lint:design": "node --test tests/designConsistency.test.mjs",
+    "prepackage:release": "node --test tests/designConsistency.test.mjs tests/textIntegrity.test.mjs tests/layoutContract.test.mjs",
     "package:release": "node scripts/packageElectronRelease.mjs",
     "start:dev": "node scripts/runElectron.mjs --dev",
     "start:prod": "node scripts/runElectron.mjs",

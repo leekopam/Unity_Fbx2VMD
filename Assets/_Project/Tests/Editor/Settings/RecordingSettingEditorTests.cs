@@ -1913,7 +1913,6 @@ namespace Tests.Editor.Settings
             Assert.That(index, Does.Not.Contain("공유 설정을 불러왔습니다."));
             Assert.That(index, Does.Not.Contain("공유 설정을 저장했습니다."));
             Assert.That(index, Does.Not.Contain("공유 설정 저장"));
-            Assert.That(index, Does.Not.Contain("캐릭터"));
             Assert.That(index, Does.Not.Contain("Character 1 (비활성화)"));
             Assert.That(index, Does.Not.Contain("Character 1 (Inactive)"));
             Assert.That(index.IndexOf('\uFFFD'), Is.EqualTo(-1));
