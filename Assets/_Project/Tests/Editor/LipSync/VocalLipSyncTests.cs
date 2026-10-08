@@ -68,6 +68,83 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
+        public void BuildArguments_고품질옵션은엔진별플래그를추가한다()
+        {
+            string sep = VocalStemSeparator.BuildArguments(
+                VocalStemSeparator.Engine.AudioSeparator,
+                "in.mp3", "out", "m.ckpt", highQuality: true);
+            StringAssert.Contains("--mdx_overlap 0.5", sep);
+            string demucs = VocalStemSeparator.BuildArguments(
+                VocalStemSeparator.Engine.Demucs, "in.mp3", "out", "",
+                highQuality: true);
+            StringAssert.Contains("--shifts 2", demucs);
+            // 기본값은 플래그 없이 기존 인자열과 동일해야 한다(하위호환).
+            string plain = VocalStemSeparator.BuildArguments(
+                VocalStemSeparator.Engine.AudioSeparator, "in.mp3", "out", "m.ckpt");
+            Assert.IsFalse(plain.Contains("--mdx_overlap"), plain);
+        }
+
+        [Test]
+        public void Wpe체인은디리버브패스를스크립트로교체한다()
+        {
+            var steps = VocalStemSeparator.CleanupStepsWithWpe();
+            Assert.AreEqual(VocalStemSeparator.DefaultCleanupSteps.Length, steps.Length);
+            Assert.AreEqual(VocalStemSeparator.WpeScriptRelPath, steps[1].scriptRelPath);
+            Assert.IsNull(steps[1].model);
+            // 나머지 패스는 기본 체인과 동일해야 한다.
+            Assert.AreEqual(steps[0].ensemblePreset,
+                VocalStemSeparator.DefaultCleanupSteps[0].ensemblePreset);
+            Assert.AreEqual(steps[2].model,
+                VocalStemSeparator.DefaultCleanupSteps[2].model);
+        }
+
+        [Test]
+        public void 히스테리시스_게이트대역에서열림유지()
+        {
+            // raw 0.1은 GetLipSyncInfo에서 norm ~0.7, 0.004은 norm ~0.08.
+            // gate=0.1 → close=0.05. raw 0.0045 → norm ~0.15로 열림 유지되고
+            // raw 0.001 → norm ~0이면 닫힌다. 단순 임계면 대역에서 튈 수 있다.
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            float[] raws = { 0f, 0.1f, 0.0045f, 0.0045f, 0.0001f };
+            foreach (float v in raws)
+            {
+                data.frames.Add(new uLipSync.BakedFrame
+                {
+                    volume = v,
+                    phonemes = new List<uLipSync.BakedPhonemeRatio>(),
+                });
+            }
+            float[] vols = VocalLipSyncBaker.BuildGatedVolumes(data, 0.1f);
+            Assert.AreEqual(0f, vols[0], "무음 시작은 닫힘");
+            Assert.Greater(vols[1], 0f, "gate 초과는 열림");
+            Assert.Greater(vols[2], 0f, "히스테리시스 대역에서 열림 유지");
+            Assert.Greater(vols[3], 0f, "대역 지속");
+            Assert.AreEqual(0f, vols[4], "닫힘 임계 미만에서 닫힘");
+        }
+
+        [Test]
+        public void SimplifyCurve_허용오차이내로키를줄인다()
+        {
+            // 선형 구간 + 한 점만 크게 튄 커브 — epsilon 2면 중간 선형 키는 제거되고
+            // 스파이크는 남아야 한다. 최대 오차가 epsilon을 넘지 않는지 검증한다.
+            float[] vals = { 0f, 10f, 20f, 80f, 40f, 50f, 60f };
+            var keys = new Keyframe[vals.Length];
+            for (int i = 0; i < vals.Length; i++)
+            {
+                keys[i] = new Keyframe(i * 0.1f, vals[i]);
+            }
+            var src = new AnimationCurve(keys);
+            var dst = VocalLipSyncBaker.SimplifyCurve(src, 2f);
+            Assert.Less(dst.length, src.length, "선형 구간 키가 제거돼야 함");
+            for (int i = 0; i < vals.Length; i++)
+            {
+                Assert.AreEqual(vals[i], dst.Evaluate(i * 0.1f), 2.01f,
+                    $"간소화 곡선이 t={i * 0.1f}에서 오차 초과");
+            }
+        }
+
+        [Test]
         public void 기본체인_첫패스는카라오케프리셋_원곡입력()
         {
             // 리드 추출은 분리 보컬이 아니라 원곡에 걸어야 1차 분리 손실이 안 누적된다.
@@ -1070,11 +1147,12 @@ namespace Fbx2Vmd.Tests.LipSync
         {
             // GetLipSyncInfo가 raw volume을 log10→[-2.5,-1.5] 구간으로 정규화한다.
             // normVol 0.15를 얻으려면 raw = 10^(-2.35) ≈ 0.00447.
-            // gate=0.1 → 니 밴드 0.1~0.2, 팩터 0.5 → 값 = 1×(0.15×0.5)×100 = 7.5
+            // gate=0.1 → 닫힘 0.05, 니 끝 0.2. 단일 램프 팩터 (0.15-0.05)/(0.2-0.05)≈0.667
+            // → 값 = 1×(0.15×0.667)×100 ≈ 10.0
             var clip = BakeAOnlyClip(new[] { 0.00447f }, gate: 0.1f, releaseDamp: 0f);
             var curve = UnityEditor.AnimationUtility.GetEditorCurve(
                 clip, UnityEditor.AnimationUtility.GetCurveBindings(clip)[0]);
-            Assert.AreEqual(7.5f, curve.Evaluate(0f), 0.2f, "소프트 니로 게이트 직상 신호는 절반 감쇠");
+            Assert.AreEqual(10.0f, curve.Evaluate(0f), 0.2f, "소프트 니로 게이트 직상 신호는 램프 감쇠");
         }
 
         [Test]

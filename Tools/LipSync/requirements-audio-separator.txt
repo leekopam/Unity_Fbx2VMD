@@ -2,3 +2,10 @@ audio-separator[cpu]==0.44.5
 audioread>=3.0.0
 librosa>=0.10,<1.0
 transformers==5.19.0
+# wav2vec2 경로 부가 패키지 — VAD 게이트/지각 음량/WPE/ONNX 추론.
+silero-vad>=6.0,<7
+pyloudnorm>=0.1.1
+nara_wpe>=0.0.8
+onnx>=1.16
+onnxruntime>=1.17
+onnxscript>=0.1

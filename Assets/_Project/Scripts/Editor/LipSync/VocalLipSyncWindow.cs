@@ -27,17 +27,31 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private string _bgmWavPath = "";
         [SerializeField] private string _rawVocalWavPath = "";
         [SerializeField] private bool _cleanVocal = true;
+        [SerializeField] private bool _highQualitySeparation; // 분리/정제 품질↑(느림)
         [SerializeField] private Profile _profile;
         [SerializeField] private GameObject _targetCharacter;
         [SerializeField] private float _minVolumeGate = 0.02f;
         [SerializeField] private float _releaseDamp = 0.35f; // 입 닫힘/잡음 하강 감쇠(0=끔)
+        [SerializeField] private float _curveEpsilon = 1f; // 커브 간소화 허용 오차(모프 단위)
         [SerializeField] private bool _useWav2VecPhonemes; // DL 음소 분석 경로
         [SerializeField] private Wav2VecPhonemeExtractor.PhonemeLanguage _phonemeLanguage;
+        [SerializeField] private string _lyricsPath = ""; // 가사 텍스트(강제 정렬, 선택)
+        [SerializeField] private bool _wpeDereverb; // 정제 체인의 디리버브를 WPE로 교체
         [SerializeField] private AnimationClip _previewClip;
         [SerializeField] private bool _previewWithAudio = true;
 
         private Task<VocalStemSeparator.Result> _separating;
         private Task<VocalStemSeparator.Result> _cleaning;
+        // 분리 중 사용자가 필드를 편집해도 완료 처리가 시작 시점 값을 보게 스냅샷한다.
+        private string _sepSourcePath;
+        private VocalStemSeparator.Engine _sepEngine;
+        private bool _sepCleanVocal;
+        private bool _sepHighQuality;
+        private bool _sepWpe;
+        // 정제 체인은 분리 완료 콜백에서 시작되므로 출력 폴더/python 경로도 함께 스냅샷한다
+        // — 분리 중 UI 편집으로 정제 산출물이 다른 폴더에 생기는 것을 막는다.
+        private string _sepOutputDir;
+        private string _sepPythonPath;
         private Task<(bool ok, string error)> _extracting;
         private string _extractCsvPath;
         private string _extractWavPath; // 추출 시작 시점의 보컬 경로 스냅샷
@@ -143,7 +157,8 @@ namespace Fbx2Vmd.LipSync
                 {
                     _bgmWavPath = result.instrumentalPath ?? "";
                     // 정제 체인은 audio-separator 전용 — demucs 보컬에 걸면 확정 실패한다.
-                    if (_cleanVocal && _engine == VocalStemSeparator.Engine.AudioSeparator)
+                    // 분리 중 편집된 값이 아니라 시작 시점 스냅샷으로 판단한다.
+                    if (_sepCleanVocal && _sepEngine == VocalStemSeparator.Engine.AudioSeparator)
                     {
                         _rawVocalWavPath = result.vocalPath;
                         StartCleanup();
@@ -297,7 +312,18 @@ namespace Fbx2Vmd.LipSync
                     new GUIContent("보컬 정제",
                         "원곡에서 리드 보컬만 추출(카라오케 앙상블) → 잔향/에코 제거 → 노이즈 제거. 립싱크용 리드 보컬만 남긴다"),
                     _cleanVocal);
+                using (new EditorGUI.DisabledScope(!_cleanVocal))
+                {
+                    _wpeDereverb = EditorGUILayout.Toggle(
+                        new GUIContent("WPE 디리버브",
+                            "신경망 디리버브 대신 WPE(결정적 선형 예측) — 신경망이 리드 보컬을 깎는 곡에서 사용"),
+                        _wpeDereverb);
+                }
             }
+            _highQualitySeparation = EditorGUILayout.Toggle(
+                new GUIContent("고품질 분리(느림)",
+                    "audio-separator: 예측 윈도 중첩 0.25→0.5. demucs: shifts 1→2. 처리 시간이 늘지만 분리 품질이 오른다"),
+                _highQualitySeparation);
             EditorGUILayout.BeginHorizontal();
             using (new EditorGUI.DisabledScope(
                 _provisioning != null || _separating != null || _cleaning != null
@@ -387,6 +413,10 @@ namespace Fbx2Vmd.LipSync
             EditorGUILayout.EndHorizontal();
             _minVolumeGate = EditorGUILayout.Slider("무음 게이트", _minVolumeGate, 0f, 0.2f);
             _releaseDamp = EditorGUILayout.Slider("감쇄(노이즈/여운)", _releaseDamp, 0f, 0.95f);
+            _curveEpsilon = EditorGUILayout.Slider(
+                new GUIContent("커브 간소화",
+                    "허용 오차(모프 단위) 이내의 중간 키프레임을 제거해 .anim 크기와 미세 떨림을 줄인다. 0=끔"),
+                _curveEpsilon, 0f, 5f);
             _useWav2VecPhonemes = EditorGUILayout.ToggleLeft(
                 "wav2vec2 음소 분석 사용(코러스 잔류에 강함, uLipSync 대신)",
                 _useWav2VecPhonemes);
@@ -397,6 +427,9 @@ namespace Fbx2Vmd.LipSync
                         new GUIContent("음소 언어",
                             "보컬 가사 언어 — 언어별 wav2vec2 모델을 사용한다(첫 실행 시 모델 다운로드)"),
                         _phonemeLanguage);
+                DrawPathRow("가사(선택)", ref _lyricsPath,
+                    "가사 텍스트 파일 — 있으면 강제 정렬로 음소 오류 제거 "
+                    + "(일본어:가나, 한국어:한글, 영어:IPA 표기)", "txt");
             }
 
             using (new EditorGUI.DisabledScope(
@@ -517,13 +550,22 @@ namespace Fbx2Vmd.LipSync
                 return;
             }
             Directory.CreateDirectory(_outputDir);
+            // 완료/정제 연결은 시작 시점 스냅샷으로 — 실행 중 필드 편집을 무시한다.
+            _sepSourcePath = _sourceAudioPath;
+            _sepEngine = _engine;
+            _sepCleanVocal = _cleanVocal;
+            _sepHighQuality = _highQualitySeparation;
+            _sepWpe = _wpeDereverb;
+            _sepOutputDir = _outputDir;
+            _sepPythonPath = _pythonPath;
             RenewCts();
             _sepProgress = 0f;
             _separating = VocalStemSeparator.SeparateAsync(
                 _engine, _pythonPath, _sourceAudioPath, _outputDir, _model,
                 _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
                 PythonEnvProvisioner.ModelsDir(ProjectRoot),
-                p => _sepProgress = p);
+                p => _sepProgress = p,
+                highQuality: _sepHighQuality);
             EditorUtility.DisplayProgressBar("보컬 분리", "오디오 스템 분리 중(수 분 소요)...", 0.5f);
             SetMessage("분리 실행 중...", MessageType.Info);
         }
@@ -534,13 +576,16 @@ namespace Fbx2Vmd.LipSync
             _sepProgress = 0f;
             _cleanStage = "";
             _cleaning = VocalStemSeparator.CleanVocalAsync(
-                _pythonPath, _rawVocalWavPath, _outputDir,
-                null, _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
+                _sepPythonPath, _rawVocalWavPath, _sepOutputDir,
+                _sepWpe ? VocalStemSeparator.CleanupStepsWithWpe() : null,
+                _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
                 PythonEnvProvisioner.ModelsDir(ProjectRoot),
                 p => _sepProgress = p,
                 s => _cleanStage = s,
-                originalMixPath: _sourceAudioPath,
-                salvageSourcePath: _rawVocalWavPath);
+                originalMixPath: _sepSourcePath,
+                salvageSourcePath: _rawVocalWavPath,
+                highQuality: _sepHighQuality,
+                projectRoot: ProjectRoot);
             SetMessage("분리 완료 — 보컬 정제(잔향/코러스/노이즈) 중...", MessageType.Info);
         }
 
@@ -592,7 +637,8 @@ namespace Fbx2Vmd.LipSync
                         _pythonPath, ProjectRoot, _vocalWavPath, _extractCsvPath,
                         Wav2VecPhonemeExtractor.ModelFor(_phonemeLanguage),
                         PythonEnvProvisioner.ProcessEnv(ProjectRoot),
-                        _cts.Token, p => _sepProgress = p);
+                        _cts.Token, p => _sepProgress = p,
+                        lyricsPath: _lyricsPath);
                     SetMessage("wav2vec2 음소 추출 중…(첫 실행은 모델 다운로드)", MessageType.Info);
                     return;
                 }
@@ -673,15 +719,26 @@ namespace Fbx2Vmd.LipSync
             var warnings = new System.Collections.Generic.List<string>();
             // VRM 프록시가 없는 모델(MMD 등)은 모음 모프명을 스캔해 자동 바인딩한다.
             AnimationClip clip = VocalLipSyncBaker.BakeClip(
-                data, _targetCharacter, _minVolumeGate, warnings, _releaseDamp);
-            clip.name = Path.GetFileNameWithoutExtension(clipNameSource) + "_lipsync";
+                data, _targetCharacter, _minVolumeGate, warnings, _releaseDamp,
+                _curveEpsilon);
+            string assetPath;
+            try
+            {
+                clip.name = Path.GetFileNameWithoutExtension(clipNameSource) + "_lipsync";
 
-            string saveDir = Path.Combine(outputDir, "clips");
-            Directory.CreateDirectory(saveDir);
-            string assetPath = AssetDatabase.GenerateUniqueAssetPath(
-                Path.Combine(saveDir, clip.name + ".anim").Replace('\\', '/'));
-            AssetDatabase.CreateAsset(clip, assetPath);
-            AssetDatabase.SaveAssets();
+                string saveDir = Path.Combine(outputDir, "clips");
+                Directory.CreateDirectory(saveDir);
+                assetPath = AssetDatabase.GenerateUniqueAssetPath(
+                    Path.Combine(saveDir, clip.name + ".anim").Replace('\\', '/'));
+                AssetDatabase.CreateAsset(clip, assetPath);
+                AssetDatabase.SaveAssets();
+            }
+            catch
+            {
+                // CreateAsset 전에 만든 비저장 클립이 누수되지 않게 파괴한다.
+                DestroyImmediate(clip);
+                throw;
+            }
             DestroyImmediate(vocal);
             DestroyImmediate(data);
             _previewClip = clip;

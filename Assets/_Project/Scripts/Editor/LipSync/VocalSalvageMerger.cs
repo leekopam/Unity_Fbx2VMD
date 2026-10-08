@@ -56,37 +56,34 @@ namespace Fbx2Vmd.LipSync
         /// <summary>
         /// cleanPath의 침묵 구간을 salvagePath로 채워 outPath에 PCM16 WAV로 쓴다.
         /// 성공 시 outPath, 포맷 불일치/읽기 실패 시 null과 error 사유를 반환한다.
+        /// Unity API를 쓰지 않아 정제 체인의 워커 스레드(Task.Run)에서 호출 가능하다.
         /// </summary>
         public static string Merge(string cleanPath, string salvagePath,
             string outPath, out float filledRatio, out string error)
         {
             filledRatio = 0f;
             error = string.Empty;
-            AudioClip clean = WavFileReader.Load(cleanPath, out error);
-            if (clean == null)
+            if (!WavFileReader.TryLoadSamples(cleanPath, out float[] cleanData,
+                    out int cleanCh, out int cleanFreq, out error))
             {
                 return null;
             }
-            AudioClip salvage = WavFileReader.Load(salvagePath, out error);
-            if (salvage == null)
+            if (!WavFileReader.TryLoadSamples(salvagePath, out float[] salvageData,
+                    out int salvageCh, out int salvageFreq, out error))
             {
                 return null;
             }
-            if (clean.channels != salvage.channels || clean.frequency != salvage.frequency)
+            if (cleanCh != salvageCh || cleanFreq != salvageFreq)
             {
-                error = $"채널/샘플레이트 불일치({clean.channels}ch {clean.frequency}Hz vs "
-                    + $"{salvage.channels}ch {salvage.frequency}Hz)";
+                error = $"채널/샘플레이트 불일치({cleanCh}ch {cleanFreq}Hz vs "
+                    + $"{salvageCh}ch {salvageFreq}Hz)";
                 return null;
             }
-            var cleanData = new float[clean.samples * clean.channels];
-            clean.GetData(cleanData, 0);
-            var salvageData = new float[salvage.samples * salvage.channels];
-            salvage.GetData(salvageData, 0);
             float[] merged = MergeBuffers(cleanData, salvageData,
-                clean.channels, out filledRatio);
+                cleanCh, out filledRatio);
             try
             {
-                WriteWav16(outPath, merged, clean.channels, clean.frequency);
+                WriteWav16(outPath, merged, cleanCh, cleanFreq);
             }
             catch (Exception e)
             {

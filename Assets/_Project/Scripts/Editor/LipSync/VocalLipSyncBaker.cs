@@ -38,10 +38,11 @@ namespace Fbx2Vmd.LipSync
             }
 
             var go = new GameObject("~LipSyncBake");
+            uLipSync.BakedData data = null;
             try
             {
                 var analyzer = go.AddComponent<uLipSync.uLipSync>();
-                var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+                data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
                 data.profile = profile;
                 data.audioClip = clip;
                 data.bakedProfile = profile;
@@ -79,11 +80,18 @@ namespace Fbx2Vmd.LipSync
                     data.frames.Add(frame);
                 }
                 analyzer.OnBakeEnd();
-                return data;
+                var done = data;
+                data = null; // 소유권을 호출자에게 이전 — 반환값은 파괴하지 않는다
+                return done;
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(go);
+                // 분석 도중 예외로 빠진 비저장 인스턴스 누수를 막는다.
+                if (data != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(data);
+                }
             }
         }
 
@@ -106,7 +114,8 @@ namespace Fbx2Vmd.LipSync
             VRMBlendShapeProxy proxy,
             float minVolumeGate = 0.02f,
             IList<string> warnings = null,
-            float releaseDamp = 0f)
+            float releaseDamp = 0f,
+            float curveEpsilon = 0f)
         {
             if (data == null || !data.isValid)
             {
@@ -119,7 +128,8 @@ namespace Fbx2Vmd.LipSync
             var bindings = new List<ResolvedBinding>();
             if (proxy.BlendShapeAvatar.Clips == null)
             {
-                return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp, warnings);
+                return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp,
+                    warnings, curveEpsilon);
             }
             foreach (BlendShapeClip shapeClip in proxy.BlendShapeAvatar.Clips)
             {
@@ -147,7 +157,8 @@ namespace Fbx2Vmd.LipSync
                     });
                 }
             }
-            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp, warnings);
+            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp,
+                warnings, curveEpsilon);
         }
 
         /// <summary>
@@ -159,12 +170,14 @@ namespace Fbx2Vmd.LipSync
             GameObject characterRoot,
             float minVolumeGate = 0.02f,
             IList<string> warnings = null,
-            float releaseDamp = 0f)
+            float releaseDamp = 0f,
+            float curveEpsilon = 0f)
         {
             VRMBlendShapeProxy proxy = FindProxy(characterRoot);
             if (proxy != null)
             {
-                return BakeClip(data, proxy, minVolumeGate, warnings, releaseDamp);
+                return BakeClip(data, proxy, minVolumeGate, warnings, releaseDamp,
+                    curveEpsilon);
             }
             var bindings = ResolveVowelBindings(characterRoot);
             if (bindings.Count == 0)
@@ -186,7 +199,8 @@ namespace Fbx2Vmd.LipSync
                     warnings?.Add($"모음 모프를 찾지 못했습니다: {p}");
                 }
             }
-            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp, warnings);
+            return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp,
+                warnings, curveEpsilon);
         }
 
         /// <summary>
@@ -303,7 +317,8 @@ namespace Fbx2Vmd.LipSync
             List<ResolvedBinding> bindings,
             float minVolumeGate,
             float releaseDamp,
-            IList<string> warnings = null)
+            IList<string> warnings = null,
+            float curveEpsilon = 0f)
         {
             if (data == null || !data.isValid)
             {
@@ -314,74 +329,211 @@ namespace Fbx2Vmd.LipSync
                 frameRate = BakeFrameRate,
                 legacy = false,
             };
-            int curveCount = 0;
-            float maxValue = 0f;
-            foreach (ResolvedBinding b in bindings)
+            try
             {
-                var curve = BuildCurve(data, b.phoneme, b.weight, minVolumeGate, releaseDamp);
-                if (curve.length == 0)
+                // 게이트 상태는 모든 음소 커브가 공유해야 하므로 음량 열을 먼저 계산한다.
+                float[] vols = BuildGatedVolumes(data, minVolumeGate);
+                int curveCount = 0;
+                float maxValue = 0f;
+                foreach (ResolvedBinding b in bindings)
                 {
-                    continue;
+                    var curve = BuildCurve(data, vols, b.phoneme, b.weight, releaseDamp);
+                    curve = SimplifyCurve(curve, curveEpsilon);
+                    if (curve.length == 0)
+                    {
+                        continue;
+                    }
+                    clip.SetCurve(b.relativePath, typeof(SkinnedMeshRenderer),
+                        "blendShape." + b.shapeName, curve);
+                    curveCount++;
+                    foreach (Keyframe k in curve.keys)
+                    {
+                        maxValue = Mathf.Max(maxValue, Mathf.Abs(k.value));
+                    }
                 }
-                clip.SetCurve(b.relativePath, typeof(SkinnedMeshRenderer),
-                    "blendShape." + b.shapeName, curve);
-                curveCount++;
-                foreach (Keyframe k in curve.keys)
+                // 키는 있는데 값이 전부 0인 "빈 베이크"는 재생해도 입이 안 움직이므로 원인 추적 전에 알린다.
+                if (curveCount == 0)
                 {
-                    maxValue = Mathf.Max(maxValue, Mathf.Abs(k.value));
+                    warnings?.Add("베이크 결과 애니메이션 커브가 하나도 없습니다. 블렌드셰이프 바인딩을 확인하세요.");
                 }
+                else if (maxValue < 0.01f)
+                {
+                    warnings?.Add("베이크 결과 모든 모프 가중치가 0입니다. 입력이 무음이거나 음소 분석이 비어 있을 수 있습니다.");
+                }
+                return clip;
             }
-            // 키는 있는데 값이 전부 0인 "빈 베이크"는 재생해도 입이 안 움직이므로 원인 추적 전에 알린다.
-            if (curveCount == 0)
+            catch
             {
-                warnings?.Add("베이크 결과 애니메이션 커브가 하나도 없습니다. 블렌드셰이프 바인딩을 확인하세요.");
+                // 예외로 빠지면 미저장 클립이 누수된다(호출부는 vocal/data만 파괴).
+                UnityEngine.Object.DestroyImmediate(clip);
+                throw;
             }
-            else if (maxValue < 0.01f)
-            {
-                warnings?.Add("베이크 결과 모든 모프 가중치가 0입니다. 입력이 무음이거나 음소 분석이 비어 있을 수 있습니다.");
-            }
-            return clip;
         }
 
         /// <summary>
-        /// 한 음소의 시간축 커브를 만든다. 값 = 음소비율 × 정규화 음량 × 바인딩 가중치(0~100).
-        /// 게이트~2×게이트 구간은 소프트 니로 선형 감쇠해 경계 근처 노이즈 블립을 억제한다.
+        /// 슈미트 트리거 히스테리시스로 음량 열을 게이트한다 — 열림(>gate)과
+        /// 닫힘(<gate×0.5) 임계를 분리해 경계 음량에서 on/off가 진동하지 않는다.
+        /// 열림 상태에서 closeGate~kneeEnd(=2×gate) 구간은 닫힘 임계부터 원본 크기까지
+        /// 단조 증가하는 단일 램프로 감쇠한다(게이트 경계에서 출력이 튀지 않게).
+        /// 반환 배열은 모든 음소 커브가 공유하는 게이트 후 음량이다.
+        /// </summary>
+        internal static float[] BuildGatedVolumes(uLipSync.BakedData data,
+            float minVolumeGate)
+        {
+            var vols = new float[data.frames.Count];
+            float closeGate = minVolumeGate * 0.5f;
+            float kneeEnd = Mathf.Min(minVolumeGate * 2f, 1f);
+            float rampRange = Mathf.Max(kneeEnd - closeGate, 1e-6f);
+            bool open = false;
+            for (int i = 0; i < data.frames.Count; i++)
+            {
+                var frame = data.frames[i];
+                // 역직렬화/외부 생성 데이터는 phonemes가 null일 수 있다 — 음량만 필요하므로
+                // 직접 읽고 null이면 무음으로 본다.
+                float v = frame.volume;
+                if (frame.phonemes != null)
+                {
+                    v = uLipSync.BakedData.GetLipSyncInfo(frame).volume;
+                }
+                if (float.IsNaN(v) || float.IsInfinity(v))
+                {
+                    v = 0f;
+                }
+                if (open)
+                {
+                    if (v < closeGate)
+                    {
+                        open = false;
+                    }
+                }
+                else if (v > minVolumeGate)
+                {
+                    open = true;
+                }
+                if (!open)
+                {
+                    vols[i] = 0f;
+                    continue;
+                }
+                if (v < kneeEnd)
+                {
+                    // 소프트 니+히스테리시스 대역을 하나의 단조 램프로 —
+                    // closeGate에서 0, kneeEnd에서 원본 크기(v×1)에 도달한다.
+                    v *= Mathf.Max(0f, v - closeGate) / rampRange;
+                }
+                vols[i] = v;
+            }
+            return vols;
+        }
+
+        /// <summary>
+        /// 한 음소의 시간축 커브를 만든다. 값 = 음소비율 × 게이트 후 음량 × 바인딩 가중치(0~100).
         /// releaseDamp(0~0.95)가 0보다 크면 하강을 지수 감쇠해 잡음성 떨림과 급격한 입 닫힘을 완화한다.
         /// 어택은 즉시 추종해 발음 타이밍을 보존한다.
         /// </summary>
         private static AnimationCurve BuildCurve(
-            uLipSync.BakedData data, string phoneme, float bindingWeight,
-            float minVolumeGate, float releaseDamp)
+            uLipSync.BakedData data, float[] gatedVols, string phoneme,
+            float bindingWeight, float releaseDamp)
         {
             var keys = new List<Keyframe>();
             float dt = 1f / BakeFrameRate;
-            float kneeEnd = Mathf.Min(minVolumeGate * 2f, 1f);
-            float kneeRange = Mathf.Max(kneeEnd - minVolumeGate, 1e-6f);
             // 1.0은 영구 피크홀드라 입이 안 닫힌다 — 문서 계약(0~0.95)에 맞게 상한 클램프.
             float damp = Mathf.Clamp(releaseDamp, 0f, 0.95f);
             float smoothed = 0f;
             for (int i = 0; i < data.frames.Count; i++)
             {
-                var info = uLipSync.BakedData.GetLipSyncInfo(data.frames[i]);
-                float volume = info.volume;
-                if (volume <= minVolumeGate)
-                {
-                    volume = 0f;
-                }
-                else if (volume < kneeEnd)
-                {
-                    volume *= (volume - minVolumeGate) / kneeRange; // 소프트 니 감쇠
-                }
+                // phonemes가 null인 프레임(외부/역직렬화 데이터)은 음소비율 0으로 본다.
                 float ratio = 0f;
-                if (info.phonemeRatios != null)
+                if (data.frames[i].phonemes != null)
                 {
-                    info.phonemeRatios.TryGetValue(phoneme, out ratio);
+                    var info = uLipSync.BakedData.GetLipSyncInfo(data.frames[i]);
+                    info.phonemeRatios?.TryGetValue(phoneme, out ratio);
                 }
-                float raw = ratio * volume * bindingWeight;
+                float raw = ratio * gatedVols[i] * bindingWeight;
                 smoothed = Mathf.Max(raw, smoothed * damp);
                 keys.Add(new Keyframe(i * dt, smoothed));
             }
             return new AnimationCurve(keys.ToArray());
+        }
+
+        /// <summary>
+        /// Ramer–Douglas–Peucker 계열 키프레임 간소화 — 양 끝을 잇는 선분에서
+        /// 수직 오차가 epsilon을 넘는 최대 편차 키만 재귀적으로 남긴다.
+        /// 값 단위는 모프 가중치(0~100). epsilon 0이면 원본을 그대로 돌려준다.
+        /// </summary>
+        internal static AnimationCurve SimplifyCurve(AnimationCurve curve,
+            float epsilon)
+        {
+            if (curve == null || epsilon <= 0f || curve.length <= 2)
+            {
+                return curve;
+            }
+            var keys = curve.keys;
+            int n = keys.Length;
+            var keep = new bool[n];
+            keep[0] = keep[n - 1] = true;
+            var stack = new Stack<int>();
+            stack.Push(0);
+            stack.Push(n - 1);
+            while (stack.Count > 0)
+            {
+                int b = stack.Pop();
+                int a = stack.Pop();
+                if (b <= a + 1)
+                {
+                    continue;
+                }
+                float ta = keys[a].time, va = keys[a].value;
+                float tb = keys[b].time, vb = keys[b].value;
+                float span = Mathf.Max(tb - ta, 1e-9f);
+                int maxI = -1;
+                float maxErr = epsilon;
+                for (int i = a + 1; i < b; i++)
+                {
+                    float t = (keys[i].time - ta) / span;
+                    float chord = va + (vb - va) * t;
+                    float err = Mathf.Abs(keys[i].value - chord);
+                    if (err > maxErr)
+                    {
+                        maxErr = err;
+                        maxI = i;
+                    }
+                }
+                if (maxI < 0)
+                {
+                    continue;
+                }
+                keep[maxI] = true;
+                stack.Push(a);
+                stack.Push(maxI);
+                stack.Push(maxI);
+                stack.Push(b);
+            }
+            var outKeys = new List<Keyframe>(n);
+            for (int i = 0; i < n; i++)
+            {
+                if (keep[i])
+                {
+                    outKeys.Add(keys[i]);
+                }
+            }
+            // RDP 오차 상한은 선형 보간 기준 — 자동 스무딩 탄젠트면 평가값이
+            // 선분을 벗어나므로 남은 키 사이 기울기로 탄젠트를 고정한다.
+            for (int i = 0; i < outKeys.Count - 1; i++)
+            {
+                var a = outKeys[i];
+                var c = outKeys[i + 1];
+                float slope = (c.value - a.value)
+                    / Mathf.Max(c.time - a.time, 1e-9f);
+                a.outTangent = slope;
+                c.inTangent = slope;
+                outKeys[i] = a;
+                outKeys[i + 1] = c;
+            }
+            var result = new AnimationCurve(outKeys.ToArray());
+            result.preWrapMode = curve.preWrapMode;
+            result.postWrapMode = curve.postWrapMode;
+            return result;
         }
 
         /// <summary>VRM 프리셋에 대응하는 uLipSync 음소명을 돌려준다(역방향 맵).</summary>

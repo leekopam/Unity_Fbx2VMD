@@ -41,15 +41,21 @@ namespace Fbx2Vmd.LipSync
             public readonly string ensemblePreset;
             /// <summary>분리 보컬이 아니라 원곡을 이 패스 입력으로 쓸지 여부.</summary>
             public readonly bool useOriginalMix;
+            /// <summary>audio-separator 대신 실행할 python 스크립트의 프로젝트 상대 경로
+            /// (예: WPE 디리버브). 지정 시 model/ensemblePreset은 무시되고
+            /// `script --input X --output Y` 규약으로 실행한다.</summary>
+            public readonly string scriptRelPath;
 
             public CleanupStep(string model, string stemKeyword, string label,
-                string ensemblePreset = null, bool useOriginalMix = false)
+                string ensemblePreset = null, bool useOriginalMix = false,
+                string scriptRelPath = null)
             {
                 this.model = model;
                 this.stemKeyword = stemKeyword;
                 this.label = label;
                 this.ensemblePreset = ensemblePreset;
                 this.useOriginalMix = useOriginalMix;
+                this.scriptRelPath = scriptRelPath;
             }
         }
 
@@ -74,6 +80,21 @@ namespace Fbx2Vmd.LipSync
                 "dry", "노이즈 제거"),
         };
 
+        /// <summary>WPE 디리버브 스크립트의 프로젝트 상대 경로.</summary>
+        public const string WpeScriptRelPath = "Tools/LipSync/wpe_dereverb.py";
+
+        /// <summary>
+        /// 신경망 디리버브 대신 WPE(nara_wpe, 결정적 선형 예측)를 쓰는 정제 체인 변형.
+        /// 리드가 잔향으로 과인식돼 신경망이 보컬을 깎는 곡에서 사용한다.
+        /// </summary>
+        public static CleanupStep[] CleanupStepsWithWpe()
+        {
+            var steps = (CleanupStep[])DefaultCleanupSteps.Clone();
+            steps[1] = new CleanupStep(null, null, "잔향 제거(WPE)",
+                scriptRelPath: WpeScriptRelPath);
+            return steps;
+        }
+
         public sealed class Result
         {
             public bool success;
@@ -88,9 +109,12 @@ namespace Fbx2Vmd.LipSync
         /// <summary>
         /// 엔진별 CLI 인자열을 만든다. program은 python 또는 audio-separator 실행 파일.
         /// modelDir을 주면 모델 캐시를 그 폴더에 고정한다(audio-separator 전용).
+        /// highQuality이면 아키텍처가 지원하는 품질 옵션만 추가한다 — 우리 모델군은
+        /// 전부 MDX 아키텍처(RoFormer/멜밴드)라 vr_*/mdxc_* 플래그는 건드리지 않는다.
         /// </summary>
         public static string BuildArguments(Engine engine, string inputPath, string outputDir,
-            string model, string modelDir = null, string ensemblePreset = null)
+            string model, string modelDir = null, string ensemblePreset = null,
+            bool highQuality = false)
         {
             switch (engine)
             {
@@ -111,12 +135,16 @@ namespace Fbx2Vmd.LipSync
                             : " --model_filename " + Quote(model))
                         + (string.IsNullOrEmpty(modelDir)
                             ? string.Empty
-                            : " --model_file_dir " + Quote(modelDir));
+                            : " --model_file_dir " + Quote(modelDir))
+                        // mdx_overlap(0.001~0.999)은 예측 윈도 중첩 비율 — 높을수록 정확하지만 느리다.
+                        + (highQuality ? " --mdx_overlap 0.5" : string.Empty);
                 case Engine.Demucs:
                     return "-m demucs --two-stems=vocals"
-                        + " -n " + (string.IsNullOrEmpty(model) ? DefaultDemucsModel : model)
+                        + " -n " + Quote(string.IsNullOrEmpty(model) ? DefaultDemucsModel : model)
                         + " -o " + Quote(outputDir)
-                        + " " + Quote(inputPath);
+                        + " " + Quote(inputPath)
+                        // shifts는 랜덤 시프트 앙상블 횟수 — 1→2로 품질↑, 시간 2배.
+                        + (highQuality ? " --shifts 2" : string.Empty);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(engine));
             }
@@ -236,18 +264,20 @@ namespace Fbx2Vmd.LipSync
             string inputPath, string outputDir, string model,
             CancellationToken ct = default,
             IReadOnlyDictionary<string, string> env = null,
-            string modelDir = null, Action<float> onProgress = null)
+            string modelDir = null, Action<float> onProgress = null,
+            bool highQuality = false)
         {
             return Task.Run(() => Separate(
                 engine, pythonPath, inputPath, outputDir, model, ct, env, modelDir,
-                onProgress), ct);
+                onProgress, highQuality), ct);
         }
 
         public static Result Separate(Engine engine, string pythonPath,
             string inputPath, string outputDir, string model,
             CancellationToken ct = default,
             IReadOnlyDictionary<string, string> env = null,
-            string modelDir = null, Action<float> onProgress = null)
+            string modelDir = null, Action<float> onProgress = null,
+            bool highQuality = false)
         {
             var result = new Result();
             if (string.IsNullOrEmpty(pythonPath) || !File.Exists(pythonPath))
@@ -274,7 +304,8 @@ namespace Fbx2Vmd.LipSync
                 return result;
             }
 
-            string args = BuildArguments(engine, inputPath, outputDir, model, modelDir);
+            string args = BuildArguments(engine, inputPath, outputDir, model, modelDir,
+                highQuality: highQuality);
             // FAT32/exFAT의 mtime 2초 단위 때문에 실행 시각보다 살짝 여유를 둔다.
             DateTime runStartUtc = DateTime.UtcNow.AddSeconds(-2);
             int code = RunSync(pythonPath, args, outputDir, out string output,
@@ -282,6 +313,7 @@ namespace Fbx2Vmd.LipSync
             result.logTail = Tail(output, 4000);
             if (code != 0)
             {
+                ct.ThrowIfCancellationRequested(); // 취소로 죽은 프로세스는 실패가 아니라 취소로 보고
                 result.error = $"분리 실패(exit {code}):\n{result.logTail}";
                 return result;
             }
@@ -314,7 +346,9 @@ namespace Fbx2Vmd.LipSync
             Action<float> onProgress = null,
             Action<string> onStage = null,
             string originalMixPath = null,
-            string salvageSourcePath = null)
+            string salvageSourcePath = null,
+            bool highQuality = false,
+            string projectRoot = null)
         {
             var result = new Result();
             if (string.IsNullOrEmpty(pythonPath) || !File.Exists(pythonPath))
@@ -355,8 +389,29 @@ namespace Fbx2Vmd.LipSync
                     && !string.IsNullOrEmpty(originalMixPath)
                         ? Path.GetFullPath(originalMixPath)
                         : input;
-                string args = BuildArguments(Engine.AudioSeparator, stepInput, outputDir,
-                    step.model, modelDir, step.ensemblePreset);
+                string args;
+                string scriptOut = null;
+                if (step.scriptRelPath != null)
+                {
+                    // 스크립트 패스(WPE 등): --input/--output 규약으로 실행하고
+                    // 출력은 고정 경로라 스템명 해석을 건너뛴다.
+                    string scriptPath = Path.Combine(projectRoot ?? ".", step.scriptRelPath);
+                    if (!File.Exists(scriptPath))
+                    {
+                        result.error = $"정제 스크립트가 없습니다: {scriptPath}";
+                        result.logTail = Tail(log.ToString(), 4000);
+                        return result;
+                    }
+                    scriptOut = Path.Combine(outputDir, $"clean_pass{i + 1}_script.wav");
+                    args = Quote(scriptPath)
+                        + " --input " + Quote(stepInput)
+                        + " --output " + Quote(scriptOut);
+                }
+                else
+                {
+                    args = BuildArguments(Engine.AudioSeparator, stepInput, outputDir,
+                        step.model, modelDir, step.ensemblePreset, highQuality);
+                }
                 // 패스 진행률을 전체 체인 범위로 환산해 통지한다.
                 int pass = i;
                 int code = RunSync(pythonPath, args, outputDir, out string output,
@@ -373,7 +428,9 @@ namespace Fbx2Vmd.LipSync
                     return result;
                 }
 
-                input = ResolveStemOutput(outputDir, stepInput, step.stemKeyword, runStartUtc);
+                input = scriptOut != null && File.Exists(scriptOut)
+                    ? scriptOut
+                    : ResolveStemOutput(outputDir, stepInput, step.stemKeyword, runStartUtc);
                 if (input == null)
                 {
                     result.error = $"정제 패스({step.label})가 목표 스템 '{step.stemKeyword}'을 출력하지 못했습니다.";
@@ -430,11 +487,13 @@ namespace Fbx2Vmd.LipSync
             Action<float> onProgress = null,
             Action<string> onStage = null,
             string originalMixPath = null,
-            string salvageSourcePath = null)
+            string salvageSourcePath = null,
+            bool highQuality = false,
+            string projectRoot = null)
         {
             return Task.Run(() => CleanVocal(pythonPath, vocalPath, outputDir, steps,
                 ct, env, modelDir, onProgress, onStage,
-                originalMixPath, salvageSourcePath), ct);
+                originalMixPath, salvageSourcePath, highQuality, projectRoot), ct);
         }
 
         /// <summary>

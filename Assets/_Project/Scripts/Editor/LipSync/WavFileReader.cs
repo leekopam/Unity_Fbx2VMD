@@ -26,21 +26,26 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
-        /// <summary>순수 바이트 파서 — 테스트 가능.</summary>
-        public static AudioClip Parse(byte[] bytes, string clipName, out string error)
+        /// <summary>
+        /// 순수 바이트 파서 — Unity API를 쓰지 않아 워커 스레드에서도 호출 가능하다.
+        /// samples는 인터리브 float, channels/frequency는 포맷 정보.
+        /// </summary>
+        public static bool TryParseSamples(byte[] bytes, out float[] samples,
+            out int channels, out int frequency, out string error)
         {
+            samples = null;
+            channels = 0;
+            frequency = 0;
             error = string.Empty;
             if (bytes == null || bytes.Length < 44
                 || BitConverter.ToInt32(bytes, 0) != 0x46464952 // "RIFF"
                 || BitConverter.ToInt32(bytes, 8) != 0x45564157) // "WAVE"
             {
                 error = "RIFF/WAVE 형식이 아닙니다.";
-                return null;
+                return false;
             }
 
             int offset = 12;
-            int channels = 0;
-            int frequency = 0;
             int bitsPerSample = 0;
             int formatTag = 0; // 1=PCM, 3=float
             byte[] data = null;
@@ -84,11 +89,10 @@ namespace Fbx2Vmd.LipSync
             if (data == null || channels <= 0 || frequency <= 0)
             {
                 error = "fmt/data 청크가 없거나 손상됐습니다.";
-                return null;
+                return false;
             }
 
             int frameCount;
-            float[] samples;
             if (formatTag == 1 && bitsPerSample == 16)
             {
                 frameCount = data.Length / (2 * channels);
@@ -110,10 +114,40 @@ namespace Fbx2Vmd.LipSync
             else
             {
                 error = $"지원하지 않는 WAV 포맷(format=0x{formatTag & 0xFFFF:X4}, bits={bitsPerSample}). PCM16 또는 float32만 지원합니다.";
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>워커 스레드 안전 — 파일을 float 샘플로 읽는다(Unity API 미사용).</summary>
+        public static bool TryLoadSamples(string path, out float[] samples,
+            out int channels, out int frequency, out string error)
+        {
+            samples = null;
+            channels = 0;
+            frequency = 0;
+            try
+            {
+                return TryParseSamples(File.ReadAllBytes(path),
+                    out samples, out channels, out frequency, out error);
+            }
+            catch (Exception e)
+            {
+                error = $"WAV 읽기 실패: {e.Message}";
+                return false;
+            }
+        }
+
+        /// <summary>순수 바이트 파서 — 테스트 가능.</summary>
+        public static AudioClip Parse(byte[] bytes, string clipName, out string error)
+        {
+            if (!TryParseSamples(bytes, out float[] samples,
+                    out int channels, out int frequency, out error))
+            {
                 return null;
             }
-
-            var clip = AudioClip.Create(clipName, frameCount, channels, frequency, false);
+            var clip = AudioClip.Create(clipName,
+                samples.Length / channels, channels, frequency, false);
             clip.SetData(samples, 0);
             return clip;
         }

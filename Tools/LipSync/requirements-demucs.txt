@@ -1,1 +1,9 @@
 demucs==4.1.0
+# wav2vec2 음소 추출은 어떤 엔진 venv에서도 동작해야 하므로 동일하게 포함한다.
+librosa>=0.10,<1.0
+transformers==5.19.0
+silero-vad>=6.0,<7
+pyloudnorm>=0.1.1
+onnx>=1.16
+onnxruntime>=1.17
+onnxscript>=0.1

@@ -249,6 +249,7 @@ namespace Fbx2Vmd.LipSync
                 result.logTail = Tail(output);
                 if (code != 0)
                 {
+                    ct.ThrowIfCancellationRequested();
                     result.error = $"venv 생성 실패(exit {code}):\n{result.logTail}";
                     return result;
                 }
@@ -265,12 +266,14 @@ namespace Fbx2Vmd.LipSync
             result.logTail = Tail(installLog);
             if (installCode != 0)
             {
+                ct.ThrowIfCancellationRequested();
                 result.error = $"패키지 설치 실패(exit {installCode}):\n{result.logTail}";
                 return result;
             }
 
             if (!ImportCheck(engine, pyExe, env, ct, out string importOutput))
             {
+                ct.ThrowIfCancellationRequested(); // 체크 중 취소는 실패가 아니라 취소로 보고
                 result.error = "설치 후 import 검증 실패:\n" + Tail(importOutput);
                 return result;
             }

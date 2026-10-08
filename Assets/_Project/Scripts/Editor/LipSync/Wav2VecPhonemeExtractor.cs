@@ -36,11 +36,14 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
-        /// <summary>추출 스크립트를 동기 실행해 CSV를 만든다. 성공 시 true.</summary>
+        /// <summary>추출 스크립트를 동기 실행해 CSV를 만든다. 성공 시 true.
+        /// lyricsPath가 있으면 CTC 강제 정렬로 음소 오류를 제거한다
+        /// (일본어 모델은 가나 가사, 한국어는 한글 가사, 영어는 IPA 표기 가사 필요).</summary>
         public static bool Extract(string pythonPath, string projectRoot,
             string wavPath, string outputCsv, string model,
             IReadOnlyDictionary<string, string> env,
-            CancellationToken ct, Action<float> onProgress, out string error)
+            CancellationToken ct, Action<float> onProgress, out string error,
+            string lyricsPath = null)
         {
             error = null;
             string script = Path.Combine(projectRoot, ScriptRelPath.Replace('/', '\\'));
@@ -55,7 +58,10 @@ namespace Fbx2Vmd.LipSync
             string args = Quote(script)
                 + " " + Quote(wavPath)
                 + " --model " + Quote(string.IsNullOrEmpty(model) ? DefaultModel : model)
-                + " --output " + Quote(outputCsv);
+                + " --output " + Quote(outputCsv)
+                + (string.IsNullOrEmpty(lyricsPath) || !File.Exists(lyricsPath)
+                    ? string.Empty
+                    : " --lyrics " + Quote(Path.GetFullPath(lyricsPath)));
             int code = VocalStemSeparator.RunSync(pythonPath, args,
                 Path.GetDirectoryName(outputCsv), out string log,
                 3600, ct, env, onProgress);
@@ -75,12 +81,13 @@ namespace Fbx2Vmd.LipSync
         public static Task<(bool ok, string error)> ExtractAsync(
             string pythonPath, string projectRoot, string wavPath, string outputCsv,
             string model, IReadOnlyDictionary<string, string> env,
-            CancellationToken ct, Action<float> onProgress)
+            CancellationToken ct, Action<float> onProgress,
+            string lyricsPath = null)
         {
             return Task.Run(() =>
             {
                 bool ok = Extract(pythonPath, projectRoot, wavPath, outputCsv,
-                    model, env, ct, onProgress, out string extractError);
+                    model, env, ct, onProgress, out string extractError, lyricsPath);
                 return (ok, extractError);
             }, ct);
         }
