@@ -109,20 +109,30 @@ def main():
     from transformers import AutoFeatureExtractor, Wav2Vec2ForCTC
 
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
+    print("10% 모델 로딩", flush=True)
     extractor = AutoFeatureExtractor.from_pretrained(args.model)
     model = Wav2Vec2ForCTC.from_pretrained(args.model).to(device).eval()
     with open(hf_hub_download(args.model, "vocab.json"), encoding="utf-8") as f:
         vocab = json.load(f)
     id2tok = {v: k for k, v in vocab.items()}
-    pad_id = vocab.get("<pad>", 0)
+    # CTC blank 인덱스는 모델 config의 pad_token_id가 정본이다 — 모델마다
+    # "<pad>"(0번)와 "[PAD]"(끝 인덱스, kresnik 한국어=1204)로 어휘 표기가 달라
+    # 어휘 조회만으로는 blank를 못 지울 수 있다.
+    pad_id = getattr(model.config, "pad_token_id", None)
+    if pad_id is None:
+        pad_id = next((vocab[k] for k in ("<pad>", "[PAD]", "[pad]", "<PAD>")
+                       if k in vocab), 0)
+    print("35% 추론 시작", flush=True)
     vocab_kind = _vocab_kind(vocab)
     kana_map = _kana_groups() if vocab_kind == "kana" else {}
 
     wav, _ = librosa.load(args.input, sr=16000, mono=True)
     inputs = extractor(wav, sampling_rate=16000, return_tensors="pt")
+    print("40% wav2vec2 추론", flush=True)
     with torch.no_grad():
         logits = model(inputs.input_values.to(device)).logits[0]
     probs = torch.softmax(logits, dim=-1)
+    print("80% 모음 그룹 집계", flush=True)
     # CTC blank(<pad>)이 대부분 프레임을 지배해 모음 확률이 0으로 눌린다.
     # blank를 빼고 나머지 토큰으로 재정규화해 모음 비율이 살아나게 한다.
     probs[:, pad_id] = 0.0
@@ -161,6 +171,7 @@ def main():
         if seg.size:
             vols[i] = float(np.sqrt(np.mean(seg ** 2)))
 
+    print("95% CSV 기록", flush=True)
     with open(args.output, "w", newline="", encoding="utf-8") as f:
         f.write(json.dumps({"model": args.model, "sr": 16000,
                             "fps": 16000.0 / stride}) + "\n")

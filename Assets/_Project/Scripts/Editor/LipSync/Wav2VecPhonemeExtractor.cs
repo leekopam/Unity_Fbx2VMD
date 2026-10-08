@@ -58,7 +58,9 @@ namespace Fbx2Vmd.LipSync
                 + " --output " + Quote(outputCsv);
             int code = VocalStemSeparator.RunSync(pythonPath, args,
                 Path.GetDirectoryName(outputCsv), out string log,
-                1800, ct, env, onProgress);
+                3600, ct, env, onProgress);
+            // 취소된 실행을 "추출 실패(exit -1)"로 보고하지 않게 취소를 전파한다.
+            ct.ThrowIfCancellationRequested();
             if (code != 0 || !File.Exists(outputCsv))
             {
                 int tail = log != null && log.Length > 800 ? log.Length - 800 : 0;

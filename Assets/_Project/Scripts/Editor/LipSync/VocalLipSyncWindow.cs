@@ -40,6 +40,8 @@ namespace Fbx2Vmd.LipSync
         private Task<VocalStemSeparator.Result> _cleaning;
         private Task<(bool ok, string error)> _extracting;
         private string _extractCsvPath;
+        private string _extractWavPath; // 추출 시작 시점의 보컬 경로 스냅샷
+        private string _extractOutputDir;
         private string _cleanStage = ""; // 정제 체인 현재 패스 라벨
         private Task<PythonEnvProvisioner.Result> _provisioning;
         private System.Threading.CancellationTokenSource _cts;
@@ -297,7 +299,8 @@ namespace Fbx2Vmd.LipSync
             }
             EditorGUILayout.BeginHorizontal();
             using (new EditorGUI.DisabledScope(
-                _provisioning != null || _separating != null || _cleaning != null))
+                _provisioning != null || _separating != null || _cleaning != null
+                || _extracting != null))
             {
                 _pythonPath = EditorGUILayout.TextField("python 경로", _pythonPath);
                 if (GUILayout.Button("환경 자동 준비", GUILayout.Width(100)))
@@ -322,7 +325,8 @@ namespace Fbx2Vmd.LipSync
             EditorGUILayout.EndHorizontal();
 
             using (new EditorGUI.DisabledScope(
-                _separating != null || _cleaning != null || _provisioning != null))
+                _separating != null || _cleaning != null || _provisioning != null
+                || _extracting != null))
             {
                 if (GUILayout.Button("보컬/BGM 분리"))
                 {
@@ -395,7 +399,8 @@ namespace Fbx2Vmd.LipSync
             }
 
             using (new EditorGUI.DisabledScope(
-                _separating != null || _cleaning != null || _extracting != null))
+                _separating != null || _cleaning != null || _extracting != null
+                || _provisioning != null))
             {
                 if (GUILayout.Button("립싱크 베이크 + 클립 저장"))
                 {
@@ -457,7 +462,8 @@ namespace Fbx2Vmd.LipSync
 
         private void StartProvisioning(bool separateAfter)
         {
-            if (_provisioning != null || _separating != null || _cleaning != null)
+            if (_provisioning != null || _separating != null || _cleaning != null
+                || _extracting != null)
             {
                 return; // 진행 중 재진입 — 실행 중 Task의 CTS 폐기·동시 설치 방지
             }
@@ -478,6 +484,12 @@ namespace Fbx2Vmd.LipSync
 
         private void StartSeparation()
         {
+            // 실행 중 Task의 CTS를 RenewCts가 폐기하므로 동시 실행은 차단한다.
+            if (_provisioning != null || _separating != null || _cleaning != null
+                || _extracting != null)
+            {
+                return;
+            }
             if (string.IsNullOrEmpty(_sourceAudioPath) || !File.Exists(_sourceAudioPath))
             {
                 SetMessage("원본 음원 파일이 없습니다.", MessageType.Error);
@@ -535,6 +547,12 @@ namespace Fbx2Vmd.LipSync
         {
             try
             {
+                // 실행 중 Task의 CTS를 공유하므로 동시 실행은 차단한다.
+                if (_provisioning != null || _separating != null || _cleaning != null
+                    || _extracting != null)
+                {
+                    return;
+                }
                 if (!File.Exists(_vocalWavPath))
                 {
                     SetMessage("보컬 WAV가 없습니다.", MessageType.Error);
@@ -560,6 +578,10 @@ namespace Fbx2Vmd.LipSync
                         SetMessage("python 경로가 없습니다. 환경 준비를 먼저 실행하세요.", MessageType.Error);
                         return;
                     }
+                    // 추출 중 경로 편집으로 "구 wav의 CSV + 신 wav의 이름/길이"가
+                    // 섞이지 않게 시작 시점 값을 스냅샷한다.
+                    _extractWavPath = _vocalWavPath;
+                    _extractOutputDir = _outputDir;
                     _extractCsvPath = Path.Combine(_outputDir,
                         Path.GetFileNameWithoutExtension(_vocalWavPath) + "_phonemes.csv");
                     Directory.CreateDirectory(_outputDir);
@@ -581,7 +603,8 @@ namespace Fbx2Vmd.LipSync
                     SetMessage(wavError, MessageType.Error);
                     return;
                 }
-                FinishBake(vocal, VocalLipSyncBaker.BakeAnalysis(vocal, _profile));
+                FinishBake(vocal, VocalLipSyncBaker.BakeAnalysis(vocal, _profile),
+                    _vocalWavPath, _outputDir);
             }
             catch (System.Exception error)
             {
@@ -594,17 +617,20 @@ namespace Fbx2Vmd.LipSync
         private void FinishWav2VecBake()
         {
             AudioClip vocal = null;
+            BakedData data = null;
             try
             {
-                vocal = WavFileReader.Load(_vocalWavPath, out string wavError);
+                vocal = WavFileReader.Load(_extractWavPath, out string wavError);
                 if (vocal == null)
                 {
                     SetMessage(wavError, MessageType.Error);
                     return;
                 }
-                var data = Wav2VecPhonemeExtractor.CsvToBakedData(
+                data = Wav2VecPhonemeExtractor.CsvToBakedData(
                     File.ReadAllText(_extractCsvPath), vocal.length);
-                FinishBake(vocal, data);
+                FinishBake(vocal, data, _extractWavPath, _extractOutputDir);
+                vocal = null;
+                data = null; // FinishBake가 파괴했으므로 소유권 해제
             }
             catch (System.Exception error)
             {
@@ -612,21 +638,26 @@ namespace Fbx2Vmd.LipSync
                 {
                     DestroyImmediate(vocal);
                 }
+                if (data != null)
+                {
+                    DestroyImmediate(data);
+                }
                 SetMessage("음소 변환/베이크 실패: " + error.Message, MessageType.Error);
                 Debug.LogException(error);
             }
         }
 
         /// <summary>분석 결과(BakedData)를 클립으로 굽고 에셋으로 저장한다(두 분석 경로 공용).</summary>
-        private void FinishBake(AudioClip vocal, BakedData data)
+        private void FinishBake(AudioClip vocal, BakedData data,
+            string clipNameSource, string outputDir)
         {
             var warnings = new System.Collections.Generic.List<string>();
             // VRM 프록시가 없는 모델(MMD 등)은 모음 모프명을 스캔해 자동 바인딩한다.
             AnimationClip clip = VocalLipSyncBaker.BakeClip(
                 data, _targetCharacter, _minVolumeGate, warnings, _releaseDamp);
-            clip.name = Path.GetFileNameWithoutExtension(_vocalWavPath) + "_lipsync";
+            clip.name = Path.GetFileNameWithoutExtension(clipNameSource) + "_lipsync";
 
-            string saveDir = Path.Combine(_outputDir, "clips");
+            string saveDir = Path.Combine(outputDir, "clips");
             Directory.CreateDirectory(saveDir);
             string assetPath = AssetDatabase.GenerateUniqueAssetPath(
                 Path.Combine(saveDir, clip.name + ".anim").Replace('\\', '/'));
