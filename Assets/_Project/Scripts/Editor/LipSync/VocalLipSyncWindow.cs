@@ -398,6 +398,29 @@ namespace Fbx2Vmd.LipSync
                 DrawPathRow("정제 전 보컬", ref _rawVocalWavPath, "정제 전 보컬 wav", "wav",
                     preview: true);
             }
+            // 정제 Task는 비직렬화라 창 닫힘/도메인 리로드로 소실되면
+            // 정제 전 보컬만 남고 보컬 WAV가 영구히 빈 상태로 고착된다 — 복구 경로를 둔다.
+            if (string.IsNullOrEmpty(_vocalWavPath)
+                && !string.IsNullOrEmpty(_rawVocalWavPath)
+                && _cleaning == null && _separating == null
+                && _provisioning == null && _extracting == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "보컬 정제가 완료되지 않았습니다(창 닫힘/재컴파일로 중단).", MessageType.Warning);
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("정제 결과 채택/재시도"))
+                {
+                    if (!TryAdoptCleanedVocal())
+                    {
+                        StartCleanup();
+                    }
+                }
+                if (GUILayout.Button("정제 전 보컬 사용"))
+                {
+                    _vocalWavPath = _rawVocalWavPath;
+                }
+                EditorGUILayout.EndHorizontal();
+            }
             _profile = (Profile)EditorGUILayout.ObjectField("uLipSync 프로필", _profile, typeof(Profile), false);
             EditorGUILayout.BeginHorizontal();
             _targetCharacter = (GameObject)EditorGUILayout.ObjectField(
@@ -573,20 +596,60 @@ namespace Fbx2Vmd.LipSync
         /// <summary>분리된 보컬에 정제 체인(디리버브→코러스 제거→디노이즈)을 돌린다.</summary>
         private void StartCleanup()
         {
+            // 도메인 리로드/창 재오픈 후 재시도되면 스냅샷·CTS가 비어 있거나
+            // 취소된 상태일 수 있으므로 현재 필드로 폴백하고 CTS는 새로 발급한다.
+            if (_cts == null || _cts.IsCancellationRequested)
+            {
+                RenewCts();
+            }
+            bool resumed = _sepSourcePath == null;
+            string outputDir = resumed ? _outputDir : _sepOutputDir;
+            string pythonPath = resumed ? _pythonPath : _sepPythonPath;
+            bool wpe = resumed ? _wpeDereverb : _sepWpe;
+            bool highQuality = resumed ? _highQualitySeparation : _sepHighQuality;
             _sepProgress = 0f;
             _cleanStage = "";
             _cleaning = VocalStemSeparator.CleanVocalAsync(
-                _sepPythonPath, _rawVocalWavPath, _sepOutputDir,
-                _sepWpe ? VocalStemSeparator.CleanupStepsWithWpe() : null,
+                pythonPath, _rawVocalWavPath, outputDir,
+                wpe ? VocalStemSeparator.CleanupStepsWithWpe() : null,
                 _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
                 PythonEnvProvisioner.ModelsDir(ProjectRoot),
                 p => _sepProgress = p,
                 s => _cleanStage = s,
-                originalMixPath: _sepSourcePath,
+                originalMixPath: resumed ? _sourceAudioPath : _sepSourcePath,
                 salvageSourcePath: _rawVocalWavPath,
-                highQuality: _sepHighQuality,
+                highQuality: highQuality,
                 projectRoot: ProjectRoot);
             SetMessage("분리 완료 — 보컬 정제(잔향/코러스/노이즈) 중...", MessageType.Info);
+        }
+
+        /// <summary>중단된 정제의 최종 산출물(_vocal_lead/_vocal_clean)이 디스크에 남아 있으면 채택한다.</summary>
+        private bool TryAdoptCleanedVocal()
+        {
+            if (string.IsNullOrEmpty(_rawVocalWavPath) || !File.Exists(_rawVocalWavPath))
+            {
+                return false;
+            }
+            string baseName = Path.GetFileNameWithoutExtension(_rawVocalWavPath);
+            if (baseName.Length > 60)
+            {
+                baseName = baseName.Substring(0, 60);
+            }
+            string outputDir = _sepOutputDir ?? _outputDir;
+            // 이전 실행/동명 곡의 낡은 산출물을 채택하지 않게 원시 보컬보다 나중에 쓰인 파일만 인정한다.
+            DateTime rawWriteUtc = File.GetLastWriteTimeUtc(_rawVocalWavPath);
+            foreach (string suffix in new[] { "_vocal_lead.wav", "_vocal_clean.wav" })
+            {
+                string candidate = Path.Combine(outputDir, baseName + suffix);
+                if (File.Exists(candidate)
+                    && File.GetLastWriteTimeUtc(candidate) >= rawWriteUtc)
+                {
+                    _vocalWavPath = candidate;
+                    SetMessage($"정제 산출물 채택: {Path.GetFileName(candidate)}", MessageType.Info);
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void Bake()
