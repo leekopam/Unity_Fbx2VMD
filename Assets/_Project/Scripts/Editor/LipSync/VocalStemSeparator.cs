@@ -309,7 +309,8 @@ namespace Fbx2Vmd.LipSync
             // FAT32/exFAT의 mtime 2초 단위 때문에 실행 시각보다 살짝 여유를 둔다.
             DateTime runStartUtc = DateTime.UtcNow.AddSeconds(-2);
             int code = RunSync(pythonPath, args, outputDir, out string output,
-                timeoutSec: 3600, ct: ct, env: env, onProgress: onProgress);
+                timeoutSec: 3600, ct: ct, env: env, onProgress: onProgress,
+                orphanPurpose: "separate", orphanKey: inputPath);
             result.logTail = Tail(output, 4000);
             if (code != 0)
             {
@@ -377,6 +378,8 @@ namespace Fbx2Vmd.LipSync
             }
 
             string input = Path.GetFullPath(vocalPath);
+            // 정제 체인의 모든 패스가 같은 고아 마커 키를 쓰도록 작업 키는 최초 입력으로 고정한다.
+            string orphanJobKey = input;
             var log = new StringBuilder();
             for (int i = 0; i < steps.Length; i++)
             {
@@ -418,7 +421,8 @@ namespace Fbx2Vmd.LipSync
                     timeoutSec: 3600, ct: ct, env: env,
                     onProgress: onProgress == null
                         ? null
-                        : p => onProgress((pass + p) / steps.Length));
+                        : p => onProgress((pass + p) / steps.Length),
+                    orphanPurpose: "clean", orphanKey: orphanJobKey);
                 log.AppendLine(output);
                 if (code != 0)
                 {
@@ -568,7 +572,8 @@ namespace Fbx2Vmd.LipSync
         internal static int RunSync(string program, string arguments, string workDir,
             out string output, int timeoutSec, CancellationToken ct = default,
             IReadOnlyDictionary<string, string> env = null,
-            Action<float> onProgress = null)
+            Action<float> onProgress = null,
+            string orphanPurpose = null, string orphanKey = null)
         {
             var startInfo = new ProcessStartInfo
             {
@@ -595,40 +600,57 @@ namespace Fbx2Vmd.LipSync
             {
                 using (var process = Process.Start(startInfo))
                 {
-                    // stdout/stderr를 동시에 비동기로 읽어 버퍼 데드락을 막는다.
-                    // 두 핸들러는 별도 스레드에서 오므로 Append는 lock으로 직렬화한다.
-                    process.OutputDataReceived += (s, e) =>
+                    // 도메인 리로드·창 닫힘으로 관리 Task가 소실돼도
+                    // 생존 프로세스를 추적할 수 있게 마커에 남긴다.
+                    if (orphanPurpose != null)
                     {
-                        if (e.Data == null) return;
-                        lock (sbLock) sb.AppendLine(e.Data);
-                        ReportProgress(e.Data, onProgress);
-                    };
-                    process.ErrorDataReceived += (s, e) =>
+                        VocalOrphanedProcessGuard.Register(
+                            process, orphanPurpose, orphanKey);
+                    }
+                    try
                     {
-                        if (e.Data == null) return;
-                        lock (sbLock) sb.AppendLine(e.Data);
-                        ReportProgress(e.Data, onProgress);
-                    };
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-                    using (ct.Register(() => TryKill(process)))
-                    {
-                        if (!process.WaitForExit(timeoutSec * 1000))
+                        // stdout/stderr를 동시에 비동기로 읽어 버퍼 데드락을 막는다.
+                        // 두 핸들러는 별도 스레드에서 오므로 Append는 lock으로 직렬화한다.
+                        process.OutputDataReceived += (s, e) =>
                         {
-                            TryKill(process);
-                            lock (sbLock) output = sb + "\n[timeout]";
+                            if (e.Data == null) return;
+                            lock (sbLock) sb.AppendLine(e.Data);
+                            ReportProgress(e.Data, onProgress);
+                        };
+                        process.ErrorDataReceived += (s, e) =>
+                        {
+                            if (e.Data == null) return;
+                            lock (sbLock) sb.AppendLine(e.Data);
+                            ReportProgress(e.Data, onProgress);
+                        };
+                        process.BeginOutputReadLine();
+                        process.BeginErrorReadLine();
+                        using (ct.Register(() => TryKill(process)))
+                        {
+                            if (!process.WaitForExit(timeoutSec * 1000))
+                            {
+                                TryKill(process);
+                                lock (sbLock) output = sb + "\n[timeout]";
+                                return -1;
+                            }
+                        }
+                        // 비동기 출력 핸들러의 잔여 라인까지 플러시되길 한 번 더 기다린다.
+                        process.WaitForExit();
+                        lock (sbLock) output = sb.ToString();
+                        if (ct.IsCancellationRequested)
+                        {
+                            output += "\n[cancelled]";
                             return -1;
                         }
+                        return process.ExitCode;
                     }
-                    // 비동기 출력 핸들러의 잔여 라인까지 플러시되길 한 번 더 기다린다.
-                    process.WaitForExit();
-                    lock (sbLock) output = sb.ToString();
-                    if (ct.IsCancellationRequested)
+                    finally
                     {
-                        output += "\n[cancelled]";
-                        return -1;
+                        if (orphanPurpose != null && process != null)
+                        {
+                            VocalOrphanedProcessGuard.Unregister(process.Id);
+                        }
                     }
-                    return process.ExitCode;
                 }
             }
             catch (OperationCanceledException)
@@ -666,7 +688,7 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
-        private static void TryKill(Process process)
+        internal static void TryKill(Process process)
         {
             try
             {

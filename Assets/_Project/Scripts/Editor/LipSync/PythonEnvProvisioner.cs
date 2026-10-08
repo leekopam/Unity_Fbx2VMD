@@ -245,7 +245,8 @@ namespace Fbx2Vmd.LipSync
                 string venvArgs = (prefixArgs.Length > 0 ? prefixArgs + " " : "")
                     + "-m venv \"" + venv + "\"";
                 int code = VocalStemSeparator.RunSync(program, venvArgs, null,
-                    out string output, 180, ct, env);
+                    out string output, 180, ct, env,
+                    orphanPurpose: "provision", orphanKey: venv);
                 result.logTail = Tail(output);
                 if (code != 0)
                 {
@@ -255,14 +256,16 @@ namespace Fbx2Vmd.LipSync
                 }
                 // 구형 pip는 최신 wheel 태그를 못 읽을 수 있어 먼저 올린다(실패해도 계속).
                 VocalStemSeparator.RunSync(pyExe,
-                    "-m pip install --upgrade pip", null, out _, 300, ct, env);
+                    "-m pip install --upgrade pip", null, out _, 300, ct, env,
+                    orphanPurpose: "provision", orphanKey: venv);
             }
 
             ct.ThrowIfCancellationRequested();
 
             int installCode = VocalStemSeparator.RunSync(pyExe,
                 "-m pip install -r \"" + reqPath + "\"", null,
-                out string installLog, 3600, ct, env);
+                out string installLog, 3600, ct, env,
+                orphanPurpose: "provision", orphanKey: venv);
             result.logTail = Tail(installLog);
             if (installCode != 0)
             {
@@ -325,7 +328,8 @@ namespace Fbx2Vmd.LipSync
                 + " torchvision==" + GpuTorchVisionVersion
                 + " torchaudio==" + GpuTorchAudioVersion
                 + " --index-url " + GpuTorchIndexUrl,
-                null, out string installLog, 3600, ct, env);
+                null, out string installLog, 3600, ct, env,
+                orphanPurpose: "provision", orphanKey: pyExe);
             if (IsTorchCudaAvailable(pyExe, env, ct))
             {
                 File.WriteAllText(marker, "cuda\n");

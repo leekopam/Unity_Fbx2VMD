@@ -68,7 +68,8 @@ namespace Fbx2Vmd.LipSync
                     ? "" : " --artist \"" + artist.Replace("\"", "") + "\"");
             int code = VocalStemSeparator.RunSync(pythonPath, args,
                 Path.GetDirectoryName(Path.GetFullPath(outBase)),
-                out string log, 120, ct);
+                out string log, 120, ct,
+                orphanPurpose: "lyrics", orphanKey: audioPath);
             ct.ThrowIfCancellationRequested();
             if (!File.Exists(jsonPath))
             {

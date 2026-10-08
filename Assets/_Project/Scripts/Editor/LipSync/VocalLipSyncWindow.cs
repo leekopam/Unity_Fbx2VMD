@@ -69,6 +69,10 @@ namespace Fbx2Vmd.LipSync
         private string _message = "";
         private MessageType _messageType = MessageType.Info;
         private float _sepProgress; // 분리 진행률 0~1 (워커 스레드에서 갱신)
+        // 이전 도메인이 남긴 고아 프로세스 감시 — Task는 소실돼도 프로세스는 살아 있을 수 있다.
+        private System.Diagnostics.Process _orphanSepProc;
+        private VocalOrphanedProcessGuard.Entry _orphanSepEntry;
+        private System.Diagnostics.Process _orphanCleanProc;
 
         /// <summary>프로젝트 루트 — Assets의 부모.</summary>
         private static string ProjectRoot =>
@@ -95,6 +99,33 @@ namespace Fbx2Vmd.LipSync
             {
                 _profile = AssetDatabase.LoadAssetAtPath<Profile>(DefaultProfilePath);
             }
+            WatchOrphanedProcesses();
+        }
+
+        /// <summary>재컴파일·창 닫힘으로 관리 Task가 소실된 뒤에도 외부 프로세스는
+        /// 계속 돌 수 있다 — 마커에 같은 작업의 생존 프로세스가 있으면
+        /// 중복 실행 대신 완료 폴링을 붙여 채택 경로로 연결한다.</summary>
+        private void WatchOrphanedProcesses()
+        {
+            if (string.IsNullOrEmpty(_vocalWavPath)
+                && !string.IsNullOrEmpty(_rawVocalWavPath)
+                && VocalOrphanedProcessGuard.TryFindLive(
+                    "clean", Path.GetFullPath(_rawVocalWavPath),
+                    out VocalOrphanedProcessGuard.Entry cleanOrphan))
+            {
+                _orphanCleanProc?.Dispose();
+                VocalOrphanedProcessGuard.TryAttach(
+                    cleanOrphan.Pid, cleanOrphan.StartedUtc, out _orphanCleanProc);
+            }
+            if (!string.IsNullOrEmpty(_sourceAudioPath)
+                && VocalOrphanedProcessGuard.TryFindLive(
+                    "separate", Path.GetFullPath(_sourceAudioPath),
+                    out VocalOrphanedProcessGuard.Entry sepOrphan)
+                && VocalOrphanedProcessGuard.TryAttach(
+                    sepOrphan.Pid, sepOrphan.StartedUtc, out _orphanSepProc))
+            {
+                _orphanSepEntry = sepOrphan;
+            }
         }
 
         private void OnDisable()
@@ -102,6 +133,11 @@ namespace Fbx2Vmd.LipSync
             _cts?.Cancel();
             _cts?.Dispose();
             _cts = null; // 재비활성화 시 disposed CTS의 Cancel이 ObjectDisposedException을 던진다.
+            _orphanSepProc?.Dispose();
+            _orphanSepProc = null;
+            _orphanSepEntry = null;
+            _orphanCleanProc?.Dispose();
+            _orphanCleanProc = null;
             LipSyncClipPreview.Stop();
             StemAudioPreview.Stop();
             EditorUtility.ClearProgressBar();
@@ -273,6 +309,27 @@ namespace Fbx2Vmd.LipSync
                     FinishWav2VecBake();
                 }
             }
+            // 고아 프로세스 완료 폴링 — Task가 소실돼도 프로세스 종료를 감지해 결과를 채택한다.
+            if (_orphanCleanProc != null && !IsOrphanRunning(_orphanCleanProc))
+            {
+                _orphanCleanProc.Dispose();
+                _orphanCleanProc = null;
+                if (string.IsNullOrEmpty(_vocalWavPath) && TryAdoptCleanedVocal())
+                {
+                    SetMessage("이전 정제 프로세스 완료 — 결과를 채택했습니다.", MessageType.Info);
+                }
+                else
+                {
+                    SetMessage("이전 정제 프로세스가 종료됐으나 산출물을 찾지 못했습니다.",
+                        MessageType.Warning);
+                }
+            }
+            if (_orphanSepProc != null && !IsOrphanRunning(_orphanSepProc))
+            {
+                _orphanSepProc.Dispose();
+                _orphanSepProc = null;
+                TryAdoptSeparated();
+            }
             // 미리듣기가 자연 종료하면 버튼 라벨을 "듣기"로 되돌린다.
             if (StemAudioPreview.ClearIfFinished())
             {
@@ -428,7 +485,13 @@ namespace Fbx2Vmd.LipSync
             }
             // 정제 Task는 비직렬화라 창 닫힘/도메인 리로드로 소실되면
             // 정제 전 보컬만 남고 보컬 WAV가 영구히 빈 상태로 고착된다 — 복구 경로를 둔다.
-            if (string.IsNullOrEmpty(_vocalWavPath)
+            if (IsOrphanRunning(_orphanCleanProc))
+            {
+                EditorGUILayout.HelpBox(
+                    "이전 정제 프로세스가 계속 실행 중입니다 — 완료되면 결과를 확인합니다.",
+                    MessageType.Info);
+            }
+            else if (string.IsNullOrEmpty(_vocalWavPath)
                 && !string.IsNullOrEmpty(_rawVocalWavPath)
                 && _cleaning == null && _separating == null
                 && _provisioning == null && _extracting == null)
@@ -438,7 +501,7 @@ namespace Fbx2Vmd.LipSync
                 EditorGUILayout.BeginHorizontal();
                 if (GUILayout.Button("정제 결과 채택/재시도"))
                 {
-                    if (!TryAdoptCleanedVocal())
+                    if (!TryAdoptCleanedVocal() && !TryWatchLiveOrphan())
                     {
                         StartCleanup();
                     }
@@ -629,6 +692,18 @@ namespace Fbx2Vmd.LipSync
                 SetMessage("원본 음원 파일이 없습니다.", MessageType.Error);
                 return;
             }
+            // 같은 원곡의 분리 프로세스가 이전 도메인에서 살아 남았으면 중복 실행하지 않는다.
+            if (VocalOrphanedProcessGuard.TryFindLive(
+                    "separate", Path.GetFullPath(_sourceAudioPath),
+                    out VocalOrphanedProcessGuard.Entry sepOrphan)
+                && VocalOrphanedProcessGuard.TryAttach(
+                    sepOrphan.Pid, sepOrphan.StartedUtc, out _orphanSepProc))
+            {
+                _orphanSepEntry = sepOrphan;
+                SetMessage($"이전 분리 프로세스가 계속 실행 중입니다(PID {sepOrphan.Pid})"
+                    + " — 완료되면 자동으로 채택됩니다.", MessageType.Info);
+                return;
+            }
             // python 경로가 비었거나 파일이 없으면 환경 자동 준비부터 돌린다.
             if (string.IsNullOrEmpty(_pythonPath) || !File.Exists(_pythonPath))
             {
@@ -670,9 +745,33 @@ namespace Fbx2Vmd.LipSync
             SetMessage("분리 실행 중...", MessageType.Info);
         }
 
+        /// <summary>같은 정제 작업의 고아 프로세스가 살아 있으면 감시를 붙이고 true —
+        /// 재시도가 프로세스를 중복 실행해 같은 출력을 동시에 쓰는 것을 막는다.</summary>
+        private bool TryWatchLiveOrphan()
+        {
+            if (string.IsNullOrEmpty(_rawVocalWavPath)
+                || !VocalOrphanedProcessGuard.TryFindLive(
+                    "clean", Path.GetFullPath(_rawVocalWavPath),
+                    out VocalOrphanedProcessGuard.Entry orphan))
+            {
+                return false;
+            }
+            _orphanCleanProc?.Dispose();
+            VocalOrphanedProcessGuard.TryAttach(
+                orphan.Pid, orphan.StartedUtc, out _orphanCleanProc);
+            SetMessage($"이전 정제 프로세스가 계속 실행 중입니다(PID {orphan.Pid})"
+                + " — 완료되면 결과를 확인합니다.", MessageType.Info);
+            return true;
+        }
+
         /// <summary>분리된 보컬에 정제 체인(디리버브→코러스 제거→디노이즈)을 돌린다.</summary>
         private void StartCleanup()
         {
+            // 살아 있는 고아가 같은 출력을 쓰는 중이면 중복 실행 대신 완료 채택을 기다린다.
+            if (TryWatchLiveOrphan())
+            {
+                return;
+            }
             // 도메인 리로드/창 재오픈 후 재시도되면 스냅샷·CTS가 비어 있거나
             // 취소된 상태일 수 있으므로 현재 필드로 폴백하고 CTS는 새로 발급한다.
             if (_cts == null || _cts.IsCancellationRequested)
@@ -728,6 +827,61 @@ namespace Fbx2Vmd.LipSync
                 _lyricsTitle, _lyricsArtist, lang,
                 _cts.Token);
             SetMessage("가사 검색 중(로컬 → 태그 → LRCLIB → VocaDB)…", MessageType.Info);
+        }
+
+        /// <summary>고아 프로세스 핸들의 생존 여부 — 소실/권한 예외는 종료로 본다.</summary>
+        private static bool IsOrphanRunning(System.Diagnostics.Process p)
+        {
+            try { return p != null && !p.HasExited; }
+            catch (Exception) { return false; }
+        }
+
+        /// <summary>중단된 분리의 산출물이 디스크에 남아 있으면 raw 보컬로 채택한다 —
+        /// 정제 채택과 달리 보컬 WAV가 아니라 정제 전 보컬로 두면
+        /// 기존 복구 UI가 정제 재시도/직접 사용을 선택하게 해준다.</summary>
+        private bool TryAdoptSeparated()
+        {
+            // 고아 마커의 Key가 실제 분리 대상 경로다 — 현재 소스와 다른 곡의 고아가
+            // 종료됐을 때 현재 소스로 찾아 헛경고를 띄우지 않게 Key를 우선한다.
+            string sourcePath = _orphanSepEntry != null
+                && !string.IsNullOrEmpty(_orphanSepEntry.Key)
+                ? _orphanSepEntry.Key : _sourceAudioPath;
+            if (string.IsNullOrEmpty(sourcePath))
+            {
+                return false;
+            }
+            // 다른 곡의 고아 산출물을 현재 창 상태에 채택하면 안 된다 — 로그만 남긴다.
+            bool sameSource = !string.IsNullOrEmpty(_sourceAudioPath)
+                && string.Equals(Path.GetFullPath(sourcePath),
+                    Path.GetFullPath(_sourceAudioPath),
+                    System.StringComparison.OrdinalIgnoreCase);
+            if (!sameSource)
+            {
+                UnityEngine.Debug.Log(
+                    "[보컬 분리] 다른 원곡의 고아 분리 종료 — 채택 생략: " + sourcePath);
+                return false;
+            }
+            string dir = _sepOutputDir ?? _outputDir;
+            // Separate 본체와 동일한 FAT32/exFAT mtime 2초 보정.
+            DateTime minWriteUtc = _orphanSepEntry != null
+                ? _orphanSepEntry.StartedUtc.AddSeconds(-2) : DateTime.MinValue;
+            VocalStemSeparator.ResolveOutputs(_engine, dir,
+                Path.GetFullPath(sourcePath),
+                out string vocal, out string instrumental, minWriteUtc: minWriteUtc);
+            if (vocal == null)
+            {
+                SetMessage("이전 분리 프로세스가 종료됐으나 산출물을 찾지 못했습니다.",
+                    MessageType.Warning);
+                return false;
+            }
+            _rawVocalWavPath = vocal;
+            if (!string.IsNullOrEmpty(instrumental))
+            {
+                _bgmWavPath = instrumental;
+            }
+            SetMessage($"이전 분리 프로세스 완료 — 보컬 채택: {Path.GetFileName(vocal)}",
+                MessageType.Info);
+            return true;
         }
 
         /// <summary>중단된 정제의 최종 산출물(_vocal_lead/_vocal_clean)이 디스크에 남아 있으면 채택한다.</summary>

@@ -64,7 +64,8 @@ namespace Fbx2Vmd.LipSync
                     : " --lyrics " + Quote(Path.GetFullPath(lyricsPath)));
             int code = VocalStemSeparator.RunSync(pythonPath, args,
                 Path.GetDirectoryName(outputCsv), out string log,
-                3600, ct, env, onProgress);
+                3600, ct, env, onProgress,
+                orphanPurpose: "phoneme", orphanKey: wavPath);
             // 취소된 실행을 "추출 실패(exit -1)"로 보고하지 않게 취소를 전파한다.
             ct.ThrowIfCancellationRequested();
             if (code != 0 || !File.Exists(outputCsv))

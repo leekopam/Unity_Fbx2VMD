@@ -32,7 +32,7 @@ namespace Fbx2Vmd.LipSync
         /// <summary>현재 재생 중인 경로. 없으면 null.</summary>
         public static string PlayingPath { get; private set; }
 
-        static MediaFoundationReader _reader; // wav/mp3/m4a 모두 지원
+        static GatedWaveProvider _reader; // wav/mp3/m4a 모두 지원 — Read/Dispose 직렬화 래퍼
         static WaveOutEvent _out;
         static bool _finished;                // 자연 종료 감지(PlaybackStopped 이벤트)
         static int _outputRetries;            // 출력 스레드 사망 시 재시작 횟수
@@ -187,7 +187,7 @@ namespace Fbx2Vmd.LipSync
         public static void Stop()
         {
             WaveOutEvent outToKill;
-            MediaFoundationReader readerToKill;
+            GatedWaveProvider readerToKill;
             lock (_gate)
             {
                 PlayingPath = null;
@@ -209,7 +209,7 @@ namespace Fbx2Vmd.LipSync
         static void StopAsync()
         {
             WaveOutEvent outToKill;
-            MediaFoundationReader readerToKill;
+            GatedWaveProvider readerToKill;
             lock (_gate)
             {
                 PlayingPath = null;
@@ -361,10 +361,11 @@ namespace Fbx2Vmd.LipSync
 
         static string StartPlayback(string path, float startSec)
         {
-            MediaFoundationReader reader;
+            GatedWaveProvider reader;
             try
             {
-                reader = new MediaFoundationReader(Path.GetFullPath(path));
+                reader = new GatedWaveProvider(
+                    new MediaFoundationReader(Path.GetFullPath(path)));
             }
             catch (Exception e)
             {
@@ -451,7 +452,7 @@ namespace Fbx2Vmd.LipSync
         /// <summary>메인 스레드(update)에서 죽은 출력을 재생성해 이어서 재생한다.</summary>
         static void PumpRetry()
         {
-            MediaFoundationReader reader;
+            GatedWaveProvider reader;
             string path;
             lock (_gate)
             {
@@ -492,18 +493,81 @@ namespace Fbx2Vmd.LipSync
                 lock (_gate) { _finished = true; }
                 return;
             }
+            WaveOutEvent stale = null;
+            bool adopted = false;
             lock (_gate)
             {
                 // 그 사이 Stop()이 _out을 비웠을 수 있다 — 비어 있을 때만 교체.
                 if (PlayingPath == null)
                 {
                     _finished = true;
-                    try { fresh.Dispose(); } catch { }
-                    return;
                 }
-                _out = fresh;
+                else
+                {
+                    adopted = true;
+                    // 교체되는 구 출력의 hWaveOut 핸들이 누수되지 않게 회수한다.
+                    stale = _out;
+                    _out = fresh;
+                }
             }
+            // winmm 호출은 lock 밖에서 — 콜백 스레드와의 교착 방지.
+            if (!adopted)
+            {
+                try { fresh.Dispose(); } catch { }
+                return;
+            }
+            try { stale?.Dispose(); } catch { }
             try { fresh.Play(); } catch { }
+        }
+
+        /// <summary>
+        /// Read와 Dispose를 한 lock으로 직렬화하는 리더 래퍼.
+        /// Mono에서 WaveOutEvent 재생 스레드는 Stop() 후에도 즉시 죽지 않을 수 있고,
+        /// 그 스레드가 IMFSourceReader.ReadSample 안에 있는 동안 Dispose가 COM 객체를
+        /// 해제하면 mfreadwrite.dll에서 Access Violation으로 에디터가 네이티브 크래시한다.
+        /// Dispose는 진행 중 Read가 끝날 때까지 기다리고, Dispose 후의 Read는 0을 반환해
+        /// 재생 스레드가 end-of-stream으로 자연 종료되게 한다.
+        /// </summary>
+        sealed class GatedWaveProvider : IWaveProvider, IDisposable
+        {
+            readonly object _sync = new object();
+            readonly MediaFoundationReader _inner;
+            bool _disposed;
+
+            internal GatedWaveProvider(MediaFoundationReader inner)
+            {
+                _inner = inner;
+            }
+
+            public WaveFormat WaveFormat => _inner.WaveFormat;
+
+            public int Read(byte[] buffer, int offset, int count)
+            {
+                lock (_sync)
+                {
+                    return _disposed ? 0 : _inner.Read(buffer, offset, count);
+                }
+            }
+
+            internal TimeSpan TotalTime
+            {
+                get { lock (_sync) { return _disposed ? TimeSpan.Zero : _inner.TotalTime; } }
+            }
+
+            internal TimeSpan CurrentTime
+            {
+                get { lock (_sync) { return _disposed ? TimeSpan.Zero : _inner.CurrentTime; } }
+                set { lock (_sync) { if (!_disposed) _inner.CurrentTime = value; } }
+            }
+
+            public void Dispose()
+            {
+                lock (_sync)
+                {
+                    _disposed = true;
+                    _inner.Dispose();
+                }
+            }
         }
     }
 }
