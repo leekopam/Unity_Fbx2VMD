@@ -16860,18 +16860,133 @@ MonoBehaviour:
     dampingRatio: 0.5
     animationBlend:
       type: 4
+      customCurve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 1
+          inSlope: 0
+          outSlope: -1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 0
+          inSlope: -1
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
     poseStiffness:
       type: 2
+      customCurve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 1
+          inSlope: 0
+          outSlope: -1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 0
+          inSlope: -1
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
     bendAngleCap:
       type: 1
+      customCurve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 1
+          inSlope: 0
+          outSlope: -1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 0
+          inSlope: -1
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
     maxBendAngleDeg: 180
     collisionRadius:
       type: 4
+      customCurve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 1
+          inSlope: 0
+          outSlope: -1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 0
+          inSlope: -1
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
     maxCollisionRadius: 0.02
     gravity: 0
     interChainCollision: 0
+  autoSkirtCloth: 1
+  skirtMode: 0
+  skirtWeightThreshold: 0.5
+  skirtFixedChainDepth: 0
+  skirtReductionScale: 1
+  useSkirtBackstop: 1
+  skirtBackstopDistance: 0.005
+  skirtTuning:
+    tipStiffnessScale: 1
+    animationPoseRatio: 0
+    overrideDepthInertia: 0
+    depthInertia: 0.7
+    characterPresetKey:
+  skirtSkinningFallback: 1
+  usePresetBaseline: 1
+  cameraCullingMode: 30
+  distanceCullingMeters: 0
+  distanceCullingFadeRatio: 0.2
   usePreBuild: 0
   autoRebuildOnEnable: 1
+  playerLoopGuard: 1
   generatedColliders:
   - {fileID: 622489058}
   - {fileID: 111733892}
@@ -16913,6 +17028,7 @@ MonoBehaviour:
   sceneLoadInitFrames: -1
   sceneLoadInitNs: 0
   sceneLoadPreBuildNs: 0
+  startupProbeFrames: 40
 --- !u!114 &1877614760
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16950,12 +17066,15 @@ MonoBehaviour:
   sampleInterval: 5
   penetrationWarningDepth: 0.005
   minChainDepth: 2
+  stuckSampleThreshold: 3
   worstPenetration: 0
   worstFrame: -1
   worstPoint: {x: 0, y: 0, z: 0}
   penetrationFrameCount: 0
   sampledFrames: 0
   baselineWorstPenetration: 0
+  maxConsecutivePenetrationSamples: 0
+  suspectedStuckBoneCount: 0
 --- !u!114 &1878701088
 MonoBehaviour:
   m_ObjectHideFlags: 0
