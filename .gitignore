@@ -389,3 +389,18 @@ __pycache__/
 /Docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
 /docs/Workflow/Tools/Local/mmd_qa_mcp/mmd_qa_mcp.config.json
 .pytest_cache/
+
+# Local AI-agent artifacts and reference captures (do not commit)
+/[Pp][Ll][Aa][Nn][Ss]/
+/*[Pp][Ll][Aa][Nn]*.[Mm][Dd]
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+/batch-*.log
+/Assets/Resources/PerformanceTestRun*.json
+/Assets/Resources/PerformanceTestRun*.json.meta
+.stitch/
+/Assets/_Project/Tools/MainRecordingSettings/DESIGN.md
+/Assets/_Project/Tools/MainRecordingSettings/DESIGN.md.meta
