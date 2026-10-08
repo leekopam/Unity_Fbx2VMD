@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Fbx2Vmd.LipSync
@@ -13,14 +15,32 @@ namespace Fbx2Vmd.LipSync
     /// </summary>
     public static class Wav2VecPhonemeExtractor
     {
+        /// <summary>음소 인식 언어. 어휘 문자 집합(가나/IPA/한글)은 스크립트가 자동 판별한다.</summary>
+        public enum PhonemeLanguage { Japanese, English, Korean }
         /// <summary>프로젝트 루트 기준 추출 스크립트 상대 경로.</summary>
         public const string ScriptRelPath = "Tools/LipSync/phoneme_extract.py";
         public const string DefaultModel = "jonatasgrosman/wav2vec2-large-xlsr-53-japanese";
 
+        /// <summary>언어별 검증된 wav2vec2 모델. 한국어는 한글 음절 어휘, 영어는 IPA 어휘 모델.</summary>
+        public static string ModelFor(PhonemeLanguage lang)
+        {
+            switch (lang)
+            {
+                case PhonemeLanguage.English:
+                    // espeak IPA 어휘 — AutoProcessor 대신 FeatureExtractor+vocab.json만 써서 phonemizer 불필요.
+                    return "facebook/wav2vec2-lv-60-espeak-cv-ft";
+                case PhonemeLanguage.Korean:
+                    return "kresnik/wav2vec2-large-xlsr-korean";
+                default:
+                    return DefaultModel;
+            }
+        }
+
         /// <summary>추출 스크립트를 동기 실행해 CSV를 만든다. 성공 시 true.</summary>
         public static bool Extract(string pythonPath, string projectRoot,
-            string wavPath, string outputCsv,
-            IReadOnlyDictionary<string, string> env, out string error)
+            string wavPath, string outputCsv, string model,
+            IReadOnlyDictionary<string, string> env,
+            CancellationToken ct, Action<float> onProgress, out string error)
         {
             error = null;
             string script = Path.Combine(projectRoot, ScriptRelPath.Replace('/', '\\'));
@@ -34,11 +54,11 @@ namespace Fbx2Vmd.LipSync
             outputCsv = Path.GetFullPath(outputCsv);
             string args = Quote(script)
                 + " " + Quote(wavPath)
-                + " --model " + Quote(DefaultModel)
+                + " --model " + Quote(string.IsNullOrEmpty(model) ? DefaultModel : model)
                 + " --output " + Quote(outputCsv);
             int code = VocalStemSeparator.RunSync(pythonPath, args,
                 Path.GetDirectoryName(outputCsv), out string log,
-                1800, default, env);
+                1800, ct, env, onProgress);
             if (code != 0 || !File.Exists(outputCsv))
             {
                 int tail = log != null && log.Length > 800 ? log.Length - 800 : 0;
@@ -47,6 +67,20 @@ namespace Fbx2Vmd.LipSync
                 return false;
             }
             return true;
+        }
+
+        /// <summary>백그라운드 추출 — 완료 후 호출자가 CSV를 읽어 CsvToBakedData로 변환한다.</summary>
+        public static Task<(bool ok, string error)> ExtractAsync(
+            string pythonPath, string projectRoot, string wavPath, string outputCsv,
+            string model, IReadOnlyDictionary<string, string> env,
+            CancellationToken ct, Action<float> onProgress)
+        {
+            return Task.Run(() =>
+            {
+                bool ok = Extract(pythonPath, projectRoot, wavPath, outputCsv,
+                    model, env, ct, onProgress, out string extractError);
+                return (ok, extractError);
+            }, ct);
         }
 
         private static string Quote(string path)

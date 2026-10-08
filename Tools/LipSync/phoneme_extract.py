@@ -31,6 +31,9 @@ _KANA_ROWS = {
     "o": "おこそとのほもよろをごぞどぼぽぉょ",
 }
 
+# 모음 연장 표기(IPA ː, 가타카나 ー) — 확률이 지배적이면 직전 프레임 모음을 계승한다.
+LONG_MARKS = ("ː", "ー")
+
 
 def _kana_groups():
     """가나 어휘용 매핑을 만든다. 가타카나는 히라가나로 평행 이동한다."""
@@ -44,11 +47,52 @@ def _kana_groups():
     return groups
 
 
-def _groups_for(vocab):
-    """어휘를 보고 IPA/가나 매핑 중 맞는 쪽을 고른다."""
-    if any("ぁ" <= k <= "ヶ" for k in vocab):
-        return _kana_groups()
-    return VOWEL_GROUPS
+def _hangul_group(ch):
+    """한글 음절의 중성 → 모음 그룹. 음절이 아니면 None."""
+    s = ord(ch) - 0xAC00
+    if not (0 <= s < 11172):
+        return None
+    jung = (s % 588) // 28
+    if jung <= 3:
+        return "a"   # ㅏㅐㅑㅒ
+    if jung <= 7:
+        return "e"   # ㅓㅔㅕㅖ
+    if jung <= 12:
+        return "o"   # ㅗㅘㅙㅚㅛ
+    if jung <= 18:
+        return "u"   # ㅜㅝㅞㅟㅠㅡ
+    return "i"       # ㅣㅢ
+
+
+def _vocab_kind(vocab):
+    """어휘 문자 집합으로 매핑 방식을 고른다: 한글 음절 > 가나 > IPA."""
+    for k in vocab:
+        if any("가" <= c <= "힣" for c in k):
+            return "hangul"
+        if any("ぁ" <= c <= "ヶ" for c in k):
+            return "kana"
+    return "ipa"
+
+
+def _token_group(tok, kind, kana_map):
+    """토큰 → 모음 그룹. 다중 문자 토큰은 끝 문자부터 역순 탐색한다
+    (CTC 토큰 경계는 토큰 끝에 정렬되므로 aɪ→i, 니가→a처럼 마지막 모음이 지배)."""
+    text = tok.strip()
+    if not text:
+        return None
+    if kind == "hangul":
+        for ch in reversed(text):
+            g = _hangul_group(ch)
+            if g:
+                return g
+        return None
+    if kind == "kana":
+        return kana_map.get(text)
+    for ch in reversed(text):
+        g = VOWEL_GROUPS.get(ch)
+        if g:
+            return g
+    return None
 
 
 def main():
@@ -71,7 +115,8 @@ def main():
         vocab = json.load(f)
     id2tok = {v: k for k, v in vocab.items()}
     pad_id = vocab.get("<pad>", 0)
-    groups_map = _groups_for(vocab)
+    vocab_kind = _vocab_kind(vocab)
+    kana_map = _kana_groups() if vocab_kind == "kana" else {}
 
     wav, _ = librosa.load(args.input, sr=16000, mono=True)
     inputs = extractor(wav, sampling_rate=16000, return_tensors="pt")
@@ -89,12 +134,12 @@ def main():
     long_ids = []
     for idx, tok in id2tok.items():
         text = tok.strip()
-        g = groups_map.get(text)
+        g = _token_group(text, vocab_kind, kana_map)
         if g is not None:
             groups[:, "aiueo".index(g)] += probs[:, idx]
-        elif text == "ー":
+        elif text in LONG_MARKS:
             long_ids.append(idx)
-    # 장음(ー)은 앞 모음의 연장이라 직전 프레임의 모음 벡터를 이어받는다.
+    # 장음(ー·ː)은 앞 모음의 연장이라 직전 프레임의 모음 벡터를 이어받는다.
     # 매핑에 넣지 않으면 노래의 지속 모음 구간이 자음 취급돼 입이 닫힌다.
     if long_ids:
         longp = probs[:, long_ids].sum(axis=1)
