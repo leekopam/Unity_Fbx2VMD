@@ -117,6 +117,15 @@ namespace Tests.Editor.FBXImporter
                     "satisfaction_2",
                     AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
 
+                // 준비-중-재생-금지 검증이 목적이므로 보정 캐시 히트로 준비가
+                // 건너뛰어지지 않게 강제 재계산을 요청한다.
+                RequireProductType("NativeSkinningCorrectionPlaybackDriver")
+                    .GetProperty(
+                        "ForceCacheRecalculate",
+                        BindingFlags.Static | BindingFlags.Public |
+                            BindingFlags.NonPublic)
+                    .SetValue(null, true);
+
                 Assert.That(pipeline.TryPlayImportedMotion(), Is.True);
                 Assert.That(
                     ReadProperty<bool>(pipeline, "IsPreparingImportedMotionCorrection"),

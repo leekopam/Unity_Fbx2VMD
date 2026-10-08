@@ -2380,6 +2380,10 @@ namespace Fbx2Vmd.FBXImporter
                 HumanoidMotionPlaybackControlsView.Ensure(this);
                 return;
             }
+            _nativeSkinningCorrectionPlaybackDriver?.ConfigureCacheIdentity(
+                clip,
+                motionName,
+                sourceModelAsset);
             SetSessionState(
                 FBXSessionState.Ready,
                 $"FBX 임포트 완료 · 재생 대기: {motionName}",

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -72,6 +73,12 @@ namespace Fbx2Vmd.FBXImporter
 
         internal int CorrectionCount => _corrections.Length;
 
+        // 디스크 저장용 스냅샷 — 내부 배열 별칭을 노출하지 않는다.
+        internal NativeSkinningVertexCorrection[] ExportCorrections()
+        {
+            return (NativeSkinningVertexCorrection[])_corrections.Clone();
+        }
+
         internal bool TryApply(IList<Vector3> vertices)
         {
             if (vertices == null)
@@ -135,6 +142,12 @@ namespace Fbx2Vmd.FBXImporter
         internal int VertexCount { get; }
 
         internal int CorrectedFrameCount => _frames.Count;
+
+        // 디스크 저장용 스냅샷 — 프레임 오름차순으로 보낸다.
+        internal NativeSkinningCorrectionFrame[] ExportFrames()
+        {
+            return _frames.Values.OrderBy(frame => frame.FrameIndex).ToArray();
+        }
 
         internal bool TryApply(
             int frameIndex,
