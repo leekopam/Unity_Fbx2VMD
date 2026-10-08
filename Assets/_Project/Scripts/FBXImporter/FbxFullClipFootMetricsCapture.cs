@@ -224,7 +224,7 @@ namespace Fbx2Vmd.FBXImporter
                 ? Mathf.Min(_pipeline.ImportedMotionLastFrameIndex, _frameLimit - 1)
                 : _pipeline.ImportedMotionLastFrameIndex;
             var stabilizer = _controller == null ? null :
-                (EditorHumanoidFootContactStabilizer)typeof(HumanoidMotionPlaybackController)
+                (HumanoidFootContactStabilizer)typeof(HumanoidMotionPlaybackController)
                     .GetField("_footContactStabilizer", BindingFlags.Instance |
                         BindingFlags.NonPublic)?.GetValue(_controller);
             _sourceSamples = stabilizer?.SourceSamples;
@@ -477,11 +477,11 @@ namespace Fbx2Vmd.FBXImporter
                     gate_thresholds_mm = new
                     {
                         target_error = _animator == null ? (float?)null :
-                            _animator.humanScale * EditorHumanoidFootGrounding.TargetErrorPerHumanScale * 1000f,
+                            _animator.humanScale * HumanoidFootGrounding.TargetErrorPerHumanScale * 1000f,
                         sole_clearance_floor = _animator == null ? (float?)null :
-                            -_animator.humanScale * EditorHumanoidFootGrounding.SoleClearancePerHumanScale * 1000f,
+                            -_animator.humanScale * HumanoidFootGrounding.SoleClearancePerHumanScale * 1000f,
                         supported_contact_error = _animator == null ? (float?)null :
-                            _animator.humanScale * EditorHumanoidFootGrounding.SupportedContactErrorPerHumanScale * 1000f
+                            _animator.humanScale * HumanoidFootGrounding.SupportedContactErrorPerHumanScale * 1000f
                     },
                     stage_basis = "source=FBX Humanoid world; retarget=initial target pose before contact correction; sole and foot=final evaluated pose; Game View mesh not presented per frame",
                     processed_frames = _frame, row_count = _rowCount,
@@ -583,7 +583,7 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 HumanoidFootContactIntentLabelSet labels = _intentLabels ??
-                    EditorHumanoidFootContactIntentLabelStore.Load(_inputFileName);
+                    HumanoidFootContactIntentLabelStore.Load(_inputFileName);
                 HumanoidFootContactIntentEstimate estimate = _intentEstimate ??
                     HumanoidFootContactIntentEstimator.Estimate(
                         _sourceSamples.Take(_lastFrame + 1).ToArray(),

@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using RootMotion.FinalIK;
 using UnityEngine;
 
@@ -7,7 +6,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 실제 지면 아래의 Avatar 발 하단 기준점을 본 길이 변화 없이 올림.
     /// </summary>
-    internal sealed class EditorHumanoidGroundResponse
+    internal sealed class HumanoidGroundResponse
     {
         private readonly RaycastHit[] _hits = new RaycastHit[16];
         private Transform _root;
@@ -136,4 +135,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

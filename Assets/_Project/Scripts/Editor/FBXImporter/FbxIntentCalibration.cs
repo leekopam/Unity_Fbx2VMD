@@ -459,7 +459,7 @@ namespace Fbx2Vmd.FBXImporter
         private static object LoadLabelSet(string sourceKey)
         {
             Type storeType = typeof(FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.FBXImporter.EditorHumanoidFootContactIntentLabelStore",
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabelStore",
                 true);
             return storeType.GetMethod("Load",
                     BindingFlags.Static | BindingFlags.NonPublic)

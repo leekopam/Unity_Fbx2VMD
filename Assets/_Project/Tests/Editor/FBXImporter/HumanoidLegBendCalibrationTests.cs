@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class EditorHumanoidLegBendCalibrationTests
+    public class HumanoidLegBendCalibrationTests
     {
         [TestCase("Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx")]
         [TestCase("Assets/_Project/FBX/Snake Hip Hop Dance.fbx")]
@@ -62,7 +62,7 @@ namespace Tests.Editor.FBXImporter
 
         private static bool Capture(object[] args)
         {
-            Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidLegBendCalibration");
+            Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidLegBendCalibration");
             Assert.That(type, Is.Not.Null, "원본 상태를 보존하는 Avatar 굽힘 교정 필요");
             return (bool)type.GetMethod("TryCapture", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, args);
         }

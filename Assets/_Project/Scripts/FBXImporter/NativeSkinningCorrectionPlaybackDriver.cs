@@ -43,13 +43,15 @@ namespace Fbx2Vmd.FBXImporter
         private long _solveTicks;
         private int _solverIdleTicks;
         private int _solverBackloggedTicks;
-#if UNITY_EDITOR
-        // 디스크 캐시 — 에디터 전용. 컨텍스트가 주입되지 않으면(테스트 등) 비활성.
-        private AnimationClip _cacheMotionClip;
+        // 디스크 캐시 — 식별자가 주입되지 않으면(테스트 등) 비활성.
         private string _cacheMotionName = string.Empty;
-        private GameObject _cacheSourceModelAsset;
         private byte[] _cacheKeyHash;
         private bool _resultFromCache;
+        // 빌드에서는 에셋 식별자가 없어 소스 FBX 경로가 캐시 키 입력이 된다.
+        private string _runtimeCacheSourcePath = string.Empty;
+#if UNITY_EDITOR
+        private AnimationClip _cacheMotionClip;
+        private GameObject _cacheSourceModelAsset;
 
         // 메뉴 설정과 다음 준비 사이에 도메인 리로드가 끼어도 유지되도록
         // SessionState(에디터 세션 생존)에 보관한다.
@@ -182,7 +184,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             ResetTransientState();
-#if UNITY_EDITOR
             // 디스크 캐시 히트 시 캡처·솔버를 전부 건너뛰고 결과만 복원한다.
             _prepWallWatch.Restart();
             if (TryRestoreResultFromCache(
@@ -192,7 +193,6 @@ namespace Fbx2Vmd.FBXImporter
                 return IsReady;
             }
             _prepWallWatch.Reset();
-#endif
             foreach (SkinnedMeshRenderer renderer in _contracts
                          .Select(contract => contract.Renderer)
                          .Distinct())
@@ -278,13 +278,14 @@ namespace Fbx2Vmd.FBXImporter
             _playbackController = null;
             _animator = null;
             _contracts = Array.Empty<NativeSkinningSurfaceContract>();
-#if UNITY_EDITOR
             // 드라이버 재사용 시 이전 조합의 캐시 식별자가 남지 않게 한다.
-            _cacheMotionClip = null;
             _cacheMotionName = string.Empty;
-            _cacheSourceModelAsset = null;
+            _runtimeCacheSourcePath = string.Empty;
             _cacheKeyHash = null;
             _resultFromCache = false;
+#if UNITY_EDITOR
+            _cacheMotionClip = null;
+            _cacheSourceModelAsset = null;
 #endif
             IsReady = false;
             IsFaulted = false;
@@ -301,6 +302,18 @@ namespace Fbx2Vmd.FBXImporter
             _animator = animator;
             _playbackController = playbackController;
             _contracts = contracts;
+        }
+
+        /// <summary>
+        /// 빌드 환경의 캐시 식별자 — 소스 FBX 경로를 키 입력으로 주입한다.
+        /// 주입되지 않으면 캐시 경로는 자동으로 비활성된다.
+        /// </summary>
+        internal void ConfigureRuntimeCacheIdentity(
+            string sourceFilePath,
+            string motionName)
+        {
+            _runtimeCacheSourcePath = sourceFilePath ?? string.Empty;
+            _cacheMotionName = motionName ?? string.Empty;
         }
 
 #if UNITY_EDITOR
@@ -493,9 +506,7 @@ namespace Fbx2Vmd.FBXImporter
                         correction.Cache));
                 }
                 IsReady = true;
-#if UNITY_EDITOR
                 TrySaveResultToCache(result);
-#endif
                 if (!PresentCurrentFrame())
                 {
                     Fail("첫 Native 보정 프레임을 표시하지 못했습니다.");
@@ -552,7 +563,6 @@ namespace Fbx2Vmd.FBXImporter
             return bakedMesh.vertices;
         }
 
-#if UNITY_EDITOR
         // 캐시 복원 시도 — 실패 사유는 전부 미스로 처리해 기존 계산 경로로 넘긴다.
         private bool TryRestoreResultFromCache(
             out NativeSkinningCorrectionPreprocessResult result)
@@ -567,6 +577,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return false;
             }
+#if UNITY_EDITOR
             if (ForceCacheRecalculate)
             {
                 ForceCacheRecalculate = false;
@@ -577,6 +588,7 @@ namespace Fbx2Vmd.FBXImporter
                 ComputeCacheKey();
                 return false;
             }
+#endif
             if (!ComputeCacheKey())
             {
                 return false;
@@ -639,8 +651,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return true;
             }
-            if (_cacheMotionClip == null ||
-                _animator == null ||
+            if (_animator == null ||
                 _playbackController == null ||
                 _contracts.Length == 0)
             {
@@ -650,22 +661,62 @@ namespace Fbx2Vmd.FBXImporter
                     this);
                 return false;
             }
-            if (!NativeSkinningCorrectionCacheKey.TryCompute(
-                    _cacheMotionClip,
-                    _cacheMotionName,
-                    TotalFrameCount,
-                    _playbackController.ClipFrameRate,
-                    _cacheSourceModelAsset,
-                    _animator,
-                    _contracts,
-                    out _cacheKeyHash,
-                    out string keyError))
+#if UNITY_EDITOR
+            if (_cacheMotionClip == null)
+            {
+                Debug.Log(
+                    "[NativePrepCache] 캐시 식별자가 주입되지 않아 " +
+                    "캐시를 사용하지 않습니다.",
+                    this);
+                return false;
+            }
+            bool computed = NativeSkinningCorrectionCacheKey.TryCompute(
+                _cacheMotionClip,
+                _cacheMotionName,
+                TotalFrameCount,
+                _playbackController.ClipFrameRate,
+                _cacheSourceModelAsset,
+                _animator,
+                _contracts,
+                out _cacheKeyHash,
+                out string keyError);
+#else
+            if (string.IsNullOrEmpty(_runtimeCacheSourcePath))
+            {
+                Debug.Log(
+                    "[NativePrepCache] 캐시 식별자가 주입되지 않아 " +
+                    "캐시를 사용하지 않습니다.",
+                    this);
+                return false;
+            }
+            bool computed = NativeSkinningCorrectionCacheKey.TryComputeRuntime(
+                _runtimeCacheSourcePath,
+                _cacheMotionName,
+                TotalFrameCount,
+                _playbackController.ClipFrameRate,
+                _animator,
+                _contracts,
+                out _cacheKeyHash,
+                out string keyError);
+#endif
+            if (!computed)
             {
                 Debug.LogWarning(
                     $"[NativePrepCache] 캐시 키 계산 실패 — {keyError}", this);
                 return false;
             }
             return true;
+        }
+
+        // 캐시 문서·바인딩이 쓰는 메시 식별자 — 에디터는 에셋 id,
+        // 빌드는 정점 내용 해시로 같은 메시를 식별한다.
+        private static string GetMeshCacheIdentity(Mesh mesh)
+        {
+#if UNITY_EDITOR
+            return NativeSkinningCorrectionCacheKey.GetAssetIdentity(mesh);
+#else
+            return NativeSkinningCorrectionCacheKey.GetRuntimeMeshIdentity(mesh);
+#endif
         }
 
         // 캐시 문서의 렌더러 항목을 현재 계약의 Renderer에 재바인딩한다.
@@ -719,8 +770,8 @@ namespace Fbx2Vmd.FBXImporter
                     return false;
                 }
                 if (renderer.sharedMesh.vertexCount != entry.VertexCount ||
-                    NativeSkinningCorrectionCacheKey.GetAssetIdentity(
-                        renderer.sharedMesh) != entry.MeshAssetId)
+                    GetMeshCacheIdentity(renderer.sharedMesh) !=
+                        entry.MeshAssetId)
                 {
                     failReason =
                         $"메시 식별 불일치 path='{entry.RendererPath}' 정점={renderer.sharedMesh.vertexCount}/{entry.VertexCount}";
@@ -819,8 +870,7 @@ namespace Fbx2Vmd.FBXImporter
                     NativeSkinningCorrectionCacheKey.GetRendererPath(
                         _animator, correction.Renderer),
                 MeshAssetId =
-                    NativeSkinningCorrectionCacheKey.GetAssetIdentity(
-                        correction.Renderer.sharedMesh),
+                    GetMeshCacheIdentity(correction.Renderer.sharedMesh),
                 VertexCount = correction.Cache.VertexCount,
                 Frames = correction.Cache.ExportFrames()
                     .Select(frame =>
@@ -841,7 +891,6 @@ namespace Fbx2Vmd.FBXImporter
                     .ToArray()
             };
         }
-#endif
 
         private void CaptureAndHideRenderers()
         {

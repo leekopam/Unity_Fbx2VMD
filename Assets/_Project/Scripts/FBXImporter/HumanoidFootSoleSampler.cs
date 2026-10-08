@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -8,7 +7,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 발 가중치로 선정한 밑창 영역과 현재 자세의 접촉점 좌표를 취득함.
     /// </summary>
-    internal sealed class EditorHumanoidFootSoleSampler : IDisposable
+    internal sealed class HumanoidFootSoleSampler : IDisposable
     {
         private readonly Transform _foot;
         private readonly List<Surface> _surfaces = new List<Surface>();
@@ -18,14 +17,14 @@ namespace Fbx2Vmd.FBXImporter
         private bool _hasSample;
         private bool _isDisposed;
 
-        private EditorHumanoidFootSoleSampler(Transform foot) => _foot = foot;
+        private HumanoidFootSoleSampler(Transform foot) => _foot = foot;
 
         // 다음 TrySample에서 갱신되는 대여 버퍼이며 앵커는 좌표 값을 따로 복사해 보관함.
         internal Vector3[] LocalSolePoints => _hasSample ? _localPoints : null;
 
         internal static bool TryCreate(
             Transform foot, Transform toes, SkinnedMeshRenderer[] renderers,
-            Vector3 calibrationUp, out EditorHumanoidFootSoleSampler sampler)
+            Vector3 calibrationUp, out HumanoidFootSoleSampler sampler)
         {
             sampler = null;
             if (!HasSupportedTransform(foot) || toes == null || !toes.IsChildOf(foot) ||
@@ -36,7 +35,7 @@ namespace Fbx2Vmd.FBXImporter
             if (!IsFinite(forward) || forward.sqrMagnitude < 0.00000001f)
                 return false;
 
-            var candidate = new EditorHumanoidFootSoleSampler(foot);
+            var candidate = new HumanoidFootSoleSampler(foot);
             try
             {
                 if (!candidate.TryInitialize(renderers, calibrationUp, forward.normalized))
@@ -294,4 +293,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

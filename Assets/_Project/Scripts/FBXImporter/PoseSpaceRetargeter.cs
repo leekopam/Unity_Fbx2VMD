@@ -866,14 +866,10 @@ namespace Fbx2Vmd.FBXImporter
         {
             get
             {
-#if UNITY_EDITOR
                 return _useCompleteEditorHumanoidMuscleReference &&
                     _hasEditorHumanoidPoseReferenceForFrame &&
                     _editorHumanoidPoseReferencePlayer != null &&
                     _editorHumanoidPoseReferencePlayer.IsInitialized;
-#else
-                return false;
-#endif
             }
         }
         public int PoseVisualSmoothingCount => _poseVisualSmoothingCount;
@@ -1749,7 +1745,7 @@ namespace Fbx2Vmd.FBXImporter
         private bool _useEditorHumanoidMuscleReference;
         private bool _useCompleteEditorHumanoidMuscleReference;
         private bool _editorHumanoidMuscleReferenceLogged;
-        private EditorHumanoidPoseReferencePlayer _editorHumanoidPoseReferencePlayer;
+        private HumanoidPoseReferencePlayer _editorHumanoidPoseReferencePlayer;
         private HumanPose _editorHumanoidPoseReference;
         private bool _hasEditorHumanoidPoseReferenceForFrame;
         private AnimationCurve _editorRootTranslationX;
@@ -1798,6 +1794,11 @@ namespace Fbx2Vmd.FBXImporter
         private Vector3 _editorReferenceBodyPosition;
         private bool _hasEditorReferenceLowestFootRestY;
         private bool _allowEditorFootHeightGroundingReference;
+        // 빌드에서는 muscle curve 추출이 불가해 HumanPoseHandler 샘플링 결과만 참조로 사용함.
+        private HumanoidPoseReferencePlayer _editorHumanoidPoseReferencePlayer;
+        private HumanPose _editorHumanoidPoseReference;
+        private bool _useCompleteEditorHumanoidMuscleReference;
+        private bool _hasEditorHumanoidPoseReferenceForFrame;
 #endif
 
         // --- 초기화 ---
@@ -2047,8 +2048,8 @@ namespace Fbx2Vmd.FBXImporter
 
         private void OnDestroy()
         {
-#if UNITY_EDITOR
             _editorHumanoidPoseReferencePlayer?.Dispose();
+#if UNITY_EDITOR
             DisposeEditorHumanoidFingerPoseReference();
 #endif
             _legacyAnimationDriver.Dispose();
@@ -2103,7 +2104,7 @@ namespace Fbx2Vmd.FBXImporter
                 try
                 {
                     _editorHumanoidPoseReferencePlayer =
-                        new EditorHumanoidPoseReferencePlayer();
+                        new HumanoidPoseReferencePlayer();
                     _editorHumanoidPoseReferencePlayer.Initialize(targetAnimator, referenceClip);
                 }
                 catch (Exception exception)
@@ -2325,6 +2326,40 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 #endif
+
+        // 빌드에서는 에디터 muscle 클립이 없어 임포트된 소스 모델을 HumanPoseHandler로 샘플링해 참조로 사용함.
+        internal void ConfigureRuntimeHumanoidPoseReference(
+            GameObject referenceSourceModel,
+            AnimationClip referenceClip)
+        {
+            _editorHumanoidPoseReferencePlayer?.Dispose();
+            _editorHumanoidPoseReferencePlayer = null;
+            _useCompleteEditorHumanoidMuscleReference = false;
+            _hasEditorHumanoidPoseReferenceForFrame = false;
+            _hasEditorReferenceBodyPosition = false;
+
+            if (referenceSourceModel == null || referenceClip == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _editorHumanoidPoseReferencePlayer = new HumanoidPoseReferencePlayer();
+                _editorHumanoidPoseReferencePlayer.InitializeFromSourceModel(
+                    referenceSourceModel,
+                    referenceClip);
+                _useCompleteEditorHumanoidMuscleReference =
+                    _editorHumanoidPoseReferencePlayer.IsInitialized;
+            }
+            catch (Exception exception)
+            {
+                _editorHumanoidPoseReferencePlayer?.Dispose();
+                _editorHumanoidPoseReferencePlayer = null;
+                Debug.LogWarning(
+                    $"[PoseSpaceRetargeter] 런타임 Humanoid 포즈 참조를 준비하지 못했습니다: {exception.Message}");
+            }
+        }
 
         void LateUpdate()
         {
@@ -2665,6 +2700,10 @@ namespace Fbx2Vmd.FBXImporter
                 useCompleteEditorHumanoidMuscleReference = _useCompleteEditorHumanoidMuscleReference;
                 hasEditorHumanoidBodyRotationReference =
                     _hasEditorHumanoidPoseReferenceForFrame;
+#else
+                useCompleteEditorHumanoidMuscleReference = _useCompleteEditorHumanoidMuscleReference;
+                hasEditorHumanoidBodyRotationReference =
+                    _hasEditorHumanoidPoseReferenceForFrame;
 #endif
                 for (int i = 0; i < pose.muscles.Length; i++)
                 {
@@ -2738,8 +2777,38 @@ namespace Fbx2Vmd.FBXImporter
         {
 #if UNITY_EDITOR
             ApplyEditorHumanoidMuscleReferenceEditor(ref pose);
+#else
+            ApplyRuntimeHumanoidPoseReference(ref pose);
 #endif
         }
+
+#if !UNITY_EDITOR
+        private void ApplyRuntimeHumanoidPoseReference(ref HumanPose pose)
+        {
+            _hasEditorHumanoidPoseReferenceForFrame = false;
+            if (pose.muscles == null ||
+                !_useCompleteEditorHumanoidMuscleReference ||
+                _editorHumanoidPoseReferencePlayer == null ||
+                !_editorHumanoidPoseReferencePlayer.TryEvaluateAt(
+                    _legacyAnimationDriver.CurrentTime,
+                    ref _editorHumanoidPoseReference))
+            {
+                return;
+            }
+
+            int muscleCount = Mathf.Min(
+                pose.muscles.Length,
+                _editorHumanoidPoseReference.muscles.Length);
+            Array.Copy(
+                _editorHumanoidPoseReference.muscles,
+                pose.muscles,
+                muscleCount);
+            pose.bodyRotation = _editorHumanoidPoseReference.bodyRotation;
+            _editorReferenceBodyPosition = _editorHumanoidPoseReference.bodyPosition;
+            _hasEditorReferenceBodyPosition = IsFinite(_editorReferenceBodyPosition);
+            _hasEditorHumanoidPoseReferenceForFrame = true;
+        }
+#endif
 
         private void ApplyEditorHumanoidFingerPoseReference(ref HumanPose pose)
         {

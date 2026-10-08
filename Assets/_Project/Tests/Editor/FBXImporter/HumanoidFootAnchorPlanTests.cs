@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class EditorHumanoidFootContactPlanTests
+    public class HumanoidFootAnchorPlanTests
     {
         private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Static |
             BindingFlags.Public | BindingFlags.NonPublic;
@@ -33,7 +33,7 @@ namespace Tests.Editor.FBXImporter
                 var skin = root.AddComponent<SkinnedMeshRenderer>();
                 skin.sharedMesh = mesh;
                 skin.bones = new[] { foot };
-                Type samplerType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootSoleSampler", true);
+                Type samplerType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootSoleSampler", true);
                 object[] create = { foot, toes, new[] { skin }, Vector3.up, null };
                 Assert.That(samplerType.GetMethod("TryCreate", Flags).Invoke(null, create), Is.True);
                 sampler = create[4];
@@ -52,7 +52,7 @@ namespace Tests.Editor.FBXImporter
                     int frame = Mathf.RoundToInt(time * 60f);
                     foot.SetPositionAndRotation(origins[frame] * ratio, rotations[frame]);
                 };
-                Type planType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+                Type planType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootAnchorPlan", true);
                 MethodInfo build = planType.GetMethod("TryBuild", Flags);
                 object[] args = { foot, sampler, sources, weights, Quaternion.identity, ratio, 60f, 1f / 60f, evaluate, null,
                     hasFrames ? rotations : null, hasFrames ? (Quaternion?)Quaternion.identity : null,
@@ -205,7 +205,7 @@ namespace Tests.Editor.FBXImporter
                         Quaternion.identity);
                 };
                 Type planType = assembly.GetType(
-                    "Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+                    "Fbx2Vmd.FBXImporter.HumanoidFootAnchorPlan", true);
                 MethodInfo build = planType.GetMethod("TryBuild", Flags);
                 object[] args = { foot, rig.Sampler, sources, weights, Quaternion.identity,
                     ratio, 60f, frameCount / 60f, evaluate, null, null, null, policies, 0f, 0f };
@@ -260,7 +260,7 @@ namespace Tests.Editor.FBXImporter
                         frame == 0 ? Quaternion.identity : rolled);
                 };
                 Type planType = assembly.GetType(
-                    "Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+                    "Fbx2Vmd.FBXImporter.HumanoidFootAnchorPlan", true);
                 MethodInfo build = planType.GetMethod("TryBuild", Flags);
                 object[] args = { foot, rig.Sampler, sources, weights, Quaternion.identity,
                     1f, 60f, frameCount / 60f, evaluate, null, null, null, policies, 0f, 0f };
@@ -287,7 +287,7 @@ namespace Tests.Editor.FBXImporter
         {
             // 인접 프레임의 접촉점 신원이 다르면 지면과 무관한 가상점을 보간하지 않고
             // 보간 계수가 가리키는 실제 프레임의 피벗·앵커를 그대로 사용해야 함.
-            Type planType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+            Type planType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootAnchorPlan", true);
             object plan = Activator.CreateInstance(planType, Flags, null, new object[] { 3 }, null);
             Array channels = (Array)planType.GetField("_frames", Flags).GetValue(plan);
             Type frameType = planType.GetNestedType("Frame", Flags);
@@ -332,7 +332,7 @@ namespace Tests.Editor.FBXImporter
                     policyArray.SetValue(Enum.ToObject(policyType, policies[index]), index);
             }
 
-            Type planType = assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+            Type planType = assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootAnchorPlan", true);
             MethodInfo build = planType.GetMethod("TryBuild", Flags);
             object[] args = { foot, sampler, sources, weights, Quaternion.identity, ratio, 60f, 1f / 60f,
                 new Action<float>(_ => foot.SetPositionAndRotation(Vector3.zero, Quaternion.identity)),
@@ -378,7 +378,7 @@ namespace Tests.Editor.FBXImporter
             var skin = root.AddComponent<SkinnedMeshRenderer>();
             skin.sharedMesh = mesh;
             skin.bones = new[] { foot };
-            Type samplerType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootSoleSampler", true);
+            Type samplerType = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootSoleSampler", true);
             object[] create = { foot, toes, new[] { skin }, Vector3.up, null };
             Assert.That(samplerType.GetMethod("TryCreate", Flags).Invoke(null, create), Is.True);
             foot.SetPositionAndRotation(Vector3.zero, Quaternion.identity);

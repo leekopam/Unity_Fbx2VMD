@@ -142,6 +142,21 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_EditorEnvironment_When_GetCacheDirectory_Then_UsesProjectLibrary()
+        {
+            // 에디터에서는 기존 Library 경로 계약을 유지해야 기존 캐시가 유효함.
+            string directory = (string)RequireMethod(
+                    StoreTypeName,
+                    "GetCacheDirectory")
+                .Invoke(null, null);
+
+            Assert.That(Application.isEditor, Is.True);
+            Assert.That(
+                directory.Replace('\\', '/'),
+                Does.EndWith("/Library/NativeSkinningCorrectionCache"));
+        }
+
+        [Test]
         public void Given_OutOfRangeVertexIndex_When_Saving_Then_Rejects()
         {
             object document = MakeDocument();

@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,7 +10,7 @@ namespace Fbx2Vmd.FBXImporter
     /// 실행 증거 폴더의 human-labels.csv에서 같은 입력 FBX의 사람 확정 표식을 누적함.
     /// 열 순서는 run-product-smoke.mjs가 기록하는 서식과 같아야 함.
     /// </summary>
-    internal static class EditorHumanoidFootContactIntentLabelStore
+    internal static class HumanoidFootContactIntentLabelStore
     {
         private const int SideColumn = 2;
         private const int ContactLabelColumn = 3;
@@ -23,27 +22,43 @@ namespace Fbx2Vmd.FBXImporter
             public string input;
         }
 
+        // 라벨 검색 루트 — 개발 증거 폴더와 런타임 영구 폴더를 모두 찾는다.
+        internal static List<string> GetSearchRoots()
+        {
+            var roots = new List<string>(2);
+            string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
+            if (!string.IsNullOrEmpty(projectRoot))
+            {
+                roots.Add(Path.Combine(projectRoot,
+                    "Docs", "Workflow", "Local", "evidence", "boogle"));
+            }
+            // 빌드 환경에는 개발 증거 폴더가 없으므로 영구 데이터 폴더를 사용함.
+            roots.Add(Path.Combine(
+                Application.persistentDataPath, "evidence", "boogle"));
+            return roots;
+        }
+
         internal static HumanoidFootContactIntentLabelSet Load(string sourceKey)
         {
             if (string.IsNullOrWhiteSpace(sourceKey))
                 return HumanoidFootContactIntentLabelSet.Empty;
-            string projectRoot = Directory.GetParent(Application.dataPath)?.FullName;
-            if (string.IsNullOrEmpty(projectRoot)) return HumanoidFootContactIntentLabelSet.Empty;
-            string root = Path.Combine(projectRoot,
-                "Docs", "Workflow", "Local", "evidence", "boogle");
-            if (!Directory.Exists(root)) return HumanoidFootContactIntentLabelSet.Empty;
 
-            string[] files;
-            try
+            var files = new List<string>();
+            foreach (string root in GetSearchRoots())
             {
-                files = Directory.GetFiles(root, "human-labels.csv", SearchOption.AllDirectories);
-            }
-            catch
-            {
-                return HumanoidFootContactIntentLabelSet.Empty;
+                if (!Directory.Exists(root)) continue;
+                try
+                {
+                    files.AddRange(Directory.GetFiles(
+                        root, "human-labels.csv", SearchOption.AllDirectories));
+                }
+                catch
+                {
+                    // 접근 불가 루트는 건너뛰고 나머지 루트를 계속 찾음.
+                }
             }
             // 파일 순서를 고정해 겹치는 표식의 해석이 실행마다 달라지지 않게 함.
-            Array.Sort(files, StringComparer.Ordinal);
+            files.Sort(StringComparer.Ordinal);
 
             var left = new List<HumanoidFootContactIntentLabel>();
             var right = new List<HumanoidFootContactIntentLabel>();
@@ -150,4 +165,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

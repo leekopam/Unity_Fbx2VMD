@@ -1,7 +1,8 @@
-#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -9,7 +10,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 기준 Humanoid 모델에서 같은 시간의 원본 자세를 샘플링함.
     /// </summary>
-    internal sealed class EditorHumanoidPoseReferencePlayer : IDisposable
+    internal sealed class HumanoidPoseReferencePlayer : IDisposable
     {
         private readonly NativeHumanoidAnimationPlayer _animationPlayer =
             new NativeHumanoidAnimationPlayer();
@@ -44,9 +45,13 @@ namespace Fbx2Vmd.FBXImporter
                 throw new ArgumentNullException(nameof(targetAnimator));
             }
 
-            GameObject referenceSource =
-                PrefabUtility.GetCorrespondingObjectFromOriginalSource(targetAnimator.gameObject) ??
-                targetAnimator.gameObject;
+            GameObject referenceSource = targetAnimator.gameObject;
+#if UNITY_EDITOR
+            // 에디터에서는 프리팹 원본을 기준 모델로 우선 사용함.
+            referenceSource =
+                PrefabUtility.GetCorrespondingObjectFromOriginalSource(referenceSource) ??
+                referenceSource;
+#endif
             InitializeFromSourceModel(referenceSource, clip);
         }
 
@@ -453,4 +458,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

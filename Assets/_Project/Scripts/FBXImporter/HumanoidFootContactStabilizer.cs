@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using RootMotion.FinalIK;
@@ -9,7 +8,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 원본 접촉 궤적을 대상 양다리에 본 길이 변화 없이 적용함.
     /// </summary>
-    internal sealed class EditorHumanoidFootContactStabilizer
+    internal sealed class HumanoidFootContactStabilizer
     {
         private const float MinimumBendNormalSquaredMagnitude = 0.00000001f;
         private const float MinimumCorrectionSquaredMagnitude = 0.0000000001f;
@@ -52,7 +51,7 @@ namespace Fbx2Vmd.FBXImporter
             Animator targetAnimator,
             AnimationClip clip,
             Action<float> evaluateTarget,
-            EditorHumanoidPoseReferencePlayer sourceReference,
+            HumanoidPoseReferencePlayer sourceReference,
             string sourceAssetName = null)
         {
             if (targetAnimator == null)
@@ -156,7 +155,7 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 // 누적된 사람 표식을 같은 입력의 과거 증거에서 읽어 추정에 반영함.
-                IntentLabels = EditorHumanoidFootContactIntentLabelStore.Load(sourceAssetName);
+                IntentLabels = HumanoidFootContactIntentLabelStore.Load(sourceAssetName);
                 try
                 {
                     IntentEstimate = HumanoidFootContactIntentEstimator.Estimate(
@@ -497,4 +496,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

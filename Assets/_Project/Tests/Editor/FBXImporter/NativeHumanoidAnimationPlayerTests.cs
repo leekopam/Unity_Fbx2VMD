@@ -620,7 +620,7 @@ namespace Tests.Editor.FBXImporter
         private static object CreateEditorReferencePlayer()
         {
             Type playerType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.FBXImporter.EditorHumanoidPoseReferencePlayer",
+                "Fbx2Vmd.FBXImporter.HumanoidPoseReferencePlayer",
                 throwOnError: false);
             Assert.That(playerType, Is.Not.Null,
                 "기존 Native Humanoid 재생기를 재사용하는 Editor pose reference player가 필요합니다.");

@@ -1514,6 +1514,10 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
         internal bool ShouldUseEditorHumanoidPlaybackSession =>
             Application.isPlaying && !EditorDiagnosticSession.IsRecordingOverrideActive;
+#else
+        // 빌드에서는 자동 녹화가 꺼진 임포트를 대화형 재생 세션으로 연다.
+        internal bool ShouldUseRuntimeHumanoidPlaybackSession =>
+            !ShouldRecordVmdAfterImport;
 #endif
         internal bool ShouldFaceTargetToCameraOnIdle =>
             _idlePoseGuard != null && _idlePoseGuard.ShouldFaceTargetToCameraOnIdle;
@@ -2391,6 +2395,70 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidMotionPlaybackControlsView.Ensure(this);
         }
 #endif
+
+        /// <summary>
+        /// 빌드 환경의 Humanoid 재생 세션 준비 — 에디터 경로와 같은 보정 스택을 쓰되
+        /// AssetDatabase·Recorder 등 에디터 전용 의존성은 쓰지 않는다.
+        /// 런타임 임포트 모델은 Ghost 컨테이너가 소유하므로 여기서 정리하지 않는다.
+        /// </summary>
+        internal void PrepareRuntimeHumanoidPlayback(
+            Animator targetAnimator,
+            AnimationClip clip,
+            string motionName,
+            GameObject importedModel,
+            string sourceFilePath)
+        {
+            _nativeSkinningCorrectionPlaybackDriver?.Release();
+            _pendingNativeSkinningPlaybackRequest =
+                NativeSkinningPendingPlaybackRequest.None;
+            _nativeSkinningCorrectionSetupError = string.Empty;
+            _humanoidMotionPlaybackController ??=
+                new HumanoidMotionPlaybackController();
+            if (importedModel == null)
+            {
+                _humanoidMotionPlaybackController.Prepare(targetAnimator, clip);
+            }
+            else
+            {
+                _humanoidMotionPlaybackController.PrepareWithArmDirectionReference(
+                    targetAnimator,
+                    clip,
+                    importedModel);
+            }
+            _humanoidMotionPlaybackController.SetGroundResponseEnabled(true);
+            _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
+                motionName,
+                _humanoidMotionPlaybackController.ClipFrameRate);
+            _humanoidMotionRecordingController?.Dispose();
+            _humanoidMotionRecordingController = new HumanoidMotionRecordingController(
+                _humanoidMotionPlaybackController,
+                new NoOpMotionVideoRecorder());
+            _preparedMotionName = motionName;
+            _isProcessing = false;
+            if (!NativeSkinningCorrectionPlaybackDriver.TryAttach(
+                    gameObject,
+                    targetAnimator,
+                    _humanoidMotionPlaybackController,
+                    out _nativeSkinningCorrectionPlaybackDriver,
+                    out _nativeSkinningCorrectionSetupError))
+            {
+                SetSessionState(
+                    FBXSessionState.Failed,
+                    _nativeSkinningCorrectionSetupError,
+                    0f);
+                HumanoidMotionPlaybackControlsView.Ensure(this);
+                return;
+            }
+            // 빌드는 에셋 식별자가 없어 소스 FBX 경로+내용 해시로 캐시 키를 잡는다.
+            _nativeSkinningCorrectionPlaybackDriver?.ConfigureRuntimeCacheIdentity(
+                sourceFilePath,
+                motionName);
+            SetSessionState(
+                FBXSessionState.Ready,
+                $"FBX 임포트 완료 · 재생 대기: {motionName}",
+                1f);
+            HumanoidMotionPlaybackControlsView.Ensure(this);
+        }
 
         internal void PrepareGhostModel(GameObject importedModel)
         {

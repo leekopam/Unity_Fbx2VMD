@@ -7,7 +7,7 @@ namespace Tests.Editor.FBXImporter
 {
     /// <summary>
     /// 라벨링 창이 쓰는 human-labels.csv 서식이 run-product-smoke.mjs 템플릿과
-    /// EditorHumanoidFootContactIntentLabelStore 파서의 계약을 지키는지 검증함.
+    /// HumanoidFootContactIntentLabelStore 파서의 계약을 지키는지 검증함.
     /// </summary>
     public class FootContactIntentLabelingCsvTests
     {
@@ -16,7 +16,7 @@ namespace Tests.Editor.FBXImporter
         private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Static |
             BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly Type StoreType = typeof(FBXVmdPipeline).Assembly
-            .GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootContactIntentLabelStore", true);
+            .GetType("Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabelStore", true);
 
         [Test]
         public void Given_Header_When_Comparing_Then_MatchesValidatorContract()

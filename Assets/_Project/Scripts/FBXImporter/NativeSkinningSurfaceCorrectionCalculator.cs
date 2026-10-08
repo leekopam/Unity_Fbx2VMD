@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 
 namespace Fbx2Vmd.FBXImporter
@@ -107,6 +111,8 @@ namespace Fbx2Vmd.FBXImporter
         private const float MaximumAbsoluteStep = 0.00005f;
         private const float MaximumRelativeStep = 0.02f;
         private const float QualityComparisonTolerance = 0.0000001f;
+        // 상대 에너지 개선이 이 값 미만이면 LG 반복을 조기 종료한다.
+        private const double EarlyConvergenceRelativeImprovement = 0.001;
         private const float MinimumStoredCorrectionSquaredMagnitude =
             0.0000000000000001f;
         private const int LineSearchIterations = 10;
@@ -129,21 +135,47 @@ namespace Fbx2Vmd.FBXImporter
         // 수용 결과는 엄격한 게이트로 다시 검증하므로 실질 품질 기준은 유지된다.
         private static readonly CorrectionConfiguration StrongHeadroomConfiguration =
             new CorrectionConfiguration(640, 64, 32, 0.05f, 0.055f, 3);
+        // 조기 수렴·웜스타트는 fast 경로에만 허용한다. strong은 정밀 fallback이라 기준 궤적을 유지한다.
+        // Burst 경로는 계측에서 회귀(CG 호출당 네이티브 포장 비용이 커널 이득을 상쇄)가
+        // 확인돼 비활성으로 둔다 — 코드는 fast 전용 게이트 뒤에 보존한다.
         private static readonly CorrectionConfiguration FastConfiguration =
-            new CorrectionConfiguration(80, 16, 0, 0.02f, 0.002512f);
+            new CorrectionConfiguration(80, 16, 0, 0.02f, 0.002512f,
+                DefaultWorksetRingCount,
+                allowsEarlyConvergence: true,
+                allowsWarmStart: true,
+                allowsBurst: false);
 
         internal static bool TryCalculateFast(
             IReadOnlyList<Vector3> baselineVertices,
             NativeSkinningSurfaceContract contract,
             out NativeSkinningSurfaceCorrectionResult result)
         {
-            return TryCalculate(
+            return TryCalculateTimed(
                 baselineVertices,
                 baselineVertices,
                 contract,
                 FastConfiguration,
                 false,
                 true,
+                null,
+                out result);
+        }
+
+        // 계측 경로 — 리플렉션 호출과 이름 충돌하지 않게 별도 명명한다.
+        internal static bool TryCalculateFastTimed(
+            IReadOnlyList<Vector3> baselineVertices,
+            NativeSkinningSurfaceContract contract,
+            NativeSkinningSolverTiming timing,
+            out NativeSkinningSurfaceCorrectionResult result)
+        {
+            return TryCalculateTimed(
+                baselineVertices,
+                baselineVertices,
+                contract,
+                FastConfiguration,
+                false,
+                true,
+                timing,
                 out result);
         }
 
@@ -152,13 +184,31 @@ namespace Fbx2Vmd.FBXImporter
             NativeSkinningSurfaceContract contract,
             out NativeSkinningSurfaceCorrectionResult result)
         {
-            return TryCalculate(
+            return TryCalculateTimed(
                 baselineVertices,
                 baselineVertices,
                 contract,
                 FastConfiguration,
                 false,
                 false,
+                null,
+                out result);
+        }
+
+        internal static bool TryCalculateFastValidatedFrameTimed(
+            IReadOnlyList<Vector3> baselineVertices,
+            NativeSkinningSurfaceContract contract,
+            NativeSkinningSolverTiming timing,
+            out NativeSkinningSurfaceCorrectionResult result)
+        {
+            return TryCalculateTimed(
+                baselineVertices,
+                baselineVertices,
+                contract,
+                FastConfiguration,
+                false,
+                false,
+                timing,
                 out result);
         }
 
@@ -167,13 +217,31 @@ namespace Fbx2Vmd.FBXImporter
             NativeSkinningSurfaceContract contract,
             out NativeSkinningSurfaceCorrectionResult result)
         {
-            return TryCalculate(
+            return TryCalculateTimed(
                 baselineVertices,
                 baselineVertices,
                 contract,
                 StrongConfiguration,
                 false,
                 true,
+                null,
+                out result);
+        }
+
+        internal static bool TryCalculateStrongTimed(
+            IReadOnlyList<Vector3> baselineVertices,
+            NativeSkinningSurfaceContract contract,
+            NativeSkinningSolverTiming timing,
+            out NativeSkinningSurfaceCorrectionResult result)
+        {
+            return TryCalculateTimed(
+                baselineVertices,
+                baselineVertices,
+                contract,
+                StrongConfiguration,
+                false,
+                true,
+                timing,
                 out result);
         }
 
@@ -182,13 +250,24 @@ namespace Fbx2Vmd.FBXImporter
             NativeSkinningSurfaceContract contract,
             out NativeSkinningSurfaceCorrectionResult result)
         {
-            if (!TryCalculate(
+            return TryCalculateStrongValidatedFrameTimed(
+                baselineVertices, contract, null, out result);
+        }
+
+        internal static bool TryCalculateStrongValidatedFrameTimed(
+            IReadOnlyList<Vector3> baselineVertices,
+            NativeSkinningSurfaceContract contract,
+            NativeSkinningSolverTiming timing,
+            out NativeSkinningSurfaceCorrectionResult result)
+        {
+            if (!TryCalculateTimed(
                     baselineVertices,
                     baselineVertices,
                     contract,
                     StrongConfiguration,
                     false,
                     false,
+                    timing,
                     out result))
             {
                 return false;
@@ -198,26 +277,28 @@ namespace Fbx2Vmd.FBXImporter
                 return true;
             }
             // 축소 예산 재시도가 더 엄격한 품질 게이트를 통과하면 그 결과를 채택한다.
-            if (TryCalculate(
+            if (TryCalculateTimed(
                     baselineVertices,
                     baselineVertices,
                     contract,
                     StrongRetryConfiguration,
                     false,
                     false,
+                    timing,
                     out NativeSkinningSurfaceCorrectionResult retry) &&
                 IsWithinQuality(retry, contract, StrongRetryConfiguration))
             {
                 result = retry;
             }
             if (!IsWithinQuality(result, contract, StrongConfiguration) &&
-                TryCalculate(
+                TryCalculateTimed(
                     baselineVertices,
                     baselineVertices,
                     contract,
                     StrongHeadroomConfiguration,
                     false,
                     false,
+                    timing,
                     out NativeSkinningSurfaceCorrectionResult headroom) &&
                 IsWithinQuality(headroom, contract, StrongConfiguration))
             {
@@ -227,13 +308,14 @@ namespace Fbx2Vmd.FBXImporter
             // 직전 결과를 초기 추정으로 재투입해 basin 이탈을 시도한다.
             if (!IsWithinQuality(result, contract, StrongConfiguration) &&
                 result?.CorrectedVertices != null &&
-                TryCalculate(
+                TryCalculateTimed(
                     baselineVertices,
                     result.CorrectedVertices,
                     contract,
                     StrongConfiguration,
                     false,
                     false,
+                    timing,
                     out NativeSkinningSurfaceCorrectionResult chained) &&
                 IsWithinQuality(chained, contract, StrongConfiguration))
             {
@@ -286,6 +368,7 @@ namespace Fbx2Vmd.FBXImporter
                        QualityComparisonTolerance;
         }
 
+        // 진단 테스트가 이 7인자 시그니처를 리플렉션으로 호출하므로 이름·인수를 유지한다.
         private static bool TryCalculate(
             IReadOnlyList<Vector3> baselineVertices,
             IReadOnlyList<Vector3> initialVertices,
@@ -293,6 +376,27 @@ namespace Fbx2Vmd.FBXImporter
             CorrectionConfiguration configuration,
             bool allowsStrainRecovery,
             bool shouldValidateVertices,
+            out NativeSkinningSurfaceCorrectionResult result)
+        {
+            return TryCalculateTimed(
+                baselineVertices,
+                initialVertices,
+                contract,
+                configuration,
+                allowsStrainRecovery,
+                shouldValidateVertices,
+                null,
+                out result);
+        }
+
+        private static bool TryCalculateTimed(
+            IReadOnlyList<Vector3> baselineVertices,
+            IReadOnlyList<Vector3> initialVertices,
+            NativeSkinningSurfaceContract contract,
+            CorrectionConfiguration configuration,
+            bool allowsStrainRecovery,
+            bool shouldValidateVertices,
+            NativeSkinningSolverTiming timing,
             out NativeSkinningSurfaceCorrectionResult result)
         {
             result = null;
@@ -344,6 +448,7 @@ namespace Fbx2Vmd.FBXImporter
 
             Vector3[] vertices = initialVertices.ToArray();
             FrameEdge[] frameEdges = BuildFrameEdges(baselineVertices, contract);
+            var buffers = new SolverBuffers();
             if (restShapeRecoveryPairIndices.Length > 0)
             {
                 vertices = ApplyCorrectionPass(
@@ -353,7 +458,10 @@ namespace Fbx2Vmd.FBXImporter
                     configuration,
                     restShapeRecoveryPairIndices,
                     true,
-                    allowsStrainRecovery);
+                    allowsStrainRecovery,
+                    frameEdges,
+                    buffers,
+                    timing);
             }
             if (sharpFoldPairIndices.Length > 0)
             {
@@ -365,7 +473,10 @@ namespace Fbx2Vmd.FBXImporter
                     sharpFoldPairIndices,
                     false,
                     allowsStrainRecovery ||
-                    restShapeRecoveryPairIndices.Length > 0);
+                    restShapeRecoveryPairIndices.Length > 0,
+                    frameEdges,
+                    buffers,
+                    timing);
             }
 
             result = EvaluateResult(
@@ -386,6 +497,8 @@ namespace Fbx2Vmd.FBXImporter
                     initialSharpFoldCount,
                     restShapeRecoveryPairIndices,
                     sharpFoldPairIndices,
+                    buffers,
+                    timing,
                     out NativeSkinningSurfaceCorrectionResult fallbackResult))
             {
                 result = fallbackResult;
@@ -403,6 +516,8 @@ namespace Fbx2Vmd.FBXImporter
             int initialSharpFoldCount,
             IReadOnlyList<int> restShapeRecoveryPairIndices,
             IReadOnlyList<int> sharpFoldPairIndices,
+            SolverBuffers buffers,
+            NativeSkinningSolverTiming timing,
             out NativeSkinningSurfaceCorrectionResult result)
         {
             result = null;
@@ -419,7 +534,10 @@ namespace Fbx2Vmd.FBXImporter
                     configuration,
                     sharpFoldPairIndices,
                     false,
-                    allowsStrainRecovery)
+                    allowsStrainRecovery,
+                    frameEdges,
+                    buffers,
+                    timing)
                 : initialVertices.ToArray();
             Vector3[] projectionStartVertices = sharpFoldCorrectedVertices;
             for (int round = 0; round < CoupledProjectionRoundCount; round++)
@@ -516,19 +634,30 @@ namespace Fbx2Vmd.FBXImporter
             CorrectionConfiguration configuration,
             IEnumerable<int> seedPairIndices,
             bool shouldRecoverRestShape,
-            bool allowsStrainRecovery)
+            bool allowsStrainRecovery,
+            IReadOnlyList<FrameEdge> frameEdges,
+            SolverBuffers buffers,
+            NativeSkinningSolverTiming timing)
         {
             Vector3[] vertices = initialVertices;
             var activePairIndices = new HashSet<int>(seedPairIndices);
+            long sectionStamp = NativeSkinningSolverTiming.Stamp();
             LocalWorkset workset = BuildLocalWorkset(
                 baselineVertices,
                 contract,
                 activePairIndices,
-                configuration.WorksetRingCount);
+                configuration.WorksetRingCount,
+                frameEdges,
+                buffers);
+            timing?.AddSetup(sectionStamp);
+            buffers.EnsureLocalSize(workset.ConstrainedVertices.Length);
+            buffers.EnsureVertexSize(vertices.Length);
             for (int iteration = 0;
                  iteration < configuration.LocalGlobalIterations;
                  iteration++)
             {
+                timing?.AddLgIteration();
+                sectionStamp = NativeSkinningSolverTiming.Stamp();
                 UpdateActiveCorrectionPairs(
                     baselineVertices,
                     vertices,
@@ -545,11 +674,13 @@ namespace Fbx2Vmd.FBXImporter
                     workset.FaceIndices,
                     workset.Edges,
                     shouldRecoverRestShape);
+                timing?.AddPairEnergy(sectionStamp);
                 if (beforeEnergy <= 0d)
                 {
                     break;
                 }
 
+                sectionStamp = NativeSkinningSolverTiming.Stamp();
                 BuildDisplacementSystem(
                     baselineVertices,
                     vertices,
@@ -557,39 +688,56 @@ namespace Fbx2Vmd.FBXImporter
                     workset,
                     activePairIndices,
                     shouldRecoverRestShape,
-                    out float[] diagonal,
-                    out float[] preconditionerDiagonal,
-                    out Vector3[] rightHandSide,
-                    out BendingLinearization[] bendingLinearizations,
-                    out EdgeStrainLinearization[] edgeStrainLinearizations,
+                    buffers,
                     out NativeSkinningMaterialStrainConstraint[]
                         materialStrainConstraints,
                     out int activeConstraintCount);
+                timing?.AddBuildSystem(sectionStamp);
                 if (activeConstraintCount == 0)
                 {
                     break;
                 }
 
-                Vector3[] displacement = SolveConjugateGradient(
-                    diagonal,
-                    preconditionerDiagonal,
-                    shouldRecoverRestShape
-                        ? Array.Empty<LocalEdge>()
-                        : workset.Edges,
-                    bendingLinearizations,
-                    edgeStrainLinearizations,
-                    materialStrainConstraints,
-                    rightHandSide,
-                    configuration.ConjugateGradientIterations);
+                sectionStamp = NativeSkinningSolverTiming.Stamp();
+                IReadOnlyList<LocalEdge> cgEdges = shouldRecoverRestShape
+                    ? (IReadOnlyList<LocalEdge>)Array.Empty<LocalEdge>()
+                    : workset.Edges;
+                bool warmStart =
+                    configuration.AllowsWarmStart && iteration > 0;
+                Vector3[] displacement = configuration.AllowsBurst
+                    ? SolveConjugateGradientBurst(
+                        buffers,
+                        cgEdges,
+                        materialStrainConstraints,
+                        workset.ConstrainedVertices.Length,
+                        configuration.ConjugateGradientIterations,
+                        warmStart,
+                        timing)
+                    : SolveConjugateGradient(
+                        buffers,
+                        cgEdges,
+                        materialStrainConstraints,
+                        workset.ConstrainedVertices.Length,
+                        configuration.ConjugateGradientIterations,
+                        warmStart,
+                        timing);
+                timing?.AddCgSolve(sectionStamp);
+                sectionStamp = NativeSkinningSolverTiming.Stamp();
                 LimitDisplacement(
                     displacement,
+                    workset.ConstrainedVertices.Length,
                     vertices,
                     contract,
                     activePairIndices);
-                Vector3[] proposedLocalPositions = workset.ConstrainedVertices
-                    .Select((vertexIndex, localIndex) =>
-                        vertices[vertexIndex] + displacement[localIndex])
-                    .ToArray();
+                Vector3[] proposedLocalPositions = buffers.ProposedLocal;
+                for (int localIndex = 0;
+                     localIndex < workset.ConstrainedVertices.Length;
+                     localIndex++)
+                {
+                    proposedLocalPositions[localIndex] =
+                        vertices[workset.ConstrainedVertices[localIndex]] +
+                        displacement[localIndex];
+                }
                 if (shouldRecoverRestShape)
                 {
                     ProjectRestShapeRecoveryConstraints(
@@ -622,11 +770,22 @@ namespace Fbx2Vmd.FBXImporter
                         configuration,
                         shouldRecoverRestShape,
                         allowsStrainRecovery,
-                        out Vector3[] acceptedVertices))
+                        buffers.CandidateFor(vertices),
+                        out Vector3[] acceptedVertices,
+                        out double acceptedEnergy))
+                {
+                    timing?.AddProjectAccept(sectionStamp);
+                    break;
+                }
+                timing?.AddProjectAccept(sectionStamp);
+                vertices = acceptedVertices;
+                // 상대 개선폭이 수렴 임계 미만이면 꼬리 반복을 생략한다.
+                if (configuration.AllowsEarlyConvergence &&
+                    (beforeEnergy - acceptedEnergy) / beforeEnergy <
+                    EarlyConvergenceRelativeImprovement)
                 {
                     break;
                 }
-                vertices = acceptedVertices;
             }
             return vertices;
         }
@@ -762,8 +921,9 @@ namespace Fbx2Vmd.FBXImporter
                     vertices,
                     contract,
                     pairIndex));
+            // vertices는 재사용 버퍼를 별칭할 수 있어 fallback 덮어쓰기를 막기 위해 스냅샷한다.
             return new NativeSkinningSurfaceCorrectionResult(
-                vertices,
+                (Vector3[])vertices.Clone(),
                 correctedVertexIndices,
                 initialSharpFoldCount,
                 residualSharpFoldCount,
@@ -856,19 +1016,20 @@ namespace Fbx2Vmd.FBXImporter
             LocalWorkset workset,
             IReadOnlyCollection<int> activePairIndices,
             bool shouldRecoverRestShape,
-            out float[] diagonal,
-            out float[] preconditionerDiagonal,
-            out Vector3[] rightHandSide,
-            out BendingLinearization[] bendingLinearizations,
-            out EdgeStrainLinearization[] edgeStrainLinearizations,
+            SolverBuffers buffers,
             out NativeSkinningMaterialStrainConstraint[] materialStrainConstraints,
             out int activeConstraintCount)
         {
-            diagonal = new float[workset.ConstrainedVertices.Length];
-            rightHandSide = new Vector3[workset.ConstrainedVertices.Length];
-            var bendingTerms = new List<BendingLinearization>();
-            var edgeStrainTerms = new List<EdgeStrainLinearization>();
-            for (int localIndex = 0; localIndex < diagonal.Length; localIndex++)
+            int count = workset.ConstrainedVertices.Length;
+            float[] diagonal = buffers.Diagonal;
+            Array.Clear(diagonal, 0, count);
+            Vector3[] rightHandSide = buffers.RightHandSide;
+            Array.Clear(rightHandSide, 0, count);
+            List<BendingLinearization> bendingTerms = buffers.BendingTerms;
+            bendingTerms.Clear();
+            List<EdgeStrainLinearization> edgeStrainTerms = buffers.EdgeStrainTerms;
+            edgeStrainTerms.Clear();
+            for (int localIndex = 0; localIndex < count; localIndex++)
             {
                 diagonal[localIndex] = shouldRecoverRestShape
                     ? RestShapeRecoveryAttachmentWeight
@@ -954,20 +1115,6 @@ namespace Fbx2Vmd.FBXImporter
                 float gradientSquaredSum =
                     violationRadians * violationRadians / correctionSquaredSum;
                 float gradientScale = -gradientSquaredSum / violationRadians;
-                int[] localIndices =
-                {
-                    workset.LocalIndexByVertex[pair.FirstOpposite],
-                    workset.LocalIndexByVertex[pair.SecondOpposite],
-                    workset.LocalIndexByVertex[pair.FirstEdge],
-                    workset.LocalIndexByVertex[pair.SecondEdge]
-                };
-                Vector3[] gradients =
-                {
-                    correction0 * gradientScale,
-                    correction1 * gradientScale,
-                    correction2 * gradientScale,
-                    correction3 * gradientScale
-                };
                 AddBendingRightHandSide(
                     pair.FirstOpposite,
                     correction0,
@@ -992,7 +1139,15 @@ namespace Fbx2Vmd.FBXImporter
                     gradientSquaredSum,
                     workset.LocalIndexByVertex,
                     rightHandSide);
-                bendingTerms.Add(new BendingLinearization(localIndices, gradients));
+                bendingTerms.Add(new BendingLinearization(
+                    workset.LocalIndexByVertex[pair.FirstOpposite],
+                    workset.LocalIndexByVertex[pair.SecondOpposite],
+                    workset.LocalIndexByVertex[pair.FirstEdge],
+                    workset.LocalIndexByVertex[pair.SecondEdge],
+                    correction0 * gradientScale,
+                    correction1 * gradientScale,
+                    correction2 * gradientScale,
+                    correction3 * gradientScale));
                 activeConstraintCount++;
             }
 
@@ -1038,16 +1193,17 @@ namespace Fbx2Vmd.FBXImporter
                     edgeStrainTerms,
                     ref activeConstraintCount);
             }
-            preconditionerDiagonal = diagonal.ToArray();
+            float[] preconditionerDiagonal = buffers.Preconditioner;
+            Array.Copy(diagonal, preconditionerDiagonal, count);
             foreach (BendingLinearization term in bendingTerms)
             {
-                for (int index = 0; index < term.LocalIndices.Length; index++)
+                for (int index = 0; index < 4; index++)
                 {
-                    int localIndex = term.LocalIndices[index];
+                    int localIndex = term.LocalIndexAt(index);
                     if (localIndex >= 0)
                     {
                         preconditionerDiagonal[localIndex] +=
-                            BendingWeight * term.Gradients[index].sqrMagnitude;
+                            BendingWeight * term.GradientAt(index).sqrMagnitude;
                     }
                 }
             }
@@ -1075,8 +1231,6 @@ namespace Fbx2Vmd.FBXImporter
                         constraint.Weight * coefficient * coefficient;
                 }
             }
-            bendingLinearizations = bendingTerms.ToArray();
-            edgeStrainLinearizations = edgeStrainTerms.ToArray();
         }
 
         private static void AddBendingRightHandSide(
@@ -1209,63 +1363,98 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private static Vector3[] SolveConjugateGradient(
-            IReadOnlyList<float> diagonal,
-            IReadOnlyList<float> preconditionerDiagonal,
+            SolverBuffers buffers,
             IReadOnlyList<LocalEdge> edges,
-            IReadOnlyList<BendingLinearization> bendingLinearizations,
-            IReadOnlyList<EdgeStrainLinearization> edgeStrainLinearizations,
             IReadOnlyList<NativeSkinningMaterialStrainConstraint>
                 materialStrainConstraints,
-            IReadOnlyList<Vector3> rightHandSide,
-            int maximumIterations)
+            int count,
+            int maximumIterations,
+            bool warmStart,
+            NativeSkinningSolverTiming timing)
         {
-            var solution = new Vector3[rightHandSide.Count];
-            Vector3[] residual = Subtract(
-                rightHandSide,
-                ApplyMatrix(
+            timing?.AddCgCall();
+            float[] diagonal = buffers.Diagonal;
+            float[] preconditionerDiagonal = buffers.Preconditioner;
+            Vector3[] rightHandSide = buffers.RightHandSide;
+            Vector3[] solution = buffers.Solution;
+            Vector3[] residual = buffers.Residual;
+            Vector3[] direction = buffers.Direction;
+            Vector3[] preconditionedResidual = buffers.PreconditionedResidual;
+            Vector3[] matrixDirection = buffers.MatrixDirection;
+            List<BendingLinearization> bendingLinearizations =
+                buffers.BendingTerms;
+            List<EdgeStrainLinearization> edgeStrainLinearizations =
+                buffers.EdgeStrainTerms;
+            if (warmStart)
+            {
+                // 직전 반복 해법을 x0로 — 잔차는 우변−A·x0를 실제 계산한다.
+                ApplyMatrixInto(
                     solution,
                     diagonal,
                     edges,
                     bendingLinearizations,
                     edgeStrainLinearizations,
-                    materialStrainConstraints));
-            Vector3[] direction = ApplyDiagonalPreconditioner(
+                    materialStrainConstraints,
+                    matrixDirection,
+                    count);
+                for (int index = 0; index < count; index++)
+                {
+                    residual[index] =
+                        rightHandSide[index] - matrixDirection[index];
+                }
+            }
+            else
+            {
+                // x0=0이면 A·x0=0이라 잔차는 우변 그대로 — 첫 ApplyMatrix를 생략한다.
+                Array.Clear(solution, 0, count);
+                Array.Copy(rightHandSide, residual, count);
+            }
+            ApplyDiagonalPreconditionerInto(
                 residual,
-                preconditionerDiagonal);
-            Vector3[] preconditionedResidual = direction.ToArray();
-            double residualDot = Dot(residual, preconditionedResidual);
+                preconditionerDiagonal,
+                direction,
+                count);
+            double residualDot = Dot(residual, direction, count);
             for (int iteration = 0;
                  iteration < maximumIterations && residualDot > 1e-20d;
                  iteration++)
             {
-                Vector3[] matrixDirection = ApplyMatrix(
+                timing?.AddCgIteration();
+                ApplyMatrixInto(
                     direction,
                     diagonal,
                     edges,
                     bendingLinearizations,
                     edgeStrainLinearizations,
-                    materialStrainConstraints);
-                double denominator = Dot(direction, matrixDirection);
+                    materialStrainConstraints,
+                    matrixDirection,
+                    count);
+                double denominator = Dot(direction, matrixDirection, count);
                 if (Math.Abs(denominator) <= 1e-20d)
                 {
                     break;
                 }
                 float step = (float)(residualDot / denominator);
-                for (int index = 0; index < solution.Length; index++)
+                for (int index = 0; index < count; index++)
                 {
                     solution[index] += direction[index] * step;
                     residual[index] -= matrixDirection[index] * step;
                 }
-                if (Dot(residual, residual) <= 1e-18d)
+                if (Dot(residual, residual, count) <= 1e-18d)
                 {
                     break;
                 }
-                preconditionedResidual = ApplyDiagonalPreconditioner(
+                ApplyDiagonalPreconditionerInto(
                     residual,
-                    preconditionerDiagonal);
-                double nextResidualDot = Dot(residual, preconditionedResidual);
+                    preconditionerDiagonal,
+                    preconditionedResidual,
+                    count);
+                double nextResidualDot = Dot(
+                    residual,
+                    preconditionedResidual,
+                    count);
                 float beta = (float)(nextResidualDot / residualDot);
-                for (int index = 0; index < direction.Length; index++)
+                for (int index = 0; index < count; index++)
                 {
                     direction[index] = preconditionedResidual[index] +
                         direction[index] * beta;
@@ -1275,17 +1464,429 @@ namespace Fbx2Vmd.FBXImporter
             return solution;
         }
 
-        private static Vector3[] ApplyMatrix(
+        // fast 전용 Burst 경로 — CG 한 호출을 하나의 Job으로 실행해
+        // 반복마다 스케줄 비용을 치르지 않는다. 포장·해제는 호출당 1회.
+        // 포장이나 실행이 실패하면 managed 경로로 되돌아가 결과 계약을 유지한다.
+        private static Vector3[] SolveConjugateGradientBurst(
+            SolverBuffers buffers,
+            IReadOnlyList<LocalEdge> edges,
+            IReadOnlyList<NativeSkinningMaterialStrainConstraint>
+                materialStrainConstraints,
+            int count,
+            int maximumIterations,
+            bool warmStart,
+            NativeSkinningSolverTiming timing)
+        {
+            timing?.AddCgCall();
+            int edgeCount = edges.Count;
+            int bendCount = buffers.BendingTerms.Count;
+            int strainCount = buffers.EdgeStrainTerms.Count;
+            int materialCount = materialStrainConstraints.Count;
+            int materialTermTotal = 0;
+            for (int index = 0; index < materialCount; index++)
+            {
+                materialTermTotal +=
+                    materialStrainConstraints[index].LocalIndices.Length;
+            }
+
+            NativeArray<float> diagonal = default;
+            NativeArray<float> preconditioner = default;
+            NativeArray<Vector3> rightHandSide = default;
+            NativeArray<Vector3> solution = default;
+            NativeArray<int> iterationsRun = default;
+            NativeArray<int2> edgeIndices = default;
+            NativeArray<int> bendIndices = default;
+            NativeArray<Vector3> bendGradients = default;
+            NativeArray<int2> strainIndices = default;
+            NativeArray<Vector3> strainFirstGradients = default;
+            NativeArray<Vector3> strainSecondGradients = default;
+            NativeArray<int> materialOffsets = default;
+            NativeArray<int> materialIndices = default;
+            NativeArray<float> materialCoefficients = default;
+            NativeArray<float> materialWeights = default;
+            try
+            {
+                diagonal = new NativeArray<float>(count, Allocator.TempJob);
+                preconditioner =
+                    new NativeArray<float>(count, Allocator.TempJob);
+                rightHandSide =
+                    new NativeArray<Vector3>(count, Allocator.TempJob);
+                solution = new NativeArray<Vector3>(count, Allocator.TempJob);
+                iterationsRun = new NativeArray<int>(1, Allocator.TempJob);
+                edgeIndices =
+                    new NativeArray<int2>(edgeCount, Allocator.TempJob);
+                bendIndices =
+                    new NativeArray<int>(bendCount * 4, Allocator.TempJob);
+                bendGradients = new NativeArray<Vector3>(
+                    bendCount * 4,
+                    Allocator.TempJob);
+                strainIndices =
+                    new NativeArray<int2>(strainCount, Allocator.TempJob);
+                strainFirstGradients = new NativeArray<Vector3>(
+                    strainCount,
+                    Allocator.TempJob);
+                strainSecondGradients = new NativeArray<Vector3>(
+                    strainCount,
+                    Allocator.TempJob);
+                materialOffsets =
+                    new NativeArray<int>(materialCount + 1, Allocator.TempJob);
+                materialIndices =
+                    new NativeArray<int>(materialTermTotal, Allocator.TempJob);
+                materialCoefficients =
+                    new NativeArray<float>(materialTermTotal, Allocator.TempJob);
+                materialWeights =
+                    new NativeArray<float>(materialCount, Allocator.TempJob);
+
+                NativeArray<float>.Copy(
+                    buffers.Diagonal, 0, diagonal, 0, count);
+                NativeArray<float>.Copy(
+                    buffers.Preconditioner, 0, preconditioner, 0, count);
+                NativeArray<Vector3>.Copy(
+                    buffers.RightHandSide, 0, rightHandSide, 0, count);
+                if (warmStart)
+                {
+                    NativeArray<Vector3>.Copy(
+                        buffers.Solution, 0, solution, 0, count);
+                }
+                for (int index = 0; index < edgeCount; index++)
+                {
+                    LocalEdge edge = edges[index];
+                    edgeIndices[index] = new int2(
+                        edge.FirstLocalIndex,
+                        edge.SecondLocalIndex);
+                }
+                for (int index = 0; index < bendCount; index++)
+                {
+                    BendingLinearization term = buffers.BendingTerms[index];
+                    bendIndices[index * 4] = term.Index0;
+                    bendIndices[index * 4 + 1] = term.Index1;
+                    bendIndices[index * 4 + 2] = term.Index2;
+                    bendIndices[index * 4 + 3] = term.Index3;
+                    bendGradients[index * 4] = term.Gradient0;
+                    bendGradients[index * 4 + 1] = term.Gradient1;
+                    bendGradients[index * 4 + 2] = term.Gradient2;
+                    bendGradients[index * 4 + 3] = term.Gradient3;
+                }
+                for (int index = 0; index < strainCount; index++)
+                {
+                    EdgeStrainLinearization term =
+                        buffers.EdgeStrainTerms[index];
+                    strainIndices[index] = new int2(
+                        term.FirstLocalIndex,
+                        term.SecondLocalIndex);
+                    strainFirstGradients[index] = term.FirstGradient;
+                    strainSecondGradients[index] = term.SecondGradient;
+                }
+                int materialOffset = 0;
+                for (int index = 0; index < materialCount; index++)
+                {
+                    NativeSkinningMaterialStrainConstraint constraint =
+                        materialStrainConstraints[index];
+                    materialOffsets[index] = materialOffset;
+                    materialWeights[index] = constraint.Weight;
+                    for (int term = 0;
+                         term < constraint.LocalIndices.Length;
+                         term++)
+                    {
+                        materialIndices[materialOffset + term] =
+                            constraint.LocalIndices[term];
+                        materialCoefficients[materialOffset + term] =
+                            constraint.Coefficients[term];
+                    }
+                    materialOffset += constraint.LocalIndices.Length;
+                }
+                materialOffsets[materialCount] = materialOffset;
+
+                new CgSolveJob
+                {
+                    Count = count,
+                    MaximumIterations = maximumIterations,
+                    WarmStart = warmStart ? (byte)1 : (byte)0,
+                    Diagonal = diagonal,
+                    Preconditioner = preconditioner,
+                    RightHandSide = rightHandSide,
+                    Solution = solution,
+                    IterationsRun = iterationsRun,
+                    EdgeIndices = edgeIndices,
+                    BendIndices = bendIndices,
+                    BendGradients = bendGradients,
+                    StrainIndices = strainIndices,
+                    StrainFirstGradients = strainFirstGradients,
+                    StrainSecondGradients = strainSecondGradients,
+                    MaterialOffsets = materialOffsets,
+                    MaterialIndices = materialIndices,
+                    MaterialCoefficients = materialCoefficients,
+                    MaterialWeights = materialWeights,
+                }.Schedule().Complete();
+                timing?.AddCgIterations(iterationsRun[0]);
+                NativeArray<Vector3>.Copy(
+                    solution, 0, buffers.Solution, 0, count);
+            }
+            catch (Exception)
+            {
+                // 네이티브 경로 실패 시 managed 솔버로 동일 입력을 다시 푼다.
+                return SolveConjugateGradient(
+                    buffers,
+                    edges,
+                    materialStrainConstraints,
+                    count,
+                    maximumIterations,
+                    warmStart,
+                    timing);
+            }
+            finally
+            {
+                if (diagonal.IsCreated) diagonal.Dispose();
+                if (preconditioner.IsCreated) preconditioner.Dispose();
+                if (rightHandSide.IsCreated) rightHandSide.Dispose();
+                if (solution.IsCreated) solution.Dispose();
+                if (iterationsRun.IsCreated) iterationsRun.Dispose();
+                if (edgeIndices.IsCreated) edgeIndices.Dispose();
+                if (bendIndices.IsCreated) bendIndices.Dispose();
+                if (bendGradients.IsCreated) bendGradients.Dispose();
+                if (strainIndices.IsCreated) strainIndices.Dispose();
+                if (strainFirstGradients.IsCreated)
+                {
+                    strainFirstGradients.Dispose();
+                }
+                if (strainSecondGradients.IsCreated)
+                {
+                    strainSecondGradients.Dispose();
+                }
+                if (materialOffsets.IsCreated) materialOffsets.Dispose();
+                if (materialIndices.IsCreated) materialIndices.Dispose();
+                if (materialCoefficients.IsCreated)
+                {
+                    materialCoefficients.Dispose();
+                }
+                if (materialWeights.IsCreated) materialWeights.Dispose();
+            }
+            return buffers.Solution;
+        }
+
+        [BurstCompile]
+        private struct CgSolveJob : IJob
+        {
+            internal int Count;
+            internal int MaximumIterations;
+            internal byte WarmStart;
+            [ReadOnly] internal NativeArray<float> Diagonal;
+            [ReadOnly] internal NativeArray<float> Preconditioner;
+            [ReadOnly] internal NativeArray<Vector3> RightHandSide;
+            internal NativeArray<Vector3> Solution;
+            internal NativeArray<int> IterationsRun;
+            [ReadOnly] internal NativeArray<int2> EdgeIndices;
+            [ReadOnly] internal NativeArray<int> BendIndices;
+            [ReadOnly] internal NativeArray<Vector3> BendGradients;
+            [ReadOnly] internal NativeArray<int2> StrainIndices;
+            [ReadOnly] internal NativeArray<Vector3> StrainFirstGradients;
+            [ReadOnly] internal NativeArray<Vector3> StrainSecondGradients;
+            [ReadOnly] internal NativeArray<int> MaterialOffsets;
+            [ReadOnly] internal NativeArray<int> MaterialIndices;
+            [ReadOnly] internal NativeArray<float> MaterialCoefficients;
+            [ReadOnly] internal NativeArray<float> MaterialWeights;
+
+            public void Execute()
+            {
+                var residual =
+                    new NativeArray<Vector3>(Count, Allocator.Temp);
+                var direction =
+                    new NativeArray<Vector3>(Count, Allocator.Temp);
+                var preconditionedResidual =
+                    new NativeArray<Vector3>(Count, Allocator.Temp);
+                var matrixDirection =
+                    new NativeArray<Vector3>(Count, Allocator.Temp);
+                if (WarmStart != 0)
+                {
+                    ApplyMatrix(Solution, matrixDirection);
+                    for (int index = 0; index < Count; index++)
+                    {
+                        residual[index] = RightHandSide[index] -
+                            matrixDirection[index];
+                    }
+                }
+                else
+                {
+                    for (int index = 0; index < Count; index++)
+                    {
+                        Solution[index] = Vector3.zero;
+                        residual[index] = RightHandSide[index];
+                    }
+                }
+                ApplyPreconditioner(residual, direction);
+                double residualDot = Dot(residual, direction);
+                int run = 0;
+                for (int iteration = 0;
+                     iteration < MaximumIterations && residualDot > 1e-20d;
+                     iteration++)
+                {
+                    run++;
+                    ApplyMatrix(direction, matrixDirection);
+                    double denominator = Dot(direction, matrixDirection);
+                    if (math.abs(denominator) <= 1e-20d)
+                    {
+                        break;
+                    }
+                    float step = (float)(residualDot / denominator);
+                    for (int index = 0; index < Count; index++)
+                    {
+                        Solution[index] += direction[index] * step;
+                        residual[index] -= matrixDirection[index] * step;
+                    }
+                    if (Dot(residual, residual) <= 1e-18d)
+                    {
+                        break;
+                    }
+                    ApplyPreconditioner(residual, preconditionedResidual);
+                    double nextResidualDot =
+                        Dot(residual, preconditionedResidual);
+                    float beta = (float)(nextResidualDot / residualDot);
+                    for (int index = 0; index < Count; index++)
+                    {
+                        direction[index] = preconditionedResidual[index] +
+                            direction[index] * beta;
+                    }
+                    residualDot = nextResidualDot;
+                }
+                IterationsRun[0] = run;
+                residual.Dispose();
+                direction.Dispose();
+                preconditionedResidual.Dispose();
+                matrixDirection.Dispose();
+            }
+
+            private void ApplyMatrix(
+                NativeArray<Vector3> values,
+                NativeArray<Vector3> result)
+            {
+                for (int index = 0; index < Count; index++)
+                {
+                    result[index] = values[index] * Diagonal[index];
+                }
+                for (int index = 0; index < EdgeIndices.Length; index++)
+                {
+                    int2 edge = EdgeIndices[index];
+                    if (edge.x >= 0 && edge.y >= 0)
+                    {
+                        result[edge.x] -= values[edge.y] *
+                            DisplacementSmoothnessWeight;
+                        result[edge.y] -= values[edge.x] *
+                            DisplacementSmoothnessWeight;
+                    }
+                }
+                int bendCount = BendIndices.Length / 4;
+                for (int term = 0; term < bendCount; term++)
+                {
+                    float projectedDisplacement = 0f;
+                    for (int index = 0; index < 4; index++)
+                    {
+                        int localIndex = BendIndices[term * 4 + index];
+                        if (localIndex >= 0)
+                        {
+                            projectedDisplacement += Vector3.Dot(
+                                BendGradients[term * 4 + index],
+                                values[localIndex]);
+                        }
+                    }
+                    for (int index = 0; index < 4; index++)
+                    {
+                        int localIndex = BendIndices[term * 4 + index];
+                        if (localIndex >= 0)
+                        {
+                            result[localIndex] += BendingWeight *
+                                BendGradients[term * 4 + index] *
+                                projectedDisplacement;
+                        }
+                    }
+                }
+                for (int term = 0; term < StrainIndices.Length; term++)
+                {
+                    int2 indices = StrainIndices[term];
+                    float projectedDisplacement = 0f;
+                    if (indices.x >= 0)
+                    {
+                        projectedDisplacement += Vector3.Dot(
+                            StrainFirstGradients[term],
+                            values[indices.x]);
+                    }
+                    if (indices.y >= 0)
+                    {
+                        projectedDisplacement += Vector3.Dot(
+                            StrainSecondGradients[term],
+                            values[indices.y]);
+                    }
+                    if (indices.x >= 0)
+                    {
+                        result[indices.x] += EdgeStrainBarrierWeight *
+                            StrainFirstGradients[term] *
+                            projectedDisplacement;
+                    }
+                    if (indices.y >= 0)
+                    {
+                        result[indices.y] += EdgeStrainBarrierWeight *
+                            StrainSecondGradients[term] *
+                            projectedDisplacement;
+                    }
+                }
+                for (int constraint = 0;
+                     constraint < MaterialWeights.Length;
+                     constraint++)
+                {
+                    int start = MaterialOffsets[constraint];
+                    int end = MaterialOffsets[constraint + 1];
+                    Vector3 projectedDisplacement = Vector3.zero;
+                    for (int index = start; index < end; index++)
+                    {
+                        projectedDisplacement +=
+                            values[MaterialIndices[index]] *
+                            MaterialCoefficients[index];
+                    }
+                    float weight = MaterialWeights[constraint];
+                    for (int index = start; index < end; index++)
+                    {
+                        result[MaterialIndices[index]] +=
+                            projectedDisplacement *
+                            MaterialCoefficients[index] * weight;
+                    }
+                }
+            }
+
+            private void ApplyPreconditioner(
+                NativeArray<Vector3> values,
+                NativeArray<Vector3> result)
+            {
+                for (int index = 0; index < Count; index++)
+                {
+                    result[index] = values[index] /
+                        math.max(Preconditioner[index], 0.000001f);
+                }
+            }
+
+            private double Dot(
+                NativeArray<Vector3> first,
+                NativeArray<Vector3> second)
+            {
+                double result = 0d;
+                for (int index = 0; index < Count; index++)
+                {
+                    result += Vector3.Dot(first[index], second[index]);
+                }
+                return result;
+            }
+        }
+
+        private static void ApplyMatrixInto(
             IReadOnlyList<Vector3> values,
             IReadOnlyList<float> diagonal,
             IEnumerable<LocalEdge> edges,
             IEnumerable<BendingLinearization> bendingLinearizations,
             IEnumerable<EdgeStrainLinearization> edgeStrainLinearizations,
             IEnumerable<NativeSkinningMaterialStrainConstraint>
-                materialStrainConstraints)
+                materialStrainConstraints,
+            Vector3[] result,
+            int count)
         {
-            var result = new Vector3[values.Count];
-            for (int index = 0; index < result.Length; index++)
+            for (int index = 0; index < count; index++)
             {
                 result[index] = values[index] * diagonal[index];
             }
@@ -1302,23 +1903,23 @@ namespace Fbx2Vmd.FBXImporter
             foreach (BendingLinearization term in bendingLinearizations)
             {
                 float projectedDisplacement = 0f;
-                for (int index = 0; index < term.LocalIndices.Length; index++)
+                for (int index = 0; index < 4; index++)
                 {
-                    int localIndex = term.LocalIndices[index];
+                    int localIndex = term.LocalIndexAt(index);
                     if (localIndex >= 0)
                     {
                         projectedDisplacement += Vector3.Dot(
-                            term.Gradients[index],
+                            term.GradientAt(index),
                             values[localIndex]);
                     }
                 }
-                for (int index = 0; index < term.LocalIndices.Length; index++)
+                for (int index = 0; index < 4; index++)
                 {
-                    int localIndex = term.LocalIndices[index];
+                    int localIndex = term.LocalIndexAt(index);
                     if (localIndex >= 0)
                     {
                         result[localIndex] += BendingWeight *
-                            term.Gradients[index] * projectedDisplacement;
+                            term.GradientAt(index) * projectedDisplacement;
                     }
                 }
             }
@@ -1365,40 +1966,28 @@ namespace Fbx2Vmd.FBXImporter
                         constraint.Coefficients[index] * constraint.Weight;
                 }
             }
-            return result;
         }
 
-        private static Vector3[] ApplyDiagonalPreconditioner(
+        private static void ApplyDiagonalPreconditionerInto(
             IReadOnlyList<Vector3> values,
-            IReadOnlyList<float> diagonal)
+            IReadOnlyList<float> diagonal,
+            Vector3[] result,
+            int count)
         {
-            var result = new Vector3[values.Count];
-            for (int index = 0; index < result.Length; index++)
+            for (int index = 0; index < count; index++)
             {
                 result[index] = values[index] /
                     Mathf.Max(diagonal[index], 0.000001f);
             }
-            return result;
-        }
-
-        private static Vector3[] Subtract(
-            IReadOnlyList<Vector3> first,
-            IReadOnlyList<Vector3> second)
-        {
-            var result = new Vector3[first.Count];
-            for (int index = 0; index < result.Length; index++)
-            {
-                result[index] = first[index] - second[index];
-            }
-            return result;
         }
 
         private static double Dot(
             IReadOnlyList<Vector3> first,
-            IReadOnlyList<Vector3> second)
+            IReadOnlyList<Vector3> second,
+            int count)
         {
             double result = 0d;
-            for (int index = 0; index < first.Count; index++)
+            for (int index = 0; index < count; index++)
             {
                 result += Vector3.Dot(first[index], second[index]);
             }
@@ -1407,6 +1996,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static void LimitDisplacement(
             IList<Vector3> displacement,
+            int count,
             IReadOnlyList<Vector3> vertices,
             NativeSkinningSurfaceContract contract,
             IReadOnlyCollection<int> activePairIndices)
@@ -1431,13 +2021,22 @@ namespace Fbx2Vmd.FBXImporter
                 ? MaximumAbsoluteStep
                 : minimumCharacteristicLength * MaximumRelativeStep;
             float maximumStep = Mathf.Min(MaximumAbsoluteStep, relativeLimit);
-            float requestedStep = displacement.Max(value => value.magnitude);
+            // 버퍼는 이전 패스의 잔여를 담을 수 있으므로 논리 크기까지만 스캔한다.
+            float requestedStep = 0f;
+            for (int index = 0; index < count; index++)
+            {
+                float magnitude = displacement[index].magnitude;
+                if (magnitude > requestedStep)
+                {
+                    requestedStep = magnitude;
+                }
+            }
             if (requestedStep <= maximumStep || requestedStep <= 0f)
             {
                 return;
             }
             float scale = maximumStep / requestedStep;
-            for (int index = 0; index < displacement.Count; index++)
+            for (int index = 0; index < count; index++)
             {
                 displacement[index] *= scale;
             }
@@ -1764,9 +2363,12 @@ namespace Fbx2Vmd.FBXImporter
             CorrectionConfiguration configuration,
             bool shouldRecoverRestShape,
             bool allowsStrainRecovery,
-            out Vector3[] acceptedVertices)
+            Vector3[] candidate,
+            out Vector3[] acceptedVertices,
+            out double acceptedEnergy)
         {
             acceptedVertices = null;
+            acceptedEnergy = 0d;
             float blend = CalculateOrientationSafeBlend(
                 baselineVertices,
                 currentVertices,
@@ -1778,7 +2380,10 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return false;
             }
-            Vector3[] candidate = currentVertices.ToArray();
+            Array.Copy(
+                (Vector3[])currentVertices,
+                candidate,
+                currentVertices.Count);
             for (int attempt = 0; attempt < LineSearchIterations; attempt++)
             {
                 for (int localIndex = 0;
@@ -1817,6 +2422,15 @@ namespace Fbx2Vmd.FBXImporter
                         candidate,
                         contract,
                         workset.FacePairIndices);
+                double candidateEnergy = CalculateConstraintEnergy(
+                    baselineVertices,
+                    candidate,
+                    contract,
+                    activePairIndices,
+                    workset.FacePairIndices,
+                    workset.FaceIndices,
+                    workset.Edges,
+                    shouldRecoverRestShape);
                 if (!HasOrientationDefect(
                         baselineVertices,
                         candidate,
@@ -1824,17 +2438,10 @@ namespace Fbx2Vmd.FBXImporter
                         workset.FaceIndices) &&
                     !hasStrainDefect &&
                     !hasRestShapeSharpFoldDefect &&
-                    CalculateConstraintEnergy(
-                        baselineVertices,
-                        candidate,
-                        contract,
-                        activePairIndices,
-                        workset.FacePairIndices,
-                        workset.FaceIndices,
-                        workset.Edges,
-                        shouldRecoverRestShape) < beforeEnergy)
+                    candidateEnergy < beforeEnergy)
                 {
                     acceptedVertices = candidate;
+                    acceptedEnergy = candidateEnergy;
                     return true;
                 }
                 blend *= 0.5f;
@@ -2302,7 +2909,9 @@ namespace Fbx2Vmd.FBXImporter
             IReadOnlyList<Vector3> baselineVertices,
             NativeSkinningSurfaceContract contract,
             IEnumerable<int> seedFacePairIndices,
-            int ringCount)
+            int ringCount,
+            IReadOnlyList<FrameEdge> frameEdges,
+            SolverBuffers buffers)
         {
             var constrainedVertexSet = new HashSet<int>();
             foreach (int pairIndex in seedFacePairIndices)
@@ -2313,63 +2922,152 @@ namespace Fbx2Vmd.FBXImporter
                 constrainedVertexSet.Add(pair.FirstEdge);
                 constrainedVertexSet.Add(pair.SecondEdge);
             }
+            int vertexCount = baselineVertices.Count;
+            int faceCount = contract.Triangles.Length / 3;
+            buffers.EnsureWorksetSize(
+                vertexCount,
+                contract.FacePairs.Length,
+                faceCount);
+            int[] localIndexByVertex = buffers.LocalIndexByVertex;
+            int[] faceMark = buffers.FaceMark;
+            int[] facePairMark = buffers.FacePairMark;
             var frontier = new HashSet<int>(constrainedVertexSet);
             for (int ring = 0; ring < ringCount && frontier.Count > 0; ring++)
             {
-                int[] adjacentFaces = frontier
-                    .SelectMany(index => contract.AffectedFaceIndicesByVertex[index])
-                    .Distinct()
-                    .ToArray();
+                // 같은 면을 두 번 순회하지 않게 스탬프로 표시한다.
+                int ringStamp = buffers.NextMarkStamp();
                 var nextFrontier = new HashSet<int>();
-                foreach (int faceIndex in adjacentFaces)
+                foreach (int index in frontier)
                 {
-                    foreach (int vertexIndex in GetFaceVertices(
-                                 contract.Triangles,
-                                 faceIndex))
+                    foreach (int faceIndex in
+                             contract.AffectedFaceIndicesByVertex[index])
                     {
-                        if (constrainedVertexSet.Add(vertexIndex))
+                        if (faceMark[faceIndex] == ringStamp)
                         {
-                            nextFrontier.Add(vertexIndex);
+                            continue;
+                        }
+                        faceMark[faceIndex] = ringStamp;
+                        int offset = faceIndex * 3;
+                        for (int corner = 0; corner < 3; corner++)
+                        {
+                            int vertexIndex =
+                                contract.Triangles[offset + corner];
+                            if (constrainedVertexSet.Add(vertexIndex))
+                            {
+                                nextFrontier.Add(vertexIndex);
+                            }
                         }
                     }
                 }
                 frontier = nextFrontier;
             }
 
-            int[] constrainedVertices = constrainedVertexSet
-                .OrderBy(index => index)
-                .ToArray();
-            int[] localIndexByVertex = Enumerable
-                .Repeat(-1, baselineVertices.Count)
-                .ToArray();
-            for (int localIndex = 0;
-                 localIndex < constrainedVertices.Length;
-                 localIndex++)
+            // 멤버십 표시 후 오름차순 스캔 — 정렬된 인덱스와 로컬 인덱스를 동시에 얻는다.
+            for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
             {
-                localIndexByVertex[constrainedVertices[localIndex]] = localIndex;
+                localIndexByVertex[vertexIndex] =
+                    constrainedVertexSet.Contains(vertexIndex) ? 0 : -1;
             }
-            int[] facePairIndices = constrainedVertices
-                .SelectMany(index => contract.FacePairIndicesByVertex[index])
-                .Distinct()
-                .OrderBy(index => index)
-                .ToArray();
-            int[] faceIndices = constrainedVertices
-                .SelectMany(index => contract.AffectedFaceIndicesByVertex[index])
-                .Distinct()
-                .OrderBy(index => index)
-                .ToArray();
-            LocalEdge[] edges = BuildFrameEdges(baselineVertices, contract)
-                .Where(edge =>
-                    localIndexByVertex[edge.FirstVertex] >= 0 ||
+            int[] constrainedVertices = new int[constrainedVertexSet.Count];
+            int constrainedCount = 0;
+            for (int vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+            {
+                if (localIndexByVertex[vertexIndex] >= 0)
+                {
+                    localIndexByVertex[vertexIndex] = constrainedCount;
+                    constrainedVertices[constrainedCount] = vertexIndex;
+                    constrainedCount++;
+                }
+            }
+
+            int pairStamp = buffers.NextMarkStamp();
+            foreach (int vertexIndex in constrainedVertices)
+            {
+                foreach (int pairIndex in
+                         contract.FacePairIndicesByVertex[vertexIndex])
+                {
+                    facePairMark[pairIndex] = pairStamp;
+                }
+            }
+            int facePairCount = 0;
+            for (int pairIndex = 0;
+                 pairIndex < contract.FacePairs.Length;
+                 pairIndex++)
+            {
+                if (facePairMark[pairIndex] == pairStamp)
+                {
+                    facePairCount++;
+                }
+            }
+            int[] facePairIndices = new int[facePairCount];
+            int facePairWriteIndex = 0;
+            for (int pairIndex = 0;
+                 pairIndex < contract.FacePairs.Length;
+                 pairIndex++)
+            {
+                if (facePairMark[pairIndex] == pairStamp)
+                {
+                    facePairIndices[facePairWriteIndex] = pairIndex;
+                    facePairWriteIndex++;
+                }
+            }
+
+            int faceStamp = buffers.NextMarkStamp();
+            foreach (int vertexIndex in constrainedVertices)
+            {
+                foreach (int faceIndex in
+                         contract.AffectedFaceIndicesByVertex[vertexIndex])
+                {
+                    faceMark[faceIndex] = faceStamp;
+                }
+            }
+            int markedFaceCount = 0;
+            for (int faceIndex = 0; faceIndex < faceCount; faceIndex++)
+            {
+                if (faceMark[faceIndex] == faceStamp)
+                {
+                    markedFaceCount++;
+                }
+            }
+            int[] faceIndices = new int[markedFaceCount];
+            int faceWriteIndex = 0;
+            for (int faceIndex = 0; faceIndex < faceCount; faceIndex++)
+            {
+                if (faceMark[faceIndex] == faceStamp)
+                {
+                    faceIndices[faceWriteIndex] = faceIndex;
+                    faceWriteIndex++;
+                }
+            }
+
+            int edgeCount = 0;
+            foreach (FrameEdge edge in frameEdges)
+            {
+                if (localIndexByVertex[edge.FirstVertex] >= 0 ||
                     localIndexByVertex[edge.SecondVertex] >= 0)
-                .Select(edge => new LocalEdge(
+                {
+                    edgeCount++;
+                }
+            }
+            var edges = new LocalEdge[edgeCount];
+            int edgeWriteIndex = 0;
+            foreach (FrameEdge edge in frameEdges)
+            {
+                int firstLocalIndex = localIndexByVertex[edge.FirstVertex];
+                int secondLocalIndex = localIndexByVertex[edge.SecondVertex];
+                if (firstLocalIndex < 0 && secondLocalIndex < 0)
+                {
+                    continue;
+                }
+                edges[edgeWriteIndex] = new LocalEdge(
                     edge.FirstVertex,
                     edge.SecondVertex,
-                    localIndexByVertex[edge.FirstVertex],
-                    localIndexByVertex[edge.SecondVertex],
+                    firstLocalIndex,
+                    secondLocalIndex,
                     edge.BaselineLength,
-                    edge.RestLength))
-                .ToArray();
+                    edge.RestLength);
+                edgeWriteIndex++;
+            }
             return new LocalWorkset(
                 constrainedVertices,
                 localIndexByVertex,
@@ -2528,6 +3226,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private readonly struct CorrectionConfiguration
         {
+            // 진단 테스트가 이 6인자 시그니처로 인스턴스를 만들므로 유지한다.
             internal CorrectionConfiguration(
                 int localGlobalIterations,
                 int conjugateGradientIterations,
@@ -2535,6 +3234,29 @@ namespace Fbx2Vmd.FBXImporter
                 float maximumEdgeLengthStrain,
                 float maximumTotalDisplacementToArmLengthRatio,
                 int worksetRingCount = DefaultWorksetRingCount)
+                : this(
+                    localGlobalIterations,
+                    conjugateGradientIterations,
+                    edgeLengthProjectionIterations,
+                    maximumEdgeLengthStrain,
+                    maximumTotalDisplacementToArmLengthRatio,
+                    worksetRingCount,
+                    false,
+                    false,
+                    false)
+            {
+            }
+
+            internal CorrectionConfiguration(
+                int localGlobalIterations,
+                int conjugateGradientIterations,
+                int edgeLengthProjectionIterations,
+                float maximumEdgeLengthStrain,
+                float maximumTotalDisplacementToArmLengthRatio,
+                int worksetRingCount,
+                bool allowsEarlyConvergence,
+                bool allowsWarmStart,
+                bool allowsBurst = false)
             {
                 LocalGlobalIterations = localGlobalIterations;
                 ConjugateGradientIterations = conjugateGradientIterations;
@@ -2543,6 +3265,9 @@ namespace Fbx2Vmd.FBXImporter
                 MaximumTotalDisplacementToArmLengthRatio =
                     maximumTotalDisplacementToArmLengthRatio;
                 WorksetRingCount = worksetRingCount;
+                AllowsEarlyConvergence = allowsEarlyConvergence;
+                AllowsWarmStart = allowsWarmStart;
+                AllowsBurst = allowsBurst;
             }
 
             internal int LocalGlobalIterations { get; }
@@ -2551,6 +3276,9 @@ namespace Fbx2Vmd.FBXImporter
             internal float MaximumEdgeLengthStrain { get; }
             internal float MaximumTotalDisplacementToArmLengthRatio { get; }
             internal int WorksetRingCount { get; }
+            internal bool AllowsEarlyConvergence { get; }
+            internal bool AllowsWarmStart { get; }
+            internal bool AllowsBurst { get; }
         }
 
         private readonly struct FrameEdge
@@ -2622,16 +3350,59 @@ namespace Fbx2Vmd.FBXImporter
             internal LocalEdge[] Edges { get; }
         }
 
+        // 쌍당 4정점 고정 — 배열 대신 인라인 필드로 반복 할당을 없앤다.
         private readonly struct BendingLinearization
         {
-            internal BendingLinearization(int[] localIndices, Vector3[] gradients)
+            internal BendingLinearization(
+                int index0,
+                int index1,
+                int index2,
+                int index3,
+                Vector3 gradient0,
+                Vector3 gradient1,
+                Vector3 gradient2,
+                Vector3 gradient3)
             {
-                LocalIndices = localIndices;
-                Gradients = gradients;
+                Index0 = index0;
+                Index1 = index1;
+                Index2 = index2;
+                Index3 = index3;
+                Gradient0 = gradient0;
+                Gradient1 = gradient1;
+                Gradient2 = gradient2;
+                Gradient3 = gradient3;
             }
 
-            internal int[] LocalIndices { get; }
-            internal Vector3[] Gradients { get; }
+            internal int Index0 { get; }
+            internal int Index1 { get; }
+            internal int Index2 { get; }
+            internal int Index3 { get; }
+            internal Vector3 Gradient0 { get; }
+            internal Vector3 Gradient1 { get; }
+            internal Vector3 Gradient2 { get; }
+            internal Vector3 Gradient3 { get; }
+
+            internal int LocalIndexAt(int index)
+            {
+                switch (index)
+                {
+                    case 0: return Index0;
+                    case 1: return Index1;
+                    case 2: return Index2;
+                    default: return Index3;
+                }
+            }
+
+            internal Vector3 GradientAt(int index)
+            {
+                switch (index)
+                {
+                    case 0: return Gradient0;
+                    case 1: return Gradient1;
+                    case 2: return Gradient2;
+                    default: return Gradient3;
+                }
+            }
         }
 
         private readonly struct EdgeStrainLinearization
@@ -2652,6 +3423,153 @@ namespace Fbx2Vmd.FBXImporter
             internal int SecondLocalIndex { get; }
             internal Vector3 FirstGradient { get; }
             internal Vector3 SecondGradient { get; }
+        }
+
+        // TryCalculate 호출 1회분의 재사용 스크래치 — 워커 스레드 한정(공유 없음)이라
+        // 별도 동기화 없이 반복 할당만 제거한다.
+        private sealed class SolverBuffers
+        {
+            internal float[] Diagonal = Array.Empty<float>();
+            internal float[] Preconditioner = Array.Empty<float>();
+            internal Vector3[] RightHandSide = Array.Empty<Vector3>();
+            internal Vector3[] Solution = Array.Empty<Vector3>();
+            internal Vector3[] Residual = Array.Empty<Vector3>();
+            internal Vector3[] Direction = Array.Empty<Vector3>();
+            internal Vector3[] PreconditionedResidual = Array.Empty<Vector3>();
+            internal Vector3[] MatrixDirection = Array.Empty<Vector3>();
+            internal Vector3[] ProposedLocal = Array.Empty<Vector3>();
+            // 수락된 후보가 다음 반복의 current로 이어지므로 핑퐁 2개가 필요하다.
+            internal Vector3[] CandidateA = Array.Empty<Vector3>();
+            internal Vector3[] CandidateB = Array.Empty<Vector3>();
+            internal readonly List<BendingLinearization> BendingTerms =
+                new List<BendingLinearization>();
+            internal readonly List<EdgeStrainLinearization> EdgeStrainTerms =
+                new List<EdgeStrainLinearization>();
+            // 워크셋 구축용 스탬프 마크 — 매번 클리어 대신 스탬프를 올려 재사용한다.
+            internal int[] LocalIndexByVertex = Array.Empty<int>();
+            internal int[] FacePairMark = Array.Empty<int>();
+            internal int[] FaceMark = Array.Empty<int>();
+            private int _markStamp;
+
+            internal void EnsureLocalSize(int count)
+            {
+                Ensure(ref Diagonal, count);
+                Ensure(ref Preconditioner, count);
+                Ensure(ref RightHandSide, count);
+                Ensure(ref Solution, count);
+                Ensure(ref Residual, count);
+                Ensure(ref Direction, count);
+                Ensure(ref PreconditionedResidual, count);
+                Ensure(ref MatrixDirection, count);
+                Ensure(ref ProposedLocal, count);
+            }
+
+            internal void EnsureVertexSize(int count)
+            {
+                Ensure(ref CandidateA, count);
+                Ensure(ref CandidateB, count);
+            }
+
+            internal void EnsureWorksetSize(
+                int vertexCount,
+                int facePairCount,
+                int faceCount)
+            {
+                Ensure(ref LocalIndexByVertex, vertexCount);
+                Ensure(ref FacePairMark, facePairCount);
+                Ensure(ref FaceMark, faceCount);
+            }
+
+            internal int NextMarkStamp() => ++_markStamp;
+
+            internal Vector3[] CandidateFor(IReadOnlyList<Vector3> current) =>
+                ReferenceEquals(current, CandidateA) ? CandidateB : CandidateA;
+
+            private static void Ensure(ref int[] array, int count)
+            {
+                if (array.Length < count)
+                {
+                    array = new int[count];
+                }
+            }
+
+            private static void Ensure(ref float[] array, int count)
+            {
+                if (array.Length < count)
+                {
+                    array = new float[count];
+                }
+            }
+
+            private static void Ensure(ref Vector3[] array, int count)
+            {
+                if (array.Length < count)
+                {
+                    array = new Vector3[count];
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 표면 솔버 커널 구간별 누적 계측 — 워커 병렬 호출에서 Interlocked로만 쓰는 진단 전용 싱크.
+    /// </summary>
+    internal sealed class NativeSkinningSolverTiming
+    {
+        internal long PairEnergyTicks;
+        internal long BuildSystemTicks;
+        internal long CgSolveTicks;
+        internal long ProjectAcceptTicks;
+        internal long SetupTicks;
+        internal long LgIterations;
+        internal long CgCalls;
+        internal long CgIterations;
+
+        internal static long Stamp() =>
+            System.Diagnostics.Stopwatch.GetTimestamp();
+
+        internal void AddPairEnergy(long since) =>
+            System.Threading.Interlocked.Add(
+                ref PairEnergyTicks, Stamp() - since);
+
+        internal void AddBuildSystem(long since) =>
+            System.Threading.Interlocked.Add(
+                ref BuildSystemTicks, Stamp() - since);
+
+        internal void AddCgSolve(long since) =>
+            System.Threading.Interlocked.Add(
+                ref CgSolveTicks, Stamp() - since);
+
+        internal void AddProjectAccept(long since) =>
+            System.Threading.Interlocked.Add(
+                ref ProjectAcceptTicks, Stamp() - since);
+
+        internal void AddSetup(long since) =>
+            System.Threading.Interlocked.Add(
+                ref SetupTicks, Stamp() - since);
+
+        internal void AddLgIteration() =>
+            System.Threading.Interlocked.Increment(ref LgIterations);
+
+        internal void AddCgCall() =>
+            System.Threading.Interlocked.Increment(ref CgCalls);
+
+        internal void AddCgIteration() =>
+            System.Threading.Interlocked.Increment(ref CgIterations);
+
+        internal void AddCgIterations(int iterations) =>
+            System.Threading.Interlocked.Add(ref CgIterations, iterations);
+
+        internal string Describe()
+        {
+            double frequency = System.Diagnostics.Stopwatch.Frequency;
+            return $"pairEnergy={PairEnergyTicks * 1000.0 / frequency:F0}ms " +
+                $"buildSystem={BuildSystemTicks * 1000.0 / frequency:F0}ms " +
+                $"cgSolve={CgSolveTicks * 1000.0 / frequency:F0}ms " +
+                $"projectAccept={ProjectAcceptTicks * 1000.0 / frequency:F0}ms " +
+                $"setup={SetupTicks * 1000.0 / frequency:F0}ms " +
+                $"lgIter={LgIterations} cgCalls={CgCalls} " +
+                $"cgIter={CgIterations}";
         }
     }
 }

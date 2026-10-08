@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -95,7 +94,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 명시적 재생 시각의 지지·밑창 목표와 양다리 도달 보정을 조립함.
     /// </summary>
-    internal sealed class EditorHumanoidFootGrounding : IDisposable
+    internal sealed class HumanoidFootGrounding : IDisposable
     {
         private readonly Transform _hips;
         private readonly Leg _left;
@@ -113,7 +112,7 @@ namespace Fbx2Vmd.FBXImporter
         private float _lastGateTimeSeconds = -1f;
         private bool _lastGateDecision;
 
-        private EditorHumanoidFootGrounding(Animator animator, Leg left, Leg right)
+        private HumanoidFootGrounding(Animator animator, Leg left, Leg right)
         {
             _hips = animator.GetBoneTransform(HumanBodyBones.Hips);
             _left = left;
@@ -147,12 +146,12 @@ namespace Fbx2Vmd.FBXImporter
                 _right.TryCaptureCurrentSurface(out right);
         }
 
-        internal static bool TryCreate(Animator animator, out EditorHumanoidFootGrounding grounding)
+        internal static bool TryCreate(Animator animator, out HumanoidFootGrounding grounding)
         {
             grounding = null;
             if (animator == null || animator.avatar == null || !animator.isHuman ||
                 animator.GetBoneTransform(HumanBodyBones.Hips) == null ||
-                !EditorHumanoidLegBendCalibration.TryCapture(animator,
+                !HumanoidLegBendCalibration.TryCapture(animator,
                     out Vector3 leftNormal, out Vector3 rightNormal))
                 return false;
 
@@ -164,7 +163,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (!Leg.TryCreate(animator, true, renderers, leftNormal, out left) ||
                     !Leg.TryCreate(animator, false, renderers, rightNormal, out right))
                     return false;
-                grounding = new EditorHumanoidFootGrounding(animator, left, right);
+                grounding = new HumanoidFootGrounding(animator, left, right);
                 return true;
             }
             finally
@@ -224,7 +223,7 @@ namespace Fbx2Vmd.FBXImporter
             _hasAppliedPose = false;
         }
 
-        internal bool TryApply(float timeSeconds, EditorHumanoidGroundResponse ground)
+        internal bool TryApply(float timeSeconds, HumanoidGroundResponse ground)
         {
             HasGround = false;
             UsedPhysicalReach = false;
@@ -377,12 +376,12 @@ namespace Fbx2Vmd.FBXImporter
             internal readonly Transform Lower;
             internal readonly Transform Foot;
             internal readonly Transform Toes;
-            internal readonly EditorHumanoidFootSoleSampler Sampler;
+            internal readonly HumanoidFootSoleSampler Sampler;
             private readonly Vector3 _referenceNormal;
             private readonly Quaternion? _localFootFrame;
             private readonly Vector3[][] _sourcePoints = new Vector3[2][];
-            private EditorHumanoidFootContactPlan _plan;
-            private readonly EditorHumanoidFootContactPlan.Sample[] _activeContacts = new EditorHumanoidFootContactPlan.Sample[2];
+            private HumanoidFootAnchorPlan _plan;
+            private readonly HumanoidFootAnchorPlan.Sample[] _activeContacts = new HumanoidFootAnchorPlan.Sample[2];
             private readonly Vector3[] _localContactPoints = new Vector3[2];
             private readonly Vector3[] _anchors = new Vector3[2];
             private Vector2[] _weights;
@@ -444,7 +443,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             private Leg(Transform upper, Transform lower, Transform foot, Transform toes,
-                EditorHumanoidFootSoleSampler sampler, Vector3 referenceNormal, Quaternion? localFootFrame)
+                HumanoidFootSoleSampler sampler, Vector3 referenceNormal, Quaternion? localFootFrame)
             {
                 Upper = upper;
                 Lower = lower;
@@ -469,7 +468,7 @@ namespace Fbx2Vmd.FBXImporter
                     localFootFrame = (Quaternion.Inverse(foot.rotation) * worldFrame).normalized;
                 if (upper == null || lower == null || foot == null ||
                     !lower.IsChildOf(upper) || !foot.IsChildOf(lower) ||
-                    !EditorHumanoidFootSoleSampler.TryCreate(foot, toes, renderers, Vector3.up, out var sampler))
+                    !HumanoidFootSoleSampler.TryCreate(foot, toes, renderers, Vector3.up, out var sampler))
                     return false;
                 leg = new Leg(upper, lower, foot, toes, sampler, normal, localFootFrame);
                 return true;
@@ -541,7 +540,7 @@ namespace Fbx2Vmd.FBXImporter
                     HumanoidFootContactIntentEstimator.SlideDisplacementPerHumanScale;
                 float trackStep = sourceScale * scaleRatio *
                     HumanoidFootContactIntentEstimator.SupportSpeedPerHumanScale / frameRate;
-                return EditorHumanoidFootContactPlan.TryBuild(Foot, Sampler, _sourcePoints, _weights,
+                return HumanoidFootAnchorPlan.TryBuild(Foot, Sampler, _sourcePoints, _weights,
                     sourceRotation, scaleRatio, frameRate, clipLength, evaluate, out _plan,
                     sourceFrames, hasSourceFrames ? _localFootFrame : null,
                     policies, pinRelease, trackStep);
@@ -568,7 +567,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (Toes != null) Toes.localRotation = _toeRotation;
             }
 
-            internal bool TryCalculateTarget(float frame, EditorHumanoidGroundResponse ground, float humanScale)
+            internal bool TryCalculateTarget(float frame, HumanoidGroundResponse ground, float humanScale)
             {
                 _target = _originalFootPosition;
                 _targetFootRotation = _originalFootRotation;
@@ -593,7 +592,7 @@ namespace Fbx2Vmd.FBXImporter
                     : Vector2.LerpUnclamped(_weights[first], _weights[second], blend);
                 for (int channel = 0; channel < 2; channel++)
                 {
-                    EditorHumanoidFootContactPlan.Sample contact = _plan.GetSample(channel, frame);
+                    HumanoidFootAnchorPlan.Sample contact = _plan.GetSample(channel, frame);
                     _activeContacts[channel] = contact;
                     if (channel == 0) Diagnostic.rear_point_id = contact.FirstPoint;
                     else Diagnostic.front_point_id = contact.FirstPoint;
@@ -714,7 +713,7 @@ namespace Fbx2Vmd.FBXImporter
                 Vector3 axis = Vector3.Cross(_ground.normal,
                     _targetFootRotation * (_localFootFrame.Value * Vector3.forward)).normalized;
                 if (axis.sqrMagnitude < 0.5f) return true;
-                if (weight > 0f && EditorHumanoidFootContactPlan.TryFindSupportPose(Foot, Sampler, axis,
+                if (weight > 0f && HumanoidFootAnchorPlan.TryFindSupportPose(Foot, Sampler, axis,
                         _targetFootRotation, _ground.normal, out Quaternion rotation, out _, out _))
                 {
                     // 들리는 영역의 지지 강도만 반영하여 해제 중인 발을 수평으로 강제하지 않음.
@@ -819,4 +818,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

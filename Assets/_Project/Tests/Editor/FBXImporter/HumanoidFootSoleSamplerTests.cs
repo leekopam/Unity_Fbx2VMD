@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class EditorHumanoidFootSoleSamplerTests
+    public class HumanoidFootSoleSamplerTests
     {
         private GameObject _root;
         private Transform _foot;
@@ -125,7 +125,7 @@ namespace Tests.Editor.FBXImporter
             CreateSampler();
             Quaternion heading = Quaternion.AngleAxis(30f, Vector3.up);
             Quaternion reference = heading * Quaternion.AngleAxis(pitch, Vector3.right);
-            Type plan = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootContactPlan", true);
+            Type plan = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootAnchorPlan", true);
             object[] args = { _foot, _sampler, heading * Vector3.right, reference, Vector3.up,
                 Quaternion.identity, -1, -1 };
             Assert.That(plan.GetMethod("TryFindSupportPose", Flags).Invoke(null, args), Is.True);
@@ -142,7 +142,7 @@ namespace Tests.Editor.FBXImporter
         {
             CreateSampler();
             Assert.That(Call("TrySample"), Is.EqualTo(true));
-            Type grounding = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootGrounding", true);
+            Type grounding = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootGrounding", true);
             Type legType = grounding.GetNestedType("Leg", BindingFlags.NonPublic);
             object leg = Activator.CreateInstance(legType, Flags, null,
                 new object[] { _root.transform, _root.transform, _foot, _toes, _sampler,
@@ -171,7 +171,7 @@ namespace Tests.Editor.FBXImporter
 
         private static Type GetTypeUnderTest()
         {
-            Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootSoleSampler");
+            Type type = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootSoleSampler");
             Assert.That(type, Is.Not.Null, "실제 밑창 샘플러가 필요합니다.");
             return type;
         }

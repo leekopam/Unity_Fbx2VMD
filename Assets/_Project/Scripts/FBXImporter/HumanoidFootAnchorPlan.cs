@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using UnityEngine;
 
@@ -7,7 +6,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 지지점 신원과 공통 이동을 미리 계산하여 탐색 순서와 무관하게 평가함.
     /// </summary>
-    internal sealed class EditorHumanoidFootContactPlan
+    internal sealed class HumanoidFootAnchorPlan
     {
         // 방출 앵커가 목표에 뒤처진 갭을 비율로 회수하되 절대 상한을 두어
         // 방침 전환·핀 시작 경계에서도 프레임당 이동이 제한된 채 유지되게 함.
@@ -22,7 +21,7 @@ namespace Fbx2Vmd.FBXImporter
         internal int UnresolvedPairCount { get; private set; }
         internal string FirstIssue { get; private set; }
 
-        private EditorHumanoidFootContactPlan(int count)
+        private HumanoidFootAnchorPlan(int count)
         {
             _frames = new[] { new Frame[count], new Frame[count] };
         }
@@ -47,7 +46,7 @@ namespace Fbx2Vmd.FBXImporter
                 CanAlignPair = canAlignPair;
             }
 
-            internal bool TryGetLocalPoint(EditorHumanoidFootSoleSampler sampler, out Vector3 point)
+            internal bool TryGetLocalPoint(HumanoidFootSoleSampler sampler, out Vector3 point)
             {
                 point = Vector3.zero;
                 if (!sampler.TryGetLocalPoint(_firstPoint, out Vector3 first) ||
@@ -79,9 +78,9 @@ namespace Fbx2Vmd.FBXImporter
                 Vector3.LerpUnclamped(first.Anchor, second.Anchor, blend), first.CanAlignPair || second.CanAlignPair);
         }
 
-        internal static bool TryBuild(Transform foot, EditorHumanoidFootSoleSampler sampler,
+        internal static bool TryBuild(Transform foot, HumanoidFootSoleSampler sampler,
             Vector3[][] source, Vector2[] weights, Quaternion sourceRotation, float scaleRatio,
-            float frameRate, float clipLength, Action<float> evaluate, out EditorHumanoidFootContactPlan plan,
+            float frameRate, float clipLength, Action<float> evaluate, out HumanoidFootAnchorPlan plan,
             Quaternion[] sourceFrames = null, Quaternion? localFootFrame = null,
             HumanoidFootAnchorPolicy[] anchorPolicies = null,
             float pinReleaseSourceDistance = 0f, float anchorTrackStep = 0f)
@@ -92,7 +91,7 @@ namespace Fbx2Vmd.FBXImporter
                 evaluate == null || frameRate <= 0f || scaleRatio <= 0f ||
                 !HasValidFrames(sourceFrames, localFootFrame, weights.Length) ||
                 (anchorPolicies != null && anchorPolicies.Length != weights.Length)) return false;
-            var result = new EditorHumanoidFootContactPlan(weights.Length);
+            var result = new HumanoidFootAnchorPlan(weights.Length);
             var states = new Contact[2];
             var offsets = new Vector3[2];
             bool TryUpdateOffset(int channel, int point)
@@ -306,7 +305,7 @@ namespace Fbx2Vmd.FBXImporter
             return !float.IsNaN(length) && !float.IsInfinity(length) && Mathf.Abs(length - 1f) < 0.0001f;
         }
 
-        private static bool TryCreatePair(Transform foot, EditorHumanoidFootSoleSampler sampler,
+        private static bool TryCreatePair(Transform foot, HumanoidFootSoleSampler sampler,
             Contact[] states, Vector3[][] source, int frame, Quaternion sourceRotation, out Pair pair)
         {
             pair = null;
@@ -337,7 +336,7 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        internal static bool TryFindSupportPose(Transform foot, EditorHumanoidFootSoleSampler sampler, Vector3 axis,
+        internal static bool TryFindSupportPose(Transform foot, HumanoidFootSoleSampler sampler, Vector3 axis,
             Quaternion referenceRotation, Vector3 groundNormal,
             out Quaternion rotation, out int rear, out int front)
         {
@@ -462,4 +461,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

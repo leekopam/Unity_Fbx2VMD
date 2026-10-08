@@ -92,7 +92,7 @@ namespace Tests.Editor.FBXImporter
             model.transform.SetPositionAndRotation(new Vector3(30f, 3f, 30f), Quaternion.Euler(0f, 90f, 0f));
             foreach (MonoBehaviour script in model.GetComponentsInChildren<MonoBehaviour>(true)) script.enabled = false;
             object controller = Activator.CreateInstance(FindType("HumanoidMotionPlaybackController"), true);
-            object reference = Activator.CreateInstance(FindType("EditorHumanoidPoseReferencePlayer"), true);
+            object reference = Activator.CreateInstance(FindType("HumanoidPoseReferencePlayer"), true);
             try
             {
                 Animator target = model.GetComponentInChildren<Animator>(true);
@@ -158,7 +158,7 @@ namespace Tests.Editor.FBXImporter
             GameObject source = UnityEngine.Object.Instantiate(asset);
             source.hideFlags = HideFlags.HideAndDontSave;
             source.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-            object reference = Activator.CreateInstance(FindType("EditorHumanoidPoseReferencePlayer"), true);
+            object reference = Activator.CreateInstance(FindType("HumanoidPoseReferencePlayer"), true);
             try
             {
                 Animator animator = source.GetComponent<Animator>();
@@ -209,7 +209,7 @@ namespace Tests.Editor.FBXImporter
             if (source == null) Assert.Ignore("로컬 원본 FBX가 없는 환경에서는 실제 모델 검증을 생략함");
             AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath(path).OfType<AnimationClip>()
                 .First(c => !c.name.StartsWith("__preview__", StringComparison.Ordinal));
-            object reference = Activator.CreateInstance(FindType("EditorHumanoidPoseReferencePlayer"), true);
+            object reference = Activator.CreateInstance(FindType("HumanoidPoseReferencePlayer"), true);
             try
             {
                 Invoke(reference, "InitializeFromSourceModel", source, clip);

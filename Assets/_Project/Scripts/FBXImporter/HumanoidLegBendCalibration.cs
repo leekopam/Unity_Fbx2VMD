@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using UnityEngine;
 
@@ -8,7 +7,7 @@ namespace Fbx2Vmd.FBXImporter
     /// 재생 준비 전 기준 모델의 복제본에서 허벅지 로컬 굽힘 평면을 취득함.
     /// 모델·Avatar가 바뀔 때 다시 취득하고 같은 재생 세션에서는 결과를 보관함.
     /// </summary>
-    internal static class EditorHumanoidLegBendCalibration
+    internal static class HumanoidLegBendCalibration
     {
         internal static bool TryCapture(Animator source, out Vector3 leftNormal, out Vector3 rightNormal)
         {
@@ -82,4 +81,3 @@ namespace Fbx2Vmd.FBXImporter
         }
     }
 }
-#endif

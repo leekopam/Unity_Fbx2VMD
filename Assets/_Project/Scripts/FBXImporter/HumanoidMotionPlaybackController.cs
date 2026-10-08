@@ -24,15 +24,14 @@ namespace Fbx2Vmd.FBXImporter
         private readonly HumanoidArmSupportPoseApplier _armSupportPoseApplier =
             new HumanoidArmSupportPoseApplier();
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
-#if UNITY_EDITOR
-        private readonly EditorHumanoidPoseReferencePlayer _poseReferencePlayer =
-            new EditorHumanoidPoseReferencePlayer();
-        private readonly EditorHumanoidFootContactStabilizer _footContactStabilizer =
-            new EditorHumanoidFootContactStabilizer();
-        private readonly EditorHumanoidGroundResponse _groundResponse =
-            new EditorHumanoidGroundResponse();
+        private readonly HumanoidPoseReferencePlayer _poseReferencePlayer =
+            new HumanoidPoseReferencePlayer();
+        private readonly HumanoidFootContactStabilizer _footContactStabilizer =
+            new HumanoidFootContactStabilizer();
+        private readonly HumanoidGroundResponse _groundResponse =
+            new HumanoidGroundResponse();
         private bool _isGroundResponseEnabled;
-        private EditorHumanoidFootGrounding _footGrounding;
+        private HumanoidFootGrounding _footGrounding;
         private HumanoidFootRotationBinding _leftFootRotation;
         private HumanoidFootRotationBinding _rightFootRotation;
         private Quaternion _sourceToTargetRotation = Quaternion.identity;
@@ -43,7 +42,6 @@ namespace Fbx2Vmd.FBXImporter
         // 마지막 프레임의 게이트 입력 수치. 계측 경로가 교정 실패 원인을 프레임별로 재현함.
         internal HumanoidFootGroundingGate LastGroundingGate { get; } =
             new HumanoidFootGroundingGate();
-#endif
 
         internal HumanoidMotionPlaybackState State { get; private set; } =
             HumanoidMotionPlaybackState.Empty;
@@ -73,7 +71,6 @@ namespace Fbx2Vmd.FBXImporter
             PrepareCore(targetAnimator, clip, null);
         }
 
-#if UNITY_EDITOR
         internal void SetGroundResponseEnabled(bool isEnabled)
         {
             _isGroundResponseEnabled = isEnabled;
@@ -99,7 +96,6 @@ namespace Fbx2Vmd.FBXImporter
                     clip,
                     sourceModelAsset));
         }
-#endif
 
         private void PrepareCore(
             Animator targetAnimator,
@@ -115,19 +111,15 @@ namespace Fbx2Vmd.FBXImporter
 
             try
             {
-#if UNITY_EDITOR
                 // 최초 원본 평가 전에 기준 밑창과 Avatar 굽힘 방향을 확보함.
                 if (initializeCanonicalPoseReference != null)
                 {
                     InitializeFootRotationBindings(targetAnimator);
-                    EditorHumanoidFootGrounding.TryCreate(targetAnimator, out _footGrounding);
+                    HumanoidFootGrounding.TryCreate(targetAnimator, out _footGrounding);
                 }
-#endif
                 _armSupportPoseApplier.Initialize(targetAnimator, clip);
                 _player.Initialize(targetAnimator, clip);
-#if UNITY_EDITOR
                 _groundResponse.Initialize(targetAnimator);
-#endif
                 ClipLengthSeconds = Mathf.Max(0f, clip.length);
                 ClipFrameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(
                     clip.frameRate);
@@ -222,7 +214,6 @@ namespace Fbx2Vmd.FBXImporter
             return IsPrepared && _poseFrameEditor.TryCapture(out pose);
         }
 
-#if UNITY_EDITOR
         internal bool TryCaptureCurrentFootSurface(out HumanoidFootGroundingSnapshot left,
             out HumanoidFootGroundingSnapshot right)
         {
@@ -252,7 +243,6 @@ namespace Fbx2Vmd.FBXImporter
                     throw new InvalidOperationException("계측 후 접지 자세를 복원하지 못했습니다.");
             }
         }
-#endif
 
         internal bool TryPreviewPoseCorrection(
             HumanoidPoseCorrectionDocument document)
@@ -273,10 +263,8 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
-#if UNITY_EDITOR
             _footGrounding?.RestoreAppliedPose();
             RestoreFootRotationBindings();
-#endif
             _player.EvaluateAt(CurrentTimeSeconds);
             if (!TryCaptureFootBendNormals(
                     out Vector3 leftBendNormal,
@@ -286,9 +274,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             bool isApplied = TryApplyArmDirectionCorrection();
-#if UNITY_EDITOR
             ApplyFootRotationReference(CurrentTimeSeconds);
-#endif
             _armSupportPoseApplier.Apply();
             return isApplied && TryApplyFootContactStabilization(
                 leftBendNormal,
@@ -317,7 +303,6 @@ namespace Fbx2Vmd.FBXImporter
 
         public void Dispose()
         {
-#if UNITY_EDITOR
             _isGroundResponseEnabled = false;
             LastGroundingStatus = HumanoidFootGroundingStatus.Disabled;
             LastGroundingGate.measured = false;
@@ -329,7 +314,6 @@ namespace Fbx2Vmd.FBXImporter
             _groundResponse.Clear();
             _footContactStabilizer.Clear();
             _poseReferencePlayer.Dispose();
-#endif
             _poseFrameEditor.Dispose();
             _player.Dispose();
             _armSupportPoseApplier.Dispose();
@@ -344,10 +328,8 @@ namespace Fbx2Vmd.FBXImporter
         private bool EvaluateCurrentPoseWithCorrection(bool applyFootStabilization = true)
         {
             // 원본 자세와 상체 보정 뒤에 발 접촉을 마지막으로 고정함.
-#if UNITY_EDITOR
             _footGrounding?.RestoreAppliedPose();
             RestoreFootRotationBindings();
-#endif
             _player.EvaluateAt(CurrentTimeSeconds);
             if (!TryCaptureFootBendNormals(
                     out Vector3 leftBendNormal,
@@ -362,9 +344,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             int frameIndex = CurrentFrameIndex;
-#if UNITY_EDITOR
             ApplyFootRotationReference(CurrentTimeSeconds);
-#endif
             bool isApplied = _poseCorrectionDocument == null ||
                 !_poseCorrectionDocument.HasFrameCorrection(frameIndex) ||
                 _poseFrameEditor.TryApply(
@@ -378,7 +358,6 @@ namespace Fbx2Vmd.FBXImporter
 
         private bool TryApplyArmDirectionCorrection()
         {
-#if UNITY_EDITOR
             if (!_poseReferencePlayer.IsInitialized)
             {
                 return true;
@@ -394,31 +373,21 @@ namespace Fbx2Vmd.FBXImporter
             return _poseFrameEditor.TryApplyArmDirectionReference(
                 reference,
                 out _);
-#else
-            return true;
-#endif
         }
 
         private bool TryCaptureFootBendNormals(
             out Vector3 leftBendNormal,
             out Vector3 rightBendNormal)
         {
-#if UNITY_EDITOR
             return _footContactStabilizer.TryCaptureBendNormals(
                 out leftBendNormal,
                 out rightBendNormal);
-#else
-            leftBendNormal = Vector3.zero;
-            rightBendNormal = Vector3.zero;
-            return true;
-#endif
         }
 
         private bool TryApplyFootContactStabilization(
             Vector3 leftBendNormal,
             Vector3 rightBendNormal)
         {
-#if UNITY_EDITOR
             LastGroundingStatus = _isGroundResponseEnabled
                 ? HumanoidFootGroundingStatus.Unavailable : HumanoidFootGroundingStatus.Disabled;
             LastGroundingGate.measured = false;
@@ -461,12 +430,8 @@ namespace Fbx2Vmd.FBXImporter
             if (isApplied && _isGroundResponseEnabled)
                 _groundResponse.Apply(leftBendNormal, rightBendNormal);
             return isApplied;
-#else
-            return true;
-#endif
         }
 
-#if UNITY_EDITOR
         private void InitializeFootRotationBindings(Animator animator)
         {
             if (animator == null || !animator.isHuman)
@@ -526,7 +491,6 @@ namespace Fbx2Vmd.FBXImporter
             ApplyFootRotationReference(timeSeconds);
             _armSupportPoseApplier.Apply();
         }
-#endif
 
         private static void ValidateTime(float timeSeconds, string parameterName)
         {

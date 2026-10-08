@@ -93,7 +93,10 @@ namespace Fbx2Vmd.FBXImporter
                     .Select(contract => contract.Renderer)
                     .Where(renderer => renderer != null)
                     .Distinct()
-                    .Select(renderer => BuildIdentity(animator, renderer))
+                    .Select(renderer => BuildIdentity(
+                        animator,
+                        renderer,
+                        GetAssetIdentity(renderer.sharedMesh)))
                     .Where(identity => identity.HasValue)
                     .Select(identity => identity.Value)
                     .OrderBy(identity => identity.RendererPath,
@@ -113,16 +116,7 @@ namespace Fbx2Vmd.FBXImporter
                     segments.Add("vhash:" + identity.VertexHash);
                 }
 
-                using (var hash = SHA256.Create())
-                {
-                    byte[] source = Encoding.UTF8.GetBytes(
-                        string.Join("\n", segments));
-                    byte[] full = hash.ComputeHash(source);
-                    var key = new byte[
-                        NativeSkinningCorrectionCacheFileStore.KeyHashLength];
-                    Buffer.BlockCopy(full, 0, key, 0, key.Length);
-                    keyHash = key;
-                }
+                keyHash = ComputeKeyHash(segments);
                 return true;
             }
             catch (Exception exception)
@@ -131,6 +125,119 @@ namespace Fbx2Vmd.FBXImporter
                     $"보정 캐시 키를 계산하지 못했습니다: {exception.Message}";
                 return false;
             }
+        }
+#endif
+
+        /// <summary>
+        /// 빌드 환경용 캐시 키 — 에셋 식별자 대신 소스 FBX 파일 경로+내용 해시를
+        /// 모션·소스 모델 식별자로 쓰고, 메시는 정점 내용 해시로 식별한다.
+        /// </summary>
+        internal static bool TryComputeRuntime(
+            string sourceFilePath,
+            string motionName,
+            int frameCount,
+            float frameRate,
+            Animator animator,
+            NativeSkinningSurfaceContract[] contracts,
+            out byte[] keyHash,
+            out string errorMessage)
+        {
+            keyHash = null;
+            errorMessage = string.Empty;
+            if (string.IsNullOrEmpty(sourceFilePath) ||
+                animator == null ||
+                contracts == null ||
+                contracts.Length == 0)
+            {
+                errorMessage = "보정 캐시 키를 계산할 대상이 없습니다.";
+                return false;
+            }
+
+            try
+            {
+                string sourceFileHash = ComputeFileHash(sourceFilePath);
+                if (string.IsNullOrEmpty(sourceFileHash))
+                {
+                    errorMessage =
+                        "소스 FBX 파일을 읽을 수 없어 보정 캐시를 사용할 수 없습니다.";
+                    return false;
+                }
+
+                var segments = new List<string>
+                {
+                    "v" + AlgorithmVersion,
+                    Application.unityVersion,
+                    "runtime",
+                    "motion:" + (motionName ?? string.Empty),
+                    "frames:" + frameCount,
+                    "rate:" + frameRate.ToString("R"),
+                    "sourceFile:" + Path.GetFullPath(sourceFilePath),
+                    "sourceFileHash:" + sourceFileHash,
+                    "avatar:" + (animator.avatar == null
+                        ? string.Empty
+                        : animator.avatar.name)
+                };
+
+                RendererIdentity[] identities = contracts
+                    .Select(contract => contract.Renderer)
+                    .Where(renderer => renderer != null)
+                    .Distinct()
+                    .Select(renderer => BuildIdentity(
+                        animator,
+                        renderer,
+                        GetRuntimeMeshIdentity(renderer.sharedMesh)))
+                    .Where(identity => identity.HasValue)
+                    .Select(identity => identity.Value)
+                    .OrderBy(identity => identity.RendererPath,
+                             StringComparer.Ordinal)
+                    .ToArray();
+                if (identities.Length == 0)
+                {
+                    errorMessage =
+                        "보정 캐시 키를 계산할 Renderer가 없습니다.";
+                    return false;
+                }
+                foreach (RendererIdentity identity in identities)
+                {
+                    segments.Add("renderer:" + identity.RendererPath);
+                    segments.Add("mesh:" + identity.MeshAssetId);
+                    segments.Add("verts:" + identity.VertexCount);
+                    segments.Add("vhash:" + identity.VertexHash);
+                }
+
+                keyHash = ComputeKeyHash(segments);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                errorMessage =
+                    $"보정 캐시 키를 계산하지 못했습니다: {exception.Message}";
+                return false;
+            }
+        }
+
+        private static byte[] ComputeKeyHash(List<string> segments)
+        {
+            using (var hash = SHA256.Create())
+            {
+                byte[] source = Encoding.UTF8.GetBytes(
+                    string.Join("\n", segments));
+                byte[] full = hash.ComputeHash(source);
+                var key = new byte[
+                    NativeSkinningCorrectionCacheFileStore.KeyHashLength];
+                Buffer.BlockCopy(full, 0, key, 0, key.Length);
+                return key;
+            }
+        }
+
+        // 정점 내용 해시가 곧 메시 실체 — 에셋 경로가 없는 런타임 메시도 식별된다.
+        internal static string GetRuntimeMeshIdentity(Mesh mesh)
+        {
+            if (mesh == null)
+            {
+                return string.Empty;
+            }
+            return "vhash:" + ComputeVertexHash(mesh);
         }
 
         // Animator 루트 기준 상대 경로 — 씬 렌더러와 캐시 항목의 재바인딩 키.
@@ -162,7 +269,8 @@ namespace Fbx2Vmd.FBXImporter
 
         private static RendererIdentity? BuildIdentity(
             Animator animator,
-            SkinnedMeshRenderer renderer)
+            SkinnedMeshRenderer renderer,
+            string meshAssetId)
         {
             Mesh mesh = renderer.sharedMesh;
             if (mesh == null)
@@ -171,11 +279,27 @@ namespace Fbx2Vmd.FBXImporter
             }
             return new RendererIdentity(
                 GetRendererPath(animator, renderer),
-                GetAssetIdentity(mesh),
+                meshAssetId,
                 mesh.vertexCount,
                 ComputeVertexHash(mesh));
         }
 
+        // 파일 내용 해시 — 소스 FBX 변경 감지의 공용 수단.
+        internal static string ComputeFileHash(string fullPath)
+        {
+            if (string.IsNullOrEmpty(fullPath) || !File.Exists(fullPath))
+            {
+                return string.Empty;
+            }
+            using (var hash = SHA256.Create())
+            using (FileStream stream = File.OpenRead(fullPath))
+            {
+                return Convert.ToBase64String(hash.ComputeHash(stream)) +
+                    ":" + stream.Length;
+            }
+        }
+
+#if UNITY_EDITOR
         internal static string GetAssetIdentity(UnityEngine.Object asset)
         {
             if (asset == null)
@@ -204,18 +328,9 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return string.Empty;
             }
-            string fullPath = Path.GetFullPath(path);
-            if (!File.Exists(fullPath))
-            {
-                return string.Empty;
-            }
-            using (var hash = SHA256.Create())
-            using (FileStream stream = File.OpenRead(fullPath))
-            {
-                return Convert.ToBase64String(hash.ComputeHash(stream)) +
-                    ":" + stream.Length;
-            }
+            return ComputeFileHash(Path.GetFullPath(path));
         }
+#endif
 
         private static string ComputeVertexHash(Mesh mesh)
         {
@@ -248,6 +363,5 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
         }
-#endif
     }
 }

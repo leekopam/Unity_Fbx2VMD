@@ -2181,11 +2181,11 @@ namespace Fbx2Vmd.FBXImporter
             string path)
         {
             var reference = ReadMemberValue(typeof(HumanoidMotionPlaybackController),
-                controller, "_poseReferencePlayer") as EditorHumanoidPoseReferencePlayer;
+                controller, "_poseReferencePlayer") as HumanoidPoseReferencePlayer;
             HumanPose pose = new HumanPose();
             if (reference == null || !reference.TryEvaluateAt(timeSeconds, ref pose))
                 return false;
-            var root = ReadMemberValue(typeof(EditorHumanoidPoseReferencePlayer),
+            var root = ReadMemberValue(typeof(HumanoidPoseReferencePlayer),
                 reference, "_referenceInstance") as GameObject;
             Animator animator = root != null ? root.GetComponentInChildren<Animator>(true) : null;
             if (animator == null || !animator.isHuman) return false;

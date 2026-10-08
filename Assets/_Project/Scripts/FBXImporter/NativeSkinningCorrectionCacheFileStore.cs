@@ -48,6 +48,13 @@ namespace Fbx2Vmd.FBXImporter
 
         internal static string GetCacheDirectory()
         {
+            // 빌드의 dataPath는 설치 폴더라 쓰기 불가할 수 있어 영구 폴더로 분기함.
+            if (!Application.isEditor)
+            {
+                return Path.Combine(
+                    Application.persistentDataPath,
+                    "NativeSkinningCorrectionCache");
+            }
             return Path.GetFullPath(Path.Combine(
                 Application.dataPath,
                 "..",

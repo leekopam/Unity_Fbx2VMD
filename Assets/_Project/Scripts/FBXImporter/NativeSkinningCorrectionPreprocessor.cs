@@ -109,6 +109,12 @@ namespace Fbx2Vmd.FBXImporter
         // 진단 디렉터리는 워커 스레드에서 읽을 수 없으므로 생성 시점에 미리 구한다.
         private readonly string _diagnosticsDirectory;
         private int _processedFrameCount;
+        // 솔버 경로 계측 — 빠른 보정과 강한 fallback의 누적 시간을 분리한다.
+        private long _fastPathTicks;
+        private long _strongPathTicks;
+        // 솔버 커널 구간별 누적 — 워커 병렬 호출에서 Interlocked로만 쓴다.
+        private readonly NativeSkinningSolverTiming _solverTiming =
+            new NativeSkinningSolverTiming();
         private volatile bool _isComplete;
         private volatile bool _isFaulted;
         private volatile bool _isCanceled;
@@ -155,6 +161,18 @@ namespace Fbx2Vmd.FBXImporter
         internal string FailureMessage { get; private set; } = string.Empty;
 
         internal NativeSkinningCorrectionPreprocessResult Result { get; private set; }
+
+        // 워커 병렬 누적이라 경로별 합계는 근사치로 읽는다 (표시 전용).
+        internal string DescribeSolveTiming()
+        {
+            double fast = _fastPathTicks * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency;
+            double strong = _strongPathTicks * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency;
+            return $"fast={fast:F0}ms strong={strong:F0}ms " +
+                $"fallbackFrames={_fallbackFrameCount} | " +
+                _solverTiming.Describe();
+        }
 
         internal bool TryProcessNextFrame()
         {
@@ -801,7 +819,7 @@ namespace Fbx2Vmd.FBXImporter
             internal int CorrectionEntryCount { get; set; }
         }
 
-        private static bool TryCalculateValidatedSurfaceCorrection(
+        private bool TryCalculateValidatedSurfaceCorrection(
             int frameIndex,
             IReadOnlyList<Vector3> vertices,
             NativeSkinningSurfaceContract contract,
@@ -811,30 +829,38 @@ namespace Fbx2Vmd.FBXImporter
         {
             correction = null;
             errorMessage = string.Empty;
+            var pathWatch = System.Diagnostics.Stopwatch.StartNew();
             if (!NativeSkinningSurfaceCorrectionCalculator
-                    .TryCalculateFastValidatedFrame(
+                    .TryCalculateFastValidatedFrameTimed(
                         vertices,
                         contract,
+                        _solverTiming,
                         out correction))
             {
                 errorMessage =
                     $"frame {frameIndex}의 빠른 표면 보정을 계산하지 못했습니다.";
                 return false;
             }
+            System.Threading.Interlocked.Add(
+                ref _fastPathTicks, pathWatch.ElapsedTicks);
             if (!NativeSkinningSurfaceCorrectionCalculator
                     .IsWithinFastQuality(correction, contract))
             {
                 usedFallback = true;
+                pathWatch.Restart();
                 if (!NativeSkinningSurfaceCorrectionCalculator
-                        .TryCalculateStrongValidatedFrame(
+                        .TryCalculateStrongValidatedFrameTimed(
                             vertices,
                             contract,
+                            _solverTiming,
                             out correction))
                 {
                     errorMessage =
                         $"frame {frameIndex}의 강한 표면 보정을 계산하지 못했습니다.";
                     return false;
                 }
+                System.Threading.Interlocked.Add(
+                    ref _strongPathTicks, pathWatch.ElapsedTicks);
             }
             if (NativeSkinningSurfaceCorrectionCalculator
                     .IsWithinStrongQuality(correction, contract))

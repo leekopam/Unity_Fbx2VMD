@@ -784,6 +784,18 @@ namespace Fbx2Vmd.FBXImporter
                     return FBXConversionResult.Fail(targetErrorMessage);
                 }
 
+#if !UNITY_EDITOR
+                if (_pipeline.ShouldUseRuntimeHumanoidPlaybackSession)
+                {
+                    _pipeline.PrepareRuntimeHumanoidPlayback(
+                        targetAnimator,
+                        targetClip,
+                        outputBaseName,
+                        importedModel,
+                        request.SourcePath);
+                    return FBXConversionResult.Succeed(outputBaseName);
+                }
+#endif
                 PrepareRetargetingTarget(
                     targetObject,
                     targetAnimator,
@@ -803,6 +815,10 @@ namespace Fbx2Vmd.FBXImporter
                     targetAnimator,
                     targetPath,
                     request.SourcePath);
+#if !UNITY_EDITOR
+                // 빌드에서는 에디터 기준 클립이 없어 임포트된 모델 자체를 포즈 참조로 사용함.
+                retargeter.ConfigureRuntimeHumanoidPoseReference(importedModel, targetClip);
+#endif
 
                 _pipeline.DispatchRecording(
                     ghostAnimation,

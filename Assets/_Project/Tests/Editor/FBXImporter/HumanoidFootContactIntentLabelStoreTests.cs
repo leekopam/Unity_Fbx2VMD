@@ -6,13 +6,13 @@ using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class EditorHumanoidFootContactIntentLabelStoreTests
+    public class HumanoidFootContactIntentLabelStoreTests
     {
         private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Static |
             BindingFlags.Public | BindingFlags.NonPublic;
 
         private static readonly Type StoreType = typeof(FBXVmdPipeline).Assembly
-            .GetType("Fbx2Vmd.FBXImporter.EditorHumanoidFootContactIntentLabelStore", true);
+            .GetType("Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabelStore", true);
         private static readonly Type LabelType = typeof(FBXVmdPipeline).Assembly
             .GetType("Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabel", true);
 
@@ -42,6 +42,23 @@ namespace Tests.Editor.FBXImporter
             object roll = ParseRow("5,9,right,뒤꿈치,구르기,reviewer,");
             Assert.That((bool?)Property(roll, "IsSupport"), Is.True);
             Assert.That(Property(roll, "Mode").ToString(), Is.EqualTo("Plant"));
+        }
+
+        [Test]
+        public void Given_RuntimeEnvironment_When_SearchRoots_Then_IncludesPersistentDataPath()
+        {
+            // 빌드에는 개발 증거 폴더가 없으므로 영구 폴더 루트가 항상 포함되어야 함.
+            var roots = (System.Collections.Generic.List<string>)StoreType
+                .GetMethod("GetSearchRoots", Flags)
+                .Invoke(null, null);
+
+            Assert.That(roots, Has.Count.GreaterThanOrEqualTo(2));
+            Assert.That(
+                roots[roots.Count - 1].Replace('\\', '/'),
+                Does.Contain("evidence/boogle"));
+            Assert.That(
+                roots[roots.Count - 1],
+                Does.StartWith(Application.persistentDataPath));
         }
 
         [Test]

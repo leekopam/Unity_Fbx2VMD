@@ -11,7 +11,7 @@ namespace Fbx2Vmd.FBXImporter
     /// <summary>
     /// 접촉 의도 추정 결과(contact-intent.json)를 보고 사람 표식을 human-labels.csv로
     /// 기록하는 창임. 보정 로직을 수정하지 않고 추정기의 정답 데이터만 생산함.
-    /// 행 서식·어휘는 run-product-smoke.mjs와 EditorHumanoidFootContactIntentLabelStore에 맞춤.
+    /// 행 서식·어휘는 run-product-smoke.mjs와 HumanoidFootContactIntentLabelStore에 맞춤.
     /// </summary>
     public class FootContactIntentLabelingWindow : EditorWindow
     {
@@ -152,7 +152,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             _stored.Clear(); // 재조회 시 기존 목록과 중복되지 않게 항상 초기화
             Type storeType = Type.GetType(
-                "Fbx2Vmd.FBXImporter.EditorHumanoidFootContactIntentLabelStore, Assembly-CSharp");
+                "Fbx2Vmd.FBXImporter.HumanoidFootContactIntentLabelStore, Assembly-CSharp");
             object set = storeType
                 ?.GetMethod("Load", BindingFlags.Static | BindingFlags.NonPublic)
                 ?.Invoke(null, new object[] { input });

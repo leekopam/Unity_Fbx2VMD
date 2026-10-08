@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Tests.Editor.FBXImporter
 {
-    public class EditorHumanoidFootGroundingTests
+    public class HumanoidFootGroundingTests
     {
         private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Static |
             BindingFlags.Public | BindingFlags.NonPublic;
@@ -427,7 +427,7 @@ namespace Tests.Editor.FBXImporter
         {
             // 목표 도달과 비관통만으로는 부족하고, 완전 지지 접촉 괴리가 임계를 넘으면 미적용.
             Type type = typeof(FBXVmdPipeline).Assembly.GetType(
-                "Fbx2Vmd.FBXImporter.EditorHumanoidFootGrounding", true);
+                "Fbx2Vmd.FBXImporter.HumanoidFootGrounding", true);
             MethodInfo resolve = type.GetMethod("ResolveApplied", Flags);
             Assert.That(resolve, Is.Not.Null);
             Assert.That((bool)resolve.Invoke(null,
