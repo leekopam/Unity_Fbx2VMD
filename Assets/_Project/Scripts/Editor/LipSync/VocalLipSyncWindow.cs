@@ -82,6 +82,7 @@ namespace Fbx2Vmd.LipSync
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            _cts = null; // 재비활성화 시 disposed CTS의 Cancel이 ObjectDisposedException을 던진다.
             LipSyncClipPreview.Stop();
             StemAudioPreview.Stop();
             EditorUtility.ClearProgressBar();
@@ -585,8 +586,7 @@ namespace Fbx2Vmd.LipSync
                     _extractCsvPath = Path.Combine(_outputDir,
                         Path.GetFileNameWithoutExtension(_vocalWavPath) + "_phonemes.csv");
                     Directory.CreateDirectory(_outputDir);
-                    _cts?.Dispose();
-                    _cts = new System.Threading.CancellationTokenSource();
+                    RenewCts();
                     _sepProgress = 0f;
                     _extracting = Wav2VecPhonemeExtractor.ExtractAsync(
                         _pythonPath, ProjectRoot, _vocalWavPath, _extractCsvPath,
@@ -603,8 +603,20 @@ namespace Fbx2Vmd.LipSync
                     SetMessage(wavError, MessageType.Error);
                     return;
                 }
-                FinishBake(vocal, VocalLipSyncBaker.BakeAnalysis(vocal, _profile),
-                    _vocalWavPath, _outputDir);
+                try
+                {
+                    FinishBake(vocal, VocalLipSyncBaker.BakeAnalysis(vocal, _profile),
+                        _vocalWavPath, _outputDir);
+                }
+                catch
+                {
+                    // BakeAnalysis/FinishBake 예외 시 로드된 클립이 도메인 리로드까지 누수된다.
+                    if (vocal != null)
+                    {
+                        DestroyImmediate(vocal);
+                    }
+                    throw;
+                }
             }
             catch (System.Exception error)
             {
