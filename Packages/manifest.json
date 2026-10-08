@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.1.0",
+    "com.hecomi.ulipsync": "file:com.hecomi.ulipsync",
     "com.unity.ai.navigation": "1.1.6",
     "com.unity.animation.rigging": "1.2.1",
     "com.unity.burst": "1.8.29",
@@ -24,9 +25,9 @@
     "com.unity.timeline": "1.8.2",
     "com.unity.ugui": "1.0.0",
     "com.unity.visualeffectgraph": "14.0.12",
-    "com.hecomi.ulipsync": "file:com.hecomi.ulipsync",
     "com.vrmc.gltf": "https://github.com/vrm-c/UniVRM.git?path=/Assets/UniGLTF#v0.130.1",
     "com.vrmc.univrm": "https://github.com/vrm-c/UniVRM.git?path=/Assets/VRM#v0.130.1",
+    "jp.lilxyzw.liltoon": "https://github.com/lilxyzw/lilToon.git?path=Assets/lilToon#2.3.4",
     "com.unity.modules.ai": "1.0.0",
     "com.unity.modules.androidjni": "1.0.0",
     "com.unity.modules.animation": "1.0.0",

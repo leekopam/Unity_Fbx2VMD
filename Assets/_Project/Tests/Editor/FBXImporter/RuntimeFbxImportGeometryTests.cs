@@ -1,5 +1,6 @@
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using UnityEditor;
@@ -213,7 +214,7 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_TextureSampleFbx_When_RuntimeImportCreatesMaterials_Then_MatchesUnityImporterCutoutShader()
+        public void Given_TextureSampleFbx_When_RuntimeImportCreatesMaterials_Then_UsesToonShadersWithTextures()
         {
             GameObject referencePrefab = RequireSampleFbxPrefab("Unity importer material comparison");
 
@@ -231,16 +232,25 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(referenceMaterials, Has.Length.EqualTo(15));
                 Assert.That(runtimeMaterials, Has.Length.EqualTo(referenceMaterials.Length));
 
-                string expectedShader = referenceMaterials[0].shader.name;
-                int expectedRenderQueue = referenceMaterials[0].renderQueue;
-                Assert.That(expectedShader, Is.EqualTo("Unlit/Transparent Cutout"));
-                Assert.That(expectedRenderQueue, Is.EqualTo((int)UnityEngine.Rendering.RenderQueue.AlphaTest));
+                // 툰 템플릿 라이브러리의 셰이더만 허용한다.
+                var toonShaders = new HashSet<string>();
+                foreach (string preset in new[] { "Toon_Opaque", "Toon_Cutout", "Toon_Transparent", "Toon_Skin", "Toon_Hair", "Toon_Eye" })
+                {
+                    Material template = Resources.Load<Material>("ToonPresets/" + preset);
+                    if (template != null && template.shader != null)
+                    {
+                        toonShaders.Add(template.shader.name);
+                    }
+                }
+                Assert.That(toonShaders, Is.Not.Empty, "Toon preset templates must load from Resources.");
 
                 foreach (Material material in runtimeMaterials)
                 {
                     Assert.That(material.mainTexture, Is.Not.Null, $"{material.name} must keep the restored runtime texture.");
-                    Assert.That(material.shader.name, Is.EqualTo(expectedShader), $"{material.name} must match Unity importer shader parity.");
-                    Assert.That(material.renderQueue, Is.EqualTo(expectedRenderQueue), $"{material.name} must match Unity importer cutout queue.");
+                    Assert.That(
+                        toonShaders.Contains(material.shader.name),
+                        Is.True,
+                        $"{material.name} must use a toon template shader (got {material.shader.name}).");
                 }
             }
             finally

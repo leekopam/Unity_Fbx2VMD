@@ -46,18 +46,50 @@ namespace Fbx2Vmd.FBXImporter
         private static UnityEngine.Material CreateRuntimeMaterial(Assimp.Material sourceMaterial, string sourceDirectory)
         {
             string texturePath = ResolveMainTexturePath(sourceMaterial, sourceDirectory);
-            Shader shader = SelectRuntimeMaterialShader(texturePath);
+            Texture2D texture = LoadMainTexture(texturePath);
+            string materialName = string.IsNullOrWhiteSpace(sourceMaterial?.Name)
+                ? "ImportedMaterial"
+                : sourceMaterial.Name;
 
-            var material = new UnityEngine.Material(shader)
+            // 툰 템플릿이 있으면 복제해 쓰고, 없으면 기존 셰이더 경로로 폴백한다.
+            bool isToon = TryCreateToonMaterial(sourceMaterial?.Name, texture, out UnityEngine.Material material);
+            if (!isToon)
             {
-                name = string.IsNullOrWhiteSpace(sourceMaterial?.Name)
-                    ? "ImportedMaterial"
-                    : sourceMaterial.Name
-            };
+                material = CreateLegacyMaterial(texturePath, materialName);
+            }
 
+            material.name = materialName;
             ApplyReferenceMaterialDefaults(material);
-            AssignMainTexture(material, texturePath);
+            AssignMainTexture(material, texture, isToon);
             return material;
+        }
+
+        private static bool TryCreateToonMaterial(
+            string sourceMaterialName, Texture2D texture, out UnityEngine.Material material)
+        {
+            material = null;
+            bool hasAlpha = texture != null && TextureContainsTransparentPixels(texture);
+            ToonMaterialRole surface = hasAlpha ? ToonMaterialRole.Cutout : ToonMaterialRole.Opaque;
+            ToonMaterialRole role =
+                ToonMaterialRoleResolver.ResolveCharacterRole(sourceMaterialName) ?? surface;
+            // 피부·눈 템플릿은 불투명 변형이라 알파 텍스처가 배정되면 알파가 유실된다.
+            // 알파가 있으면 부위 역할보다 표면 방식을 우선해 Cutout으로 내린다.
+            if (hasAlpha &&
+                (role == ToonMaterialRole.Skin || role == ToonMaterialRole.Eye))
+            {
+                role = ToonMaterialRole.Cutout;
+            }
+
+            return ToonMaterialLibrary.TryInstantiate(role, surface, out material);
+        }
+
+        private static UnityEngine.Material CreateLegacyMaterial(string texturePath, string materialName)
+        {
+            Shader shader = SelectRuntimeMaterialShader(texturePath);
+            return new UnityEngine.Material(shader)
+            {
+                name = materialName
+            };
         }
 
         private static Shader SelectRuntimeMaterialShader(string texturePath)
@@ -108,11 +140,11 @@ namespace Fbx2Vmd.FBXImporter
             return texturePath;
         }
 
-        private static void AssignMainTexture(UnityEngine.Material material, string texturePath)
+        private static Texture2D LoadMainTexture(string texturePath)
         {
             if (string.IsNullOrEmpty(texturePath))
             {
-                return;
+                return null;
             }
 
             try
@@ -125,9 +157,7 @@ namespace Fbx2Vmd.FBXImporter
 
                 if (texture.LoadImage(bytes))
                 {
-                    material.mainTexture = texture;
-                    ApplyTextureMaterialState(material, texture);
-                    return;
+                    return texture;
                 }
 
                 DestroyTexture(texture);
@@ -139,6 +169,24 @@ namespace Fbx2Vmd.FBXImporter
             catch (System.Exception e)
             {
                 Debug.LogWarning($"[FBXImport] 텍스처 적용 실패함. 경로={texturePath}, 오류={e.Message}");
+            }
+
+            return null;
+        }
+
+        private static void AssignMainTexture(UnityEngine.Material material, Texture2D texture, bool isToon)
+        {
+            if (material == null || texture == null)
+            {
+                return;
+            }
+
+            material.mainTexture = texture;
+            // 레거시 머티리얼만 알파컷 상태를 추가 설정한다.
+            // 툰 템플릿은 선택 시점에 이미 Opaque/Cutout이 정해져 있다.
+            if (!isToon)
+            {
+                ApplyTextureMaterialState(material, texture);
             }
         }
 

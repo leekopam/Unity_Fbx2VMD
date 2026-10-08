@@ -222,15 +222,18 @@ namespace Tests.Editor.FBXImporter
                 UnityEngine.Material material = renderer.sharedMaterials[0];
                 Assert.That(material, Is.Not.Null);
                 Assert.That(material.mainTexture, Is.Not.Null);
-                bool usesCutoutShader = material.shader != null
+                bool usesLegacyCutoutShader = material.shader != null
                     && material.shader.name == "Unlit/Transparent Cutout";
+                bool usesToonCutout = material.shader != null
+                    && material.shader.name.Contains("lilToonCutout");
                 if (material.HasProperty("_Mode"))
                 {
                     Assert.That(material.GetFloat("_Mode"), Is.EqualTo(1f).Within(0.0001f));
                 }
 
                 Assert.That(
-                    usesCutoutShader || material.IsKeywordEnabled("_ALPHATEST_ON"),
+                    usesLegacyCutoutShader || usesToonCutout
+                        || material.IsKeywordEnabled("_ALPHATEST_ON"),
                     Is.True);
                 Assert.That(material.renderQueue, Is.EqualTo((int)UnityEngine.Rendering.RenderQueue.AlphaTest));
             }
@@ -242,7 +245,82 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_RuntimeMaterialUsesStandardShader_When_RuntimeImportCreatesRenderer_Then_UsesMatteReferenceGlossiness()
+        public void Given_EyeMaterialHasTransparentPixels_When_RuntimeImportCreatesRenderer_Then_UsesCutoutToonMaterial()
+        {
+            var importer = new AssimpFBXImporter();
+            var target = new GameObject("eye-alpha-texture-target");
+            string root = CreateTempRoot();
+
+            try
+            {
+                string fbxDirectory = Path.Combine(root, "Import_FBX");
+                Directory.CreateDirectory(fbxDirectory);
+                string texturePath = Path.Combine(fbxDirectory, "eye_highlight.png");
+                WritePng(
+                    texturePath,
+                    new[]
+                    {
+                        new Color(1f, 1f, 1f, 1f),
+                        new Color(1f, 1f, 1f, 0f),
+                        new Color(1f, 1f, 1f, 1f),
+                        new Color(1f, 1f, 1f, 0f)
+                    });
+
+                SetSourceDirectory(importer, fbxDirectory);
+
+                // 눈 역할로 추정되는 이름 + 알파 텍스처 → 알파 유실 방지로 Cutout이어야 한다.
+                var sourceMaterial = new Assimp.Material { Name = "F00_000_00_EyeHighlight_00_EYE" };
+                var textureSlot = new TextureSlot(
+                    "eye_highlight.png",
+                    TextureType.Diffuse,
+                    0,
+                    TextureMapping.FromUV,
+                    0,
+                    1f,
+                    TextureOperation.Add,
+                    Assimp.TextureWrapMode.Wrap,
+                    Assimp.TextureWrapMode.Wrap,
+                    0);
+                sourceMaterial.TextureDiffuse = textureSlot;
+
+                var scene = new Scene();
+                scene.Materials.Add(sourceMaterial);
+
+                var mesh = new Assimp.Mesh("eye_mesh", Assimp.PrimitiveType.Triangle)
+                {
+                    MaterialIndex = 0
+                };
+                mesh.Vertices.Add(new Vector3D(0f, 0f, 0f));
+                mesh.Vertices.Add(new Vector3D(1f, 0f, 0f));
+                mesh.Vertices.Add(new Vector3D(0f, 1f, 0f));
+                mesh.Faces.Add(new Face(new[] { 0, 1, 2 }));
+
+                MethodInfo createMesh = typeof(AssimpFBXImporter).GetMethod(
+                    "CreateMesh",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(createMesh, Is.Not.Null);
+
+                createMesh.Invoke(importer, new object[] { target, mesh, scene });
+
+                Renderer renderer = RequireComponent<Renderer>(target);
+                UnityEngine.Material material = renderer.sharedMaterials[0];
+                Assert.That(material, Is.Not.Null);
+                bool usesCutoutSurface = material.shader != null
+                    && (material.shader.name.Contains("lilToonCutout")
+                        || material.shader.name == "Unlit/Transparent Cutout");
+                Assert.That(usesCutoutSurface, Is.True,
+                    $"알파 텍스처는 Cutout 표면이어야 한다 (got {material.shader.name}).");
+                Assert.That(material.renderQueue, Is.EqualTo((int)UnityEngine.Rendering.RenderQueue.AlphaTest));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+                DeleteTempRoot(root);
+            }
+        }
+
+        [Test]
+        public void Given_RuntimeMaterial_When_RuntimeImportCreatesRenderer_Then_UsesToonOrMatteDefaults()
         {
             var importer = new AssimpFBXImporter();
             var target = new GameObject("matte-material-target");
@@ -269,11 +347,21 @@ namespace Tests.Editor.FBXImporter
                 createMesh.Invoke(importer, new object[] { target, mesh, scene });
 
                 Renderer renderer = RequireComponent<Renderer>(target);
-                Assert.That(renderer.sharedMaterials[0], Is.Not.Null);
-                Assert.That(renderer.sharedMaterials[0].HasProperty("_Glossiness"), Is.True);
-                Assert.That(renderer.sharedMaterials[0].GetFloat("_Glossiness"), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(renderer.sharedMaterials[0].HasProperty("_Metallic"), Is.True);
-                Assert.That(renderer.sharedMaterials[0].GetFloat("_Metallic"), Is.EqualTo(0f).Within(0.0001f));
+                UnityEngine.Material material = renderer.sharedMaterials[0];
+                Assert.That(material, Is.Not.Null);
+                if (material.shader.name.StartsWith("Hidden/lilToon"))
+                {
+                    // 툰 템플릿 경로: 무광·셰이딩 설정은 템플릿 에셋에 포함된다.
+                    Assert.That(material.shader.name, Does.StartWith("Hidden/lilToon"));
+                }
+                else
+                {
+                    // 레거시 Standard 폴백 경로: 무광 기본값 유지.
+                    Assert.That(material.HasProperty("_Glossiness"), Is.True);
+                    Assert.That(material.GetFloat("_Glossiness"), Is.EqualTo(0f).Within(0.0001f));
+                    Assert.That(material.HasProperty("_Metallic"), Is.True);
+                    Assert.That(material.GetFloat("_Metallic"), Is.EqualTo(0f).Within(0.0001f));
+                }
             }
             finally
             {
