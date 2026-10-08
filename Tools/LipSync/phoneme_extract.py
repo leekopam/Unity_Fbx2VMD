@@ -9,6 +9,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 
 import numpy as np
@@ -256,36 +257,99 @@ def _kweighted_vols(wav, n_frames):
     return vols
 
 
+_LRC_TAG = re.compile(r"\[([^\[\]]*)\]")
+_LRC_TIME = re.compile(r"^(\d+):(\d+(?:\.\d+)?)$")
+# LRC 줄 시각은 약간 어긋날 수 있어 창에 ±여유를 둔다.
+_LRC_MARGIN_SEC = 1.2
+
+
+def _parse_lrc(text):
+    """LRC → ([(초, 가사줄)], offset초). 타임스탬프 없는 줄은 초=None.
+    [t1][t2]가사 다중 타임스탬프(반복 표기)는 각 시각 항목으로 전개한다."""
+    lines, offset_ms = [], 0.0
+    for raw in text.splitlines():
+        tags = _LRC_TAG.findall(raw)
+        body = _LRC_TAG.sub("", raw).strip()
+        times = []
+        for t in tags:
+            m = _LRC_TIME.match(t.strip())
+            if m:
+                times.append(int(m.group(1)) * 60 + float(m.group(2)))
+            elif t.strip().startswith("offset:"):
+                try:
+                    offset_ms = float(t.split(":", 1)[1])
+                except ValueError:
+                    pass
+        for sec in times:
+            if body:
+                lines.append((sec, body))
+        if not times and body and not tags:
+            lines.append((None, body))
+    lines.sort(key=lambda x: (x[0] is None, x[0] or 0.0))
+    return lines, offset_ms / 1000.0
+
+
 def _load_lyrics(path, vocab, pad_id):
     """가사 파일을 읽어 어휘 토큰 id 열로 변환한다.
-    어휘에 없는 문자(공백·한자 등)는 건너뛴다 — 정렬 대상은 발음 토큰뿐이다."""
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
+    어휘에 없는 문자(공백·한자 등)는 건너뛴다 — 정렬 대상은 발음 토큰뿐이다.
+    .lrc 입력이면 줄 타임스탬프에서 토큰별 허용 시간 창도 함께 돌려준다.
+    반환: (ids, windows|None) — windows는 토큰별 (시작초, 끝초)."""
+    # 일본 레거시 가사는 Shift_JIS로 저장된 경우가 있어 UTF-8 실패 시 폴백한다.
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            text = f.read()
+    except UnicodeDecodeError:
+        with open(path, encoding="cp932", errors="replace") as f:
+            text = f.read()
+    is_lrc = path.lower().endswith(".lrc") or _LRC_TIME.search(text)
+    segs = [(0.0, float("inf"), text)]  # (줄 시작, 줄 끝, 텍스트)
+    if is_lrc:
+        lines, offset = _parse_lrc(text)
+        timed = [t for t, _ in lines if t is not None]
+        segs = []
+        for i, (sec, body) in enumerate(lines):
+            if sec is None:
+                lo, hi = 0.0, float("inf")
+            else:
+                nxt = next((lines[k][0] for k in range(i + 1, len(lines))
+                            if lines[k][0] is not None), float("inf"))
+                lo = max(0.0, sec + offset - _LRC_MARGIN_SEC)
+                hi = (nxt + offset + _LRC_MARGIN_SEC) if nxt != float("inf") \
+                    else float("inf")
+            segs.append((lo, hi, body))
+        print("가사 정렬: LRC 타임스탬프 %d줄 창 적용" % len(timed), flush=True)
     ids = []
+    windows = [] if is_lrc else None
     skipped = 0
-    for ch in text:
-        c = ch.strip()
-        if not c:
-            continue
-        # 어휘 표기와 가사 표기의 가나 계열이 다를 수 있어 양방향을 시도한다.
-        cands = [c]
-        if "ァ" <= c <= "ヶ":
-            cands.append(chr(ord(c) - 0x60))
-        elif "ぁ" <= c <= "ゖ":
-            cands.append(chr(ord(c) + 0x60))
-        hit = next((vocab[cx] for cx in cands if cx in vocab), None)
-        if hit is None or hit == pad_id:
-            skipped += 1
-            continue
-        ids.append(hit)
+    for lo, hi, seg in segs:
+        for ch in seg:
+            c = ch.strip()
+            if not c:
+                continue
+            # 어휘 표기와 가사 표기의 가나 계열이 다를 수 있어 양방향을 시도한다.
+            cands = [c]
+            if "ァ" <= c <= "ヶ":
+                cands.append(chr(ord(c) - 0x60))
+            elif "ぁ" <= c <= "ゖ":
+                cands.append(chr(ord(c) + 0x60))
+            hit = next((vocab[cx] for cx in cands if cx in vocab), None)
+            if hit is None or hit == pad_id:
+                skipped += 1
+                continue
+            ids.append(hit)
+            if windows is not None:
+                windows.append((lo, hi))
     if skipped:
         print("가사 정렬: 어휘에 없는 문자 %d개 건너뜀" % skipped, flush=True)
-    return ids
+    return ids, windows
 
 
-def _forced_align(log_probs, lyric_ids, pad_id, id2tok, kind, kana_map):
+def _forced_align(log_probs, lyric_ids, pad_id, id2tok, kind, kana_map,
+                  windows=None, fps=50.0):
     """CTC 강제 정렬 — 가사 토큰 열로 제한한 Viterbi 경로를 찾아
     각 프레임이 어느 가사 토큰에 대응하는지 돌려준다.
+    windows(LRC 타임스탬프 유래)가 있으면 토큰 j가 자기 줄의 시간 창 밖
+    프레임에 배치되지 못하게 해 어긋난 구간(2절/코러스 반복) 정렬을 막는다.
     반환: 프레임별 모음 그룹 원핫(무토큰 프레임은 0)."""
     n = log_probs.shape[0]
     if n == 0 or not lyric_ids:
@@ -298,16 +362,29 @@ def _forced_align(log_probs, lyric_ids, pad_id, id2tok, kind, kana_map):
     ext.append(pad_id)
     s_len = len(ext)
 
+    # 토큰 상태(ext 홀수 인덱스)의 허용 프레임 창 — 초 단위를 프레임으로 환산.
+    wlo = whi = None
+    if windows is not None and len(windows) == len(lyric_ids):
+        wlo = np.full(s_len, -1, dtype=np.int64)
+        whi = np.full(s_len, n, dtype=np.int64)
+        for i, (lo, hi) in enumerate(windows):
+            wlo[2 * i + 1] = int(lo * fps)
+            whi[2 * i + 1] = n if math.isinf(hi) \
+                else min(n, int(math.ceil(hi * fps)))
+
     neg = -1e30
     dp = np.full(s_len, neg)
     dp[0] = log_probs[0, pad_id]
-    if s_len > 1:
+    if s_len > 1 and (wlo is None or (0 >= wlo[1] and 0 < whi[1])):
         dp[1] = log_probs[0, ext[1]]
     back = np.zeros((n, s_len), dtype=np.int64)
     for t in range(1, n):
         ndp = np.full(s_len, neg)
         lp = log_probs[t]
         for j in range(s_len):
+            if wlo is not None and (t < wlo[j] or t >= whi[j]):
+                continue
+            cands = [dp[j]]
             cands = [dp[j]]
             if j >= 1:
                 cands.append(dp[j - 1])
@@ -458,9 +535,11 @@ def main():
 
     lyric_groups = None
     if args.lyrics:
-        lyric_ids = _load_lyrics(args.lyrics, vocab, pad_id)
+        lyric_ids, windows = _load_lyrics(args.lyrics, vocab, pad_id)
         lyric_groups = _forced_align(log_probs_full, lyric_ids, pad_id,
-                                     id2tok, vocab_kind, kana_map)
+                                     id2tok, vocab_kind, kana_map,
+                                     windows=windows,
+                                     fps=16000.0 / STRIDE)
         if lyric_groups is None:
             print("가사 정렬 실패 — blind 추출 결과로 진행", flush=True)
 

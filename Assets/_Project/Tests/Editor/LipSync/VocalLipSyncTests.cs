@@ -1330,6 +1330,34 @@ namespace Fbx2Vmd.Tests.LipSync
         }
 
         [Test]
+        public void LyricsFetch_결과JSON을후보로파싱한다()
+        {
+            var json = "{\"ok\":true,\"error\":null,\"title\":\"t\",\"artist\":\"a\","
+                + "\"warnings\":[\"w1\"],\"candidates\":[{"
+                + "\"source\":\"lrclib\",\"title\":\"곡명\",\"artist\":\"가수\","
+                + "\"score\":0.82,\"path\":\"C:/x/lyrics.txt\","
+                + "\"lrcPath\":\"C:/x/lyrics.lrc\",\"preview\":\"첫줄\","
+                + "\"timedLines\":63,\"romanized\":false}]}";
+            Assert.IsTrue(LyricsFetcher.ParseResult(json,
+                out var cand, out string error), error);
+            Assert.AreEqual("lrclib", cand.source);
+            Assert.AreEqual("곡명", cand.title);
+            Assert.AreEqual(63, cand.timedLines);
+            Assert.AreEqual("C:/x/lyrics.lrc", cand.lrcPath);
+        }
+
+        [Test]
+        public void LyricsFetch_실패JSON은오류를돌린다()
+        {
+            var json = "{\"ok\":false,\"error\":\"가사를 찾지 못했습니다\","
+                + "\"candidates\":[],\"warnings\":[]}";
+            Assert.IsFalse(LyricsFetcher.ParseResult(json,
+                out var cand, out string error));
+            Assert.IsNull(cand);
+            Assert.AreEqual("가사를 찾지 못했습니다", error);
+        }
+
+        [Test]
         public void CsvToBakedData_NaN과Inf는0으로정제한다()
         {
             // float.TryParse는 "nan"/"inf"를 NaN/Infinity로 파싱한다 — 커브 유입 차단 확인.

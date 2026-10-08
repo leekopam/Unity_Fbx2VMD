@@ -37,6 +37,10 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private bool _useWav2VecPhonemes; // DL 음소 분석 경로
         [SerializeField] private Wav2VecPhonemeExtractor.PhonemeLanguage _phonemeLanguage;
         [SerializeField] private string _lyricsPath = ""; // 가사 텍스트(강제 정렬, 선택)
+        [SerializeField] private string _lyricsTitle = "";  // 가사 검색용 곡명(비우면 파일명)
+        [SerializeField] private string _lyricsArtist = ""; // 가사 검색용 아티스트(선택)
+        private Task<(bool ok, LyricsFetcher.Candidate candidate, string error)> _lyricsFetching;
+        private LyricsFetcher.Candidate _lyricsCandidate; // 승인 대기 중인 수집 후보
         [SerializeField] private bool _wpeDereverb; // 정제 체인의 디리버브를 WPE로 교체
         [SerializeField] private AnimationClip _previewClip;
         [SerializeField] private bool _previewWithAudio = true;
@@ -218,6 +222,29 @@ namespace Fbx2Vmd.LipSync
                     // 정제 실패 시 원본 보컬로라도 진행할 수 있게 폴백한다.
                     _vocalWavPath = _rawVocalWavPath;
                     SetMessage("정제 실패(원본 보컬로 대체): " + result.error, MessageType.Warning);
+                }
+            }
+            if (_lyricsFetching != null && _lyricsFetching.IsCompleted)
+            {
+                bool cancelled = _lyricsFetching.IsCanceled;
+                (bool ok, LyricsFetcher.Candidate candidate, string error) fetch =
+                    (!cancelled && !_lyricsFetching.IsFaulted)
+                        ? _lyricsFetching.Result
+                        : (false, null,
+                            cancelled
+                                ? "가사 검색이 취소됐습니다."
+                                : _lyricsFetching.Exception?.GetBaseException().Message);
+                _lyricsFetching = null;
+                if (fetch.ok)
+                {
+                    _lyricsCandidate = fetch.candidate;
+                    SetMessage("가사 후보를 찾았습니다 — 내용 확인 후 적용하세요.",
+                        MessageType.Info);
+                }
+                else
+                {
+                    SetMessage("가사 자동 검색 실패: " + fetch.error,
+                        MessageType.Warning);
                 }
             }
             if (_extracting != null && _extracting.IsCompleted)
@@ -452,13 +479,62 @@ namespace Fbx2Vmd.LipSync
                             "보컬 가사 언어 — 언어별 wav2vec2 모델을 사용한다(첫 실행 시 모델 다운로드)"),
                         _phonemeLanguage);
                 DrawPathRow("가사(선택)", ref _lyricsPath,
-                    "가사 텍스트 파일 — 있으면 강제 정렬로 음소 오류 제거 "
-                    + "(일본어:가나, 한국어:한글, 영어:IPA 표기)", "txt");
+                    "가사 텍스트/lrc 파일 — 있으면 강제 정렬로 음소 오류 제거 "
+                    + "(일본어:가나, 한국어:한글, 영어:IPA 표기)", "txt,lrc");
+                EditorGUILayout.BeginHorizontal();
+                _lyricsTitle = EditorGUILayout.TextField(
+                    new GUIContent("곡명", "가사 검색용 — 비우면 원곡 파일명 사용"),
+                    _lyricsTitle);
+                _lyricsArtist = EditorGUILayout.TextField(
+                    new GUIContent("아티스트", "가사 검색용(선택) — 매칭 정확도↑"),
+                    _lyricsArtist);
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.BeginHorizontal();
+                using (new EditorGUI.DisabledScope(
+                    _lyricsFetching != null
+                    || (string.IsNullOrEmpty(_sourceAudioPath)
+                        && string.IsNullOrEmpty(_vocalWavPath))))
+                {
+                    if (GUILayout.Button("가사 자동 검색"))
+                    {
+                        StartLyricsFetch();
+                    }
+                }
+                if (_lyricsFetching != null)
+                {
+                    GUILayout.Label("검색 중…", GUILayout.Width(70));
+                }
+                EditorGUILayout.EndHorizontal();
+                // 자동 매칭은 오탐 위험이 있어 사용자 승인 후에만 적용한다.
+                if (_lyricsCandidate != null)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"[{_lyricsCandidate.source}] {_lyricsCandidate.title}"
+                        + $" / {_lyricsCandidate.artist}"
+                        + $" (점수 {_lyricsCandidate.score:F2}"
+                        + (_lyricsCandidate.timedLines > 0
+                            ? $", 싱크 {_lyricsCandidate.timedLines}줄" : "")
+                        + ")\n" + _lyricsCandidate.preview,
+                        MessageType.None);
+                    EditorGUILayout.BeginHorizontal();
+                    if (GUILayout.Button("이 가사 적용"))
+                    {
+                        _lyricsPath = _lyricsCandidate.path;
+                        _lyricsCandidate = null;
+                        SetMessage("가사 적용: " + Path.GetFileName(_lyricsPath),
+                            MessageType.Info);
+                    }
+                    if (GUILayout.Button("무시"))
+                    {
+                        _lyricsCandidate = null;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
             }
 
             using (new EditorGUI.DisabledScope(
                 _separating != null || _cleaning != null || _extracting != null
-                || _provisioning != null))
+                || _provisioning != null || _lyricsFetching != null))
             {
                 if (GUILayout.Button("립싱크 베이크 + 클립 저장"))
                 {
@@ -622,6 +698,36 @@ namespace Fbx2Vmd.LipSync
                 highQuality: highQuality,
                 projectRoot: ProjectRoot);
             SetMessage("분리 완료 — 보컬 정제(잔향/코러스/노이즈) 중...", MessageType.Info);
+        }
+
+        /// <summary>가사 자동 검색 — 메타데이터는 원곡 우선, 없으면 보컬 스템 파일명을 쓴다.</summary>
+        private void StartLyricsFetch()
+        {
+            string audio = !string.IsNullOrEmpty(_sourceAudioPath)
+                && File.Exists(_sourceAudioPath)
+                    ? _sourceAudioPath : _vocalWavPath;
+            if (string.IsNullOrEmpty(audio) || !File.Exists(audio))
+            {
+                SetMessage("가사 검색에 쓸 음원 파일이 없습니다.", MessageType.Warning);
+                return;
+            }
+            if (_cts == null || _cts.IsCancellationRequested)
+            {
+                RenewCts();
+            }
+            _lyricsCandidate = null;
+            string lang = _phonemeLanguage
+                == Wav2VecPhonemeExtractor.PhonemeLanguage.Korean ? "ko"
+                : _phonemeLanguage == Wav2VecPhonemeExtractor.PhonemeLanguage.English
+                    ? "en" : "ja";
+            string outBase = Path.Combine(_outputDir,
+                Path.GetFileNameWithoutExtension(audio) + "_lyrics");
+            Directory.CreateDirectory(_outputDir);
+            _lyricsFetching = LyricsFetcher.FetchAsync(
+                _pythonPath, ProjectRoot, audio, outBase,
+                _lyricsTitle, _lyricsArtist, lang,
+                _cts.Token);
+            SetMessage("가사 검색 중(로컬 → 태그 → LRCLIB → VocaDB)…", MessageType.Info);
         }
 
         /// <summary>중단된 정제의 최종 산출물(_vocal_lead/_vocal_clean)이 디스크에 남아 있으면 채택한다.</summary>

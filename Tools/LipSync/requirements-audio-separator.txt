@@ -9,3 +9,8 @@ nara_wpe>=0.0.8
 onnx>=1.16
 onnxruntime>=1.17
 onnxscript>=0.1
+# 가사 자동 수집 — 임베디드 태그 읽기 + 일본어 한자→가나 독서 변환.
+mutagen>=1.46
+fugashi>=1.3
+unidic-lite>=1.0.8
+eng-to-ipa>=0.0.2
