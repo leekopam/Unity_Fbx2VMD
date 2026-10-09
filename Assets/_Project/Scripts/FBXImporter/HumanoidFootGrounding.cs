@@ -371,7 +371,9 @@ namespace Fbx2Vmd.FBXImporter
 
         private sealed class Leg
         {
-            private const float MaximumSupportedToePitch = 40f;
+            // 앞꿈치 지지 발끝 하향각 — 25°부터 초과분을 완만히 눌러 35°에 점근시킴.
+            private const float ToePitchSoftKneeDeg = 25f;
+            private const float MaximumSupportedToePitch = 35f;
             internal readonly Transform Upper;
             internal readonly Transform Lower;
             internal readonly Transform Foot;
@@ -724,12 +726,16 @@ namespace Fbx2Vmd.FBXImporter
                     Vector3 forward = _targetFootRotation * (_localFootFrame.Value * Vector3.forward);
                     float pitch = Mathf.Asin(Mathf.Clamp(Vector3.Dot(forward, _ground.normal), -1f, 1f)) *
                         Mathf.Rad2Deg;
-                    if (pitch < -MaximumSupportedToePitch)
+                    if (pitch < -ToePitchSoftKneeDeg)
                     {
-                        // 앞꿈치 지지는 유지하되 원본의 과도한 발끝 하향 회전만 제한함.
-                        Quaternion limited = Quaternion.AngleAxis(pitch + MaximumSupportedToePitch, axis) *
+                        // 앞꿈치 지지는 유지하되 과도한 발끝 하향만 완만히 압축 — tanh로
+                        // 상한에 점근시켜 캡 경계의 각도 단절을 없앰.
+                        float span = MaximumSupportedToePitch - ToePitchSoftKneeDeg;
+                        float limited = -(ToePitchSoftKneeDeg +
+                            span * (float)System.Math.Tanh((-pitch - ToePitchSoftKneeDeg) / span));
+                        Quaternion corrected = Quaternion.AngleAxis(limited - pitch, axis) *
                             _targetFootRotation;
-                        _targetFootRotation = Quaternion.Slerp(_targetFootRotation, limited, _activeWeights.y);
+                        _targetFootRotation = Quaternion.Slerp(_targetFootRotation, corrected, _activeWeights.y);
                     }
                 }
                 return true;

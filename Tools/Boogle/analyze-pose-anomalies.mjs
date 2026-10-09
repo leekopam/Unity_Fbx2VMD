@@ -13,9 +13,10 @@ export const defaultThresholds = {
   // 무릎 역신전·과굴곡(도). 음수는 역신전
   kneeHyperextensionDeg: -4,
   kneeMaxFlexionDeg: 170,
-  // 발목 피치 허용 범위(도) — 족저굴곡 양수, 배측굴곡 음수
-  anklePitchMinDeg: -45,
-  anklePitchMaxDeg: 75,
+  // 발목 피치 허용 범위(도) — 이 리그의 측정 컨벤션에서 중립 ≈ -130~-140,
+  // 족저굴곡은 음수 방향. 실측 과꺾임(foot_pitch -38°~)은 -179~-183에 해당.
+  anklePitchMinDeg: -175,
+  anklePitchMaxDeg: -95,
   // 발 회전 프레임간 스텝(도) — 이상치 상한
   footRotationSpikeDeg: 25,
   // 골반 높이 프레임간 스텝(mm, 배율 곱) — 핀 경계 팝·지터 공용
