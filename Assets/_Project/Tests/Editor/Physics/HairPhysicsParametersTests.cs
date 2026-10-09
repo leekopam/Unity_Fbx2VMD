@@ -99,6 +99,42 @@ namespace Tests.Editor.ClothPhysics
         }
 
         [Test]
+        public void Given_Accessory_When_Apply_Then_DampingRisesTowardTip()
+        {
+            var s = new ClothSerializeData();
+            HairPhysicsParameters.Apply(HairPart.Accessory, s, 0.6f, null, false, HairTuning.Default);
+            Assert.That(s.damping.useCurve, Is.True,
+                "의상 체인은 깊이별 감쇠 램프를 써야 합니다 (팁 과흔들림 방지).");
+            Assert.That(s.damping.Evaluate(0f), Is.LessThan(s.damping.Evaluate(1f)),
+                "감쇠는 루트보다 끝에서 커야 합니다.");
+            Assert.That(s.damping.Evaluate(1f), Is.GreaterThanOrEqualTo(0.4f),
+                "끝단 감쇠가 너무 약하면 팁이 계속 출렁입니다.");
+        }
+
+        [Test]
+        public void Given_AccessoryAndSpringProfile_When_Apply_Then_DampingRampSurvives()
+        {
+            var spring = HairSpringProfile.Default;
+            spring.enabled = true;
+            spring.dampingRatio = 0.5f; // 스프링 경로는 damping을 평탄값으로 덮어쓴다
+            var s = new ClothSerializeData();
+            HairPhysicsParameters.Apply(
+                HairPart.Accessory, s, 0.6f, null, false, HairTuning.Default, true, spring);
+            Assert.That(s.damping.useCurve, Is.True,
+                "스프링 프로파일의 평탄 damping 덮어쓰기 후에도 의상 램프는 복원돼야 합니다.");
+            Assert.That(s.damping.Evaluate(1f), Is.GreaterThan(s.damping.Evaluate(0f)));
+        }
+
+        [Test]
+        public void Given_HairPart_When_Apply_Then_DampingStaysFlat()
+        {
+            var s = new ClothSerializeData();
+            HairPhysicsParameters.Apply(HairPart.Tail, s, 0.6f, null, true, HairTuning.Default);
+            // 머리카락은 의상 램프를 쓰지 않는다 — 끝이 살랑여야 한다
+            Assert.That(s.damping.useCurve, Is.False);
+        }
+
+        [Test]
         public void Given_TorsoScale_When_Apply_Then_SelfCollisionThicknessScaled()
         {
             var small = new ClothSerializeData();

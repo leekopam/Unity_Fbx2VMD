@@ -202,11 +202,15 @@ namespace Fbx2Vmd.ClothPhysics
             ApplyCommon(s, unit, 3.0f, 360f, 4.0f);
         }
 
-        /// <summary>리본·장식물 — MC2 Accessory 프리셋 기준, 빳빳하고 안정적.</summary>
+        /// <summary>
+        /// 리본·장식물 — MC2 Accessory 프리셋 기준 + 의상식 감쇠 램프.
+        /// PMX 의상 강체(넥타이 실측)는 끝으로 갈수록 감쇠가 커져 팁이 과하게
+        /// 출렁이지 않는다 — 머리카락과 반대 방향의 깊이 커브가 필요하다.
+        /// </summary>
         public static void ApplyAccessory(ClothSerializeData s, float unit)
         {
             s.gravity = 0f;
-            s.damping.SetValue(0.1f);
+            ApplyGarmentDamping(s);
             s.radius.SetValue(0.02f * unit);
 
             s.tetherConstraint.distanceCompression = 0.1f;
@@ -223,6 +227,17 @@ namespace Fbx2Vmd.ClothPhysics
 
             s.colliderCollisionConstraint.mode = ColliderCollisionConstraint.Mode.Point;
             ApplyCommon(s, unit, 5.0f, 720f, 4.0f);
+        }
+
+        /// <summary>
+        /// 의상/장식물 전용 감쇠 램프 — 유효값 루트 0.10 → 끝 0.50 (value×커브).
+        /// PMX 강체의 감쇠 형태(위치 감쇠 루트 0.10 → 끝 1.00)를 MC2 damping
+        /// 통상 범위(0.03~0.5)로 환산한 근사. 스프링 프로파일이 damping을
+        /// 평탄값으로 덮어쓰므로 Apply()에서 Accessory에 한해 재적용된다.
+        /// </summary>
+        internal static void ApplyGarmentDamping(ClothSerializeData s)
+        {
+            s.damping.SetValue(0.5f, 0.2f, 1.0f);
         }
 
         /// <summary>부위와 길이로 적절한 템플릿을 선택 적용한다.</summary>
@@ -273,7 +288,19 @@ namespace Fbx2Vmd.ClothPhysics
             ApplyTuning(sdata, tuning, unit);
             // Boing 식 프로파일이 켜져 있으면 위 결과를 스프링 의미론으로 덮어쓴다.
             if (spring.enabled)
+            {
                 spring.ApplyToMc2(sdata, unit);
+                if (part == HairPart.Accessory)
+                {
+                    // damping은 의상 체인의 깊이 램프가 정본 — 스프링의 평탄값 덮어쓰기를
+                    // 복원하되, 함께 지워진 감쇠 튜닝 채널(sway·dampingScale·tip)도 되살린다.
+                    // 무조건 재적용하면 스프링 없이도 ApplyTuning 결과가 지워진다.
+                    ApplyGarmentDamping(sdata);
+                    float inv = 1f / Mathf.Max(tuning.sway, 0.05f);
+                    ScaleCurve(sdata.damping, inv * tuning.dampingScale, 1f);
+                    ScaleCurveTip(sdata.damping, tuning.tipDampingScale);
+                }
+            }
         }
 
         /// <summary>부위에 대응하는 공식 프리셋 이름 (Resources/PhysicsPresets 기준).</summary>

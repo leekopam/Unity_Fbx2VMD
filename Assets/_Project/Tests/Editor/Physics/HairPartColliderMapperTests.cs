@@ -43,6 +43,17 @@ namespace Tests.Editor.ClothPhysics
         }
 
         [Test]
+        public void Given_Accessory_When_Mapping_Then_UpperBodyAndHips()
+        {
+            // 장식물은 몸통 축 전체(머리~골반)를 커버 — 넥타이는 가슴, 벨트류는 허리까지.
+            // 팔/손/다리는 접촉 빈도 대비 떨림 부작용이 커 제외한다.
+            var cats = HairPartColliderMapper.Map(HairPart.Accessory, 0.3f, Torso);
+            Assert.That(cats, Is.EqualTo(ColliderCategory.UpperBody | ColliderCategory.Hips));
+            Assert.That(cats.HasFlag(ColliderCategory.Arms), Is.False);
+            Assert.That(cats.HasFlag(ColliderCategory.Legs), Is.False);
+        }
+
+        [Test]
         public void Given_Selection_When_OverCap_Then_TruncatesAt32()
         {
             var byCat = new Dictionary<ColliderCategory, List<int>>();

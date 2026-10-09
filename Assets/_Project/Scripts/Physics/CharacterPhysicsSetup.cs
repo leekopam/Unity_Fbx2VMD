@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using MagicaCloth2;
@@ -30,6 +31,15 @@ namespace Fbx2Vmd.ClothPhysics
         [Header("머리카락 옵션")]
         [Tooltip("이름 규칙에 맞지 않는 미매핑 본도 머리카락 후보로 포함")]
         public bool includeUnknownBones = false;
+
+        [Header("장식물 옵션")]
+        [Tooltip("이름에 안 잡히는 신체측 체인을 토폴로지+스키닝으로 장식물 후보 탐지 " +
+                 "(일반 FBX/VRM용 폴백 — 스키닝 버텍스를 가진 체인만 채택)")]
+        public bool detectGarmentChainsByTopology = true;
+
+        [Tooltip("네이티브 스프링본(VRM VRMSpringBone 등)이 시뮬레이션하는 본에는 " +
+                 "MC2를 생성하지 않는다 — 제작자 튜닝이 정본, 이중 물리 방지")]
+        public bool respectNativeSpringBones = true;
 
         [Header("흔들림 조정")]
         public HairTuning tuning = HairTuning.Default;
@@ -268,6 +278,11 @@ namespace Fbx2Vmd.ClothPhysics
             report.Add($"콜라이더 {colResult.colliders.Count}개 생성");
             report.AddRange(colResult.warnings.Select(w => "경고: " + w));
 
+            // 네이티브 스프링본(VRM 등) 소유 본 — 같은 본에 MC2를 얹으면 이중 물리가 된다
+            var externalOwned = respectNativeSpringBones
+                ? NativeSpringBoneProbe.CollectOwnedBones(animator.transform)
+                : new HashSet<Transform>();
+
             // 2. 머리카락 체인 탐지
             Transform head = resolver(HumanBodyBones.Head);
             if (head == null)
@@ -279,18 +294,38 @@ namespace Fbx2Vmd.ClothPhysics
             var detect = HairChainDetector.Detect(
                 head, t => bodyBones.Contains(t), explicitHairRoots, includeUnknownBones);
 
+            if (externalOwned.Count > 0)
+            {
+                // 루트뿐 아니라 체인 중간의 소유 본도 검사 — 일부만 네이티브 소유인
+                // 체인은 통째로 네이티브에 맡긴다 (본 단위 이중 시뮬레이션 방지)
+                int removed = detect.chains.RemoveAll(
+                    c => c.bones.Any(b => b != null && externalOwned.Contains(b)));
+                if (removed > 0)
+                    report.Add($"네이티브 스프링본 소유 머리 체인 {removed}개 스킵 (이중 물리 방지)");
+            }
+
             if (detect.skipped.Count > 0)
                 report.Add($"미분류 본 {detect.skipped.Count}개 건너뜀: " +
                     string.Join(", ", detect.skipped.Select(t => t.name).Take(10)));
 
+            // 스커트 본은 미리 수집 — 장식물 토폴로지 탐지의 소유 집합에도 포함한다
+            var skirtBoneDepths = SkirtClothBuilder.CollectSkirtBoneDepths(animator.transform);
+
             // 2.5. 신체 측(허리/가슴 등)에 매달린 장식물 체인 탐지 — 머리 외 부착점
             var accRoots = new List<Transform>();
             var accClaimed = new HashSet<Transform>();
+            // 헤어 체인 본 집합 — 명시 루트가 Head 밖을 가리키는 경우 acc 스캔과의
+            // 중복 채택(같은 본이 두 클로스 루트)을 막는다
+            var hairBones = new HashSet<Transform>();
+            foreach (var c in detect.chains)
+                foreach (var b in c.bones)
+                    hairBones.Add(b);
             foreach (var t in animator.GetComponentsInChildren<Transform>(true))
             {
-                if (accClaimed.Contains(t) || t.IsChildOf(head) || bodyBones.Contains(t)
-                    || t.name.StartsWith("MC2"))
-                    continue; // 상위 장식물 체인 내부·머리 쪽·신체 본·생성물은 제외
+                if (accClaimed.Contains(t) || hairBones.Contains(t) || t.IsChildOf(head)
+                    || bodyBones.Contains(t)
+                    || t.name.StartsWith("MC2") || externalOwned.Contains(t))
+                    continue; // 상위 장식물 체인 내부·머리 쪽·신체 본·생성물·네이티브 소유 본은 제외
                 if (t.childCount > 0 && HairBoneClassifier.Classify(t.name) == HairPart.Accessory)
                 {
                     accRoots.Add(t);
@@ -298,15 +333,44 @@ namespace Fbx2Vmd.ClothPhysics
                         accClaimed.Add(d); // 하위 체인 본은 중복 루트로 잡지 않음
                 }
             }
+
+            // 2.6. 이름에 안 잡힌 신체측 체인 — 토폴로지+스키닝 폴백 (일반 FBX/VRM용)
+            if (detectGarmentChainsByTopology)
+            {
+                var claimed = new HashSet<Transform>(bodyBones);
+                claimed.UnionWith(accClaimed);
+                claimed.UnionWith(externalOwned);
+                foreach (var sb in skirtBoneDepths.Keys)
+                    claimed.Add(sb);
+                foreach (var chain in detect.chains)
+                    foreach (var b in chain.bones)
+                        claimed.Add(b);
+
+                var garment = GarmentChainDetector.Detect(
+                    GarmentAttachmentBones(resolver), t => claimed.Contains(t),
+                    t => bodyBones.Contains(t), boneVerts);
+                accRoots.AddRange(garment.roots);
+                report.AddRange(garment.report); // 채택/스킵 사유를 모두 남긴다 (미탐지 진단용)
+            }
+
+            // 중첩 루트 제거 — 상위 루트 서브트리에 속한 루트를 빼 같은 본의 이중 시뮬레이션을 막는다
+            var accRootSet = new HashSet<Transform>(accRoots);
+            accRoots.RemoveAll(r => accRootSet.Any(o => o != r && r.IsChildOf(o)));
+
             if (accRoots.Count > 0)
             {
-                var acc = HairChainDetector.Detect(head, x => bodyBones.Contains(x), accRoots);
+                // 네이티브 소유 본은 체인 수집에서도 절단 — 루트가 미소유여도 중간 본이
+                // 섞여 들어가면 그 본만큼은 이중 물리가 된다
+                var acc = HairChainDetector.Detect(
+                    head, x => bodyBones.Contains(x) || externalOwned.Contains(x), accRoots);
+                // 신체측 체인에는 헤어 부위 분류(위치 추정 포함)를 적용하지 않는다
+                foreach (var ch in acc.chains)
+                    ch.part = HairPart.Accessory;
                 detect.chains.AddRange(acc.chains);
                 detect.skipped.AddRange(acc.skipped);
             }
 
             // 스커트 본 감지 → 클로스 자동 생성
-            var skirtBoneDepths = SkirtClothBuilder.CollectSkirtBoneDepths(animator.transform);
             if (skirtBoneDepths.Count > 0)
             {
                 if (!autoSkirtCloth)
@@ -655,12 +719,18 @@ namespace Fbx2Vmd.ClothPhysics
         /// </summary>
         int integrityCheckDelay;
 
+        /// <summary>씬 직렬화 클로스에 현재 컴포넌트 파라미터 재적용 예약.</summary>
+        bool pendingParamApply;
+
         void OnEnable()
         {
             if (Application.isPlaying && generatedCloths.Count > 0)
             {
                 graceUntilFrame = Time.frameCount + RebuildGraceFrames;
                 integrityCheckDelay = RebuildGraceFrames + 5; // 유예 종료 후 무결성 판정
+                // 씬에 직렬화된 클로스는 생성 시점 파라미터를 갖는다 —
+                // 튜닝/springProfile 변경이 반영되도록 빌드 완료 후 한 번 재적용한다
+                pendingParamApply = true;
             }
         }
 
@@ -689,7 +759,16 @@ namespace Fbx2Vmd.ClothPhysics
                 if (!IsClothAlive(cloth))
                     invalid++;
             if (invalid == 0)
+            {
+                // 무결성 확인 시점 — 씬 직렬화 클로스의 구 파라미터를 현재 설정으로 한 번 재적용
+                if (pendingParamApply)
+                {
+                    pendingParamApply = false;
+                    ReapplyParameters();
+                }
                 return;
+            }
+            pendingParamApply = false; // 재생성 경로는 생성 시점 파라미터를 직접 쓴다
             if (autoRebuildOnEnable)
             {
                 Debug.Log($"[CharacterPhysicsSetup] 무효 클로스 {invalid}개 — 자동 재설정 실행", this);
@@ -700,6 +779,27 @@ namespace Fbx2Vmd.ClothPhysics
                 Debug.LogWarning($"[CharacterPhysicsSetup] 무효 클로스 {invalid}개 감지. " +
                     "ContextMenu '자동 물리 설정 실행'으로 재설정하거나 autoRebuildOnEnable을 켜세요.", this);
             }
+        }
+
+        /// <summary>
+        /// 장식물이 매달릴 수 있는 신체 본을 해석한다 — 허리/척추/가슴/윗가슴/목/어깨.
+        /// 해석 실패 본은 건너뛰고 중복은 제거한다.
+        /// </summary>
+        static List<Transform> GarmentAttachmentBones(Func<HumanBodyBones, Transform> resolver)
+        {
+            var list = new List<Transform>();
+            foreach (var b in new[]
+            {
+                HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest,
+                HumanBodyBones.UpperChest, HumanBodyBones.Neck,
+                HumanBodyBones.LeftShoulder, HumanBodyBones.RightShoulder,
+            })
+            {
+                var t = resolver(b);
+                if (t != null && !list.Contains(t))
+                    list.Add(t);
+            }
+            return list;
         }
 
         /// <summary>생성 클로스에 컬링 옵션을 적용한다 (프리셋 JSON은 컬링을 저장하지 않아 여기서 설정).</summary>

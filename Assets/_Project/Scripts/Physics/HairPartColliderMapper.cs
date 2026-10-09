@@ -68,8 +68,9 @@ namespace Fbx2Vmd.ClothPhysics
                         : ColliderCategory.Head | ColliderCategory.Neck | ColliderCategory.Chest | ColliderCategory.Shoulders | ColliderCategory.Arms | ColliderCategory.Hands;
 
                 case HairPart.Accessory:
-                    // 장식물은 장착 부위 근처만 — 호출자가 구체 범위 조정
-                    return ColliderCategory.Head | ColliderCategory.Neck | ColliderCategory.Chest;
+                    // 장식물은 몸통 축 전체 — 넥타이는 가슴, 벨트·사시류는 허리/골반까지 닿는다.
+                    // 팔/손은 접촉 빈도 대비 떨림 부작용이 커 제외한다.
+                    return ColliderCategory.UpperBody | ColliderCategory.Hips;
 
                 default:
                     return ColliderCategory.UpperBody;

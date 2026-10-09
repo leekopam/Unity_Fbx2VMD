@@ -31,7 +31,8 @@ namespace Fbx2Vmd.ClothPhysics
             (HairPart.Side,     @"side|yokogami|横髪|temple|sidelock"),
             (HairPart.Back,     @"back|ushiro|後髪|ushirogami|rear"),
             // bow는 elbow 오탐 때문에 단독 금지 — hairbow/bowknot/bowtie만 허용
-            (HairPart.Accessory,@"ribbon|リボン|hair_?bow|bowknot|bow_?tie|饰|飾|accessory|kanzashi|簪|hair_?pin|hair_?ornament|scrunchie|シュシュ|chain|チェーン|strap|ornament|tassel|房|charm|buckle"),
+            // 넥타이는 neck 제외 패턴과 충돌하므로 tie+숫자/명시 키워드만 허용
+            (HairPart.Accessory,@"ribbon|リボン|hair_?bow|bowknot|bow_?tie|necktie|ネクタイ|tie\d|饰|飾|accessory|kanzashi|簪|hair_?pin|hair_?ornament|scrunchie|シュシュ|chain|チェーン|strap|ornament|tassel|房|charm|buckle"),
         };
 
         // 머리카락을 나타내는 공통 키워드
@@ -52,7 +53,7 @@ namespace Fbx2Vmd.ClothPhysics
         {
             if (string.IsNullOrEmpty(boneName))
                 return false;
-            if (ExclusionKeyword.IsMatch(boneName))
+            if (IsExcluded(boneName))
                 return false;
             return HairKeyword.IsMatch(boneName) || Classify(boneName) != HairPart.Unknown;
         }
@@ -64,6 +65,9 @@ namespace Fbx2Vmd.ClothPhysics
         {
             if (string.IsNullOrEmpty(boneName))
                 return true;
+            // 넥타이 본은 "neck" 패턴에 걸리면 안 되므로 선처리로 허용
+            if (Regex.IsMatch(boneName, @"necktie|ネクタイ|tie\d", RegexOptions.IgnoreCase))
+                return false;
             return ExclusionKeyword.IsMatch(boneName);
         }
 
@@ -74,7 +78,7 @@ namespace Fbx2Vmd.ClothPhysics
         {
             if (string.IsNullOrEmpty(boneName))
                 return HairPart.Unknown;
-            if (ExclusionKeyword.IsMatch(boneName))
+            if (IsExcluded(boneName))
                 return HairPart.Unknown;
 
             foreach (var (part, pattern) in PartPatterns)
