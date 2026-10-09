@@ -1424,6 +1424,8 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
               throw new Error("CSV 경로가 실행 폴더를 벗어났습니다.");
             const rows = (await readFile(csvPath, "utf8")).trimEnd().split(/\r?\n/);
             const expected = (state.last_frame + 1) * 2;
+            // 열 수는 헤더에서 읽음 — Phase 1에서 계측 열이 끝에 추가되어도 검증이 유지되게 함
+            const columnCount = rows.length ? rows[0].split(",").length : 0;
             const valid = state.status === "metrics_complete_review_required" &&
               state.scene === scenePath && state.input === inputFile &&
               (groundingCase || alternateModel ? state.model === modelName :
@@ -1436,7 +1438,7 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
               rows.slice(1).every((row, index) => {
                 const cells = row.split(",");
                 const frame = Math.floor(index / 2);
-                return cells.length === 51 && Number(cells[0]) === frame &&
+                return cells.length === columnCount && Number(cells[0]) === frame &&
                   cells[3] === (index % 2 ? "right" : "left") &&
                   Math.abs(Number(cells[1]) - frame / state.clip_frame_rate) * 1000 <=
                     500 / state.clip_frame_rate + 0.02 &&

@@ -21,6 +21,8 @@ namespace Fbx2Vmd.FBXImporter
         private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const int FramesPerPoll = 12;
+        // 탐색이 간헐 실패해도 같은 프레임을 몇 차례 재시도하고도 안 되면 중단함.
+        private const int MaxFrameRetries = 8;
         private enum Phase { Importing, Preparing, Scanning, Finished }
 
         private readonly FBXVmdPipeline _pipeline;
@@ -34,12 +36,21 @@ namespace Fbx2Vmd.FBXImporter
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private StreamWriter _writer;
         private StreamWriter _diagnosticWriter;
+        private StreamWriter _muscleWriter;
+        private StreamWriter _jointWriter;
+        private Transform[] _jointBones = Array.Empty<Transform>();
+        private string[] _jointNames = Array.Empty<string>();
+        private HumanPoseHandler _poseHandler;
+        private HumanPose _poseBuffer;
         private HumanoidMotionPlaybackController _controller;
         private Animator _animator;
         private Transform _hips;
+        private readonly Transform[] _thighs = new Transform[2];
         private readonly Transform[] _knees = new Transform[2];
         private readonly Transform[] _feet = new Transform[2];
         private readonly Transform[] _toes = new Transform[2];
+        private Transform[] _comBones = Array.Empty<Transform>();
+        private float[] _comWeights = Array.Empty<float>();
         private readonly Vector3[] _previousRear = new Vector3[2];
         private readonly Vector3[] _previousFront = new Vector3[2];
         private readonly int[] _previousRearVertex = new int[2];
@@ -55,6 +66,7 @@ namespace Fbx2Vmd.FBXImporter
         private float _sourceHumanScale;
         private Phase _phase = Phase.Importing;
         private int _frame;
+        private int _frameRetries;
         private int _lastFrame;
         private int _rowCount;
         private int _diagnosticRowCount;
@@ -82,11 +94,15 @@ namespace Fbx2Vmd.FBXImporter
             _lowerBodyOnly = lowerBodyOnly;
             CsvPath = Path.Combine(directory, "all-frames.csv");
             DiagnosticPath = Path.Combine(directory, "grounding-diagnostics.csv");
+            MusclePath = Path.Combine(directory, "pose-muscles.jsonl");
+            JointPath = Path.Combine(directory, "joint-positions.jsonl");
             StatePath = Path.Combine(directory, "state.json");
         }
 
         internal string CsvPath { get; }
         internal string DiagnosticPath { get; }
+        internal string MusclePath { get; }
+        internal string JointPath { get; }
         internal string StatePath { get; }
         internal bool IsFinished => _phase == Phase.Finished;
         internal bool HasEvidence { get; private set; }
@@ -195,7 +211,14 @@ namespace Fbx2Vmd.FBXImporter
                     case Phase.Scanning:
                         for (int count = 0; count < FramesPerPoll && _frame <= _lastFrame; count++)
                         {
-                            CaptureFrame(_frame);
+                            try { CaptureFrame(_frame); }
+                            // 일시적인 재생 상태 흔들림은 다음 Poll에서 같은 프레임을 재시도함.
+                            catch (InvalidOperationException) when (++_frameRetries < MaxFrameRetries)
+                            {
+                                Debug.LogWarning($"{_caseId} {_frame}프레임 측정 재시도 {_frameRetries}");
+                                break;
+                            }
+                            _frameRetries = 0;
                             _frame++;
                         }
                         if (_frame > _lastFrame) Finish(string.Empty, string.Empty);
@@ -213,6 +236,9 @@ namespace Fbx2Vmd.FBXImporter
                     BindingFlags.NonPublic)?.GetValue(_pipeline);
             _animator = _pipeline.targetCharacter.GetComponent<Animator>();
             _hips = _animator?.GetBoneTransform(HumanBodyBones.Hips);
+            _thighs[0] = _animator?.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+            _thighs[1] = _animator?.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+            InitializeCenterOfMassBones();
             _knees[0] = _animator?.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
             _knees[1] = _animator?.GetBoneTransform(HumanBodyBones.RightLowerLeg);
             _feet[0] = _animator?.GetBoneTransform(HumanBodyBones.LeftFoot);
@@ -232,7 +258,8 @@ namespace Fbx2Vmd.FBXImporter
             _intentEstimate = stabilizer?.IntentEstimate;
             _intentLabels = stabilizer?.IntentLabels;
             _sourceHumanScale = stabilizer?.SourceHumanScale ?? 0f;
-            if (_controller == null || _hips == null || _knees.Any(item => item == null) ||
+            if (_controller == null || _hips == null || _thighs.Any(item => item == null) ||
+                _knees.Any(item => item == null) ||
                 _feet.Any(item => item == null) || _toes.Any(item => item == null) ||
                 !(_frameRate > 0f) || _lastFrame < 1 ||
                 _sourceSamples == null || _sourceSamples.Count <= _lastFrame ||
@@ -241,19 +268,65 @@ namespace Fbx2Vmd.FBXImporter
                 throw new InvalidOperationException($"{_caseId} 전체 클립 또는 하체 본이 준비되지 않았습니다.");
 
             _writer = new StreamWriter(CsvPath, false, new System.Text.UTF8Encoding(false));
-            _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps,grounding_target_error_mm,grounding_sole_clearance_mm,grounding_contact_error_mm,grounding_supported_contacts");
+            _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps,grounding_target_error_mm,grounding_sole_clearance_mm,grounding_contact_error_mm,grounding_supported_contacts,knee_flexion_deg,ankle_pitch_deg,pelvis_tilt_deg,com_x_m,com_z_m,support_polygon_contains_com,joint_delta_deg,pose_novelty,transition_novelty");
             _diagnosticWriter = new StreamWriter(DiagnosticPath, false, new System.Text.UTF8Encoding(false));
             _diagnosticWriter.WriteLine("frame,side,status,stage,raw_pass,held_pass,used_physical_reach,pelvis_offset_mm,pelvis_maximum_offset_mm,has_ground,rear_point_id,front_point_id,mixed_ground_collider,contact_ground_misses,maximum_ground_normal_angle_deg,maximum_anchor_ground_shift_mm,pair_span_error_mm,weighted_contact_error_mm,lift_mm,lifted_contact_error_mm,foot_offset_mm,offset_contact_error_mm,hip_to_target_mm,damped_reach_mm,physical_reach_mm,target_error_mm,supported_contact_error_mm,supported_contact_count");
+            // Phase P 자체 자세 사전 입력 — 근육 공간은 체형·스켈레톤에 무관하게 정규화됨.
+            if (_animator != null && _animator.isHuman && _animator.avatar != null &&
+                _animator.avatar.isValid)
+            {
+                _poseHandler = new HumanPoseHandler(_animator.avatar, _animator.transform);
+                _poseBuffer = new HumanPose();
+                _muscleWriter = new StreamWriter(MusclePath, false,
+                    new System.Text.UTF8Encoding(false));
+                SetupJointDump();
+            }
+        }
+
+        // UnderPressure 채점 입력 — Humanoid 본 월드 좌표를 프레임당 1행으로 남김.
+        private void SetupJointDump()
+        {
+            HumanBodyBones[] bones =
+            {
+                HumanBodyBones.Hips, HumanBodyBones.Spine, HumanBodyBones.Chest,
+                HumanBodyBones.UpperChest, HumanBodyBones.Neck, HumanBodyBones.Head,
+                HumanBodyBones.LeftShoulder, HumanBodyBones.LeftUpperArm,
+                HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand,
+                HumanBodyBones.RightShoulder, HumanBodyBones.RightUpperArm,
+                HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
+                HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg,
+                HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes,
+                HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg,
+                HumanBodyBones.RightFoot, HumanBodyBones.RightToes,
+            };
+            var resolvedBones = new List<Transform>();
+            var resolvedNames = new List<string>();
+            foreach (HumanBodyBones bone in bones)
+            {
+                Transform mapped = _animator.GetBoneTransform(bone);
+                if (mapped == null) continue;
+                resolvedBones.Add(mapped);
+                resolvedNames.Add(bone.ToString());
+            }
+            _jointBones = resolvedBones.ToArray();
+            _jointNames = resolvedNames.ToArray();
+            _jointWriter = new StreamWriter(JointPath, false,
+                new System.Text.UTF8Encoding(false));
         }
 
         private void CaptureFrame(int frame)
         {
             // 상태 로그 1만 건을 만들지 않도록 같은 제품 평가기의 내부 탐색만 호출함.
-            if (!_controller.SeekFrame(frame) || _pipeline.ImportedMotionCurrentFrameIndex != frame ||
-                !_pipeline.TryCaptureImportedMotionFootSurface(out HumanoidFootGroundingSnapshot left,
+            if (!_controller.SeekFrame(frame))
+                throw new InvalidOperationException($"{_caseId} {frame}프레임 탐색 실패");
+            if (_pipeline.ImportedMotionCurrentFrameIndex != frame)
+                throw new InvalidOperationException(
+                    $"{_caseId} {frame}프레임 불일치: {_pipeline.ImportedMotionCurrentFrameIndex}");
+            if (!_pipeline.TryCaptureImportedMotionFootSurface(out HumanoidFootGroundingSnapshot left,
                     out HumanoidFootGroundingSnapshot right, out HumanoidFootGroundingStatus status,
                     out HumanoidFootGroundingGate gate))
-                throw new InvalidOperationException($"{_caseId} {frame}프레임 탐색·접지 측정 실패");
+                throw new InvalidOperationException(
+                    $"{_caseId} {frame}프레임 접지 측정 실패: {status}");
 
             float time = _pipeline.ImportedMotionCurrentTimeSeconds;
             float timeError = Mathf.Abs(time - frame / _frameRate) * 1000f;
@@ -269,12 +342,53 @@ namespace Fbx2Vmd.FBXImporter
                 { _maximumHipsStepMillimeters = hipsStep; _maximumHipsStepFrame = frame; }
             }
             _previousHipsY = hipsY;
-            WriteFoot(frame, time, timeError, 0, status, left, gate);
-            WriteFoot(frame, time, timeError, 1, status, right, gate);
+            WriteMuscles(frame);
+            WriteJoints(frame);
+            Vector3 centerOfMass = ComputeApproximateCenterOfMass();
+            bool supportContains = SupportPolygonContains(left, right, centerOfMass);
+            WriteFoot(frame, time, timeError, 0, status, left, gate,
+                centerOfMass, supportContains);
+            WriteFoot(frame, time, timeError, 1, status, right, gate,
+                centerOfMass, supportContains);
             WriteDiagnostic(frame, 0, status, gate);
             WriteDiagnostic(frame, 1, status, gate);
             if (_captureViews && (frame == 0 || frame == _lastFrame))
                 CaptureGameView(frame);
+        }
+
+        // 프레임당 1행의 근육 벡터를 남겨 코퍼스 kNN 사전의 입력으로 씀.
+        private void WriteMuscles(int frame)
+        {
+            if (_poseHandler == null) return;
+            _poseHandler.GetHumanPose(ref _poseBuffer);
+            float[] muscles = _poseBuffer.muscles;
+            var builder = new System.Text.StringBuilder(muscles.Length * 8 + 32);
+            builder.Append("{\"frame\":").Append(frame).Append(",\"muscles\":[");
+            for (int index = 0; index < muscles.Length; index++)
+            {
+                if (index > 0) builder.Append(',');
+                builder.Append(muscles[index].ToString("G4", CultureInfo.InvariantCulture));
+            }
+            builder.Append("]}");
+            _muscleWriter.WriteLine(builder.ToString());
+        }
+
+        private void WriteJoints(int frame)
+        {
+            if (_jointWriter == null) return;
+            var builder = new System.Text.StringBuilder(_jointBones.Length * 40 + 32);
+            builder.Append("{\"frame\":").Append(frame).Append(",\"joints\":{");
+            for (int index = 0; index < _jointBones.Length; index++)
+            {
+                if (index > 0) builder.Append(',');
+                Vector3 p = _jointBones[index].position;
+                builder.Append('\"').Append(_jointNames[index]).Append("\":[")
+                    .Append(p.x.ToString("G6", CultureInfo.InvariantCulture)).Append(',')
+                    .Append(p.y.ToString("G6", CultureInfo.InvariantCulture)).Append(',')
+                    .Append(p.z.ToString("G6", CultureInfo.InvariantCulture)).Append(']');
+            }
+            builder.Append("}}");
+            _jointWriter.WriteLine(builder.ToString());
         }
 
         private void CaptureGameView(int frame)
@@ -323,9 +437,132 @@ namespace Fbx2Vmd.FBXImporter
             }
         }
 
+        // Winter 분절 질량표를 Humanoid 본에 근사 배정해 대략적 CoM을 추정함.
+        // 결측 본은 제외하고 남은 무게를 정규화해 사용함.
+        private void InitializeCenterOfMassBones()
+        {
+            var bones = new List<Transform>();
+            var weights = new List<float>();
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.Hips, 0.10f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.Spine, 0.13f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.Chest, 0.19f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.UpperChest, 0.08f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.Head, 0.081f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.LeftUpperArm, 0.027f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.LeftLowerArm, 0.016f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.LeftHand, 0.006f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.RightUpperArm, 0.027f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.RightLowerArm, 0.016f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.RightHand, 0.006f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.LeftUpperLeg, 0.10f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.LeftLowerLeg, 0.0465f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.LeftFoot, 0.0145f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.RightUpperLeg, 0.10f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.RightLowerLeg, 0.0465f);
+            AddCenterOfMassBone(bones, weights, HumanBodyBones.RightFoot, 0.0145f);
+            _comBones = bones.ToArray();
+            _comWeights = weights.ToArray();
+        }
+
+        private void AddCenterOfMassBone(List<Transform> bones, List<float> weights,
+            HumanBodyBones bone, float weight)
+        {
+            Transform transform = _animator?.GetBoneTransform(bone);
+            if (transform == null || !(weight > 0f)) return;
+            bones.Add(transform);
+            weights.Add(weight);
+        }
+
+        private Vector3 ComputeApproximateCenterOfMass()
+        {
+            if (_comBones.Length == 0) return _hips.position;
+            Vector3 sum = Vector3.zero;
+            float total = 0f;
+            for (int index = 0; index < _comBones.Length; index++)
+            {
+                sum += _comBones[index].position * _comWeights[index];
+                total += _comWeights[index];
+            }
+            return total > 0f ? sum / total : _hips.position;
+        }
+
+        // 접지된 발의 발바닥 접촉점을 XZ 평면 볼록 껍질로 만들어 CoM 투영이
+        // 그 안에 있는지 판정함. 한 발만 접지되면 선분 거리로 근사함.
+        private bool SupportPolygonContains(HumanoidFootGroundingSnapshot left,
+            HumanoidFootGroundingSnapshot right, Vector3 centerOfMass)
+        {
+            var points = new List<Vector2>();
+            AddGroundPoints(points, left);
+            AddGroundPoints(points, right);
+            if (points.Count == 0) return false;
+            var center = new Vector2(centerOfMass.x, centerOfMass.z);
+            float tolerance = _sourceHumanScale * 0.05f;
+            if (points.Count == 1) return Vector2.Distance(center, points[0]) <= tolerance;
+            if (points.Count == 2)
+                return DistancePointToSegment(center, points[0], points[1]) <= tolerance;
+            List<Vector2> hull = ConvexHull(points);
+            if (hull.Count < 3)
+                return DistancePointToSegment(center, hull[0], hull[hull.Count - 1]) <= tolerance;
+            return PointInConvexPolygon(center, hull, tolerance);
+        }
+
+        private static void AddGroundPoints(List<Vector2> points,
+            HumanoidFootGroundingSnapshot foot)
+        {
+            if (foot == null || !foot.has_ground) return;
+            points.Add(new Vector2(foot.rear_point.x, foot.rear_point.z));
+            points.Add(new Vector2(foot.front_point.x, foot.front_point.z));
+        }
+
+        private static float DistancePointToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 segment = b - a;
+            float lengthSquared = segment.sqrMagnitude;
+            if (lengthSquared <= Mathf.Epsilon) return Vector2.Distance(point, a);
+            float t = Mathf.Clamp01(Vector2.Dot(point - a, segment) / lengthSquared);
+            return Vector2.Distance(point, a + segment * t);
+        }
+
+        // Andrew 단조 체인 — 접촉점은 최대 4개라 단순 정렬로 충분함.
+        private static List<Vector2> ConvexHull(List<Vector2> points)
+        {
+            var sorted = points.OrderBy(p => p.x).ThenBy(p => p.y).ToList();
+            var hull = new List<Vector2>();
+            foreach (Vector2 point in sorted.Concat(sorted.AsEnumerable().Reverse()))
+            {
+                while (hull.Count >= 2 && Cross(hull[hull.Count - 2], hull[hull.Count - 1],
+                    point) <= 0f) hull.RemoveAt(hull.Count - 1);
+                hull.Add(point);
+            }
+            hull.RemoveAt(hull.Count - 1);
+            return hull;
+        }
+
+        private static float Cross(Vector2 origin, Vector2 a, Vector2 b)
+        {
+            return (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x);
+        }
+
+        private static bool PointInConvexPolygon(Vector2 point, List<Vector2> hull,
+            float tolerance)
+        {
+            float sign = 0f;
+            for (int index = 0; index < hull.Count; index++)
+            {
+                Vector2 a = hull[index];
+                Vector2 b = hull[(index + 1) % hull.Count];
+                float cross = Cross(a, b, point);
+                if (Mathf.Abs(cross) <= tolerance * Mathf.Max(0.0001f,
+                    Vector2.Distance(a, b))) continue;
+                if (sign == 0f) { sign = Mathf.Sign(cross); continue; }
+                if (Mathf.Sign(cross) != sign) return false;
+            }
+            return true;
+        }
+
         private void WriteFoot(int frame, float time, float timeError, int side,
             HumanoidFootGroundingStatus status, HumanoidFootGroundingSnapshot foot,
-            HumanoidFootGroundingGate gate)
+            HumanoidFootGroundingGate gate, Vector3 centerOfMass, bool supportContains)
         {
             if (foot == null) throw new InvalidOperationException($"F10 {frame}프레임 발 측정값 누락");
             Vector3 rear = foot.rear_point;
@@ -364,6 +601,15 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidFootContactSample previousSource = _sourceSamples[Mathf.Max(0, frame - 1)];
             Vector3 previousSourceFoot = side == 0 ? previousSource.LeftFoot : previousSource.RightFoot;
             Vector3 previousSourceToes = side == 0 ? previousSource.LeftToes : previousSource.RightToes;
+            // 골반 우향축 기준 부호 각도 — 굴곡/신전·족저/배측 굴곡을 부호로 구분함.
+            Vector3 thighDirection = (_knees[side].position - _thighs[side].position).normalized;
+            Vector3 shinDirection = (bone.position - _knees[side].position).normalized;
+            Vector3 toeDirection = _toes[side] == null ? Vector3.forward :
+                (_toes[side].position - bone.position).normalized;
+            Vector3 referenceAxis = _hips.right;
+            float kneeFlexion = Vector3.SignedAngle(thighDirection, shinDirection, referenceAxis);
+            float anklePitch = Vector3.SignedAngle(shinDirection, toeDirection, referenceAxis) - 90f;
+            float pelvisTilt = Vector3.SignedAngle(Vector3.up, _hips.up, _hips.right);
             HumanoidFootContactSample target = _targetSamples[frame];
             Vector3 targetFoot = side == 0 ? target.LeftFoot : target.RightFoot;
             Vector3 targetToes = side == 0 ? target.LeftToes : target.RightToes;
@@ -394,7 +640,11 @@ namespace Fbx2Vmd.FBXImporter
                 gate != null && gate.measured ? (object)(gate.target_error_m * 1000f) : string.Empty,
                 gate != null && gate.measured ? (object)(gate.sole_clearance_m * 1000f) : string.Empty,
                 gate != null && gate.measured ? (object)(gate.supported_contact_error_m * 1000f) : string.Empty,
-                gate != null && gate.measured ? (object)gate.supported_contact_count : string.Empty
+                gate != null && gate.measured ? (object)gate.supported_contact_count : string.Empty,
+                kneeFlexion, anklePitch, pelvisTilt, centerOfMass.x, centerOfMass.z,
+                supportContains,
+                // 리타겟 스테이지 회전과 자세 사전 점수는 후속 Phase가 채움.
+                string.Empty, string.Empty, string.Empty
             };
             if (values.OfType<float>().Any(value => !IsFinite(value)))
                 throw new InvalidOperationException($"{_caseId} {frame}프레임 비유한 하체 수치");
@@ -441,6 +691,12 @@ namespace Fbx2Vmd.FBXImporter
                 _writer = null;
                 _diagnosticWriter?.Dispose();
                 _diagnosticWriter = null;
+                _muscleWriter?.Dispose();
+                _muscleWriter = null;
+                _jointWriter?.Dispose();
+                _jointWriter = null;
+                _poseHandler?.Dispose();
+                _poseHandler = null;
                 HasEvidence = string.IsNullOrEmpty(stage) && _rowCount == (_lastFrame + 1) * 2 &&
                     _diagnosticRowCount == _rowCount &&
                     File.Exists(CsvPath) && new FileInfo(CsvPath).Length > 100 &&

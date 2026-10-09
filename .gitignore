@@ -404,3 +404,6 @@ __pycache__/
 .stitch/
 /Assets/_Project/Tools/MainRecordingSettings/DESIGN.md
 /Assets/_Project/Tools/MainRecordingSettings/DESIGN.md.meta
+
+# UnderPressure 외부 평가 저장소 클론 (평가 라이선스·대용량 가중치 — 로컬 전용)
+/Tools/Boogle/external/
