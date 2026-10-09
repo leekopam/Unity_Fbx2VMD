@@ -18,7 +18,7 @@ const baseColumns = ("frame,time_s,time_error_ms,side,grounding_status,has_groun
   "support_polygon_contains_com,joint_delta_deg,pose_novelty,transition_novelty")
   .split(",");
 
-// 정상 기저: 접지 중 발 고정, 무릎 40도, 발목 0도, CoM 지지 내부.
+// 정상 기저: 접지 중 발 고정, 무릎 40도, 발목 -135도(이 리그 측정 컨벤션의 중립), CoM 지지 내부.
 function createCsv(overrides = {}) {
   const lines = [baseColumns.join(",")];
   for (let frame = 0; frame < 40; frame++) {
@@ -32,7 +32,7 @@ function createCsv(overrides = {}) {
         minimum_signed_mm: grounded ? "2" : "60",
         foot_x_m: "0.1", foot_z_m: "0.2", foot_y_m: grounded ? "0.01" : "0.2",
         foot_rotation_step_deg: frame === 0 ? "0" : "1.5",
-        hips_y_m: "0.9", knee_flexion_deg: "40", ankle_pitch_deg: "5",
+        hips_y_m: "0.9", knee_flexion_deg: "40", ankle_pitch_deg: "-135",
         pelvis_tilt_deg: "2", com_x_m: "0.11", com_z_m: "0.2",
         support_polygon_contains_com: grounded ? "True" : "False",
       });
@@ -61,8 +61,8 @@ test("접지 구간 발 드리프트는 residual_slide로 잡힘", () => {
 
 test("무릎 역신전·발목 범위 초과는 joint_limit으로 잡힘", () => {
   const csv = createCsv({
-    15: v => { v.knee_flexion_deg = "-12"; v.ankle_pitch_deg = "95"; },
-    16: v => { v.knee_flexion_deg = "-12"; v.ankle_pitch_deg = "95"; },
+    15: v => { v.knee_flexion_deg = "-12"; v.ankle_pitch_deg = "-180"; },
+    16: v => { v.knee_flexion_deg = "-12"; v.ankle_pitch_deg = "-180"; },
   });
   const result = analyzePoseAnomalies(csv, { sourceHumanScale: 1 });
   assert.ok(result.anomalies.some(a => a.defect_type === "joint_limit_knee"));

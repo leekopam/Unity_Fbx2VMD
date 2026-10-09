@@ -158,6 +158,31 @@ namespace Tests.Editor.FBXImporter
                 "반대쪽 지지 해제 여부로 남은 지지점 보정이 끊기거나 정상 발 구르기가 사라지면 안 됨");
         }
 
+        [Test]
+        public void Given_ToeOnlySupport_When_PitchExceedsSoftKnee_Then_LiftsTowardAsymptote()
+        {
+            CreateSampler();
+            Assert.That(Call("TrySample"), Is.EqualTo(true));
+            Type grounding = typeof(FBXVmdPipeline).Assembly.GetType("Fbx2Vmd.FBXImporter.HumanoidFootGrounding", true);
+            Type legType = grounding.GetNestedType("Leg", BindingFlags.NonPublic);
+            object leg = Activator.CreateInstance(legType, Flags, null,
+                new object[] { _root.transform, _root.transform, _foot, _toes, _sampler,
+                    Vector3.forward, Quaternion.identity }, null);
+            legType.GetField("_ground", Flags).SetValue(leg, new RaycastHit { normal = Vector3.up });
+            legType.GetField("_originalFootRotation", Flags).SetValue(leg, Quaternion.identity);
+            // +x축 회전은 발끝 하향 — 측정 피치 -40°에 해당
+            legType.GetField("_targetFootRotation", Flags).SetValue(leg, Quaternion.AngleAxis(40f, Vector3.right));
+            legType.GetField("_activeWeights", Flags).SetValue(leg, new Vector2(0f, 1f));
+
+            Assert.That(legType.GetMethod("TryAlignSupportSurface", Flags).Invoke(leg, new object[] { 0f }), Is.True);
+            var result = (Quaternion)legType.GetField("_targetFootRotation", Flags).GetValue(leg);
+            Vector3 forward = result * Vector3.forward;
+            float pitch = Mathf.Asin(Mathf.Clamp(Vector3.Dot(forward, Vector3.up), -1f, 1f)) * Mathf.Rad2Deg;
+            Assert.That(pitch, Is.GreaterThan(-40f), "캡이 발끝을 더 내리면 안 됨 — 회전 방향 반전 회귀");
+            Assert.That(pitch, Is.InRange(-35.3f, -33.0f),
+                "tanh 소프트캡: -40° 입력은 -(25+10·tanh(1.5))≈-34.05°로 압축되어야 함");
+        }
+
         private const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
 
         private void CreateSampler()

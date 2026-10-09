@@ -5,12 +5,18 @@ import { buildConsensus, loadRuleVotes, loadUpVotes, rowsToCsv,
 
 const hdr = "frame,side,source_toes_y_m\n";
 
-test("규칙 신호는 소스 발끝 높이를 접촉 의도로 읽음", () => {
-  const votes = loadRuleVotes(hdr +
-    "0,left,0.012\n0,right,0.12\n1,left,0.035\n");
-  assert.equal(votes.left[0], true);   // 12mm → 접촉
-  assert.equal(votes.right[0], false); // 120mm → 공중
-  assert.equal(votes.left[1], undefined); // 35mm → 기권 구간
+test("규칙 신호는 지속된 발끝 접촉만 양성으로 읽음", () => {
+  // left: f0~7 12mm 8연속 → 양성, f10~12 3연속(0.05s) → 기권
+  // right: f8~14 12mm 7연속 → 양성
+  const rows = Array.from({ length: 15 }, (_, f) =>
+    `${f},left,${f < 8 || (f >= 10 && f <= 12) ? "0.012" : "0.12"}\n` +
+    `${f},right,${f >= 8 ? "0.012" : "0.12"}\n`).join("");
+  const votes = loadRuleVotes(hdr + rows);
+  assert.equal(votes.left[0], true);
+  assert.equal(votes.left[7], true);
+  assert.equal(votes.left[10], undefined); // 순간 스치기 기권
+  assert.equal(votes.right[0], false);
+  assert.equal(votes.right[10], true);
 });
 
 test("UnderPressure JSONL은 좌우 프레임별 진리값", () => {
@@ -36,7 +42,7 @@ test("사람 라벨은 다른 신호보다 우선한다", () => {
   assert.equal(stats.consensus, 0);
 });
 
-test("비사람 신호 2표 이상 만장일치만 정답 채택", () => {
+test("어느 신호든 양성이면 양성(OR), 충돌은 스팟큐에 기록", () => {
   const { truth, spotCheck, stats } = buildConsensus({
     humanRows: [],
     videoRows: [{ f0: 0, f1: 1, side: "left", contact: "발 전체",
@@ -45,26 +51,27 @@ test("비사람 신호 2표 이상 만장일치만 정답 채택", () => {
     ruleVotes: { left: [true, false], right: [] },
     lastFrame: 1,
   });
-  assert.equal(truth.left[0], true);   // video+up+rule 만장일치
-  // f=1: video 양성 vs up·rule 음성 → 불일치, 미확정
-  assert.equal(truth.left[1], undefined);
-  assert.equal(stats.consensus, 1);
+  assert.equal(truth.left[0], true);  // video+up+rule 양성
+  assert.equal(truth.left[1], true);  // video 양성 단독 → OR 양성
+  assert.equal(stats.consensus, 2);
+  assert.equal(stats.disagreement, 1); // up·rule 음성 vs video 양성 충돌 기록
   assert.equal(spotCheck.length, 1);
+  assert.equal(spotCheck[0].resolved, "positive_or");
 });
 
-test("신호가 갈리면 스팟 확인 큐로 보냄", () => {
-  const { truth, spotCheck } = buildConsensus({
+test("전 신호 음성이면 음성, 기권만이면 미확정", () => {
+  const { truth, stats } = buildConsensus({
     humanRows: [],
-    videoRows: [{ f0: 5, f1: 5, side: "right", contact: "앞꿈치",
-      reviewer: "ref-video" }],
-    upVotes: { left: [], right: [undefined, undefined, undefined, undefined, undefined, false] },
-    ruleVotes: { left: [], right: [undefined, undefined, undefined, undefined, undefined, true] },
-    lastFrame: 5,
+    videoRows: [],
+    upVotes: { left: [false, undefined], right: [] },
+    ruleVotes: { left: [false, undefined], right: [] },
+    lastFrame: 1,
   });
-  assert.equal(truth.right[5], undefined);
-  assert.equal(spotCheck.length, 1);
-  assert.equal(spotCheck[0].frame, 5);
-  assert.equal(spotCheck[0].side, "right");
+  assert.equal(truth.left[0], false);  // up+rule 동시 음성
+  assert.equal(truth.left[1], undefined); // 둘 다 기권 → 미확정
+  assert.equal(stats.consensus, 1);
+  // 미확정 = left f1 기권 + right f0/f1 무신호
+  assert.equal(stats.unlabeled, 3);
 });
 
 test("진리값 배열은 연속 구간으로 압축되고 CSV로 나감", () => {

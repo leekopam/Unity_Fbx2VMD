@@ -11,7 +11,7 @@ function csv() {
   for (let frame = 0; frame < 20; frame++) {
     for (const side of ["left", "right"]) {
       const bad = side === "left" && frame >= 5 && frame <= 12;
-      lines.push([frame, side, bad ? -15 : 40, bad ? 90 : 5, 2,
+      lines.push([frame, side, bad ? -15 : 40, bad ? -180 : -135, 2,
         bad ? 0.9 : 0.05, bad ? 4 : 0.5, bad ? 30 : 1, 2, 1].join(","));
     }
   }

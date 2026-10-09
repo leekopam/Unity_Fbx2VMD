@@ -17,18 +17,38 @@ const SIDES = ["left", "right"];
 
 // all-frames.csv → 소스(보정 전) 발끝 높이로 접촉 의도를 추정.
 // has_ground·밑창 클리어런스는 보정 솔버가 지면에 고정하므로 신호가 아님.
-// 소스 발끝 ≤25mm → 접촉 의도 양성, >50mm → 음성, 사이는 기권.
-const TOE_CONTACT_M = 0.025, TOE_AIR_M = 0.05;
-export function loadRuleVotes(csvText) {
-  const votes = { left: [], right: [] };
+// 소스 발끝 >50mm → 음성. ≤25mm이면서 0.1초 이상 지속 → 양성.
+// 순간 스치기는 의도 아닌 통과로 기권 — 지속 기준은 UnderPressure의
+// 0.1초 미만 접촉 폐기 규칙과 동일 근거.
+const TOE_CONTACT_M = 0.025, TOE_AIR_M = 0.05, MIN_CONTACT_SECONDS = 0.1;
+export function loadRuleVotes(csvText, frameRate = 60) {
+  const minContactFrames = Math.max(1, Math.ceil(frameRate * MIN_CONTACT_SECONDS));
+  const raw = { left: [], right: [] };
   for (const row of readCsv(csvText.replace(/^﻿/, ""))) {
     const side = (row.side || "").trim().toLowerCase();
     if (!SIDES.includes(side)) continue;
     const f = Number(row.frame);
     const toeY = Number(row.source_toes_y_m);
     if (!Number.isInteger(f) || !Number.isFinite(toeY)) continue;
-    if (toeY <= TOE_CONTACT_M) votes[side][f] = true;
-    else if (toeY > TOE_AIR_M) votes[side][f] = false;
+    raw[side][f] = toeY <= TOE_CONTACT_M ? true :
+      toeY > TOE_AIR_M ? false : undefined;
+  }
+  const votes = { left: [], right: [] };
+  for (const side of SIDES) {
+    const lane = raw[side];
+    // 발끝 닿음의 연속 길이를 계산해 지속 구간만 양성 투표
+    const runLen = new Array(lane.length);
+    let run = 0, start = 0;
+    for (let f = 0; f <= lane.length; f++) {
+      if (lane[f] === true) { if (run === 0) start = f; run++; continue; }
+      for (let i = start; i < start + run; i++) runLen[i] = run;
+      run = 0;
+    }
+    for (let f = 0; f < lane.length; f++) {
+      if (lane[f] === false) votes[side][f] = false;
+      else if (lane[f] === true && runLen[f] >= minContactFrames)
+        votes[side][f] = true;
+    }
   }
   return votes;
 }
@@ -87,23 +107,35 @@ export function buildConsensus({ humanRows = [], videoRows = [],
         if (h) stats.human_override++;
         continue;
       }
+      // 접지 의도의 정의: 발 일부가 지면과 지속 접촉(기하 신호) 또는
+      // 체중 실림(UP). 어느 신호든 양성이면 양성(OR), 전부 음성이어야 음성.
+      // UP=F + 발끝닿음 지속은 "무하중 발끝 접촉"이라 불일치가 아니라 양성.
       const votes = [];
       if (video[side]?.[f] === true) votes.push({ src: "video", v: true });
       const u = upVotes?.[side]?.[f];
       if (u === true || u === false) votes.push({ src: "up", v: u });
       const r = ruleVotes?.[side]?.[f];
       if (r === true || r === false) votes.push({ src: "rule", v: r });
-      const unique = [...new Set(votes.map(x => x.v))];
-      if (votes.length >= 2 && unique.length === 1) {
-        truth[side][f] = unique[0];
+      const anyPos = votes.some(x => x.v === true);
+      const negVoters = votes.filter(x => x.v === false).length;
+      if (anyPos) {
+        truth[side][f] = true;
+        stats.consensus++;
+        // 진짜 충돌만 큐로: 체중 실렸는데 발끝이 공중(up=T & rule=F)이거나
+        // 영상만 양성이고 나머지 전원 음성 — 기하와 물리가 모순되는 프레임.
+        // up=F & rule=T(발끝 무하중 접촉)는 의미 차이라 충돌이 아님.
+        const suspicious = (u === true && r === false) ||
+          (video[side]?.[f] === true && u === false && r === false);
+        if (suspicious) {
+          stats.disagreement++;
+          spotCheck.push({ frame: f, side, resolved: "positive_or",
+            votes: Object.fromEntries(votes.map(x => [x.src, x.v])) });
+        }
+      } else if (negVoters >= 2) {
+        truth[side][f] = false;
         stats.consensus++;
       } else {
         stats.unlabeled++;
-        if (votes.length >= 2 && unique.length > 1) {
-          stats.disagreement++;
-          spotCheck.push({ frame: f, side,
-            votes: Object.fromEntries(votes.map(x => [x.src, x.v])) });
-        }
       }
     }
   }
@@ -154,7 +186,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     read("video-labels.csv"), read("underpressure-contacts.jsonl")]);
   const extraCsv = extraLabelsArg ?
     await readFile(extraLabelsArg, "utf8") : null;
-  const lastFrame = JSON.parse(state || "{}").last_frame ??
+  const stateJson = JSON.parse(state || "{}");
+  const lastFrame = stateJson.last_frame ??
     (csv ? Math.max(...readCsv(csv).map(r => Number(r.frame))) : 0);
   const humanRows = humanCsv ? loadLabelRows(humanCsv) : [];
   if (extraCsv)
@@ -163,7 +196,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const { truth, spotCheck, stats } = buildConsensus({
     humanRows, videoRows, lastFrame,
     upVotes: upJsonl ? loadUpVotes(upJsonl) : null,
-    ruleVotes: csv ? loadRuleVotes(csv) : null,
+    ruleVotes: csv ? loadRuleVotes(csv, Number(stateJson.clip_frame_rate) || 60) : null,
   });
   const rows = truthToRows(truth);
   await writeFile(path.join(directory, "consensus-labels.csv"),
