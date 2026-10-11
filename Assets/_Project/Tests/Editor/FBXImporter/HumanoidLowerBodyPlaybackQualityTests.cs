@@ -11,6 +11,23 @@ namespace Tests.Editor.FBXImporter
 {
     public class HumanoidLowerBodyPlaybackQualityTests
     {
+        // 씬의 Auto Generate(Iterative) 상태에서 FBX 렌더러 instantiate가 Enlighten 수집을
+        // 유발해 에디터가 장시간 무응답하므로, 테스트 동안만 수동 베이크 모드로 전환한다.
+        private Lightmapping.GIWorkflowMode? _previousGiWorkflowMode;
+
+        [SetUp]
+        public void SuspendAutoGenerateLighting()
+        {
+            _previousGiWorkflowMode = EditorGiWorkflowScope.Push();
+        }
+
+        [TearDown]
+        public void RestoreGiWorkflowMode()
+        {
+            EditorGiWorkflowScope.Pop(_previousGiWorkflowMode);
+            _previousGiWorkflowMode = null;
+        }
+
         private const string TargetAssetPath =
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
         private const string ClipAssetPath =
