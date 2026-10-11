@@ -52,6 +52,11 @@ namespace Fbx2Vmd.CharacterLibrary
             newRoot.name = "Library Character";
             newRoot.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
             instance.ShowMeshes();
+
+            // VRM은 MToon 머티리얼로 로드되므로 다른 캐릭터 경로와 같은 툰 룩을 입힌다.
+            // 프리셋이 없으면 0을 돌려 원본 머티리얼이 유지된다.
+            ToonMaterialConverter.ApplyTo(newRoot);
+
             newRoot.SetActive(true);
 
             // 검증·배치가 모두 끝난 뒤에 타겟을 한 번만 교체한다.

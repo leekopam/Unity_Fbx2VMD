@@ -1,10 +1,19 @@
 import { createRequire } from "node:module";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { startBoogleWorkbench } from "./boogleWorkbench.js";
-import { createFbxFileDialogOptions, extractSelectedFbxPath } from "./fileDialog.js";
+import {
+  createAudioFileDialogOptions,
+  createDirectoryDialogOptions,
+  createFbxFileDialogOptions,
+  createLyricsFileDialogOptions,
+  createVrmFileDialogOptions,
+  extractSelectedFbxPath,
+  extractSelectedPath
+} from "./fileDialog.js";
 import {
   getRendererEntry,
   getSmokeImportFbxPath,
@@ -20,6 +29,25 @@ const require = createRequire(import.meta.url);
 const electron = require("electron");
 const { app, BrowserWindow, dialog, ipcMain, shell } = electron;
 const __filename = fileURLToPath(import.meta.url);
+
+// read-text-preview 허용 루트 — Unity 프로젝트(립싱크 산출물), 앱 데이터
+// 디렉터리(설정/캐릭터 라이브러리), 임시 디렉터리만 읽을 수 있다.
+const TEXT_PREVIEW_ROOTS = [
+  path.resolve(fileURLToPath(import.meta.url), "../../../../../.."),
+  path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"), "Unity_Fbx2VMD"),
+  os.tmpdir()
+];
+
+function isTextPreviewAllowed(resolvedPath) {
+  // Windows 파일시스템은 대소문자를 구분하지 않으므로 비교도 케이스를 맞춰야
+  // 허용 루트 안의 파일이 케이스 차이로 거부되지 않는다(fail-closed 방향이지만 불일치 제거).
+  const norm = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+  const target = norm(resolvedPath);
+  return TEXT_PREVIEW_ROOTS.some((root) => {
+    const normalizedRoot = norm(root.endsWith(path.sep) ? root : root + path.sep);
+    return target.startsWith(normalizedRoot) || target === norm(root);
+  });
+}
 const __dirname = path.dirname(__filename);
 const appRoot = path.resolve(__dirname, "..");
 const preloadPath = path.join(__dirname, "preload.cjs");
@@ -58,6 +86,15 @@ async function createMainWindow() {
   keepNavigationInsideShell(mainWindow);
 
   const entry = getRendererEntry({ appRoot });
+  // file:// 렌더러는 opaque 오리진이라 브리지가 세션 토큰을 요구한다 —
+  // smoke 유무와 관계없이 로드 완료 때마다 config를 주입한다.
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (entry.type === "file") {
+      applyRendererBridgeConfig(mainWindow, bridgeServer).catch((error) => {
+        console.warn("브리지 config 주입 실패:", error?.message ?? error);
+      });
+    }
+  });
   attachSmokeTestExit(mainWindow, entry, bridgeServer);
   if (entry.type === "url") {
     await mainWindow.loadURL(entry.target);
@@ -183,7 +220,8 @@ async function applyRendererBridgeConfig(mainWindow, bridge) {
   await mainWindow.webContents.executeJavaScript(`
     window.mainRecordingSettingsBridgeConfig = {
       apiBaseUrl: ${JSON.stringify(bridge.baseUrl)},
-      wsUrl: ${JSON.stringify(`${bridge.wsUrl}/settings`)}
+      wsUrl: ${JSON.stringify(`${bridge.wsUrl}/settings`)},
+      token: ${JSON.stringify(bridge.token)}
     };
   `);
 }
@@ -198,7 +236,8 @@ async function runRendererImportSmoke({ mainWindow, bridge, fbxPath, finish }) {
     (async () => {
       window.mainRecordingSettingsBridgeConfig = {
         apiBaseUrl: ${JSON.stringify(bridge.baseUrl)},
-        wsUrl: ${JSON.stringify(`${bridge.wsUrl}/settings`)}
+        wsUrl: ${JSON.stringify(`${bridge.wsUrl}/settings`)},
+        token: ${JSON.stringify(bridge.token)}
       };
 
       const importButton = document.querySelector("#importButton");
@@ -437,6 +476,56 @@ function registerIpcHandlers() {
 
     const result = await dialog.showOpenDialog(createFbxFileDialogOptions());
     return extractSelectedFbxPath(result);
+  });
+  ipcMain.handle("settings:choose-audio-file", async () => {
+    const result = await dialog.showOpenDialog(createAudioFileDialogOptions());
+    return extractSelectedPath(result);
+  });
+  ipcMain.handle("settings:choose-lyrics-file", async () => {
+    const result = await dialog.showOpenDialog(createLyricsFileDialogOptions());
+    return extractSelectedPath(result);
+  });
+  ipcMain.handle("settings:choose-directory", async () => {
+    const result = await dialog.showOpenDialog(createDirectoryDialogOptions());
+    return extractSelectedPath(result);
+  });
+  ipcMain.handle("settings:choose-vrm-file", async () => {
+    const result = await dialog.showOpenDialog(createVrmFileDialogOptions());
+    return extractSelectedPath(result);
+  });
+  ipcMain.handle("settings:open-path", async (_event, targetPath) => {
+    if (typeof targetPath !== "string" || !targetPath.trim()) {
+      return "";
+    }
+
+    // 폴더 열기 용도만 허용한다 — 임의 파일/실행 파일을 open 동사로 기동하는 것을 막는다.
+    const stat = await fs.stat(targetPath.trim()).catch(() => null);
+    if (!stat?.isDirectory()) {
+      return "";
+    }
+
+    return shell.openPath(targetPath.trim());
+  });
+  ipcMain.handle("settings:read-text-preview", async (_event, filePath, maxBytes = 4096) => {
+    if (typeof filePath !== "string" || !filePath.trim()) {
+      return "";
+    }
+
+    // 임의 로컬 파일 읽기를 막기 위해 허용 루트 밖 경로는 거절한다.
+    const resolved = path.resolve(filePath.trim());
+    if (!isTextPreviewAllowed(resolved)) {
+      return "";
+    }
+
+    const cap = Math.min(Math.max(Number(maxBytes) || 0, 256), 65536);
+    const handle = await fs.open(resolved, "r");
+    try {
+      const buffer = Buffer.alloc(cap);
+      const { bytesRead } = await handle.read(buffer, 0, cap, 0);
+      return buffer.subarray(0, bytesRead).toString("utf8");
+    } finally {
+      await handle.close();
+    }
   });
 }
 

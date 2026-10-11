@@ -27,6 +27,24 @@ test("Electron shell keeps project reference bounds for the onboarding workspace
   assert.match(main, /minHeight:\s*600,/);
 });
 
+test("Electron shell injects the bridge token for file:// renders outside smoke mode", async () => {
+  const main = await fs.readFile(mainUrl, "utf8");
+
+  // opaque 오리진 렌더러는 세션 토큰으로만 인증되므로 주입이 smoke 가드
+  // 안에 있으면 프로덕션 전 요청이 403이 된다 — did-finish-load 등록이
+  // smoke 핸들러보다 앞에 오는지 순서까지 고정한다.
+  const injectIndex = main.indexOf('webContents.on("did-finish-load"');
+  const smokeIndex = main.indexOf("attachSmokeTestExit(mainWindow, entry, bridgeServer);");
+  assert.ok(injectIndex !== -1, "did-finish-load 주입 핸들러 없음");
+  assert.ok(smokeIndex !== -1, "smoke 핸들러 호출 없음");
+  assert.ok(injectIndex < smokeIndex, "주입이 smoke 핸들러 안쪽에 있음");
+  assert.match(main, /applyRendererBridgeConfig\(mainWindow, bridgeServer\)/);
+  // token 줄이 smoke 전용 함수에만 있어도 통과되지 않게 주입 함수 본문으로 범위를 좁힌다.
+  const fnStart = main.indexOf("async function applyRendererBridgeConfig");
+  const fnEnd = main.indexOf("\n}", fnStart);
+  assert.match(main.slice(fnStart, fnEnd), /token:\s*\$\{JSON\.stringify\(bridge\.token\)\}/);
+});
+
 test("Electron shell keeps one settings window instance and focuses the existing window", async () => {
   const main = await fs.readFile(mainUrl, "utf8");
 

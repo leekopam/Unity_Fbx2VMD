@@ -14,5 +14,7 @@ namespace Fbx2Vmd.Settings
         public bool openSettingsOnStart = true;
         public MainRecordingSettingsState runtimeState = new MainRecordingSettingsState();
         public MainRecordingSettingsCommandEnvelope pendingCommand = new MainRecordingSettingsCommandEnvelope();
+        /// <summary>마지막으로 소비된 명령의 결과. Electron이 폴링해 상태를 표시한다.</summary>
+        public MainRecordingSettingsCommandResult lastCommandResult = new MainRecordingSettingsCommandResult();
     }
 }

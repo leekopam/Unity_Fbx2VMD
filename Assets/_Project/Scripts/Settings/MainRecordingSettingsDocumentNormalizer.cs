@@ -67,9 +67,59 @@ namespace Fbx2Vmd.Settings
                 document.pendingCommand.fbxPath = string.Empty;
             }
 
+            if (document.pendingCommand.characterId == null)
+            {
+                document.pendingCommand.characterId = string.Empty;
+            }
+
+            if (document.pendingCommand.presetId == null)
+            {
+                document.pendingCommand.presetId = string.Empty;
+            }
+
+            if (document.pendingCommand.path == null)
+            {
+                document.pendingCommand.path = string.Empty;
+            }
+
+            if (document.pendingCommand.paramsJson == null)
+            {
+                document.pendingCommand.paramsJson = string.Empty;
+            }
+
             if (document.pendingCommand.requestedAtUtc == null)
             {
                 document.pendingCommand.requestedAtUtc = string.Empty;
+            }
+
+            if (document.lastCommandResult == null)
+            {
+                document.lastCommandResult = new MainRecordingSettingsCommandResult();
+            }
+
+            if (document.lastCommandResult.commandId == null)
+            {
+                document.lastCommandResult.commandId = string.Empty;
+            }
+
+            if (document.lastCommandResult.action == null)
+            {
+                document.lastCommandResult.action = string.Empty;
+            }
+
+            if (document.lastCommandResult.state == null)
+            {
+                document.lastCommandResult.state = string.Empty;
+            }
+
+            if (document.lastCommandResult.message == null)
+            {
+                document.lastCommandResult.message = string.Empty;
+            }
+
+            if (document.lastCommandResult.finishedAtUtc == null)
+            {
+                document.lastCommandResult.finishedAtUtc = string.Empty;
             }
 
             return document;

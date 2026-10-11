@@ -31,7 +31,7 @@ export async function postImportFbx({
   }
 
   const request = createImportFbxRequest({ apiBaseUrl, fbxPath });
-  const response = await fetchImpl(request.url, request.init);
+  const response = await fetchImpl(request.url, withBridgeToken(request.init));
   if (!response.ok) {
     const body = typeof response.text === "function" ? await response.text() : "";
     const detail = body ? `: ${body}` : "";
@@ -65,7 +65,7 @@ export async function getRuntimeState({
   }
 
   const request = createRuntimeStateRequest({ apiBaseUrl });
-  const response = await fetchImpl(request.url, request.init);
+  const response = await fetchImpl(request.url, withBridgeToken(request.init));
   if (!response.ok) {
     const body = typeof response.text === "function" ? await response.text() : "";
     const detail = body ? `: ${body}` : "";
@@ -110,7 +110,7 @@ export function createSettingsAutoConnectionController({
     }
 
     socketChannel = createWebSocketChannel({
-      wsUrl: resolveRuntimeValue(wsUrl),
+      wsUrl: appendBridgeTokenQuery(resolveRuntimeValue(wsUrl)),
       onStatusChange: (status) => {
         if (status === "closed" || status === "error") {
           socketChannel = null;
@@ -235,6 +235,35 @@ function normalizeBaseUrl(value) {
 
 function resolveRuntimeValue(value) {
   return typeof value === "function" ? value() : value;
+}
+
+// file:///"null" 오리진은 샌드박스 iframe과 구분이 안 되므로
+// Electron 렌더러만 아는 세션 토큰으로 판별한다. 요청 시점에 지연 해석해야
+// executeJavaScript 주입보다 먼저 bootstrap돼도 이후 요청부터 토큰이 붙는다.
+export function resolveBridgeToken() {
+  return globalThis.window?.mainRecordingSettingsBridgeConfig?.token || "";
+}
+
+export function withBridgeToken(init) {
+  const token = resolveBridgeToken();
+  if (!token) {
+    return init;
+  }
+
+  return {
+    ...init,
+    headers: { ...(init?.headers || {}), "X-Bridge-Token": token }
+  };
+}
+
+function appendBridgeTokenQuery(wsUrl) {
+  const token = resolveBridgeToken();
+  if (!token) {
+    return wsUrl;
+  }
+
+  const separator = wsUrl.includes("?") ? "&" : "?";
+  return `${wsUrl}${separator}token=${encodeURIComponent(token)}`;
 }
 
 function normalizePlayMode(value) {
