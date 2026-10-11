@@ -18,6 +18,7 @@ namespace Fbx2Vmd.FBXImporter
         private GameObject _referenceInstance;
         private Animator _referenceAnimator;
         private HumanPoseHandler _poseHandler;
+        private Transform _hips;
         private Transform _leftFoot;
         private Transform _leftToes;
         private Transform _rightFoot;
@@ -85,6 +86,7 @@ namespace Fbx2Vmd.FBXImporter
 
             _referenceAnimator.runtimeAnimatorController = null;
             _referenceAnimator.enabled = true;
+            _hips = _referenceAnimator.GetBoneTransform(HumanBodyBones.Hips);
             _leftFoot = _referenceAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
             _leftToes = _referenceAnimator.GetBoneTransform(HumanBodyBones.LeftToes);
             _rightFoot = _referenceAnimator.GetBoneTransform(HumanBodyBones.RightFoot);
@@ -204,6 +206,21 @@ namespace Fbx2Vmd.FBXImporter
                 Vector3.Dot(leftFrame * Vector3.forward, referenceUp) * _footForwardLengths.x,
                 Vector3.Dot(rightFrame * Vector3.forward, referenceUp) * _footForwardLengths.y);
             return IsFinite(heights.x) && IsFinite(heights.y);
+        }
+
+        // 재평가 없이 마지막 평가 시점의 원본 골반 포즈를 읽음. 루트 모션이 골반에 실리므로
+        // goal 스트림의 루트 상대 정규화 기준으로 씀.
+        internal bool TryCaptureHipsPose(out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            if (!IsInitialized || _hips == null)
+            {
+                return false;
+            }
+            position = _hips.position;
+            rotation = _hips.rotation;
+            return IsFinite(position) && IsFinite(rotation);
         }
 
         internal bool TryEvaluateAt(float timeSeconds, ref HumanPose pose)

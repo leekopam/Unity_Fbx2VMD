@@ -21,6 +21,8 @@ namespace Fbx2Vmd.FBXImporter
         private Vector3[] _rightBaseRootSpaceFootPositions = Array.Empty<Vector3>();
         private Vector3[] _leftBaseRootSpaceBendNormals = Array.Empty<Vector3>();
         private Vector3[] _rightBaseRootSpaceBendNormals = Array.Empty<Vector3>();
+        private Vector3[] _sourceHipsPositions = Array.Empty<Vector3>();
+        private Quaternion[] _sourceHipsRotations = Array.Empty<Quaternion>();
         private float _frameRate;
 
         internal bool IsInitialized =>
@@ -38,6 +40,13 @@ namespace Fbx2Vmd.FBXImporter
 
         internal IReadOnlyList<HumanoidFootContactSample> TargetSamples { get; private set; } =
             Array.Empty<HumanoidFootContactSample>();
+
+        // 원본 궤적과 같은 프레임 인덱스의 골반 포즈임. goal 스트림의 루트 상대 기준으로 씀.
+        internal IReadOnlyList<Vector3> SourceHipsPositions { get; private set; } =
+            Array.Empty<Vector3>();
+
+        internal IReadOnlyList<Quaternion> SourceHipsRotations { get; private set; } =
+            Array.Empty<Quaternion>();
 
         internal float SourceHumanScale { get; private set; }
 
@@ -99,6 +108,8 @@ namespace Fbx2Vmd.FBXImporter
             _rightBaseRootSpaceFootPositions = new Vector3[frameCount];
             _leftBaseRootSpaceBendNormals = new Vector3[frameCount];
             _rightBaseRootSpaceBendNormals = new Vector3[frameCount];
+            _sourceHipsPositions = new Vector3[frameCount];
+            _sourceHipsRotations = new Quaternion[frameCount];
             _frameRate = frameRate;
             Quaternion sourceToTargetRotation = _targetRoot.rotation;
 
@@ -129,6 +140,16 @@ namespace Fbx2Vmd.FBXImporter
                         leftFootFrame = leftFrame;
                         rightFootFrame = rightFrame;
                     }
+
+                    if (!sourceReference.TryCaptureHipsPose(
+                            out Vector3 sourceHipsPosition,
+                            out Quaternion sourceHipsRotation))
+                    {
+                        throw new InvalidOperationException(
+                            "원본 Humanoid 골반 기준을 샘플링하지 못했습니다.");
+                    }
+                    _sourceHipsPositions[frameIndex] = sourceHipsPosition;
+                    _sourceHipsRotations[frameIndex] = sourceHipsRotation;
 
                     evaluateTarget(timeSeconds);
                     _leftBaseRootSpaceFootPositions[frameIndex] =
@@ -181,6 +202,8 @@ namespace Fbx2Vmd.FBXImporter
                 // 이미 평가한 원본 궤적을 정밀 밑창 접지에서도 재사용함.
                 SourceSamples = Array.AsReadOnly(sourceSamples);
                 TargetSamples = Array.AsReadOnly(targetSamples);
+                SourceHipsPositions = Array.AsReadOnly(_sourceHipsPositions);
+                SourceHipsRotations = Array.AsReadOnly(_sourceHipsRotations);
                 SourceHumanScale = sourceReference.SourceHumanScale;
             }
             finally
@@ -285,12 +308,16 @@ namespace Fbx2Vmd.FBXImporter
             IntentLabels = HumanoidFootContactIntentLabelSet.Empty;
             SourceSamples = Array.Empty<HumanoidFootContactSample>();
             TargetSamples = Array.Empty<HumanoidFootContactSample>();
+            SourceHipsPositions = Array.Empty<Vector3>();
+            SourceHipsRotations = Array.Empty<Quaternion>();
             SourceHumanScale = 0f;
             _targetRoot = null;
             _leftBaseRootSpaceFootPositions = Array.Empty<Vector3>();
             _rightBaseRootSpaceFootPositions = Array.Empty<Vector3>();
             _leftBaseRootSpaceBendNormals = Array.Empty<Vector3>();
             _rightBaseRootSpaceBendNormals = Array.Empty<Vector3>();
+            _sourceHipsPositions = Array.Empty<Vector3>();
+            _sourceHipsRotations = Array.Empty<Quaternion>();
             _frameRate = 0f;
             _leftLeg.Clear();
             _rightLeg.Clear();

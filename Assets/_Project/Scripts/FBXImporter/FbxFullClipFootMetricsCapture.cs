@@ -38,6 +38,8 @@ namespace Fbx2Vmd.FBXImporter
         private StreamWriter _diagnosticWriter;
         private StreamWriter _muscleWriter;
         private StreamWriter _jointWriter;
+        private IReadOnlyList<Vector3> _sourceHipsPositions;
+        private IReadOnlyList<Quaternion> _sourceHipsRotations;
         private Transform[] _jointBones = Array.Empty<Transform>();
         private string[] _jointNames = Array.Empty<string>();
         private HumanPoseHandler _poseHandler;
@@ -97,6 +99,7 @@ namespace Fbx2Vmd.FBXImporter
             MusclePath = Path.Combine(directory, "pose-muscles.jsonl");
             JointPath = Path.Combine(directory, "joint-positions.jsonl");
             StatePath = Path.Combine(directory, "state.json");
+            GoalStreamPath = Path.Combine(directory, "goal-stream.jsonl");
         }
 
         internal string CsvPath { get; }
@@ -104,6 +107,7 @@ namespace Fbx2Vmd.FBXImporter
         internal string MusclePath { get; }
         internal string JointPath { get; }
         internal string StatePath { get; }
+        internal string GoalStreamPath { get; }
         internal bool IsFinished => _phase == Phase.Finished;
         internal bool HasEvidence { get; private set; }
         internal string FailureStage { get; private set; } = string.Empty;
@@ -258,6 +262,8 @@ namespace Fbx2Vmd.FBXImporter
             _intentEstimate = stabilizer?.IntentEstimate;
             _intentLabels = stabilizer?.IntentLabels;
             _sourceHumanScale = stabilizer?.SourceHumanScale ?? 0f;
+            _sourceHipsPositions = stabilizer?.SourceHipsPositions;
+            _sourceHipsRotations = stabilizer?.SourceHipsRotations;
             if (_controller == null || _hips == null || _thighs.Any(item => item == null) ||
                 _knees.Any(item => item == null) ||
                 _feet.Any(item => item == null) || _toes.Any(item => item == null) ||
@@ -653,6 +659,39 @@ namespace Fbx2Vmd.FBXImporter
             _rowCount++;
         }
 
+        // 관측 전용 goal 스트림 — 안정화기가 남긴 원본 발 궤적을 골반 기준 상대 공간으로 변환해 기록함.
+        private void WriteGoalStream()
+        {
+            if (_sourceSamples == null || _sourceHipsPositions == null ||
+                _sourceHipsRotations == null || _sourceSamples.Count == 0 ||
+                _sourceHipsPositions.Count != _sourceSamples.Count ||
+                _sourceHipsRotations.Count != _sourceSamples.Count)
+            {
+                Debug.LogWarning(
+                    $"{_caseId} goal 스트림 입력이 없어 goal-stream.jsonl을 건너뜁니다.");
+                return;
+            }
+
+            var stream = new HumanoidFootGoalStream();
+            for (int index = 0; index < _sourceSamples.Count; index++)
+            {
+                HumanoidFootContactSample sample = _sourceSamples[index];
+                Vector3 hips = _sourceHipsPositions[index];
+                Quaternion hipsRotation = _sourceHipsRotations[index];
+                stream.Record(index, true, hips, hipsRotation,
+                    sample.LeftFoot, sample.LeftFootFrame ?? Quaternion.identity,
+                    sample.LeftToes);
+                stream.Record(index, false, hips, hipsRotation,
+                    sample.RightFoot, sample.RightFootFrame ?? Quaternion.identity,
+                    sample.RightToes);
+            }
+            using (var writer = new StreamWriter(GoalStreamPath, false,
+                       new System.Text.UTF8Encoding(false)))
+            {
+                stream.WriteJsonl(writer);
+            }
+        }
+
         private void WriteDiagnostic(int frame, int side, HumanoidFootGroundingStatus status,
             HumanoidFootGroundingGate gate)
         {
@@ -697,6 +736,7 @@ namespace Fbx2Vmd.FBXImporter
                 _jointWriter = null;
                 _poseHandler?.Dispose();
                 _poseHandler = null;
+                WriteGoalStream();
                 HasEvidence = string.IsNullOrEmpty(stage) && _rowCount == (_lastFrame + 1) * 2 &&
                     _diagnosticRowCount == _rowCount &&
                     File.Exists(CsvPath) && new FileInfo(CsvPath).Length > 100 &&
