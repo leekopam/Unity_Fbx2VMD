@@ -27,12 +27,13 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void 전방_노멀은_중간값으로_베이크된다()
+        public void 전방_노멀은_90도_경계값으로_베이크된다()
         {
+            // _ShadowBorder=0.6 기준 90° 경계 → 2*0.6 - 0.5 - cos(90°) = 0.7.
             var tex = SdfFaceTextureBaker.Bake(CreateQuad(Vector3.forward), 0, 32);
             var c = tex.GetPixel(16, 16);
-            Assert.AreEqual(0.5f, c.r, 0.05f);
-            Assert.AreEqual(0.5f, c.g, 0.05f);
+            Assert.AreEqual(0.7f, c.r, 0.05f);
+            Assert.AreEqual(0.7f, c.g, 0.05f);
             Object.DestroyImmediate(tex);
         }
 
@@ -82,8 +83,31 @@ namespace Tests.Editor.FBXImporter
             };
             var tex = SdfFaceTextureBaker.Bake(mesh, 0, 32);
             var c = tex.GetPixel(28, 28);
-            Assert.AreEqual(0.5f, c.r, 0.05f);
+            Assert.AreEqual(0.7f, c.r, 0.05f);
             Object.DestroyImmediate(tex);
+        }
+
+        [Test]
+        public void 좌측_빛이_차광되면_R_채널만_낮아진다()
+        {
+            // 좌측광(φ<0, lightDir.x<0)만 가리는 오클루더 — G(우측광 경계)는 그대로여야 한다.
+            bool BlockLeft(Vector3 pos, Vector3 dir) => dir.x < 0f;
+
+            var tex = SdfFaceTextureBaker.Bake(CreateQuad(Vector3.forward), 0, 32,
+                Matrix4x4.identity, Vector3.forward, BlockLeft, 0.6f);
+            var c = tex.GetPixel(16, 16);
+            Assert.Less(c.r, 0.05f);
+            Assert.AreEqual(0.7f, c.g, 0.05f);
+            Object.DestroyImmediate(tex);
+        }
+
+        [Test]
+        public void 경계각은_lilToon_점등_조건의_역산이다()
+        {
+            // lit iff sdf >= 2*border - 0.5 - cos(phi) — 경계 φ를 그대로 인코딩한다.
+            Assert.AreEqual(0.7f, SdfFaceTextureBaker.EncodeBoundary(Mathf.PI * 0.5f, 0.6f), 0.001f);
+            Assert.AreEqual(0f, SdfFaceTextureBaker.EncodeBoundary(0f, 0.6f));
+            Assert.AreEqual(1f, SdfFaceTextureBaker.EncodeBoundary(Mathf.PI, 0.6f));
         }
     }
 }

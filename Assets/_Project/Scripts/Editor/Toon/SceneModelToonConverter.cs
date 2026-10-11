@@ -161,6 +161,11 @@ namespace Fbx2Vmd.EditorTools
 
                     toon.SetTexture("_ShadowStrengthMask", sdf);
                     toon.SetFloat("_ShadowMaskType", 2f);
+                    // 베이크된 SDF는 수평 방위각 기준이므로 Y 성분 비교를 꺼 맞춘다.
+                    if (toon.HasProperty("_ShadowFlatBlur"))
+                    {
+                        toon.SetFloat("_ShadowFlatBlur", 0f);
+                    }
                     return;
                 }
             }

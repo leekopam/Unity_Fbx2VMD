@@ -113,6 +113,8 @@ namespace Tests.Editor.FBXImporter
                 {
                     Assert.That(variant, Is.Not.Null);
                     Assert.That(variant.GetFloat("_ShadowMaskType"), Is.EqualTo(2f));
+                    // 방위각 SDF와 맞추기 위해 Y 성분 비교는 꺼져 있어야 한다.
+                    Assert.That(variant.GetFloat("_ShadowFlatBlur"), Is.EqualTo(0f));
                     Assert.That(variant.GetTexture("_ShadowStrengthMask"), Is.EqualTo(sdf));
                 }
                 finally
@@ -149,6 +151,7 @@ namespace Tests.Editor.FBXImporter
                 {
                     Assert.That(variant, Is.Not.Null);
                     Assert.That(variant.GetFloat("_ShadowMaskType"), Is.EqualTo(2f));
+                    Assert.That(variant.GetFloat("_ShadowFlatBlur"), Is.EqualTo(0f));
                     Assert.That(variant.GetTexture("_ShadowStrengthMask"), Is.EqualTo(sdf));
                 }
                 finally
