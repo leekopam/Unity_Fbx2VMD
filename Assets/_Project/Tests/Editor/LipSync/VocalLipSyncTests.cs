@@ -1376,5 +1376,50 @@ namespace Fbx2Vmd.Tests.LipSync
                 }
             }
         }
+
+        // ---------- 서버 작업 추적(파일 기반 재부착) ----------
+
+        [Test]
+        public void ServerJobTracker_Track후PendingJobId와Context를돌려준다()
+        {
+            string kind = "test_track_" + Guid.NewGuid().ToString("N");
+            try
+            {
+                ServerJobTracker.Track(kind, "job123", "ctx|data");
+                Assert.AreEqual("job123", ServerJobTracker.PendingJobId(kind));
+                Assert.AreEqual("ctx|data", ServerJobTracker.PendingContext(kind));
+            }
+            finally
+            {
+                ServerJobTracker.Untrack(kind);
+            }
+        }
+
+        [Test]
+        public void ServerJobTracker_Untrack하면Pending이사라진다()
+        {
+            string kind = "test_untrack_" + Guid.NewGuid().ToString("N");
+            ServerJobTracker.Track(kind, "job456", "");
+            ServerJobTracker.Untrack(kind);
+            Assert.IsNull(ServerJobTracker.PendingJobId(kind));
+            Assert.AreEqual("", ServerJobTracker.PendingContext(kind));
+        }
+
+        [Test]
+        public void ServerJobTracker_같은kind는마지막Track이이긴다()
+        {
+            string kind = "test_overwrite_" + Guid.NewGuid().ToString("N");
+            try
+            {
+                ServerJobTracker.Track(kind, "old", "");
+                ServerJobTracker.Track(kind, "new", "ctx");
+                Assert.AreEqual("new", ServerJobTracker.PendingJobId(kind));
+                Assert.AreEqual("ctx", ServerJobTracker.PendingContext(kind));
+            }
+            finally
+            {
+                ServerJobTracker.Untrack(kind);
+            }
+        }
     }
 }

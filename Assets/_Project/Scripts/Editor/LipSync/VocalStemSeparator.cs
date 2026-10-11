@@ -265,11 +265,11 @@ namespace Fbx2Vmd.LipSync
             CancellationToken ct = default,
             IReadOnlyDictionary<string, string> env = null,
             string modelDir = null, Action<float> onProgress = null,
-            bool highQuality = false)
+            bool highQuality = false, string ensemblePreset = null)
         {
             return Task.Run(() => Separate(
                 engine, pythonPath, inputPath, outputDir, model, ct, env, modelDir,
-                onProgress, highQuality), ct);
+                onProgress, highQuality, ensemblePreset), ct);
         }
 
         public static Result Separate(Engine engine, string pythonPath,
@@ -277,7 +277,7 @@ namespace Fbx2Vmd.LipSync
             CancellationToken ct = default,
             IReadOnlyDictionary<string, string> env = null,
             string modelDir = null, Action<float> onProgress = null,
-            bool highQuality = false)
+            bool highQuality = false, string ensemblePreset = null)
         {
             var result = new Result();
             if (string.IsNullOrEmpty(pythonPath) || !File.Exists(pythonPath))
@@ -305,7 +305,7 @@ namespace Fbx2Vmd.LipSync
             }
 
             string args = BuildArguments(engine, inputPath, outputDir, model, modelDir,
-                highQuality: highQuality);
+                ensemblePreset, highQuality);
             // FAT32/exFAT의 mtime 2초 단위 때문에 실행 시각보다 살짝 여유를 둔다.
             DateTime runStartUtc = DateTime.UtcNow.AddSeconds(-2);
             int code = RunSync(pythonPath, args, outputDir, out string output,

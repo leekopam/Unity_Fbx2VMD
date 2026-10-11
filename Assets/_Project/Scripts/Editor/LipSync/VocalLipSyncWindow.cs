@@ -19,9 +19,18 @@ namespace Fbx2Vmd.LipSync
             "Packages/com.hecomi.ulipsync/Assets/Profiles/uLipSync-Profile-Sample-Female.asset";
         private const string DefaultOutputDir = "Assets/Generated/LipSync";
 
+        // audio-separator 내장 앙상블 프리셋 — 콤보 첫 항목(인덱스 0)은 단일 모델 경로다.
+        private static readonly string[] EnsemblePresets =
+            { "vocal_clean", "vocal_balanced", "vocal_full", "karaoke" };
+        private readonly System.Collections.Generic.List<GUIContent> _ensemblePresetOptions =
+            new System.Collections.Generic.List<GUIContent>();
+
         [SerializeField] private string _sourceAudioPath = "";
         [SerializeField] private VocalStemSeparator.Engine _engine = VocalStemSeparator.Engine.AudioSeparator;
         [SerializeField] private string _model = VocalStemSeparator.DefaultModel;
+        // A/B 실측(tmp/lipsync_ab): vocal_clean 앙상블이 단일 모델 대비 음소
+        // 인식 확신도·커버리지에서 우위 — 기본값으로 채택. 비우면 모델 필드 단독 사용.
+        [SerializeField] private string _ensemblePreset = "vocal_clean";
         [SerializeField] private string _pythonPath = "";
         [SerializeField] private string _outputDir = DefaultOutputDir;
         [SerializeField] private string _vocalWavPath = "";
@@ -50,6 +59,7 @@ namespace Fbx2Vmd.LipSync
         // 분리 중 사용자가 필드를 편집해도 완료 처리가 시작 시점 값을 보게 스냅샷한다.
         private string _sepSourcePath;
         private VocalStemSeparator.Engine _sepEngine;
+        private string _sepEnsemblePreset = "";
         private bool _sepCleanVocal;
         private bool _sepHighQuality;
         private bool _sepWpe;
@@ -64,6 +74,9 @@ namespace Fbx2Vmd.LipSync
         private string _cleanStage = ""; // 정제 체인 현재 패스 라벨
         private Task<PythonEnvProvisioner.Result> _provisioning;
         private System.Threading.CancellationTokenSource _cts;
+        // 창 닫힘·도메인 리로드가 시작됐는지 — 참이면 진행 중 서버 작업의 취소는
+        // 서버에 통지하지 않고 조용히 끊는다(서버에서는 계속 실행되어 재부착된다).
+        private bool _shuttingDown;
         private bool _separateAfterProvision;
         private bool _previewWasPlaying;
         private string _message = "";
@@ -100,6 +113,103 @@ namespace Fbx2Vmd.LipSync
                 _profile = AssetDatabase.LoadAssetAtPath<Profile>(DefaultProfilePath);
             }
             WatchOrphanedProcesses();
+            _shuttingDown = false;
+            ResumeServerJobs();
+        }
+
+        /// <summary>도메인 리로드·창 재오픈으로 끊긴 서버 작업의 폴링을 재개한다.
+        /// 서버가 작업을 소유하므로 리로드 중에도 처리는 계속된다 —
+        /// 여기서는 상태 폴링 Task만 다시 만들어 완료·채택 경로로 연결한다.</summary>
+        private void ResumeServerJobs()
+        {
+            if (_cts == null || _cts.IsCancellationRequested)
+            {
+                RenewCts();
+            }
+            string jobId = ServerJobTracker.PendingJobId("separate");
+            if (jobId != null && _separating == null)
+            {
+                // 컨텍스트 `입력|출력dir|engine|cleanVocal|wpe|hq` — 분리 완료 후
+                // 정제 체인으로 이어지는 판단이 스냅샷에 달려 있어 전부 복원한다.
+                string[] ctx = ServerJobTracker.PendingContext("separate").Split('|');
+                if (ctx.Length > 0 && !string.IsNullOrEmpty(ctx[0]))
+                {
+                    _sepSourcePath = ctx[0];
+                }
+                if (ctx.Length > 1 && !string.IsNullOrEmpty(ctx[1]))
+                {
+                    _sepOutputDir = ctx[1];
+                }
+                if (ctx.Length > 2)
+                {
+                    _sepEngine = ctx[2] == "demucs"
+                        ? VocalStemSeparator.Engine.Demucs
+                        : VocalStemSeparator.Engine.AudioSeparator;
+                }
+                if (ctx.Length > 3)
+                {
+                    _sepCleanVocal = ctx[3] == "1";
+                }
+                if (ctx.Length > 4)
+                {
+                    _sepWpe = ctx[4] == "1";
+                }
+                if (ctx.Length > 5)
+                {
+                    _sepHighQuality = ctx[5] == "1";
+                }
+                if (ctx.Length > 6)
+                {
+                    _sepEnsemblePreset = ctx[6];
+                }
+                _sepPythonPath = _pythonPath;
+                _separating = LipSyncServerClient.ResumeSeparateAsync(
+                    jobId, _cts.Token, p => _sepProgress = p,
+                    () => !_shuttingDown);
+                SetMessage("진행 중이던 서버 분리 작업에 다시 연결했습니다.", MessageType.Info);
+            }
+            jobId = ServerJobTracker.PendingJobId("clean");
+            if (jobId != null && _cleaning == null)
+            {
+                string[] ctx = ServerJobTracker.PendingContext("clean").Split('|');
+                if (ctx.Length > 0 && !string.IsNullOrEmpty(ctx[0]))
+                {
+                    _rawVocalWavPath = ctx[0];
+                }
+                if (ctx.Length > 1 && !string.IsNullOrEmpty(ctx[1]))
+                {
+                    _sepOutputDir = ctx[1];
+                }
+                _cleaning = LipSyncServerClient.ResumeCleanAsync(
+                    jobId, ServerJobTracker.PendingContext("clean"), _cts.Token,
+                    p => _sepProgress = p, s => _cleanStage = s,
+                    () => !_shuttingDown);
+                SetMessage("진행 중이던 서버 정제 작업에 다시 연결했습니다.", MessageType.Info);
+            }
+            jobId = ServerJobTracker.PendingJobId("phoneme");
+            if (jobId != null && _extracting == null)
+            {
+                // 컨텍스트 `입력wav|출력csv` — 베이크에 쓰는 스냅샷을 함께 복원한다.
+                string[] ctx = ServerJobTracker.PendingContext("phoneme").Split('|');
+                if (ctx.Length > 1 && !string.IsNullOrEmpty(ctx[0]))
+                {
+                    _extractWavPath = ctx[0];
+                    _extractCsvPath = ctx[1];
+                    _extractOutputDir = Path.GetDirectoryName(_extractCsvPath);
+                }
+                _extracting = LipSyncServerClient.ResumePhonemeAsync(
+                    jobId, _extractCsvPath, _cts.Token, p => _sepProgress = p,
+                    () => !_shuttingDown);
+                SetMessage("진행 중이던 서버 음소 추출에 다시 연결했습니다.", MessageType.Info);
+            }
+            jobId = ServerJobTracker.PendingJobId("lyrics");
+            if (jobId != null && _lyricsFetching == null)
+            {
+                _lyricsFetching = LipSyncServerClient.ResumeLyricsAsync(
+                    jobId, ServerJobTracker.PendingContext("lyrics"), _cts.Token,
+                    () => !_shuttingDown);
+                SetMessage("진행 중이던 서버 가사 수집에 다시 연결했습니다.", MessageType.Info);
+            }
         }
 
         /// <summary>재컴파일·창 닫힘으로 관리 Task가 소실된 뒤에도 외부 프로세스는
@@ -130,6 +240,7 @@ namespace Fbx2Vmd.LipSync
 
         private void OnDisable()
         {
+            _shuttingDown = true; // 이 취소는 리로드용 — 서버 작업에는 통지하지 않는다.
             _cts?.Cancel();
             _cts?.Dispose();
             _cts = null; // 재비활성화 시 disposed CTS의 Cancel이 ObjectDisposedException을 던진다.
@@ -393,6 +504,30 @@ namespace Fbx2Vmd.LipSync
             _model = EditorGUILayout.TextField("모델", _model);
             using (new EditorGUI.DisabledScope(_engine != VocalStemSeparator.Engine.AudioSeparator))
             {
+                // 오타로 잘못된 프리셋명이 들어가는 걸 막기 위해 팝업으로 제한한다.
+                // 직렬화된 값이 목록에 없으면(신규 프리셋 등) 그대로 보여 선택이 날아가지 않게 한다.
+                _ensemblePresetOptions.Clear();
+                _ensemblePresetOptions.Add(new GUIContent("(단일 모델 — 위 모델 필드)"));
+                foreach (string name in EnsemblePresets)
+                {
+                    _ensemblePresetOptions.Add(new GUIContent(name));
+                }
+                int presetIndex = Array.IndexOf(EnsemblePresets, _ensemblePreset) + 1;
+                if (presetIndex == 0 && !string.IsNullOrEmpty(_ensemblePreset))
+                {
+                    _ensemblePresetOptions.Add(new GUIContent(_ensemblePreset + " (직접 입력)"));
+                    presetIndex = _ensemblePresetOptions.Count - 1;
+                }
+                int nextPreset = EditorGUILayout.Popup(
+                    new GUIContent("앙상블 프리셋",
+                        "audio-separator 내장 앙상블(vocal_clean/vocal_balanced/vocal_full/karaoke). '단일 모델'이면 위 모델 필드의 단일 ckpt를 쓴다"),
+                    presetIndex, _ensemblePresetOptions.ToArray());
+                if (nextPreset != presetIndex && nextPreset <= EnsemblePresets.Length)
+                {
+                    // 목록 밖 인덱스는 "(직접 입력)" 표시 항목 — 값 자체는 유지한다.
+                    _ensemblePreset = nextPreset == 0
+                        ? "" : EnsemblePresets[nextPreset - 1];
+                }
                 _cleanVocal = EditorGUILayout.Toggle(
                     new GUIContent("보컬 정제",
                         "원곡에서 리드 보컬만 추출(카라오케 앙상블) → 잔향/에코 제거 → 노이즈 제거. 립싱크용 리드 보컬만 남긴다"),
@@ -660,7 +795,7 @@ namespace Fbx2Vmd.LipSync
         private void StartProvisioning(bool separateAfter)
         {
             if (_provisioning != null || _separating != null || _cleaning != null
-                || _extracting != null)
+                || _extracting != null || _lyricsFetching != null)
             {
                 return; // 진행 중 재진입 — 실행 중 Task의 CTS 폐기·동시 설치 방지
             }
@@ -683,7 +818,7 @@ namespace Fbx2Vmd.LipSync
         {
             // 실행 중 Task의 CTS를 RenewCts가 폐기하므로 동시 실행은 차단한다.
             if (_provisioning != null || _separating != null || _cleaning != null
-                || _extracting != null)
+                || _extracting != null || _lyricsFetching != null)
             {
                 return;
             }
@@ -728,6 +863,7 @@ namespace Fbx2Vmd.LipSync
             // 완료/정제 연결은 시작 시점 스냅샷으로 — 실행 중 필드 편집을 무시한다.
             _sepSourcePath = _sourceAudioPath;
             _sepEngine = _engine;
+            _sepEnsemblePreset = _ensemblePreset;
             _sepCleanVocal = _cleanVocal;
             _sepHighQuality = _highQualitySeparation;
             _sepWpe = _wpeDereverb;
@@ -735,12 +871,7 @@ namespace Fbx2Vmd.LipSync
             _sepPythonPath = _pythonPath;
             RenewCts();
             _sepProgress = 0f;
-            _separating = VocalStemSeparator.SeparateAsync(
-                _engine, _pythonPath, _sourceAudioPath, _outputDir, _model,
-                _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
-                PythonEnvProvisioner.ModelsDir(ProjectRoot),
-                p => _sepProgress = p,
-                highQuality: _sepHighQuality);
+            _separating = SeparatePreferServerAsync();
             EditorUtility.DisplayProgressBar("보컬 분리", "오디오 스템 분리 중(수 분 소요)...", 0.5f);
             SetMessage("분리 실행 중...", MessageType.Info);
         }
@@ -785,17 +916,8 @@ namespace Fbx2Vmd.LipSync
             bool highQuality = resumed ? _highQualitySeparation : _sepHighQuality;
             _sepProgress = 0f;
             _cleanStage = "";
-            _cleaning = VocalStemSeparator.CleanVocalAsync(
-                pythonPath, _rawVocalWavPath, outputDir,
-                wpe ? VocalStemSeparator.CleanupStepsWithWpe() : null,
-                _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
-                PythonEnvProvisioner.ModelsDir(ProjectRoot),
-                p => _sepProgress = p,
-                s => _cleanStage = s,
-                originalMixPath: resumed ? _sourceAudioPath : _sepSourcePath,
-                salvageSourcePath: _rawVocalWavPath,
-                highQuality: highQuality,
-                projectRoot: ProjectRoot);
+            _cleaning = CleanPreferServerAsync(
+                pythonPath, outputDir, wpe, highQuality, resumed);
             SetMessage("분리 완료 — 보컬 정제(잔향/코러스/노이즈) 중...", MessageType.Info);
         }
 
@@ -822,11 +944,130 @@ namespace Fbx2Vmd.LipSync
             string outBase = Path.Combine(_outputDir,
                 Path.GetFileNameWithoutExtension(audio) + "_lyrics");
             Directory.CreateDirectory(_outputDir);
-            _lyricsFetching = LyricsFetcher.FetchAsync(
+            _lyricsFetching = LyricsPreferServerAsync(audio, outBase, lang);
+            SetMessage("가사 검색 중(로컬 → 태그 → LRCLIB → VocaDB)…", MessageType.Info);
+        }
+
+        /// <summary>로컬 모델 서버가 살아 있으면 서버 경로, 아니면 기존 에디터
+        /// 프로세스 경로로 분리한다 — 서버 경로는 리로드·에디터 종료에 무관하다.</summary>
+        private async Task<VocalStemSeparator.Result> SeparatePreferServerAsync()
+        {
+            if (await LipSyncServerClient.IsAvailableAsync())
+            {
+                try
+                {
+                    // 컨텍스트 `입력|출력dir|engine|cleanVocal|wpe|hq|preset` — 재부착 후
+                    // 정제 체인 연결에 필요한 스냅샷을 통째로 남긴다.
+                    string engine = _sepEngine == VocalStemSeparator.Engine.Demucs
+                        ? "demucs" : "audio_separator";
+                    string resumeContext = string.Join("|",
+                        Path.GetFullPath(_sepSourcePath),
+                        Path.GetFullPath(_sepOutputDir), engine,
+                        _sepCleanVocal ? "1" : "0", _sepWpe ? "1" : "0",
+                        _sepHighQuality ? "1" : "0", _sepEnsemblePreset ?? "");
+                    return await LipSyncServerClient.SeparateViaServerAsync(
+                        _sepEngine, _sepSourcePath, _sepOutputDir, _model,
+                        PythonEnvProvisioner.ModelsDir(ProjectRoot), _sepHighQuality,
+                        _cts.Token, p => _sepProgress = p,
+                        () => !_shuttingDown, resumeContext, _sepEnsemblePreset);
+                }
+                catch (LipSyncServerClient.SubmitRejectedException e)
+                {
+                    Debug.LogWarning("[LipSync] 서버 분리 제출 실패, 로컬로 전환: "
+                        + e.Message);
+                }
+            }
+            return await VocalStemSeparator.SeparateAsync(
+                _sepEngine, _sepPythonPath, _sepSourcePath, _sepOutputDir, _model,
+                _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
+                PythonEnvProvisioner.ModelsDir(ProjectRoot),
+                p => _sepProgress = p,
+                highQuality: _sepHighQuality,
+                ensemblePreset: _sepEnsemblePreset);
+        }
+
+        /// <summary>정제 — 서버 우선, 실패 시 기존 로컬 체인으로 폴백한다.</summary>
+        private async Task<VocalStemSeparator.Result> CleanPreferServerAsync(
+            string pythonPath, string outputDir, bool wpe, bool highQuality,
+            bool resumed)
+        {
+            if (await LipSyncServerClient.IsAvailableAsync())
+            {
+                try
+                {
+                    return await LipSyncServerClient.CleanViaServerAsync(
+                        _rawVocalWavPath, outputDir, wpe,
+                        PythonEnvProvisioner.ModelsDir(ProjectRoot), highQuality,
+                        resumed ? _sourceAudioPath : _sepSourcePath,
+                        _rawVocalWavPath,
+                        _cts.Token, p => _sepProgress = p, s => _cleanStage = s,
+                        () => !_shuttingDown);
+                }
+                catch (LipSyncServerClient.SubmitRejectedException e)
+                {
+                    Debug.LogWarning("[LipSync] 서버 정제 제출 실패, 로컬로 전환: "
+                        + e.Message);
+                }
+            }
+            return await VocalStemSeparator.CleanVocalAsync(
+                pythonPath, _rawVocalWavPath, outputDir,
+                wpe ? VocalStemSeparator.CleanupStepsWithWpe() : null,
+                _cts.Token, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
+                PythonEnvProvisioner.ModelsDir(ProjectRoot),
+                p => _sepProgress = p,
+                s => _cleanStage = s,
+                originalMixPath: resumed ? _sourceAudioPath : _sepSourcePath,
+                salvageSourcePath: _rawVocalWavPath,
+                highQuality: highQuality,
+                projectRoot: ProjectRoot);
+        }
+
+        /// <summary>가사 수집 — 서버 우선, 실패 시 로컬 수집기로 폴백한다.</summary>
+        private async Task<(bool ok, LyricsFetcher.Candidate candidate, string error)>
+            LyricsPreferServerAsync(string audio, string outBase, string lang)
+        {
+            if (await LipSyncServerClient.IsAvailableAsync())
+            {
+                try
+                {
+                    return await LipSyncServerClient.LyricsViaServerAsync(
+                        audio, outBase, _lyricsTitle, _lyricsArtist, lang,
+                        _cts.Token, () => !_shuttingDown);
+                }
+                catch (LipSyncServerClient.SubmitRejectedException e)
+                {
+                    Debug.LogWarning("[LipSync] 서버 가사 수집 제출 실패, 로컬로 전환: "
+                        + e.Message);
+                }
+            }
+            return await LyricsFetcher.FetchAsync(
                 _pythonPath, ProjectRoot, audio, outBase,
                 _lyricsTitle, _lyricsArtist, lang,
                 _cts.Token);
-            SetMessage("가사 검색 중(로컬 → 태그 → LRCLIB → VocaDB)…", MessageType.Info);
+        }
+
+        /// <summary>음소 추출 — 서버 우선, 실패 시 로컬 추출기로 폴백한다.</summary>
+        private async Task<(bool ok, string error)> PhonemePreferServerAsync(string model)
+        {
+            if (await LipSyncServerClient.IsAvailableAsync())
+            {
+                try
+                {
+                    return await LipSyncServerClient.PhonemeViaServerAsync(
+                        _extractWavPath, _extractCsvPath, model, _lyricsPath,
+                        _cts.Token, p => _sepProgress = p, () => !_shuttingDown);
+                }
+                catch (LipSyncServerClient.SubmitRejectedException e)
+                {
+                    Debug.LogWarning("[LipSync] 서버 음소 추출 제출 실패, 로컬로 전환: "
+                        + e.Message);
+                }
+            }
+            return await Wav2VecPhonemeExtractor.ExtractAsync(
+                _pythonPath, ProjectRoot, _extractWavPath, _extractCsvPath,
+                model, PythonEnvProvisioner.ProcessEnv(ProjectRoot),
+                _cts.Token, p => _sepProgress = p,
+                lyricsPath: _lyricsPath);
         }
 
         /// <summary>고아 프로세스 핸들의 생존 여부 — 소실/권한 예외는 종료로 본다.</summary>
@@ -919,7 +1160,7 @@ namespace Fbx2Vmd.LipSync
             {
                 // 실행 중 Task의 CTS를 공유하므로 동시 실행은 차단한다.
                 if (_provisioning != null || _separating != null || _cleaning != null
-                    || _extracting != null)
+                    || _extracting != null || _lyricsFetching != null)
                 {
                     return;
                 }
@@ -957,12 +1198,8 @@ namespace Fbx2Vmd.LipSync
                     Directory.CreateDirectory(_outputDir);
                     RenewCts();
                     _sepProgress = 0f;
-                    _extracting = Wav2VecPhonemeExtractor.ExtractAsync(
-                        _pythonPath, ProjectRoot, _vocalWavPath, _extractCsvPath,
-                        Wav2VecPhonemeExtractor.ModelFor(_phonemeLanguage),
-                        PythonEnvProvisioner.ProcessEnv(ProjectRoot),
-                        _cts.Token, p => _sepProgress = p,
-                        lyricsPath: _lyricsPath);
+                    _extracting = PhonemePreferServerAsync(
+                        Wav2VecPhonemeExtractor.ModelFor(_phonemeLanguage));
                     SetMessage("wav2vec2 음소 추출 중…(첫 실행은 모델 다운로드)", MessageType.Info);
                     return;
                 }
