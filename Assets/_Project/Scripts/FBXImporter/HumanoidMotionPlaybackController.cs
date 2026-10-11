@@ -30,7 +30,12 @@ namespace Fbx2Vmd.FBXImporter
             new HumanoidFootContactStabilizer();
         private readonly HumanoidGroundResponse _groundResponse =
             new HumanoidGroundResponse();
+        private readonly HumanoidFootGoalDriver _footGoalDriver =
+            new HumanoidFootGoalDriver();
         private bool _isGroundResponseEnabled;
+        // 실험 경로 — goal IK 드라이브가 켜지면 접지·지면 반응과 상호배제됨.
+        private bool _useIkGoalFootDrive;
+        private float _footGoalAlpha;
         private HumanoidFootGrounding _footGrounding;
         private HumanoidFootRotationBinding _leftFootRotation;
         private HumanoidFootRotationBinding _rightFootRotation;
@@ -77,6 +82,18 @@ namespace Fbx2Vmd.FBXImporter
             if (IsPrepared)
                 EvaluateCurrentPoseWithCorrection();
         }
+
+        // goal IK 실험 경로 스위치. alpha=0 또는 데이터 부족이면 기존 접지 경로가 그대로 동작함.
+        internal void SetIkGoalFootDrive(bool isEnabled, float alpha)
+        {
+            _useIkGoalFootDrive = isEnabled;
+            _footGoalAlpha = Mathf.Clamp01(alpha);
+            if (IsPrepared)
+                EvaluateCurrentPoseWithCorrection();
+        }
+
+        internal bool IsIkGoalFootDriveActive =>
+            _useIkGoalFootDrive && _footGoalAlpha > 0f && _footGoalDriver.IsInitialized;
 
         internal void PrepareWithArmDirectionReference(
             Animator targetAnimator,
@@ -304,6 +321,8 @@ namespace Fbx2Vmd.FBXImporter
         public void Dispose()
         {
             _isGroundResponseEnabled = false;
+            _useIkGoalFootDrive = false;
+            _footGoalAlpha = 0f;
             LastGroundingStatus = HumanoidFootGroundingStatus.Disabled;
             LastGroundingGate.measured = false;
             _footGrounding?.Dispose();
@@ -312,6 +331,7 @@ namespace Fbx2Vmd.FBXImporter
             _leftFootRotation = _rightFootRotation = null;
             _sourceToTargetRotation = Quaternion.identity;
             _groundResponse.Clear();
+            _footGoalDriver.Clear();
             _footContactStabilizer.Clear();
             _poseReferencePlayer.Dispose();
             _poseFrameEditor.Dispose();
@@ -397,7 +417,11 @@ namespace Fbx2Vmd.FBXImporter
             LastGroundingGate.pelvis_offset_m = 0f;
             LastGroundingGate.pelvis_maximum_offset_m = 0f;
             LastGroundingGate.left = LastGroundingGate.right = null;
-            if (_isGroundResponseEnabled && _footGrounding != null && _footGrounding.IsPrepared)
+            bool goalDriverActive = IsIkGoalFootDriveActive;
+            if (goalDriverActive)
+                LastGroundingGate.evaluation_stage = "ik_goal_drive";
+            if (!goalDriverActive && _isGroundResponseEnabled &&
+                _footGrounding != null && _footGrounding.IsPrepared)
             {
                 bool applied = _footGrounding.TryApply(CurrentTimeSeconds, _groundResponse);
                 LastGroundingGate.evaluation_stage = _footGrounding.EvaluationStage;
@@ -427,8 +451,16 @@ namespace Fbx2Vmd.FBXImporter
                 CurrentTimeSeconds,
                 leftBendNormal,
                 rightBendNormal);
-            if (isApplied && _isGroundResponseEnabled)
+            if (goalDriverActive)
+            {
+                // pin 프레임만 IK가 목표를 주장하고 기권 구간은 stabilizer 출력이 유지됨.
+                _footGoalDriver.TryApply(CurrentTimeSeconds, _footGoalAlpha,
+                    leftBendNormal, rightBendNormal);
+            }
+            else if (isApplied && _isGroundResponseEnabled)
+            {
                 _groundResponse.Apply(leftBendNormal, rightBendNormal);
+            }
             return isApplied;
         }
 
@@ -474,6 +506,9 @@ namespace Fbx2Vmd.FBXImporter
                 _player.EvaluateAt,
                 _poseReferencePlayer,
                 sourceModelAsset?.name);
+            // 초기화는 항상 수행해 세터 시점과 무관하게 둠 — 적용만 플래그로 게이트함.
+            _footGoalDriver.TryInitialize(
+                targetAnimator, _footContactStabilizer, clip.frameRate);
             if (_footGrounding != null)
                 _footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
                     _footContactStabilizer.SourceHumanScale, clip, EvaluateEditorContactReference,

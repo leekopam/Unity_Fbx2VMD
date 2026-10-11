@@ -24,6 +24,8 @@ namespace Fbx2Vmd.FBXImporter
         public int screen_width;
         public int screen_height;
         public bool lower_body_only;
+        // 0이면 goal IK 실험 경로를 켜지 않음 — 기본 요청은 기존 출력과 동일하게 유지됨.
+        public float ik_goal_alpha;
     }
 
     [Serializable]

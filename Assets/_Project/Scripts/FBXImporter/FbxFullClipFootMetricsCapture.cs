@@ -32,6 +32,7 @@ namespace Fbx2Vmd.FBXImporter
         private readonly int _frameLimit;
         private readonly bool _captureViews;
         private readonly bool _lowerBodyOnly;
+        private readonly float _ikGoalAlpha;
         private readonly List<string> _capturePaths = new List<string>();
         private readonly DateTime _startedUtc = DateTime.UtcNow;
         private StreamWriter _writer;
@@ -85,7 +86,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private FbxFullClipFootMetricsCapture(FBXVmdPipeline pipeline, string directory,
             string inputFileName, string caseId, int frameLimit, bool captureViews,
-            bool lowerBodyOnly)
+            bool lowerBodyOnly, float ikGoalAlpha)
         {
             _pipeline = pipeline;
             _scenePath = SceneManager.GetActiveScene().path;
@@ -94,6 +95,7 @@ namespace Fbx2Vmd.FBXImporter
             _frameLimit = frameLimit;
             _captureViews = captureViews;
             _lowerBodyOnly = lowerBodyOnly;
+            _ikGoalAlpha = ikGoalAlpha;
             CsvPath = Path.Combine(directory, "all-frames.csv");
             DiagnosticPath = Path.Combine(directory, "grounding-diagnostics.csv");
             MusclePath = Path.Combine(directory, "pose-muscles.jsonl");
@@ -122,7 +124,8 @@ namespace Fbx2Vmd.FBXImporter
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
             out FbxFullClipFootMetricsCapture capture, out string message,
             string inputFileName = DefaultInputFileName, string caseId = "F10",
-            int frameLimit = 0, bool captureViews = false, bool lowerBodyOnly = false)
+            int frameLimit = 0, bool captureViews = false, bool lowerBodyOnly = false,
+            float ikGoalAlpha = 0f)
         {
             capture = null;
             message = string.Empty;
@@ -158,7 +161,8 @@ namespace Fbx2Vmd.FBXImporter
             {
                 Directory.CreateDirectory(directory);
                 capture = new FbxFullClipFootMetricsCapture(pipeline, directory,
-                    inputFileName, caseId, frameLimit, captureViews, lowerBodyOnly);
+                    inputFileName, caseId, frameLimit, captureViews, lowerBodyOnly,
+                    ikGoalAlpha);
                 if (pipeline.TryStartFbxImportFromSharedSettings(input)) return true;
                 message = $"{caseId} 제품 FBX 가져오기 요청이 거부되었습니다.";
             }
@@ -272,6 +276,10 @@ namespace Fbx2Vmd.FBXImporter
                 _targetSamples == null || _targetSamples.Count <= _lastFrame ||
                 !(_sourceHumanScale > 0f))
                 throw new InvalidOperationException($"{_caseId} 전체 클립 또는 하체 본이 준비되지 않았습니다.");
+
+            // alpha>0 요청만 goal IK 실험 경로를 켬 — 기본 요청은 기존 출력을 유지함.
+            if (_ikGoalAlpha > 0f)
+                _controller.SetIkGoalFootDrive(true, _ikGoalAlpha);
 
             _writer = new StreamWriter(CsvPath, false, new System.Text.UTF8Encoding(false));
             _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps,grounding_target_error_mm,grounding_sole_clearance_mm,grounding_contact_error_mm,grounding_supported_contacts,knee_flexion_deg,ankle_pitch_deg,pelvis_tilt_deg,com_x_m,com_z_m,support_polygon_contains_com,joint_delta_deg,pose_novelty,transition_novelty");
@@ -752,6 +760,7 @@ namespace Fbx2Vmd.FBXImporter
                     failure_stage = stage, failure_message = message,
                     scene = _scenePath, input = _inputFileName,
                     lower_body_only = _lowerBodyOnly,
+                    ik_goal_alpha = _ikGoalAlpha,
                     fingerprint = BuildFingerprint(),
                     contact_intents = BuildContactIntentsSummary(),
                     model = _pipeline?.targetCharacter != null ? _pipeline.targetCharacter.name : string.Empty,

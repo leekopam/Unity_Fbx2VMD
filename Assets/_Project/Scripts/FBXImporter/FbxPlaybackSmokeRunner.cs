@@ -932,7 +932,8 @@ namespace Fbx2Vmd.FBXImporter
                     if (!TryGetFBXVmdPipeline(SatisfactionFbxFileName, out FBXVmdPipeline fullPipeline,
                             interactive: false, out message)) return false;
                     return FbxFullClipFootMetricsCapture.TryStart(fullPipeline, request.request_id,
-                        request.run_id, out _fullClipMetrics, out message);
+                        request.run_id, out _fullClipMetrics, out message,
+                        ikGoalAlpha: request.ik_goal_alpha);
                 case CaptureGroundingFullClipMetricsCommand:
                     return TryStartGroundingCapture(request, false, out message);
                 case CaptureGroundingLiveFootEvidenceCommand:
