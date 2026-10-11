@@ -597,7 +597,7 @@ Material:
     - _UseMain3rdTex: 0
     - _UseMatCap: 0
     - _UseMatCap2nd: 0
-    - _UseOutline: 0
+    - _UseOutline: 1
     - _UsePOM: 0
     - _UseParallax: 0
     - _UseReflection: 0

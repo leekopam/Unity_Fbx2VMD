@@ -9,6 +9,7 @@ namespace Fbx2Vmd.Settings.EditorTools
         private const float DefaultComparisonCameraViewportCenterY = 0.28f;
         private const float DefaultComparisonCameraAspect = 16f / 9f;
         private const float DefaultComparisonCameraDepth = 39f;
+        private const float DefaultCameraNearClip = 0.05f;
         private const float DefaultFloorViewPitchPerOrthographicUnit = 0.5f;
 
         internal static void ApplyDefaultFraming(Camera camera, GameObject targetRoot)
@@ -34,7 +35,7 @@ namespace Fbx2Vmd.Settings.EditorTools
                 camera.orthographicSize * DefaultFloorViewPitchPerOrthographicUnit,
                 180f,
                 0f);
-            camera.nearClipPlane = 0.3f;
+            camera.nearClipPlane = DefaultCameraNearClip;
             camera.farClipPlane = DefaultComparisonCameraDepth + bounds.extents.z + 100f;
             camera.useOcclusionCulling = false;
         }
