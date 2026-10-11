@@ -61,6 +61,7 @@ namespace Fbx2Vmd.EditorTools
 
                 var material = new Material(source) { name = $"Toon_{pair.Key}" };
                 ApplyRoleDefaults(material, pair.Key);
+                SyncLilToonKeywords(material);
                 SaveMaterial(material);
             }
 
@@ -122,6 +123,8 @@ namespace Fbx2Vmd.EditorTools
         // 공연 툰 룩 공통 기본값 — 그림자는 2단 선명하게, 얇은 아웃라인, 림·역광 활성.
         private static void ApplyLookDefaults(Material material, string role)
         {
+            // lilToon은 _UseShadow=0이면 그림자 블록 전체가 비활성 — 반드시 켠다.
+            SetFloat(material, "_UseShadow", 1f);
             SetFloat(material, "_ShadowStrength", 0.55f);
             SetFloat(material, "_ShadowBorder", 0.5f);
             SetFloat(material, "_ShadowBlur", 0f);
@@ -131,6 +134,8 @@ namespace Fbx2Vmd.EditorTools
             SetColor(material, "_Shadow2ndColor", new Color(0.66f, 0.64f, 0.78f));
 
             SetFloat(material, "_OutlineWidth", 0.05f);
+            // 카메라 근접 시 아웃라인 폭을 거리 비례로 줄여 클로즈업에서 선이 뭉개지지 않게 함.
+            SetFloat(material, "_OutlineFixWidth", 1f);
             SetColor(material, "_OutlineColor", new Color(0.05f, 0.05f, 0.08f));
 
             // lilToon은 기능 토글(_Use*)이 꺼져 있으면 파라미터만 있어도 적용되지 않는다.
@@ -174,6 +179,35 @@ namespace Fbx2Vmd.EditorTools
                     SetFloat(material, "_OutlineWidth", 0.04f);
                     break;
             }
+        }
+
+        // lilToon 기능은 _Use* 프로퍼티와 별개로 셰이더 키워드로 컴파일된다.
+        // lilMaterialUtils.SetupMultiMaterial(lilToon.Editor 어셈블리, 비참조)과 동일 매핑을 우리가 쓰는 기능 범위로 재현한다.
+        private static void SyncLilToonKeywords(Material material)
+        {
+            void SetKeyword(string keyword, bool on)
+            {
+                if (on)
+                {
+                    material.EnableKeyword(keyword);
+                }
+                else
+                {
+                    material.DisableKeyword(keyword);
+                }
+            }
+
+            float GetFloat(string prop) => material.HasProperty(prop) ? material.GetFloat(prop) : 0f;
+            bool IsOn(string prop) => material.HasProperty(prop) && GetFloat(prop) != 0f;
+
+            SetKeyword("UNITY_UI_ALPHACLIP", GetFloat("_TransparentMode") == 1f);
+            SetKeyword("_REQUIRE_UV2", IsOn("_UseShadow"));
+            SetKeyword("_METALLICGLOSSMAP", IsOn("_UseRim"));
+            SetKeyword("GEOM_TYPE_LEAF", IsOn("_UseRim") && IsOn("_RimDirStrength"));
+            SetKeyword("AUTO_KEY_VALUE", IsOn("_UseRimShade"));
+            SetKeyword("ANTI_FLICKER", IsOn("_UseBacklight"));
+            SetKeyword("_EMISSION", IsOn("_UseEmission"));
+            SetKeyword("_NORMALMAP", IsOn("_UseBumpMap"));
         }
 
         private static void SaveMaterial(Material material)
