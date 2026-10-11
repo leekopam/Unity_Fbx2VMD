@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Fbx2Vmd.FBXImporter;
 using UnityEditor;
 using UnityEngine;
@@ -13,7 +14,7 @@ namespace Fbx2Vmd.EditorTools
     /// 각 텍셀에 "그 방향 빛에 점등되기 시작하는 방위각 경계"를 넣는다:
     /// R = 좌측광 경계, G = 우측광 경계, 값 = 2*border - 0.5 - cos(경계각).
     /// 표현 가능한 경계는 border=0.6 기준 약 45.5°~107.5°뿐 — 그 밖은 0/1로 포화된다.
-    /// occluded를 넘기면 라이트 스윕 중 레이캐스트로 자체그림자(앞머리·코)까지 반영한다.
+    /// occluded를 넘기면 라이트 스윕 중 레이캐스트로 얼굴 자체그림자(코·눈두덩)까지 반영한다.
     /// 근사 한계: 오클루더는 바인드 포즈 sharedMesh를 TRS로 올린 것이라 스키닝 포즈와 어긋나고,
     /// Collider.Raycast는 뒷면·메시 내부 시작점을 치지 않아 일부 텍셀의 차광이 빠질 수 있다.
     /// </summary>
@@ -21,7 +22,7 @@ namespace Fbx2Vmd.EditorTools
     {
         const int DefaultResolution = 1024;
         const float DefaultShadowBorder = 0.6f;
-        const string FacePresetPath = "Assets/Resources/ToonPresets/Toon_Face.mat";
+        const string MenuPath = "Tools/Toon/선택 오브젝트 얼굴 SDF 베이크";
         // 방위각 스윕 해상도(도) — 굵게 훑은 뒤 첫 비점등 구간만 세밀히 다시 본다.
         // 6°보다 얇은 차광대는 건너뛸 수 있으나 결과는 밝은 쪽으로만 어긋난다.
         const float SweepStepDegrees = 2f;
@@ -29,9 +30,10 @@ namespace Fbx2Vmd.EditorTools
         const float SurfaceBias = 0.002f;
 
         /// <summary>선택 오브젝트에서 Face 역할 서브메시의 SDF 마스크를 베이크해
-        /// "{모델 루트}/tex/sdf/{머티리얼명}_sdf.png"로 저장한다.
-        /// 변환기가 탐색하는 "_sdf" 규약과 같은 위치·이름이다.</summary>
-        [MenuItem("Tools/Toon/선택 오브젝트 얼굴 SDF 베이크")]
+        /// 변환기가 찾는 기존 "_sdf" 텍스처를 덮어쓰고(GUID 유지), 없으면
+        /// "{모델 루트}/tex/sdf/{원본 머티리얼명}_sdf.png"로 새로 저장한다.
+        /// 이미 툰 변환된 모델을 선택해도 원본 머티리얼 기준으로 저장한다.</summary>
+        [MenuItem(MenuPath)]
         public static void BakeSelectedFace()
         {
             GameObject root = Selection.activeGameObject;
@@ -41,9 +43,7 @@ namespace Fbx2Vmd.EditorTools
                 return;
             }
 
-            // Face 역할 서브메시를 먼저 모으고 합산 바운드를 잡는다 — 오클루더 범위 제한에 쓴다.
             var faceSlots = new List<(Renderer renderer, Mesh mesh, int submesh, Material source)>();
-            Bounds? faceBounds = null;
             foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
             {
                 Mesh mesh = GetRendererMesh(renderer);
@@ -55,51 +55,68 @@ namespace Fbx2Vmd.EditorTools
                 Material[] slots = renderer.sharedMaterials;
                 for (int i = 0; i < slots.Length && i < mesh.subMeshCount; i++)
                 {
-                    Material source = slots[i];
-                    if (source == null
-                        || ToonMaterialRoleResolver.ResolveCharacterRole(source.name)
-                            != ToonMaterialRole.Face)
+                    if (slots[i] == null)
                     {
+                        continue;
+                    }
+
+                    Material source = SceneModelToonConverter.ResolveSourceMaterial(slots[i]);
+                    if (ToonMaterialRoleResolver.ResolveCharacterRole(source.name)
+                        != ToonMaterialRole.Face)
+                    {
+                        continue;
+                    }
+
+                    if (!mesh.isReadable)
+                    {
+                        Debug.LogWarning(
+                            $"[Toon] 읽기 불가 메시라 SDF를 베이크할 수 없습니다: {source.name}");
                         continue;
                     }
 
                     faceSlots.Add((renderer, mesh, i, source));
-                    Bounds merged = faceBounds ?? renderer.bounds;
-                    merged.Encapsulate(renderer.bounds);
-                    faceBounds = merged;
                 }
             }
 
-            // 전신 메시를 임시 MeshCollider로 올려 앞머리·코의 자체그림자까지 오클루전에 반영한다.
-            // 얼굴 바운드를 크게 넓힌 범위 밖의 렌더러는 얼굴에 그림자를 못 드리우므로 제외한다.
+            if (faceSlots.Count == 0)
+            {
+                Debug.LogWarning($"[Toon] '{root.name}' 아래에서 얼굴 역할 머티리얼을 찾지 못했습니다.");
+                return;
+            }
+
+            // 얼굴 SDF는 얼굴 형상(코·눈두덩)의 그림자 진행만 담는다 — 머리카락·장식 그림자는
+            // 런타임의 다른 경로 몫이고, 전신을 넣으면 머리카락 아래 피부가 항상 그늘로 굳는다.
+            // 그래서 오클루더는 Face 서브메시만 합친 임시 메시로 만든다.
             var occluders = new List<Collider>();
-            var tempObjects = new List<GameObject>();
+            var tempObjects = new List<UnityEngine.Object>();
             int baked = 0;
+            bool cancelled = false;
             try
             {
-                Bounds occluderZone = faceBounds
-                    ?? new Bounds(root.transform.position, Vector3.zero);
-                occluderZone.Expand(occluderZone.extents.magnitude * 2f);
-                foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+                foreach (var group in faceSlots.GroupBy(slot => slot.renderer))
                 {
-                    Mesh mesh = GetRendererMesh(renderer);
-                    // 읽기 불가 메시는 콜라이더 쿠킹이 실패해 조용히 무력화되므로 건너뛴다.
-                    if (mesh == null || !mesh.isReadable
-                        || !renderer.bounds.Intersects(occluderZone))
+                    Mesh rendererMesh = group.First().mesh;
+                    var faceMesh = new Mesh
                     {
-                        continue;
-                    }
-
+                        name = "~sdf_face_occluder",
+                        hideFlags = HideFlags.HideAndDontSave,
+                        indexFormat = rendererMesh.indexFormat,
+                        vertices = rendererMesh.vertices,
+                        triangles = group
+                            .SelectMany(slot => rendererMesh.GetTriangles(slot.submesh))
+                            .ToArray()
+                    };
                     var occluder = new GameObject("~sdf_occluder")
                     {
                         hideFlags = HideFlags.HideAndDontSave
                     };
+                    tempObjects.Add(faceMesh);
                     tempObjects.Add(occluder);
                     occluder.transform.SetPositionAndRotation(
-                        renderer.transform.position, renderer.transform.rotation);
-                    occluder.transform.localScale = renderer.transform.lossyScale;
+                        group.Key.transform.position, group.Key.transform.rotation);
+                    occluder.transform.localScale = group.Key.transform.lossyScale;
                     var collider = occluder.AddComponent<MeshCollider>();
-                    collider.sharedMesh = mesh;
+                    collider.sharedMesh = faceMesh;
                     occluders.Add(collider);
                 }
 
@@ -116,27 +133,23 @@ namespace Fbx2Vmd.EditorTools
                     return false;
                 }
 
-                // 소비자는 Face 프리셋 복제본이므로 경계값도 원본 머티리얼이 아니라 프리셋에서 읽는다.
-                float border = DefaultShadowBorder;
-                var facePreset = AssetDatabase.LoadAssetAtPath<Material>(FacePresetPath);
-                if (facePreset != null && facePreset.HasProperty("_ShadowBorder"))
+                float border = ResolveShadowBorder();
+                for (int k = 0; k < faceSlots.Count; k++)
                 {
-                    border = facePreset.GetFloat("_ShadowBorder");
-                }
-
-                foreach ((Renderer renderer, Mesh mesh, int submesh, Material source) in faceSlots)
-                {
-                    if (!mesh.isReadable)
-                    {
-                        Debug.LogWarning(
-                            $"[Toon] 읽기 불가 메시라 SDF를 베이크할 수 없습니다: {source.name}");
-                        continue;
-                    }
+                    (Renderer renderer, Mesh mesh, int submesh, Material source) = faceSlots[k];
+                    string label = $"{source.name} ({k + 1}/{faceSlots.Count})";
 
                     // lilToon의 얼굴 정면은 머티리얼이 아니라 렌더러 오브젝트의 +Z다.
                     Texture2D tex = Bake(mesh, submesh, DefaultResolution,
                         renderer.transform.localToWorldMatrix,
-                        renderer.transform.forward, IsOccluded, border);
+                        renderer.transform.forward, IsOccluded, border,
+                        progress => cancelled = EditorUtility.DisplayCancelableProgressBar(
+                            "얼굴 SDF 베이크", label, progress));
+                    if (cancelled)
+                    {
+                        break;
+                    }
+
                     if (tex == null)
                     {
                         Debug.LogWarning(
@@ -144,20 +157,50 @@ namespace Fbx2Vmd.EditorTools
                         continue;
                     }
 
-                    SaveSdfPng(tex, source);
+                    try
+                    {
+                        SaveSdfPng(tex, source);
+                    }
+                    finally
+                    {
+                        UnityEngine.Object.DestroyImmediate(tex);
+                    }
                     baked++;
                 }
             }
             finally
             {
-                foreach (GameObject temp in tempObjects)
+                foreach (UnityEngine.Object temp in tempObjects)
                 {
                     UnityEngine.Object.DestroyImmediate(temp);
                 }
+                EditorUtility.ClearProgressBar();
             }
 
             AssetDatabase.SaveAssets();
-            Debug.Log($"[Toon] 얼굴 SDF 베이크 완료. 대상={root.name}, 생성={baked}");
+            string result = cancelled ? "사용자 취소로 중단" : "완료";
+            Debug.Log($"[Toon] 얼굴 SDF 베이크 {result}. 대상={root.name}, " +
+                $"생성={baked}/{faceSlots.Count}");
+        }
+
+        [MenuItem(MenuPath, true)]
+        private static bool CanBakeSelectedFace()
+        {
+            return Selection.activeGameObject != null;
+        }
+
+        // 소비자는 Face 프리셋 복제본이므로 경계값도 원본 머티리얼이 아니라 프리셋에서 읽음.
+        private static float ResolveShadowBorder()
+        {
+            var preset = Resources.Load<Material>(ToonMaterialLibrary.ResourceRoot
+                + ToonMaterialLibrary.TemplateName(ToonMaterialRole.Face));
+            if (preset != null && preset.HasProperty("_ShadowBorder"))
+            {
+                return preset.GetFloat("_ShadowBorder");
+            }
+
+            Debug.LogWarning("[Toon] Face 프리셋을 찾지 못해 기본 경계값으로 SDF를 베이크합니다.");
+            return DefaultShadowBorder;
         }
 
         private static Mesh GetRendererMesh(Renderer renderer)
@@ -179,10 +222,12 @@ namespace Fbx2Vmd.EditorTools
 
         /// <summary>월드 공간 라이트 스윕으로 SDF를 베이크한다.
         /// isOccluded는 (월드 위치, 조명 방향)에서 차광 여부를 돌려주는 술어 — null이면 노멀만으로 판정한다.
-        /// forward는 모델 정면의 월드 방향(lilToon의 얼굴 정면과 같은 기준).</summary>
+        /// forward는 모델 정면의 월드 방향(lilToon의 얼굴 정면과 같은 기준).
+        /// reportProgress는 진행률(0~1)을 받아 취소 요청이면 true를 돌려준다 — 취소 시 null 반환.</summary>
         public static Texture2D Bake(Mesh mesh, int submeshIndex, int resolution,
             Matrix4x4 localToWorld, Vector3 forward,
-            Func<Vector3, Vector3, bool> isOccluded, float shadowBorder)
+            Func<Vector3, Vector3, bool> isOccluded, float shadowBorder,
+            Func<float, bool> reportProgress = null)
         {
             if (mesh == null || resolution <= 0
                 || submeshIndex < 0 || submeshIndex >= mesh.subMeshCount
@@ -227,44 +272,34 @@ namespace Fbx2Vmd.EditorTools
             float bias = SurfaceBias * Mathf.Max(0.0001f,
                 localToWorld.lossyScale.magnitude * 0.57735026f);
 
+            // 이 각도 이상의 경계는 인코딩이 1로 포화되므로 그 너머는 차광을 볼 필요가 없음.
+            float sweepLimit = Mathf.Acos(Mathf.Clamp(2f * shadowBorder - 1.5f, -1f, 1f));
+
             // 덮이지 않는 영역은 90° 경계(일반 램버트와 같은 차광)로 채움.
             float flatBoundary = EncodeBoundary(Mathf.PI * 0.5f, shadowBorder);
             var pixels = new Color[resolution * resolution];
-            // 대형 베이크는 수십 초 걸릴 수 있으므로 진행 표시와 취소를 둔다.
-            bool showProgress = resolution >= 256;
-            try
+            for (int i = 0; i < pixels.Length; i++)
             {
-                for (int i = 0; i < pixels.Length; i++)
+                bool isCancelRequested = reportProgress != null && (i & 0xFFF) == 0
+                    && reportProgress(i / (float)pixels.Length);
+                if (isCancelRequested)
                 {
-                    if (showProgress && (i & 0xFFF) == 0
-                        && EditorUtility.DisplayCancelableProgressBar(
-                            "얼굴 SDF 베이크", "라이트 스윕 베이크 중...",
-                            i / (float)pixels.Length))
-                    {
-                        return null;
-                    }
-
-                    if (!covered[i])
-                    {
-                        pixels[i] = new Color(flatBoundary, flatBoundary, 0f, 1f);
-                        continue;
-                    }
-
-                    float boundaryLeft = FindLitBoundary(
-                        worldPositions[i], worldNormals[i], -1f, faceF, isOccluded, bias);
-                    float boundaryRight = FindLitBoundary(
-                        worldPositions[i], worldNormals[i], 1f, faceF, isOccluded, bias);
-                    pixels[i] = new Color(
-                        EncodeBoundary(boundaryLeft, shadowBorder),
-                        EncodeBoundary(boundaryRight, shadowBorder), 0f, 1f);
+                    return null;
                 }
-            }
-            finally
-            {
-                if (showProgress)
+
+                if (!covered[i])
                 {
-                    EditorUtility.ClearProgressBar();
+                    pixels[i] = new Color(flatBoundary, flatBoundary, 0f, 1f);
+                    continue;
                 }
+
+                float boundaryLeft = FindLitBoundary(worldPositions[i], worldNormals[i],
+                    -1f, faceF, isOccluded, bias, sweepLimit);
+                float boundaryRight = FindLitBoundary(worldPositions[i], worldNormals[i],
+                    1f, faceF, isOccluded, bias, sweepLimit);
+                pixels[i] = new Color(
+                    EncodeBoundary(boundaryLeft, shadowBorder),
+                    EncodeBoundary(boundaryRight, shadowBorder), 0f, 1f);
             }
 
             var texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
@@ -274,45 +309,69 @@ namespace Fbx2Vmd.EditorTools
         }
 
         /// <summary>정면(0°)에서 지정 쪽으로 방위각을 넓히며 처음으로 점등이 끊기는 각도(라디안)를 찾는다.
-        /// 굵은 스윕으로 구간을 좁힌 뒤 세밀하게 다시 보므로 텍셀당 레이캐스트를 줄인다.
+        /// 노멀만으로 정해지는 경계는 해석적으로 구하고, 그 안쪽(sweepLimit까지)만 레이캐스트로 차광을 훑는다.
         /// 끝까지 점등되면 180°를 반환한다.</summary>
         internal static float FindLitBoundary(Vector3 worldPos, Vector3 worldNormal,
-            float sideSign, Vector3 faceF, Func<Vector3, Vector3, bool> isOccluded, float bias)
+            float sideSign, Vector3 faceF, Func<Vector3, Vector3, bool> isOccluded, float bias,
+            float sweepLimit = Mathf.PI)
         {
-            Vector3 origin = worldPos + worldNormal * bias;
             Vector3 right = new Vector3(faceF.z, 0f, -faceF.x);
+            float geometricBoundary = FindGeometricBoundary(worldNormal, sideSign, faceF, right);
+            if (isOccluded == null)
+            {
+                return geometricBoundary;
+            }
 
-            bool IsLit(float deg)
+            Vector3 origin = worldPos + worldNormal * bias;
+            bool IsOccludedAt(float deg)
             {
                 float phi = Mathf.Deg2Rad * deg;
                 Vector3 lightDir = faceF * Mathf.Cos(phi) + right * Mathf.Sin(phi) * sideSign;
-                return Vector3.Dot(lightDir, worldNormal) > 0f
-                    && (isOccluded == null || !isOccluded(origin, lightDir));
+                return isOccluded(origin, lightDir);
             }
 
-            // φ=0은 측면 노멀에서 dot=0 경계라 제외하고, 정면에서 바깥으로 첫 비점등각을 찾는다.
+            // 기하 경계 안쪽은 노멀상 점등이 보장되므로 차광만 확인함.
+            float limitDeg = Mathf.Rad2Deg * Mathf.Min(geometricBoundary, sweepLimit);
             float litThrough = 0f;
-            for (float deg = CoarseStepDegrees; deg <= 180f; deg += CoarseStepDegrees)
+            for (float deg = CoarseStepDegrees; deg < limitDeg; deg += CoarseStepDegrees)
             {
-                if (IsLit(deg))
+                if (!IsOccludedAt(deg))
                 {
                     litThrough = deg;
                     continue;
                 }
 
-                // 직전 점등각~이번 각 사이만 세밀히 다시 봐 첫 비점등각을 확정한다.
-                for (float fine = litThrough + SweepStepDegrees;
-                     fine <= deg;
-                     fine += SweepStepDegrees)
+                // 직전 점등각~이번 각 사이만 세밀히 다시 봐 첫 비점등각을 확정함.
+                for (float fine = litThrough + SweepStepDegrees; fine < deg; fine += SweepStepDegrees)
                 {
-                    if (!IsLit(fine))
+                    if (IsOccludedAt(fine))
                     {
                         return Mathf.Deg2Rad * fine;
                     }
                 }
                 return Mathf.Deg2Rad * deg;
             }
-            return Mathf.PI;
+            return geometricBoundary;
+        }
+
+        /// <summary>노멀만으로 정해지는 점등 경계각(라디안). dot(빛, n) = a·cosφ + b·sinφ = R·cos(φ-δ)이므로
+        /// 정면 근처에서 점등이면 경계는 δ+90°(최대 180°), 정면 근처부터 비점등이면 0이다.</summary>
+        private static float FindGeometricBoundary(
+            Vector3 worldNormal, float sideSign, Vector3 faceF, Vector3 right)
+        {
+            float a = Vector3.Dot(faceF, worldNormal);
+            float b = Vector3.Dot(right, worldNormal) * sideSign;
+            // 수직 노멀은 수평 빛과 직교해 어느 방위에서도 점등되지 않음.
+            if (a * a + b * b < 1e-8f)
+            {
+                return 0f;
+            }
+
+            // 첫 표본각보다 좁은 정면 비점등 구간은 단일 임계값으로 표현할 수 없어 점등으로 근사함.
+            float delta = Mathf.Atan2(b, a);
+            bool isLitNearFront = delta > -Mathf.PI * 0.5f
+                && delta < Mathf.PI * 0.5f + Mathf.Deg2Rad * CoarseStepDegrees;
+            return isLitNearFront ? Mathf.Min(delta + Mathf.PI * 0.5f, Mathf.PI) : 0f;
         }
 
         /// <summary>경계 방위각을 lilToon SDF 텍셀 값으로 인코딩한다.
@@ -323,21 +382,15 @@ namespace Fbx2Vmd.EditorTools
         }
 
         // SDF는 색이 아니라 데이터 텍스처 — sRGB 보정·밉·압축을 끄고 저장한다.
+        // 변환기가 이미 쓰는 PNG가 있으면 그 파일을 덮어써 GUID와 기존 툰 머티리얼 참조를 유지함.
         private static void SaveSdfPng(Texture2D tex, Material source)
         {
-            string matPath = AssetDatabase.GetAssetPath(source);
-            string grand = string.IsNullOrEmpty(matPath)
-                ? null
-                : Path.GetDirectoryName(Path.GetDirectoryName(matPath))?.Replace('\\', '/');
-            // 머티리얼이 Assets 루트나 Packages 아래 있으면 경로가 샌다 — 폴백 폴더를 쓴다.
-            string dir = string.IsNullOrEmpty(grand) || grand == "Assets"
-                || !grand.StartsWith("Assets/")
-                ? "Assets/ToonSdf"
-                : grand + "/tex/sdf";
-            Directory.CreateDirectory(dir);
-            string path = $"{dir}/{source.name}_sdf.png";
+            string existing = SceneModelToonConverter.FindSdfTexturePath(source);
+            bool canOverwrite = existing != null
+                && existing.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+            string path = canOverwrite ? existing : BuildDefaultSdfPath(source);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllBytes(path, tex.EncodeToPNG());
-            UnityEngine.Object.DestroyImmediate(tex);
 
             AssetDatabase.ImportAsset(path);
             if (AssetImporter.GetAtPath(path) is TextureImporter importer)
@@ -348,6 +401,21 @@ namespace Fbx2Vmd.EditorTools
                 importer.textureCompression = TextureImporterCompression.Uncompressed;
                 importer.SaveAndReimport();
             }
+            Debug.Log($"[Toon] SDF 저장: {path}");
+        }
+
+        private static string BuildDefaultSdfPath(Material source)
+        {
+            string matPath = AssetDatabase.GetAssetPath(source);
+            string grand = string.IsNullOrEmpty(matPath)
+                ? null
+                : Path.GetDirectoryName(Path.GetDirectoryName(matPath))?.Replace('\\', '/');
+            // 머티리얼이 Assets 루트나 Packages 아래 있으면 경로가 샌다 — 폴백 폴더를 쓴다.
+            string dir = string.IsNullOrEmpty(grand) || grand == "Assets"
+                || !grand.StartsWith("Assets/")
+                ? "Assets/ToonSdf"
+                : grand + "/tex/sdf";
+            return $"{dir}/{source.name}_sdf.png";
         }
 
         // UV 공간 삼각형을 바리센트릭 래스터라이즈해 픽셀별 월드 위치·노멀을 보간해 기록함.

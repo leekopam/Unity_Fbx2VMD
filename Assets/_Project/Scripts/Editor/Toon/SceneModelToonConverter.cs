@@ -13,6 +13,7 @@ namespace Fbx2Vmd.EditorTools
     public static class SceneModelToonConverter
     {
         const string ToonSubFolderName = "Toon";
+        const string VariantPrefix = "Toon_";
         const string FallbackOutputFolder = "Assets/ToonConverted";
 
         [MenuItem("Tools/Toon/선택 오브젝트에 툰 머티리얼 적용")]
@@ -108,16 +109,35 @@ namespace Fbx2Vmd.EditorTools
                 return;
             }
 
+            string sdfPath = FindSdfTexturePath(source);
+            if (sdfPath == null)
+            {
+                return;
+            }
+
+            toon.SetTexture("_ShadowStrengthMask", AssetDatabase.LoadAssetAtPath<Texture2D>(sdfPath));
+            toon.SetFloat("_ShadowMaskType", 2f);
+            // 베이크된 SDF는 수평 방위각 기준이므로 Y 성분 비교를 꺼 맞춘다.
+            if (toon.HasProperty("_ShadowFlatBlur"))
+            {
+                toon.SetFloat("_ShadowFlatBlur", 0f);
+            }
+        }
+
+        /// <summary>원본 머티리얼에 대응하는 SDF 텍스처 에셋 경로를 찾는다. 없으면 null.
+        /// 베이커도 같은 규약으로 기존 파일을 덮어써 GUID를 유지한다.</summary>
+        internal static string FindSdfTexturePath(Material source)
+        {
             string sourcePath = AssetDatabase.GetAssetPath(source);
             if (string.IsNullOrEmpty(sourcePath))
             {
-                return;
+                return null;
             }
 
             string modelRoot = System.IO.Path.GetDirectoryName(sourcePath)?.Replace('\\', '/');
             if (string.IsNullOrEmpty(modelRoot))
             {
-                return;
+                return null;
             }
 
             // 머티리얼이 Materials/ 같은 하위 폴더에 있으므로 한 단계 위(모델 루트)를 검색 범위로 한다.
@@ -153,22 +173,33 @@ namespace Fbx2Vmd.EditorTools
                         continue;
                     }
 
-                    Texture2D sdf = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
-                    if (sdf == null)
+                    if (AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath) != null)
                     {
-                        continue;
+                        return assetPath;
                     }
-
-                    toon.SetTexture("_ShadowStrengthMask", sdf);
-                    toon.SetFloat("_ShadowMaskType", 2f);
-                    // 베이크된 SDF는 수평 방위각 기준이므로 Y 성분 비교를 꺼 맞춘다.
-                    if (toon.HasProperty("_ShadowFlatBlur"))
-                    {
-                        toon.SetFloat("_ShadowFlatBlur", 0f);
-                    }
-                    return;
                 }
             }
+
+            return null;
+        }
+
+        /// <summary>변환본("{원본 폴더}/Toon/Toon_{이름}.mat")이면 원본 머티리얼을, 아니면 입력을 그대로 반환한다.
+        /// 이미 변환된 모델을 선택해도 원본 기준 규약(SDF 파일명·위치)을 쓰기 위함.</summary>
+        internal static Material ResolveSourceMaterial(Material material)
+        {
+            string path = AssetDatabase.GetAssetPath(material);
+            string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/');
+            bool isVariant = !string.IsNullOrEmpty(folder)
+                && material.name.StartsWith(VariantPrefix, System.StringComparison.Ordinal)
+                && System.IO.Path.GetFileName(folder) == ToonSubFolderName;
+            if (!isVariant)
+            {
+                return material;
+            }
+
+            string sourceFolder = System.IO.Path.GetDirectoryName(folder)?.Replace('\\', '/');
+            string sourceName = material.name.Substring(VariantPrefix.Length);
+            return AssetDatabase.LoadAssetAtPath<Material>($"{sourceFolder}/{sourceName}.mat") ?? material;
         }
 
         public static bool IsToonMaterial(Material material)
@@ -182,7 +213,7 @@ namespace Fbx2Vmd.EditorTools
         private static Material SaveVariantAsset(Material toon, Material source)
         {
             string folder = ResolveOutputFolder(source);
-            string path = $"{folder}/Toon_{toon.name}.mat";
+            string path = $"{folder}/{VariantPrefix}{toon.name}.mat";
             Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (existing == null)
             {
@@ -192,7 +223,7 @@ namespace Fbx2Vmd.EditorTools
 
             EditorUtility.CopySerialized(toon, existing);
             // CopySerialized는 m_Name까지 덮어쓰므로 파일명("Toon_*.mat")과 동기화한다.
-            existing.name = $"Toon_{toon.name}";
+            existing.name = $"{VariantPrefix}{toon.name}";
             EditorUtility.SetDirty(existing);
             Object.DestroyImmediate(toon);
             return existing;

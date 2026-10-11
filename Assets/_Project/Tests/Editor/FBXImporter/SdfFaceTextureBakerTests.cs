@@ -38,14 +38,64 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void 좌측_노멀은_G가_높고_우측_노멀은_R이_높다()
+        public void 오른쪽을_향한_노멀은_우측광_G가_높고_좌측광_R은_0이다()
         {
             // +X 노멀: +X 방향 조명에서 오래 밝게 유지 → G 채널이 커야 함.
             var tex = SdfFaceTextureBaker.Bake(CreateQuad(Vector3.right), 0, 32);
             var c = tex.GetPixel(16, 16);
-            Assert.Greater(c.g, c.r);
             Assert.Greater(c.g, 0.9f);
+            Assert.Less(c.r, 0.05f);
             Object.DestroyImmediate(tex);
+        }
+
+        [Test]
+        public void 비스듬한_노멀의_기하_경계는_해석적으로_정확하다()
+        {
+            // 오른쪽으로 45° 돌아간 노멀: 우측광은 135°, 좌측광은 45°까지 점등.
+            Vector3 n = new Vector3(Mathf.Sin(Mathf.PI / 4f), 0f, Mathf.Cos(Mathf.PI / 4f));
+            float right = SdfFaceTextureBaker.FindLitBoundary(
+                Vector3.zero, n, 1f, Vector3.forward, null, 0f);
+            float left = SdfFaceTextureBaker.FindLitBoundary(
+                Vector3.zero, n, -1f, Vector3.forward, null, 0f);
+            Assert.AreEqual(135f, right * Mathf.Rad2Deg, 0.01f);
+            Assert.AreEqual(45f, left * Mathf.Rad2Deg, 0.01f);
+        }
+
+        [Test]
+        public void 정면만_살짝_어두운_측후면_노멀은_넓게_점등으로_근사한다()
+        {
+            // 3° 뒤로 넘어간 측면 노멀: 3°~180° 점등이므로 단일 임계값으로는 180°가 가장 가깝다.
+            float back = 3f * Mathf.Deg2Rad;
+            Vector3 n = new Vector3(Mathf.Cos(back), 0f, -Mathf.Sin(back));
+            float boundary = SdfFaceTextureBaker.FindLitBoundary(
+                Vector3.zero, n, 1f, Vector3.forward, null, 0f);
+            Assert.AreEqual(Mathf.PI, boundary, 0.001f);
+        }
+
+        [Test]
+        public void 수직_노멀은_어느_방위에서도_점등되지_않는다()
+        {
+            float boundary = SdfFaceTextureBaker.FindLitBoundary(
+                Vector3.zero, Vector3.up, 1f, Vector3.forward, null, 0f);
+            Assert.AreEqual(0f, boundary);
+        }
+
+        [Test]
+        public void 포화각_너머는_차광을_검사하지_않는다()
+        {
+            // 인코딩이 1로 포화되는 각도 이후의 차광은 결과를 바꾸지 못하므로 레이캐스트를 아낀다.
+            float maxQueried = 0f;
+            bool RecordAngle(Vector3 pos, Vector3 dir)
+            {
+                maxQueried = Mathf.Max(maxQueried, Vector3.Angle(Vector3.forward, dir));
+                return false;
+            }
+
+            float sweepLimit = 100f * Mathf.Deg2Rad;
+            float boundary = SdfFaceTextureBaker.FindLitBoundary(
+                Vector3.zero, Vector3.right, 1f, Vector3.forward, RecordAngle, 0f, sweepLimit);
+            Assert.AreEqual(Mathf.PI, boundary, 0.001f);
+            Assert.Less(maxQueried, 100f);
         }
 
         [Test]

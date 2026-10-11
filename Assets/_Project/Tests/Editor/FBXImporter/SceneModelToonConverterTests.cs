@@ -234,6 +234,33 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ToonVariantAsset_When_ResolveSourceMaterial_Then_ReturnsOriginal()
+        {
+            // 이미 변환된 모델에서 베이크해도 원본 이름 규약(SDF 파일명)을 써야 한다.
+            const string root = "Assets/ToonResolveTest_Temp";
+            var go = new GameObject("resolve-test");
+            try
+            {
+                AssetDatabase.CreateFolder("Assets", "ToonResolveTest_Temp");
+                var source = new Material(Shader.Find("Standard")) { name = "11.face96" };
+                AssetDatabase.CreateAsset(source, $"{root}/11.face96.mat");
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = source;
+                SceneModelToonConverter.ApplyTo(go);
+
+                Material variant = renderer.sharedMaterial;
+                Assert.That(variant, Is.Not.EqualTo(source), "검증 전제 — 변환본이 달려야 함");
+                Assert.That(SceneModelToonConverter.ResolveSourceMaterial(variant), Is.EqualTo(source));
+                Assert.That(SceneModelToonConverter.ResolveSourceMaterial(source), Is.EqualTo(source));
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+                AssetDatabase.DeleteAsset(root);
+            }
+        }
+
+        [Test]
         public void Given_TransparentShaderSource_When_CreateToonVariant_Then_AlphaSurface()
         {
             Shader transparent = Shader.Find("Unlit/Transparent");
