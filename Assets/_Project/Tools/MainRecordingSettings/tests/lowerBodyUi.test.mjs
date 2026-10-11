@@ -8,13 +8,22 @@ import { bootstrapLowerBodyUi } from "../client/lowerBodyUi.js";
 test("index.html declares pipeline panels, tree entries, and dev-mode blocks", async () => {
   const html = await fs.readFile(new URL("../build/index.html", import.meta.url), "utf8");
 
-  for (const panel of ["upperbody", "lowerbody", "physics"]) {
+  for (const panel of [
+    "upperbody", "lowerbody", "physics", "library",
+    "camera", "light", "shader", "lipsync", "audioio"
+  ]) {
     assert.match(html, new RegExp(`data-panel-target="${panel}"`));
     assert.match(html, new RegExp(`data-panel-view="${panel}"`));
   }
   assert.match(html, /id="lowerBodyPanel"/);
   assert.match(html, /id="upperBodyPanel"/);
   assert.match(html, /id="physicsPanel"/);
+  assert.match(html, /id="libraryPanel"/);
+  assert.match(html, /id="cameraPanel"/);
+  assert.match(html, /id="lightPanel"/);
+  assert.match(html, /id="shaderPanel"/);
+  assert.match(html, /id="lipSyncPanel"/);
+  assert.match(html, /id="audioIoPanel"/);
   assert.match(html, /id="railMenuButton"/);
   assert.match(html, /id="railMenuPopup"/);
   assert.match(html, /id="themeMenuToggle"/);
@@ -27,6 +36,14 @@ test("index.html declares pipeline panels, tree entries, and dev-mode blocks", a
   assert.match(html, /하체 보정 파이프라인/);
   assert.match(html, /상체 보정 파이프라인/);
   assert.match(html, /캐릭터 물리 파이프라인/);
+  assert.match(html, /툰 셰이더 파이프라인/);
+  assert.match(html, /시네마토그래피/);
+  assert.match(html, />Camera 1</);
+  assert.match(html, />Directional Light</);
+  assert.match(html, /id="camAutoFrame"/);
+  assert.match(html, /id="camStartBake"/);
+  assert.match(html, /id="ltAutoAlign"/);
+  assert.match(html, /id="ltResetDefault"/);
   // 우측 섹션 목차 레일은 유지하되 "인스펙터 바로가기" 헤딩 텍스트만 제거한다.
   assert.match(html, /class="lb-anchor"/);
   assert.doesNotMatch(html, /인스펙터 바로가기/);
@@ -42,6 +59,9 @@ test("index.html declares pipeline panels, tree entries, and dev-mode blocks", a
   assert.match(script, /lowerbody:\s*"하체 보정 파라미터"/);
   assert.match(script, /upperbody:\s*"상체 보정 파라미터"/);
   assert.match(script, /physics:\s*"캐릭터 물리 파라미터"/);
+  assert.match(script, /shader:\s*"툰 셰이더 및 무대 룩"/);
+  assert.match(script, /camera:\s*"카메라 파라미터"/);
+  assert.match(script, /light:\s*"Directional Light & Ambient"/);
 });
 
 test("rail menu popup opens on menu button and theme item toggles the theme", () => {
@@ -198,6 +218,27 @@ test("seg with data-controls toggles its dependent sub-block", () => {
 
   on.dispatch("click", { target: on });
   assert.equal(sub.hidden, false);
+});
+
+test("seg with data-controls-value opens the sub-block only on the matching value", () => {
+  const sub = fakeEl("div", { attrs: { id: "subCamRes" }, hidden: true });
+  const sq = fakeEl("button", { attrs: { "data-val": "sq960", "aria-pressed": "true" } });
+  const custom = fakeEl("button", { attrs: { "data-val": "custom", "aria-pressed": "false" } });
+  const seg = fakeEl("div", {
+    classes: ["lb-seg"],
+    dataset: { default: "sq960", controls: "subCamRes", controlsValue: "custom" },
+    children: [sq, custom]
+  });
+  const root = fakeRoot({ "#subCamRes": sub }, { ".lb-seg": [seg] });
+
+  bootstrapLowerBodyUi(root, { storage: fakeStorage() });
+  assert.equal(sub.hidden, true);
+
+  custom.dispatch("click", { target: custom });
+  assert.equal(sub.hidden, false);
+
+  sq.dispatch("click", { target: sq });
+  assert.equal(sub.hidden, true);
 });
 
 test("hair backend segment shows the Boing fallback badge", () => {

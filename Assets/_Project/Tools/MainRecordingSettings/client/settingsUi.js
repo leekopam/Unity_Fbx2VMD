@@ -17,10 +17,15 @@ const statusLabels = {
 // 패널 전환 시 상단 헤더에 표시할 제목
 const panelTitles = {
   onboarding: "Onboarding Assistant",
-  camera: "Camera 1",
+  camera: "카메라 파라미터",
+  light: "Directional Light & Ambient",
   upperbody: "상체 보정 파라미터",
   lowerbody: "하체 보정 파라미터",
   physics: "캐릭터 물리 파라미터",
+  library: "캐릭터 라이브러리 및 프리셋 관리",
+  lipsync: "립싱크 및 오디오 파이프라인",
+  audioio: "전역 설정 및 I/O 매핑",
+  shader: "툰 셰이더 및 무대 룩",
   developer: "개발자 모드"
 };
 
@@ -43,6 +48,39 @@ const panelPresets = {
     "가볍게 / 실시간 성능 우선",
     "고품질 / 디테일 시뮬레이션",
     "사용자 커스텀 세팅"
+  ],
+  shader: [
+    "프리셋: 표준 (lilToon 기본)",
+    "세카이풍 (무그림자 얼굴)",
+    "무대 강조 (림·백라이트)",
+    "사용자 정의"
+  ],
+  camera: [
+    "프리셋: 기본값 (스튜디오 표준)",
+    "투명 녹화 (MOV ProRes 4444)",
+    "확대 검수 (고품질 렌더)",
+    "사용자 정의"
+  ],
+  light: [
+    "프리셋: 무대 조명 (Trilight 권장)",
+    "자연광 (Skybox 앰비언트)",
+    "플랫 톤 (Flat 앰비언트)",
+    "사용자 정의"
+  ],
+  library: [
+    "◆ 기본 프리셋 (Default Stage)",
+    "댄스 모션 최적화 프리셋 (High Damping)",
+    "어쿠스틱 라이브 프리셋 (Relaxed Spine)",
+    "사용자 정의"
+  ],
+  lipsync: [
+    "프리셋: 기본 파이프라인 (권장)",
+    "고품질 분리 모드",
+    "사용자 정의"
+  ],
+  audioio: [
+    "프리셋: 기본 I/O",
+    "사용자 정의"
   ]
 };
 
@@ -96,6 +134,11 @@ export function bootstrapSettingsUi(root = document, {
   });
   const panelTargets = Array.from(root.querySelectorAll?.("[data-panel-target]") ?? []);
   const panelViews = Array.from(root.querySelectorAll?.("[data-panel-view]") ?? []);
+  const railPageButtons = Array.from(root.querySelectorAll?.("[data-rail-page]") ?? []);
+  const sidebarPages = Array.from(root.querySelectorAll?.("[data-sidebar-page]") ?? []);
+  const lastPanelByPage = {};
+  // 사이드바 항목 없이 레일 버튼이 직접 여는 패널의 소속 페이지
+  const panelPageFallback = { onboarding: "assistant" };
 
   let isSubmitting = false;
   let isPlaying = false;
@@ -177,6 +220,16 @@ export function bootstrapSettingsUi(root = document, {
       });
     }
 
+    for (const button of railPageButtons) {
+      button.addEventListener("click", () => {
+        const pageName = button.dataset.railPage;
+        const defaultPanel = sidebarPages.find(
+          (page) => page.dataset.sidebarPage === pageName
+        )?.dataset.defaultPanel;
+        selectPanel(lastPanelByPage[pageName] || defaultPanel);
+      });
+    }
+
     selectPanel(elements.shell.dataset.activePanel || "onboarding");
   }
 
@@ -200,6 +253,24 @@ export function bootstrapSettingsUi(root = document, {
 
     for (const view of panelViews) {
       view.hidden = view.dataset.panelView !== panelName;
+    }
+
+    // 선택된 항목이 속한 사이드바 페이지만 표시하고 레일 활성 상태를 맞춘다.
+    const activeTarget = panelTargets.find((t) => t.dataset.panelTarget === panelName);
+    const pageName = activeTarget?.closest?.("[data-sidebar-page]")?.dataset?.sidebarPage
+      ?? panelPageFallback[panelName];
+    if (pageName) {
+      lastPanelByPage[pageName] = panelName;
+      for (const page of sidebarPages) {
+        page.hidden = page.dataset.sidebarPage !== pageName;
+      }
+      for (const button of railPageButtons) {
+        button.className = toggleClassName(
+          button.className,
+          "rail-button-active",
+          button.dataset.railPage === pageName
+        );
+      }
     }
 
     if (panelName === "developer") {

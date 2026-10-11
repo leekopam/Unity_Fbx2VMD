@@ -102,6 +102,13 @@ test("Camera 1 tree item switches to the camera settings panel", () => {
   const shell = createFakeElement("div");
   shell.dataset.activePanel = "onboarding";
 
+  const characterPage = createFakeElement("div");
+  characterPage.dataset.sidebarPage = "character";
+
+  const environmentPage = createFakeElement("div");
+  environmentPage.dataset.sidebarPage = "environment";
+  environmentPage.hidden = true;
+
   const onboardingButton = createFakeElement("button");
   onboardingButton.dataset.panelTarget = "onboarding";
   onboardingButton.className = "sidebar-heading active";
@@ -110,6 +117,7 @@ test("Camera 1 tree item switches to the camera settings panel", () => {
   const cameraButton = createFakeElement("button");
   cameraButton.dataset.panelTarget = "camera";
   cameraButton.className = "tree-item";
+  cameraButton.closest = () => environmentPage;
 
   const onboardingPanel = createFakeElement("section");
   onboardingPanel.dataset.panelView = "onboarding";
@@ -138,6 +146,10 @@ test("Camera 1 tree item switches to the camera settings panel", () => {
 
       if (selector === "[data-panel-view]") {
         return [onboardingPanel, cameraPanel];
+      }
+
+      if (selector === "[data-sidebar-page]") {
+        return [characterPage, environmentPage];
       }
 
       return [];
@@ -175,6 +187,130 @@ test("Camera 1 tree item switches to the camera settings panel", () => {
     assert.equal(onboardingButton.getAttribute("aria-current"), undefined);
     assert.equal(onboardingPanel.hidden, true);
     assert.equal(cameraPanel.hidden, false);
+    // 카메라 항목은 환경 페이지 소속 — 사이드바가 환경 페이지로 바뀐다.
+    assert.equal(environmentPage.hidden, false);
+    assert.equal(characterPage.hidden, true);
+  } finally {
+    for (const handler of beforeUnloadHandlers) {
+      handler();
+    }
+
+    globalThis.document = previousDocument;
+    globalThis.fetch = previousFetch;
+    globalThis.window = previousWindow;
+  }
+});
+
+test("레일 전구 버튼은 환경 설정 페이지로 전환하고 셰이더 패널을 연다", async () => {
+  const shell = createFakeElement("div");
+  shell.dataset.activePanel = "onboarding";
+
+  const characterPage = createFakeElement("div");
+  characterPage.dataset.sidebarPage = "character";
+  characterPage.dataset.defaultPanel = "onboarding";
+
+  const environmentPage = createFakeElement("div");
+  environmentPage.dataset.sidebarPage = "environment";
+  environmentPage.dataset.defaultPanel = "shader";
+  environmentPage.hidden = true;
+
+  const onboardingButton = createFakeElement("button");
+  onboardingButton.dataset.panelTarget = "onboarding";
+  onboardingButton.closest = () => characterPage;
+
+  const shaderButton = createFakeElement("button");
+  shaderButton.dataset.panelTarget = "shader";
+  shaderButton.className = "tree-item";
+  shaderButton.closest = () => environmentPage;
+
+  const characterRail = createFakeElement("button");
+  characterRail.dataset.railPage = "character";
+  characterRail.className = "rail-button rail-button-active";
+
+  const environmentRail = createFakeElement("button");
+  environmentRail.dataset.railPage = "environment";
+  environmentRail.className = "rail-button";
+
+  const onboardingPanel = createFakeElement("section");
+  onboardingPanel.dataset.panelView = "onboarding";
+
+  const shaderPanel = createFakeElement("section");
+  shaderPanel.dataset.panelView = "shader";
+  shaderPanel.hidden = true;
+
+  const elements = {
+    ".app-shell": shell,
+    "#importButton": createFakeElement("button"),
+    "#statusBadge": createFakeElement("div"),
+    "#statusText": createFakeElement("span"),
+    "#feedback": createFakeElement("p"),
+    "#eventLog": createFakeElement("div")
+  };
+  const root = {
+    querySelector(selector) {
+      return elements[selector] ?? null;
+    },
+    querySelectorAll(selector) {
+      if (selector === "[data-panel-target]") {
+        return [onboardingButton, shaderButton];
+      }
+      if (selector === "[data-panel-view]") {
+        return [onboardingPanel, shaderPanel];
+      }
+      if (selector === "[data-rail-page]") {
+        return [characterRail, environmentRail];
+      }
+      if (selector === "[data-sidebar-page]") {
+        return [characterPage, environmentPage];
+      }
+      return [];
+    }
+  };
+  const beforeUnloadHandlers = [];
+  const previousDocument = globalThis.document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+
+  globalThis.document = {
+    createElement: () => createFakeElement("div")
+  };
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ runtimeState: { playMode: "stopped", updatedAtUtc: "" } })
+  });
+  globalThis.window = {
+    addEventListener(type, handler) {
+      if (type === "beforeunload") {
+        beforeUnloadHandlers.push(handler);
+      }
+    }
+  };
+
+  try {
+    bootstrapSettingsUi(root, { createWebSocketChannel: fakeChannel });
+
+    // 초기 상태: 캐릭터 페이지만 표시.
+    assert.equal(characterPage.hidden, false);
+    assert.equal(environmentPage.hidden, true);
+
+    await environmentRail.dispatch("click");
+
+    assert.equal(shell.dataset.activePanel, "shader");
+    assert.equal(shaderButton.className, "tree-item selected");
+    assert.equal(environmentPage.hidden, false);
+    assert.equal(characterPage.hidden, true);
+    assert.equal(shaderPanel.hidden, false);
+    assert.equal(onboardingPanel.hidden, true);
+    assert.equal(environmentRail.className, "rail-button rail-button-active");
+    assert.equal(characterRail.className, "rail-button");
+
+    // 캐릭터 레일로 돌아오면 마지막으로 본 패널(온보딩)을 복원한다.
+    await characterRail.dispatch("click");
+    assert.equal(shell.dataset.activePanel, "onboarding");
+    assert.equal(characterPage.hidden, false);
+    assert.equal(environmentPage.hidden, true);
+    assert.equal(characterRail.className, "rail-button rail-button-active");
   } finally {
     for (const handler of beforeUnloadHandlers) {
       handler();

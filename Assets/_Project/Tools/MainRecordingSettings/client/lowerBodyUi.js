@@ -132,6 +132,23 @@ export function bootstrapLowerBodyUi(root = document, { storage } = {}) {
   wireBusyButton("#phRunValidation", "시퀀스 전송 중...", "전송됨");
   wireBusyButton("#phRunBenchmark", "측정 중...", "완료");
 
+  // 카메라/조명 패널 액션 버튼 피드백 (브릿지 미연결 — 시각적 확인만)
+  wireBusyButton("#camAutoFrame", "프레이밍 중...", "프레이밍 완료");
+  wireBusyButton("#camStartBake", "베이킹 중...", "베이킹 요청됨");
+  wireBusyButton("#ltAutoAlign", "방향 계산 중...", "빛 방향 일치됨");
+  wireBusyButton("#ltResetDefault", null, "기본값으로 리셋됨");
+
+  // 캐릭터 라이브러리·립싱크 버튼은 characterPanel.js/lipsyncPanel.js가 실제 동작을 배선한다.
+
+  // 컬러 피커 옆 HEX 읽기값을 실시간으로 맞춘다 (초기값은 피커 value에서 유도)
+  for (const picker of toArray(root.querySelectorAll?.(".lb-color-field .lb-color"))) {
+    const hexLabel = picker.closest(".lb-color-field")?.querySelector(".lb-hex");
+    if (hexLabel) hexLabel.textContent = String(picker.value).toUpperCase();
+    picker.addEventListener("input", () => {
+      if (hexLabel) hexLabel.textContent = String(picker.value).toUpperCase();
+    });
+  }
+
   root.querySelector("#phClearGenerated")?.addEventListener("click", () => {
     const confirmed = globalThis.window?.confirm?.(
       "생성된 모든 메쉬 클로스 프록시와 캡슐 콜라이더를 삭제하고 원본 리깅 상태로 복원하시겠습니까?");
@@ -251,11 +268,18 @@ export function bootstrapLowerBodyUi(root = document, { storage } = {}) {
   }
 
   // 세그먼트 부수 효과: 종속 서브블록 표시/숨김 + Boing 폴백 배지
+  // data-controls-value가 있으면 그 값과 일치할 때만 서브블록을 연다
+  // (예: 투영=원근 시 FOV, 해상도=사용자 지정 시 W/H 입력).
   function syncSegEffects(seg, value) {
     const controlsId = seg.dataset?.controls;
     if (controlsId) {
       const sub = root.querySelector(`#${controlsId}`);
-      if (sub) sub.hidden = value === "off" || value === "no";
+      const controlsValue = seg.dataset?.controlsValue;
+      if (sub) {
+        sub.hidden = controlsValue != null
+          ? value !== controlsValue
+          : value === "off" || value === "no";
+      }
     }
     if (seg === hairBackendSeg && boingFallbackBadge) {
       boingFallbackBadge.hidden = value !== "boing";

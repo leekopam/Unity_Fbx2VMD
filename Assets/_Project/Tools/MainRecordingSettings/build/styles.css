@@ -145,6 +145,14 @@ input:focus-visible {
   overflow-y: auto;
 }
 
+.sidebar-page {
+  display: contents;
+}
+
+.sidebar-page[hidden] {
+  display: none;
+}
+
 .sidebar-heading,
 .tree-item {
   display: grid;
@@ -1325,7 +1333,13 @@ input {
 
 .app-shell[data-active-panel="lowerbody"] #panelActions,
 .app-shell[data-active-panel="upperbody"] #panelActions,
-.app-shell[data-active-panel="physics"] #panelActions {
+.app-shell[data-active-panel="physics"] #panelActions,
+.app-shell[data-active-panel="camera"] #panelActions,
+.app-shell[data-active-panel="light"] #panelActions,
+.app-shell[data-active-panel="library"] #panelActions,
+.app-shell[data-active-panel="lipsync"] #panelActions,
+.app-shell[data-active-panel="audioio"] #panelActions,
+.app-shell[data-active-panel="shader"] #panelActions {
   display: inline-flex;
 }
 
@@ -1717,6 +1731,163 @@ input {
   content: "";
 }
 
+/* 트리 droplet 아이콘 (툰 셰이더 파이프라인) */
+.droplet-icon::before {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50% 50% 0 50%;
+  background: currentColor;
+  content: "";
+  transform: rotate(45deg);
+}
+
+/* 트리 카메라 아이콘 (Camera 1) */
+.camera-icon::before {
+  position: absolute;
+  top: 5px;
+  left: 2px;
+  width: 10px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  content: "";
+}
+
+.camera-icon::after {
+  position: absolute;
+  top: 7px;
+  left: 13px;
+  width: 0;
+  height: 0;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-left: 4px solid currentColor;
+  content: "";
+}
+
+/* 트리 태양 아이콘 (Directional Light) */
+.sun-icon::before {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  content: "";
+}
+
+.sun-icon::after {
+  position: absolute;
+  top: 1px;
+  left: 7px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: -6px 6px 0 0 currentColor, 6px 6px 0 0 currentColor,
+    -4px 11px 0 -0.5px currentColor, 4px 11px 0 -0.5px currentColor,
+    0 12px 0 -0.5px currentColor;
+  content: "";
+}
+
+/* 컬러 스와치 입력 (셰이더 색 파라미터) */
+.lb-color {
+  width: 44px;
+  height: 28px;
+  border: 1px solid var(--lb-border);
+  border-radius: 6px;
+  background: var(--lb-inset);
+  padding: 2px;
+  cursor: pointer;
+}
+
+.lb-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.lb-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+/* 텍스트 입력 (캐릭터 프리셋 키 등) */
+.lb-input {
+  min-height: 30px;
+  width: 160px;
+  border: 1px solid var(--lb-border);
+  border-radius: 6px;
+  background: var(--lb-inset);
+  color: var(--lb-text);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.lb-input::placeholder {
+  color: var(--lb-text-3);
+}
+
+.lb-input:focus-visible,
+.lb-color:focus-visible,
+.lb-num:focus-visible {
+  outline: 2px solid var(--lb-accent);
+  outline-offset: 1px;
+}
+
+/* 숫자 필드 묶음 (위치/회전 XYZ, 해상도 W·H) */
+.lb-vec {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lb-vec label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--lb-text-3);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.lb-num {
+  min-height: 30px;
+  width: 66px;
+  border: 1px solid var(--lb-border);
+  border-radius: 6px;
+  background: var(--lb-inset);
+  color: var(--lb-text);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.lb-num::-webkit-outer-spin-button,
+.lb-num::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+/* 컬러 피커 + HEX 읽기값 묶음 */
+.lb-color-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lb-color-field .lb-hex {
+  min-width: 72px;
+  text-transform: uppercase;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
 /* ── 물리 패널 액션 툴바 ── */
 .lb-toolbar {
   display: flex;
@@ -2076,4 +2247,270 @@ input {
 .lb-modal-label {
   color: var(--lb-text-2);
   font-weight: 600;
+}
+
+/* 캐릭터 라이브러리 / 오디오·립싱크 페이지 컴포넌트 */
+
+.lb-toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.lb-toolbar-sort {
+  width: auto;
+  min-width: 150px;
+}
+
+/* 중립/오류 배지 칩 */
+.lb-chip {
+  flex: none;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--lb-accent-dim);
+  color: var(--lb-accent-text);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.lb-chip-err {
+  flex: none;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--lb-danger-bg);
+  color: var(--lb-danger-text);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+/* 캐릭터 카드 행 */
+.char-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 4px;
+}
+
+.char-thumb {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--lb-border);
+  border-radius: 10px;
+  background: var(--lb-inset);
+  color: var(--lb-text-3);
+}
+
+.char-thumb svg {
+  width: 26px;
+  height: 26px;
+}
+
+.char-info {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.char-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.char-name {
+  font-size: 13px;
+}
+
+.char-meta {
+  color: var(--lb-text-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.char-path {
+  font-family: ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.char-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 220px;
+}
+
+.char-preset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+}
+
+.char-preset .lb-param-name {
+  flex: none;
+}
+
+.char-preset .lb-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.char-preset-actions {
+  max-width: none;
+  justify-content: flex-start;
+  padding: 2px 4px 6px;
+}
+
+/* 산출물 파일 행 */
+.lb-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+}
+
+.lb-file-row + .lb-file-row {
+  border-top: 1px solid var(--lb-border-soft);
+}
+
+.lb-file-name {
+  min-width: 0;
+  flex: 1;
+  color: var(--lb-text-2);
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+/* 진행률 바 */
+.lb-progress {
+  width: 100%;
+  height: 6px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lb-inset);
+}
+
+.lb-progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: var(--lb-inset);
+}
+
+.lb-progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: var(--lb-accent);
+}
+
+.lb-progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: var(--lb-accent);
+}
+
+/* 로그/미리보기 박스 */
+.lb-logbox {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--lb-border);
+  border-radius: 8px;
+  background: var(--lb-inset);
+  color: var(--lb-text-2);
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 사이드바 트리 아이콘 — 폴더/마이크/튠 */
+.folder-icon::before {
+  position: absolute;
+  top: 4px;
+  left: 1px;
+  width: 15px;
+  height: 11px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  content: "";
+}
+
+.folder-icon::after {
+  position: absolute;
+  top: 2px;
+  left: 1px;
+  width: 7px;
+  height: 3px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+  content: "";
+}
+
+.mic-icon::before {
+  position: absolute;
+  top: 1px;
+  left: 6px;
+  width: 5px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  content: "";
+}
+
+.mic-icon::after {
+  position: absolute;
+  bottom: 1px;
+  left: 4px;
+  width: 9px;
+  height: 7px;
+  border: 1.5px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
+  content: "";
+}
+
+.tune-icon::before {
+  position: absolute;
+  top: 3px;
+  left: 2px;
+  width: 14px;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 5px 0 currentColor, 0 10px 0 currentColor;
+  content: "";
+}
+
+.tune-icon::after {
+  position: absolute;
+  top: 1px;
+  left: 5px;
+  width: 4px;
+  height: 5px;
+  border-radius: 2px;
+  background: currentColor;
+  box-shadow: 6px 4px 0 currentColor, 1px 9px 0 currentColor;
+  content: "";
+}
+
+/* 경로/파일 입력이 컨트롤 영역을 가로로 채우는 행 */
+.lb-param-ctl-fill {
+  flex: 1;
+  min-width: 220px;
+}
+
+.lb-param-ctl-fill > .lb-input {
+  flex: 1;
+  min-width: 0;
 }
