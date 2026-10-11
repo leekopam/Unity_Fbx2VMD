@@ -186,12 +186,10 @@ namespace Tests.Editor.FBXImporter
             Component setting = settingRoot.GetComponent(recodingSettingType);
             Assert.That(setting, Is.Not.Null, "Setting must expose the recording assignment through RecordingSetting.");
 
-            GameObject buttonObject = GameObject.Find(ManualRecordButtonName);
-            Assert.That(buttonObject, Is.Not.Null,
-                $"Main_recoding must expose an active {ManualRecordButtonName} UI button for manual MMD-style recording.");
-
-            Button button = buttonObject.GetComponent<Button>();
-            Assert.That(button, Is.Not.Null, $"{ManualRecordButtonName} must use a Unity UI Button component.");
+            // 수동 VMD 녹화 기능은 개발 중지 상태라 버튼이 비활성일 수 있어 비활성 포함으로 탐색한다.
+            Button button = FindManualRecordButton();
+            Assert.That(button, Is.Not.Null,
+                $"Main_recoding must keep the {ManualRecordButtonName} UI button wired for manual MMD-style recording.");
             Assert.That(button.interactable, Is.True, $"{ManualRecordButtonName} must be interactable in Main_recoding.");
             Assert.That(ReadSerializedField<Component>(setting, "recordingFBXVmdPipeline"), Is.EqualTo(fileManager),
                 "Setting must show which FBXVmdPipeline owns manual recording.");
@@ -302,6 +300,16 @@ namespace Tests.Editor.FBXImporter
                         $"{sceneName} must not wire any UI button directly to {HumanoidManualRecordMethodName}.");
                 }
             }
+        }
+
+        private static Button FindManualRecordButton()
+        {
+            foreach (Button button in Object.FindObjectsOfType<Button>(true))
+            {
+                if (button.name == ManualRecordButtonName) return button;
+            }
+
+            return null;
         }
 
         private static bool HasPersistentCall(Button button, Object target, string methodName)

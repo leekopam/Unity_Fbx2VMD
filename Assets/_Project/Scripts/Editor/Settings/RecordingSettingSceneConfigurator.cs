@@ -117,8 +117,16 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static Button ResolveManualRecordButton()
         {
-            GameObject buttonObject = GameObject.Find(ManualRecordButtonName);
-            return buttonObject != null ? buttonObject.GetComponent<Button>() : null;
+            // 수동 VMD 녹화 기능은 개발 중지 상태라 버튼이 비활성일 수 있어 비활성 포함으로 탐색한다.
+            foreach (Button button in Object.FindObjectsOfType<Button>(true))
+            {
+                if (button.name == ManualRecordButtonName)
+                {
+                    return button;
+                }
+            }
+
+            return null;
         }
     }
 }

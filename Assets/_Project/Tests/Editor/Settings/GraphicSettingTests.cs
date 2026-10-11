@@ -1305,10 +1305,9 @@ namespace Tests.Editor.Settings
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FBXVmdPipeline for recording control.");
             Component recordingController = ResolveRecordingController(fileManager);
             Assert.That(recordingController, Is.Not.Null, "Main_recoding target must keep HumanoidSampleCode for manual recording.");
-            GameObject manualRecordButtonObject = GameObject.Find(ManualRecordButtonName);
-            Assert.That(manualRecordButtonObject, Is.Not.Null, "Main_recoding must expose a manual MMD recording button.");
-            Button manualRecordButton = manualRecordButtonObject.GetComponent<Button>();
-            Assert.That(manualRecordButton, Is.Not.Null, "Manual MMD recording button must use Unity UI Button.");
+            // 수동 VMD 녹화 기능은 개발 중지 상태라 버튼이 비활성일 수 있어 비활성 포함으로 탐색한다.
+            Button manualRecordButton = FindManualRecordButton();
+            Assert.That(manualRecordButton, Is.Not.Null, "Main_recoding must keep a wired manual MMD recording button.");
             Assert.That(GetField<Component>(recodingSetting, "recordingFBXVmdPipeline"), Is.EqualTo(fileManager),
                 "RecordingSetting must show which FBXVmdPipeline owns the recording flow.");
             Assert.That(GetField<Button>(recodingSetting, "manualRecordButton"), Is.EqualTo(manualRecordButton),
@@ -1409,7 +1408,7 @@ namespace Tests.Editor.Settings
                 Assert.That(recodingSetting, Is.Not.Null, "Installer must keep RecordingSetting on Setting.");
                 Component fileManager = UnityEngine.Object.FindObjectOfType(RequireType(FBXVmdPipelineTypeName)) as Component;
                 Component recordingController = ResolveRecordingController(fileManager);
-                Button manualRecordButton = GameObject.Find(ManualRecordButtonName)?.GetComponent<Button>();
+                Button manualRecordButton = FindManualRecordButton();
                 Assert.That(fileManager, Is.Not.Null);
                 Assert.That(recordingController, Is.Not.Null);
                 Assert.That(manualRecordButton, Is.Not.Null);
@@ -1743,6 +1742,16 @@ namespace Tests.Editor.Settings
 
             GameObject targetCharacter = GetMemberValue<GameObject>(fileManager, "targetCharacter");
             return targetCharacter != null ? targetCharacter.GetComponent<HumanoidSampleCode>() : null;
+        }
+
+        private static Button FindManualRecordButton()
+        {
+            foreach (Button button in UnityEngine.Object.FindObjectsOfType<Button>(true))
+            {
+                if (button.name == ManualRecordButtonName) return button;
+            }
+
+            return null;
         }
 
         private static EditorWindow RequireGameViewWindow()
