@@ -8,6 +8,10 @@ namespace Fbx2Vmd.FBXImporter
     /// </summary>
     internal sealed class HumanoidGroundResponse
     {
+        // 드라이버와 같은 기준 — 무릎 각도가 약 1도 이하면 자세 cross 방향이
+        // 잡음성이라 안정적이지 않은 것으로 판정함.
+        private const float MinimumStableBendSine = 0.0175f;
+
         private readonly RaycastHit[] _hits = new RaycastHit[16];
         private Transform _root;
         private float _probeDistance;
@@ -46,6 +50,11 @@ namespace Fbx2Vmd.FBXImporter
             _probeDistance = 0f;
         }
 
+        // 임시 진단 — 발화 여부를 테스트에서 실측하기 위한 카운터.
+        internal static int DebugSolveCount;
+        internal static float DebugLastTargetHeight;
+        internal static float DebugLastFootY;
+
         private void Apply(Leg leg, Vector3 bendNormal)
         {
             if (leg.Upper == null || leg.Lower == null || leg.Foot == null ||
@@ -53,18 +62,31 @@ namespace Fbx2Vmd.FBXImporter
                 return;
 
             float targetHeight = groundHeight + leg.BottomHeight;
+            DebugLastTargetHeight = targetHeight;
+            DebugLastFootY = leg.Foot.position.y;
             if (targetHeight <= leg.Foot.position.y + 0.00001f)
                 return;
+            DebugSolveCount++;
 
             Vector3 target = leg.Foot.position;
             target.y = targetHeight;
-            // 기존 IK가 다리를 거의 펴면 외적으로 구한 평면이 흔들리므로 원본 평가의 굽힘 방향을 우선함.
-            if (bendNormal.sqrMagnitude < 0.00000001f)
-                bendNormal = Vector3.Cross(
-                    leg.Lower.position - leg.Upper.position,
-                    leg.Foot.position - leg.Lower.position);
-            if (bendNormal.sqrMagnitude < 0.00000001f)
-                bendNormal = _root.right;
+            // 상승은 무릎 측을 유지하는 보정 — 현재 자세의 굽힘면이 안정적이면
+            // 그 방향이 정답이다. stale·부호반전된 전달 법선을 그대로 쓰면
+            // 무릎이 반대편에 배치되므로 자세 cross를 우선하고, 무릎이 거의
+            // 펴져 자세 cross가 퇴화할 때만 전달 법선을 폴백으로 사용함.
+            Vector3 poseNormal = Vector3.Cross(
+                leg.Lower.position - leg.Upper.position,
+                leg.Foot.position - leg.Lower.position);
+            float stableThreshold =
+                (leg.Lower.position - leg.Upper.position).magnitude *
+                (leg.Foot.position - leg.Lower.position).magnitude *
+                MinimumStableBendSine;
+            stableThreshold *= stableThreshold;
+            if (poseNormal.sqrMagnitude >= stableThreshold)
+                bendNormal = poseNormal;
+            else if (bendNormal.sqrMagnitude < 0.00000001f)
+                bendNormal = poseNormal.sqrMagnitude > 0.00000001f
+                    ? poseNormal : _root.right;
 
             Quaternion footRotation = leg.Foot.rotation;
             Quaternion toeRotation = leg.Toes == null ? Quaternion.identity : leg.Toes.rotation;

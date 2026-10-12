@@ -47,13 +47,25 @@ namespace Fbx2Vmd.FBXImporter
 
         internal bool TryApplyWorldFrame(Quaternion frame)
         {
-            if (!IsUnitRotation(frame) || !HasSupportedTransform(_foot))
+            if (!TryResolveAppliedRotation(frame, out Quaternion applied) ||
+                !HasSupportedTransform(_foot))
                 return false;
             // 같은 평가 안에서 여러 번 적용해도 최초 원본 자세만 복원 대상으로 유지함.
             if (!_hasAppliedRotation)
                 _originalLocalRotation = _foot.localRotation;
-            _foot.rotation = (frame * Quaternion.Inverse(_localFrame)).normalized;
+            _foot.rotation = applied;
             _hasAppliedRotation = true;
+            return true;
+        }
+
+        // canonical frame 입력이 실제로 뼈에 쓰일 월드 회전 — 밑창 프로브처럼
+        // 뼈 로컬 좌표를 목표 회전으로 옮길 때 이 변환을 거쳐야 축이 맞음.
+        internal bool TryResolveAppliedRotation(Quaternion frame, out Quaternion footWorldRotation)
+        {
+            footWorldRotation = Quaternion.identity;
+            if (!IsUnitRotation(frame))
+                return false;
+            footWorldRotation = (frame * Quaternion.Inverse(_localFrame)).normalized;
             return true;
         }
 

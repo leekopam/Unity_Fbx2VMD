@@ -1345,6 +1345,14 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
     (alternateModel ? "testPrefab" : "YYB Hatsune Miku");
   const captureCommand = groundingCase ? groundingFullClipCommand :
     alternateModel ? alternateModelCommand : fullClipCommand;
+  // goal IK 실험 A/B — 러너는 capture_satisfaction_full_clip_metrics에서만 알파를 전달함.
+  const ikGoalAlphaRaw = process.env.FBX_SMOKE_IK_GOAL_ALPHA;
+  const ikGoalAlpha = ikGoalAlphaRaw === undefined || ikGoalAlphaRaw === ""
+    ? 0 : Number(ikGoalAlphaRaw);
+  if (!Number.isFinite(ikGoalAlpha) || ikGoalAlpha < 0 || ikGoalAlpha > 1)
+    throw new Error("FBX_SMOKE_IK_GOAL_ALPHA는 0~1 사이 숫자여야 합니다.");
+  if (ikGoalAlpha > 0 && captureCommand !== fullClipCommand)
+    throw new Error("ik_goal_alpha는 full-clip 모드에서만 지원합니다.");
   const sessionRoot = path.join(evidenceRoot,
     alternateModel ? "alternate-model-runs" : "full-clip-runs", runId);
   await mkdir(sessionRoot, { recursive: true });
@@ -1387,6 +1395,7 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
         await writeFile(requestPath, JSON.stringify({ request_id: requestId,
           command: captureCommand, requested_command: captureCommand,
           run_id: runId, lower_body_only: alternateModel || groundingCase?.lower_body_only === true,
+          ...(ikGoalAlpha > 0 ? { ik_goal_alpha: ikGoalAlpha } : {}),
           ...(groundingCase ? { scene_path: scenePath, fbx_file: inputFile,
             model_name: modelName } : {})
         }), { flag: "wx" });
@@ -1497,7 +1506,7 @@ async function executeFullClip(runId, alternateModel = false, groundingCase = nu
       await writeFile(path.join(sessionRoot, "unity-trace.log"), trace.subarray(traceOffset));
     await writeFile(path.join(sessionRoot, "manifest.json"), JSON.stringify({
       runId, requestId, result: result.status, failureStage, steps, before, after,
-      groundingCase,
+      groundingCase, ikGoalAlpha: ikGoalAlpha || null,
       unityStatus, statePath: unityStatus?.full_clip_state_path || null,
       humanLabelsPath,
       processedFrames: state?.processed_frames ?? null, rowCount: state?.row_count ?? null,
@@ -2482,6 +2491,9 @@ async function main() {
         ? { captureMode: mode,
           lowerBodyOnly: String(mode === "alternate-model" || groundingCase?.lower_body_only === true) }
         : {}),
+      ...(mode === "full-clip" &&
+          Number(process.env.FBX_SMOKE_IK_GOAL_ALPHA) > 0
+        ? { ikGoalAlpha: String(process.env.FBX_SMOKE_IK_GOAL_ALPHA) } : {}),
       ...(contactSource ? { sourceRunId: contactSource.runId,
         sourceCsvSha256: contactSource.events.input.csv_sha256 } : {}),
       modelSha256: modelHash, sceneSha256: sceneHash

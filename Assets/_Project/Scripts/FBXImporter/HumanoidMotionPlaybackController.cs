@@ -33,7 +33,8 @@ namespace Fbx2Vmd.FBXImporter
         private readonly HumanoidFootGoalDriver _footGoalDriver =
             new HumanoidFootGoalDriver();
         private bool _isGroundResponseEnabled;
-        // 실험 경로 — goal IK 드라이브가 켜지면 접지·지면 반응과 상호배제됨.
+        // 실험 경로 — goal IK 드라이브가 켜져도 gate는 매 프레임 실행되고
+        // 드라이버는 주장 프레임에만 gate 결과 위에 오버레이됨.
         private bool _useIkGoalFootDrive;
         private float _footGoalAlpha;
         private HumanoidFootGrounding _footGrounding;
@@ -238,6 +239,9 @@ namespace Fbx2Vmd.FBXImporter
             right = null;
             // 폴백 프레임도 접지 평가가 실행된 상태이므로 표면 측정값을 기록해야 한다.
             // Unavailable/Disabled는 평가 자체가 없어 측정값이 없으므로 제외한다.
+            // goal 경로(evaluation_stage=="ik_goal_drive")는 TryEvaluate로 지면·앵커·
+            // 가중치를 프레임별 갱신하되 gate 판정(핀 보정 목표·통과 여부)은 평가하지
+            // 않으므로 gate 진단 열 해석은 stage로 구분해야 함.
             return IsPrepared &&
                 (LastGroundingStatus == HumanoidFootGroundingStatus.Applied ||
                  LastGroundingStatus == HumanoidFootGroundingStatus.NoGround ||
@@ -418,16 +422,24 @@ namespace Fbx2Vmd.FBXImporter
             LastGroundingGate.pelvis_maximum_offset_m = 0f;
             LastGroundingGate.left = LastGroundingGate.right = null;
             bool goalDriverActive = IsIkGoalFootDriveActive;
+            // 주장 여부는 weight 갱신 전 상태로 판정해 gate가 stabilizer 이전 자세를
+            // 보는 alpha=0 순서를 유지함.
+            bool driverClaims = goalDriverActive &&
+                _footGoalDriver.WouldClaim(CurrentTimeSeconds);
             if (goalDriverActive)
-                LastGroundingGate.evaluation_stage = "ik_goal_drive";
-            if (!goalDriverActive && _isGroundResponseEnabled &&
+                LastGroundingGate.evaluation_stage = driverClaims
+                    ? "ik_goal_drive" : "ik_goal_abstain";
+            // gate는 준비된 매 프레임에서 실행 — weight 감쇠·기권 프레임의 접지 보정
+            // 공백을 막고, 주장 프레임에는 드라이버가 gate 결과 위에 오버레이함.
+            bool gateApplied = false;
+            if (_isGroundResponseEnabled &&
                 _footGrounding != null && _footGrounding.IsPrepared)
             {
-                bool applied = _footGrounding.TryApply(CurrentTimeSeconds, _groundResponse);
+                gateApplied = _footGrounding.TryApply(CurrentTimeSeconds, _groundResponse);
                 LastGroundingGate.evaluation_stage = _footGrounding.EvaluationStage;
                 LastGroundingGate.measured = _footGrounding.EvaluationStage == "gate";
                 LastGroundingGate.raw_pass = _footGrounding.RawGatePass;
-                LastGroundingGate.held_pass = applied;
+                LastGroundingGate.held_pass = gateApplied;
                 LastGroundingGate.used_physical_reach = _footGrounding.UsedPhysicalReach;
                 LastGroundingGate.pelvis_offset_m = _footGrounding.PelvisOffset;
                 LastGroundingGate.pelvis_maximum_offset_m = _footGrounding.PelvisMaximumOffset;
@@ -439,29 +451,79 @@ namespace Fbx2Vmd.FBXImporter
                     _footGrounding.MaximumSupportedContactError;
                 LastGroundingGate.supported_contact_count =
                     _footGrounding.FullySupportedContactCount;
-                if (applied)
+                if (gateApplied)
                 {
                     LastGroundingStatus = _footGrounding.HasGround
                         ? HumanoidFootGroundingStatus.Applied : HumanoidFootGroundingStatus.NoGround;
-                    return true;
+                    if (!driverClaims)
+                    {
+                        if (goalDriverActive)
+                        {
+                            // gate 적용 프레임도 드라이버 시간·weight는 매 프레임 갱신해
+                            // 다음 pin 진입의 램프와 점프 판정이 끊기지 않게 함.
+                            _footGoalDriver.TryApply(CurrentTimeSeconds, _footGoalAlpha,
+                                leftBendNormal, rightBendNormal);
+                        }
+                        return true;
+                    }
                 }
-                LastGroundingStatus = HumanoidFootGroundingStatus.Fallback;
+                else
+                {
+                    LastGroundingStatus = HumanoidFootGroundingStatus.Fallback;
+                }
             }
-            bool isApplied = _footContactStabilizer.TryApply(
+            // gate 적용 프레임은 alpha=0과 같이 stabilizer를 건너뜀.
+            bool isApplied = !gateApplied && _footContactStabilizer.TryApply(
                 CurrentTimeSeconds,
                 leftBendNormal,
                 rightBendNormal);
             if (goalDriverActive)
             {
-                // pin 프레임만 IK가 목표를 주장하고 기권 구간은 stabilizer 출력이 유지됨.
+                // pin 프레임만 IK가 목표를 주장하고 기권 구간은 gate/stabilizer 출력이 유지됨.
                 _footGoalDriver.TryApply(CurrentTimeSeconds, _footGoalAlpha,
                     leftBendNormal, rightBendNormal);
+                // 주장 프레임의 골반 오프셋은 gate+드라이버 누적값을 보고함.
+                if (driverClaims)
+                {
+                    LastGroundingGate.pelvis_offset_m +=
+                        _footGoalDriver.LastAppliedPelvisOffset;
+                }
+                // 지면 하방 침투 차단은 goal 경로에도 동일하게 적용 — 발 하단이
+                // 지면 아래일 때만 작동해 pin 프레임의 IK 결과는 건드리지 않음.
+                // 굽힘 법선은 드라이버의 해부학 정합 결과를 사용 — 원시 자세
+                // cross는 무릎이 거의 펴진 구간에서 부호가 뒤집혀 상승 IK가
+                // 무릎을 반대편에 배치함. 미solve 다리는 자세 cross 폴백으로
+                // 드라이버 이후의 현재 자세 기준 방향을 유지함.
+                if ((isApplied || gateApplied) && _isGroundResponseEnabled)
+                    _groundResponse.Apply(
+                        _footGoalDriver.LastUsedLeftBendNormal,
+                        _footGoalDriver.LastUsedRightBendNormal);
+                // goal 경로는 gate 보정 대신 평가 전용 갱신으로 지면·지지 가중치·
+                // 밑창 측정을 현재 프레임 기준으로 채움 — 스냅샷이 마지막 gate 평가나
+                // 초기값을 재사용하지 않게 함. gate 판정 열은 계속 비움(measured=false).
+                // 기권 프레임은 gate가 이미 진단을 채웠으므로 평가 갱신을 건너뜀.
+                // grounding이 준비되지 않은 구성에서는 스냅샷을 만들 수 없으므로
+                // Unavailable을 유지해 측정 불가를 정직하게 신호함.
+                if (driverClaims && _footGrounding != null && _footGrounding.IsPrepared)
+                {
+                    bool evaluated = _footGrounding.TryEvaluate(
+                        CurrentTimeSeconds, _groundResponse);
+                    LastGroundingGate.evaluation_stage = evaluated
+                        ? "ik_goal_drive" : $"ik_goal_{_footGrounding.EvaluationStage}";
+                    LastGroundingGate.left = _footGrounding.LeftDiagnostic;
+                    LastGroundingGate.right = _footGrounding.RightDiagnostic;
+                    LastGroundingStatus = !evaluated
+                        ? HumanoidFootGroundingStatus.Fallback
+                        : _footGrounding.HasGround
+                            ? HumanoidFootGroundingStatus.Applied
+                            : HumanoidFootGroundingStatus.NoGround;
+                }
             }
             else if (isApplied && _isGroundResponseEnabled)
             {
                 _groundResponse.Apply(leftBendNormal, rightBendNormal);
             }
-            return isApplied;
+            return isApplied || gateApplied;
         }
 
         private void InitializeFootRotationBindings(Animator animator)
@@ -510,9 +572,21 @@ namespace Fbx2Vmd.FBXImporter
             _footGoalDriver.TryInitialize(
                 targetAnimator, _footContactStabilizer, clip.frameRate);
             if (_footGrounding != null)
+            {
                 _footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
                     _footContactStabilizer.SourceHumanScale, clip, EvaluateEditorContactReference,
                     _footContactStabilizer.IntentEstimate);
+                // goal 드라이버에 밑창 정점을 공유 — 발끝 본 스냅만으로는 회전된 발의
+                // 밑창 정점이 지면 아래로 파고드는 침투를 막지 못함. 프로브가 없으면
+                // 기존 발끝 스냅 폴백이 그대로 적용됨.
+                if (_footGoalDriver.IsInitialized)
+                {
+                    if (_footGrounding.TryGetSoleProbeLocalOffsets(true, out Vector3[] leftSole))
+                        _footGoalDriver.SetSoleProbes(true, leftSole);
+                    if (_footGrounding.TryGetSoleProbeLocalOffsets(false, out Vector3[] rightSole))
+                        _footGoalDriver.SetSoleProbes(false, rightSole);
+                }
+            }
         }
 
         private void EvaluateEditorContactReference(float timeSeconds)

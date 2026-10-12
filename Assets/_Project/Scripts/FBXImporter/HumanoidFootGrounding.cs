@@ -225,18 +225,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal bool TryApply(float timeSeconds, HumanoidGroundResponse ground)
         {
-            HasGround = false;
-            UsedPhysicalReach = false;
-            RawGatePass = false;
-            PelvisOffset = 0f;
-            PelvisMaximumOffset = 0f;
-            EvaluationStage = "preconditions";
-            MaximumTargetError = 0f;
-            MinimumSoleClearance = 0f;
-            MaximumSupportedContactError = 0f;
-            FullySupportedContactCount = 0;
-            _left.Diagnostic.Reset();
-            _right.Diagnostic.Reset();
+            ResetEvaluationState();
             if (!IsPrepared || _hips == null || ground == null ||
                 float.IsNaN(timeSeconds) || float.IsInfinity(timeSeconds) || timeSeconds < 0f)
                 return false;
@@ -300,6 +289,71 @@ namespace Fbx2Vmd.FBXImporter
                 if (!isApplied)
                     RestoreAppliedPose();
             }
+        }
+
+        // 본을 움직이지 않고 현재 프레임의 지면·지지 가중치·밑창 측정값만 갱신함.
+        // gate 보정을 적용하지 않는 경로(goal 드라이브)에서 표면 스냅샷과 진단이
+        // 마지막 gate 평가나 초기값을 재사용하지 않게 하는 평가 전용 단계임.
+        internal bool TryEvaluate(float timeSeconds, HumanoidGroundResponse ground)
+        {
+            ResetEvaluationState();
+            if (!IsPrepared || _hips == null || ground == null ||
+                float.IsNaN(timeSeconds) || float.IsInfinity(timeSeconds) || timeSeconds < 0f)
+                return false;
+
+            _left.CapturePose();
+            _right.CapturePose();
+            Physics.SyncTransforms();
+            float frame = timeSeconds * _frameRate;
+            EvaluationStage = "target";
+            if (!_left.TryCalculateTarget(frame, ground, _humanScale) ||
+                !_right.TryCalculateTarget(frame, ground, _humanScale))
+                return false;
+
+            HasGround = _left.HasGround || _right.HasGround;
+            EvaluationStage = "measure";
+            if (!_left.TryMeasure(out float leftClearance, out float leftContact, out int leftCount) ||
+                !_right.TryMeasure(out float rightClearance, out float rightContact, out int rightCount))
+                return false;
+
+            MinimumSoleClearance = Mathf.Min(leftClearance, rightClearance);
+            MaximumSupportedContactError = Mathf.Max(leftContact, rightContact);
+            FullySupportedContactCount = leftCount + rightCount;
+            return true;
+        }
+
+        // 발목 로컬 좌표의 밑창 후보 정점 — goal 드라이브의 밑창 인식 지면 스냅이 재사용함.
+        // 샘플러의 대여 버퍼를 복제해 넘기므로 이후 갱신과 무관하게 안정적임.
+        internal bool TryGetSoleProbeLocalOffsets(bool isLeft, out Vector3[] localPoints)
+        {
+            localPoints = null;
+            if (!IsPrepared)
+            {
+                return false;
+            }
+            Vector3[] points = (isLeft ? _left : _right).Sampler.LocalSolePoints;
+            if (points == null || points.Length == 0)
+            {
+                return false;
+            }
+            localPoints = (Vector3[])points.Clone();
+            return true;
+        }
+
+        private void ResetEvaluationState()
+        {
+            HasGround = false;
+            UsedPhysicalReach = false;
+            RawGatePass = false;
+            PelvisOffset = 0f;
+            PelvisMaximumOffset = 0f;
+            EvaluationStage = "preconditions";
+            MaximumTargetError = 0f;
+            MinimumSoleClearance = 0f;
+            MaximumSupportedContactError = 0f;
+            FullySupportedContactCount = 0;
+            _left.Diagnostic.Reset();
+            _right.Diagnostic.Reset();
         }
 
         public void Dispose()
