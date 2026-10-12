@@ -22,6 +22,10 @@ namespace Fbx2Vmd.FBXImporter
         // gate↔드라이버 자세 갭(수십mm)이 한계를 넘는 단발 스텝으로 노출됨.
         // 고정 속도 선형이면 프레임당 스텝이 갭/전이 프레임 수로 균일하게 상한 아래가 됨.
         internal const float PinWeightChangePerSecond = 3.5f;
+        // 두 발 수평 간격 하한 — gate/기권 구간의 근육 리타겟 출력이 발을 한 점에
+        // 모으는 결함(실측 21mm, 소스 목표는 130mm 분리)의 복구 발화 기준임.
+        // 발 폭 이하인 ~21mm만 걸러내고 교차 스탠스(50mm+)는 건드리지 않게 여유를 둠.
+        internal const float MinimumFootSeparationMeters = 0.05f;
         // 이 각도 이하의 무릎 굽힘은 bend normal이 수치적으로 불안정해 마지막 유효값을 유지함.
         private const float MinimumStableBendSine = 0.0175f;
         // 밑창 지면 정렬의 피치 가중 구간 — 이 각도 이상 기울면 롤 스탠스로 간주해 정렬하지 않음.
@@ -60,6 +64,9 @@ namespace Fbx2Vmd.FBXImporter
         internal float[] DebugRightFloorWorldY => _rightFloorWorldY;
         internal bool[] DebugLeftPinArray => _left.Pin;
         internal bool[] DebugRightPinArray => _right.Pin;
+        // 발 모임 복구 주장 weight — 핀과 무관하게 gate/기권 출력이 두 발을
+        // 임계 이하로 모으면 목표 분리쪽으로 solve를 주장함. 진단·테스트용임.
+        internal float DebugSeparationWeight => _separationWeight;
         internal bool DebugRightSolveSucceeded => _right.DebugSolveSucceeded;
         internal Vector3 DebugRightDesiredKnee => _right.DebugDesiredKnee;
         internal Vector3 LastUsedRightBendNormal => _right.LastUsedBendNormal;
@@ -97,6 +104,9 @@ namespace Fbx2Vmd.FBXImporter
         private readonly LegDrive _left = new LegDrive();
         private readonly LegDrive _right = new LegDrive();
         private float _lastTimeSeconds = float.NaN;
+        // 발 모임 복구의 선형 weight — 핀 weight와 같은 속도로 오르내려
+        // 복구 개입·해제가 단발 점프로 보이지 않게 함.
+        private float _separationWeight;
 
         // stabilizer가 보존한 원본 궤적·의도·표식에서 goal 스트림과 핀 구간을 전부 선계산함.
         // 반환 false는 "데이터 부족으로 실험 경로 비활성"이며 예외가 아님.
@@ -205,6 +215,7 @@ namespace Fbx2Vmd.FBXImporter
             _left.Clear();
             _right.Clear();
             _lastTimeSeconds = float.NaN;
+            _separationWeight = 0f;
         }
 
         // goal 스트림은 stabilizer의 원본 샘플과 같은 인덱스 — 관측 산출물과 동일 데이터임.
@@ -412,7 +423,19 @@ namespace Fbx2Vmd.FBXImporter
             // UpdateWeights의 dt<=0 조기 반환으로 상태를 유지해 멱등 재적용이 됨.
             _left.UpdateWeights(alpha, _left.Pin[frame], jumped || firstEval, dt);
             _right.UpdateWeights(alpha, _right.Pin[frame], jumped || firstEval, dt);
-            if (_left.Weight <= 0f && _right.Weight <= 0f)
+            // gate/기권 구간의 발 모임 복구 — 근육 리타겟은 소스가 분리돼 있어도
+            // 출력 발을 한 점에 모을 수 있음. 핀 weight가 0인 프레임에서도 현재
+            // 자세의 수평 간격이 임계 이하면 소스 목표(원래 분리됨)쪽으로 solve를
+            // 주장해 발이 겹치지 않게 함. 핀과 같은 선형 램프로 개입·해제함.
+            float separationTarget =
+                HorizontalFootSeparation() < MinimumFootSeparationMeters ? alpha : 0f;
+            _separationWeight = jumped || firstEval
+                ? separationTarget
+                : Mathf.MoveTowards(_separationWeight, separationTarget,
+                    PinWeightChangePerSecond * dt);
+            _left.SolveWeight = Mathf.Max(_left.Weight, _separationWeight);
+            _right.SolveWeight = Mathf.Max(_right.Weight, _separationWeight);
+            if (_left.SolveWeight <= 0f && _right.SolveWeight <= 0f)
             {
                 return true;
             }
@@ -438,6 +461,16 @@ namespace Fbx2Vmd.FBXImporter
             _right.TrySolve(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
                 _rightFloorRootSpaceY[frame], _rightFloorWorldY[frame], rightBendNormal, dt);
             return true;
+        }
+
+        // 두 발의 수평 거리 — solve 전의 현재 출력 자세를 측정함. 수평만 보면
+        // 한 발이 다른 발 위로 지나가는 정상 구간을 오탐하지 않음.
+        private float HorizontalFootSeparation()
+        {
+            Vector3 left = _left.Foot.position;
+            Vector3 right = _right.Foot.position;
+            return Mathf.Sqrt((left.x - right.x) * (left.x - right.x) +
+                (left.z - right.z) * (left.z - right.z));
         }
 
         // 이 프레임에 한 발이라도 IK가 목표를 주장하는지 — weight 갱신 전 상태로 판정해
@@ -592,6 +625,10 @@ namespace Fbx2Vmd.FBXImporter
             internal float LowerLength { get; private set; }
             internal float Reach => UpperLength + LowerLength;
             internal float Weight { get; private set; }
+            // 이번 프레임 solve의 실제 적용 weight — 핀 weight와 발 모임 복구
+            // weight의 큰 쪽. 핀 앵커·감쇠 블렌드는 Weight 기준을 유지하고,
+            // solve 발화·결과 블렌드만 이 값을 씀. TryApply가 매 프레임 계산함.
+            internal float SolveWeight { get; set; }
             internal bool[] Pin = Array.Empty<bool>();
             internal bool[] Grounded = Array.Empty<bool>();
 
@@ -762,7 +799,7 @@ namespace Fbx2Vmd.FBXImporter
                 float floorRootSpaceY, float floorWorldY,
                 Vector3 bendNormal, float dt)
             {
-                if (Weight <= 0f)
+                if (SolveWeight <= 0f)
                 {
                     return;
                 }
@@ -938,11 +975,11 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 DebugSolveSucceeded = solved;
                 DebugTargetError = targetError;
-                if (solved && Weight < 1f)
+                if (solved && SolveWeight < 1f)
                 {
-                    Upper.rotation = Quaternion.Slerp(upperRotation, Upper.rotation, Weight);
-                    Lower.rotation = Quaternion.Slerp(lowerRotation, Lower.rotation, Weight);
-                    Foot.rotation = Quaternion.Slerp(footRotation, Foot.rotation, Weight);
+                    Upper.rotation = Quaternion.Slerp(upperRotation, Upper.rotation, SolveWeight);
+                    Lower.rotation = Quaternion.Slerp(lowerRotation, Lower.rotation, SolveWeight);
+                    Foot.rotation = Quaternion.Slerp(footRotation, Foot.rotation, SolveWeight);
                 }
                 DebugPostBlendLowerPosition = Lower.position;
                 DebugPostBlendFootPosition = Foot.position;
@@ -952,7 +989,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     return;
                 }
-                Quaternion blended = Quaternion.Slerp(currentFrame, goalFrame, Weight);
+                Quaternion blended = Quaternion.Slerp(currentFrame, goalFrame, SolveWeight);
                 _binding.TryApplyWorldFrame(blended);
             }
 
@@ -1001,6 +1038,7 @@ namespace Fbx2Vmd.FBXImporter
                 Upper = Lower = Foot = null;
                 _binding = null;
                 Weight = 0f;
+                SolveWeight = 0f;
                 Pin = Grounded = Array.Empty<bool>();
                 _hasSmoothedGoal = false;
                 _smoothedGoal = Vector3.zero;

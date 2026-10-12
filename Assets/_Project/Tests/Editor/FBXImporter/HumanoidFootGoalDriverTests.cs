@@ -125,6 +125,61 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_MergedFeetOnUnpinnedFrame_When_Applying_Then_SeparatesTowardGoals()
+        {
+            Animator animator = LoadTargetAnimator();
+            if (animator == null) Assert.Ignore("로컬 검증 모델이 없는 환경에서는 생략함");
+            try
+            {
+                Transform leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty,
+                    animator.humanScale, FrameRate), Is.True);
+                // 근육 리타겟이 두 발을 한 점에 모은 출력을 재현 — pin 없는 프레임 0.
+                Vector3 rightGoalWorld = rightFoot.position;
+                rightFoot.position = leftFoot.position;
+                Assert.That(driver.TryApply(0f, 1f, Vector3.right, Vector3.right), Is.True);
+                float separation = Mathf.Sqrt(
+                    (leftFoot.position.x - rightFoot.position.x) *
+                    (leftFoot.position.x - rightFoot.position.x) +
+                    (leftFoot.position.z - rightFoot.position.z) *
+                    (leftFoot.position.z - rightFoot.position.z));
+                Assert.That(separation,
+                    Is.GreaterThan(HumanoidFootGoalDriver.MinimumFootSeparationMeters),
+                    $"발 모임 출력은 소스 목표로 분리돼야 함 sep={separation:F4}");
+                Assert.That(Vector3.Distance(rightFoot.position, rightGoalWorld),
+                    Is.LessThan(0.01f),
+                    "오른발은 원래 지지 목표로 돌아가야 함");
+                Assert.That(driver.DebugSeparationWeight, Is.GreaterThan(0f));
+            }
+            finally { if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
+        [Test]
+        public void Given_SeparatedFeetOnUnpinnedFrame_When_Applying_Then_NoSeparationClaim()
+        {
+            Animator animator = LoadTargetAnimator();
+            if (animator == null) Assert.Ignore("로컬 검증 모델이 없는 환경에서는 생략함");
+            try
+            {
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty,
+                    animator.humanScale, FrameRate), Is.True);
+                // 정상 간격의 기본 자세는 복구를 주장하지 않아야 함 — 오탐 방지.
+                Assert.That(driver.TryApply(0f, 1f, Vector3.right, Vector3.right), Is.True);
+                Assert.That(driver.DebugSeparationWeight, Is.EqualTo(0f));
+            }
+            finally { if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
+        [Test]
         public void Given_UncertainOnlyIntent_When_Applying_Then_StaysPassThrough()
         {
             Animator animator = LoadTargetAnimator();
