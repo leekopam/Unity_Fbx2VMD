@@ -35,58 +35,22 @@ namespace Fbx2Vmd.FBXImporter
         internal bool IsInitialized { get; private set; }
         // 마지막 TryApply가 실제로 골반에 적용한 수직 오프셋(m). 진단 열 기록용임.
         internal float LastAppliedPelvisOffset { get; private set; }
-        // 테스트 진단용 — 마지막 solve에 사용된 왼쪽 다리 굽힘 법선·평활 목표.
-        internal Vector3 DebugLeftBendNormal => _left.LastBendNormal;
-        internal Vector3 DebugLeftSmoothedGoal => _left.LastSmoothedGoal;
+        // 테스트 진단용 — 마지막 solve의 목표·입력·성공 여부·오차.
         internal Vector3 DebugLeftSolveGoal => _left.LastSolveGoal;
-        internal Vector3 DebugLeftPreUpper => _left.DebugPreUpperPosition;
-        internal Vector3 DebugLeftPreLower => _left.DebugPreLowerPosition;
-        internal Vector3 DebugLeftPostLower => _left.DebugPostLowerPosition;
-        internal Vector3 DebugLeftDesiredKnee => _left.DebugDesiredKnee;
         internal Vector3 LastUsedLeftBendNormal => _left.LastUsedBendNormal;
         internal string DebugLeftSolveInputs => _left.DebugSolveInputs;
         internal bool DebugLeftSolveSucceeded => _left.DebugSolveSucceeded;
         internal float DebugLeftTargetError => _left.DebugTargetError;
-        // 실제 경로에서 밑창 프로브가 배선됐고 lift가 발화하는지 진단용.
-        internal int DebugLeftSoleProbeCount => _left.DebugSoleProbeCount;
-        internal int DebugRightSoleProbeCount => _right.DebugSoleProbeCount;
-        internal float DebugLeftLastLift => _left.DebugLastLift;
-        internal float DebugRightLastLift => _right.DebugLastLift;
-        internal float DebugLeftLastLowestProbe => _left.DebugLastLowestProbe;
-        internal float DebugRightLastLowestProbe => _right.DebugLastLowestProbe;
         // 캡처 경로에서 핀 가중치가 실제로 올라가는지 진단용.
         internal float DebugLeftWeight => _left.Weight;
-        internal float DebugRightWeight => _right.Weight;
         // reach 계산이 현재 프레임에 앵커를 쓰는지 진단용 — 해제 감쇠·weight 소실
         // 뒤에도 true면 다음 재진입의 골반 계산이 오래된 앵커로 오염됨.
         internal bool DebugLeftPinAnchorInReach => _left.TryGetPinAnchor(out _);
-        internal float[] DebugLeftFloorWorldY => _leftFloorWorldY;
-        internal float[] DebugRightFloorWorldY => _rightFloorWorldY;
         internal bool[] DebugLeftPinArray => _left.Pin;
-        internal bool[] DebugRightPinArray => _right.Pin;
         // 발 모임 복구 주장 weight — 핀과 무관하게 gate/기권 출력이 두 발을
         // 임계 이하로 모으면 목표 분리쪽으로 solve를 주장함. 진단·테스트용임.
         internal float DebugSeparationWeight => _separationWeight;
-        internal bool DebugRightSolveSucceeded => _right.DebugSolveSucceeded;
-        internal Vector3 DebugRightDesiredKnee => _right.DebugDesiredKnee;
         internal Vector3 LastUsedRightBendNormal => _right.LastUsedBendNormal;
-        internal string DebugRightSolveInputs => _right.DebugSolveInputs;
-        internal float DebugRightTargetError => _right.DebugTargetError;
-        internal float DebugRightReferenceWeight => _right.DebugReferenceWeight;
-        internal Vector3 DebugRightProjectedReference => _right.DebugProjectedReference;
-        internal float DebugLeftReferenceWeight => _left.DebugReferenceWeight;
-        internal Vector3 DebugLeftProjectedReference => _left.DebugProjectedReference;
-        internal Vector3 DebugLeftPreFoot => _left.DebugPreFootPosition;
-        internal Vector3 DebugLeftPostBlendLower => _left.DebugPostBlendLowerPosition;
-        internal Vector3 DebugLeftPostBlendFoot => _left.DebugPostBlendFootPosition;
-        internal Vector3 DebugRightPreFoot => _right.DebugPreFootPosition;
-        internal Vector3 DebugRightPreUpper => _right.DebugPreUpperPosition;
-        internal Vector3 DebugRightPreLower => _right.DebugPreLowerPosition;
-        internal Vector3 DebugRightPostLower => _right.DebugPostLowerPosition;
-        internal Vector3 DebugRightPostBlendLower => _right.DebugPostBlendLowerPosition;
-        internal Vector3 DebugRightPostBlendFoot => _right.DebugPostBlendFootPosition;
-        // 골반 오프셋 계산에 들어간 양다리 입력(무릎각·거리·감쇠 도달·필요 플래그).
-        internal string DebugPelvisInputs { get; private set; } = string.Empty;
 
         private Animator _animator;
         private Transform _hips;
@@ -491,10 +455,9 @@ namespace Fbx2Vmd.FBXImporter
         private float CalculatePelvisOffset(int frame)
         {
             bool needsLeft = TryBuildReachLeg(_left, frame,
-                out HumanoidPelvisReachCalculator.Leg left, out string leftDebug);
+                out HumanoidPelvisReachCalculator.Leg left);
             bool needsRight = TryBuildReachLeg(_right, frame,
-                out HumanoidPelvisReachCalculator.Leg right, out string rightDebug);
-            DebugPelvisInputs = $"L[{leftDebug}] R[{rightDebug}]";
+                out HumanoidPelvisReachCalculator.Leg right);
             if (!needsLeft && !needsRight)
             {
                 return 0f;
@@ -516,10 +479,9 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private bool TryBuildReachLeg(LegDrive leg, int frame,
-            out HumanoidPelvisReachCalculator.Leg reachLeg, out string debug)
+            out HumanoidPelvisReachCalculator.Leg reachLeg)
         {
             reachLeg = default;
-            debug = "inactive";
             if (leg.Weight <= 0f ||
                 !TryGetGoalSample(frame, leg.IsLeft, out HumanoidFootGoalStream.GoalSample goal))
             {
@@ -545,9 +507,6 @@ namespace Fbx2Vmd.FBXImporter
             {
                 dampedReach = leg.Reach;
             }
-            debug = $"w={leg.Weight:F2} d={distance:F5} " +
-                $"damped={dampedReach:F5} need={distance > dampedReach} " +
-                $"up={leg.Upper.position:F4} low={leg.Lower.position:F4} ft={leg.Foot.position:F4}";
             if (distance <= dampedReach)
             {
                 return false;
@@ -653,8 +612,6 @@ namespace Fbx2Vmd.FBXImporter
             // 바인드 자세에서 취득한 gate와 같은 규약임. 미설정 시 zero로 두고 폴백함.
             private Vector3 _referenceNormal;
             private float _stableNormalSquaredThreshold;
-            internal Vector3 LastBendNormal => _lastBendNormal;
-            internal Vector3 LastSmoothedGoal => _smoothedGoal;
             // 이번 solve가 실제로 쫓은 목표(핀 앵커·해제 블렌드 반영 후, 평활 전) —
             // 해제 전이의 목표 불연속 검증용.
             internal Vector3 LastSolveGoal { get; private set; }
@@ -687,25 +644,12 @@ namespace Fbx2Vmd.FBXImporter
                 rawGoal.z = Mathf.Lerp(rawGoal.z, _pinAnchor.z, Weight);
                 return rawGoal;
             }
-            // solve 직전·직후 포즈 진단 — 무릎 결과 분기 추적용.
-            internal Vector3 DebugPreUpperPosition { get; private set; }
-            internal Vector3 DebugPreLowerPosition { get; private set; }
-            internal Vector3 DebugPostLowerPosition { get; private set; }
-            internal Vector3 DebugDesiredKnee { get; private set; }
             // 최근 solve에 실제 사용된 굽힘 법선 — 해부학 기준 정합 결과라 사후
             // 지면 상승 IK도 같은 굽힘면을 쓸 수 있게 컨트롤러에 공개함.
             internal Vector3 LastUsedBendNormal { get; private set; }
-            internal float DebugReferenceWeight { get; private set; }
-            internal Vector3 DebugProjectedReference { get; private set; }
-            internal Vector3 DebugPreFootPosition { get; private set; }
-            internal Vector3 DebugPostBlendLowerPosition { get; private set; }
-            internal Vector3 DebugPostBlendFootPosition { get; private set; }
             internal string DebugSolveInputs { get; private set; }
             internal bool DebugSolveSucceeded { get; private set; }
             internal float DebugTargetError { get; private set; }
-            internal int DebugSoleProbeCount => _soleProbesLocal.Length;
-            internal float DebugLastLift { get; private set; }
-            internal float DebugLastLowestProbe { get; private set; }
 
             internal void SetSoleProbes(Vector3[] localPoints)
             {
@@ -852,12 +796,11 @@ namespace Fbx2Vmd.FBXImporter
                     // 바인딩이 뼈에 실제로 쓸 회전으로 밑창 정점을 평가함 —
                     // goalFrame은 canonical frame 규약이라 발목 뼈 로컬 좌표의
                     // 프로브에 그대로 곱하면 축이 어긋나 높이가 틀어짐.
-                    DebugLastLowestProbe = LowestSoleProbeHeight(
+                    float soleLift = floorWorldY - LowestSoleProbeHeight(
                         goalWorld, appliedFootRotation);
-                    DebugLastLift = floorWorldY - DebugLastLowestProbe;
-                    if (DebugLastLift > 0f)
+                    if (soleLift > 0f)
                     {
-                        goalWorld.y += DebugLastLift;
+                        goalWorld.y += soleLift;
                     }
                 }
 
@@ -917,13 +860,11 @@ namespace Fbx2Vmd.FBXImporter
                 // 가중 정합해 굽힘면을 고정함. 기준이 없거나 정합이 퇴화하면
                 // 기존 입력·캐시 경로로 폴백함.
                 Vector3 referenceNormal = upperRotation * _referenceNormal;
-                DebugProjectedReference = referenceNormal;
                 bool bendAligned = HumanoidLegPoseSolver.TryCalculateBendNormal(
                     Lower.position - Upper.position,
                     Foot.position - Lower.position,
                     _smoothedGoal - Upper.position,
                     referenceNormal, out bendNormal, out float referenceWeight);
-                DebugReferenceWeight = bendAligned ? referenceWeight : -1f;
                 if (bendAligned)
                 {
                     _lastBendNormal = bendNormal;
@@ -950,14 +891,9 @@ namespace Fbx2Vmd.FBXImporter
                     }
                     bendNormal = _lastBendNormal;
                 }
-                DebugPreUpperPosition = Upper.position;
-                DebugPreLowerPosition = Lower.position;
-                DebugPreFootPosition = Foot.position;
                 LastUsedBendNormal = bendNormal;
                 bool solved = HumanoidLegPoseSolver.TrySolve(Upper, Lower, Foot,
                     _smoothedGoal, bendNormal, out float targetError);
-                DebugPostLowerPosition = Lower.position;
-                // 래퍼가 계산한 목표 무릎 — solve와 동일 수학으로 기대값을 재구성함.
                 {
                     Vector3 direction = _smoothedGoal - Upper.position;
                     float distance = direction.magnitude;
@@ -967,8 +903,6 @@ namespace Fbx2Vmd.FBXImporter
                         UpperLength * UpperLength - along * along));
                     Vector3 bendDir = Vector3.Cross(direction,
                         bendNormal.normalized).normalized;
-                    DebugDesiredKnee = Upper.position + direction.normalized * along +
-                        bendDir * radius;
                     DebugSolveInputs = string.Format(
                         "dir={0:F4} d={1:F4} along={2:F4} r={3:F4} bendDir={4:F4} UL={5:F4} LL={6:F4}",
                         direction, distance, along, radius, bendDir, UpperLength, LowerLength);
@@ -981,9 +915,6 @@ namespace Fbx2Vmd.FBXImporter
                     Lower.rotation = Quaternion.Slerp(lowerRotation, Lower.rotation, SolveWeight);
                     Foot.rotation = Quaternion.Slerp(footRotation, Foot.rotation, SolveWeight);
                 }
-                DebugPostBlendLowerPosition = Lower.position;
-                DebugPostBlendFootPosition = Foot.position;
-
                 // 발 회전 — 목표 프레임(grounded 시 정렬+soft-cap 반영됨)을 가중 적용.
                 if (_binding == null || !_binding.TryCaptureWorldFrame(out Quaternion currentFrame))
                 {

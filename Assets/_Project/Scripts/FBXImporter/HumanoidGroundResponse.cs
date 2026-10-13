@@ -50,11 +50,6 @@ namespace Fbx2Vmd.FBXImporter
             _probeDistance = 0f;
         }
 
-        // 임시 진단 — 발화 여부를 테스트에서 실측하기 위한 카운터.
-        internal static int DebugSolveCount;
-        internal static float DebugLastTargetHeight;
-        internal static float DebugLastFootY;
-
         private void Apply(Leg leg, Vector3 bendNormal)
         {
             if (leg.Upper == null || leg.Lower == null || leg.Foot == null ||
@@ -62,11 +57,8 @@ namespace Fbx2Vmd.FBXImporter
                 return;
 
             float targetHeight = groundHeight + leg.BottomHeight;
-            DebugLastTargetHeight = targetHeight;
-            DebugLastFootY = leg.Foot.position.y;
             if (targetHeight <= leg.Foot.position.y + 0.00001f)
                 return;
-            DebugSolveCount++;
 
             Vector3 target = leg.Foot.position;
             target.y = targetHeight;
