@@ -273,7 +273,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(variant.GetFloat("_UseMatCap"), Is.EqualTo(1f));
                 Assert.That(variant.GetTexture("_MatCapTex"), Is.Not.Null);
                 Assert.That(variant.GetFloat("_MatCapBlendMode"), Is.EqualTo(1f));
-                Assert.That(variant.GetFloat("_MatCapBlend"), Is.EqualTo(0.8f));
+                Assert.That(variant.GetFloat("_MatCapBlend"), Is.EqualTo(0.7f));
                 Assert.That(variant.GetFloat("_MatCapZRotCancel"), Is.EqualTo(1f));
             }
             finally

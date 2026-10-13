@@ -499,7 +499,7 @@ Material:
     - _RimBackfaceMask: 1
     - _RimBlendMode: 1
     - _RimBlur: 0.65
-    - _RimBorder: 0.5
+    - _RimBorder: 0.55
     - _RimDirRange: 0
     - _RimDirStrength: 0
     - _RimEnableLighting: 1
@@ -527,7 +527,7 @@ Material:
     - _ShadowBlurMaskLOD: 0
     - _ShadowBorder: 0.55
     - _ShadowBorderMaskLOD: 0
-    - _ShadowBorderRange: 0.08
+    - _ShadowBorderRange: 0.15
     - _ShadowColorType: 0
     - _ShadowEnvStrength: 0
     - _ShadowFlatBlur: 1
@@ -676,7 +676,7 @@ Material:
     - _OutlineTex_ScrollRotate: {r: 0, g: 0, b: 0, a: 0}
     - _ReflectionColor: {r: 1, g: 1, b: 1, a: 1}
     - _ReflectionCubeColor: {r: 0, g: 0, b: 0, a: 1}
-    - _RimColor: {r: 1, g: 1, b: 1, a: 0.5}
+    - _RimColor: {r: 0.65, g: 0.82, b: 1, a: 0.9}
     - _RimIndirColor: {r: 1, g: 1, b: 1, a: 1}
     - _RimShadeColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _Shadow2ndColor: {r: 0.66, g: 0.64, b: 0.78, a: 1}
