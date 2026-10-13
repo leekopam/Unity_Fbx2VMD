@@ -204,6 +204,61 @@ namespace Tests.Editor.ClothPhysics
                 Is.True, "어느 클로스도 스커트 루프를 상호 충돌 상대로 지정하면 안 됩니다.");
         }
 
+        /// <summary>
+        /// 부위 마스크 회귀: 머리 측 Front 체인만 끄면 Front 클로스가 빠지고
+        /// 신체측 Accessory 체인은 마스크 비대상이라 유지돼야 한다.
+        /// </summary>
+        [Test]
+        public void Given_MaskExcludesFront_When_Setup_Then_FrontSkippedAccessoryKept()
+        {
+            var root = BuildGenericModel();
+            var setup = root.AddComponent<CharacterPhysicsSetup>();
+            setup.hairPhysicsParts = HairPartMask.All & ~HairPartMask.Front;
+            setup.Setup();
+
+            Assert.That(setup.generatedParts.Contains(HairPart.Front), Is.False,
+                "Front 마스크가 꺼지면 앞머리 클로스가 없어야 합니다.\n" + setup.lastReport);
+            Assert.That(setup.generatedParts, Contains.Item(HairPart.Accessory),
+                "신체측 장식물 체인은 마스크 대상이 아니므로 유지돼야 합니다.\n" + setup.lastReport);
+            Assert.That(setup.lastReport, Does.Contain("부위 마스크로 스킵"));
+        }
+
+        /// <summary>
+        /// 부위 마스크 회귀: Tail만 켜면 머리 측 클로스가 전부 빠진다 —
+        /// 트윈테일 전용 구성(레퍼런스식)의 직접 검증.
+        /// </summary>
+        [Test]
+        public void Given_MaskTailOnly_When_Setup_Then_NoHeadHairCloths()
+        {
+            var root = BuildGenericModel();
+            var setup = root.AddComponent<CharacterPhysicsSetup>();
+            setup.hairPhysicsParts = HairPartMask.Tail;
+            setup.Setup();
+
+            Assert.That(
+                setup.generatedParts.Contains(HairPart.Front)
+                    || setup.generatedParts.Contains(HairPart.Side)
+                    || setup.generatedParts.Contains(HairPart.Back), Is.False,
+                "머리 측 부위 클로스가 없어야 합니다.\n" + setup.lastReport);
+            Assert.That(setup.generatedParts, Contains.Item(HairPart.Accessory));
+        }
+
+        /// <summary>
+        /// 기본값 회귀: 마스크 미설정(All)은 기존 동작과 동일해야 한다.
+        /// </summary>
+        [Test]
+        public void Given_DefaultMask_When_Setup_Then_SameAsBefore()
+        {
+            var root = BuildGenericModel();
+            var setup = root.AddComponent<CharacterPhysicsSetup>();
+            Assert.That(setup.hairPhysicsParts, Is.EqualTo(HairPartMask.All),
+                "신규 필드 기본값은 All이어야 기존 씬 동작이 보존됩니다.");
+            setup.Setup();
+
+            Assert.That(setup.generatedParts, Contains.Item(HairPart.Front));
+            Assert.That(setup.generatedParts, Contains.Item(HairPart.Accessory));
+        }
+
         const string PronamaChanPrefabPath =
             "Assets/Plugins/VMDRecorderSample/Models/PronamaChan/PronamaChan.prefab";
 

@@ -17,6 +17,23 @@ namespace Fbx2Vmd.ClothPhysics
     }
 
     /// <summary>
+    /// 머리카락 부위별 물리 적용 마스크 — 켜진 비트의 부위만 클로스를 생성한다.
+    /// </summary>
+    [System.Flags]
+    public enum HairPartMask
+    {
+        None = 0,
+        Front = 1 << 0,
+        Side = 1 << 1,
+        Back = 1 << 2,
+        Tail = 1 << 3,
+        Ahoge = 1 << 4,
+        Accessory = 1 << 5,
+        Unknown = 1 << 6,
+        All = Front | Side | Back | Tail | Ahoge | Accessory | Unknown,
+    }
+
+    /// <summary>
     /// 본 이름을 분석하여 머리카락 부위를 분류하는 순수 함수 모음.
     /// 영어/일본어 로마자/MMD 명명 규칙을 지원한다.
     /// </summary>
@@ -107,6 +124,21 @@ namespace Fbx2Vmd.ClothPhysics
             if (UnityEngine.Mathf.Abs(localFromHead.x) > UnityEngine.Mathf.Abs(localFromHead.z))
                 return HairPart.Side;
             return HairPart.Back;
+        }
+
+        /// <summary>부위를 마스크 비트로 변환한다 (미매핑 값은 Unknown 비트).</summary>
+        public static HairPartMask ToMask(this HairPart part)
+        {
+            return part switch
+            {
+                HairPart.Front => HairPartMask.Front,
+                HairPart.Side => HairPartMask.Side,
+                HairPart.Back => HairPartMask.Back,
+                HairPart.Tail => HairPartMask.Tail,
+                HairPart.Ahoge => HairPartMask.Ahoge,
+                HairPart.Accessory => HairPartMask.Accessory,
+                _ => HairPartMask.Unknown,
+            };
         }
     }
 }

@@ -76,5 +76,23 @@ namespace Tests.Editor.ClothPhysics
             Assert.That(HairBoneClassifier.ClassifyByPosition(new Vector3(0.06f, 0.08f, -0.02f)),
                 Is.EqualTo(HairPart.Tail));
         }
+
+        [Test]
+        public void Given_EveryPart_When_ToMask_Then_RoundTrips()
+        {
+            // 정의된 부위 전부가 고유 비트로 왕복 변환돼야 한다
+            foreach (HairPart part in System.Enum.GetValues(typeof(HairPart)))
+            {
+                var bit = part.ToMask();
+                Assert.That(bit, Is.Not.EqualTo(HairPartMask.None), $"{part} 비트 누락");
+                Assert.That(HairPartMask.All.HasFlag(bit), Is.True, $"{part}가 All에 미포함");
+            }
+            // 미매핑 값은 Unknown 비트로 귀결
+            Assert.That(((HairPart)99).ToMask(), Is.EqualTo(HairPartMask.Unknown));
+            // 단일 비트 조합 검증 — Tail만 켠 마스크가 다른 부위를 통과시키지 않음
+            var tailOnly = HairPartMask.Tail;
+            Assert.That(tailOnly.HasFlag(HairPart.Tail.ToMask()), Is.True);
+            Assert.That(tailOnly.HasFlag(HairPart.Front.ToMask()), Is.False);
+        }
     }
 }

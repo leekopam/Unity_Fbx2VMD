@@ -32,14 +32,43 @@ namespace Fbx2Vmd.ClothPhysics
         [Tooltip("이름 규칙에 맞지 않는 미매핑 본도 머리카락 후보로 포함")]
         public bool includeUnknownBones = false;
 
+        [Tooltip("물리를 적용할 머리카락 부위. 끈 부위는 클로스를 만들지 않아 " +
+                 "본이 애니메이션을 그대로 따라간다 (예: Tail만 켜면 트윈테일만 물리). " +
+                 "신체측 장식물 체인은 이 마스크 대상이 아님")]
+        public HairPartMask hairPhysicsParts = HairPartMask.All;
+
         [Header("장식물 옵션")]
         [Tooltip("이름에 안 잡히는 신체측 체인을 토폴로지+스키닝으로 장식물 후보 탐지 " +
                  "(일반 FBX/VRM용 폴백 — 스키닝 버텍스를 가진 체인만 채택)")]
         public bool detectGarmentChainsByTopology = true;
 
+        [Header("네이티브 스프링본")]
         [Tooltip("네이티브 스프링본(VRM VRMSpringBone 등)이 시뮬레이션하는 본에는 " +
                  "MC2를 생성하지 않는다 — 제작자 튜닝이 정본, 이중 물리 방지")]
         public bool respectNativeSpringBones = true;
+
+        /// <summary>VRM 내장 스프링본 처리 방식.</summary>
+        public enum VrmConversionMode
+        {
+            /// <summary>C-1: 네이티브 소유 본에는 MC2를 만들지 않고 네이티브 시뮬을 그대로 둠</summary>
+            GuardOnly = 0,
+            /// <summary>C-2: VRMSpringBone 튜닝을 MC2 BoneCloth로 변환 후 원본 비활성</summary>
+            ConvertToMc2 = 1,
+            /// <summary>네이티브 스프링본을 무시 — 이중 물리 위험이 있어 디버그용</summary>
+            Off = 2,
+        }
+
+        [Tooltip("VRM 내장 스프링본 처리. GuardOnly=네이티브 소유 본에 MC2 미생성(기본), " +
+                 "ConvertToMc2=제작자 튜닝을 MC2 클로스로 변환 후 원본 비활성, " +
+                 "Off=무시(이중 물리 주의)")]
+        public VrmConversionMode vrmConversionMode = VrmConversionMode.GuardOnly;
+
+        /// <summary>
+        /// 변환으로 비활성화한 VRM 스프링 — ClearGenerated에서 복원한다.
+        /// 직렬화되어 있어 씬 저장·모드 전환 후에도 롤백 경로가 유지된다.
+        /// </summary>
+        [SerializeField, HideInInspector]
+        List<VRM.VRMSpringBone> convertedSprings = new List<VRM.VRMSpringBone>();
 
         [Header("흔들림 조정")]
         public HairTuning tuning = HairTuning.Default;
@@ -278,10 +307,41 @@ namespace Fbx2Vmd.ClothPhysics
             report.Add($"콜라이더 {colResult.colliders.Count}개 생성");
             report.AddRange(colResult.warnings.Select(w => "경고: " + w));
 
-            // 네이티브 스프링본(VRM 등) 소유 본 — 같은 본에 MC2를 얹으면 이중 물리가 된다
-            var externalOwned = respectNativeSpringBones
+            // 네이티브 스프링본(VRM 등) 소유 본 — 같은 본에 MC2를 얹으면 이중 물리가 된다.
+            // ConvertToMc2일 때도 소유 스캔은 필요 — 변환 본이 자동 탐지에 잡히면
+            // 변환 클로스와 자동 생성 클로스의 이중 시뮬레이션이 된다.
+            bool nativeGuard = respectNativeSpringBones ||
+                vrmConversionMode == VrmConversionMode.ConvertToMc2;
+            if (vrmConversionMode == VrmConversionMode.Off)
+                nativeGuard = false;
+            var externalOwned = nativeGuard
                 ? NativeSpringBoneProbe.CollectOwnedBones(animator.transform)
                 : new HashSet<Transform>();
+            if (vrmConversionMode == VrmConversionMode.ConvertToMc2)
+            {
+                // C-2 변환 — 제작자 튜닝을 MC2 클로스로 이식하고 원본을 비활성.
+                // 비활성 스프링은 ClearGenerated가 복원하므로 재실행·GuardOnly
+                // 복귀 모두 안전하다.
+                float unit = torso > 0f ? torso / 0.6f : 1f;
+                var conv = VrmSpringBoneConverter.ConvertAll(
+                    transform, animator.transform, unit, report);
+                foreach (var cloth in conv.cloths)
+                {
+                    cloth.GetSerializeData2().preBuildData.enabled = usePreBuild;
+                    ApplyCulling(cloth);
+                    cloth.OnBuildComplete += HandleClothBuildComplete;
+                    generatedCloths.Add(cloth);
+                    generatedParts.Add(HairPart.Unknown);
+                    generatedIsLong.Add(false);
+                }
+                generatedColliders.AddRange(conv.colliders);
+                convertedSprings.AddRange(conv.disabledSprings);
+                foreach (var u in conv.unsupported)
+                    report.Add($"VRM 미지원: {u}");
+                if (conv.disabledSprings.Count == 0)
+                    report.Add("주의: ConvertToMc2인데 변환된 스프링이 없음 — " +
+                        "네이티브 소유 본 제외는 유지되므로 해당 체인에 클로스가 생성되지 않을 수 있음");
+            }
 
             // 2. 머리카락 체인 탐지
             Transform head = resolver(HumanBodyBones.Head);
@@ -310,6 +370,9 @@ namespace Fbx2Vmd.ClothPhysics
 
             // 스커트 본은 미리 수집 — 장식물 토폴로지 탐지의 소유 집합에도 포함한다
             var skirtBoneDepths = SkirtClothBuilder.CollectSkirtBoneDepths(animator.transform);
+
+            // 머리 측 체인 수 — 신체측 장식물 체인이 뒤에 추가되므로 마스크 대상 구간을 구분한다
+            int headHairChainCount = detect.chains.Count;
 
             // 2.5. 신체 측(허리/가슴 등)에 매달린 장식물 체인 탐지 — 머리 외 부착점
             var accRoots = new List<Transform>();
@@ -366,6 +429,7 @@ namespace Fbx2Vmd.ClothPhysics
                 // 신체측 체인에는 헤어 부위 분류(위치 추정 포함)를 적용하지 않는다
                 foreach (var ch in acc.chains)
                     ch.part = HairPart.Accessory;
+                headHairChainCount = detect.chains.Count;
                 detect.chains.AddRange(acc.chains);
                 detect.skipped.AddRange(acc.skipped);
             }
@@ -477,13 +541,26 @@ namespace Fbx2Vmd.ClothPhysics
                 }
             }
 
-            // 3. 부위별 머리카락 다이내믹스 생성 — 백엔드에 따라 MC2 BoneCloth 또는 본 스프링 에셋
-            var groups = detect.chains.GroupBy(c => c.part);
+            // 3. 부위별 머리카락 다이내믹스 생성 — 백엔드에 따라 MC2 BoneCloth 또는 본 스프링 에셋.
+            //    마스크로 끈 머리 부위는 클로스 미생성(본이 애니메이션 추종) — 신체측 체인은 대상 아님
+            var hairChains = detect.chains;
+            if (hairPhysicsParts != HairPartMask.All)
+            {
+                hairChains = detect.chains
+                    .Where((c, i) => i >= headHairChainCount
+                        || hairPhysicsParts.HasFlag(c.part.ToMask()))
+                    .ToList();
+                foreach (var p in detect.chains.Take(headHairChainCount)
+                    .Select(c => c.part).Distinct()
+                    .Where(p => !hairPhysicsParts.HasFlag(p.ToMask())))
+                    report.Add($"{p}: 부위 마스크로 스킵 — 본이 애니메이션 포즈를 추종");
+            }
+            var groups = hairChains.GroupBy(c => c.part);
             bool springPath = hairBackend == HairDynamicsBackend.SpringBones;
             if (springPath)
             {
                 var springGo = SpringHairBackend.Build(
-                    transform, detect.chains, springProfile, report, colResult.colliders);
+                    transform, hairChains, springProfile, report, colResult.colliders);
                 if (springGo == null)
                 {
                     report.Add(SpringHairBackend.Available
@@ -506,7 +583,9 @@ namespace Fbx2Vmd.ClothPhysics
                 WireHairMutualCollision(report);
             }
 
-            report.Add($"머리카락 다이내믹스 생성: {(springPath ? "본 스프링 에셋 1개" : $"BoneCloth {generatedCloths.Count}개")}");
+            // 카운트는 머리카락 클로스만 — 스커트/VRM 변환 클로스도 generatedCloths에 들어간다
+            int hairClothCount = generatedCloths.Count(IsHairCloth);
+            report.Add($"머리카락 다이내믹스 생성: {(springPath ? "본 스프링 에셋 1개" : $"BoneCloth {hairClothCount}개")}");
             graceUntilFrame = Time.frameCount + RebuildGraceFrames;
             Finish(report);
         }
@@ -515,6 +594,12 @@ namespace Fbx2Vmd.ClothPhysics
         [ContextMenu("자동 생성 물리 제거")]
         public void ClearGenerated()
         {
+            // 변환으로 끈 네이티브 스프링 복원 — 이 호출이 없으면 생성물만 지워져
+            // 물리가 소실되고 GuardOnly 복귀도 원본을 잃는다.
+            foreach (var s in convertedSprings)
+                if (s != null)
+                    s.enabled = true;
+            convertedSprings.Clear();
             SkirtClothBuilder.CleanupExtractions(transform);
             BodyColliderBuilder.ClearGenerated(transform);
             var doomed = new List<GameObject>();
@@ -647,22 +732,25 @@ namespace Fbx2Vmd.ClothPhysics
         }
 
         /// <summary>
-        /// 머리카락 클로스끼리 상호 충돌을 별형으로 연결한다.
-        /// MC2는 클로스당 상대를 1개만 지정 가능(한쪽만 설정하면 됨) → 루트 본이
-        /// 가장 많은 클로스(주모발)를 앵커로 삼고 나머지가 그쪽으로 충돌하게 한다.
-        /// 스커트 클로스(MC2Cloth_Skirt*)는 대상에서 제외.
-        /// </summary>
-        /// <summary>
-        /// 머리카락용 클로스인지 — 스커트(MC2Cloth_Skirt*)는 BoneClothLoop여도 제외한다.
+        /// 머리카락용 클로스인지 — 스커트(MC2Cloth_Skirt*)와 VRM 변환 클로스(MC2Cloth_Vrm*)
+        /// 는 BoneClothLoop/BoneCloth여도 제외한다. 변환 클로스는 제작자 튜닝이 정본이라
+        /// 헤어 템플릿 재적용·상호 충돌 배선 대상이 아니다.
         /// </summary>
         static bool IsHairCloth(MagicaCloth c)
         {
             return c != null &&
                 c.name.StartsWith(ClothNamePrefix) &&
                 !c.name.StartsWith(ClothNamePrefix + "Skirt") &&
+                !c.name.StartsWith(ClothNamePrefix + "Vrm") &&
                 c.SerializeData.clothType == ClothProcess.ClothType.BoneCloth;
         }
 
+        /// <summary>
+        /// 머리카락 클로스끼리 상호 충돌을 별형으로 연결한다.
+        /// MC2는 클로스당 상대를 1개만 지정 가능(한쪽만 설정하면 됨) → 루트 본이
+        /// 가장 많은 클로스(주모발)를 앵커로 삼고 나머지가 그쪽으로 충돌하게 한다.
+        /// 스커트 클로스(MC2Cloth_Skirt*)는 대상에서 제외.
+        /// </summary>
         void WireHairMutualCollision(List<string> report)
         {
             var hairs = generatedCloths.Where(IsHairCloth).ToList();

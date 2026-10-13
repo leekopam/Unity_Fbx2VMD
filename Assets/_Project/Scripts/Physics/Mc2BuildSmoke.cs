@@ -31,7 +31,43 @@ namespace Fbx2Vmd.ClothPhysics
                 // 초기 프레임은 엔진 스파이크 구간 — 빌드 완료까지 유예
                 for (int i = 0; i < 180; i++)
                     yield return null;
-                var setups = Object.FindObjectsOfType<CharacterPhysicsSetup>();
+                LogMarker("boot");
+                // 부트 씬에 캐릭터가 없고 -mc2Smoke 인자가 있을 때만 녹화 씬을 직접 열어
+                // 실제 클로스까지 계측한다 — 무인자 실행에서는 수동적 프로브로만 동작
+                if (Object.FindObjectsByType<CharacterPhysicsSetup>(FindObjectsSortMode.InstanceID).Length == 0 && SmokeSceneLoadRequested())
+                {
+                    var load = UnityEngine.SceneManagement.SceneManager.LoadSceneAsync("Main_Recoding");
+                    if (load != null)
+                    {
+                        // 비완료 AsyncOperation 대비 상한 — 무한 대기면 마커가 안 나와 진단 공백이 된다
+                        int waited = 0;
+                        while (!load.isDone && waited++ < 1800)
+                            yield return null;
+                        if (!load.isDone)
+                            LogMarker("load_timeout");
+                        else
+                        {
+                            for (int i = 0; i < 300; i++)
+                                yield return null;
+                            LogMarker("main_recoding");
+                        }
+                    }
+                }
+                Destroy(gameObject);
+            }
+
+            static bool SmokeSceneLoadRequested()
+            {
+                var args = System.Environment.GetCommandLineArgs();
+                foreach (var a in args)
+                    if (string.Equals(a, "-mc2Smoke",
+                        System.StringComparison.OrdinalIgnoreCase)) return true;
+                return false;
+            }
+
+            static void LogMarker(string stage)
+            {
+                var setups = Object.FindObjectsByType<CharacterPhysicsSetup>(FindObjectsSortMode.InstanceID);
                 int total = 0, valid = 0;
                 foreach (var s in setups)
                     foreach (var c in s.generatedCloths)
@@ -40,10 +76,9 @@ namespace Fbx2Vmd.ClothPhysics
                         total++;
                         if (c.IsValid()) valid++;
                     }
-                Debug.Log($"[MC2_SMOKE] managers={(MagicaManager.Time != null)} " +
+                Debug.Log($"[MC2_SMOKE] stage={stage} managers={(MagicaManager.Time != null)} " +
                     $"setups={setups.Length} cloths={total} valid={valid} " +
                     $"burst={(Unity.Burst.BurstCompiler.IsEnabled ? 1 : 0)}");
-                Destroy(gameObject);
             }
         }
 #endif
