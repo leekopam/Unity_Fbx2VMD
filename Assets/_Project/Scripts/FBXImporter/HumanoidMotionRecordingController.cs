@@ -16,6 +16,10 @@ namespace Fbx2Vmd.FBXImporter
         private float _recordingFrameRate;
         private long _nextRecordingFrame;
         private bool _hasReachedLastFrame;
+        // 느린 틱 계측 — 목표 프레임 간격의 2배를 넘는 틱을 스파이크로 집계함.
+        private int _slowTickCount;
+        private int _recordedTickCount;
+        private double _maxTickMilliseconds;
 
         internal HumanoidMotionRecordingController(
             HumanoidMotionPlaybackController playbackController,
@@ -55,6 +59,11 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+            // 이전 세션 계측 잔존 방지 — 실패 경로에서도 새 세션으로 초기화함.
+            _slowTickCount = 0;
+            _recordedTickCount = 0;
+            _maxTickMilliseconds = 0.0;
+
             if (!_videoRecorder.TryPrepare(settings, out errorMessage))
             {
                 _playbackController.Stop();
@@ -74,6 +83,10 @@ namespace Fbx2Vmd.FBXImporter
                 _recordingFrameRate = settings.FrameRate;
                 _nextRecordingFrame = 1;
                 _hasReachedLastFrame = false;
+                // 프레임 정확도 우선 녹화 — 재생이 실시간보다 느려 보이는 것은 정상 동작임.
+                Debug.Log(
+                    $"[FBXImport] 영상 녹화 시작됨. fps={settings.FrameRate}, " +
+                    "프레임 정확도 모드로 재생이 느려 보일 수 있습니다.");
                 // 투명 배경 녹화(MOV)일 때만 지정된 렌더러를 숨겨 캐릭터만 산출함.
                 SetAlphaHidden(settings.Format == MotionVideoFileFormat.MovProRes);
                 return true;
@@ -96,11 +109,22 @@ namespace Fbx2Vmd.FBXImporter
             if (_hasReachedLastFrame)
                 return Stop();
 
+            long tickStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             double timeSeconds = _nextRecordingFrame / (double)_recordingFrameRate;
             _playbackController.Seek((float)Math.Min(timeSeconds, _playbackController.ClipLengthSeconds));
             _hasReachedLastFrame =
                 _playbackController.CurrentTimeSeconds >= _playbackController.ClipLengthSeconds;
             _nextRecordingFrame++;
+
+            double tickMilliseconds =
+                (System.Diagnostics.Stopwatch.GetTimestamp() - tickStartTimestamp) *
+                1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            _recordedTickCount++;
+            _maxTickMilliseconds = Math.Max(_maxTickMilliseconds, tickMilliseconds);
+            if (tickMilliseconds > 2000.0 / _recordingFrameRate)
+            {
+                _slowTickCount++;
+            }
             return false;
         }
 
@@ -110,6 +134,17 @@ namespace Fbx2Vmd.FBXImporter
             _videoRecorder.Stop();
             bool rewoundMotion = _playbackController.Stop();
             SetAlphaHidden(false);
+            if (_recordedTickCount > 0)
+            {
+                // 녹화 중 프레임 스파이크 요약 — 끊김 원인 분석용 계측.
+                Debug.Log(
+                    $"[FBXImport] 녹화 틱 계측: ticks={_recordedTickCount}, " +
+                    $"slowTicks(>2프레임시간)={_slowTickCount}, maxTickMs={_maxTickMilliseconds:F1}");
+                // 중복 Stop 호출 시 같은 요약이 반복 출력되지 않도록 리셋함.
+                _recordedTickCount = 0;
+                _slowTickCount = 0;
+                _maxTickMilliseconds = 0.0;
+            }
             return hadActiveRecording || rewoundMotion;
         }
 

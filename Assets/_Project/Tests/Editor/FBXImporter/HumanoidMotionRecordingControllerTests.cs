@@ -244,6 +244,59 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RecorderNotRecording_When_Tick_Then_DoesNotAdvanceMotion()
+        {
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+            try
+            {
+                Invoke(playback, "Play");
+
+                Assert.That((bool)Invoke(controller, "Tick", 0.5f), Is.False);
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                    Is.EqualTo(0f).Within(TimeTolerance),
+                    "인코더가 녹화 중이 아닐 때 Tick은 모션을 진행하면 안 됩니다 " +
+                    "(중복 프레임 원천 차단).");
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_ActiveRecording_When_Ticks_Then_AdvancesExactlyOneOutputFramePerTick()
+        {
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+            try
+            {
+                Invoke(controller, "TryStart", CreateSettings(frameRate: 60f), null);
+
+                for (int index = 0; index < 5; index++)
+                {
+                    // 프레임별 진행량은 입력 dt와 무관하게 정확히 1/60초여야 함(캡처↔모션 1:1).
+                    Invoke(controller, "Tick", (index + 1) * 0.3f);
+                    Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                        Is.EqualTo((index + 1) / 60f).Within(TimeTolerance),
+                        $"틱 {index + 1}은 정확히 {(index + 1)}번째 출력 프레임 자세여야 합니다.");
+                }
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
         public void Given_MovFormat_When_RecordingStartsAndStops_Then_AlphaHiddenRenderersAreRestored()
         {
             GameObject target = InstantiateTarget();
@@ -361,7 +414,7 @@ namespace Tests.Editor.FBXImporter
 
             try
             {
-                var pipeline = UnityEngine.Object.FindObjectOfType<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
+                var pipeline = UnityEngine.Object.FindFirstObjectByType<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
                 Assert.That(pipeline, Is.Not.Null,
                     $"{sceneLabel} 씬에서 영상 녹화 파이프라인을 찾아야 합니다.");
 

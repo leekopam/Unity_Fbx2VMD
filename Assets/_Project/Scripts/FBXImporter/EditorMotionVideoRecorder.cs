@@ -62,6 +62,14 @@ namespace Fbx2Vmd.FBXImporter
                     settings.Format == MotionVideoFileFormat.MovProRes;
                 _movieSettings.OutputFile = outputFileWithoutExtension;
 
+                // ProRes 4444는 분당 수십 GB 수준의 무압축급 산출물이라 재생 버벅임을 유발함.
+                if (settings.Format == MotionVideoFileFormat.MovProRes)
+                {
+                    Debug.LogWarning(
+                        "[FBXImport] ProRes 4444(MOV)는 파일이 매우 커져 일반 플레이어 재생이 " +
+                        "버벅일 수 있습니다. 일반 감상용 녹화는 MP4를 권장합니다.");
+                }
+
                 _controllerSettings.AddRecorderSettings(_movieSettings);
                 _controllerSettings.SetRecordModeToManual();
                 _controllerSettings.FrameRate = settings.FrameRate;
