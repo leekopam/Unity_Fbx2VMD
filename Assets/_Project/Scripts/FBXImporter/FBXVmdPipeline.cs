@@ -1514,6 +1514,9 @@ namespace Fbx2Vmd.FBXImporter
         // evidence 캡처처럼 준비된 재생 세션에 goal IK 실험 경로를 켤 때 사용한다.
         internal void SetImportedMotionIkGoalFootDrive(bool isEnabled, float alpha) =>
             _humanoidMotionPlaybackController?.SetIkGoalFootDrive(isEnabled, alpha);
+        // 준비된 재생 세션의 정지 발 순간이동 확산을 토글한다 — A/B 검증과 롤백 경로.
+        internal void SetImportedMotionFootStepDiffusion(bool isEnabled) =>
+            _humanoidMotionPlaybackController?.SetFootStepDiffusion(isEnabled);
 #if UNITY_EDITOR
         internal bool ShouldUseEditorHumanoidPlaybackSession =>
             Application.isPlaying && !EditorDiagnosticSession.IsRecordingOverrideActive;
@@ -2365,6 +2368,9 @@ namespace Fbx2Vmd.FBXImporter
             _humanoidMotionPlaybackController.SetGroundResponseEnabled(true);
             // goal IK 경로 기본 활성 — 발 모임 등 근육 리타겟 왜곡을 소스 목표로 직접 구동해 차단한다.
             _humanoidMotionPlaybackController.SetIkGoalFootDrive(true, 1f);
+            // 정지 발 순간이동 확산 기본 활성 — 소스 클립의 단발 불연속이 지지 발을
+            // 순간이동시키는 스냅을 수 프레임에 걸쳐 완화한다.
+            _humanoidMotionPlaybackController.SetFootStepDiffusion(true);
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);
@@ -2433,6 +2439,9 @@ namespace Fbx2Vmd.FBXImporter
             _humanoidMotionPlaybackController.SetGroundResponseEnabled(true);
             // goal IK 경로 기본 활성 — 발 모임 등 근육 리타겟 왜곡을 소스 목표로 직접 구동해 차단한다.
             _humanoidMotionPlaybackController.SetIkGoalFootDrive(true, 1f);
+            // 정지 발 순간이동 확산 기본 활성 — 소스 클립의 단발 불연속이 지지 발을
+            // 순간이동시키는 스냅을 수 프레임에 걸쳐 완화한다.
+            _humanoidMotionPlaybackController.SetFootStepDiffusion(true);
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);

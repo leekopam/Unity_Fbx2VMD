@@ -32,11 +32,15 @@ namespace Fbx2Vmd.FBXImporter
             new HumanoidGroundResponse();
         private readonly HumanoidFootGoalDriver _footGoalDriver =
             new HumanoidFootGoalDriver();
+        private readonly HumanoidFootStepDiffuser _footStepDiffuser =
+            new HumanoidFootStepDiffuser();
         private bool _isGroundResponseEnabled;
         // 실험 경로 — goal IK 드라이브가 켜져도 gate는 매 프레임 실행되고
         // 드라이버는 주장 프레임에만 gate 결과 위에 오버레이됨.
         private bool _useIkGoalFootDrive;
         private float _footGoalAlpha;
+        // 소스 클립의 단발 불연속으로 정지 발이 순간이동할 때 확산 적용 여부.
+        private bool _useFootStepDiffusion;
         private HumanoidFootGrounding _footGrounding;
         private HumanoidFootRotationBinding _leftFootRotation;
         private HumanoidFootRotationBinding _rightFootRotation;
@@ -96,6 +100,15 @@ namespace Fbx2Vmd.FBXImporter
         internal bool IsIkGoalFootDriveActive =>
             _useIkGoalFootDrive && _footGoalAlpha > 0f && _footGoalDriver.IsInitialized;
 
+        // 정지 발 순간이동 확산 스위치 — 파이프라인 준비 경로가 기본 활성하고
+        // A/B 비교나 롤백 시 해제함.
+        internal void SetFootStepDiffusion(bool isEnabled)
+        {
+            _useFootStepDiffusion = isEnabled;
+            if (IsPrepared)
+                EvaluateCurrentPoseWithCorrection();
+        }
+
         internal void PrepareWithArmDirectionReference(
             Animator targetAnimator,
             AnimationClip clip,
@@ -138,6 +151,7 @@ namespace Fbx2Vmd.FBXImporter
                 _armSupportPoseApplier.Initialize(targetAnimator, clip);
                 _player.Initialize(targetAnimator, clip);
                 _groundResponse.Initialize(targetAnimator);
+                _footStepDiffuser.Initialize(targetAnimator);
                 ClipLengthSeconds = Mathf.Max(0f, clip.length);
                 ClipFrameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(
                     clip.frameRate);
@@ -336,6 +350,8 @@ namespace Fbx2Vmd.FBXImporter
             _sourceToTargetRotation = Quaternion.identity;
             _groundResponse.Clear();
             _footGoalDriver.Clear();
+            _footStepDiffuser.Clear();
+            _useFootStepDiffusion = false;
             _footContactStabilizer.Clear();
             _poseReferencePlayer.Dispose();
             _poseFrameEditor.Dispose();
@@ -426,6 +442,18 @@ namespace Fbx2Vmd.FBXImporter
         }
 
         private bool TryApplyFootContactStabilization(
+            Vector3 leftBendNormal,
+            Vector3 rightBendNormal)
+        {
+            bool isApplied = TryApplyFootContactStabilizationCore(
+                leftBendNormal, rightBendNormal);
+            // 발 계층 최종 출력의 단발 순간이동을 확산 — 모든 경로 반환부를 감쌈.
+            if (_useFootStepDiffusion)
+                _footStepDiffuser.TryApply(CurrentTimeSeconds, ClipFrameRate);
+            return isApplied;
+        }
+
+        private bool TryApplyFootContactStabilizationCore(
             Vector3 leftBendNormal,
             Vector3 rightBendNormal)
         {
