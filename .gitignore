@@ -25,6 +25,7 @@
 /[Vv]ideos/
 /TestResults-*.log
 /TestResults-*.xml
+/TestResults/
 /[Aa]ssets/[Ss]creenshots/
 /[Aa]ssets/[Ss]creenshots.meta
 /[Aa]ssets/[Cc]aptures/
@@ -273,6 +274,8 @@ Assets/MMD4Mecanim/Plugins/MMD4MecanimBulletPhysics/iOS/libBulletPhysics.a
 
 /Workflow.md
 /Workflow
+/Machine Spirit.md
+/Machine Spirit
 
 # Generated motion/model outputs
 *.vmd
