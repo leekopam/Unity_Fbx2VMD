@@ -15,12 +15,13 @@ namespace Tests.Editor.Settings
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string GraphicSettingTypeName = "Fbx2Vmd.Settings.GraphicSetting, Assembly-CSharp";
         private const string BackgroundColorSettingTypeName = "BackgroundColorSetting, Assembly-CSharp";
-        private const string YybRootName = "YYB Hatsune Miku";
+        private const string YybRootName = "YYB Hatsune Miku_default_1.0ver";
         private const float ComparisonCameraViewportHeight = 0.56f;
         private const float ComparisonCameraViewportWidth = 0.82f;
         private const float ComparisonCameraViewportCenterY = 0.28f;
         private const float ComparisonCameraAspect = 16f / 9f;
         private const float ComparisonCameraDepth = 39f;
+        private const float ComparisonCameraNearClip = 0.05f;
         private static string pendingCapturePath;
         private static double pendingCaptureStartTime;
         private static int pendingCapturePlayFrames;
@@ -277,7 +278,7 @@ namespace Tests.Editor.Settings
             float cameraY = focus.y - (ComparisonCameraViewportCenterY - 0.5f) * 2f * camera.orthographicSize;
             camera.transform.position = new Vector3(focus.x, cameraY, focus.z + ComparisonCameraDepth);
             camera.transform.rotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
-            camera.nearClipPlane = 0.3f;
+            camera.nearClipPlane = ComparisonCameraNearClip;
             camera.farClipPlane = ComparisonCameraDepth + bounds.extents.z + 100f;
             camera.useOcclusionCulling = false;
             Debug.Log(
