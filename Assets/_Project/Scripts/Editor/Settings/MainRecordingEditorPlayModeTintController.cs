@@ -92,8 +92,18 @@ namespace Fbx2Vmd.Settings.EditorTools
 
         private static object GetPlayModeTintPrefColor()
         {
+            // Unity 6: 틴트 프리팹이 PlayModeTintResolver로 이동, 구버전은 HostView.kPlayModeDarken
+            Type resolverType = typeof(EditorWindow).Assembly.GetType("UnityEditor.PlayModeTintResolver");
+            FieldInfo field = resolverType?.GetField(
+                "s_PlayModeTintPref",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (field != null)
+            {
+                return field.GetValue(null);
+            }
+
             Type hostViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.HostView");
-            FieldInfo field = hostViewType?.GetField(
+            field = hostViewType?.GetField(
                 "kPlayModeDarken",
                 BindingFlags.NonPublic | BindingFlags.Static);
             return field?.GetValue(null);

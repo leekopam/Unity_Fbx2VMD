@@ -229,7 +229,7 @@ namespace Fbx2Vmd.Settings
                 return qualityAsset;
             }
 
-            if (GraphicsSettings.renderPipelineAsset is UniversalRenderPipelineAsset graphicsAsset)
+            if (GraphicsSettings.defaultRenderPipeline is UniversalRenderPipelineAsset graphicsAsset)
             {
                 return graphicsAsset;
             }

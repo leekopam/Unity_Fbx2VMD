@@ -64,7 +64,7 @@ namespace Fbx2Vmd.EditorTools
                 s_cb = ScriptableObject.CreateInstance<Cb>();
                 s_cb.hideFlags = HideFlags.HideAndDontSave;
                 s_api.RegisterCallbacks(s_cb);
-                var filter = new Filter { testMode = TestMode.EditMode };
+                var filter = new Filter { testMode = UnityEditor.TestTools.TestRunner.Api.TestMode.EditMode };
                 var names = filterNames == null ? null :
                     System.Linq.Enumerable.ToArray(
                         System.Linq.Enumerable.Where(filterNames,
