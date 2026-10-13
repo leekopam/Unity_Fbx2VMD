@@ -66,7 +66,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
             ClearYybVisualComparisonRunnerState("default-options-preserve-scene-defaults-test");
@@ -120,7 +120,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
@@ -151,7 +151,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
@@ -183,7 +183,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -224,7 +224,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
@@ -359,7 +359,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference, Is.False);

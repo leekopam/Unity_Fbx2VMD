@@ -572,7 +572,7 @@ namespace Fbx2Vmd.CharacterLibrary
 
         private async void LoadEntry(CharacterLibraryEntry entry)
         {
-            FBXVmdPipeline pipeline = FindObjectOfType<FBXVmdPipeline>(true);
+            FBXVmdPipeline pipeline = FindFirstObjectByType<FBXVmdPipeline>(FindObjectsInactive.Include);
             if (pipeline == null)
             {
                 _message = "씬에 FBXVmdPipeline이 없어 캐릭터를 배치할 수 없습니다.";
@@ -626,7 +626,7 @@ namespace Fbx2Vmd.CharacterLibrary
                 : Manager.LastError;
             if (_manager != null && !Application.isPlaying)
             {
-                FBXVmdPipeline pipeline = FindObjectOfType<FBXVmdPipeline>(true);
+                FBXVmdPipeline pipeline = FindFirstObjectByType<FBXVmdPipeline>(FindObjectsInactive.Include);
                 if (pipeline != null)
                 {
                     EditorSceneManager.MarkSceneDirty(pipeline.gameObject.scene);

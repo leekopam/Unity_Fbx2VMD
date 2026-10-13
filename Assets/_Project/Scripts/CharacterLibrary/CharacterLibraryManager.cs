@@ -61,7 +61,7 @@ namespace Fbx2Vmd.CharacterLibrary
                 return _current;
             }
 
-            _current = FindObjectOfType<CharacterLibraryManager>(true);
+            _current = FindFirstObjectByType<CharacterLibraryManager>(FindObjectsInactive.Include);
             if (_current != null)
             {
                 return _current;
@@ -414,7 +414,7 @@ namespace Fbx2Vmd.CharacterLibrary
                 return true;
             }
 
-            _pipeline = FindObjectOfType<FBXVmdPipeline>(true);
+            _pipeline = FindFirstObjectByType<FBXVmdPipeline>(FindObjectsInactive.Include);
             return _pipeline != null;
         }
 

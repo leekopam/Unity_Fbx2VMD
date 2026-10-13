@@ -26,7 +26,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(MainAutoScenePath);
 
-            FBXVmdPipeline fileManager = Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must keep its FBXVmdPipeline.");
             Assert.That(ReadRecordVmdAfterImport(fileManager), Is.True, "Main_Auto must remain the existing VMD generation scene.");
@@ -41,7 +41,7 @@ namespace Tests.Editor.FBXImporter
 
             EditorSceneManager.OpenScene(CaptureScenePath);
 
-            FBXVmdPipeline fileManager = Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = Object.FindFirstObjectByType<FBXVmdPipeline>();
             Camera mainCamera = Camera.main;
 
             Assert.That(fileManager, Is.Not.Null, "Capture scene must contain FBXVmdPipeline for FBX selection/import.");
@@ -160,7 +160,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(MainRecordingScenePath);
 
-            FBXVmdPipeline fileManager = Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = Object.FindFirstObjectByType<FBXVmdPipeline>();
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FBXVmdPipeline for FBX selection/import.");
             Assert.That(ReadRecordVmdAfterImport(fileManager), Is.False,
                 "Main_recoding must keep FBX import capture separate from automatic VMD conversion.");
@@ -206,7 +206,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(MainRecordingScenePath);
 
-            FBXVmdPipeline fileManager = Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FBXVmdPipeline for FBX selection/import.");
             Assert.That(fileManager.ShouldUseManualAnimatorFingerPoseReference, Is.False,
@@ -271,7 +271,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(scenePath);
 
-            FBXVmdPipeline fileManager = Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, $"{sceneName} must contain FBXVmdPipeline.");
             Assert.That(fileManager.showGhostModel, Is.False,
@@ -287,7 +287,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(GameObject.Find(ManualRecordButtonName), Is.Null,
                 $"{sceneName} must not expose the Main_recoding-only manual recording button.");
 
-            Button[] buttons = Object.FindObjectsOfType<Button>(true);
+            Button[] buttons = Object.FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID);
             foreach (Button button in buttons)
             {
                 for (int i = 0; i < button.onClick.GetPersistentEventCount(); i++)
@@ -304,7 +304,7 @@ namespace Tests.Editor.FBXImporter
 
         private static Button FindManualRecordButton()
         {
-            foreach (Button button in Object.FindObjectsOfType<Button>(true))
+            foreach (Button button in Object.FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 if (button.name == ManualRecordButtonName) return button;
             }

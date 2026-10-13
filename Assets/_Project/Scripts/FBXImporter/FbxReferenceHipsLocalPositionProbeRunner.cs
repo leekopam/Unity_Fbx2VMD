@@ -77,7 +77,7 @@ namespace Fbx2Vmd.FBXImporter
             AddAssetVariant(variants, "manual_yyb_prefab", ManualYybPrefabPath, fallbackController);
             AddAssetVariant(variants, "testprefab_prefab", TestPrefabPath, fallbackController);
 
-            foreach (Animator animator in UnityEngine.Object.FindObjectsOfType<Animator>(true))
+            foreach (Animator animator in UnityEngine.Object.FindObjectsByType<Animator>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 if (animator == null || animator.avatar == null || !animator.avatar.isValid || !animator.avatar.isHuman)
                 {

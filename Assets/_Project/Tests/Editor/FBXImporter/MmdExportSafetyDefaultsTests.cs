@@ -20,7 +20,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldStabilizeGroundedFootXZ, Is.False, "Rollback preset must not enable per-foot X/Z locking.");
@@ -185,7 +185,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must contain FBXVmdPipeline.");
             Assert.That(
@@ -224,7 +224,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(scenePath);
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
             Assert.That(fileManager.MovementScaleMultiplier, Is.EqualTo(expectedMovementScaleMultiplier).Within(0.0001f), $"{scenePath} must keep the expected visible root carrier movement scale.");
@@ -295,7 +295,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(scenePath);
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
             Assert.That(
@@ -320,7 +320,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(scenePath);
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldPreserveRetargetBodyPosition, Is.False, $"{scenePath} must let the imported FBX body position drive the moving-root solve.");
@@ -333,7 +333,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(scenePath);
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
             Assert.That(
@@ -427,7 +427,7 @@ namespace Tests.Editor.FBXImporter
         {
             EditorSceneManager.OpenScene(scenePath);
 
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
             Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
             Assert.That(GetField<bool>(fileManager, "enableFinalIkFootGroundingExperiment"), Is.False, "Final IK foot grounding experiment must stay opt-in.");

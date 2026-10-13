@@ -26,7 +26,7 @@ namespace Fbx2Vmd.Settings
                 return;
             }
 
-            foreach (PostProcessVolume volume in Object.FindObjectsOfType<PostProcessVolume>(true))
+            foreach (PostProcessVolume volume in Object.FindObjectsByType<PostProcessVolume>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 if (volume.isGlobal)
                 {

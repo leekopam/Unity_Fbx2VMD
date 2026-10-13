@@ -9,7 +9,7 @@ namespace Fbx2Vmd.FBXImporter
     {
         internal static HumanoidSampleCode SelectAndActivate(string targetNameToken)
         {
-            HumanoidSampleCode[] recorders = UnityEngine.Object.FindObjectsOfType<HumanoidSampleCode>(true);
+            HumanoidSampleCode[] recorders = UnityEngine.Object.FindObjectsByType<HumanoidSampleCode>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID);
             HumanoidSampleCode selected = null;
             foreach (HumanoidSampleCode recorder in recorders)
             {

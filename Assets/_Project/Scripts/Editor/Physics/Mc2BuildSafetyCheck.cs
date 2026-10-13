@@ -22,7 +22,6 @@ namespace Fbx2Vmd.EditorPhysics
         {
             var sb = new StringBuilder("[MC2 빌드 안전 점검]\n");
             var target = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
-            var group = EditorUserBuildSettings.selectedBuildTargetGroup;
 
             // 1) 스크립팅 백엔드
             var backend = PlayerSettings.GetScriptingBackend(target);
@@ -35,13 +34,18 @@ namespace Fbx2Vmd.EditorPhysics
                     ? "— ⚠ Medium 이상은 MC2/Burst에서 실패 사례 있음. 빌드 스모크 필수"
                     : "— OK"));
 
-            // 3) Burst AOT 설정 파일
-            string burstAot = $"ProjectSettings/BurstAotSettings_{EditorUserBuildSettings.activeBuildTarget}.json";
+            // 3) Burst AOT 설정 파일 — Burst는 ResolveTarget(BuildTarget) 기준 이름을 읽는다
+            //    (StandaloneWindows64/StandaloneWindows → StandaloneWindows).
+            //    BuildTargetGroup은 "Standalone"을 반환해 파일명을 만들 수 없다.
+            var burstTarget = EditorUserBuildSettings.activeBuildTarget;
+            if (burstTarget == BuildTarget.StandaloneWindows64 || burstTarget == BuildTarget.StandaloneWindows)
+                burstTarget = BuildTarget.StandaloneWindows;
+            string burstAot = $"ProjectSettings/BurstAotSettings_{burstTarget}.json";
             bool hasBurstAot = File.Exists(burstAot);
             sb.AppendLine($"Burst AOT 설정: {(hasBurstAot ? burstAot : "없음 — Burst 기본값 사용 (보통 AOT 켜짐, 명시 생성 권장)")}");
 
             // 4) MC2 PreBuild 사용 여부 — 생성물 의존이라 지금은 기본 OFF
-            var setups = Object.FindObjectsOfType<CharacterPhysicsSetup>(true);
+            var setups = Object.FindObjectsByType<CharacterPhysicsSetup>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID);
             int prebuildOn = 0, total = 0;
             foreach (var s in setups)
             {

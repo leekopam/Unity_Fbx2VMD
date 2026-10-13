@@ -1241,7 +1241,7 @@ namespace Tests.Editor.Settings
 
             EditorSceneManager.OpenScene(MainAutoScenePath);
             Assert.That(
-                UnityEngine.Object.FindObjectOfType<RecordingSetting>(),
+                UnityEngine.Object.FindFirstObjectByType<RecordingSetting>(),
                 Is.Null,
                 "The first Player scene is Main_Auto, so Player startup settings launch must not depend on RecordingSetting.Start().");
         }
@@ -2059,7 +2059,7 @@ namespace Tests.Editor.Settings
         public void Given_MainRecordingScene_When_InspectingOnboardingActions_Then_BasicSetupCanReachFbxImporter()
         {
             EditorSceneManager.OpenScene(MainRecordingScenePath);
-            RecordingSetting recodingSetting = UnityEngine.Object.FindObjectOfType<RecordingSetting>();
+            RecordingSetting recodingSetting = UnityEngine.Object.FindFirstObjectByType<RecordingSetting>();
 
             Assert.That(
                 MainRecordingSettingsActions.CanExecute(
@@ -2072,7 +2072,7 @@ namespace Tests.Editor.Settings
         public void Given_MainRecordingScene_When_ExecutingImportFbxBeforeFBXVmdPipelineAwake_Then_InitializesFileBrowserAndCancelsSafely()
         {
             EditorSceneManager.OpenScene(MainRecordingScenePath);
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>();
+            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
             Assert.That(fileManager, Is.Not.Null);
 
             var fakeFileBrowser = new CancelFileBrowserService();
@@ -2762,7 +2762,7 @@ namespace Tests.Editor.Settings
             Type popupType = RequireType(RuntimePopupTypeName);
             EditorSceneManager.OpenScene(MainRecordingScenePath);
 
-            RecordingSetting recordingSetting = UnityEngine.Object.FindObjectOfType<RecordingSetting>();
+            RecordingSetting recordingSetting = UnityEngine.Object.FindFirstObjectByType<RecordingSetting>();
             Assert.That(recordingSetting, Is.Not.Null, "Main_recoding must keep RecordingSetting on the Setting object.");
             Assert.That(GetField<bool>(recordingSetting, "openSettingsPopupOnStart"), Is.True);
 

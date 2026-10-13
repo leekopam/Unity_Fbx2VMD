@@ -37,7 +37,7 @@ namespace Tests.Editor.Settings
 
         internal static void ApplyDrag(MainRecordingSettingsPopup popup, Vector2 delta)
         {
-            EventSystem eventSystem = UnityEngine.Object.FindObjectOfType<EventSystem>();
+            EventSystem eventSystem = UnityEngine.Object.FindFirstObjectByType<EventSystem>();
             GameObject ownedEventSystemObject = null;
             if (eventSystem == null)
             {

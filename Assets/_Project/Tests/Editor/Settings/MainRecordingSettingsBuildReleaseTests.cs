@@ -80,7 +80,7 @@ namespace Tests.Editor.Settings
                 Assert.That(scaler.uiScaleMode, Is.EqualTo(CanvasScaler.ScaleMode.ScaleWithScreenSize));
                 Assert.That(scaler.referenceResolution, Is.EqualTo(MainRecordingSettingsLayoutSpec.ReferenceSize));
 
-                Assert.That(UnityEngine.Object.FindObjectOfType<EventSystem>(), Is.Not.Null);
+                Assert.That(UnityEngine.Object.FindFirstObjectByType<EventSystem>(), Is.Not.Null);
                 Assert.That(footerActions.GetComponentInChildren<Button>(true), Is.Not.Null);
 
                 AssertSerializedReference(controller, "fbxPathInput", true);
@@ -132,9 +132,9 @@ namespace Tests.Editor.Settings
                     Is.LessThanOrEqualTo(15f),
                     "Companion TMP action label max font size must stay within the measured safe button contract.");
 
-                Assert.That(UnityEngine.Object.FindObjectOfType<RecordingSetting>(), Is.Null);
-                Assert.That(UnityEngine.Object.FindObjectOfType<FBXVmdPipeline>(), Is.Null);
-                Assert.That(UnityEngine.Object.FindObjectOfType<UnityHumanoidVMDRecorder>(), Is.Null);
+                Assert.That(UnityEngine.Object.FindFirstObjectByType<RecordingSetting>(), Is.Null);
+                Assert.That(UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>(), Is.Null);
+                Assert.That(UnityEngine.Object.FindFirstObjectByType<UnityHumanoidVMDRecorder>(), Is.Null);
             }
             finally
             {

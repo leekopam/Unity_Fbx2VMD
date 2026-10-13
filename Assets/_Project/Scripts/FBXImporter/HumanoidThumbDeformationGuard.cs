@@ -370,7 +370,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (targetAnimator != null)
             {
-                PoseSpaceRetargeter[] retargeters = FindObjectsOfType<PoseSpaceRetargeter>();
+                PoseSpaceRetargeter[] retargeters = FindObjectsByType<PoseSpaceRetargeter>(FindObjectsSortMode.InstanceID);
                 foreach (PoseSpaceRetargeter candidate in retargeters)
                 {
                     if (candidate != null && candidate.targetAnimator == targetAnimator)

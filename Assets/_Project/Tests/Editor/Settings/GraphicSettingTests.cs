@@ -1301,7 +1301,7 @@ namespace Tests.Editor.Settings
             Assert.That(GetField<Color>(backgroundSetting, "backgroundColor"), Is.EqualTo(ReferenceMp4BackgroundColor),
                 "BackgroundColorSetting must own the reference mp4 background color.");
 
-            Component fileManager = UnityEngine.Object.FindObjectOfType(RequireType(FBXVmdPipelineTypeName)) as Component;
+            Component fileManager = UnityEngine.Object.FindFirstObjectByType(RequireType(FBXVmdPipelineTypeName)) as Component;
             Assert.That(fileManager, Is.Not.Null, "Main_recoding scene must keep FBXVmdPipeline for recording control.");
             Component recordingController = ResolveRecordingController(fileManager);
             Assert.That(recordingController, Is.Not.Null, "Main_recoding target must keep HumanoidSampleCode for manual recording.");
@@ -1352,7 +1352,7 @@ namespace Tests.Editor.Settings
             Type graphicSettingType = RequireType(GraphicSettingTypeName);
             EditorSceneManager.OpenScene(MainAutoScenePath);
 
-            Component component = UnityEngine.Object.FindObjectOfType(graphicSettingType) as Component;
+            Component component = UnityEngine.Object.FindFirstObjectByType(graphicSettingType) as Component;
 
             Assert.That(component, Is.Null,
                 "Main_Auto must stay focused on VMD generation and must not carry the Main_recoding visual quality controls.");
@@ -1406,7 +1406,7 @@ namespace Tests.Editor.Settings
                     Is.EqualTo(ReferenceMp4BackgroundColor));
                 Component recodingSetting = component.GetComponent(recodingSettingType);
                 Assert.That(recodingSetting, Is.Not.Null, "Installer must keep RecordingSetting on Setting.");
-                Component fileManager = UnityEngine.Object.FindObjectOfType(RequireType(FBXVmdPipelineTypeName)) as Component;
+                Component fileManager = UnityEngine.Object.FindFirstObjectByType(RequireType(FBXVmdPipelineTypeName)) as Component;
                 Component recordingController = ResolveRecordingController(fileManager);
                 Button manualRecordButton = FindManualRecordButton();
                 Assert.That(fileManager, Is.Not.Null);
@@ -1525,7 +1525,7 @@ namespace Tests.Editor.Settings
             Camera mainCamera = Camera.main;
             Assert.That(mainCamera, Is.Not.Null, "Main_recoding scene must expose a MainCamera-tagged camera for GameView.");
 
-            Camera[] cameras = UnityEngine.Object.FindObjectsOfType<Camera>();
+            Camera[] cameras = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.InstanceID);
             Assert.That(cameras, Has.Length.EqualTo(1),
                 "Main_recoding must not keep temporary comparison cameras; ref mp4 comparison must use the existing Main Camera.");
             Assert.That(cameras[0], Is.EqualTo(mainCamera));
@@ -1632,7 +1632,7 @@ namespace Tests.Editor.Settings
         private static GameObject RequireRecordingTargetRoot(Component fileManager = null)
         {
             Component resolvedFileManager = fileManager ??
-                UnityEngine.Object.FindObjectOfType(RequireType(FBXVmdPipelineTypeName)) as Component;
+                UnityEngine.Object.FindFirstObjectByType(RequireType(FBXVmdPipelineTypeName)) as Component;
             Assert.That(resolvedFileManager, Is.Not.Null, "Expected an active FBXVmdPipeline.");
 
             GameObject targetRoot = GetMemberValue<GameObject>(resolvedFileManager, "targetCharacter");
@@ -1746,7 +1746,7 @@ namespace Tests.Editor.Settings
 
         private static Button FindManualRecordButton()
         {
-            foreach (Button button in UnityEngine.Object.FindObjectsOfType<Button>(true))
+            foreach (Button button in UnityEngine.Object.FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 if (button.name == ManualRecordButtonName) return button;
             }

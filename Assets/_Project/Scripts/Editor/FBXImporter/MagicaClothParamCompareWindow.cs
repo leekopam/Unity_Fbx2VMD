@@ -96,7 +96,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             // 열린 씬의 MagicaCloth를 나열해 레퍼런스/대상 선택을 돕는 메뉴임.
             var menu = new GenericMenu();
-            foreach (MagicaCloth cloth in UnityEngine.Object.FindObjectsOfType<MagicaCloth>(true))
+            foreach (MagicaCloth cloth in UnityEngine.Object.FindObjectsByType<MagicaCloth>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 string label = cloth.name;
                 menu.AddItem(new GUIContent("레퍼런스/" + label), false,

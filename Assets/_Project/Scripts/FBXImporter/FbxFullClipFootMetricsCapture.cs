@@ -420,7 +420,7 @@ namespace Fbx2Vmd.FBXImporter
             var renderTexture = new RenderTexture(width, height, 24);
             var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
             Canvas[] canvases = excludeUi
-                ? UnityEngine.Object.FindObjectsOfType<Canvas>(true) : Array.Empty<Canvas>();
+                ? UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID) : Array.Empty<Canvas>();
             bool[] canvasStates = new bool[canvases.Length];
             RenderTexture previousActive = RenderTexture.active;
             RenderTexture previousTarget = camera.targetTexture;

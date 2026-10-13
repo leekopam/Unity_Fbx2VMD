@@ -44,7 +44,7 @@ namespace Fbx2Vmd.CharacterLibrary
 
                 if (pipeline == null)
                 {
-                    pipeline = Object.FindObjectOfType<FBXVmdPipeline>(true);
+                    pipeline = Object.FindFirstObjectByType<FBXVmdPipeline>(FindObjectsInactive.Include);
                 }
 
                 // 파이프라인이 가리키는 루트는 이전 캐릭터로 복원하고,
