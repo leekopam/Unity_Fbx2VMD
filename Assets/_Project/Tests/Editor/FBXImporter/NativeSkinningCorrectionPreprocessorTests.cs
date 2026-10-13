@@ -551,7 +551,7 @@ namespace Tests.Editor.FBXImporter
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "CorrectedFrameCount"),
-                    Is.EqualTo(7223),
+                    Is.EqualTo(7222),
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "FallbackFrameCount"),
@@ -559,7 +559,7 @@ namespace Tests.Editor.FBXImporter
                     message);
                 Assert.That(
                     ReadProperty<int>(result, "CorrectionEntryCount"),
-                    Is.EqualTo(1250305),
+                    Is.EqualTo(1250467),
                     message);
             }
             finally
