@@ -1188,9 +1188,251 @@ namespace Fbx2Vmd.Tests.LipSync
                 "전량 0 베이크는 경고로 표면화돼야 함: " + string.Join("|", warnings));
         }
 
+        // ---------- 음량 자동 정규화 + 채널 스무딩 ----------
+
+        [Test]
+        public void NormalizeVolumes_조용한클립도p95기준전개구()
+        {
+            // 전부 0.01인 조용한 클립 — p95가 곧 최댓값이라 모두 완전 개구(1.0)로 정규화
+            var vols = new float[20];
+            for (int i = 0; i < vols.Length; i++)
+            {
+                vols[i] = 0.01f;
+            }
+            VocalLipSyncBaker.NormalizeVolumes(vols, 1f);
+            foreach (float v in vols)
+            {
+                Assert.AreEqual(1f, v, 1e-4f, "클립 p95가 완전 개구 기준이 돼야 함");
+            }
+        }
+
+        [Test]
+        public void NormalizeVolumes_감마가조용구간을부양하고무음은유지()
+        {
+            // p95(0.1) 대비 1/10인 발성 구간 — 감마 0.5로 sqrt(0.1)≈0.316까지 부양.
+            // 0인 무음 프레임은 정규화·지수를 걸어도 0이라 닫힘이 유지된다.
+            var vols = new[] { 0.1f, 0f, 0.01f };
+            VocalLipSyncBaker.NormalizeVolumes(vols, 0.5f);
+            Assert.AreEqual(1f, vols[0], 1e-4f, "피크는 완전 개구 유지");
+            Assert.AreEqual(0f, vols[1], "무음은 0 유지");
+            Assert.AreEqual(0.3162f, vols[2], 0.01f, "조용한 발성 구간은 감마 부양");
+        }
+
+        [Test]
+        public void BuildGatedVolumes_자동정규화는조용한클립도게이트통과()
+        {
+            // raw 0.005 → GetLipSyncInfo 정규화 음량 ≈ 0.199 — 절대 게이트 0.3에 못 미침.
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            data.duration = 20 / 60f;
+            for (int i = 0; i < 20; i++)
+            {
+                data.frames.Add(new uLipSync.BakedFrame
+                {
+                    volume = 0.005f,
+                    phonemes = new List<uLipSync.BakedPhonemeRatio>
+                    {
+                        new uLipSync.BakedPhonemeRatio { phoneme = "A", ratio = 1f },
+                    },
+                });
+            }
+            float[] gated = VocalLipSyncBaker.BuildGatedVolumes(data, 0.3f);
+            Assert.IsTrue(gated.All(v => v == 0f), "절대 게이트로는 조용한 클립이 전량 차단");
+            float[] normed = VocalLipSyncBaker.BuildGatedVolumes(data, 0.3f,
+                autoVolumeNorm: true, volumeGamma: 1f);
+            Assert.IsTrue(normed.All(v => v > 0.9f), "자동 정규화로 같은 클립이 개구 통과");
+        }
+
+        [Test]
+        public void SmoothChannel_열림보다닫힘이느리다()
+        {
+            // open 50ms(α≈0.284)/close 130ms(α≈0.120) — 상승 첫 프레임은 스냅이 아니라
+            // 부분 추종이고, 같은 폭의 하강은 더 느리게 감쇠한다.
+            float[] smoothed = VocalLipSyncBaker.SmoothChannel(
+                new[] { 0f, 1f, 1f, 1f, 1f, 0f, 0f }, 50f, 130f);
+            Assert.Greater(smoothed[1], 0.2f, "열림은 부분 추종");
+            Assert.Less(smoothed[1], 0.4f, "열림은 1프레임 스냅이 아니다");
+            Assert.Greater(smoothed[5], smoothed[1], "닫힘이 열림보다 느려야 함");
+        }
+
+        [Test]
+        public void BakeClip_채널스무딩은어택도점진()
+        {
+            // 레거시는 어택이 1프레임 스냅(=100) — 채널 스무딩은 open 50ms로 점진 개구,
+            // close 130ms로 닫힘 꼬리가 남는다.
+            var tuning = new VocalLipSyncBaker.BakeTuning
+            {
+                channelSmoothing = true,
+                openMs = 50f,
+                closeMs = 130f,
+                transitionMs = 0f,
+            };
+            var clip = BakeAOnlyClip(new[] { 1f, 1f, 1f, 0f, 0f },
+                gate: 0.02f, releaseDamp: 0f, tuning: tuning);
+            var curve = UnityEditor.AnimationUtility.GetEditorCurve(
+                clip, UnityEditor.AnimationUtility.GetCurveBindings(clip)[0]);
+            float dt = 1f / 60f;
+            Assert.Less(curve.Evaluate(0f), 40f, "열림 첫 프레임은 즉시 100이 아니다");
+            Assert.Greater(curve.Evaluate(dt * 4f), 0f, "닫힘은 130ms 꼬리로 점진");
+            Assert.Less(curve.Evaluate(dt * 4f), curve.Evaluate(dt * 2f),
+                "닫힘 구간은 단조 감소");
+        }
+
+        [Test]
+        public void BakeClip_모음전이는시상수로크로스페이드()
+        {
+            // A만 3프레임 → I만 3프레임. 전이 80ms(α≈0.188)면 I가 즉시 100이 아니라
+            // 점진 상승하고 A도 점진 하강한다 — 발음 속도 이상의 형태 급변을 막는다.
+            var ratios = new List<uLipSync.BakedPhonemeRatio>[6];
+            for (int i = 0; i < 6; i++)
+            {
+                ratios[i] = new List<uLipSync.BakedPhonemeRatio>
+                {
+                    new uLipSync.BakedPhonemeRatio { phoneme = i < 3 ? "A" : "I", ratio = 1f },
+                };
+            }
+            var tuning = new VocalLipSyncBaker.BakeTuning
+            {
+                channelSmoothing = true,
+                openMs = 0f,
+                closeMs = 0f,
+                transitionMs = 80f,
+            };
+            var clip = BakeTwoMorphClip(new float[6].Select(_ => 1f).ToArray(), ratios, tuning);
+            var bindings = UnityEditor.AnimationUtility.GetCurveBindings(clip);
+            var curveA = UnityEditor.AnimationUtility.GetEditorCurve(clip,
+                bindings.First(b => b.propertyName == "blendShape.あ"));
+            var curveI = UnityEditor.AnimationUtility.GetEditorCurve(clip,
+                bindings.First(b => b.propertyName == "blendShape.い"));
+            float dt = 1f / 60f;
+            float i3 = curveI.Evaluate(dt * 3f);
+            Assert.Greater(i3, 5f, "전환 직후 I가 시작돼야 함");
+            Assert.Less(i3, 30f, "I는 1프레임에 100으로 스냅하지 않는다");
+            Assert.Greater(curveI.Evaluate(dt * 5f), curveI.Evaluate(dt * 4f),
+                "I는 점진 상승");
+            Assert.Greater(curveA.Evaluate(dt * 3f), 0f, "A는 점진 하강(꼬리 잔존)");
+            Assert.Less(curveA.Evaluate(dt * 5f) + curveI.Evaluate(dt * 5f), 100f,
+                "전이 중 두 모프 합은 개구량 이내");
+        }
+
+        [Test]
+        public void BakeClip_레거시튜닝은미지정과동일()
+        {
+            // tuning=Legacy(정규화·스무딩 모두 끔)는 tuning 생략과 같은 출력이어야 한다.
+            var plain = BakeAOnlyClip(new[] { 1f, 0.5f, 0f }, 0.02f, 0.3f);
+            var legacy = BakeAOnlyClip(new[] { 1f, 0.5f, 0f }, 0.02f, 0.3f,
+                tuning: VocalLipSyncBaker.BakeTuning.Legacy);
+            var c1 = UnityEditor.AnimationUtility.GetEditorCurve(
+                plain, UnityEditor.AnimationUtility.GetCurveBindings(plain)[0]);
+            var c2 = UnityEditor.AnimationUtility.GetEditorCurve(
+                legacy, UnityEditor.AnimationUtility.GetCurveBindings(legacy)[0]);
+            for (int i = 0; i < 3; i++)
+            {
+                Assert.AreEqual(c1.Evaluate(i / 60f), c2.Evaluate(i / 60f), 0.01f,
+                    $"프레임 {i} 출력이 달라서는 안 됨");
+            }
+        }
+
+        [Test]
+        public void BakeClip_발성중무판정은마지막모음유지()
+        {
+            // A 2프레임 → 무판정 3프레임(음량 계속) → I. wav2vec2 원핫이 1프레임
+            // 펄스로 나오는 데이터에서 무판정 구간마다 입이 닫히는 파닥거림을 막는다.
+            var ratios = new List<uLipSync.BakedPhonemeRatio>[6];
+            for (int i = 0; i < 6; i++)
+            {
+                ratios[i] = i < 2
+                    ? new List<uLipSync.BakedPhonemeRatio>
+                        { new uLipSync.BakedPhonemeRatio { phoneme = "A", ratio = 1f } }
+                    : i == 5
+                        ? new List<uLipSync.BakedPhonemeRatio>
+                            { new uLipSync.BakedPhonemeRatio { phoneme = "I", ratio = 1f } }
+                        : new List<uLipSync.BakedPhonemeRatio>(); // 무판정
+            }
+            var tuning = new VocalLipSyncBaker.BakeTuning
+            {
+                channelSmoothing = true,
+                transitionMs = 0f,
+                holdVowelWhileVoiced = true,
+            };
+            var clip = BakeTwoMorphClip(new float[6].Select(_ => 1f).ToArray(), ratios, tuning);
+            var bindings = UnityEditor.AnimationUtility.GetCurveBindings(clip);
+            var curveA = UnityEditor.AnimationUtility.GetEditorCurve(clip,
+                bindings.First(b => b.propertyName == "blendShape.あ"));
+            var curveI = UnityEditor.AnimationUtility.GetEditorCurve(clip,
+                bindings.First(b => b.propertyName == "blendShape.い"));
+            float dt = 1f / 60f;
+            Assert.AreEqual(100f, curveA.Evaluate(dt * 3f), 1f,
+                "발성 중 무판정 구간은 마지막 모음 A를 유지");
+            Assert.AreEqual(0f, curveA.Evaluate(dt * 5f), 1f,
+                "새 우세 모음 I가 오면 A 유지는 해제");
+            Assert.AreEqual(100f, curveI.Evaluate(dt * 5f), 1f, "I 프레임은 정상 반영");
+        }
+
+        [Test]
+        public void BakeClip_무음이면모음유지해제()
+        {
+            // A 후 무음(음량 0) → 음량 복귀해도 새 펄스가 없으면 유지되면 안 된다 —
+            // 침묵을 사이에 둔 오래된 모음 형태가 되살아나는 것을 막는다.
+            // closeMs>0이어야 실기본값 경로를 검증한다 — 스무딩된 개구 채널은 원폴
+            // 꼬리가 0에 도달하지 않으므로 무음 판정이 스무딩 전 게이트 출력이어야 함.
+            var ratios = new List<uLipSync.BakedPhonemeRatio>[5];
+            for (int i = 0; i < 5; i++)
+            {
+                ratios[i] = i < 2
+                    ? new List<uLipSync.BakedPhonemeRatio>
+                        { new uLipSync.BakedPhonemeRatio { phoneme = "A", ratio = 1f } }
+                    : new List<uLipSync.BakedPhonemeRatio>();
+            }
+            var tuning = new VocalLipSyncBaker.BakeTuning
+            {
+                channelSmoothing = true,
+                closeMs = 130f,
+                transitionMs = 0f,
+                holdVowelWhileVoiced = true,
+            };
+            var clip = BakeTwoMorphClip(new[] { 1f, 1f, 0f, 0f, 1f }, ratios, tuning);
+            var bindings = UnityEditor.AnimationUtility.GetCurveBindings(clip);
+            var curveA = UnityEditor.AnimationUtility.GetEditorCurve(clip,
+                bindings.First(b => b.propertyName == "blendShape.あ"));
+            float dt = 1f / 60f;
+            Assert.AreEqual(0f, curveA.Evaluate(dt * 4f), 1f,
+                "무음을 지난 후의 무판정 프레임은 유지 대상이 아니다");
+        }
+
+        /// <summary>'あ'·'い' 모프 두 개 모델에 프레임별 음소비율을 베이크한다.</summary>
+        private AnimationClip BakeTwoMorphClip(float[] volumes,
+            List<uLipSync.BakedPhonemeRatio>[] frameRatios,
+            VocalLipSyncBaker.BakeTuning? tuning)
+        {
+            var root = new GameObject("TwoMorphChar");
+            _cleanup.Add(root);
+            var mesh = new Mesh { name = "m" };
+            mesh.vertices = new[] { Vector3.zero };
+            mesh.AddBlendShapeFrame("あ", 100f, new Vector3[1], new Vector3[1], new Vector3[1]);
+            mesh.AddBlendShapeFrame("い", 100f, new Vector3[1], new Vector3[1], new Vector3[1]);
+            _cleanup.Add(mesh);
+            root.AddComponent<SkinnedMeshRenderer>().sharedMesh = mesh;
+
+            var data = ScriptableObject.CreateInstance<uLipSync.BakedData>();
+            _cleanup.Add(data);
+            data.duration = volumes.Length / 60f;
+            for (int i = 0; i < volumes.Length; i++)
+            {
+                data.frames.Add(new uLipSync.BakedFrame
+                {
+                    volume = volumes[i],
+                    phonemes = frameRatios[i],
+                });
+            }
+            var clip = VocalLipSyncBaker.BakeClip(data, root, 0.02f, null, 0f, 0f, tuning);
+            _cleanup.Add(clip);
+            return clip;
+        }
+
         /// <summary>'あ' 모프 하나만 가진 모델에 A=1 음소 데이터를 베이크한다.</summary>
         private AnimationClip BakeAOnlyClip(float[] volumes, float gate, float releaseDamp,
-            IList<string> warnings = null)
+            IList<string> warnings = null, VocalLipSyncBaker.BakeTuning? tuning = null)
         {
             var root = new GameObject("DampChar");
             _cleanup.Add(root);
@@ -1214,7 +1456,8 @@ namespace Fbx2Vmd.Tests.LipSync
                     },
                 });
             }
-            var clip = VocalLipSyncBaker.BakeClip(data, root, gate, warnings, releaseDamp);
+            var clip = VocalLipSyncBaker.BakeClip(data, root, gate, warnings, releaseDamp,
+                0f, tuning);
             _cleanup.Add(clip);
             return clip;
         }

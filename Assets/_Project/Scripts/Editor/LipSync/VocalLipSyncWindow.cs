@@ -43,6 +43,13 @@ namespace Fbx2Vmd.LipSync
         [SerializeField] private float _minVolumeGate = 0.02f;
         [SerializeField] private float _releaseDamp = 0.35f; // 입 닫힘/잡음 하강 감쇠(0=끔)
         [SerializeField] private float _curveEpsilon = 1f; // 커브 간소화 허용 오차(모프 단위)
+        [SerializeField] private bool _autoVolumeNorm = true;  // 클립 p95 기준 음량 정규화
+        [SerializeField] private float _volumeLift = 0.7f;     // 정규화 후 지수(조용한 발성 부양)
+        [SerializeField] private bool _channelSmoothing = true; // 개폐/전이 채널 스무딩
+        [SerializeField] private float _openSmoothMs = 50f;      // 입 열림 시상수(ms)
+        [SerializeField] private float _closeSmoothMs = 130f;    // 입 닫힘 시상수(ms)
+        [SerializeField] private float _transitionSmoothMs = 80f; // 모음 전이 시상수(ms)
+        [SerializeField] private bool _holdVowelWhileVoiced = true; // 발성 중 무판정 구간 모음 유지
         [SerializeField] private bool _useWav2VecPhonemes; // DL 음소 분석 경로
         [SerializeField] private Wav2VecPhonemeExtractor.PhonemeLanguage _phonemeLanguage;
         [SerializeField] private string _lyricsPath = ""; // 가사 텍스트(강제 정렬, 선택)
@@ -661,11 +668,43 @@ namespace Fbx2Vmd.LipSync
             }
             EditorGUILayout.EndHorizontal();
             _minVolumeGate = EditorGUILayout.Slider("무음 게이트", _minVolumeGate, 0f, 0.2f);
-            _releaseDamp = EditorGUILayout.Slider("감쇄(노이즈/여운)", _releaseDamp, 0f, 0.95f);
+            using (new EditorGUI.DisabledScope(_channelSmoothing))
+            {
+                _releaseDamp = EditorGUILayout.Slider(
+                    new GUIContent("감쇄(노이즈/여운)",
+                        "입 닫힘 하강 감쇠 — 개폐/전이 스무딩이 켜진 동안은 적용되지 않는다"),
+                    _releaseDamp, 0f, 0.95f);
+            }
             _curveEpsilon = EditorGUILayout.Slider(
                 new GUIContent("커브 간소화",
                     "허용 오차(모프 단위) 이내의 중간 키프레임을 제거해 .anim 크기와 미세 떨림을 줄인다. 0=끔"),
                 _curveEpsilon, 0f, 5f);
+            _autoVolumeNorm = EditorGUILayout.ToggleLeft(
+                new GUIContent("음량 자동 정규화",
+                    "이 클립의 p95를 완전 개구 기준으로 정규화 — 조용한 곡·조용한 구간도 입이 반응한다"),
+                _autoVolumeNorm);
+            using (new EditorGUI.DisabledScope(!_autoVolumeNorm))
+            {
+                _volumeLift = EditorGUILayout.Slider(
+                    new GUIContent("음량 부양",
+                        "정규화 후 지수 — 1 미만이면 조용한 발성 구간의 개구를 키운다(무음은 그대로 닫힘)"),
+                    _volumeLift, 0.3f, 1.5f);
+            }
+            _channelSmoothing = EditorGUILayout.ToggleLeft(
+                new GUIContent("개폐/전이 스무딩",
+                    "입 열림·닫힘·모음 전이를 발음 속도에 맞춰 스무딩 — 프레임 단위 스냅을 제거한다"),
+                _channelSmoothing);
+            using (new EditorGUI.DisabledScope(!_channelSmoothing))
+            {
+                _openSmoothMs = EditorGUILayout.Slider("열림(ms)", _openSmoothMs, 0f, 300f);
+                _closeSmoothMs = EditorGUILayout.Slider("닫힘(ms)", _closeSmoothMs, 0f, 500f);
+                _transitionSmoothMs = EditorGUILayout.Slider("모음 전이(ms)", _transitionSmoothMs, 0f, 300f);
+            }
+            _holdVowelWhileVoiced = EditorGUILayout.ToggleLeft(
+                new GUIContent("무판정 구간 모음 유지",
+                    "발성 중 모음비율이 모두 0인 구간에서 마지막 모음 형태를 유지 — " +
+                    "wav2vec2가 1프레임 펄스로 출력하는 데이터의 파닥거림을 막는다"),
+                _holdVowelWhileVoiced);
             _useWav2VecPhonemes = EditorGUILayout.ToggleLeft(
                 "wav2vec2 음소 분석 사용(코러스 잔류에 강함, uLipSync 대신)",
                 _useWav2VecPhonemes);
@@ -1279,9 +1318,19 @@ namespace Fbx2Vmd.LipSync
         {
             var warnings = new System.Collections.Generic.List<string>();
             // VRM 프록시가 없는 모델(MMD 등)은 모음 모프명을 스캔해 자동 바인딩한다.
+            var tuning = new VocalLipSyncBaker.BakeTuning
+            {
+                autoVolumeNorm = _autoVolumeNorm,
+                volumeGamma = _volumeLift,
+                openMs = _openSmoothMs,
+                closeMs = _closeSmoothMs,
+                transitionMs = _transitionSmoothMs,
+                channelSmoothing = _channelSmoothing,
+                holdVowelWhileVoiced = _holdVowelWhileVoiced,
+            };
             AnimationClip clip = VocalLipSyncBaker.BakeClip(
                 data, _targetCharacter, _minVolumeGate, warnings, _releaseDamp,
-                _curveEpsilon);
+                _curveEpsilon, tuning);
             string assetPath;
             try
             {

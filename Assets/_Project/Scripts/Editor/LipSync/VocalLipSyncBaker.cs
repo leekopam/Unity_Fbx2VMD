@@ -115,7 +115,8 @@ namespace Fbx2Vmd.LipSync
             float minVolumeGate = 0.02f,
             IList<string> warnings = null,
             float releaseDamp = 0f,
-            float curveEpsilon = 0f)
+            float curveEpsilon = 0f,
+            BakeTuning? tuning = null)
         {
             if (data == null || !data.isValid)
             {
@@ -129,7 +130,7 @@ namespace Fbx2Vmd.LipSync
             if (proxy.BlendShapeAvatar.Clips == null)
             {
                 return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp,
-                    warnings, curveEpsilon);
+                    warnings, curveEpsilon, tuning);
             }
             foreach (BlendShapeClip shapeClip in proxy.BlendShapeAvatar.Clips)
             {
@@ -158,7 +159,7 @@ namespace Fbx2Vmd.LipSync
                 }
             }
             return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp,
-                warnings, curveEpsilon);
+                warnings, curveEpsilon, tuning);
         }
 
         /// <summary>
@@ -171,13 +172,14 @@ namespace Fbx2Vmd.LipSync
             float minVolumeGate = 0.02f,
             IList<string> warnings = null,
             float releaseDamp = 0f,
-            float curveEpsilon = 0f)
+            float curveEpsilon = 0f,
+            BakeTuning? tuning = null)
         {
             VRMBlendShapeProxy proxy = FindProxy(characterRoot);
             if (proxy != null)
             {
                 return BakeClip(data, proxy, minVolumeGate, warnings, releaseDamp,
-                    curveEpsilon);
+                    curveEpsilon, tuning);
             }
             var bindings = ResolveVowelBindings(characterRoot);
             if (bindings.Count == 0)
@@ -200,7 +202,7 @@ namespace Fbx2Vmd.LipSync
                 }
             }
             return BakeClipFromBindings(data, bindings, minVolumeGate, releaseDamp,
-                warnings, curveEpsilon);
+                warnings, curveEpsilon, tuning);
         }
 
         /// <summary>
@@ -318,7 +320,8 @@ namespace Fbx2Vmd.LipSync
             float minVolumeGate,
             float releaseDamp,
             IList<string> warnings = null,
-            float curveEpsilon = 0f)
+            float curveEpsilon = 0f,
+            BakeTuning? tuning = null)
         {
             if (data == null || !data.isValid)
             {
@@ -331,13 +334,46 @@ namespace Fbx2Vmd.LipSync
             };
             try
             {
+                var t = tuning ?? BakeTuning.Legacy;
                 // 게이트 상태는 모든 음소 커브가 공유해야 하므로 음량 열을 먼저 계산한다.
-                float[] vols = BuildGatedVolumes(data, minVolumeGate);
+                float[] vols = BuildGatedVolumes(data, minVolumeGate,
+                    t.autoVolumeNorm, t.volumeGamma);
+                float[] openVols = vols;
+                if (t.channelSmoothing)
+                {
+                    // 개구 채널은 전 커브 공유 — 비대칭 원폴로 1프레임 스냅을 제거한다.
+                    openVols = SmoothChannel(vols, t.openMs, t.closeMs);
+                }
+                // 모음 유지 옵션용 — 어느 음소든 비율이 있는 프레임을 미리 표시한다.
+                bool[] vowelFrames = null;
+                if (t.holdVowelWhileVoiced)
+                {
+                    vowelFrames = new bool[data.frames.Count];
+                    for (int i = 0; i < data.frames.Count; i++)
+                    {
+                        if (data.frames[i].phonemes == null)
+                        {
+                            continue;
+                        }
+                        var info = uLipSync.BakedData.GetLipSyncInfo(data.frames[i]);
+                        foreach (var kv in info.phonemeRatios)
+                        {
+                            if (kv.Value > 1e-4f)
+                            {
+                                vowelFrames[i] = true;
+                                break;
+                            }
+                        }
+                    }
+                }
                 int curveCount = 0;
                 float maxValue = 0f;
                 foreach (ResolvedBinding b in bindings)
                 {
-                    var curve = BuildCurve(data, vols, b.phoneme, b.weight, releaseDamp);
+                    // 무음 해제 판정에는 스무딩 전 게이트 출력을 넘긴다 — 원폴 꼬리는
+                    // 수학적으로 0에 도달하지 않아 스무딩 채널로는 무음을 검출할 수 없다.
+                    var curve = BuildCurve(data, openVols, b.phoneme, b.weight, releaseDamp,
+                        t.channelSmoothing ? t.transitionMs : -1f, vowelFrames, vols);
                     curve = SimplifyCurve(curve, curveEpsilon);
                     if (curve.length == 0)
                     {
@@ -370,21 +406,43 @@ namespace Fbx2Vmd.LipSync
             }
         }
 
+        /// <summary>베이크 튜닝 — 음량 정규화와 채널 스무딩 파라미터 묶음.
+        /// channelSmoothing이 켜지면 레거시 releaseDamp 대신 개구/전이 원폴 스무딩을 쓴다.</summary>
+        public struct BakeTuning
+        {
+            /// <summary>true면 클립 자체 p95를 완전 개구 기준으로 음량을 정규화한다.</summary>
+            public bool autoVolumeNorm;
+            /// <summary>정규화 후 적용할 지수(1=끔, &lt;1이면 조용한 발성 구간을 부양).</summary>
+            public float volumeGamma;
+            /// <summary>입 열림 시상수(ms). 채널 스무딩 시에만 사용.</summary>
+            public float openMs;
+            /// <summary>입 닫힘 시상수(ms). 채널 스무딩 시에만 사용.</summary>
+            public float closeMs;
+            /// <summary>모음 전이 시상수(ms). 채널 스무딩 시에만 사용.</summary>
+            public float transitionMs;
+            /// <summary>true면 채널 분리 스무딩 경로(개구/전이)를 사용한다.</summary>
+            public bool channelSmoothing;
+            /// <summary>true면 발성 중 무판정(어느 음소 비율도 없음) 구간에서 마지막 유성 모음을
+            /// 유지한다 — wav2vec2 원핫이 1프레임 펄스로 나오는 데이터에서 입이
+            /// 모음 사이마다 닫히는 파닥거림을 막는다. 무음(게이트 후 음량 0)이면 해제.</summary>
+            public bool holdVowelWhileVoiced;
+
+            /// <summary>기존 동작 그대로 — 정규화·스무딩 모두 끔.</summary>
+            public static readonly BakeTuning Legacy = new BakeTuning { volumeGamma = 1f };
+        }
+
         /// <summary>
         /// 슈미트 트리거 히스테리시스로 음량 열을 게이트한다 — 열림(>gate)과
         /// 닫힘(<gate×0.5) 임계를 분리해 경계 음량에서 on/off가 진동하지 않는다.
         /// 열림 상태에서 closeGate~kneeEnd(=2×gate) 구간은 닫힘 임계부터 원본 크기까지
         /// 단조 증가하는 단일 램프로 감쇠한다(게이트 경계에서 출력이 튀지 않게).
         /// 반환 배열은 모든 음소 커브가 공유하는 게이트 후 음량이다.
+        /// autoVolumeNorm이면 게이트 전에 클립 p95 기준으로 정규화해 곡별 레벨 차를 없앤다.
         /// </summary>
         internal static float[] BuildGatedVolumes(uLipSync.BakedData data,
-            float minVolumeGate)
+            float minVolumeGate, bool autoVolumeNorm = false, float volumeGamma = 1f)
         {
             var vols = new float[data.frames.Count];
-            float closeGate = minVolumeGate * 0.5f;
-            float kneeEnd = Mathf.Min(minVolumeGate * 2f, 1f);
-            float rampRange = Mathf.Max(kneeEnd - closeGate, 1e-6f);
-            bool open = false;
             for (int i = 0; i < data.frames.Count; i++)
             {
                 var frame = data.frames[i];
@@ -399,6 +457,19 @@ namespace Fbx2Vmd.LipSync
                 {
                     v = 0f;
                 }
+                vols[i] = v;
+            }
+            if (autoVolumeNorm)
+            {
+                NormalizeVolumes(vols, volumeGamma);
+            }
+            float closeGate = minVolumeGate * 0.5f;
+            float kneeEnd = Mathf.Min(minVolumeGate * 2f, 1f);
+            float rampRange = Mathf.Max(kneeEnd - closeGate, 1e-6f);
+            bool open = false;
+            for (int i = 0; i < data.frames.Count; i++)
+            {
+                float v = vols[i];
                 if (open)
                 {
                     if (v < closeGate)
@@ -427,19 +498,98 @@ namespace Fbx2Vmd.LipSync
         }
 
         /// <summary>
+        /// 클립 자체의 p95 음량을 완전 개구 기준으로 정규화한다 — 고정 캘리브레이션
+        /// 구간(log10 -2.5~-1.5) 아래로 눌린 조용한 곡·구간도 상대 크기로 열리게 한다.
+        /// volumeGamma&lt;1이면 정규화 후 지수를 걸어 조용한 발성 구간을 추가로 부양한다
+        /// (VAD 무음=0은 지수를 걸어도 0이라 닫힘이 유지된다).
+        /// </summary>
+        internal static void NormalizeVolumes(float[] vols, float volumeGamma)
+        {
+            var positive = new List<float>(vols.Length);
+            foreach (float v in vols)
+            {
+                if (v > 0f)
+                {
+                    positive.Add(v);
+                }
+            }
+            if (positive.Count == 0)
+            {
+                return;
+            }
+            positive.Sort();
+            float refVol = positive[Mathf.Min(positive.Count - 1,
+                Mathf.FloorToInt(positive.Count * 0.95f))];
+            if (refVol <= 0f)
+            {
+                return;
+            }
+            float gamma = Mathf.Max(volumeGamma, 0.05f);
+            for (int i = 0; i < vols.Length; i++)
+            {
+                float n = Mathf.Clamp01(vols[i] / refVol);
+                vols[i] = Mathf.Approximately(gamma, 1f) ? n : Mathf.Pow(n, gamma);
+            }
+        }
+
+        /// <summary>
+        /// 비대칭 원폴 필터 — 목표가 오르면 openMs, 내리면 closeMs 시상수로 추종한다.
+        /// 사람 턱의 개폐 속도(열림 ~50ms·닫힘 ~130ms)에 맞춰 프레임 스냅을 제거한다.
+        /// 모든 음소 커브가 공유하는 개구 채널이므로 커브 생성 전에 한 번 적용한다.
+        /// </summary>
+        internal static float[] SmoothChannel(float[] src, float openMs, float closeMs)
+        {
+            var dst = new float[src.Length];
+            float aOpen = AlphaFor(openMs);
+            float aClose = AlphaFor(closeMs);
+            float cur = 0f;
+            for (int i = 0; i < src.Length; i++)
+            {
+                float a = src[i] > cur ? aOpen : aClose;
+                cur += (src[i] - cur) * a;
+                dst[i] = cur;
+            }
+            return dst;
+        }
+
+        /// <summary>시상수(ms)를 60fps 프레임 단계 계수로 환산한다. 0이면 즉시 추종.</summary>
+        private static float AlphaFor(float tauMs)
+        {
+            if (tauMs <= 0f)
+            {
+                return 1f;
+            }
+            return 1f - Mathf.Exp(-1f / (BakeFrameRate * (tauMs / 1000f)));
+        }
+
+        /// <summary>
         /// 한 음소의 시간축 커브를 만든다. 값 = 음소비율 × 게이트 후 음량 × 바인딩 가중치(0~100).
-        /// releaseDamp(0~0.95)가 0보다 크면 하강을 지수 감쇠해 잡음성 떨림과 급격한 입 닫힘을 완화한다.
-        /// 어택은 즉시 추종해 발음 타이밍을 보존한다.
+        /// transitionMs&gt;=0이면 채널 스무딩 경로 — gatedVols는 이미 개구 스무딩이 끝난 공유 채널이고
+        /// 여기서는 모음 비율에만 원폴 스무딩을 걸어 전이를 사람 발음 속도로 제한한다
+        /// (레거시 releaseDamp는 채널 스무딩 경로에서 적용하지 않는다 — 이중 감쇠 방지).
+        /// transitionMs&lt;0이면 레거시: releaseDamp(0~0.95)가 하강만 지수 감쇠하고 어택은 즉시 추종한다.
+        /// vowelFrames!=null이면 모음 유지 — 프레임에 어느 음소 비율도 없고 게이트 후 음량이
+        /// 있으면(발성 중 무판정) 마지막 유성 형태(ratio>0이던 모음 전체)를 유지한다.
+        /// 무음이면 유지를 해제한다 — 무음 판정은 silenceVols(스무딩 전 게이트 출력)로 하며,
+        /// null이면 gatedVols로 대체한다. 개구 스무딩 채널은 원폴 꼬리가 0에 수렴할 뿐
+        /// 도달하지 않으므로 그 값으로 무음을 검출할 수 없다.
         /// </summary>
         private static AnimationCurve BuildCurve(
             uLipSync.BakedData data, float[] gatedVols, string phoneme,
-            float bindingWeight, float releaseDamp)
+            float bindingWeight, float releaseDamp, float transitionMs = -1f,
+            bool[] vowelFrames = null, float[] silenceVols = null)
         {
             var keys = new List<Keyframe>();
             float dt = 1f / BakeFrameRate;
             // 1.0은 영구 피크홀드라 입이 안 닫힌다 — 문서 계약(0~0.95)에 맞게 상한 클램프.
             float damp = Mathf.Clamp(releaseDamp, 0f, 0.95f);
+            float alphaT = AlphaFor(transitionMs);
             float smoothed = 0f;
+            float sratio = 0f;
+            float[] sil = silenceVols ?? gatedVols;
+            // 모음 유지 상태 — 이 커브의 모음이 마지막 판정 프레임에서 비율이 있었을 때만 유지 대상.
+            bool held = false;
+            float heldRatio = 0f;
             for (int i = 0; i < data.frames.Count; i++)
             {
                 // phonemes가 null인 프레임(외부/역직렬화 데이터)은 음소비율 0으로 본다.
@@ -449,9 +599,34 @@ namespace Fbx2Vmd.LipSync
                     var info = uLipSync.BakedData.GetLipSyncInfo(data.frames[i]);
                     info.phonemeRatios?.TryGetValue(phoneme, out ratio);
                 }
-                float raw = ratio * gatedVols[i] * bindingWeight;
-                smoothed = Mathf.Max(raw, smoothed * damp);
-                keys.Add(new Keyframe(i * dt, smoothed));
+                if (vowelFrames != null)
+                {
+                    if (vowelFrames[i])
+                    {
+                        // 새 판정 프레임 — 이 모음의 비율이 있으면 유지 대상이 된다.
+                        held = ratio > 1e-4f;
+                        heldRatio = ratio;
+                    }
+                    else if (sil[i] <= 0f)
+                    {
+                        held = false; // 무음 구간을 넘긴 형태는 유지하지 않는다.
+                    }
+                    else if (held)
+                    {
+                        ratio = heldRatio;
+                    }
+                }
+                if (transitionMs >= 0f)
+                {
+                    sratio += (ratio - sratio) * alphaT;
+                    keys.Add(new Keyframe(i * dt, sratio * gatedVols[i] * bindingWeight));
+                }
+                else
+                {
+                    float raw = ratio * gatedVols[i] * bindingWeight;
+                    smoothed = Mathf.Max(raw, smoothed * damp);
+                    keys.Add(new Keyframe(i * dt, smoothed));
+                }
             }
             return new AnimationCurve(keys.ToArray());
         }
