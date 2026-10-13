@@ -78,14 +78,19 @@ namespace Fbx2Vmd.FBXImporter
 
             // 정지 상태의 발이 임계 이상 순간이동하면 그 차이를 잔여로 보유해
             // 이후 프레임에 걸쳐 상쇄시킴 — 출력은 원자세로부터 미끄러지듯 이동함.
-            if (track.HasState && track.PrevRawDelta <= PlantedDeltaMeters &&
+            // dt=0인 동일 시각 재평가(보정 프리뷰 등)에서는 판정하지 않음 — 그 경로는
+            // 실제 프레임 전이가 아니라 같은 자세의 재적용이라 debt가 소진되지 않음.
+            if (dt > 0f && track.HasState &&
+                track.PrevRawDelta <= PlantedDeltaMeters &&
                 rawDelta >= TriggerStepMeters)
             {
                 track.Debt += track.PrevOut - raw;
             }
 
             track.PrevRaw = raw;
-            track.PrevRawDelta = rawDelta;
+            // 리셋 직후 첫 전이는 직전 이동 이력이 없으므로 "정지"로 시딩하지 않음 —
+            // 탐색 직후 실제 고속 이동 중인 발을 순간이동으로 오판해 확산하는 것을 막음.
+            track.PrevRawDelta = track.HasState ? rawDelta : float.MaxValue;
             track.HasState = true;
 
             if (track.Debt.sqrMagnitude < 0.000000001f)
@@ -105,7 +110,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             // 상승 클램프와 같은 기준 — 자세 cross가 안정적이면 그 방향이 정답이고
-            // 무릎이 거의 펴져 퇴화할 때만 루트 우측을 폴백으로 사용함.
+            // 무릎이 거의 펴져 퇴화할 때만 발 우측을 폴백으로 사용함.
             Vector3 bendNormal = Vector3.Cross(
                 track.Lower.position - track.Upper.position,
                 track.Foot.position - track.Lower.position);
