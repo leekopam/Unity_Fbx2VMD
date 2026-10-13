@@ -1511,6 +1511,9 @@ namespace Fbx2Vmd.FBXImporter
             _humanoidMotionPlaybackController?.ClipName ?? string.Empty;
         public int ImportedMotionPoseCorrectionFrameCount =>
             _poseCorrectionDocument?.FrameCount ?? 0;
+        // evidence 캡처처럼 준비된 재생 세션에 goal IK 실험 경로를 켤 때 사용한다.
+        internal void SetImportedMotionIkGoalFootDrive(bool isEnabled, float alpha) =>
+            _humanoidMotionPlaybackController?.SetIkGoalFootDrive(isEnabled, alpha);
 #if UNITY_EDITOR
         internal bool ShouldUseEditorHumanoidPlaybackSession =>
             Application.isPlaying && !EditorDiagnosticSession.IsRecordingOverrideActive;

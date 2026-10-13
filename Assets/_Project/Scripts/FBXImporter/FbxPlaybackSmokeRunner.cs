@@ -179,6 +179,7 @@ namespace Fbx2Vmd.FBXImporter
         private static PlaybackEvidencePhase _playbackEvidencePhase;
         private static FBXVmdPipeline _playbackEvidencePipeline;
         private static PlaybackEvidence _playbackEvidence;
+        private static float _playbackIkGoalAlpha;
         private static DateTime _playbackEvidenceStartedUtc;
         private static DateTime _playbackCaptureStartedUtc;
         private static string _playbackEvidencePath;
@@ -1316,6 +1317,7 @@ namespace Fbx2Vmd.FBXImporter
             public bool keep_original_position_xz;
             public FootFrameEvidence[] foot_frames;
             public int[] capture_frames;
+            public float ik_goal_alpha;
             public bool structural_passed;
             public bool visual_review_required;
             public string failure_stage;
@@ -1400,6 +1402,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
             _playbackSideFrames = requestedSideFrames ?? new[] { 0, 166, 544 };
+            _playbackIkGoalAlpha = request.ik_goal_alpha;
 
             if (SceneManager.GetActiveScene().name != MainAutoSceneName ||
                 pipeline.IsProcessing || pipeline.IsImportedMotionRecording ||
@@ -1434,7 +1437,8 @@ namespace Fbx2Vmd.FBXImporter
                     pre_import_hips_position = hips.position,
                     apply_root_motion = animator.applyRootMotion,
                     foot_frames = new FootFrameEvidence[_playbackFootFrames.Length],
-                    capture_frames = _playbackFootFrames
+                    capture_frames = _playbackFootFrames,
+                    ik_goal_alpha = _playbackIkGoalAlpha
                 };
                 _playbackEvidencePipeline = pipeline;
                 _playbackEvidenceStartedUtc = DateTime.UtcNow;
@@ -1884,6 +1888,10 @@ namespace Fbx2Vmd.FBXImporter
                                 "선택된 모델·클립 또는 FBX 임포트 설정을 확인하지 못했습니다.");
                             return;
                         }
+                        if (_playbackIkGoalAlpha >= 0f)
+                            _playbackEvidencePipeline.SetImportedMotionIkGoalFootDrive(
+                                _playbackIkGoalAlpha > 0f,
+                                _playbackIkGoalAlpha);
                         if (_playbackEvidence.last_frame < _playbackFootFrames[_playbackFootFrames.Length - 1] ||
                             _playbackEvidence.clip_frame_rate <= 0f ||
                             !_playbackEvidencePipeline.TryPlayImportedMotion())
@@ -3449,7 +3457,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string BuildRetargeterThumbReferenceSummary(FBXVmdPipeline runtimeFBXVmdPipeline)
         {
-            Component[] retargeters = UnityEngine.Object.FindObjectsOfType<Component>()
+            Component[] retargeters = UnityEngine.Object.FindObjectsByType<Component>(FindObjectsSortMode.InstanceID)
                 .Where(component => component != null && component.GetType().Name == "PoseSpaceRetargeter")
                 .ToArray();
             if (retargeters.Length == 0)

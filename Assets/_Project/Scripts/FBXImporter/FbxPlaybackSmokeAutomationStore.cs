@@ -24,8 +24,8 @@ namespace Fbx2Vmd.FBXImporter
         public int screen_width;
         public int screen_height;
         public bool lower_body_only;
-        // 0이면 goal IK 실험 경로를 켜지 않음 — 기본 요청은 기존 출력과 동일하게 유지됨.
-        public float ik_goal_alpha;
+        // -1이면 미지정으로 파이프라인 기본값을 따름, 0이면 명시 해제, 양수면 해당 알파로 활성.
+        public float ik_goal_alpha = -1f;
     }
 
     [Serializable]

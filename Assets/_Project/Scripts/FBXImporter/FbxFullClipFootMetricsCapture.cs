@@ -277,9 +277,8 @@ namespace Fbx2Vmd.FBXImporter
                 !(_sourceHumanScale > 0f))
                 throw new InvalidOperationException($"{_caseId} 전체 클립 또는 하체 본이 준비되지 않았습니다.");
 
-            // alpha>0 요청만 goal IK 실험 경로를 켬 — 기본 요청은 기존 출력을 유지함.
-            if (_ikGoalAlpha > 0f)
-                _controller.SetIkGoalFootDrive(true, _ikGoalAlpha);
+            // 요청 알파를 명시 적용 — 파이프라인이 goal IK를 기본 활성하므로 alpha=0 측정은 해제가 필요함.
+            _controller.SetIkGoalFootDrive(_ikGoalAlpha > 0f, _ikGoalAlpha);
 
             _writer = new StreamWriter(CsvPath, false, new System.Text.UTF8Encoding(false));
             _writer.WriteLine("frame,time_s,time_error_ms,side,grounding_status,has_ground,support_role,rear_weight,front_weight,rear_signed_mm,front_signed_mm,minimum_signed_mm,rear_anchor_x_m,rear_anchor_y_m,rear_anchor_z_m,front_anchor_x_m,front_anchor_y_m,front_anchor_z_m,rear_point_x_m,rear_point_y_m,rear_point_z_m,front_point_x_m,front_point_y_m,front_point_z_m,rear_vertex,front_vertex,rear_step_mm,front_step_mm,foot_rotation_step_deg,foot_x_m,foot_y_m,foot_z_m,foot_pitch_deg,foot_yaw_deg,foot_roll_deg,toes_y_m,knee_y_m,hips_y_m,root_y_m,source_foot_y_m,source_toes_y_m,source_foot_speed_mps,source_toes_speed_mps,retarget_foot_y_m,retarget_toes_y_m,retarget_foot_speed_mps,retarget_toes_speed_mps,grounding_target_error_mm,grounding_sole_clearance_mm,grounding_contact_error_mm,grounding_supported_contacts,knee_flexion_deg,ankle_pitch_deg,pelvis_tilt_deg,com_x_m,com_z_m,support_polygon_contains_com,joint_delta_deg,pose_novelty,transition_novelty");
