@@ -149,7 +149,7 @@ namespace Fbx2Vmd.EditorTools
             toon.SetFloat("_UseMatCap", 1f);
             toon.SetTexture("_MatCapTex", matCap);
             toon.SetFloat("_MatCapBlendMode", 1f);
-            toon.SetFloat("_MatCapBlend", 0.8f);
+            toon.SetFloat("_MatCapBlend", 0.55f);
             toon.SetFloat("_MatCapZRotCancel", 1f);
         }
 

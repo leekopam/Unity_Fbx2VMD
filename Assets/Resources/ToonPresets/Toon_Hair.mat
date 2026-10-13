@@ -529,7 +529,7 @@ Material:
     - _ShadowBlurMaskLOD: 0
     - _ShadowBorder: 0.45
     - _ShadowBorderMaskLOD: 0
-    - _ShadowBorderRange: 0.08
+    - _ShadowBorderRange: 0.15
     - _ShadowColorType: 0
     - _ShadowEnvStrength: 0
     - _ShadowFlatBlur: 1
@@ -542,7 +542,7 @@ Material:
     - _ShadowStrength: 0.6
     - _ShadowStrengthMaskLOD: 0
     - _ShiftBackfaceUV: 0
-    - _Smoothness: 1
+    - _Smoothness: 0.62
     - _SpecularBlur: 0
     - _SpecularBorder: 0.5
     - _SpecularNormalStrength: 1
@@ -678,7 +678,7 @@ Material:
     - _OutlineTex_ScrollRotate: {r: 0, g: 0, b: 0, a: 0}
     - _ReflectionColor: {r: 1, g: 1, b: 1, a: 1}
     - _ReflectionCubeColor: {r: 0, g: 0, b: 0, a: 1}
-    - _RimColor: {r: 1, g: 1, b: 1, a: 0.5}
+    - _RimColor: {r: 0.72, g: 0.85, b: 1, a: 0.62}
     - _RimIndirColor: {r: 1, g: 1, b: 1, a: 1}
     - _RimShadeColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
     - _Shadow2ndColor: {r: 0.66, g: 0.64, b: 0.78, a: 1}
