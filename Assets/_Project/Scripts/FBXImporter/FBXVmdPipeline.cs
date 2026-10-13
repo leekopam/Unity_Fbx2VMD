@@ -2363,6 +2363,8 @@ namespace Fbx2Vmd.FBXImporter
                     sourceModelAsset);
             }
             _humanoidMotionPlaybackController.SetGroundResponseEnabled(true);
+            // goal IK 경로 기본 활성 — 발 모임 등 근육 리타겟 왜곡을 소스 목표로 직접 구동해 차단한다.
+            _humanoidMotionPlaybackController.SetIkGoalFootDrive(true, 1f);
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);
@@ -2429,6 +2431,8 @@ namespace Fbx2Vmd.FBXImporter
                     importedModel);
             }
             _humanoidMotionPlaybackController.SetGroundResponseEnabled(true);
+            // goal IK 경로 기본 활성 — 발 모임 등 근육 리타겟 왜곡을 소스 목표로 직접 구동해 차단한다.
+            _humanoidMotionPlaybackController.SetIkGoalFootDrive(true, 1f);
             _poseCorrectionDocument = new HumanoidPoseCorrectionDocument(
                 motionName,
                 _humanoidMotionPlaybackController.ClipFrameRate);
