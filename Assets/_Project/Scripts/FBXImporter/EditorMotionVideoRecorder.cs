@@ -57,9 +57,8 @@ namespace Fbx2Vmd.FBXImporter
                     OutputWidth = settings.Width,
                     OutputHeight = settings.Height
                 };
-                // 알파 채널 녹화는 ProRes 선택 시에만 활성화함 (ImageInputSettings 할당 이후에 지정해야 전파됨)
-                _movieSettings.CaptureAlpha =
-                    settings.Format == MotionVideoFileFormat.MovProRes;
+                // 알파 채널 녹화는 알파 지원 포맷 선택 시에만 활성화함 (ImageInputSettings 할당 이후에 지정해야 전파됨)
+                _movieSettings.CaptureAlpha = settings.Format.SupportsAlpha();
                 _movieSettings.OutputFile = outputFileWithoutExtension;
 
                 // ProRes 4444는 분당 수십 GB 수준의 무압축급 산출물이라 재생 버벅임을 유발함.
@@ -67,7 +66,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     Debug.LogWarning(
                         "[FBXImport] ProRes 4444(MOV)는 파일이 매우 커져 일반 플레이어 재생이 " +
-                        "버벅일 수 있습니다. 일반 감상용 녹화는 MP4를 권장합니다.");
+                        "버벅일 수 있습니다. 투명 배경이 필요하면 WebM(VP8)이 훨씬 작고 알파를 지원합니다.");
                 }
 
                 _controllerSettings.AddRecorderSettings(_movieSettings);

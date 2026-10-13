@@ -1059,15 +1059,15 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private string _motionVideoOutputFolder= "";
         public string motionVideoOutputFolder { get => _motionVideoOutputFolder; private set => _motionVideoOutputFolder = value; }
 
-        [Tooltip("녹화 영상의 컨테이너/코덱입니다.")]
-        [SerializeField] private MotionVideoFileFormat _motionVideoFormat= MotionVideoFileFormat.Mp4;
+        [Tooltip("녹화 영상의 컨테이너/코덱입니다. WebM은 투명 배경(알파)을 지원해 영상 편집 시 누끼 작업 없이 캐릭터만 합성할 수 있습니다.")]
+        [SerializeField] private MotionVideoFileFormat _motionVideoFormat= MotionVideoFileFormat.WebM;
         public MotionVideoFileFormat motionVideoFormat { get => _motionVideoFormat; private set => _motionVideoFormat = value; }
 
         [Tooltip("녹화 영상의 프레임률입니다. 녹화 타이밍과 모션 진행 단위에 함께 사용됩니다.")]
         [SerializeField] private MotionVideoFrameRate _motionVideoFrameRate= MotionVideoFrameRate.Fps60;
         public MotionVideoFrameRate motionVideoFrameRate { get => _motionVideoFrameRate; private set => _motionVideoFrameRate = value; }
 
-        [Tooltip("MOV(배경 투명) 녹화 중에만 숨길 오브젝트입니다. 캐릭터만 남기려면 바닥 Plane 등을 지정합니다.")]
+        [Tooltip("MOV/WebM(배경 투명) 녹화 중에만 숨길 오브젝트입니다. 캐릭터만 남기려면 바닥 Plane 등을 지정합니다.")]
         [SerializeField] private GameObject[] _alphaRecordingHiddenObjects= null;
         public GameObject[] alphaRecordingHiddenObjects { get => _alphaRecordingHiddenObjects; private set => _alphaRecordingHiddenObjects = value; }
 
@@ -2273,7 +2273,7 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        // MOV 녹화 중 숨길 오브젝트들의 렌더러를 수집함.
+        // 투명 배경(MOV/WebM) 녹화 중 숨길 오브젝트들의 렌더러를 수집함.
         private Renderer[] CollectAlphaHiddenRenderers()
         {
             if (_alphaRecordingHiddenObjects == null || _alphaRecordingHiddenObjects.Length == 0)

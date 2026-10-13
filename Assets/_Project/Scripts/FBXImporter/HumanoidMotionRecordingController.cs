@@ -87,8 +87,8 @@ namespace Fbx2Vmd.FBXImporter
                 Debug.Log(
                     $"[FBXImport] 영상 녹화 시작됨. fps={settings.FrameRate}, " +
                     "프레임 정확도 모드로 재생이 느려 보일 수 있습니다.");
-                // 투명 배경 녹화(MOV)일 때만 지정된 렌더러를 숨겨 캐릭터만 산출함.
-                SetAlphaHidden(settings.Format == MotionVideoFileFormat.MovProRes);
+                // 투명 배경 녹화(MOV/WebM)일 때만 지정된 렌더러를 숨겨 캐릭터만 산출함.
+                SetAlphaHidden(settings.Format.SupportsAlpha());
                 return true;
             }
 

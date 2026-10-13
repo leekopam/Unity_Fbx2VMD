@@ -332,6 +332,41 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_WebmFormat_When_RecordingStartsAndStops_Then_AlphaHiddenRenderersAreRestored()
+        {
+            GameObject target = InstantiateTarget();
+            GameObject hidden = CreateHiddenRendererTarget(out Renderer hiddenRenderer);
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(
+                playback, recorder, new[] { hiddenRenderer });
+
+            try
+            {
+                bool started = (bool)Invoke(
+                    controller,
+                    "TryStart",
+                    CreateSettings(format: MotionVideoFileFormat.WebM),
+                    null);
+
+                Assert.That(started, Is.True);
+                Assert.That(hiddenRenderer.enabled, Is.False,
+                    "WebM 알파 녹화 중에는 숨김 대상 렌더러가 꺼져야 합니다.");
+
+                Invoke(controller, "Stop");
+                Assert.That(hiddenRenderer.enabled, Is.True,
+                    "녹화 종료 후에는 숨김 대상 렌더러가 복원되어야 합니다.");
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(hidden);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
         public void Given_Mp4Format_When_RecordingStarts_Then_AlphaHiddenRenderersStayEnabled()
         {
             GameObject target = InstantiateTarget();

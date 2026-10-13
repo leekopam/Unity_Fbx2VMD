@@ -354,12 +354,16 @@ namespace Fbx2Vmd.FBXImporter
             // 원본 자세와 상체 보정 뒤에 발 접촉을 마지막으로 고정함.
             _footGrounding?.RestoreAppliedPose();
             RestoreFootRotationBindings();
-            _player.EvaluateAt(CurrentTimeSeconds);
-            if (!TryCaptureFootBendNormals(
-                    out Vector3 leftBendNormal,
-                    out Vector3 rightBendNormal))
+            Vector3 leftBendNormal, rightBendNormal;
+            using (PerfScope.Measure("PlaybackController.PoseSample"))
             {
-                return false;
+                _player.EvaluateAt(CurrentTimeSeconds);
+                if (!TryCaptureFootBendNormals(
+                        out leftBendNormal,
+                        out rightBendNormal))
+                {
+                    return false;
+                }
             }
 
             if (!TryApplyArmDirectionCorrection())
@@ -369,15 +373,28 @@ namespace Fbx2Vmd.FBXImporter
 
             int frameIndex = CurrentFrameIndex;
             ApplyFootRotationReference(CurrentTimeSeconds);
-            bool isApplied = _poseCorrectionDocument == null ||
-                !_poseCorrectionDocument.HasFrameCorrection(frameIndex) ||
-                _poseFrameEditor.TryApply(
-                    _poseCorrectionDocument,
-                    frameIndex);
-            _armSupportPoseApplier.Apply();
-            return isApplied && (!applyFootStabilization || TryApplyFootContactStabilization(
-                leftBendNormal,
-                rightBendNormal));
+            bool isApplied;
+            using (PerfScope.Measure("PlaybackController.PoseFrameEdit"))
+            {
+                isApplied = _poseCorrectionDocument == null ||
+                    !_poseCorrectionDocument.HasFrameCorrection(frameIndex) ||
+                    _poseFrameEditor.TryApply(
+                        _poseCorrectionDocument,
+                        frameIndex);
+                _armSupportPoseApplier.Apply();
+            }
+
+            if (!isApplied || !applyFootStabilization)
+            {
+                return isApplied;
+            }
+
+            using (PerfScope.Measure("PlaybackController.FootStabilization"))
+            {
+                return TryApplyFootContactStabilization(
+                    leftBendNormal,
+                    rightBendNormal);
+            }
         }
 
         private bool TryApplyArmDirectionCorrection()
