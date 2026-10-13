@@ -15,6 +15,7 @@ namespace Fbx2Vmd.EditorTools
         const string ToonSubFolderName = "Toon";
         const string VariantPrefix = "Toon_";
         const string FallbackOutputFolder = "Assets/ToonConverted";
+        const string IridescentMatCapPath = "Assets/_Project/Textures/MatCap_Iridescent.png";
 
         [MenuItem("Tools/Toon/선택 오브젝트에 툰 머티리얼 적용")]
         public static void ApplyToSelection()
@@ -94,6 +95,7 @@ namespace Fbx2Vmd.EditorTools
         {
             Material toon = ToonMaterialConverter.CreateToonVariant(source);
             TryAttachSdfMask(toon, source);
+            TryAttachIridescentMatCap(toon, source);
             return toon;
         }
 
@@ -122,6 +124,66 @@ namespace Fbx2Vmd.EditorTools
             {
                 toon.SetFloat("_ShadowFlatBlur", 0f);
             }
+        }
+
+        // 홀로그램 광택 규약: 넥타이·소매·스커트 계열은 무지개 맷캡을 얹어 프리즘 원단 느낌을 낸다.
+        // 재변환으로 변환본이 다시 생성돼도 이 규약으로 같은 설정이 복원된다.
+        private static void TryAttachIridescentMatCap(Material toon, Material source)
+        {
+            if (toon == null || source == null || !toon.HasProperty("_UseMatCap"))
+            {
+                return;
+            }
+
+            if (!IsIridescentTargetName(source.name))
+            {
+                return;
+            }
+
+            Texture2D matCap = AssetDatabase.LoadAssetAtPath<Texture2D>(IridescentMatCapPath);
+            if (matCap == null)
+            {
+                return;
+            }
+
+            toon.SetFloat("_UseMatCap", 1f);
+            toon.SetTexture("_MatCapTex", matCap);
+            toon.SetFloat("_MatCapBlendMode", 1f);
+            toon.SetFloat("_MatCapBlend", 0.8f);
+            toon.SetFloat("_MatCapZRotCancel", 1f);
+        }
+
+        private static readonly string[] IridescentKeywords = { "necktie", "sleeve", "skirt" };
+
+        // "45.necktie" 같은 번호 접두를 떼고 키워드로 시작하는지 본다.
+        // "sleeveless"류 오탐 방지를 위해 키워드 뒤가 이어지는 문자면 비대상.
+        private static bool IsIridescentTargetName(string materialName)
+        {
+            if (string.IsNullOrEmpty(materialName))
+            {
+                return false;
+            }
+
+            string name = materialName.ToLowerInvariant();
+            int dot = name.IndexOf('.');
+            if (dot >= 0)
+            {
+                name = name.Substring(dot + 1);
+            }
+
+            foreach (string keyword in IridescentKeywords)
+            {
+                if (!name.StartsWith(keyword, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (name.Length > keyword.Length && char.IsLetter(name[keyword.Length]))
+                {
+                    continue;
+                }
+                return true;
+            }
+            return false;
         }
 
         /// <summary>원본 머티리얼에 대응하는 SDF 텍스처 에셋 경로를 찾는다. 없으면 null.

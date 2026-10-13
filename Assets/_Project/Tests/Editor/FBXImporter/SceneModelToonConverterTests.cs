@@ -261,6 +261,48 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_NecktieNamedSource_When_CreateToonVariant_Then_IridescentMatCapAttached()
+        {
+            // 넥타이·소매·스커트 계열은 재변환해도 홀로그램 맷캡이 다시 붙어야 한다.
+            var source = new Material(Shader.Find("Standard")) { name = "45.necktie" };
+
+            Material variant = SceneModelToonConverter.CreateToonVariant(source);
+            try
+            {
+                Assert.That(variant, Is.Not.Null);
+                Assert.That(variant.GetFloat("_UseMatCap"), Is.EqualTo(1f));
+                Assert.That(variant.GetTexture("_MatCapTex"), Is.Not.Null);
+                Assert.That(variant.GetFloat("_MatCapBlendMode"), Is.EqualTo(1f));
+                Assert.That(variant.GetFloat("_MatCapBlend"), Is.EqualTo(0.8f));
+                Assert.That(variant.GetFloat("_MatCapZRotCancel"), Is.EqualTo(1f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(variant);
+                Object.DestroyImmediate(source);
+            }
+        }
+
+        [Test]
+        public void Given_BodyNamedSource_When_CreateToonVariant_Then_MatCapKeptOff()
+        {
+            // 의상 부위가 아닌 머티리얼에는 맷캡을 붙이지 않는다.
+            var source = new Material(Shader.Find("Standard")) { name = "0.body01" };
+
+            Material variant = SceneModelToonConverter.CreateToonVariant(source);
+            try
+            {
+                Assert.That(variant, Is.Not.Null);
+                Assert.That(variant.GetFloat("_UseMatCap"), Is.EqualTo(0f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(variant);
+                Object.DestroyImmediate(source);
+            }
+        }
+
+        [Test]
         public void Given_TransparentShaderSource_When_CreateToonVariant_Then_AlphaSurface()
         {
             Shader transparent = Shader.Find("Unlit/Transparent");
