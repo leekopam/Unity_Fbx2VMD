@@ -1071,6 +1071,24 @@ namespace Fbx2Vmd.FBXImporter
         [SerializeField] private GameObject[] _alphaRecordingHiddenObjects= null;
         public GameObject[] alphaRecordingHiddenObjects { get => _alphaRecordingHiddenObjects; private set => _alphaRecordingHiddenObjects = value; }
 
+        [Tooltip("켜면 클립 시작부의 완전 정지(준비 자세) 구간을 자동으로 건너뛰고 첫 움직임부터 녹화합니다. 인트로 홀드를 영상에 남기려면 끕니다. 구간 녹화가 켜져 있으면 지정 프레임이 우선합니다.")]
+        [SerializeField] private bool _motionVideoSkipLeadingStill= true;
+        public bool motionVideoSkipLeadingStill { get => _motionVideoSkipLeadingStill; private set => _motionVideoSkipLeadingStill = value; }
+
+        [Tooltip("켜면 시작~종료 프레임 구간만 영상으로 녹화합니다. 프레임 번호는 클립 FPS 기준 모션 프레임입니다.")]
+        [SerializeField] private bool _motionVideoRangeEnabled= false;
+        public bool motionVideoRangeEnabled { get => _motionVideoRangeEnabled; private set => _motionVideoRangeEnabled = value; }
+
+        [Tooltip("녹화 시작 모션 프레임입니다(포함). 0이면 클립 처음부터입니다.")]
+        [Min(0)]
+        [SerializeField] private int _motionVideoRangeStartFrame= 0;
+        public int motionVideoRangeStartFrame { get => _motionVideoRangeStartFrame; private set => _motionVideoRangeStartFrame = value; }
+
+        [Tooltip("녹화 종료 모션 프레임입니다(포함). 0이거나 클립 끝을 넘으면 끝까지 녹화합니다.")]
+        [Min(0)]
+        [SerializeField] private int _motionVideoRangeEndFrame= 0;
+        public int motionVideoRangeEndFrame { get => _motionVideoRangeEndFrame; private set => _motionVideoRangeEndFrame = value; }
+
         [Tooltip("비교 CSV/프레임 캡처 Probe를 켭니다. 일반 변환에서는 미세 멈춤을 줄이기 위해 끄고, 회귀 테스트 때만 켭니다.")]
         [HideInInspector]
         [FormerlySerializedAs("enableRecordingDiagnostics")]
@@ -1378,6 +1396,7 @@ namespace Fbx2Vmd.FBXImporter
         private string _nativeSkinningCorrectionSetupError = string.Empty;
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
         private string _preparedMotionName = string.Empty;
+        private float _lastRecordingProgressUpdateTime = -999f;
         private FBXSessionState _sessionState = FBXSessionState.Idle;
         internal bool _isProcessing;
         private GameObject _activeGhostContainer;
@@ -2251,6 +2270,15 @@ namespace Fbx2Vmd.FBXImporter
 #if UNITY_EDITOR
         private bool TryStartImportedMotionRecordingNow()
         {
+            if (!TryResolveMotionVideoRangeSeconds(
+                    out float rangeStartSeconds,
+                    out float rangeEndSeconds,
+                    out string rangeErrorMessage))
+            {
+                Debug.LogWarning($"[FBXImport] {rangeErrorMessage}");
+                SetSessionState(FBXSessionState.Ready, rangeErrorMessage, 1f);
+                return false;
+            }
 
             // GameView 현재 크기로 기록해 녹화 중 화면 해상도가 바뀌지 않게 함.
             var settings = new MotionVideoRecordingSettings(
@@ -2259,7 +2287,9 @@ namespace Fbx2Vmd.FBXImporter
                 Screen.height,
                 (float)_motionVideoFrameRate,
                 outputDirectory: _motionVideoOutputFolder,
-                format: _motionVideoFormat);
+                format: _motionVideoFormat,
+                startTimeSeconds: rangeStartSeconds,
+                endTimeSeconds: rangeEndSeconds);
             if (!_humanoidMotionRecordingController.TryStart(
                     settings,
                     out string errorMessage))
@@ -2273,6 +2303,81 @@ namespace Fbx2Vmd.FBXImporter
                 FBXSessionState.Recording,
                 "FBX 모션 영상 녹화 중",
                 0f);
+            return true;
+        }
+
+        // 모션 프레임 기준 녹화 구간을 초 단위로 환산함. 구간 녹화가 꺼져 있으면
+        // 선두 정지 스킵만 적용하고, 둘 다 아니면 클립 전체를 녹화함.
+        private bool TryResolveMotionVideoRangeSeconds(
+            out float startTimeSeconds,
+            out float endTimeSeconds,
+            out string errorMessage)
+        {
+            startTimeSeconds = 0f;
+            endTimeSeconds = 0f;
+            errorMessage = string.Empty;
+
+            HumanoidMotionPlaybackController playback = _humanoidMotionPlaybackController;
+            float clipLength = playback?.ClipLengthSeconds ?? 0f;
+            float clipFrameRate = playback?.ClipFrameRate ?? 0f;
+            if (clipLength <= 0f || clipFrameRate <= 0f)
+            {
+                errorMessage = "재생할 FBX 모션이 준비되지 않았습니다.";
+                return false;
+            }
+
+            if (!_motionVideoRangeEnabled)
+            {
+                if (_motionVideoSkipLeadingStill &&
+                    HumanoidMotionLeadingStillLocator.TryFindMotionStartTime(
+                        playback.PreparedClip,
+                        out float stillEndSeconds))
+                {
+                    Debug.Log(
+                        $"[FBXImport] 클립 선두 정지 구간을 건너뛰어 " +
+                        $"{stillEndSeconds:F2}s부터 녹화합니다.");
+                    startTimeSeconds = stillEndSeconds;
+                }
+                return true;
+            }
+
+            if (_motionVideoRangeStartFrame < 0 || _motionVideoRangeEndFrame < 0)
+            {
+                errorMessage = "녹화 구간 프레임은 0 이상이어야 합니다.";
+                return false;
+            }
+
+            int lastFrameIndex = playback.LastFrameIndex;
+            if (_motionVideoRangeStartFrame >= lastFrameIndex)
+            {
+                errorMessage =
+                    $"녹화 시작 프레임({_motionVideoRangeStartFrame})이 " +
+                    $"클립 마지막 프레임({lastFrameIndex}) 이상입니다.";
+                return false;
+            }
+
+            startTimeSeconds = HumanoidMotionFrameCalculator.CalculateTimeSeconds(
+                _motionVideoRangeStartFrame,
+                clipLength,
+                clipFrameRate);
+            // 종료 프레임이 0이거나 클립 범위를 넘으면 클립 끝까지 녹화함.
+            if (_motionVideoRangeEndFrame > 0 &&
+                _motionVideoRangeEndFrame <= lastFrameIndex)
+            {
+                endTimeSeconds = HumanoidMotionFrameCalculator.CalculateTimeSeconds(
+                    _motionVideoRangeEndFrame,
+                    clipLength,
+                    clipFrameRate);
+            }
+
+            if (endTimeSeconds > 0f && startTimeSeconds >= endTimeSeconds)
+            {
+                errorMessage =
+                    $"녹화 시작 프레임({_motionVideoRangeStartFrame})이 " +
+                    $"종료 프레임({_motionVideoRangeEndFrame}) 이상입니다.";
+                return false;
+            }
+
             return true;
         }
 
@@ -2319,6 +2424,17 @@ namespace Fbx2Vmd.FBXImporter
         #region 파일 처리 로직
         internal async void ProcessFBXAsync(string sourcePath)
         {
+            // 영상 녹화 중 임포트는 재생 컨트롤러를 해제해 Recorder가 정지 프레임만
+            // 캡처하게 되므로 차단함.
+            if (IsImportedMotionRecording)
+            {
+                SetSessionState(
+                    FBXSessionState.Recording,
+                    "영상 녹화 중에는 새 FBX를 불러올 수 없습니다.",
+                    0f);
+                return;
+            }
+
             if (_isProcessing)
             {
                 SetSessionState(FBXSessionState.LoadingFbx, "이미 FBX 처리 중입니다.", 0.1f);
@@ -2842,6 +2958,10 @@ namespace Fbx2Vmd.FBXImporter
                 // 녹화 시작 프레임에는 deltaTime이 갱신 전일 수 있어 현재 정지 상태도 확인함.
                 completedRecording = _humanoidMotionRecordingController.Tick(
                     Time.timeScale > 0f ? Time.deltaTime : 0f);
+                if (!completedRecording)
+                {
+                    UpdateRecordingSessionProgress();
+                }
             }
             else
             {
@@ -2859,6 +2979,23 @@ namespace Fbx2Vmd.FBXImporter
                         : "FBX 모션 재생 완료",
                     1f);
             }
+        }
+
+        // 프레임 정확도 녹화는 실시간보다 느리게 보이므로 진행률을 주기 갱신해
+        // 멈춘 것처럼 보이지 않게 함. 갱신 빈도를 제한해 매 틱 UI 호출 비용을 피함.
+        private void UpdateRecordingSessionProgress()
+        {
+            if (Time.unscaledTime - _lastRecordingProgressUpdateTime < 0.25f)
+            {
+                return;
+            }
+
+            _lastRecordingProgressUpdateTime = Time.unscaledTime;
+            SetSessionState(
+                FBXSessionState.Recording,
+                "FBX 모션 영상 녹화 중",
+                _humanoidMotionRecordingController.NormalizedRecordingProgress,
+                shouldLog: false);
         }
 
         private bool TryPrepareNativeSkinningCorrection(

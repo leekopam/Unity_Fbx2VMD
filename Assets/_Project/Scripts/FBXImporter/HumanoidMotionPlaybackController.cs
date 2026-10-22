@@ -63,6 +63,9 @@ namespace Fbx2Vmd.FBXImporter
         internal float ClipFrameRate { get; private set; }
         internal string ClipName { get; private set; } = string.Empty;
 
+        // 선두 정지 구간 탐지처럼 준비된 클립 자체를 읽는 경로에서 사용함.
+        internal AnimationClip PreparedClip { get; private set; }
+
         internal int CurrentFrameIndex =>
             HumanoidMotionFrameCalculator.CalculateFrameIndex(
                 CurrentTimeSeconds,
@@ -156,6 +159,7 @@ namespace Fbx2Vmd.FBXImporter
                 ClipFrameRate = HumanoidMotionFrameCalculator.NormalizeFrameRate(
                     clip.frameRate);
                 ClipName = clip.name;
+                PreparedClip = clip;
                 CurrentTimeSeconds = 0f;
                 _player.EvaluateAt(CurrentTimeSeconds);
                 _poseFrameEditor.Initialize(targetAnimator);
@@ -361,6 +365,7 @@ namespace Fbx2Vmd.FBXImporter
             ClipLengthSeconds = 0f;
             ClipFrameRate = 0f;
             ClipName = string.Empty;
+            PreparedClip = null;
             _poseCorrectionDocument = null;
             State = HumanoidMotionPlaybackState.Empty;
         }

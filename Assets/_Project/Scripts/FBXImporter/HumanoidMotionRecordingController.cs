@@ -16,6 +16,9 @@ namespace Fbx2Vmd.FBXImporter
         private float _recordingFrameRate;
         private long _nextRecordingFrame;
         private bool _hasReachedLastFrame;
+        // 녹화 구간 — 시작 시각의 자세가 첫 캡처 프레임, 종료 시각의 자세가 마지막 캡처 프레임이 됨.
+        private float _rangeStartSeconds;
+        private float _rangeEndSeconds;
         // 느린 틱 계측 — 목표 프레임 간격의 2배를 넘는 틱을 스파이크로 집계함.
         private int _slowTickCount;
         private int _recordedTickCount;
@@ -43,6 +46,22 @@ namespace Fbx2Vmd.FBXImporter
         internal bool IsRecording => _videoRecorder.IsRecording;
         internal string OutputFilePath => _videoRecorder.OutputFilePath;
 
+        // 구간 내 재생 위치를 0~1로 환산 — 녹화 중 진행률 표시에 사용함.
+        internal float NormalizedRecordingProgress
+        {
+            get
+            {
+                float span = _rangeEndSeconds - _rangeStartSeconds;
+                if (!IsRecording || span <= 0f)
+                {
+                    return 0f;
+                }
+
+                return Mathf.Clamp01(
+                    (_playbackController.CurrentTimeSeconds - _rangeStartSeconds) / span);
+            }
+        }
+
         internal bool TryStart(
             MotionVideoRecordingSettings settings,
             out string errorMessage)
@@ -59,6 +78,18 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
             }
 
+            // 구간 해석은 어떤 부작용도 일으키기 전에 검증함 — 무효 설정은 재생 상태를 건드리지 않음.
+            _rangeStartSeconds = Mathf.Max(0f, settings.StartTimeSeconds);
+            float clipLengthSeconds = _playbackController.ClipLengthSeconds;
+            _rangeEndSeconds = settings.EndTimeSeconds > 0f
+                ? Mathf.Min(settings.EndTimeSeconds, clipLengthSeconds)
+                : clipLengthSeconds;
+            if (_rangeEndSeconds - _rangeStartSeconds <= 0f)
+            {
+                errorMessage = "녹화 구간이 비어 있습니다. 시작/종료 프레임 설정을 확인하세요.";
+                return false;
+            }
+
             // 이전 세션 계측 잔존 방지 — 실패 경로에서도 새 세션으로 초기화함.
             _slowTickCount = 0;
             _recordedTickCount = 0;
@@ -71,6 +102,15 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _playbackController.Stop();
+            // 구간 녹화면 첫 캡처 프레임이 시작 자세가 되도록 녹화 시작 전에 해당 시각으로 이동함.
+            if (_rangeStartSeconds > 0f &&
+                !_playbackController.Seek(_rangeStartSeconds))
+            {
+                _videoRecorder.Stop();
+                errorMessage = "녹화 구간 시작 위치로 이동하지 못했습니다.";
+                return false;
+            }
+
             if (!_videoRecorder.TryStart(out errorMessage))
             {
                 _videoRecorder.Stop();
@@ -86,6 +126,7 @@ namespace Fbx2Vmd.FBXImporter
                 // 프레임 정확도 우선 녹화 — 재생이 실시간보다 느려 보이는 것은 정상 동작임.
                 Debug.Log(
                     $"[FBXImport] 영상 녹화 시작됨. fps={settings.FrameRate}, " +
+                    $"구간={_rangeStartSeconds:F2}~{_rangeEndSeconds:F2}s, " +
                     "프레임 정확도 모드로 재생이 느려 보일 수 있습니다.");
                 // 투명 배경 녹화(MOV/WebM)일 때만 지정된 렌더러를 숨겨 캐릭터만 산출함.
                 SetAlphaHidden(settings.Format.SupportsAlpha());
@@ -110,10 +151,11 @@ namespace Fbx2Vmd.FBXImporter
                 return Stop();
 
             long tickStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
-            double timeSeconds = _nextRecordingFrame / (double)_recordingFrameRate;
-            _playbackController.Seek((float)Math.Min(timeSeconds, _playbackController.ClipLengthSeconds));
+            double timeSeconds =
+                _rangeStartSeconds + _nextRecordingFrame / (double)_recordingFrameRate;
+            _playbackController.Seek((float)Math.Min(timeSeconds, _rangeEndSeconds));
             _hasReachedLastFrame =
-                _playbackController.CurrentTimeSeconds >= _playbackController.ClipLengthSeconds;
+                _playbackController.CurrentTimeSeconds >= _rangeEndSeconds;
             _nextRecordingFrame++;
 
             double tickMilliseconds =

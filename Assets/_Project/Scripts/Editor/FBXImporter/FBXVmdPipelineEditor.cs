@@ -831,6 +831,21 @@ namespace Fbx2Vmd.FBXImporter
             EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoFormat", "영상 파일 형식", showWarningOnNull: true);
             EditorDrawUtility.DrawProperty(serializedObject, "_alphaRecordingHiddenObjects", "MOV/WebM 녹화 시 숨길 오브젝트", showWarningOnNull: false);
             EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoFrameRate", "영상 FPS", showWarningOnNull: true);
+            EditorGUILayout.HelpBox(
+                "영상 FPS가 높을수록 녹화 중 재생이 느려 보입니다. 프레임마다 정확한 시각을 기록하는 모드라 출력 영상의 길이와 속도는 그대로입니다.",
+                MessageType.None);
+            EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoSkipLeadingStill", "선두 정지(준비) 구간 건너뛰기", showWarningOnNull: true);
+            EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoRangeEnabled", "구간 녹화", showWarningOnNull: true);
+            if (EditorDrawUtility.GetBool(serializedObject, "_motionVideoRangeEnabled"))
+            {
+                EditorGUI.indentLevel++;
+                EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoRangeStartFrame", "시작 프레임(포함)", showWarningOnNull: true);
+                EditorDrawUtility.DrawProperty(serializedObject, "_motionVideoRangeEndFrame", "종료 프레임(포함, 0=끝)", showWarningOnNull: true);
+                EditorGUILayout.HelpBox(
+                    "프레임 번호는 영상 FPS가 아니라 모션 클립의 FPS 기준 0부터 시작입니다. 시작·종료 프레임 모두 영상에 포함됩니다.",
+                    MessageType.None);
+                EditorGUI.indentLevel--;
+            }
             EditorDrawUtility.DrawProperty(serializedObject, "_clampRetargetVisualClipStep", "Ghost clip time step 제한", showWarningOnNull: true);
             if (EditorDrawUtility.GetBool(serializedObject, "_clampRetargetVisualClipStep"))
             {

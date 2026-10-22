@@ -297,6 +297,352 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RangeStart_When_StartingRecording_Then_FirstCapturedPoseIsRangeStart()
+        {
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+
+            try
+            {
+                const float rangeStart = 1.5f;
+                recorder.BeforeStart = () =>
+                    Mathf.Abs(ReadProperty<float>(playback, "CurrentTimeSeconds") - rangeStart) <
+                    TimeTolerance &&
+                    ReadProperty(playback, "State").ToString() == "Ready";
+
+                bool started = (bool)Invoke(
+                    controller,
+                    "TryStart",
+                    CreateSettings(startTimeSeconds: rangeStart),
+                    null);
+
+                Assert.That(started, Is.True);
+                Assert.That(recorder.WasReadyAtStart, Is.True,
+                    "인코더 시작 전에 모션이 구간 시작 자세로 이동해 있어야 합니다.");
+                Assert.That(ReadProperty(playback, "State").ToString(), Is.EqualTo("Playing"));
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                    Is.EqualTo(rangeStart).Within(TimeTolerance));
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_RangeEnd_When_Ticking_Then_StopsAfterEndPoseRenderOpportunity()
+        {
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+
+            try
+            {
+                const float frameRate = 60f;
+                const float rangeStart = 1.0f;
+                // 출력 3프레임 뒤에 끝나는 구간 — 시작~종료 자세가 모두 캡처 대상임.
+                const float rangeEnd = rangeStart + 3f / frameRate;
+                Assert.That((bool)Invoke(
+                    controller,
+                    "TryStart",
+                    CreateSettings(
+                        frameRate,
+                        startTimeSeconds: rangeStart,
+                        endTimeSeconds: rangeEnd),
+                    null), Is.True);
+
+                for (int step = 1; step <= 3; step++)
+                {
+                    Assert.That((bool)Invoke(controller, "Tick", 1f), Is.False);
+                    Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                        Is.EqualTo(rangeStart + step / frameRate).Within(TimeTolerance));
+                }
+
+                Assert.That(recorder.IsRecording, Is.True,
+                    "종료 자세의 렌더 기회 전에 녹화를 종료하면 안 됩니다.");
+                Assert.That((bool)Invoke(controller, "Tick", 1f), Is.True);
+                Assert.That(recorder.IsRecording, Is.False);
+                Assert.That(recorder.StopCount, Is.EqualTo(1));
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"), Is.Zero);
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [TestCase(5f, 5f)]
+        [TestCase(5f, 4f)]
+        public void Given_InvalidRange_When_StartingRecording_Then_FailsWithoutRecorderStart(
+            float startTimeSeconds,
+            float endTimeSeconds)
+        {
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+
+            try
+            {
+                object[] arguments =
+                {
+                    CreateSettings(
+                        startTimeSeconds: startTimeSeconds,
+                        endTimeSeconds: endTimeSeconds),
+                    null
+                };
+                bool started = (bool)Invoke(controller, "TryStart", arguments);
+
+                Assert.That(started, Is.False);
+                Assert.That(arguments[1], Is.Not.Null.And.Not.Empty);
+                Assert.That(recorder.Calls, Is.Empty,
+                    "무효 구간은 인코더 준비 자체를 시작하면 안 됩니다.");
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                    Is.EqualTo(0f).Within(TimeTolerance));
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_RangeEndBeyondClip_When_StartingRecording_Then_RecordsToClipEnd()
+        {
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+            var recorder = new RecorderProbe();
+            object controller = CreateRecordingController(playback, recorder);
+
+            try
+            {
+                float clipLength = ReadProperty<float>(playback, "ClipLengthSeconds");
+                Assert.That((bool)Invoke(
+                    controller,
+                    "TryStart",
+                    CreateSettings(
+                        startTimeSeconds: 1f,
+                        endTimeSeconds: clipLength + 100f),
+                    null), Is.True);
+
+                Assert.That((bool)Invoke(controller, "Tick", 1f), Is.False);
+                Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"),
+                    Is.EqualTo(1f + 1f / 60f).Within(TimeTolerance));
+            }
+            finally
+            {
+                DisposeIfPresent(controller);
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_ClipWithLeadingStill_When_LocatingMotionStart_Then_ReturnsPositiveTime()
+        {
+            AnimationClip clip = LoadHumanoidClip();
+            bool found = TryLocateMotionStart(clip, out float motionStart);
+
+            TestContext.WriteLine(
+                $"[LeadingStill] clip={clip.name}, detectedMotionStart={motionStart:F3}s, " +
+                $"clipLength={clip.length:F3}s");
+            Assert.That(found, Is.True, "satisfaction_2 클립은 선두 정지 구간이 있어야 합니다.");
+            // 실측 프로파일 기준 안무 시작은 약 7초 — 감지가 엉뚱한 시각을 반환하지 않는지 확인함.
+            Assert.That(motionStart, Is.GreaterThan(1f).And.LessThan(30f));
+        }
+
+        [Test]
+        public void Given_ConstantCurveClip_When_LocatingMotionStart_Then_ReturnsFalse()
+        {
+            var clip = new AnimationClip { frameRate = 30f };
+            clip.SetCurve(
+                string.Empty,
+                typeof(Transform),
+                "localPosition.x",
+                new AnimationCurve(new Keyframe(0f, 0f), new Keyframe(6f, 0f)));
+
+            bool found = TryLocateMotionStart(clip, out _);
+
+            Assert.That(found, Is.False, "전 구간 정지 클립은 건너뛸 구간이 없어야 합니다.");
+            UnityEngine.Object.DestroyImmediate(clip);
+        }
+
+        [Test]
+        public void Given_StillThenMovingClip_When_LocatingMotionStart_Then_DetectsStillEnd()
+        {
+            var clip = new AnimationClip { frameRate = 30f };
+            clip.SetCurve(
+                string.Empty,
+                typeof(Transform),
+                "localPosition.x",
+                new AnimationCurve(
+                    new Keyframe(0f, 0f),
+                    new Keyframe(2f, 0f),
+                    new Keyframe(2.3f, 5f),
+                    new Keyframe(6f, 5f)));
+
+            bool found = TryLocateMotionStart(clip, out float motionStart);
+
+            // 2.1~2.3s에서 활동 임계를 연속 3회 넘기므로 상승 직전인 ~2.0s를 정지 끝으로 반환함.
+            Assert.That(found, Is.True);
+            Assert.That(motionStart, Is.EqualTo(2f).Within(0.15f));
+            UnityEngine.Object.DestroyImmediate(clip);
+        }
+
+        [Test]
+        public void Given_ImmediatelyMovingClip_When_LocatingMotionStart_Then_ReturnsFalse()
+        {
+            var clip = new AnimationClip { frameRate = 30f };
+            clip.SetCurve(
+                string.Empty,
+                typeof(Transform),
+                "localPosition.x",
+                new AnimationCurve(new Keyframe(0f, 0f), new Keyframe(0.5f, 5f)));
+
+            bool found = TryLocateMotionStart(clip, out _);
+
+            Assert.That(found, Is.False,
+                "처음부터 움직이는 클립은 건너뛸 준비 구간이 없어야 합니다.");
+            UnityEngine.Object.DestroyImmediate(clip);
+        }
+
+        [Test]
+        public void Given_PipelineRangeSettings_When_ResolvingRange_Then_ConvertsMotionFramesToSeconds()
+        {
+            GameObject host = new GameObject("RangeResolveTest", typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline));
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+
+            try
+            {
+                var pipeline = host.GetComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
+                SetField(pipeline, "_humanoidMotionPlaybackController", playback);
+                SetField(pipeline, "_motionVideoRangeEnabled", true);
+                SetField(pipeline, "_motionVideoRangeStartFrame", 30);
+                SetField(pipeline, "_motionVideoRangeEndFrame", 90);
+
+                object[] arguments = { 0f, 0f, null };
+                bool resolved = (bool)Invoke(
+                    pipeline,
+                    "TryResolveMotionVideoRangeSeconds",
+                    arguments);
+
+                float clipFrameRate = ReadProperty<float>(playback, "ClipFrameRate");
+                Assert.That(resolved, Is.True, (string)arguments[2]);
+                Assert.That((float)arguments[0],
+                    Is.EqualTo(30f / clipFrameRate).Within(TimeTolerance));
+                Assert.That((float)arguments[1],
+                    Is.EqualTo(90f / clipFrameRate).Within(TimeTolerance));
+            }
+            finally
+            {
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void Given_PipelineRangeWithReversedFrames_When_ResolvingRange_Then_FailsWithMessage()
+        {
+            GameObject host = new GameObject("RangeResolveTest", typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline));
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+
+            try
+            {
+                var pipeline = host.GetComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
+                SetField(pipeline, "_humanoidMotionPlaybackController", playback);
+                SetField(pipeline, "_motionVideoRangeEnabled", true);
+                SetField(pipeline, "_motionVideoRangeStartFrame", 90);
+                SetField(pipeline, "_motionVideoRangeEndFrame", 30);
+
+                object[] arguments = { 0f, 0f, null };
+                bool resolved = (bool)Invoke(
+                    pipeline,
+                    "TryResolveMotionVideoRangeSeconds",
+                    arguments);
+
+                Assert.That(resolved, Is.False);
+                Assert.That(arguments[2], Is.Not.Null.And.Not.Empty);
+            }
+            finally
+            {
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
+        public void Given_PipelineSkipStill_When_ResolvingRange_Then_StartsAtDetectedMotion()
+        {
+            GameObject host = new GameObject("RangeResolveTest", typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline));
+            GameObject target = InstantiateTarget();
+            object playback = CreatePlaybackController(target);
+
+            try
+            {
+                var pipeline = host.GetComponent<Fbx2Vmd.FBXImporter.FBXVmdPipeline>();
+                SetField(pipeline, "_humanoidMotionPlaybackController", playback);
+                // 구간 녹화 없이 선두 정지 스킵만 켠 기본 조합을 재현함.
+                SetField(pipeline, "_motionVideoRangeEnabled", false);
+                SetField(pipeline, "_motionVideoSkipLeadingStill", true);
+
+                object[] arguments = { 0f, 0f, null };
+                bool resolved = (bool)Invoke(
+                    pipeline,
+                    "TryResolveMotionVideoRangeSeconds",
+                    arguments);
+
+                float clipLength = ReadProperty<float>(playback, "ClipLengthSeconds");
+                Assert.That(resolved, Is.True, (string)arguments[2]);
+                Assert.That((float)arguments[0],
+                    Is.GreaterThan(0f).And.LessThan(clipLength),
+                    "선두 정지 감지가 동작하면 시작 시각이 0보다 커야 합니다.");
+            }
+            finally
+            {
+                DisposeIfPresent(playback);
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        private static bool TryLocateMotionStart(AnimationClip clip, out float motionStart)
+        {
+            Type locatorType = typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline).Assembly.GetType(
+                "Fbx2Vmd.FBXImporter.HumanoidMotionLeadingStillLocator",
+                throwOnError: true);
+            MethodInfo method = locatorType.GetMethod(
+                "TryFindMotionStartTime",
+                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+            object[] arguments = { clip, 0f };
+            bool found = (bool)method.Invoke(null, arguments);
+            motionStart = (float)arguments[1];
+            return found;
+        }
+
+        private static void SetField(object target, string fieldName, object value)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"{fieldName} 필드가 필요합니다.");
+            field.SetValue(target, value);
+        }
+
+        [Test]
         public void Given_MovFormat_When_RecordingStartsAndStops_Then_AlphaHiddenRenderersAreRestored()
         {
             GameObject target = InstantiateTarget();
@@ -492,10 +838,18 @@ namespace Tests.Editor.FBXImporter
 
         private static MotionVideoRecordingSettings CreateSettings(
             float frameRate = 60f,
-            MotionVideoFileFormat format = MotionVideoFileFormat.Mp4)
+            MotionVideoFileFormat format = MotionVideoFileFormat.Mp4,
+            float startTimeSeconds = 0f,
+            float endTimeSeconds = 0f)
         {
             return new MotionVideoRecordingSettings(
-                "motion", 1920, 1080, frameRate, format: format);
+                "motion",
+                1920,
+                1080,
+                frameRate,
+                format: format,
+                startTimeSeconds: startTimeSeconds,
+                endTimeSeconds: endTimeSeconds);
         }
 
         private static object CreatePlaybackController(GameObject target)
