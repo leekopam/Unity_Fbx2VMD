@@ -567,35 +567,15 @@ namespace Tests.Editor.FBXImporter
                 object sequentialResult = ReadProperty<object>(sequential, "Result");
 
                 // 베이스라인 없이 스키닝 행렬만 싣고 처리 — 워커 LBS 경로를 검증한다.
-                Type preparedType = RequireProductType(
-                    "NativeSkinningPreparedFrame");
-                Type vertexDictionaryType = typeof(
-                        System.Collections.Generic.Dictionary<,>)
-                    .MakeGenericType(
-                        typeof(SkinnedMeshRenderer),
-                        typeof(Vector3[]));
-                Type matrixDictionaryType = typeof(
-                        System.Collections.Generic.Dictionary<,>)
-                    .MakeGenericType(
-                        typeof(SkinnedMeshRenderer),
-                        typeof(Matrix4x4[]));
-                IList preparedFrames = (IList)Activator.CreateInstance(
-                    typeof(System.Collections.Generic.List<>)
-                        .MakeGenericType(preparedType));
-                IDictionary emptyVertexDictionary =
-                    (IDictionary)Activator.CreateInstance(vertexDictionaryType);
-                IDictionary matrixDictionary =
-                    (IDictionary)Activator.CreateInstance(matrixDictionaryType);
-                matrixDictionary[renderer] = skinningMatrices;
-                preparedFrames.Add(Activator.CreateInstance(
-                    preparedType,
-                    BindingFlags.Instance | BindingFlags.Public |
-                    BindingFlags.NonPublic,
-                    null,
-                    new object[] { 0, emptyVertexDictionary, matrixDictionary },
-                    null));
-
+                // 행렬 전용 프레임은 LBS 사용 확정 상태에서만 풀 수 있으므로
+                // 실제 캡처 게이트와 같은 전제(verdict=Usable)를 반영한다.
+                IList preparedFrames = CreatePreparedFrameList(
+                    CreatePreparedFrame(0, renderer, null, skinningMatrices));
                 object lbsOnly = CreateSession(1, contracts, frameReader);
+                WriteLbsField(
+                    lbsOnly,
+                    "LbsVerdict",
+                    ReadLbsConstant(lbsOnly, "LbsUsable"));
                 Assert.That(
                     (bool)Invoke(
                         lbsOnly,
@@ -605,6 +585,10 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(
                     ReadProperty<bool>(lbsOnly, "IsComplete"),
                     Is.True);
+                // 행렬 전용 프레임은 자기 자신과 비교하는 표결을 하면 안 된다.
+                Assert.That(
+                    ReadLbsField(lbsOnly, "LbsComparedFrameCount"),
+                    Is.EqualTo(0));
                 object lbsResult = ReadProperty<object>(lbsOnly, "Result");
 
                 foreach (string property in new[]
@@ -631,6 +615,241 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
+        [Test]
+        public void Given_MatricesOnlyFrameBeforeLbsVerified_When_Processing_Then_SessionFaults()
+        {
+            // 캡처 게이트와 같은 조건 — 미검증 상태의 행렬 전용 프레임은
+            // 베이크 없이 풀 수 없으므로 세션이 명시 실패해야 한다.
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
+                    Is.True);
+                Matrix4x4[] skinningMatrices = SampleSkinningMatrices(renderer);
+                Array contracts = CreateContractArray(contract);
+                Func<int, SkinnedMeshRenderer, Vector3[]> unusedReader =
+                    (_, _) => throw new InvalidOperationException(
+                        "행렬 전용 프레임은 frame reader를 호출하면 안 됩니다.");
+
+                object session = CreateSession(1, contracts, unusedReader);
+                IList preparedFrames = CreatePreparedFrameList(
+                    CreatePreparedFrame(0, renderer, null, skinningMatrices));
+                Assert.That(
+                    (bool)Invoke(
+                        session,
+                        "TryProcessPreparedFrames",
+                        preparedFrames),
+                    Is.False);
+                Assert.That(
+                    ReadProperty<bool>(session, "IsFaulted"),
+                    Is.True);
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_MatricesOnlyFrameAfterLbsRejected_When_Processing_Then_SessionFaults()
+        {
+            // 거부 이후 큐에 남은 행렬 전용 프레임은 어긋난 델타를 만들어
+            // 결과 캐시를 오염시킨다 — 명시 실패로 재준비(베이크) 경로로 보낸다.
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
+                    Is.True);
+                Matrix4x4[] skinningMatrices = SampleSkinningMatrices(renderer);
+                Array contracts = CreateContractArray(contract);
+                Func<int, SkinnedMeshRenderer, Vector3[]> unusedReader =
+                    (_, _) => throw new InvalidOperationException(
+                        "행렬 전용 프레임은 frame reader를 호출하면 안 됩니다.");
+
+                object session = CreateSession(1, contracts, unusedReader);
+                WriteLbsField(
+                    session,
+                    "LbsVerdict",
+                    ReadLbsConstant(session, "LbsRejected"));
+                IList preparedFrames = CreatePreparedFrameList(
+                    CreatePreparedFrame(0, renderer, null, skinningMatrices));
+                Assert.That(
+                    (bool)Invoke(
+                        session,
+                        "TryProcessPreparedFrames",
+                        preparedFrames),
+                    Is.False);
+                Assert.That(
+                    ReadProperty<bool>(session, "IsFaulted"),
+                    Is.True);
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_OutOfToleranceBakedBaseline_When_Voting_Then_LbsRejectedAndBakeRequired()
+        {
+            // 베이크와 LBS가 허용치 이상 어긋나면 거부로 확정되고
+            // 이후 캡처 게이트는 다시 베이크를 요구해야 한다.
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+            var bakedMesh = new Mesh();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
+                    Is.True);
+                renderer.BakeMesh(bakedMesh, false);
+                Matrix4x4[] skinningMatrices = SampleSkinningMatrices(renderer);
+                Array contracts = CreateContractArray(contract);
+                Func<int, SkinnedMeshRenderer, Vector3[]> frameReader =
+                    (_, _) => bakedMesh.vertices;
+
+                // 베이크와 다른 베이스라인을 밀어 넣어 편차 초과 표결을 유도한다.
+                Vector3[] shiftedBaseline = bakedMesh.vertices
+                    .Select(vertex => vertex + Vector3.one)
+                    .ToArray();
+                object session = CreateSession(1, contracts, frameReader);
+                IList preparedFrames = CreatePreparedFrameList(
+                    CreatePreparedFrame(
+                        0,
+                        renderer,
+                        shiftedBaseline,
+                        skinningMatrices));
+                Invoke(session, "TryProcessPreparedFrames", preparedFrames);
+
+                Assert.That(
+                    ReadLbsField(session, "LbsVerdict"),
+                    Is.EqualTo(ReadLbsConstant(session, "LbsRejected")));
+                Assert.That(
+                    (bool)Invoke(session, "RequiresBakedBaseline", renderer),
+                    Is.True);
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(bakedMesh);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_EnoughInToleranceFrames_When_Voting_Then_LbsUsableAndBakeSkipped()
+        {
+            // 허용치 내 비교가 캘리브레이션 횟수만큼 누적되면 사용 확정되고
+            // 이후 캡처 게이트는 베이크를 건너뛰어야 한다.
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+            var bakedMesh = new Mesh();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
+                    Is.True);
+                renderer.BakeMesh(bakedMesh, false);
+                Vector3[] baselineVertices = bakedMesh.vertices;
+                Matrix4x4[] skinningMatrices = SampleSkinningMatrices(renderer);
+                Array contracts = CreateContractArray(contract);
+                Func<int, SkinnedMeshRenderer, Vector3[]> frameReader =
+                    (_, _) => baselineVertices.ToArray();
+
+                const int frameCount = 8;
+                object session = CreateSession(frameCount, contracts, frameReader);
+                IList preparedFrames = CreatePreparedFrameList(
+                    Enumerable.Range(0, frameCount)
+                        .Select(index => CreatePreparedFrame(
+                            index,
+                            renderer,
+                            baselineVertices.ToArray(),
+                            skinningMatrices))
+                        .ToArray());
+                Assert.That(
+                    (bool)Invoke(
+                        session,
+                        "TryProcessPreparedFrames",
+                        preparedFrames),
+                    Is.True);
+
+                Assert.That(
+                    ReadLbsField(session, "LbsVerdict"),
+                    Is.EqualTo(ReadLbsConstant(session, "LbsUsable")));
+                Assert.That(
+                    (bool)Invoke(session, "RequiresBakedBaseline", renderer),
+                    Is.False);
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(bakedMesh);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
         private static Matrix4x4[] SampleSkinningMatrices(
             SkinnedMeshRenderer renderer)
         {
@@ -645,6 +864,94 @@ namespace Tests.Editor.FBXImporter
                 (bool)sampleMethod.Invoke(null, sampleArguments),
                 Is.True);
             return (Matrix4x4[])sampleArguments[1];
+        }
+
+        // 준비 프레임 하나를 리플렉션으로 만든다 — baseline이 null이면 행렬 전용.
+        private static object CreatePreparedFrame(
+            int frameIndex,
+            SkinnedMeshRenderer renderer,
+            Vector3[] baselineVertices,
+            Matrix4x4[] skinningMatrices)
+        {
+            Type preparedType = RequireProductType(
+                "NativeSkinningPreparedFrame");
+            var vertexDictionary =
+                new System.Collections.Generic.Dictionary<
+                    SkinnedMeshRenderer, Vector3[]>();
+            if (baselineVertices != null)
+            {
+                vertexDictionary[renderer] = baselineVertices;
+            }
+            var matrixDictionary =
+                new System.Collections.Generic.Dictionary<
+                    SkinnedMeshRenderer, Matrix4x4[]>
+                {
+                    [renderer] = skinningMatrices
+                };
+            return Activator.CreateInstance(
+                preparedType,
+                BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic,
+                null,
+                new object[] { frameIndex, vertexDictionary, matrixDictionary },
+                null);
+        }
+
+        private static IList CreatePreparedFrameList(params object[] frames)
+        {
+            IList list = (IList)Activator.CreateInstance(
+                typeof(System.Collections.Generic.List<>).MakeGenericType(
+                    RequireProductType("NativeSkinningPreparedFrame")));
+            foreach (object frame in frames)
+            {
+                list.Add(frame);
+            }
+            return list;
+        }
+
+        // 세션 내부의 첫 RendererWork — 캘리브레이션 상태를 검증한다.
+        private static object GetRendererWork(object session)
+        {
+            FieldInfo worksField = session.GetType().GetField(
+                "_rendererWorks",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(worksField, Is.Not.Null);
+            var works = (Array)worksField.GetValue(session);
+            Assert.That(works.Length, Is.GreaterThan(0));
+            return works.GetValue(0);
+        }
+
+        private static int ReadLbsField(object session, string fieldName)
+        {
+            FieldInfo field = GetRendererWork(session).GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, fieldName);
+            return (int)field.GetValue(GetRendererWork(session));
+        }
+
+        private static void WriteLbsField(
+            object session,
+            string fieldName,
+            int value)
+        {
+            FieldInfo field = GetRendererWork(session).GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public |
+                BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, fieldName);
+            field.SetValue(GetRendererWork(session), value);
+        }
+
+        private static int ReadLbsConstant(object session, string constName)
+        {
+            FieldInfo field = GetRendererWork(session).GetType().GetField(
+                constName,
+                BindingFlags.Static | BindingFlags.Public |
+                BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, constName);
+            return (int)field.GetValue(null);
         }
 
         [Test, Explicit("제품 사전계산기의 전체 clip 정량 계약을 검증할 때 실행합니다.")]

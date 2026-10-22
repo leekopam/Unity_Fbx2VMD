@@ -21,6 +21,9 @@ namespace Fbx2Vmd.FBXImporter
         private NativeSkinningCorrectionPreprocessSession _preprocessSession;
         private readonly Dictionary<SkinnedMeshRenderer, Mesh> _bakedMeshes =
             new Dictionary<SkinnedMeshRenderer, Mesh>();
+        // 준비 시작 시점의 소스 메시 — 캡처 중 토폴로지 교체를 감지한다.
+        private readonly Dictionary<SkinnedMeshRenderer, Mesh> _sessionMeshes =
+            new Dictionary<SkinnedMeshRenderer, Mesh>();
         private readonly List<NativeSkinningCorrectionPresenter> _presenters =
             new List<NativeSkinningCorrectionPresenter>();
         private Renderer[] _hiddenRenderers = Array.Empty<Renderer>();
@@ -36,6 +39,8 @@ namespace Fbx2Vmd.FBXImporter
         private readonly Queue<NativeSkinningPreparedFrame> _pendingPreparedFrames =
             new Queue<NativeSkinningPreparedFrame>();
         private Task _solveTask;
+        // 버려진 솔버 태스크가 다음 세션의 계측을 오염시키지 않게 구분하는 세대 값.
+        private int _preparationGeneration;
         // 준비 병목 분해 계측 — 완료/실패 시 [NativePrepTiming] 로그로 남긴다.
         private readonly System.Diagnostics.Stopwatch _prepWallWatch =
             new System.Diagnostics.Stopwatch();
@@ -209,6 +214,7 @@ namespace Fbx2Vmd.FBXImporter
                     hideFlags = HideFlags.HideAndDontSave
                 };
                 _bakedMeshes.Add(renderer, bakedMesh);
+                _sessionMeshes[renderer] = renderer.sharedMesh;
             }
 
             bool sessionCreated =
@@ -402,6 +408,8 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 NativeSkinningCorrectionPreprocessSession session =
                     _preprocessSession;
+                int generation = System.Threading.Volatile.Read(
+                    ref _preparationGeneration);
                 _solveTask = Task.Run(() =>
                 {
                     var solveWatch = System.Diagnostics.Stopwatch.StartNew();
@@ -411,8 +419,14 @@ namespace Fbx2Vmd.FBXImporter
                     }
                     finally
                     {
-                        System.Threading.Interlocked.Add(
-                            ref _solveTicks, solveWatch.ElapsedTicks);
+                        // 파이프라인이 리셋된 뒤 끝난 버려진 작업은
+                        // 다음 세션의 계측에 합산하지 않는다.
+                        if (System.Threading.Volatile.Read(
+                                ref _preparationGeneration) == generation)
+                        {
+                            System.Threading.Interlocked.Add(
+                                ref _solveTicks, solveWatch.ElapsedTicks);
+                        }
                     }
                 });
             }
@@ -443,7 +457,11 @@ namespace Fbx2Vmd.FBXImporter
                          .Select(contract => contract.Renderer)
                          .Distinct())
             {
-                if (renderer == null || renderer.sharedMesh == null)
+                // 세션 시작 때 쥔 메시와 달라지면 스냅샷과 행렬이 섞여
+                // 조용히 잘못된 베이스라인이 만들어진다 — 캡처에서 차단한다.
+                if (renderer == null || renderer.sharedMesh == null ||
+                    !_sessionMeshes.TryGetValue(renderer, out Mesh sessionMesh) ||
+                    renderer.sharedMesh != sessionMesh)
                 {
                     Fail("사전 계산 중 Renderer 토폴로지가 변경됐습니다.");
                     return false;
@@ -458,8 +476,7 @@ namespace Fbx2Vmd.FBXImporter
                         return false;
                     }
                     renderer.BakeMesh(bakedMesh, false);
-                    baselineVertices[renderer] =
-                        (Vector3[])bakedMesh.vertices.Clone();
+                    baselineVertices[renderer] = bakedMesh.vertices;
                 }
                 _bakeTicks += stageWatch.ElapsedTicks;
                 // LBS 베이스라인과 지연 본 변환의 공통 입력 — 매 프레임 표본화한다.
@@ -968,6 +985,7 @@ namespace Fbx2Vmd.FBXImporter
             _nextCaptureFrame = 0;
             _pendingPreparedFrames.Clear();
             _solveTask = null;
+            System.Threading.Interlocked.Increment(ref _preparationGeneration);
         }
 
         private void DestroyBakedMeshes()
@@ -977,6 +995,7 @@ namespace Fbx2Vmd.FBXImporter
                 DestroyOwnedObject(mesh);
             }
             _bakedMeshes.Clear();
+            _sessionMeshes.Clear();
         }
 
         private void DisposePresenters()

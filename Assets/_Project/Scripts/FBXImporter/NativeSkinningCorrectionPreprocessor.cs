@@ -116,6 +116,8 @@ namespace Fbx2Vmd.FBXImporter
         // 솔버 경로 계측 — 빠른 보정과 강한 fallback의 누적 시간을 분리한다.
         private long _fastPathTicks;
         private long _strongPathTicks;
+        private long _lbsTicks;
+        private long _convertTicks;
         // 솔버 커널 구간별 누적 — 워커 병렬 호출에서 Interlocked로만 쓴다.
         private readonly NativeSkinningSolverTiming _solverTiming =
             new NativeSkinningSolverTiming();
@@ -186,7 +188,12 @@ namespace Fbx2Vmd.FBXImporter
                     rejected++;
                 }
             }
+            double lbs = _lbsTicks * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency;
+            double convert = _convertTicks * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency;
             return $"fast={fast:F0}ms strong={strong:F0}ms " +
+                $"lbs={lbs:F0}ms convert={convert:F0}ms " +
                 $"fallbackFrames={_fallbackFrameCount} | " +
                 $"lbsUsable={usable} lbsRejected={rejected} | " +
                 _solverTiming.Describe();
@@ -784,29 +791,58 @@ namespace Fbx2Vmd.FBXImporter
                 prepared.SkinningMatrices?.TryGetValue(
                     work.Renderer,
                     out skinningMatrices);
-                // 베이크 베이스라인이 없으면 워커가 LBS로 직접 계산한다 —
-                // 스키닝 행렬이 캡처돼 있으면 Unity API 없이 복원 가능하다.
-                if (baselineVertices == null &&
-                    !TryComputeLbsBaseline(
-                        work,
-                        skinningMatrices,
-                        out baselineVertices))
+                if (baselineVertices == null)
                 {
-                    outcome.FatalMessage =
-                        $"frame {frameIndex}의 LBS 베이스라인을 계산하지 못했습니다.";
-                    return outcome;
+                    // 행렬 전용 프레임은 LBS 사용 확정 상태에서만 풀 수 있다 —
+                    // 미검증·거부 상태로 넘어온 입력은 베이크 없이 복원할 수 없으므로
+                    // 세션을 실패시켜 베이크 경로 재준비로 수렴시킨다.
+                    if (work.LbsVerdict != RendererWork.LbsUsable)
+                    {
+                        outcome.FatalMessage =
+                            $"frame {frameIndex}은 LBS가 미검증·거부된 상태의 " +
+                            "행렬 전용 프레임이라 베이스라인을 복원할 수 없습니다.";
+                        return outcome;
+                    }
+                    // 베이크 베이스라인이 없으면 워커가 LBS로 직접 계산한다 —
+                    // 스키닝 행렬이 캡처돼 있으면 Unity API 없이 복원 가능하다.
+                    var lbsWatch = System.Diagnostics.Stopwatch.StartNew();
+                    if (!TryComputeLbsBaseline(
+                            work,
+                            skinningMatrices,
+                            out baselineVertices))
+                    {
+                        outcome.FatalMessage =
+                            $"frame {frameIndex}의 LBS 베이스라인을 계산하지 못했습니다.";
+                        return outcome;
+                    }
+                    System.Threading.Interlocked.Add(
+                        ref _lbsTicks,
+                        lbsWatch.ElapsedTicks);
                 }
-                // 베이크 베이스라인이 있으면 LBS와 비교해 사용 가능 여부를 표결한다.
-                else if (baselineVertices != null)
+                else
                 {
+                    // 함께 캡처된 베이크 베이스라인하고만 표결한다 — 워커가 방금 채운
+                    // LBS 결과를 자기 자신과 비교하는 표결은 의미가 없다.
                     VoteLbsCalibration(work, skinningMatrices, baselineVertices);
                 }
                 NativeSkinningDualQuaternionTransform[] capturedTransforms = null;
                 if (!TryCalculateRendererFrameCore(
                         frameIndex,
                         baselineVertices,
-                        () => capturedTransforms ??=
-                            ConvertSkinningMatrices(skinningMatrices),
+                        () =>
+                        {
+                            if (capturedTransforms == null)
+                            {
+                                var convertWatch =
+                                    System.Diagnostics.Stopwatch.StartNew();
+                                capturedTransforms =
+                                    ConvertSkinningMatrices(skinningMatrices);
+                                System.Threading.Interlocked.Add(
+                                    ref _convertTicks,
+                                    convertWatch.ElapsedTicks);
+                            }
+                            return capturedTransforms;
+                        },
                         work,
                         out NativeSkinningCorrectionFrame frame,
                         out bool usedFallback,
@@ -870,7 +906,7 @@ namespace Fbx2Vmd.FBXImporter
         // 베이크 베이스라인과 LBS 결과를 전 정점 비교해 LBS 사용 가능 여부를 표결한다.
         // 미검증 구간에서는 비교 횟수가 임계에 도달하면 사용으로 확정하고,
         // 언제든 편차 초과가 나오면 거부로 전환해 베이크 경로로 되돌린다.
-        private static void VoteLbsCalibration(
+        private void VoteLbsCalibration(
             RendererWork work,
             Matrix4x4[] skinningMatrices,
             Vector3[] bakedBaselineVertices)
@@ -881,6 +917,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 return;
             }
+            var lbsWatch = System.Diagnostics.Stopwatch.StartNew();
             bool withinTolerance =
                 TryComputeLbsBaseline(
                     work,
@@ -891,18 +928,28 @@ namespace Fbx2Vmd.FBXImporter
                     bakedBaselineVertices) <=
                     NativeSkinningLinearBlendCalculator
                         .BaselineMaxDeviationMeters;
+            System.Threading.Interlocked.Add(
+                ref _lbsTicks,
+                lbsWatch.ElapsedTicks);
             if (withinTolerance)
             {
-                System.Threading.Interlocked.Increment(
-                    ref work.LbsComparedFrameCount);
-                if (work.LbsComparedFrameCount >= LbsCalibrationFrameCount)
+                // 사용 확정은 미결정 상태에서만 — 거부는 어느 표결보다 우선한다.
+                if (System.Threading.Interlocked.Increment(
+                        ref work.LbsComparedFrameCount) >=
+                    LbsCalibrationFrameCount)
                 {
-                    work.LbsVerdict = RendererWork.LbsUsable;
+                    System.Threading.Interlocked.CompareExchange(
+                        ref work.LbsVerdict,
+                        RendererWork.LbsUsable,
+                        RendererWork.LbsUndecided);
                 }
             }
             else
             {
-                work.LbsVerdict = RendererWork.LbsRejected;
+                // 거부는 즉시 확정 — 동시 표결이 사용으로 되돌리지 못한다.
+                System.Threading.Interlocked.Exchange(
+                    ref work.LbsVerdict,
+                    RendererWork.LbsRejected);
             }
         }
 
