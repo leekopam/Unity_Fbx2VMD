@@ -1509,6 +1509,25 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidMotionPlaybackState.Playing;
         public bool IsImportedMotionRecording =>
             _humanoidMotionRecordingController?.IsRecording ?? false;
+        // smoke/e2e 증거 수집이 해석된 구간과 캡처 수를 읽을 때 사용함.
+        internal HumanoidMotionRecordingController MotionRecordingController =>
+            _humanoidMotionRecordingController;
+
+        // e2e 녹화 증거 수집이 직렬화 녹화 옵션을 강제할 때 사용함 — Play 모드 인스턴스
+        // 변경이라 종료 시 직렬화 값이 유지됨.
+        internal void SetMotionVideoRecordingOptionsForEvidence(
+            bool skipLeadingStill,
+            bool rangeEnabled,
+            int startFrame,
+            int endFrame,
+            string outputDirectory)
+        {
+            _motionVideoSkipLeadingStill = skipLeadingStill;
+            _motionVideoRangeEnabled = rangeEnabled;
+            _motionVideoRangeStartFrame = startFrame;
+            _motionVideoRangeEndFrame = endFrame;
+            _motionVideoOutputFolder = outputDirectory;
+        }
         public bool IsPreparingImportedMotionCorrection =>
             _nativeSkinningCorrectionPlaybackDriver?.IsPreparing ?? false;
         public float ImportedMotionCorrectionPreparationProgress =>

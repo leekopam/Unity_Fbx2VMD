@@ -228,9 +228,10 @@ namespace Tests.Editor.FBXImporter
                         Is.EqualTo(Mathf.Min(sample / frameRate, length)).Within(TimeTolerance));
                 }
                 Assert.That(recorder.IsRecording, Is.True, "마지막 자세의 렌더 전에 녹화를 종료하면 안 됩니다.");
-                Invoke(controller, "Tick", 0f);
-                Assert.That(recorder.IsRecording, Is.True);
-                Assert.That((bool)Invoke(controller, "Tick", 1f), Is.True);
+                // 종료 자세는 플래그를 세운 틱의 프레임에 이미 렌더됐으므로 다음 틱은
+                // deltaTime과 무관하게 즉시 정지해야 함 — timeScale=0 대기 중
+                // 같은 자세가 중복 캡처되는 것을 막는 F5 계약임.
+                Assert.That((bool)Invoke(controller, "Tick", 0f), Is.True);
                 Assert.That(recorder.IsRecording, Is.False);
                 Assert.That(ReadProperty<float>(playback, "CurrentTimeSeconds"), Is.Zero);
                 Assert.That(recorder.StopCount, Is.EqualTo(1));
@@ -518,8 +519,11 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_MotionThenStillThenMotionClip_When_LocatingMotionStart_Then_ReturnsFalse()
         {
-            // 선두 트랜지언트가 아니라 실제 움직임(0.8s) 뒤의 중간 홀드는
+            // 선두 트랜지언트가 아니라 실제 움직임 뒤의 중간 홀드는
             // 선두 정지 구간이 아니므로 스킵하지 않아야 함 — 격리 리뷰 F1 회귀.
+            // 키 자동 탄젠트가 램프를 종형으로 스무딩해 양끝 샘플이 임계 미만이 되므로,
+            // 선행 활동이 트랜지언트 한도(6샘플)를 넘게 하려면 시간이 아니라
+            // 진폭을 키워야 함 — 1.2s/진폭8이면 활동 샘플이 ~10개로 확실히 초과됨.
             var clip = new AnimationClip { frameRate = 30f };
             foreach (string axis in new[] { "x", "y", "z" })
             {
@@ -529,9 +533,9 @@ namespace Tests.Editor.FBXImporter
                     $"localPosition.{axis}",
                     new AnimationCurve(
                         new Keyframe(0f, 0f),
-                        new Keyframe(0.8f, 4f),
-                        new Keyframe(1.5f, 4f),
-                        new Keyframe(1.8f, 7f)));
+                        new Keyframe(1.2f, 8f),
+                        new Keyframe(2.0f, 8f),
+                        new Keyframe(2.4f, 11f)));
             }
 
             bool found = TryLocateMotionStart(clip, out _);

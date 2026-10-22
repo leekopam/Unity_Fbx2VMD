@@ -20,9 +20,11 @@ namespace Fbx2Vmd.FBXImporter
         private float _rangeStartSeconds;
         private float _rangeEndSeconds;
         // 느린 틱 계측 — 목표 프레임 간격의 2배를 넘는 틱을 스파이크로 집계함.
+        // 카운터는 Stop 이후에도 증거 수집이 읽을 수 있게 유지하고 요약 로그는 1회로 제한함.
         private int _slowTickCount;
         private int _recordedTickCount;
         private double _maxTickMilliseconds;
+        private bool _hasLoggedTickSummary;
 
         internal HumanoidMotionRecordingController(
             HumanoidMotionPlaybackController playbackController,
@@ -45,6 +47,10 @@ namespace Fbx2Vmd.FBXImporter
 
         internal bool IsRecording => _videoRecorder.IsRecording;
         internal string OutputFilePath => _videoRecorder.OutputFilePath;
+        // e2e 증거 수집이 정지 후에도 해석된 구간·캡처 포즈 수를 읽을 수 있게 노출함.
+        internal float RangeStartSeconds => _rangeStartSeconds;
+        internal float RangeEndSeconds => _rangeEndSeconds;
+        internal int RecordedPoseTicks => _recordedTickCount;
 
         // 구간 내 재생 위치를 0~1로 환산 — 녹화 중 진행률 표시에 사용함.
         internal float NormalizedRecordingProgress
@@ -94,6 +100,7 @@ namespace Fbx2Vmd.FBXImporter
             _slowTickCount = 0;
             _recordedTickCount = 0;
             _maxTickMilliseconds = 0.0;
+            _hasLoggedTickSummary = false;
 
             if (!_videoRecorder.TryPrepare(settings, out errorMessage))
             {
@@ -181,16 +188,13 @@ namespace Fbx2Vmd.FBXImporter
             _videoRecorder.Stop();
             bool rewoundMotion = _playbackController.Stop();
             SetAlphaHidden(false);
-            if (_recordedTickCount > 0)
+            if (_recordedTickCount > 0 && !_hasLoggedTickSummary)
             {
                 // 녹화 중 프레임 스파이크 요약 — 끊김 원인 분석용 계측.
                 Debug.Log(
                     $"[FBXImport] 녹화 틱 계측: ticks={_recordedTickCount}, " +
                     $"slowTicks(>2프레임시간)={_slowTickCount}, maxTickMs={_maxTickMilliseconds:F1}");
-                // 중복 Stop 호출 시 같은 요약이 반복 출력되지 않도록 리셋함.
-                _recordedTickCount = 0;
-                _slowTickCount = 0;
-                _maxTickMilliseconds = 0.0;
+                _hasLoggedTickSummary = true;
             }
             return hadActiveRecording || rewoundMotion;
         }

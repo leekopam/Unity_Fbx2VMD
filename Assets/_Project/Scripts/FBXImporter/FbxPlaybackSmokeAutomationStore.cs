@@ -26,6 +26,15 @@ namespace Fbx2Vmd.FBXImporter
         public bool lower_body_only;
         // -1이면 미지정으로 파이프라인 기본값을 따름, 0이면 명시 해제, 양수면 해당 알파로 활성.
         public float ik_goal_alpha = -1f;
+        // 영상 녹화 증거 수집(capture_motion_recording_evidence) 파라미터.
+        public bool recording_range_enabled;
+        public int recording_start_frame;
+        public int recording_end_frame;
+        // -1이면 미지정으로 파이프라인 직렬화 값 유지, 0이면 끔, 1이면 켬.
+        public int recording_skip_still = -1;
+        // 0 이하면 구간 끝 자동 정지까지 대기, 양수면 해당 실시간 경과 후 수동 정지.
+        public float recording_stop_after_seconds;
+        public bool recording_try_import_during;
     }
 
     [Serializable]

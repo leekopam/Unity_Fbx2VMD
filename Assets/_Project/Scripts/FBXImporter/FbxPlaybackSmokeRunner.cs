@@ -42,6 +42,7 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureVrmBaselineCommand = "capture_vrm_mmd_head_metrics";
         private const string CaptureVrmLoadedCommand = "capture_vrm_univrm_head_metrics";
         private const string CaptureProductUiFlowCommand = "capture_product_ui_flow";
+        private const string CaptureMotionRecordingEvidenceCommand = "capture_motion_recording_evidence";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
         private const string CaptureE2eFrameCommand = "capture_e2e_frame";
@@ -193,6 +194,7 @@ namespace Fbx2Vmd.FBXImporter
         private static FbxFootLiveEvidenceCapture _footLiveEvidence;
         private static FbxFullClipFootMetricsCapture _fullClipMetrics;
         private static FbxProductUiFlowCapture _productUiFlow;
+        private static FbxMotionRecordingEvidenceCapture _motionRecordingEvidence;
         private static FBXVmdPipeline _alternateModelPipeline;
         private static GameObject _originalModel;
         private static GameObject _alternateModel;
@@ -471,6 +473,12 @@ namespace Fbx2Vmd.FBXImporter
             if (_productUiFlow != null)
             {
                 PollProductUiFlow();
+                return;
+            }
+
+            if (_motionRecordingEvidence != null)
+            {
+                PollMotionRecordingEvidence();
                 return;
             }
 
@@ -1124,6 +1132,17 @@ namespace Fbx2Vmd.FBXImporter
                     return FbxProductUiFlowCapture.TryStart(uiPipeline, request.request_id,
                         request.run_id, request.screen_width, request.screen_height,
                         out _productUiFlow, out message);
+                case CaptureMotionRecordingEvidenceCommand:
+                    // fbx_file 미지정이면 선두 정지 구간이 확인된 satisfaction_2를 사용함.
+                    if (string.IsNullOrWhiteSpace(request.fbx_file))
+                    {
+                        request.fbx_file = SatisfactionFbxFileName;
+                    }
+                    if (!TryGetFBXVmdPipeline(request.fbx_file,
+                            out FBXVmdPipeline recordingPipeline, interactive: false,
+                            out message)) return false;
+                    return FbxMotionRecordingEvidenceCapture.TryStart(recordingPipeline,
+                        request, out _motionRecordingEvidence, out message);
                 case CaptureInvalidInputEvidenceCommand:
                     return TryStartInvalidInputEvidence(request.request_id, out message);
                 case CaptureSatisfactionQuickVmdSmokeCommand:
@@ -1704,6 +1723,42 @@ namespace Fbx2Vmd.FBXImporter
             {
                 _productUiFlow.Dispose();
                 _productUiFlow = null;
+                ClearAutomationRequestState();
+                TryDeleteRequestFile();
+            }
+        }
+
+        private static void PollMotionRecordingEvidence()
+        {
+            _motionRecordingEvidence.Poll();
+            if (!_motionRecordingEvidence.IsFinished) return;
+            try
+            {
+                bool hasEvidence = _motionRecordingEvidence.HasEvidence;
+                string message = hasEvidence
+                    ? "영상 녹화 증거 수집 완료"
+                    : _motionRecordingEvidence.FailureMessage;
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = _activeAutomationRequestId,
+                    status = hasEvidence ? "completed" : "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = _activeAutomationRequestedCommand,
+                    message = message,
+                    passed = hasEvidence,
+                    failure_stage = _motionRecordingEvidence.FailureStage,
+                    manifest_path = _motionRecordingEvidence.StatePath,
+                    // 녹화 산출물 경로를 status에 실어 e2e가 attempt 산출물로 복사하게 함.
+                    output_path = _motionRecordingEvidence.OutputPath,
+                    total_jobs = 1,
+                    success_jobs = hasEvidence ? 1 : 0,
+                    failures = hasEvidence ? Array.Empty<string>() : new[] { message }
+                });
+            }
+            finally
+            {
+                _motionRecordingEvidence.Dispose();
+                _motionRecordingEvidence = null;
                 ClearAutomationRequestState();
                 TryDeleteRequestFile();
             }

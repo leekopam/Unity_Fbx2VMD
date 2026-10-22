@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
 
 import { test } from "e2e";
 
+import { MAIN_AUTO_SCENE, prepareMainAuto, readStatusJson } from "./mainAuto.js";
 import type { UnityStatus } from "./unityClient.js";
 import type { UnityFixture } from "./unityFixture.js";
 
@@ -11,33 +11,11 @@ import type { UnityFixture } from "./unityFixture.js";
 // 사람 판정이 필요한 산출물(포즈 프레임, 영상 화면)은 여기서 완전성만 검증하고
 // "visual-review" 태그로 표시한다 — 이진 PASS를 사람 판정으로 오인시키지 않기 위함.
 
-const MAIN_AUTO = "Assets/_Project/Scene/Main_Auto.unity";
+const MAIN_AUTO = MAIN_AUTO_SCENE;
 
 type Fixtures = { unity: UnityFixture };
 
-/** Main_Auto를 Edit 상태로 열고 F계열 선행조건(비녹화·비재생·깨끗한 씬)을 확인한다. */
-async function prepareMainAuto(unity: UnityFixture): Promise<void> {
-  await unity.run("open_e2e_scene", { scene_path: MAIN_AUTO });
-  const env = await unity.environment();
-  const problems: string[] = [];
-  if (env.play_mode === true) problems.push("이미 Play 중");
-  if (env.scene_path !== MAIN_AUTO) problems.push(`씬 불일치: ${env.scene_path}`);
-  if (env.scene_dirty === true) problems.push("씬이 dirty");
-  if (env.avatar_valid !== true) problems.push("Humanoid Avatar 없음");
-  if (env.is_recording === true || env.recorder_recording === true) problems.push("녹화 중");
-  if (env.capture_framerate !== 0) problems.push("captureFramerate 잔류");
-  if (env.has_prepared_motion === true) problems.push("준비된 모션 잔류");
-  if (problems.length > 0) {
-    throw new Error(`Main_Auto 선행조건 불만족: ${problems.join("; ")}`);
-  }
-}
-
-async function readJson(pathValue: unknown): Promise<Record<string, unknown>> {
-  if (typeof pathValue !== "string" || pathValue.length === 0) {
-    throw new Error("상태 경로가 status에 없습니다");
-  }
-  return JSON.parse(await fs.promises.readFile(pathValue, "utf8")) as Record<string, unknown>;
-}
+const readJson = readStatusJson;
 
 // F01 — 선택 전 상태: 모델·Avatar·바닥·카메라 구조 검증 + 증거 PNG.
 // 시각 판정은 사람 검토 대상이다(visual_review_required가 true여야 정상).

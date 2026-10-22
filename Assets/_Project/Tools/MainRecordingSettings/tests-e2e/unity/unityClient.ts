@@ -23,7 +23,8 @@ export const UNITY_COMMANDS = {
   fullNamedVmd: "capture_satisfaction_full_named_vmd",
   alternateModel: "capture_tetoris_testprefab_full_clip_metrics",
   productUi: "capture_product_ui_flow",
-  vrmExport: "capture_satisfaction_vrm"
+  vrmExport: "capture_satisfaction_vrm",
+  motionRecording: "capture_motion_recording_evidence"
 } as const;
 
 export interface UnityStatus {
