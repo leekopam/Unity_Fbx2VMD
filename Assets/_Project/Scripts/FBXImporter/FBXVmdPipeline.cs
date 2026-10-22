@@ -1397,6 +1397,7 @@ namespace Fbx2Vmd.FBXImporter
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
         private string _preparedMotionName = string.Empty;
         private float _lastRecordingProgressUpdateTime = -999f;
+        private float _recordingProgressHoldUntilUnscaledTime;
         private FBXSessionState _sessionState = FBXSessionState.Idle;
         internal bool _isProcessing;
         private GameObject _activeGhostContainer;
@@ -1628,6 +1629,13 @@ namespace Fbx2Vmd.FBXImporter
             float recordingPlaybackSpeedOverride = float.NaN,
             bool useInputBaseName = false)
         {
+            // 녹화 중 시작하면 변환 가드에 막혀 진단 세션과 덮어쓴 설정이 복원되지 않고 남음.
+            if (IsImportedMotionRecording)
+            {
+                Debug.LogWarning("[FBXImport] 영상 녹화 중이라 smoke 진단을 시작하지 않았습니다.");
+                return false;
+            }
+
             if (_isProcessing)
             {
                 Debug.LogWarning("[FBXImport] 다른 FBX 처리가 진행 중이라 smoke 진단을 시작하지 않았습니다.");
@@ -2252,6 +2260,12 @@ namespace Fbx2Vmd.FBXImporter
         public bool TryStartImportedMotionRecording()
         {
 #if UNITY_EDITOR
+            // 녹화 중 재시작은 실패 로그로 Ready 상태가 잠시 표시되는 것을 막기 위해 선제 차단함.
+            if (IsImportedMotionRecording)
+            {
+                return false;
+            }
+
             if (_humanoidMotionRecordingController == null ||
                 !TryPrepareNativeSkinningCorrection(
                     NativeSkinningPendingPlaybackRequest.Record,
@@ -2431,7 +2445,9 @@ namespace Fbx2Vmd.FBXImporter
                 SetSessionState(
                     FBXSessionState.Recording,
                     "영상 녹화 중에는 새 FBX를 불러올 수 없습니다.",
-                    0f);
+                    _humanoidMotionRecordingController.NormalizedRecordingProgress);
+                // 진행률 갱신이 곧바로 거부 메시지를 덮지 않게 잠시 보류함.
+                _recordingProgressHoldUntilUnscaledTime = Time.unscaledTime + 1f;
                 return;
             }
 
@@ -2985,7 +3001,8 @@ namespace Fbx2Vmd.FBXImporter
         // 멈춘 것처럼 보이지 않게 함. 갱신 빈도를 제한해 매 틱 UI 호출 비용을 피함.
         private void UpdateRecordingSessionProgress()
         {
-            if (Time.unscaledTime - _lastRecordingProgressUpdateTime < 0.25f)
+            if (Time.unscaledTime < _recordingProgressHoldUntilUnscaledTime ||
+                Time.unscaledTime - _lastRecordingProgressUpdateTime < 0.25f)
             {
                 return;
             }

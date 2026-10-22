@@ -142,13 +142,18 @@ namespace Fbx2Vmd.FBXImporter
         internal bool Tick(float simulationDeltaTimeSeconds)
         {
             using var perfScope = PerfScope.Measure("HumanoidMotionRecordingController.Tick");
-            // Recorder가 첫 0자세를 기록할 때까지 시뮬레이션을 정지하므로 함께 대기함.
-            if (!IsRecording || simulationDeltaTimeSeconds <= 0f)
+            if (!IsRecording)
                 return false;
 
             // 마지막 자세를 평가한 프레임의 렌더가 끝난 다음에 되감음.
+            // timeScale=0 대기 중에도 종료 자세가 잡혔으면 바로 정지해 같은 자세의
+            // 중복 캡처가 쌓이지 않게 함.
             if (_hasReachedLastFrame)
                 return Stop();
+
+            // Recorder가 첫 0자세를 기록할 때까지 시뮬레이션을 정지하므로 함께 대기함.
+            if (simulationDeltaTimeSeconds <= 0f)
+                return false;
 
             long tickStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             double timeSeconds =

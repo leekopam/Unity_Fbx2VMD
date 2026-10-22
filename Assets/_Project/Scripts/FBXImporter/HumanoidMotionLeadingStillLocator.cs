@@ -20,6 +20,9 @@ namespace Fbx2Vmd.FBXImporter
         private const int RequiredQuietSamples = 5;
         // 단발 스파이크를 안무 시작으로 오인하지 않기 위한 연속 활동 샘플 수.
         private const int RequiredActiveSamples = 2;
+        // 선두 정지 이전에 허용하는 활동 샘플 수 — satisfaction_2 정착 트랜지언트는
+        // 4샘플(0.4s). 이보다 긴 선행 움직임 뒤의 정지는 선두가 아니라 중간 홀드로 봄.
+        private const int MaxLeadInTransientActiveSamples = 6;
         private const float MaxScanSeconds = 60f;
 
         internal static bool TryFindMotionStartTime(
@@ -56,6 +59,9 @@ namespace Fbx2Vmd.FBXImporter
             float scanEnd = Mathf.Min(clip.length, MaxScanSeconds);
             int consecutiveQuiet = 0;
             int consecutiveActive = 0;
+            // 정지 run 자격 성립 전의 활동 누적 — 선두 트랜지언트와 실제 선행 움직임을
+            // 구별해 안무 도중의 홀드를 선두 정지로 오인하지 않게 함.
+            int activeBeforeStill = 0;
             float previousTime = 0f;
             for (float t = SampleStepSeconds; t < scanEnd; t += SampleStepSeconds)
             {
@@ -70,15 +76,29 @@ namespace Fbx2Vmd.FBXImporter
                 if (sumDelta >= ActiveSumDeltaThreshold)
                 {
                     consecutiveActive++;
-                    if (consecutiveQuiet >= RequiredQuietSamples &&
-                        consecutiveActive >= RequiredActiveSamples)
+                    if (consecutiveQuiet >= RequiredQuietSamples)
                     {
+                        if (consecutiveActive < RequiredActiveSamples)
+                        {
+                            continue;
+                        }
+
+                        if (activeBeforeStill > MaxLeadInTransientActiveSamples)
+                        {
+                            // 이미 움직임이 진행된 뒤의 정지 구간 — 선두 스킵 대상 아님.
+                            return false;
+                        }
+
                         // 상승 구간 첫 샘플 직전까지를 정지 끝으로 잡아
                         // 움직임 램프 시작이 잘리지 않게 함.
                         motionStartTimeSeconds =
                             t - RequiredActiveSamples * SampleStepSeconds;
                         return motionStartTimeSeconds > 0f;
                     }
+
+                    // 정지 run 미성립 상태의 활동은 선두 활동으로 누적함.
+                    activeBeforeStill++;
+                    consecutiveQuiet = 0;
                 }
                 else
                 {

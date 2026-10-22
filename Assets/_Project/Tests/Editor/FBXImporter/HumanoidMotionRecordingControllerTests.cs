@@ -516,6 +516,57 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_MotionThenStillThenMotionClip_When_LocatingMotionStart_Then_ReturnsFalse()
+        {
+            // 선두 트랜지언트가 아니라 실제 움직임(0.8s) 뒤의 중간 홀드는
+            // 선두 정지 구간이 아니므로 스킵하지 않아야 함 — 격리 리뷰 F1 회귀.
+            var clip = new AnimationClip { frameRate = 30f };
+            foreach (string axis in new[] { "x", "y", "z" })
+            {
+                clip.SetCurve(
+                    string.Empty,
+                    typeof(Transform),
+                    $"localPosition.{axis}",
+                    new AnimationCurve(
+                        new Keyframe(0f, 0f),
+                        new Keyframe(0.8f, 4f),
+                        new Keyframe(1.5f, 4f),
+                        new Keyframe(1.8f, 7f)));
+            }
+
+            bool found = TryLocateMotionStart(clip, out _);
+
+            Assert.That(found, Is.False,
+                "움직임-정지-움직임 클립의 중간 홀드를 선두 준비 구간으로 오인하면 안 됩니다.");
+            UnityEngine.Object.DestroyImmediate(clip);
+        }
+
+        [Test]
+        public void Given_ShortTransientThenStillThenMotionClip_When_LocatingMotionStart_Then_DetectsStillEnd()
+        {
+            // 짧은 정착 트랜지언트(≤0.6s) 뒤의 정지 구간은 선두 준비 구간으로 인정해야 함.
+            var clip = new AnimationClip { frameRate = 30f };
+            foreach (string axis in new[] { "x", "y", "z" })
+            {
+                clip.SetCurve(
+                    string.Empty,
+                    typeof(Transform),
+                    $"localPosition.{axis}",
+                    new AnimationCurve(
+                        new Keyframe(0f, 0f),
+                        new Keyframe(0.3f, 3f),
+                        new Keyframe(1.0f, 3f),
+                        new Keyframe(1.3f, 6f)));
+            }
+
+            bool found = TryLocateMotionStart(clip, out float motionStart);
+
+            Assert.That(found, Is.True);
+            Assert.That(motionStart, Is.EqualTo(1f).Within(0.25f));
+            UnityEngine.Object.DestroyImmediate(clip);
+        }
+
+        [Test]
         public void Given_PipelineRangeSettings_When_ResolvingRange_Then_ConvertsMotionFramesToSeconds()
         {
             GameObject host = new GameObject("RangeResolveTest", typeof(Fbx2Vmd.FBXImporter.FBXVmdPipeline));
