@@ -44,7 +44,10 @@ namespace Tests.Editor.Settings
 
             Assert.That(mainRecordingIndex, Is.GreaterThanOrEqualTo(0));
             Assert.That(companionIndex, Is.GreaterThan(mainRecordingIndex));
-            Assert.That(enabledScenePaths.Length, Is.GreaterThanOrEqualTo(5));
+            Assert.That(enabledScenePaths.Length, Is.GreaterThanOrEqualTo(4));
+            Assert.That(enabledScenePaths,
+                Does.Not.Contain("Assets/_Project/Scene/Main_Auto.unity"),
+                "레거시 Main_Auto 씬은 삭제되어 빌드 목록에 남으면 안 된다.");
         }
 
         [Test]
