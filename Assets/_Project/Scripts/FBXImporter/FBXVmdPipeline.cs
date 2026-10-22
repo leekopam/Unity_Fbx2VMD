@@ -3091,6 +3091,14 @@ namespace Fbx2Vmd.FBXImporter
             }
             if (_nativeSkinningCorrectionPlaybackDriver.IsPreparing)
             {
+                // 녹화 중 재준비는 재생 틱만 스킵되고 Recorder는 정지 자세를 계속
+                // 캡처해 영상에 중복 프레임이 박히므로, 조용히 두지 않고 중단함.
+                if (IsImportedMotionRecording)
+                {
+                    Debug.LogWarning(
+                        "[FBXImport] 영상 녹화 중 보정 재준비가 발생해 녹화를 중단합니다.");
+                    TryStopImportedMotionRecording();
+                }
                 SetSessionState(
                     FBXSessionState.Retargeting,
                     $"FBX 팔 표면 보정 준비 중: " +

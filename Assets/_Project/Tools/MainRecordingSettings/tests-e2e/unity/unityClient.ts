@@ -52,8 +52,11 @@ export interface UnityStatus {
 export interface UnityClientOptions {
   /** Unity 프로젝트 루트(절대 경로). */
   projectRoot: string;
-  /** 요청 픽업 대기 예산. GUI 에디터 첫 요청은 임포트·Native 준비로 30초를 넘을 수 있다. */
+  /** 요청 픽업 대기 예산. GUI 에디터 첫 요청은 임포트·Native 준비로 30초를 넘을 수 있고,
+   * 도메인 리로드 중엔 폴러가 수 분간 요청을 소비하지 못한다. */
   pickupTimeoutMs?: number;
+  /** 이전 요청 잔여·진행 중 처리로 runner가 busy일 때 idle이 될 때까지 기다리는 유예. */
+  busyGraceMs?: number;
   /** 요청/상태 파일명 — F13 시각 비교는 yyb_visual_compare_* 쌍을 쓴다. */
   requestFileName?: string;
   statusFileName?: string;
@@ -72,7 +75,8 @@ export function createUnityClient(options: UnityClientOptions) {
   const runtimeRoot = path.join(options.projectRoot, "Docs", "Workflow", "Local", "runtime");
   const requestPath = path.join(runtimeRoot, options.requestFileName ?? "fbx_smoke_request.json");
   const statusPath = path.join(runtimeRoot, options.statusFileName ?? "fbx_smoke_status.json");
-  const pickupTimeoutMs = options.pickupTimeoutMs ?? 120_000;
+  const pickupTimeoutMs = options.pickupTimeoutMs ?? 240_000;
+  const busyGraceMs = options.busyGraceMs ?? 120_000;
 
   async function readStatus(): Promise<UnityStatus | null> {
     let content: string;
@@ -158,8 +162,18 @@ export function createUnityClient(options: UnityClientOptions) {
    */
   async function send(command: string, sendOptions?: SendOptions): Promise<UnityStatus> {
     const requestId = randomUUID();
-    if (await isBusy()) {
-      throw new UnityBusyError(`unity runner is busy; cannot send ${command}`);
+    // 컴파일·도메인 리로드 중에는 폴러가 잠시 요청을 소비하지 못해 busy로 보인다.
+    // 즉시 실패시키지 않고 유예 시간 안에 idle이 되길 기다린다.
+    const busyDeadline = Date.now() + busyGraceMs;
+    while (await isBusy()) {
+      if (sendOptions?.signal?.aborted) {
+        throw new Error(`aborted waiting for unity runner idle before ${command}`);
+      }
+      if (Date.now() > busyDeadline) {
+        throw new UnityBusyError(
+          `unity runner stayed busy for ${busyGraceMs}ms; cannot send ${command}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     const request = { request_id: requestId, command, requested_command: command, ...sendOptions?.fields };
     await fs.promises.mkdir(runtimeRoot, { recursive: true });
