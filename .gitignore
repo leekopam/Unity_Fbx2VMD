@@ -407,6 +407,12 @@ __pycache__/
 .stitch/
 /Assets/_Project/Tools/MainRecordingSettings/DESIGN.md
 /Assets/_Project/Tools/MainRecordingSettings/DESIGN.md.meta
+# tester-army/e2e 실행 산출물 — replay 캐시만 CI 재생용으로 커밋 대상 유지
+/Assets/_Project/Tools/MainRecordingSettings/.e2e/*
+!/Assets/_Project/Tools/MainRecordingSettings/.e2e/cache/
 
 # UnderPressure 외부 평가 저장소 클론 (평가 라이선스·대용량 가중치 — 로컬 전용)
 /Tools/Boogle/external/
+
+# e2e 실행 산출물 — 결과·스크린샷·봉인 스테이징 전부 로컬 전용
+/Assets/_Project/Tools/MainRecordingSettings/.e2e-*/

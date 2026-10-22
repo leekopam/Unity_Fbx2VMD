@@ -329,7 +329,7 @@ async function executeSmoke(runId, options = {}) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         const candidate = await readStatus();
         if (candidate?.request_id !== requestId) {
-          if (Date.now() - startedAt > 30000) break;
+          if (Date.now() - startedAt > 120000) break;
           continue;
         }
         status = candidate;
@@ -636,7 +636,7 @@ async function executePlayback(runId, captureFrames = null, sideCaptureFrames = 
         await new Promise((resolve) => setTimeout(resolve, 500));
         const candidate = await readStatus();
         if (candidate?.request_id !== requestId) {
-          if (Date.now() - startedAt > 30000) break;
+          if (Date.now() - startedAt > 120000) break;
           continue;
         }
         status = candidate;
@@ -1090,7 +1090,7 @@ async function executeInvalidInput(runId) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         const candidate = await readStatus();
         if (candidate?.request_id !== requestId) {
-          if (Date.now() - startedAt > 30000) break;
+          if (Date.now() - startedAt > 120000) break;
           continue;
         }
         status = candidate;

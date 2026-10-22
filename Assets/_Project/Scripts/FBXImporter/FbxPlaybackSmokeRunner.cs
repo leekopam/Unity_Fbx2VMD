@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Fbx2Vmd.FBXImporter;
+using Fbx2Vmd.Recording;
 using UniGLTF;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -43,7 +44,11 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureProductUiFlowCommand = "capture_product_ui_flow";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
+        private const string CaptureE2eFrameCommand = "capture_e2e_frame";
+        private const string StartE2eVideoCommand = "start_e2e_video";
+        private const string StopE2eVideoCommand = "stop_e2e_video";
         private const string EnterE2ePlayCommand = "enter_e2e_play";
+        private const string OpenE2eSceneCommand = "open_e2e_scene";
         private const string ExitE2ePlayCommand = "exit_e2e_play";
         private const string VerifyThumbGuardCommand = "verify_thumb_guard";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
@@ -134,6 +139,7 @@ namespace Fbx2Vmd.FBXImporter
         private static string _activeAutomationRequestId;
         private static string _activeAutomationCommand;
         private static string _activeAutomationRequestedCommand;
+        private static EditorMotionVideoRecorder _e2eVideoRecorder;
         private static DateTime _nextAutomationPollUtc = DateTime.MinValue;
         private static DateTime _preselectionStartedUtc;
         private static string _preselectionCapturePath;
@@ -206,6 +212,11 @@ namespace Fbx2Vmd.FBXImporter
         private static Avatar _originalAvatar;
         private static InvalidInputEvidence _invalidInputEvidence;
         private static string _invalidInputEvidencePath;
+        // 요청 파일 읽기가 연속 실패하면 손상 파일로 보고 정리한다(일시 공유 위반과 구분).
+        private static int _requestReadFailures;
+        private const int MaxRequestReadFailures = 5;
+        // 마지막으로 읽어 들인 요청 id — 완료 틱 사이에 쓰인 다른 요청을 지우지 않게 한다.
+        private static string _consumedRequestId;
         private static DateTime _invalidInputStartedUtc;
 
         static FbxPlaybackSmokeRunner()
@@ -214,6 +225,10 @@ namespace Fbx2Vmd.FBXImporter
             AutomationStore = new FbxPlaybackSmokeAutomationStore(projectRoot);
             EditorApplication.update -= PollAutomationRequest;
             EditorApplication.update += PollAutomationRequest;
+            // Play 종료는 명령 없이도 발생한다 — 녹화 중 종료하면 MP4가 깨지고
+            // _e2eVideoRecorder가 새는 것을 막기 위해 상시 정리 훅을 둔다.
+            EditorApplication.playModeStateChanged -= ReleaseE2eVideoOnPlayExit;
+            EditorApplication.playModeStateChanged += ReleaseE2eVideoOnPlayExit;
         }
 
         // 배치 모드 진입점: -executeMethod로 호출해 Main_Auto를 저장된 Edit 상태로 열어
@@ -516,7 +531,15 @@ namespace Fbx2Vmd.FBXImporter
             }
             catch (Exception ex)
             {
-                TraceAutomation($"request read failed: {ex.Message}");
+                // 쓰는 쪽과 읽기가 겹치는 일시적 공유 위반은 재시도하되,
+                // 계속 실패하면 손상 파일로 보고 정리한다 — 그대로 두면 폴러가 wedge된다.
+                _requestReadFailures += 1;
+                TraceAutomation($"request read retry {_requestReadFailures}/{MaxRequestReadFailures}: {ex.Message}");
+                if (_requestReadFailures < MaxRequestReadFailures)
+                {
+                    return;
+                }
+                _requestReadFailures = 0;
                 TryDeleteRequestFile();
                 WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
@@ -530,10 +553,13 @@ namespace Fbx2Vmd.FBXImporter
                 });
                 return;
             }
+            _requestReadFailures = 0;
 
             if (request == null || string.IsNullOrWhiteSpace(request.command))
             {
                 TraceAutomation("request payload is invalid");
+                // 이 파일이 방금 읽은 요청임을 기록해 id 불일치 삭제 가드를 통과시킨다.
+                _consumedRequestId = request?.request_id;
                 TryDeleteRequestFile();
                 WriteStatus(new FbxPlaybackSmokeAutomationStatus
                 {
@@ -558,6 +584,7 @@ namespace Fbx2Vmd.FBXImporter
                 request.requested_command = request.command;
             }
 
+            _consumedRequestId = request.request_id;
             PersistRequest(request);
             TraceAutomation($"loaded request id={request.request_id} command={request.command} requested={request.requested_command}");
 
@@ -611,6 +638,7 @@ namespace Fbx2Vmd.FBXImporter
             public bool play_mode;
             public string scene;
             public string scene_path;
+            public string session_state;
             public bool scene_dirty;
             public string model_name;
             public bool model_active;
@@ -643,11 +671,16 @@ namespace Fbx2Vmd.FBXImporter
         private static bool TryHandleE2eControlRequest(FbxPlaybackSmokeAutomationRequest request)
         {
             bool isCapture = request.command == CaptureE2eEnvironmentCommand;
+            bool isFrame = request.command == CaptureE2eFrameCommand;
+            bool isVideoStart = request.command == StartE2eVideoCommand;
+            bool isVideoStop = request.command == StopE2eVideoCommand;
             bool isEnter = request.command == EnterE2ePlayCommand;
             bool isExit = request.command == ExitE2ePlayCommand;
+            bool isOpenScene = request.command == OpenE2eSceneCommand;
             bool isVrmExport = request.command == CaptureSatisfactionVrmCommand;
             bool isThumbVerify = request.command == VerifyThumbGuardCommand;
-            if (!isCapture && !isEnter && !isExit && !isVrmExport && !isThumbVerify) return false;
+            if (!isCapture && !isFrame && !isVideoStart && !isVideoStop &&
+                !isEnter && !isExit && !isOpenScene && !isVrmExport && !isThumbVerify) return false;
 
             try
             {
@@ -672,6 +705,10 @@ namespace Fbx2Vmd.FBXImporter
                     E2eEnvironmentEvidence state = new E2eEnvironmentEvidence
                     {
                         play_mode = EditorApplication.isPlaying,
+                        // F15 같은 연속 요청이 직전 세션의 Failed 상태를 만나지 않게
+                        // 세션 상태를 환경 증거에 노출한다.
+                        session_state = pipeline != null
+                            ? pipeline.SessionState.ToString() : string.Empty,
                         scene = scene.name,
                         scene_path = scene.path,
                         scene_dirty = scene.isDirty,
@@ -729,6 +766,84 @@ namespace Fbx2Vmd.FBXImporter
                     });
                     TraceAutomation($"environment id={request.request_id} play={state.play_mode} scene={state.scene} recording={state.is_recording}");
                 }
+                else if (isFrame)
+                {
+                    // e2e 엔진의 observe/screenshot용 최소 캡처 — 카메라 동기 렌더라 Edit Mode에서도 동작한다.
+                    if (!Guid.TryParse(request.request_id, out Guid frameId))
+                        throw new InvalidOperationException("e2e 프레임 요청 ID가 유효하지 않습니다.");
+                    string frameDirectory = Path.Combine(
+                        Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
+                        "Docs", "Workflow", "Local", "evidence", "boogle", "e2e-frames");
+                    Directory.CreateDirectory(frameDirectory);
+                    string framePath = Path.Combine(frameDirectory, $"{frameId:D}.png");
+                    FbxFullClipFootMetricsCapture.WriteGameViewPng(framePath);
+                    WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                    {
+                        request_id = request.request_id,
+                        status = "completed",
+                        updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                        command = request.requested_command,
+                        passed = true,
+                        capture_path = framePath,
+                        failures = Array.Empty<string>()
+                    });
+                    TraceAutomation($"e2e-frame id={request.request_id} path={framePath}");
+                }
+                else if (isVideoStart)
+                {
+                    // e2e 엔진의 artifacts.startVideo — Play Mode에서만 Main Camera MP4 녹화.
+                    if (!EditorApplication.isPlaying)
+                        throw new InvalidOperationException("e2e 영상 녹화는 Play Mode에서만 시작할 수 있습니다.");
+                    if (_e2eVideoRecorder != null)
+                        throw new InvalidOperationException("e2e 영상 녹화가 이미 진행 중입니다.");
+                    string videoDirectory = Path.Combine(
+                        Directory.GetParent(Application.dataPath)?.FullName ?? Application.dataPath,
+                        "Docs", "Workflow", "Local", "evidence", "boogle", "e2e-video");
+                    var recorder = new EditorMotionVideoRecorder();
+                    var videoSettings = new MotionVideoRecordingSettings(
+                        $"e2e-{request.request_id}",
+                        Screen.width > 0 ? Screen.width : 1280,
+                        Screen.height > 0 ? Screen.height : 720,
+                        60f,
+                        outputDirectory: videoDirectory,
+                        format: MotionVideoFileFormat.Mp4);
+                    if (!recorder.TryPrepare(videoSettings, out string prepareError))
+                        throw new InvalidOperationException($"e2e 영상 녹화 준비 실패: {prepareError}");
+                    if (!recorder.TryStart(out string startError))
+                    {
+                        recorder.Dispose();
+                        throw new InvalidOperationException($"e2e 영상 녹화 시작 실패: {startError}");
+                    }
+                    _e2eVideoRecorder = recorder;
+                    WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                    {
+                        request_id = request.request_id,
+                        status = "completed",
+                        updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                        command = request.requested_command,
+                        passed = true,
+                        output_path = recorder.OutputFilePath,
+                        failures = Array.Empty<string>()
+                    });
+                    TraceAutomation($"e2e-video-start id={request.request_id} path={recorder.OutputFilePath}");
+                }
+                else if (isVideoStop)
+                {
+                    if (_e2eVideoRecorder == null)
+                        throw new InvalidOperationException("진행 중인 e2e 영상 녹화가 없습니다.");
+                    string videoPath = StopE2eVideoRecording();
+                    WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                    {
+                        request_id = request.request_id,
+                        status = "completed",
+                        updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                        command = request.requested_command,
+                        passed = true,
+                        output_path = videoPath,
+                        failures = Array.Empty<string>()
+                    });
+                    TraceAutomation($"e2e-video-stop id={request.request_id} path={videoPath}");
+                }
                 else if (isThumbVerify)
                 {
                     VerifyThumbGuardBinding(request);
@@ -774,6 +889,33 @@ namespace Fbx2Vmd.FBXImporter
                         failures = Array.Empty<string>()
                     });
                     TraceAutomation($"vrm-export id={request.request_id} bytes={bytes.LongLength}");
+                }
+                else if (isOpenScene)
+                {
+                    // E2E 전용 씬 열기 — 지원 씬(Main_Auto/Main_Recoding)만 허용하고
+                    // Play 중이거나 dirty 상태면 거절해 저장되지 않은 변경을 보호한다.
+                    if (request.scene_path != MainAutoScenePath &&
+                        request.scene_path != MainRecordingScenePath)
+                        throw new InvalidOperationException("지원하지 않는 씬 경로입니다: " + request.scene_path);
+                    if (EditorApplication.isPlaying)
+                        throw new InvalidOperationException("Play Mode에서는 씬을 열 수 없습니다.");
+                    Scene openTarget = SceneManager.GetActiveScene();
+                    if (openTarget.path != request.scene_path)
+                    {
+                        if (openTarget.isDirty)
+                            throw new InvalidOperationException("저장되지 않은 씬 변경이 있어 씬을 열 수 없습니다.");
+                        EditorSceneManager.OpenScene(request.scene_path, OpenSceneMode.Single);
+                    }
+                    WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                    {
+                        request_id = request.request_id,
+                        status = "completed",
+                        updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                        command = request.requested_command,
+                        passed = true,
+                        failures = Array.Empty<string>()
+                    });
+                    TraceAutomation($"open-scene id={request.request_id} path={request.scene_path}");
                 }
                 else
                 {
@@ -840,6 +982,31 @@ namespace Fbx2Vmd.FBXImporter
 
             TryDeleteRequestFile();
             return true;
+        }
+
+        // 진행 중인 e2e 영상 녹화를 멈추고 산출물 경로를 돌려준다.
+        private static string StopE2eVideoRecording()
+        {
+            string videoPath = _e2eVideoRecorder.OutputFilePath;
+            _e2eVideoRecorder.Stop();
+            _e2eVideoRecorder.Dispose();
+            _e2eVideoRecorder = null;
+            return videoPath;
+        }
+
+        // Play 모드가 어떤 경로로든 끝나면 남은 e2e 녹화를 정리한다.
+        private static void ReleaseE2eVideoOnPlayExit(PlayModeStateChange state)
+        {
+            if (state != PlayModeStateChange.ExitingPlayMode || _e2eVideoRecorder == null) return;
+            try
+            {
+                string videoPath = StopE2eVideoRecording();
+                TraceAutomation($"e2e-video auto-stop on play exit path={videoPath}");
+            }
+            catch (Exception ex)
+            {
+                TraceAutomation($"e2e-video auto-stop failed: {ex.Message}");
+            }
         }
 
         // E2E가 엄지 보정 Guard의 바인딩/활성화/실행 여부를 명시 판정할 수 있게 함.
@@ -3234,6 +3401,16 @@ namespace Fbx2Vmd.FBXImporter
         {
             try
             {
+                // 완료 처리 틱 사이에 이미 새 요청이 쓰였을 수 있다 —
+                // 파일의 request_id가 우리가 소비한 것과 다르면 지우지 않는다.
+                FbxPlaybackSmokeAutomationRequest onDisk = null;
+                try { onDisk = AutomationStore.ReadRequest(); }
+                catch { /* 읽기 불가 파일은 손상물로 보고 정리 대상 */ }
+                if (onDisk != null && !string.IsNullOrEmpty(onDisk.request_id) &&
+                    onDisk.request_id != _consumedRequestId)
+                {
+                    return;
+                }
                 AutomationStore.DeleteRequest();
             }
             catch (System.Exception ex)

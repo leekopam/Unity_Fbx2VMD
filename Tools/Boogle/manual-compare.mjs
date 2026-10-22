@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 export function readCsv(source) {
+  // Unity 측 CSV는 UTF-8 BOM이 붙을 수 있어 첫 헤더 열 인식이 깨지므로 제거한다.
+  if (source.charCodeAt(0) === 0xFEFF) source = source.slice(1);
   const rows = [];
   let row = [];
   let value = "";
