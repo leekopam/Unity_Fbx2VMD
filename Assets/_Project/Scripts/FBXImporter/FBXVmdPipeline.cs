@@ -3091,8 +3091,9 @@ namespace Fbx2Vmd.FBXImporter
             }
             if (_nativeSkinningCorrectionPlaybackDriver.IsPreparing)
             {
-                // 녹화 중 재준비는 재생 틱만 스킵되고 Recorder는 정지 자세를 계속
-                // 캡처해 영상에 중복 프레임이 박히므로, 조용히 두지 않고 중단함.
+                // 방어적 불변식: 정상 호출 경로에선 녹화 중 재준비가 성립하지 않지만,
+                // 성립하면 재생 틱만 스킵된 채 Recorder가 렌더러 숨김 상태를 계속
+                // 캡처해 영상이 오염되므로 조용히 두지 않고 중단함.
                 if (IsImportedMotionRecording)
                 {
                     Debug.LogWarning(
