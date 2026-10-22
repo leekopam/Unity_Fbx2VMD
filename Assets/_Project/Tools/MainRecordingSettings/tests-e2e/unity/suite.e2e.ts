@@ -2,16 +2,13 @@ import { randomUUID } from "node:crypto";
 
 import { test } from "e2e";
 
-import { MAIN_AUTO_SCENE, prepareMainAuto, readStatusJson } from "./mainAuto.js";
-import type { UnityStatus } from "./unityClient.js";
+import { prepareMainScene, readStatusJson } from "./mainScene.js";
 import type { UnityFixture } from "./unityFixture.js";
 
 // M6: 기존 Boogle 모드별 실행을 e2e 테스트로 이식한다.
 // 각 테스트는 하나의 attempt를 쓰며 endAttempt가 에디터 상태를 복원한다.
 // 사람 판정이 필요한 산출물(포즈 프레임, 영상 화면)은 여기서 완전성만 검증하고
 // "visual-review" 태그로 표시한다 — 이진 PASS를 사람 판정으로 오인시키지 않기 위함.
-
-const MAIN_AUTO = MAIN_AUTO_SCENE;
 
 type Fixtures = { unity: UnityFixture };
 
@@ -21,7 +18,7 @@ const readJson = readStatusJson;
 // 시각 판정은 사람 검토 대상이다(visual_review_required가 true여야 정상).
 test("F01 preselection state", { platforms: ["unity"], tags: ["visual-review"] }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run("capture_preselection_state");
   const state = await readJson(status.preselection_state_path);
@@ -35,7 +32,7 @@ test("F02-F11 playback seek evidence", {
   platforms: ["unity"], timeout: 1_300_000, tags: ["visual-review"]
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run("capture_playback_seek_evidence", {
     side_capture_frames: [0, 166, 544]
@@ -46,7 +43,7 @@ test("F02-F11 playback seek evidence", {
 // F07 — 잘못된 입력(없는 FBX·무효 Avatar)이 제품 검증에서 거절되는지.
 test("F07 invalid input evidence", { platforms: ["unity"], timeout: 180_000 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run("capture_invalid_input_evidence", undefined, 120_000);
   const state = await readJson(status.failure_evidence_path);
@@ -60,7 +57,7 @@ test("F09 foot live evidence", {
   platforms: ["unity"], timeout: 1_300_000, tags: ["visual-review"]
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run("capture_tetoris_live_foot_evidence", {
     run_id: randomUUID()
@@ -73,7 +70,7 @@ test("F10 full clip metrics", {
   platforms: ["unity"], timeout: 1_980_000, tags: ["metrics"]
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.fullClipMetrics({ run_id: randomUUID() });
   const state = await readJson(status.full_clip_state_path);
@@ -82,19 +79,30 @@ test("F10 full clip metrics", {
   }
 });
 
-// F12 — 풀클립 named VMD 산출 + VRM 익스포트.
-test("F12 full named vmd + vrm export", {
-  platforms: ["unity"], timeout: 2_400_000, tags: ["output"]
+// F12-VMD — 풀클립 named VMD 산출. VMD 변환 보류로 명령이 제거되어 skip한다.
+// VMD 기능 복원 시 skip을 해제하고 명령을 되살린다.
+test("F12 full named vmd export", {
+  platforms: ["unity"], tags: ["output"],
+  skip: "VMD 변환 기능 보류 — capture_satisfaction_full_named_vmd 명령 제거됨"
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
-  const vmdStatus: UnityStatus = await unity.run("capture_satisfaction_full_named_vmd", {
+  const vmdStatus = await unity.run("capture_satisfaction_full_named_vmd", {
     run_id: randomUUID()
   }, 2_100_000);
   if (typeof vmdStatus.output_path !== "string" || vmdStatus.output_path.length === 0) {
     throw new Error("F12 VMD 산출 경로가 없습니다");
   }
+});
+
+// F12-VRM — VRM 익스포트(VMD와 무관하게 유지).
+test("F12 vrm export", {
+  platforms: ["unity"], timeout: 300_000, tags: ["output"]
+}, async (f) => {
+  const unity = (f as unknown as Fixtures).unity;
+  await prepareMainScene(unity);
+  await unity.enterPlay();
   await unity.exitPlay();
   const vrm = await unity.run("capture_satisfaction_vrm", undefined, 120_000);
   if (typeof vrm.vrm_output_path !== "string" || (vrm.vrm_file_size_bytes ?? 0) <= 0) {
@@ -102,10 +110,13 @@ test("F12 full named vmd + vrm export", {
   }
 });
 
-// F02/F06 — 2초 quick VMD smoke(기존 러너의 기본 smoke 명령).
-test("F06 quick vmd smoke", { platforms: ["unity"], timeout: 300_000 }, async (f) => {
+// F02/F06 — 2초 quick VMD smoke. VMD 변환 보류로 명령이 제거되어 skip한다.
+test("F06 quick vmd smoke", {
+  platforms: ["unity"], tags: ["output"],
+  skip: "VMD 변환 기능 보류 — capture_satisfaction_quick_vmd_smoke_2s 명령 제거됨"
+}, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run("capture_satisfaction_quick_vmd_smoke_2s", {
     run_id: randomUUID()
@@ -120,7 +131,7 @@ test("F14 alternate model metrics", {
   platforms: ["unity"], timeout: 2_400_000, tags: ["metrics"]
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run("capture_tetoris_testprefab_full_clip_metrics", {
     run_id: randomUUID(), lower_body_only: true
@@ -138,7 +149,7 @@ test("F15 product ui flow", {
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
   const runId = randomUUID();
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   for (const size of PRODUCT_UI_SIZES) {
     // 각 흐름의 invalid_input 단계가 파이프라인 세션을 Failed로 남긴다.

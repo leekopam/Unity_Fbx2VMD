@@ -109,7 +109,7 @@ namespace Fbx2Vmd.FBXImporter
                 pipeline.IsProcessing || pipeline.HasPreparedImportedMotion ||
                 pipeline.IsImportedMotionRecording || Time.captureFramerate != 0)
             {
-                message = "영상 녹화 증거는 Main_Auto/Main_Recoding의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
+                message = "영상 녹화 증거는 Main_Recoding의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
                 return false;
             }
 
@@ -388,8 +388,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool IsSupportedScenePath(string path)
         {
-            return path == "Assets/_Project/Scene/Main_Auto.unity" ||
-                path == "Assets/_Project/Scene/Main_Recoding.unity";
+            return path == "Assets/_Project/Scene/Main_Recoding.unity";
         }
 
         [Serializable]

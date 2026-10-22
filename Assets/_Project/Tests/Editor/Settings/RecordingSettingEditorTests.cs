@@ -19,7 +19,7 @@ namespace Tests.Editor.Settings
     public class RecordingSettingEditorTests
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
         private const string SettingsLauncherTypeName =
             "Fbx2Vmd.Settings.EditorTools.MainRecordingSettingsCompanionLauncher, Assembly-CSharp-Editor";
         private const string LayoutSpecTypeName =
@@ -225,6 +225,33 @@ namespace Tests.Editor.Settings
                 Assert.That(actual.CaptureQuality, Is.EqualTo(RecordingCaptureQualityPreset.Custom));
                 Assert.That(actual.CustomCaptureWidth, Is.EqualTo(3200));
                 Assert.That(actual.CustomCaptureHeight, Is.EqualTo(1800));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(settingObject);
+                UnityEngine.Object.DestroyImmediate(pipelineObject);
+            }
+        }
+
+        [Test]
+        public void Given_ActiveDiagnosticSession_When_ApplyingDiagnostics_Then_KeepsSessionOwnedFlags()
+        {
+            var pipelineObject = new GameObject("Diagnostics Session Guard Pipeline Test");
+            var settingObject = new GameObject("Diagnostics Session Guard Setting Test");
+
+            try
+            {
+                var pipeline = pipelineObject.AddComponent<FBXVmdPipeline>();
+                var recordingSetting = settingObject.AddComponent<RecordingSetting>();
+                SetField(recordingSetting, "recordingFBXVmdPipeline", pipeline);
+                SetField(recordingSetting, "enableRecordingDiagnostics", false);
+
+                pipeline.enableRecordingDiagnostics = true;
+                BeginEditorDiagnosticSessionForTests(pipeline);
+
+                recordingSetting.ApplyDiagnosticsToFBXVmdPipeline();
+
+                Assert.That(pipeline.enableRecordingDiagnostics, Is.True);
             }
             finally
             {
@@ -1051,7 +1078,7 @@ namespace Tests.Editor.Settings
                 Is.EqualTo(MainRecordingScenePath));
             Assert.That(File.Exists(MainRecordingScenePath), Is.True);
             Assert.That(InvokeStatic<bool>(launcherType, "ShouldOpenForScene", MainRecordingScenePath), Is.True);
-            Assert.That(InvokeStatic<bool>(launcherType, "ShouldOpenForScene", MainAutoScenePath), Is.False);
+            Assert.That(InvokeStatic<bool>(launcherType, "ShouldOpenForScene", SubManualScenePath), Is.False);
             Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Contain("Electron"));
             Assert.That(MainRecordingSettingsSurfacePolicy.EditorSurfacePolicy, Does.Contain("Web UI"));
             Assert.That(InvokeStatic<bool>(launcherType, "CanLaunchWebSettingsForTests"), Is.True);
@@ -1239,11 +1266,11 @@ namespace Tests.Editor.Settings
                 MainRecordingSettingsLauncher.ShouldAutoLaunchForPlayer(true, false, true),
                 Is.False);
 
-            EditorSceneManager.OpenScene(MainAutoScenePath);
+            EditorSceneManager.OpenScene(SubManualScenePath);
             Assert.That(
                 UnityEngine.Object.FindFirstObjectByType<RecordingSetting>(),
                 Is.Null,
-                "The first Player scene is Main_Auto, so Player startup settings launch must not depend on RecordingSetting.Start().");
+                "Player startup settings launch must not depend on RecordingSetting.Start() in a scene without RecordingSetting.");
         }
 
         [Test]
@@ -1299,7 +1326,7 @@ namespace Tests.Editor.Settings
                 InvokeStatic<bool>(
                     launcherType,
                     "ShouldAutoLaunchWebSettingsForPlayModeForTests",
-                    MainAutoScenePath,
+                    SubManualScenePath,
                     false,
                     PlayModeStateChange.EnteredPlayMode),
                 Is.False);
@@ -1643,7 +1670,7 @@ namespace Tests.Editor.Settings
                 InvokeStatic<bool>(
                     guardType,
                     "ShouldApplyEditorPlayModeGuardForTests",
-                    MainAutoScenePath,
+                    SubManualScenePath,
                     false,
                     PlayModeStateChange.ExitingEditMode),
                 Is.False);
@@ -1676,7 +1703,7 @@ namespace Tests.Editor.Settings
                 InvokeStatic<bool>(
                     guardType,
                     "ShouldMaintainEditorPlayModeGuardForTests",
-                    MainAutoScenePath,
+                    SubManualScenePath,
                     false),
                 Is.False);
             Assert.That(
@@ -2913,6 +2940,19 @@ namespace Tests.Editor.Settings
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"{instance.GetType().FullName}.{fieldName} must exist.");
             field.SetValue(instance, value);
+        }
+
+        private static void BeginEditorDiagnosticSessionForTests(FBXVmdPipeline pipeline)
+        {
+            object session = typeof(FBXVmdPipeline)
+                .GetProperty("EditorDiagnosticSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pipeline);
+            Type sessionType = session.GetType();
+            object plan = Activator.CreateInstance(
+                sessionType.GetNestedType("Plan", BindingFlags.NonPublic));
+            sessionType
+                .GetMethod("Begin", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(session, new[] { plan });
         }
 
         private static int CountDirectChildrenNamed(Transform parent, string childName)

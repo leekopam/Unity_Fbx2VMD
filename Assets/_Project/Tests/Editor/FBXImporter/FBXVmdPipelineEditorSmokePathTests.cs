@@ -164,9 +164,9 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_MainSceneName_When_CheckingFbxSmokeSceneSupport_Then_AllowsBothMainScenes()
+        public void Given_MainSceneName_When_CheckingFbxSmokeSceneSupport_Then_AllowsOnlyMainRecoding()
         {
-            Assert.That(IsSupportedMainScene("Main_Auto"), Is.True);
+            Assert.That(IsSupportedMainScene("Main_Auto"), Is.False);
             Assert.That(IsSupportedMainScene("Main_recoding"), Is.True);
             Assert.That(IsSupportedMainScene("Main_Recoding"), Is.True);
             Assert.That(IsSupportedMainScene("Sub_Manual"), Is.False);
@@ -959,7 +959,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(
                 CalculateGhostSkeletonDebugDisplayScale(new Vector3(0.01f, 0.01f, 0.01f)),
                 Is.EqualTo(100f).Within(0.0001f),
-                "Main_Auto wraps the imported Ghost in a 0.01 scale container, so debug skeleton lines must be expanded for Scene/Game visibility without changing the retargeting transform.");
+                "The automatic path wraps the imported Ghost in a 0.01 scale container, so debug skeleton lines must be expanded for Scene/Game visibility without changing the retargeting transform.");
         }
 
         [Test]
@@ -1127,15 +1127,6 @@ namespace Tests.Editor.FBXImporter
         {
             Assert.That(GetRunnerFullRegressionCommand(), Is.EqualTo("capture_satisfaction_full_regression_evidence_208s_4k"));
             Assert.That(GetRunnerFullRegressionFbxFileName(), Is.EqualTo("satisfaction_2.fbx"));
-        }
-
-        [Test]
-        public void Given_QuickVmdSmokeCommand_When_InspectingRunnerPlan_Then_UsesSatisfaction2ForTwoSeconds()
-        {
-            Assert.That(GetRunnerQuickVmdSmokeCommand(), Is.EqualTo("capture_satisfaction_quick_vmd_smoke_2s"));
-            Assert.That(GetRunnerQuickVmdSmokeFbxFileName(), Is.EqualTo("satisfaction_2.fbx"));
-            Assert.That(GetRunnerQuickVmdSmokeDurationSeconds(), Is.EqualTo(2f).Within(0.0001f));
-            Assert.That(GetRunnerQuickVmdSmokeTargetFrameCount(), Is.EqualTo(60));
         }
 
         [Test]
@@ -1483,30 +1474,6 @@ namespace Tests.Editor.FBXImporter
         {
             MethodInfo method = GetSmokeRunnerMethod("GetFullRegressionEvidenceSampleTimesForTest", Type.EmptyTypes);
             return (float[])method.Invoke(null, Array.Empty<object>());
-        }
-
-        private static string GetRunnerQuickVmdSmokeCommand()
-        {
-            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeCommandForTest", Type.EmptyTypes);
-            return (string)method.Invoke(null, Array.Empty<object>());
-        }
-
-        private static string GetRunnerQuickVmdSmokeFbxFileName()
-        {
-            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeFbxFileNameForTest", Type.EmptyTypes);
-            return (string)method.Invoke(null, Array.Empty<object>());
-        }
-
-        private static float GetRunnerQuickVmdSmokeDurationSeconds()
-        {
-            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeDurationSecondsForTest", Type.EmptyTypes);
-            return (float)method.Invoke(null, Array.Empty<object>());
-        }
-
-        private static int GetRunnerQuickVmdSmokeTargetFrameCount()
-        {
-            MethodInfo method = GetSmokeRunnerMethod("GetQuickVmdSmokeTargetFrameCountForTest", Type.EmptyTypes);
-            return (int)method.Invoke(null, Array.Empty<object>());
         }
 
         private static MethodInfo GetSmokeRunnerMethod(string methodName, Type[] parameterTypes)

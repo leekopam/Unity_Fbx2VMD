@@ -15,7 +15,6 @@ namespace Tests.Editor.FBXImporter
         private const string TargetAssetPath =
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const float TimeTolerance = 0.0001f;
 
@@ -834,10 +833,6 @@ namespace Tests.Editor.FBXImporter
                 UnityEngine.Object.DestroyImmediate(target);
             }
         }
-
-        [Test]
-        public void Given_MainAutoScene_When_ReadingAlphaHiddenObjects_Then_ContainsScenePlaneRenderer() =>
-            AssertSceneWiresPlaneToAlphaHiddenObjects(MainAutoScenePath, "Main_Auto");
 
         [Test]
         public void Given_MainRecodingScene_When_ReadingAlphaHiddenObjects_Then_ContainsScenePlaneRenderer() =>

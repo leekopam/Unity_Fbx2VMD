@@ -22,7 +22,7 @@ namespace Fbx2Vmd.FBXImporter
     internal sealed class FbxFootLiveEvidenceCapture : IDisposable
     {
         private const string InputFileName = "tetoris_001.fbx";
-        private const string ScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string ScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const int VideoWidth = 1280;
         private const int VideoHeight = 720;
         private const int RecorderPrerollFrames = 60;

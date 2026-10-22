@@ -12,7 +12,6 @@ namespace Tests.Editor.FBXImporter
 {
     public class FbxImportCaptureSceneTests
     {
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string CaptureScenePath = "Assets/_Project/Scene/FbxImport_Capture.unity";
         private const string RecodingSettingTypeName = "RecordingSetting, Assembly-CSharp";
@@ -22,21 +21,9 @@ namespace Tests.Editor.FBXImporter
         private const string HumanoidManualRecordMethodName = nameof(HumanoidSampleCode.OnManualRecordButtonClick);
 
         [Test]
-        public void MainAutoScene_RemainsVmdGenerationScene()
-        {
-            EditorSceneManager.OpenScene(MainAutoScenePath);
-
-            FBXVmdPipeline fileManager = Object.FindFirstObjectByType<FBXVmdPipeline>();
-
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must keep its FBXVmdPipeline.");
-            Assert.That(ReadRecordVmdAfterImport(fileManager), Is.True, "Main_Auto must remain the existing VMD generation scene.");
-        }
-
-        [Test]
         public void FbxImportCaptureScene_IsRegisteredAndConfiguredForCaptureOnly()
         {
             Assert.That(File.Exists(CaptureScenePath), Is.True, "A separate FBX import/capture scene must exist.");
-            Assert.That(BuildSettingsContains(MainAutoScenePath), Is.True, "Existing VMD generation scene must stay in build settings.");
             Assert.That(BuildSettingsContains(CaptureScenePath), Is.True, "Capture-only scene must be available from build settings.");
 
             EditorSceneManager.OpenScene(CaptureScenePath);
@@ -150,7 +137,6 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void MainImportScenes_DefaultGhostDisplayOff()
         {
-            AssertSceneGhostDisplayOff(MainAutoScenePath, "Main_Auto");
             AssertSceneGhostDisplayOff(MainRecordingScenePath, "Main_Recoding");
             AssertSceneGhostDisplayOff(CaptureScenePath, "FbxImport_Capture");
         }
@@ -246,9 +232,8 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void ConversionAndCaptureScenes_DoNotExposeManualMmdRecordingButton()
+        public void CaptureScene_DoesNotExposeManualMmdRecordingButton()
         {
-            AssertSceneDoesNotExposeManualRecordButton(MainAutoScenePath, "Main_Auto");
             AssertSceneDoesNotExposeManualRecordButton(CaptureScenePath, "FbxImport_Capture");
         }
 

@@ -18,7 +18,6 @@ namespace Fbx2Vmd.FBXImporter
     internal sealed class FbxFullClipFootMetricsCapture : IDisposable
     {
         private const string DefaultInputFileName = "satisfaction_2.fbx";
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const int FramesPerPoll = 12;
         // 탐색이 간헐 실패해도 같은 프레임을 몇 차례 재시도하고도 안 되면 중단함.
@@ -83,6 +82,7 @@ namespace Fbx2Vmd.FBXImporter
         private int _maximumSoleStepFrame;
         private int _maximumFootRotationStepFrame;
         private int _maximumHipsStepFrame;
+        private bool _holdsEditorRefreshLock;
 
         private FbxFullClipFootMetricsCapture(FBXVmdPipeline pipeline, string directory,
             string inputFileName, string caseId, int frameLimit, bool captureViews,
@@ -118,7 +118,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool IsSupportedScenePath(string path)
         {
-            return path == MainAutoScenePath || path == MainRecordingScenePath;
+            return path == MainRecordingScenePath;
         }
 
         internal static bool TryStart(FBXVmdPipeline pipeline, string requestId, string runId,
@@ -135,7 +135,7 @@ namespace Fbx2Vmd.FBXImporter
                 pipeline.HasPreparedImportedMotion || pipeline.IsImportedMotionRecording ||
                 Time.captureFramerate != 0 || pipeline.targetCharacter == null)
             {
-                message = $"{caseId}는 저장된 Main_Auto 또는 Main_Recoding의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
+                message = $"{caseId}는 저장된 Main_Recoding의 비녹화 Play 상태와 유효한 실행 ID가 필요합니다.";
                 return false;
             }
 
@@ -239,6 +239,20 @@ namespace Fbx2Vmd.FBXImporter
 
         private void Initialize()
         {
+            // 스캔 중 우발적인 Assets/쓰기·스크립트 변경이 임포트·도메인 리로드를
+            // 일으켜 재생 세션을 깨지 않도록 측정 종료까지 임포트·리로드를 지연시킨다.
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                EditorApplication.LockReloadAssemblies();
+            }
+            catch
+            {
+                // 어셈블리 잠금 실패 시 에셋 배치만 잔류하지 않게 되돌린다.
+                AssetDatabase.StopAssetEditing();
+                throw;
+            }
+            _holdsEditorRefreshLock = true;
             _controller = (HumanoidMotionPlaybackController)typeof(FBXVmdPipeline)
                 .GetField("_humanoidMotionPlaybackController", BindingFlags.Instance |
                     BindingFlags.NonPublic)?.GetValue(_pipeline);
@@ -729,6 +743,29 @@ namespace Fbx2Vmd.FBXImporter
         private void Finish(string stage, string message)
         {
             if (IsFinished) return;
+            if (_holdsEditorRefreshLock)
+            {
+                _holdsEditorRefreshLock = false;
+                // 한 쪽 해제가 실패해도 다른 쪽은 반드시 시도한다.
+                try
+                {
+                    EditorApplication.UnlockReloadAssemblies();
+                }
+                catch (Exception error)
+                {
+                    Debug.LogWarning(
+                        $"[FootMetrics] 어셈블리 잠금 해제 실패: {error.Message}");
+                }
+                try
+                {
+                    AssetDatabase.StopAssetEditing();
+                }
+                catch (Exception error)
+                {
+                    Debug.LogWarning(
+                        $"[FootMetrics] 에셋 편집 종료 실패: {error.Message}");
+                }
+            }
             FailureStage = stage;
             FailureMessage = message;
             try
@@ -810,10 +847,11 @@ namespace Fbx2Vmd.FBXImporter
             }
             finally
             {
+                // TryStop 실패가 IsFinished 전이를 막지 않게 먼저 전이시킨다.
+                _phase = Phase.Finished;
                 if (_pipeline != null && (_pipeline.IsImportedMotionPlaying ||
                     _pipeline.SessionState == FBXVmdPipeline.FBXSessionState.PreviewPaused))
                     _pipeline.TryStopImportedMotion();
-                _phase = Phase.Finished;
             }
         }
 

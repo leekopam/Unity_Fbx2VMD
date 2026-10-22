@@ -399,7 +399,7 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(GetField<bool>(selection, "selected_candidate_metrics_exists"), Is.True);
                 Assert.That(GetField<bool>(selection, "selected_candidate_differs_from_raw_vmd"), Is.True);
                 Assert.That(GetField<bool>(selection, "selected_candidate_is_acceptance_artifact"), Is.True);
-                Assert.That(GetField<string>(selection, "selected_candidate_acceptance_basis"), Does.Contain("primary Main_Auto export"));
+                Assert.That(GetField<string>(selection, "selected_candidate_acceptance_basis"), Does.Contain("primary automatic-path export"));
             }
             finally
             {

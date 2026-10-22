@@ -185,7 +185,7 @@ namespace Fbx2Vmd.FBXImporter
             builder.AppendLine();
             builder.AppendLine($"- ref target: `{diagnostics.reference_target_frame_count}` ({EscapeMarkdown(diagnostics.target_frame_count_role)})");
             builder.AppendLine($"- Sub_Manual baseline recorded frames: `{diagnostics.baseline_recorded_frame_count}` ({EscapeMarkdown(diagnostics.baseline_recorded_frame_count_role)})");
-            builder.AppendLine($"- Main_Auto candidate recorded frames: `{diagnostics.candidate_recorded_frame_count}` ({EscapeMarkdown(diagnostics.candidate_recorded_frame_count_role)})");
+            builder.AppendLine($"- Main_Recoding candidate recorded frames: `{diagnostics.candidate_recorded_frame_count}` ({EscapeMarkdown(diagnostics.candidate_recorded_frame_count_role)})");
             builder.AppendLine($"- metric basis: {EscapeMarkdown(diagnostics.frame_quality_metric_basis)}");
             builder.AppendLine();
             builder.AppendLine("## Reference MP4 Diagnostics");

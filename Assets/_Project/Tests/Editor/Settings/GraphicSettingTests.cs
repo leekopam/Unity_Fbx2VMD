@@ -49,7 +49,6 @@ namespace Tests.Editor.Settings
             "Fbx2Vmd.Settings.EditorTools.GraphicSettingCameraFramingApplier, Assembly-CSharp-Editor";
         private const string GameViewScaleAutoApplierTypeName =
             "Fbx2Vmd.Settings.EditorTools.GraphicSettingGameViewScaleAutoApplier, Assembly-CSharp-Editor";
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string ManualRecordButtonName = "MMD_Record_Button";
         private const string ManualRecordMethodName = "StartManualRecording";
@@ -1347,18 +1346,6 @@ namespace Tests.Editor.Settings
         }
 
         [Test]
-        public void MainAutoScene_DoesNotCarryGraphicSettingQualityControls()
-        {
-            Type graphicSettingType = RequireType(GraphicSettingTypeName);
-            EditorSceneManager.OpenScene(MainAutoScenePath);
-
-            Component component = UnityEngine.Object.FindFirstObjectByType(graphicSettingType) as Component;
-
-            Assert.That(component, Is.Null,
-                "Main_Auto must stay focused on VMD generation and must not carry the Main_recoding visual quality controls.");
-        }
-
-        [Test]
         public void MainRecordingScene_InstallerEnsuresActualGameViewQualityPath()
         {
             Type installerType = RequireType(SceneInstallerTypeName);
@@ -1397,7 +1384,7 @@ namespace Tests.Editor.Settings
                 Assert.That(GetField<object>(installed, "smaaQuality").ToString(), Is.EqualTo("High"));
                 Assert.That(GetField<int>(installed, "msaaSampleCount"), Is.EqualTo(8));
                 Assert.That(GetField<float>(installed, "renderScale"), Is.EqualTo(1.0f).Within(0.0001f),
-                    "Installer must keep URP renderScale inactive when Main_Auto uses the built-in pipeline.");
+                    "Installer must keep URP renderScale at 1.0 (disabled).");
                 Component backgroundSetting = component.GetComponent(backgroundSettingType);
                 Assert.That(backgroundSetting, Is.Not.Null, "Installer must keep BackgroundColorSetting on Setting.");
                 Assert.That(GetField<Camera>(backgroundSetting, "targetCamera"), Is.EqualTo(Camera.main));

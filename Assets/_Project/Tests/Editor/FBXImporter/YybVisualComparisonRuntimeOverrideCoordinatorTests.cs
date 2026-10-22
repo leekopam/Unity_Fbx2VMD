@@ -62,19 +62,19 @@ namespace Tests.Editor.FBXImporter
             }
         }
         [Test]
-        public void MainSceneRuntimeOverrides_DefaultOptionsPreservePromotedSceneDefaults()
+        public void MainSceneRuntimeOverrides_DefaultOptionsPreserveSceneDefaults()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
             FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
+            Assert.That(fileManager, Is.Not.Null, "Main_Recoding scene must contain FBXVmdPipeline.");
             ClearYybVisualComparisonRunnerState("default-options-preserve-scene-defaults-test");
 
             Assert.That(ApplyMainSceneRuntimeOverrides(fileManager), Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
             Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.False);
             Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
@@ -88,7 +88,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f));
             Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(1f).Within(0.0001f));
-            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False);
             Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False);
@@ -98,7 +98,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(fileManager.manualAnimatorFullBodyPoseRightSleeveChainMusclesOnly, Is.False);
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f));
-            Assert.That(fileManager.useManualAnimatorHandLocalRotationReference, Is.True);
+            Assert.That(fileManager.useManualAnimatorHandLocalRotationReference, Is.False);
             Assert.That(fileManager.ShouldLockTargetHumanoidBonePositions, Is.True);
             Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.True);
             Assert.That(fileManager.YybArmSwingLimitWeight, Is.EqualTo(0.6f).Within(0.0001f));
@@ -118,11 +118,11 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void MainSceneRuntimeOverrides_LowerBodyForceOffOptionsDisablePromotedSceneDefaults()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
             FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
+            Assert.That(fileManager, Is.Not.Null, "Main_Recoding scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True);
@@ -149,11 +149,11 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void MainSceneRuntimeOverrides_LegChainSegmentDetailOptionsPreservePromotedSceneDefaults()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
             FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
+            Assert.That(fileManager, Is.Not.Null, "Main_Recoding scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f));
@@ -181,11 +181,14 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void MainSceneRuntimeOverrides_FullBodyForceOffOptionsDisablePromotedSceneDefaults()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
             FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
+            Assert.That(fileManager, Is.Not.Null, "Main_Recoding scene must contain FBXVmdPipeline.");
+            // 승격된 수동 참조 기본값은 Main_Recoding에서 꺼져 있어, 메커니즘 검증 전 명시적으로 켠다.
+            fileManager.ShouldUseManualAnimatorFullBodyPoseReference = true;
+            fileManager.ShouldUseManualAnimatorBodyRotationReference = true;
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True);
@@ -222,11 +225,14 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void MainSceneRuntimeOverrides_FullBodyPoseMaskOptionsKeepRuntimeScopeIsolated()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
             FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
+            Assert.That(fileManager, Is.Not.Null, "Main_Recoding scene must contain FBXVmdPipeline.");
+            // 승격된 수동 참조 기본값은 Main_Recoding에서 꺼져 있어, 마스크 검증 전 명시적으로 켠다.
+            fileManager.ShouldUseManualAnimatorFullBodyPoseReference = true;
+            fileManager.ShouldUseManualAnimatorBodyRotationReference = true;
             Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True);
             Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True);
@@ -357,11 +363,13 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void MainSceneRuntimeOverrides_SetHumanPoseRightLegTwistOutputKeepsRuntimeScopeIsolated()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
             FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
+            Assert.That(fileManager, Is.Not.Null, "Main_Recoding scene must contain FBXVmdPipeline.");
+            // 무관한 full-body 참조 유지 검증을 위해 명시적으로 켠다.
+            fileManager.ShouldUseManualAnimatorFullBodyPoseReference = true;
             Assert.That(fileManager.ShouldUseSetHumanPoseRightLegTwistOutputReference, Is.False);
             Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceWeight, Is.EqualTo(1f).Within(0.0001f));
             Assert.That(fileManager.setHumanPoseRightLegTwistOutputReferenceMaxDelta, Is.EqualTo(0.02f).Within(0.0001f));

@@ -380,6 +380,14 @@ public sealed class RecordingSetting : MonoBehaviour
             return;
         }
 
+#if UNITY_EDITOR
+        // 진단 smoke 세션 진행 중에는 세션이 소유한 진단 플래그를 공유 설정이 덮어쓰지 않는다.
+        if (fileManager.EditorDiagnosticSession.IsRecordingOverrideActive)
+        {
+            return;
+        }
+#endif
+
         fileManager.DiagnosticsSettings = CreateDiagnosticsSettings();
     }
 

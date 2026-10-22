@@ -94,12 +94,12 @@ namespace Fbx2Vmd.FBXImporter
                 !Guid.TryParse(runId, out Guid runGuid) || !EditorApplication.isPlaying ||
                 screenWidth < 320 || screenWidth > 3840 ||
                 screenHeight < 320 || screenHeight > 3840 ||
-                SceneManager.GetActiveScene().path != "Assets/_Project/Scene/Main_Auto.unity" ||
+                SceneManager.GetActiveScene().path != "Assets/_Project/Scene/Main_Recoding.unity" ||
                 pipeline.IsProcessing || pipeline.HasPreparedImportedMotion ||
                 Time.captureFramerate != 0 || EventSystem.current == null ||
                 !TryFindButton("FBX_Button", out _))
             {
-                message = "F15는 저장된 Main_Auto Play와 활성 FBX 버튼·EventSystem이 필요합니다.";
+                message = "F15는 저장된 Main_Recoding Play와 활성 FBX 버튼·EventSystem이 필요합니다.";
                 return false;
             }
 
@@ -147,7 +147,7 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 if (!EditorApplication.isPlaying ||
-                    SceneManager.GetActiveScene().path != "Assets/_Project/Scene/Main_Auto.unity" ||
+                    SceneManager.GetActiveScene().path != "Assets/_Project/Scene/Main_Recoding.unity" ||
                     (Time.captureFramerate != 0 && !_pipeline.IsImportedMotionRecording))
                     throw new InvalidOperationException("Play·씬·프레임률 상태가 변경되었습니다.");
                 if (DateTime.UtcNow - _startedUtc > TimeSpan.FromMinutes(5))
@@ -337,7 +337,7 @@ namespace Fbx2Vmd.FBXImporter
                 string when = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff",
                     CultureInfo.InvariantCulture);
                 imagePath = System.IO.Path.Combine(_directory,
-                    $"when-{when}_where-Main_Auto_who-auto_what-{step}_why-F15_how-GameView.png");
+                    $"when-{when}_where-Main_Recoding_who-auto_what-{step}_why-F15_how-GameView.png");
                 cameraPath = System.IO.Path.Combine(_directory,
                     $"when-{when.Substring(0, 15)}_where-Auto_who-YYB_what-{step}_why-F15_how-cam.png");
                 ScreenCapture.CaptureScreenshot(imagePath);

@@ -10,6 +10,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes()
         {
+            Assert.That(InvokePolicy<bool>("IsCandidateMode", "Automatic"), Is.True);
             Assert.That(InvokePolicy<bool>("IsCandidateMode", "MainAuto"), Is.True);
             Assert.That(InvokePolicy<bool>("IsCandidateMode", "MainRecording"), Is.True);
             Assert.That(InvokePolicy<bool>("IsCandidateMode", "MainRecordingVmdPlaybackProbe"), Is.True);
@@ -18,11 +19,14 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles()
+        public void Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndAutomaticUseSeparateRoles()
         {
             Assert.That(
+                InvokePolicy<string>("ResolveIntegratedVerticalSolveRole", "Automatic"),
+                Is.EqualTo("automatic_integrated_vertical_solve_metrics"));
+            Assert.That(
                 InvokePolicy<string>("ResolveIntegratedVerticalSolveRole", "MainAuto"),
-                Is.EqualTo("main_auto_integrated_vertical_solve_metrics"));
+                Is.EqualTo("automatic_integrated_vertical_solve_metrics"));
             Assert.That(
                 InvokePolicy<string>("ResolveIntegratedVerticalSolveRole", "MainRecordingVmdPlaybackProbe"),
                 Is.EqualTo("vmd_replay_integrated_vertical_solve_metrics"));
@@ -51,8 +55,8 @@ namespace Tests.Editor.FBXImporter
                 InvokePolicy<string>("ResolveIntegratedVerticalSolveBasis", "MainRecordingVmdPlaybackProbe"),
                 Is.EqualTo("primary VMD replay diagnostic output after bounded vertical solve promotion; raw replay metrics/VMD were preserved as raw_vertical_solve_diagnostic artifacts"));
             Assert.That(
-                InvokePolicy<string>("ResolveIntegratedVerticalSolveBasis", "MainAuto"),
-                Is.EqualTo("primary Main_Auto result paths after bounded vertical solve promotion; raw metrics/VMD were preserved as raw_vertical_solve_diagnostic artifacts"));
+                InvokePolicy<string>("ResolveIntegratedVerticalSolveBasis", "Automatic"),
+                Is.EqualTo("primary automatic-path result paths after bounded vertical solve promotion; raw metrics/VMD were preserved as raw_vertical_solve_diagnostic artifacts"));
         }
 
         private static T InvokePolicy<T>(string methodName, params object[] arguments)

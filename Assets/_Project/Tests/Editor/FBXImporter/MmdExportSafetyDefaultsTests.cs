@@ -16,74 +16,74 @@ namespace Tests.Editor.FBXImporter
         private const float MaxSmokeSafeThumbProjectionMaxPalmNormal = 0.5f;
 
         [Test]
-        public void MainAutoScene_UsesMmdSafeYybExportDefaults()
+        public void MainRecodingScene_UsesMmdSafeYybExportDefaults()
         {
-            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Auto.unity");
+            EditorSceneManager.OpenScene("Assets/_Project/Scene/Main_Recoding.unity");
 
             FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
 
-            Assert.That(fileManager, Is.Not.Null, "Main_Auto scene must contain FBXVmdPipeline.");
+            Assert.That(fileManager, Is.Not.Null, "Main_Recoding scene must contain FBXVmdPipeline.");
             Assert.That(fileManager.ShouldStabilizeGroundedFootXZ, Is.False, "Rollback preset must not enable per-foot X/Z locking.");
             Assert.That(fileManager.GroundedFootLockWeight, Is.EqualTo(0.45f).Within(0.0001f), "Rollback preset must restore the pre-reference-video foot-lock blend.");
             Assert.That(fileManager.FreezeRootYAfterInitialGrounding, Is.True, "Root Y must freeze after initial grounding so live playback does not chase per-frame foot noise.");
             Assert.That(fileManager.RetargetPrewarmFrameCount, Is.EqualTo(6), "Rollback preset must remove the 120-frame prewarm added by the reference-video tuning pass.");
             Assert.That(fileManager.MaxLateVisualGroundingStepPerFrame, Is.EqualTo(0.003f).Within(0.0001f), "Rollback preset must restore the conservative late visual grounding step.");
-            Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.True, "Main_Auto must promote the MP4-aligned arm swing limiter after the default playback compare removed the frame-quality failure.");
-            Assert.That(fileManager.YybArmSwingLimitWeight, Is.EqualTo(0.6f).Within(0.0001f), "Main_Auto must use the accepted runtime arm swing blend for MP4-aligned playback.");
-            Assert.That(fileManager.YybArmSwingMaxDownDot, Is.EqualTo(0.75f).Within(0.0001f), "Main_Auto must keep the accepted upper-arm down-dot cap.");
-            Assert.That(fileManager.YybArmSwingMinHandHorizontalRatio, Is.EqualTo(0.05f).Within(0.0001f), "Main_Auto must keep the accepted horizontal trigger ratio.");
-            Assert.That(fileManager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(1.5f).Within(0.0001f), "Main_Auto must keep the accepted below-shoulder tolerance.");
-            Assert.That(fileManager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must apply the accepted horizontal reach clamp strength.");
-            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.06f).Within(0.0001f), "Main_Auto must use the measured reach cap that reduces non-hair average, local average, upper span, and silhouette average without worsening the current max metrics.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseHorizontalReachLimitWeight, Is.EqualTo(0.25f).Within(0.0001f), "Main_Auto must keep the accepted raised-pose reach cap that reduces upper-band and silhouette residuals without worsening full or non-hair max.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot, Is.EqualTo(0.55f).Within(0.0001f), "Main_Auto must only apply the raised-pose reach cap when the upper arm is still meaningfully lowered.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio, Is.EqualTo(0.05f).Within(0.0001f), "Main_Auto must keep the raised-pose reach cap out of the natural below-shoulder swing frames.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio, Is.EqualTo(0.55f).Within(0.0001f), "Main_Auto must cap only the wide raised-pose horizontal reach that drives the MP4 upper-band residual.");
-            Assert.That(fileManager.enableAnatomicalArmGuard, Is.True, "Main_Auto must keep arm anatomy protection while validating the shared YYB playback/export path.");
-            Assert.That(fileManager.attachTargetArmDeformationGuard, Is.True, "Main_Auto must attach arm deformation guards while validating the shared YYB playback/export path.");
-            Assert.That(fileManager.targetGuardClampAnatomicalArmMuscles, Is.True, "Main_Auto must clamp target-side arm muscles after YYB arm swing correction so late guard output cannot reopen limb-pose failures.");
-            Assert.That(fileManager.targetGuardClampArmStretchMuscles, Is.True, "Main_Auto must clamp target-side forearm stretch after YYB arm swing correction.");
-            Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, "Main_Auto must keep YYB arm visual twist correction for the shared playback/export path.");
-            Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, "Main_Auto must keep sleeve anchor correction for the shared playback/export path.");
-            Assert.That(fileManager.YybArmSleeveAnchorInfluence, Is.EqualTo(0.825f).Within(0.0001f), "Main_Auto must use the measured sleeve anchor influence that reduces non-hair avg without worsening non-hair max, silhouette, or full max.");
-            Assert.That(fileManager.enableThumbAnatomicalGuard, Is.True, "Main_Auto must keep thumb anatomy protection for the shared playback/export path.");
-            Assert.That(fileManager.enableThumbLocalRotationGuard, Is.True, "Main_Auto must keep thumb local rotation protection for the shared playback/export path.");
-            Assert.That(fileManager.enableThumbVisualLengthGuard, Is.True, "Main_Auto must keep thumb visual length protection for the shared playback/export path.");
+            Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.True, "Main_Recoding must promote the MP4-aligned arm swing limiter after the default playback compare removed the frame-quality failure.");
+            Assert.That(fileManager.YybArmSwingLimitWeight, Is.EqualTo(0.6f).Within(0.0001f), "Main_Recoding must use the accepted runtime arm swing blend for MP4-aligned playback.");
+            Assert.That(fileManager.YybArmSwingMaxDownDot, Is.EqualTo(0.75f).Within(0.0001f), "Main_Recoding must keep the accepted upper-arm down-dot cap.");
+            Assert.That(fileManager.YybArmSwingMinHandHorizontalRatio, Is.EqualTo(0.05f).Within(0.0001f), "Main_Recoding must keep the accepted horizontal trigger ratio.");
+            Assert.That(fileManager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(1.5f).Within(0.0001f), "Main_Recoding must keep the accepted below-shoulder tolerance.");
+            Assert.That(fileManager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must apply the accepted horizontal reach clamp strength.");
+            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.06f).Within(0.0001f), "Main_Recoding must use the measured reach cap that reduces non-hair average, local average, upper span, and silhouette average without worsening the current max metrics.");
+            Assert.That(fileManager.YybArmSwingRaisedPoseHorizontalReachLimitWeight, Is.EqualTo(0.25f).Within(0.0001f), "Main_Recoding must keep the accepted raised-pose reach cap that reduces upper-band and silhouette residuals without worsening full or non-hair max.");
+            Assert.That(fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot, Is.EqualTo(0.55f).Within(0.0001f), "Main_Recoding must only apply the raised-pose reach cap when the upper arm is still meaningfully lowered.");
+            Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio, Is.EqualTo(0.05f).Within(0.0001f), "Main_Recoding must keep the raised-pose reach cap out of the natural below-shoulder swing frames.");
+            Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio, Is.EqualTo(0.55f).Within(0.0001f), "Main_Recoding must cap only the wide raised-pose horizontal reach that drives the MP4 upper-band residual.");
+            Assert.That(fileManager.enableAnatomicalArmGuard, Is.True, "Main_Recoding must keep arm anatomy protection while validating the shared YYB playback/export path.");
+            Assert.That(fileManager.attachTargetArmDeformationGuard, Is.True, "Main_Recoding must attach arm deformation guards while validating the shared YYB playback/export path.");
+            Assert.That(fileManager.targetGuardClampAnatomicalArmMuscles, Is.True, "Main_Recoding must clamp target-side arm muscles after YYB arm swing correction so late guard output cannot reopen limb-pose failures.");
+            Assert.That(fileManager.targetGuardClampArmStretchMuscles, Is.True, "Main_Recoding must clamp target-side forearm stretch after YYB arm swing correction.");
+            Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, "Main_Recoding must keep YYB arm visual twist correction for the shared playback/export path.");
+            Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, "Main_Recoding must keep sleeve anchor correction for the shared playback/export path.");
+            Assert.That(fileManager.YybArmSleeveAnchorInfluence, Is.EqualTo(0.825f).Within(0.0001f), "Main_Recoding must use the measured sleeve anchor influence that reduces non-hair avg without worsening non-hair max, silhouette, or full max.");
+            Assert.That(fileManager.enableThumbAnatomicalGuard, Is.True, "Main_Recoding must keep thumb anatomy protection for the shared playback/export path.");
+            Assert.That(fileManager.enableThumbLocalRotationGuard, Is.True, "Main_Recoding must keep thumb local rotation protection for the shared playback/export path.");
+            Assert.That(fileManager.enableThumbVisualLengthGuard, Is.True, "Main_Recoding must keep thumb visual length protection for the shared playback/export path.");
             Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.True, "Editor smoke must fail when thumb risk exceeds the threshold.");
-            Assert.That(fileManager.clampRetargetArmStretchMuscles, Is.True, "Main_Auto must clamp retarget arm stretch muscles to prevent corrected left forearm stretch spikes from reopening the limb-pose gate.");
-            Assert.That(fileManager.ArmStretchMuscleLimit, Is.EqualTo(0.5f).Within(0.0001f), "Main_Auto must keep the measured 0.5 arm stretch limit that reduces the corrected left forearm stretch gate delta below 1.0.");
-            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True, "Main_Auto must blend the manual reference pose to reduce the non-hair band_3_right arm/sleeve residual in normal playback/import.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must use the measured full-body reference blend that reduces full max, non-hair max, and non-hair avg while the remaining upper/silhouette trade-off stays tracked.");
-            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False, "Main_Auto must not mask lower-body muscles unless a runtime diagnostic explicitly requests it.");
-            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to lower-body muscles unless a runtime diagnostic explicitly requests it.");
-            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to leg twist muscles unless a runtime diagnostic explicitly requests it.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to right-arm muscles unless a runtime diagnostic explicitly requests it.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False, "Main_Auto must not limit full-body reference to left-arm muscles unless a runtime diagnostic explicitly requests it.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f), "Main_Auto must keep full-body reference frame gates disabled by default.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f), "Main_Auto must keep full-body reference frame gates disabled by default.");
+            Assert.That(fileManager.clampRetargetArmStretchMuscles, Is.True, "Main_Recoding must clamp retarget arm stretch muscles to prevent corrected left forearm stretch spikes from reopening the limb-pose gate.");
+            Assert.That(fileManager.ArmStretchMuscleLimit, Is.EqualTo(0.5f).Within(0.0001f), "Main_Recoding must keep the measured 0.5 arm stretch limit that reduces the corrected left forearm stretch gate delta below 1.0.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.False, "Main_Recoding keeps the manual full-body pose reference off on the moving-root automatic path.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must use the measured full-body reference blend that reduces full max, non-hair max, and non-hair avg while the remaining upper/silhouette trade-off stays tracked.");
+            Assert.That(fileManager.ShouldExcludeManualAnimatorFullBodyLowerMuscles, Is.False, "Main_Recoding must not mask lower-body muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLowerMusclesOnly, Is.False, "Main_Recoding must not limit full-body reference to lower-body muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.ShouldApplyManualAnimatorFullBodyLegTwistMusclesOnly, Is.False, "Main_Recoding must not limit full-body reference to leg twist muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseRightArmMusclesOnly, Is.False, "Main_Recoding must not limit full-body reference to right-arm muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseLeftArmMusclesOnly, Is.False, "Main_Recoding must not limit full-body reference to left-arm muscles unless a runtime diagnostic explicitly requests it.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateStart, Is.EqualTo(0f).Within(0.0001f), "Main_Recoding must keep full-body reference frame gates disabled by default.");
+            Assert.That(fileManager.manualAnimatorFullBodyPoseFrameGateEnd, Is.EqualTo(0f).Within(0.0001f), "Main_Recoding must keep full-body reference frame gates disabled by default.");
             Assert.That(fileManager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, "Rollback preset must remove the manual hips local-position override from the reference-video tuning pass.");
             Assert.That(fileManager.ShouldUseManualAnimatorFootHeightGroundingReference, Is.False, "Rollback preset must remove manual lowest-foot grounding from the reference-video tuning pass.");
-            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True, "Main_Auto must promote the accepted lower-body localRotation reference after it kept MP4 compare gates passing.");
-            Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted leg-chain localRotation blend.");
-            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True, "Main_Auto must promote the accepted bodyRotation reference for MP4-aligned playback.");
-            Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted bodyRotation blend.");
-            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True, "Main_Auto must promote the accepted lower-body segment direction guard.");
-            Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted lower-body segment direction blend.");
-            Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f), "Main_Auto must keep the accepted lower-body segment direction cap.");
-            Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.125f).Within(0.0001f), "Main_Auto must use the measured right LowerLegToFoot soft blend that reduces right foot X/Z and hips-aligned foot residual without moving hips.");
-            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True, "Main_Auto must promote the accepted foot hips-aligned residual yaw guard.");
-            Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must keep the accepted residual yaw blend.");
-            Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f), "Main_Auto must keep the accepted residual yaw cap.");
-            Assert.That(fileManager.usePostSetHumanPoseRightEndpointPositionReference, Is.False, "Main_Auto must keep the post-SetHumanPose endpoint carrier runtime-only until twist and manual-layer ablation metrics justify promotion.");
-            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must preserve the endpoint diagnostic blend value while the diagnostic is disabled.");
-            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f), "Main_Auto must preserve the endpoint diagnostic cap while the diagnostic remains runtime-only.");
-            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must preserve the symmetric X/Z endpoint diagnostic scale.");
-            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Auto must preserve the foot/toes average endpoint diagnostic blend.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True, "Main_Recoding must promote the accepted lower-body localRotation reference after it kept MP4 compare gates passing.");
+            Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must keep the accepted leg-chain localRotation blend.");
+            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.False, "Main_Recoding keeps the manual bodyRotation reference off on the moving-root automatic path.");
+            Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must keep the accepted bodyRotation blend.");
+            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True, "Main_Recoding must promote the accepted lower-body segment direction guard.");
+            Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must keep the accepted lower-body segment direction blend.");
+            Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f), "Main_Recoding must keep the accepted lower-body segment direction cap.");
+            Assert.That(fileManager.manualAnimatorRightLowerLegToFootSegmentDirectionReferenceBlendWeight, Is.EqualTo(0.125f).Within(0.0001f), "Main_Recoding must use the measured right LowerLegToFoot soft blend that reduces right foot X/Z and hips-aligned foot residual without moving hips.");
+            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True, "Main_Recoding must promote the accepted foot hips-aligned residual yaw guard.");
+            Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must keep the accepted residual yaw blend.");
+            Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f), "Main_Recoding must keep the accepted residual yaw cap.");
+            Assert.That(fileManager.usePostSetHumanPoseRightEndpointPositionReference, Is.False, "Main_Recoding must keep the post-SetHumanPose endpoint carrier runtime-only until twist and manual-layer ablation metrics justify promotion.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must preserve the endpoint diagnostic blend value while the diagnostic is disabled.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceMaxOffset, Is.EqualTo(0.04f).Within(0.0001f), "Main_Recoding must preserve the endpoint diagnostic cap while the diagnostic remains runtime-only.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferencePositiveZScale, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must preserve the symmetric X/Z endpoint diagnostic scale.");
+            Assert.That(fileManager.postSetHumanPoseRightEndpointPositionReferenceToesBlendWeight, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding must preserve the foot/toes average endpoint diagnostic blend.");
             Assert.That(fileManager.manualAnimatorFootHeightGroundingReferenceMaxLift, Is.EqualTo(0.08f).Within(0.0001f), "Serialized cap remains available but must be inactive while the reference-video foot-height reference is disabled.");
-            Assert.That(fileManager.clampRetargetHipsLocalPositionSpikes, Is.False, "Hips local clamps change pose internals and must stay out of the center/root-only floor correction slice.");
-            Assert.That(fileManager.vmdRecordingPlaybackSpeed, Is.EqualTo(1f).Within(0.0001f), "Main_Auto VMD export must default to normal playback speed.");
-            Assert.That(fileManager.useKnownMmdReferenceTiming, Is.False, "Reference timing must be opt-in so Main_Auto does not accelerate normal VMD generation by default.");
-            Assert.That(fileManager.showGhostModel, Is.False, "Main_Auto must not show imported Ghost models until the user enables the debug option.");
+            Assert.That(fileManager.clampRetargetHipsLocalPositionSpikes, Is.True, "Main_Recoding clamps Hips local-position spikes for moving-root playback stability.");
+            Assert.That(fileManager.vmdRecordingPlaybackSpeed, Is.EqualTo(1f).Within(0.0001f), "Main_Recoding VMD export must default to normal playback speed.");
+            Assert.That(fileManager.useKnownMmdReferenceTiming, Is.False, "Reference timing must be opt-in so Main_Recoding does not accelerate normal VMD generation by default.");
+            Assert.That(fileManager.showGhostModel, Is.False, "Main_Recoding must not show imported Ghost models until the user enables the debug option.");
             Assert.That(fileManager.showGhostSkeletonWhenNoRenderers, Is.False, "Rendererless Ghost skeleton fallback must stay off while Ghost display is disabled.");
 
             var yybPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
@@ -157,27 +157,9 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
-        public void MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback()
+        public void MainScene_PreserveMovingRootRetargetDefaultsForYybPlayback()
         {
-            AssertRegressionSafeRetargetDefaults("Assets/_Project/Scene/Main_Auto.unity", expectedMovementScaleMultiplier: 1f);
             AssertMovingRootRetargetDefaults("Assets/_Project/Scene/Main_Recoding.unity", minMovementScaleMultiplier: 0.9f);
-        }
-
-        [Test]
-        public void MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier()
-        {
-            AssertSceneRootMotionPolicy(
-                "Assets/_Project/Scene/Main_Auto.unity",
-                expectedPreserveRetargetBodyPosition: true,
-                expectedUseRetargetBodyPositionXZRootMotion: false,
-                expectedUseEditorHumanoidRootTranslationReference: false,
-                expectedClampRetargetHipsLocalPositionSpikes: false);
-            AssertSceneRootMotionPolicy(
-                "Assets/_Project/Scene/Main_Recoding.unity",
-                expectedPreserveRetargetBodyPosition: false,
-                expectedUseRetargetBodyPositionXZRootMotion: true,
-                expectedUseEditorHumanoidRootTranslationReference: false,
-                expectedClampRetargetHipsLocalPositionSpikes: true);
         }
 
         [Test]
@@ -195,7 +177,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(
                 fileManager.ShouldUseRetargetBodyPositionXZRootMotion,
                 Is.True,
-                "Main_Recoding must preserve bodyPosition X/Z root motion instead of behaving like Main_Auto.");
+                "Main_Recoding must preserve bodyPosition X/Z root motion instead of suppressing root motion.");
             Assert.That(
                 fileManager.ShouldUseEditorHumanoidRootTranslationReference,
                 Is.False,
@@ -209,111 +191,13 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void MainScenes_FreezeRootYAfterInitialGroundingForLivePlaybackStability()
         {
-            AssertRootYFreezeAfterInitialGrounding("Assets/_Project/Scene/Main_Auto.unity");
             AssertRootYFreezeAfterInitialGrounding("Assets/_Project/Scene/Main_Recoding.unity");
         }
 
         [Test]
         public void MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault()
         {
-            AssertFinalIkFootGroundingDefaults("Assets/_Project/Scene/Main_Auto.unity");
             AssertFinalIkFootGroundingDefaults("Assets/_Project/Scene/Main_Recoding.unity");
-        }
-
-        private static void AssertRegressionSafeRetargetDefaults(string scenePath, float expectedMovementScaleMultiplier)
-        {
-            EditorSceneManager.OpenScene(scenePath);
-
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
-
-            Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
-            Assert.That(fileManager.MovementScaleMultiplier, Is.EqualTo(expectedMovementScaleMultiplier).Within(0.0001f), $"{scenePath} must keep the expected visible root carrier movement scale.");
-            Assert.That(fileManager.enableAnatomicalArmGuard, Is.True, $"{scenePath} must keep the arm anatomy guard enabled.");
-            Assert.That(fileManager.attachTargetArmDeformationGuard, Is.True, $"{scenePath} must attach the target arm deformation guard.");
-            Assert.That(fileManager.targetGuardClampAnatomicalArmMuscles, Is.True, $"{scenePath} must clamp target-side arm muscles after YYB arm swing correction.");
-            Assert.That(fileManager.targetGuardClampArmStretchMuscles, Is.True, $"{scenePath} must clamp target-side forearm stretch after YYB arm swing correction.");
-            Assert.That(fileManager.enableYybArmVisualTwistCorrection, Is.True, $"{scenePath} must keep YYB arm visual twist correction enabled.");
-            Assert.That(fileManager.enableYybArmSleeveAnchorCorrection, Is.True, $"{scenePath} must keep sleeve anchor correction enabled.");
-            Assert.That(fileManager.YybArmSleeveAnchorInfluence, Is.EqualTo(0.825f).Within(0.0001f), $"{scenePath} must keep the measured sleeve anchor influence that reduces non-hair avg without worsening the current max metrics.");
-            Assert.That(fileManager.ShouldUseManualAnimatorFingerPoseReference, Is.False, $"{scenePath} must not copy manual finger pose into the normal Play/import path.");
-            Assert.That(fileManager.ShouldUseManualAnimatorBodyRotationReference, Is.True, $"{scenePath} must use the accepted MP4-aligned body rotation reference in the normal Play/import path.");
-            Assert.That(fileManager.manualAnimatorBodyRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted body rotation blend.");
-            Assert.That(fileManager.ShouldUseManualAnimatorBodyPositionYReference, Is.False, $"{scenePath} must not copy manual body Y into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorHandLocalRotationReference, Is.True, $"{scenePath} must use the measured manual hand local rotation reference in the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorThumbLocalRotationReference, Is.False, $"{scenePath} must not copy manual thumb local rotation into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorThumbSegmentDirectionReference, Is.False, $"{scenePath} must not copy manual thumb segment direction into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorThumbHandDirectionReference, Is.False, $"{scenePath} must not copy manual thumb hand direction into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorHandPalmFrameReference, Is.False, $"{scenePath} must not copy manual palm frame into the normal Play/import path.");
-            Assert.That(fileManager.useManualAnimatorThumbBasePositionReference, Is.False, $"{scenePath} must not copy manual thumb base position into the normal Play/import path.");
-            Assert.That(fileManager.enableThumbAnatomicalGuard, Is.True, $"{scenePath} must keep thumb anatomy guard enabled.");
-            Assert.That(fileManager.preserveManualFingerReferenceThumbMuscles, Is.False, $"{scenePath} must not preserve manual thumb muscles while the manual finger reference is disabled.");
-            Assert.That(fileManager.enableThumbLocalRotationGuard, Is.True, $"{scenePath} must keep thumb local rotation guard enabled.");
-            Assert.That(fileManager.syncDetachedThumbBaseHelpers, Is.True, $"{scenePath} must keep detached thumb helper rotation sync enabled.");
-            Assert.That(fileManager.syncDetachedThumbBaseHelperPositions, Is.True, $"{scenePath} must keep detached thumb helper position sync enabled.");
-            Assert.That(fileManager.stabilizeThumbWebbingCrease, Is.True, $"{scenePath} must keep thumb webbing crease stabilization enabled.");
-            Assert.That(fileManager.enableThumbVisualLengthGuard, Is.True, $"{scenePath} must keep thumb visual length guard enabled.");
-            Assert.That(
-                fileManager.ThumbIndexMaxSpreadAngle,
-                Is.LessThanOrEqualTo(MaxSmokeSafeThumbIndexSpreadAngle),
-                $"{scenePath} must cap thumb-index spread before YYB smoke deformation risk can exceed 0.35.");
-            Assert.That(
-                fileManager.ThumbProjectionMaxPalmNormal,
-                Is.LessThanOrEqualTo(MaxSmokeSafeThumbProjectionMaxPalmNormal),
-                $"{scenePath} must cap thumb palm-normal projection before YYB smoke deformation risk can exceed 0.35.");
-            Assert.That(fileManager.failEditorSmokeOnThumbRisk, Is.True, $"{scenePath} must fail editor smoke when thumb risk exceeds the threshold.");
-            Assert.That(fileManager.ShouldUseManualAnimatorFootLocalRotationReference, Is.True, $"{scenePath} must use the accepted MP4-aligned foot/toe localRotation reference in the normal Play/import path.");
-            Assert.That(fileManager.manualAnimatorFootLocalRotationReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted foot/toe localRotation blend.");
-            Assert.That(fileManager.ShouldUseManualAnimatorLowerBodySegmentDirectionReference, Is.True, $"{scenePath} must use the accepted lower-body segment direction guard.");
-            Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted lower-body segment direction blend.");
-            Assert.That(fileManager.manualAnimatorLowerBodySegmentDirectionReferenceMaxAngle, Is.EqualTo(60f).Within(0.0001f), $"{scenePath} must keep the accepted lower-body segment direction cap.");
-            Assert.That(fileManager.ShouldUseManualAnimatorFootHipsAlignedResidualYawReference, Is.True, $"{scenePath} must use the accepted foot hips-aligned residual yaw guard.");
-            Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted foot residual yaw blend.");
-            Assert.That(fileManager.manualAnimatorFootHipsAlignedResidualYawReferenceMaxAngle, Is.EqualTo(45f).Within(0.0001f), $"{scenePath} must keep the accepted foot residual yaw cap.");
-            Assert.That(fileManager.enableYybArmSwingLimitCorrection, Is.True, $"{scenePath} must use the accepted MP4-aligned arm swing limiter.");
-            Assert.That(fileManager.YybArmSwingLimitWeight, Is.EqualTo(0.6f).Within(0.0001f), $"{scenePath} must keep the accepted arm swing blend.");
-            Assert.That(fileManager.YybArmSwingMaxDownDot, Is.EqualTo(0.75f).Within(0.0001f), $"{scenePath} must keep the accepted upper-arm down-dot cap.");
-            Assert.That(fileManager.YybArmSwingMinHandHorizontalRatio, Is.EqualTo(0.05f).Within(0.0001f), $"{scenePath} must keep the accepted horizontal trigger ratio.");
-            Assert.That(fileManager.YybArmSwingMaxHandBelowShoulderRatio, Is.EqualTo(1.5f).Within(0.0001f), $"{scenePath} must keep the accepted below-shoulder tolerance.");
-            Assert.That(fileManager.YybArmSwingHorizontalReachLimitWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must keep the accepted horizontal reach clamp strength.");
-            Assert.That(fileManager.YybArmSwingMaxHandHorizontalReachRatio, Is.EqualTo(0.06f).Within(0.0001f), $"{scenePath} must keep the measured horizontal reach cap that reduces non-hair average, local average, upper span, and silhouette average without worsening the current max metrics.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseHorizontalReachLimitWeight, Is.EqualTo(0.25f).Within(0.0001f), $"{scenePath} must keep the accepted raised-pose reach cap without the rejected hair-length candidate.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseMinUpperArmDownDot, Is.EqualTo(0.55f).Within(0.0001f), $"{scenePath} must keep the raised-pose cap limited to mildly lowered upper arms.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandBelowShoulderRatio, Is.EqualTo(0.05f).Within(0.0001f), $"{scenePath} must avoid applying the raised-pose cap to below-shoulder swing frames.");
-            Assert.That(fileManager.YybArmSwingRaisedPoseMaxHandHorizontalReachRatio, Is.EqualTo(0.55f).Within(0.0001f), $"{scenePath} must cap only wide raised-pose horizontal reach.");
-            Assert.That(fileManager.ShouldUseManualAnimatorFullBodyPoseReference, Is.True, $"{scenePath} must blend the manual reference pose as the default playback source.");
-            Assert.That(fileManager.manualAnimatorFullBodyPoseReferenceWeight, Is.EqualTo(1f).Within(0.0001f), $"{scenePath} must use the measured full-body reference blend that reduces full max, non-hair max, and non-hair avg while the remaining upper/silhouette trade-off stays tracked.");
-            Assert.That(fileManager.ShouldUseManualAnimatorHipsLocalPositionReference, Is.False, $"{scenePath} must not copy manual Hips localPosition into the default playback/import path.");
-            Assert.That(fileManager.manualAnimatorHipsLocalPositionMaxOffset, Is.EqualTo(0.12f).Within(0.0001f), $"{scenePath} must keep only the conservative serialized Hips reference cap while the reference is disabled.");
-        }
-
-        private static void AssertSceneRootMotionPolicy(
-            string scenePath,
-            bool expectedPreserveRetargetBodyPosition,
-            bool expectedUseRetargetBodyPositionXZRootMotion,
-            bool expectedUseEditorHumanoidRootTranslationReference,
-            bool expectedClampRetargetHipsLocalPositionSpikes)
-        {
-            EditorSceneManager.OpenScene(scenePath);
-
-            FBXVmdPipeline fileManager = UnityEngine.Object.FindFirstObjectByType<FBXVmdPipeline>();
-
-            Assert.That(fileManager, Is.Not.Null, $"{scenePath} must contain FBXVmdPipeline.");
-            Assert.That(
-                fileManager.ShouldPreserveRetargetBodyPosition,
-                Is.EqualTo(expectedPreserveRetargetBodyPosition),
-                $"{scenePath} must match the scene-specific body-position preservation policy.");
-            Assert.That(
-                fileManager.ShouldUseRetargetBodyPositionXZRootMotion,
-                Is.EqualTo(expectedUseRetargetBodyPositionXZRootMotion),
-                $"{scenePath} must keep the requested scene-specific X/Z root-motion policy.");
-            Assert.That(
-                fileManager.ShouldUseEditorHumanoidRootTranslationReference,
-                Is.EqualTo(expectedUseEditorHumanoidRootTranslationReference),
-                $"{scenePath} must use the requested scene-specific Humanoid RootT translation policy.");
-            Assert.That(
-                fileManager.clampRetargetHipsLocalPositionSpikes,
-                Is.EqualTo(expectedClampRetargetHipsLocalPositionSpikes),
-                $"{scenePath} must match the scene-specific Hips local-position spike policy.");
         }
 
         private static void AssertMovingRootRetargetDefaults(string scenePath, float minMovementScaleMultiplier)

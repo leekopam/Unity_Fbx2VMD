@@ -22,8 +22,8 @@ namespace Tests.Editor.FBXImporter
             var results = new List<TestResultRecord>();
 
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainAutoScene_UsesMmdSafeYybExportDefaults),
-                () => new MmdExportSafetyDefaultsTests().MainAutoScene_UsesMmdSafeYybExportDefaults());
+                nameof(MmdExportSafetyDefaultsTests.MainRecodingScene_UsesMmdSafeYybExportDefaults),
+                () => new MmdExportSafetyDefaultsTests().MainRecodingScene_UsesMmdSafeYybExportDefaults());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.YybMmdExportProductionPrefab_UsesAcceptedRuntimeVisualRecoveryDefaults),
                 () => new MmdExportSafetyDefaultsTests().YybMmdExportProductionPrefab_UsesAcceptedRuntimeVisualRecoveryDefaults());
@@ -31,17 +31,14 @@ namespace Tests.Editor.FBXImporter
                 nameof(MmdExportSafetyDefaultsTests.YybMmdExportManualReferencePrefab_StaysClampOnlyBaseline),
                 () => new MmdExportSafetyDefaultsTests().YybMmdExportManualReferencePrefab_StaysClampOnlyBaseline());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier),
-                () => new MmdExportSafetyDefaultsTests().MainSceneRootMotionPolicy_KeepsMainAutoStationaryAndMainRecordingMovingRootCarrier());
-            RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.MainRecordingRootMotionPolicy_EnablesMovingRootCarrierForNaturalMotion),
                 () => new MmdExportSafetyDefaultsTests().MainRecordingRootMotionPolicy_EnablesMovingRootCarrierForNaturalMotion());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
                 nameof(MmdExportSafetyDefaultsTests.MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault),
                 () => new MmdExportSafetyDefaultsTests().MainScenes_KeepFinalIkFootGroundingExperimentDisabledByDefault());
             RunTest(results, typeof(MmdExportSafetyDefaultsTests).FullName + "." +
-                nameof(MmdExportSafetyDefaultsTests.MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback),
-                () => new MmdExportSafetyDefaultsTests().MainScenes_PreserveRegressionSafeRetargetDefaultsForYybPlayback());
+                nameof(MmdExportSafetyDefaultsTests.MainScene_PreserveMovingRootRetargetDefaultsForYybPlayback),
+                () => new MmdExportSafetyDefaultsTests().MainScene_PreserveMovingRootRetargetDefaultsForYybPlayback());
             RunTest(results, typeof(HumanoidThumbDeformationGuardSmokeRiskTests).FullName + "." +
                 nameof(HumanoidThumbDeformationGuardSmokeRiskTests.Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap),
                 () => new HumanoidThumbDeformationGuardSmokeRiskTests().Given_ManualThumbOverrideSpreadExceedsSceneCap_When_ResolvingVisualLengthLimit_Then_KeepsConfiguredSmokeCap());
@@ -206,8 +203,8 @@ namespace Tests.Editor.FBXImporter
                 nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes),
                 () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_CaptureModes_When_CheckingSummaryCandidateMode_Then_IncludesBothMainScenes());
             RunTest(results, typeof(VisualComparisonMainSceneDiagnosticPolicyTests).FullName + "." +
-                nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles),
-                () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndMainAutoUseSeparateRoles());
+                nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndAutomaticUseSeparateRoles),
+                () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_MainSceneCandidateModes_When_ResolvingIntegratedVerticalSolveRole_Then_ReplayAndAutomaticUseSeparateRoles());
             RunTest(results, typeof(VisualComparisonMainSceneDiagnosticPolicyTests).FullName + "." +
                 nameof(VisualComparisonMainSceneDiagnosticPolicyTests.Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate),
                 () => new VisualComparisonMainSceneDiagnosticPolicyTests().Given_MainSceneCandidateFailedButHasMetricsAndVmd_When_CheckingFrameQualityEligibility_Then_KeepsDiagnosticCandidate());

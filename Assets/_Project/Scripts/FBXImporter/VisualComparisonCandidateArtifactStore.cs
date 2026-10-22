@@ -11,7 +11,7 @@ namespace Fbx2Vmd.FBXImporter
             string summaryDirectory,
             string fallbackRole)
         {
-            if (string.Equals(captureMode, "MainAuto", StringComparison.Ordinal) ||
+            if (VisualComparisonMainSceneDiagnosticPolicy.IsAutomaticMode(captureMode) ||
                 string.IsNullOrWhiteSpace(result.FilePath) ||
                 !File.Exists(result.FilePath) ||
                 string.IsNullOrWhiteSpace(summaryDirectory))

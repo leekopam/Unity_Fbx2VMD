@@ -636,7 +636,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private static string BuildDefaultOutputDirectory()
         {
-            string sessionId = $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-Main_Auto_who-yyb_what-fbx-inventory_why-generalization_how-editor-batch";
+            string sessionId = $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-Main_Recoding_who-yyb_what-fbx-inventory_why-generalization_how-editor-batch";
             return Path.Combine("Docs", "Workflow", "Local", "ComparisonSessions", sessionId);
         }
 

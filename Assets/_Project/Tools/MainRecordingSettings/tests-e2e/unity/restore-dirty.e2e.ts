@@ -8,7 +8,7 @@ import type { UnityFixture } from "./unityFixture.js";
 
 test("leaves play mode running", { platforms: ["unity"] }, async (fixtures) => {
   const unity = (fixtures as { unity: UnityFixture }).unity;
-  // 현재 로드된 씬으로 진입한다 — 씬 미지정 시 Main_Auto 선행조건이 검증된다.
+  // 현재 로드된 씬으로 진입한다 — 씬 미지정 시 Main_Recoding 선행조건이 검증된다.
   const before = await unity.environment();
   await unity.run("enter_e2e_play", { scene_path: before.scene_path }, 90_000);
   const env = await unity.environment();

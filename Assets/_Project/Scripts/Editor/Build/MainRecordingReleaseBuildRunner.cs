@@ -11,7 +11,6 @@ namespace Fbx2Vmd.Build
     {
         private static readonly string[] MainScenes =
         {
-            "Assets/_Project/Scene/Main_Auto.unity",
             "Assets/_Project/Scene/Main_Recoding.unity",
             "Assets/_Project/Scene/Sub_Manual.unity",
             "Assets/_Project/Scene/FbxImport_Capture.unity",

@@ -21,10 +21,10 @@ test("F13 manual compare", {
     statusFileName: "yyb_visual_compare_status.json"
   });
 
-  await unity.run("open_e2e_scene", { scene_path: "Assets/_Project/Scene/Main_Auto.unity" });
+  await unity.run("open_e2e_scene", { scene_path: "Assets/_Project/Scene/Main_Recoding.unity" });
   const env = await unity.environment();
   if (env.play_mode === true || env.scene_dirty === true) {
-    throw new Error("F13 선행조건: Main_Auto 비재생·비dirty 상태가 필요합니다");
+    throw new Error("F13 선행조건: Main_Recoding 비재생·비dirty 상태가 필요합니다");
   }
 
   // Unity 측 비교 실행 — 수동·자동 쌍 캡처와 비교 CSV/PNG를 만든다.

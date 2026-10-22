@@ -42,7 +42,7 @@ namespace Fbx2Vmd.FBXImporter
                 ? "rec"
                 : string.Equals(mode, "MainRecordingVmdPlaybackProbe", StringComparison.Ordinal)
                     ? "replay"
-                    : string.Equals(mode, "MainAuto", StringComparison.Ordinal)
+                    : VisualComparisonMainSceneDiagnosticPolicy.IsAutomaticMode(mode)
                         ? "auto"
                         : mode;
             return BuildEvidenceFileName("vmd", role, extension, ".vmd", fallbackRole);

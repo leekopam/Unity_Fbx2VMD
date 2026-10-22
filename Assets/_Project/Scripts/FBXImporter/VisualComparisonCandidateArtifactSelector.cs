@@ -25,15 +25,25 @@ namespace Fbx2Vmd.FBXImporter
                 summary != null &&
                 string.Equals(
                     summary.frame_quality_evaluation_role,
-                    "main_auto_integrated_vertical_solve_metrics",
+                    "automatic_integrated_vertical_solve_metrics",
                     StringComparison.Ordinal));
+            if (mainAutoIntegrated == null)
+            {
+                mainAutoIntegrated = frameQualitySummaries.FirstOrDefault(summary =>
+                    summary != null &&
+                    string.Equals(
+                        summary.frame_quality_evaluation_role,
+                        "main_auto_integrated_vertical_solve_metrics",
+                        StringComparison.Ordinal));
+            }
+
             MotionComparisonFrameQualitySummary raw = frameQualitySummaries.FirstOrDefault(summary =>
                 summary != null &&
                 string.Equals(
                     summary.frame_quality_evaluation_role,
                     "evaluation_candidate_metrics",
                     StringComparison.Ordinal) &&
-                IsMainAutoSummary(summary));
+                IsAutomaticSummary(summary));
             if (raw == null)
             {
                 raw = frameQualitySummaries.FirstOrDefault(summary =>
@@ -60,7 +70,7 @@ namespace Fbx2Vmd.FBXImporter
                     summary.frame_quality_evaluation_role,
                     "corrected_candidate_metrics",
                     StringComparison.Ordinal) &&
-                IsMainAutoSummary(summary));
+                IsAutomaticSummary(summary));
             if (corrected == null)
             {
                 corrected = frameQualitySummaries.FirstOrDefault(summary =>
@@ -88,7 +98,7 @@ namespace Fbx2Vmd.FBXImporter
                     mainAutoIntegrated.vertical_solve_corrected_candidate_manifest_path,
                     projectRoot);
                 selection.selection_basis =
-                    "primary Main_Auto export paths passed after bounded vertical solve integration; raw diagnostic artifacts remain preserved";
+                    "primary automatic-path export paths passed after bounded vertical solve integration; raw diagnostic artifacts remain preserved";
                 return selection;
             }
 
@@ -139,11 +149,12 @@ namespace Fbx2Vmd.FBXImporter
                 !string.IsNullOrWhiteSpace(summary.candidate_metrics_csv);
         }
 
-        private static bool IsMainAutoSummary(MotionComparisonFrameQualitySummary summary)
+        private static bool IsAutomaticSummary(MotionComparisonFrameQualitySummary summary)
         {
             return summary != null &&
                 !string.IsNullOrWhiteSpace(summary.candidate_label) &&
-                summary.candidate_label.IndexOf("Main_Auto", StringComparison.OrdinalIgnoreCase) >= 0;
+                (summary.candidate_label.IndexOf("Main_Recoding_Auto", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    summary.candidate_label.IndexOf("Main_Auto", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private static void FillSelectedCandidateFields(
@@ -179,10 +190,15 @@ namespace Fbx2Vmd.FBXImporter
                 selected.frame_quality_evaluation_role,
                 "corrected_candidate_metrics",
                 StringComparison.Ordinal);
-            bool selectedIntegratedPrimary = string.Equals(
-                selected.frame_quality_evaluation_role,
-                "main_auto_integrated_vertical_solve_metrics",
-                StringComparison.Ordinal);
+            bool selectedIntegratedPrimary =
+                string.Equals(
+                    selected.frame_quality_evaluation_role,
+                    "automatic_integrated_vertical_solve_metrics",
+                    StringComparison.Ordinal) ||
+                string.Equals(
+                    selected.frame_quality_evaluation_role,
+                    "main_auto_integrated_vertical_solve_metrics",
+                    StringComparison.Ordinal);
             bool selectedRawPrimary = VisualComparisonFrameQualityFailurePolicy.IsRawCandidateRole(selected);
             if (selectedCorrectedArtifact)
             {
@@ -270,7 +286,7 @@ namespace Fbx2Vmd.FBXImporter
 
             selection.selected_candidate_acceptance_basis = selection.selected_candidate_is_acceptance_artifact
                 ? selectedIntegratedPrimary
-                    ? "selected primary Main_Auto export VMD/metrics/manifest is the final acceptance/export candidate; raw diagnostic files remain preserved"
+                    ? "selected primary automatic-path export VMD/metrics/manifest is the final acceptance/export candidate; raw diagnostic files remain preserved"
                     : selectedCorrectedArtifact
                         ? "selected corrected VMD/metrics/manifest is the final acceptance/export candidate; raw candidate remains diagnostic"
                         : "selected raw VMD/metrics is the final acceptance/export candidate; no corrected artifact was required"

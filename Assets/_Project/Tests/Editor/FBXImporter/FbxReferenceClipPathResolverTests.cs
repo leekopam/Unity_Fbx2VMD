@@ -70,7 +70,7 @@ namespace Tests.Editor.FBXImporter
                 types: YybReferenceClipResolverParameterTypes,
                 modifiers: null);
 
-            Assert.That(method, Is.Not.Null, "YYB runner must expose a fakeable resolver so manual reference and Main_Auto smoke use the same FBX source priority.");
+            Assert.That(method, Is.Not.Null, "YYB runner must expose a fakeable resolver so manual reference and Main_Recoding smoke use the same FBX source priority.");
 
             var existing = new HashSet<string>(existingAssetPaths, StringComparer.OrdinalIgnoreCase);
             Func<string, bool> assetExists = existing.Contains;

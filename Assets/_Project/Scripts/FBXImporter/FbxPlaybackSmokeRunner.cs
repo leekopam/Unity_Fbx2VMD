@@ -22,16 +22,13 @@ namespace Fbx2Vmd.FBXImporter
     public static class FbxPlaybackSmokeRunner
     {
         private const string MenuRoot = "Machine Spirit/FBX Smoke/";
-        private const string MainAutoSceneName = "Main_Auto";
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string MainRecordingSceneName = "Main_Recoding";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string E2eModelName = "YYB Hatsune Miku";
-        private const string MainRecordingSceneName = "Main_recoding";
         private const string ImportFbxRelativeDirectory = "Resources/Import_FBX";
         private const string RunAllImportFbxHeadCommand = "run_all_import_fbx_31s";
         private const string RunAllImportFbxMiddleCommand = "run_all_import_fbx_middle_31s";
         private const string RunAllImportFbxTailCommand = "run_all_import_fbx_tail_31s";
-        private const string CaptureSatisfactionQuickVmdSmokeCommand = "capture_satisfaction_quick_vmd_smoke_2s";
         private const string CapturePreselectionStateCommand = "capture_preselection_state";
         private const string CapturePlaybackSeekEvidenceCommand = "capture_playback_seek_evidence";
         private const string CaptureTetorisLiveFootEvidenceCommand = "capture_tetoris_live_foot_evidence";
@@ -54,7 +51,6 @@ namespace Fbx2Vmd.FBXImporter
         private const string VerifyThumbGuardCommand = "verify_thumb_guard";
         private const string CaptureSatisfactionThumbEvidenceCommand = "capture_satisfaction_thumb_evidence_14s";
         private const string CaptureSatisfactionFullRegressionEvidenceCommand = "capture_satisfaction_full_regression_evidence_208s_4k";
-        private const string CaptureSatisfactionFullNamedVmdCommand = "capture_satisfaction_full_named_vmd";
         private const string CaptureSatisfactionVrmCommand = "capture_satisfaction_vrm";
         private const string CaptureSatisfactionHead31Command = "capture_satisfaction_head_31s";
         private const string CaptureSatisfactionMiddle31Command = "capture_satisfaction_middle_31s";
@@ -63,8 +59,6 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureAntennaTailHelperEvidenceCleanCommand = "capture_antenna_tail_helper_evidence_clean";
         private const string CaptureAntennaTailHelperEvidenceResumeAfterCleanCommand = "capture_antenna_tail_helper_evidence_resume_after_clean";
         private const string SatisfactionFbxFileName = "satisfaction_2.fbx";
-        private const float QuickVmdSmokeDurationSeconds = 2f;
-        private const int QuickVmdSmokeTargetFrameCount = 60;
         private const float SmokeDurationSeconds = 31f;
         private const float SmokeFrameRate = 30f;
         private const float SmokeStartDelaySeconds = 0.2f;
@@ -233,11 +227,11 @@ namespace Fbx2Vmd.FBXImporter
             EditorApplication.playModeStateChanged += ReleaseE2eVideoOnPlayExit;
         }
 
-        // 배치 모드 진입점: -executeMethod로 호출해 Main_Auto를 저장된 Edit 상태로 열어
+        // 배치 모드 진입점: -executeMethod로 호출해 Main_Recoding을 저장된 Edit 상태로 열어
         // 요청 파일 폴러가 동작할 수 있게 한다. -quit 없이 실행하면 배치 인스턴스가 계속 생존한다.
-        public static void OpenMainAutoForAutomation()
+        public static void OpenMainRecodingForAutomation()
         {
-            EditorSceneManager.OpenScene(MainAutoScenePath, OpenSceneMode.Single);
+            EditorSceneManager.OpenScene(MainRecordingScenePath, OpenSceneMode.Single);
         }
 
         [MenuItem(MenuRoot + "Run All Import_FBX 31s", false, 2090)]
@@ -292,17 +286,6 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             StartSmokeBatch(fileManager, fbxFileNames, FBXVmdPipeline.EditorDiagnosticSmokeSegment.Tail);
-        }
-
-        [MenuItem(MenuRoot + "Run satisfaction_2 Quick VMD Smoke 2s", false, 2099)]
-        private static void RunSatisfactionQuickVmdSmoke()
-        {
-            RunSingleSmoke(
-                SatisfactionFbxFileName,
-                QuickVmdSmokeDurationSeconds,
-                enableFingerCloseups: false,
-                sampleTimesOverride: null,
-                mode: "quick-vmd-smoke");
         }
 
         [MenuItem(MenuRoot + "Run satisfaction_2 31s", false, 2100)]
@@ -437,7 +420,7 @@ namespace Fbx2Vmd.FBXImporter
             string fileManagerState = runtimeFBXVmdPipeline != null
                 ? $"found={GetHierarchyPath(runtimeFBXVmdPipeline.transform)}"
                 : "found=<none>";
-            Debug.Log($"[FbxPlaybackSmokeRunner] FBXVmdPipeline probe: {BuildMainAutoRuntimeSummary()}, runtimeLookup={fileManagerState}, thumbReference[{BuildRetargeterThumbReferenceSummary(runtimeFBXVmdPipeline)}]");
+            Debug.Log($"[FbxPlaybackSmokeRunner] FBXVmdPipeline probe: {BuildMainSceneRuntimeSummary()}, runtimeLookup={fileManagerState}, thumbReference[{BuildRetargeterThumbReferenceSummary(runtimeFBXVmdPipeline)}]");
         }
 
         [MenuItem(MenuRoot + "Run All Import_FBX 31s", true)]
@@ -862,8 +845,8 @@ namespace Fbx2Vmd.FBXImporter
                     FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
                     GameObject model = pipeline != null ? pipeline.targetCharacter : null;
                     Animator animator = model != null ? model.GetComponent<Animator>() : null;
-                    if (EditorApplication.isPlaying || scene.path != MainAutoScenePath ||
-                        scene.isDirty || model == null || model.name != E2eModelName ||
+                    if (EditorApplication.isPlaying || scene.path != MainRecordingScenePath ||
+                        scene.isDirty || model == null || !IsYybModelName(model.name) ||
                         animator == null || animator.avatar == null ||
                         !animator.avatar.isValid || !animator.avatar.isHuman)
                         throw new InvalidOperationException("F12 VRM 대상 모델과 Edit Mode 상태가 유효하지 않습니다.");
@@ -900,10 +883,9 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 else if (isOpenScene)
                 {
-                    // E2E 전용 씬 열기 — 지원 씬(Main_Auto/Main_Recoding)만 허용하고
+                    // E2E 전용 씬 열기 — 지원 씬(Main_Recoding)만 허용하고
                     // Play 중이거나 dirty 상태면 거절해 저장되지 않은 변경을 보호한다.
-                    if (request.scene_path != MainAutoScenePath &&
-                        request.scene_path != MainRecordingScenePath)
+                    if (request.scene_path != MainRecordingScenePath)
                         throw new InvalidOperationException("지원하지 않는 씬 경로입니다: " + request.scene_path);
                     if (EditorApplication.isPlaying)
                         throw new InvalidOperationException("Play Mode에서는 씬을 열 수 없습니다.");
@@ -931,16 +913,15 @@ namespace Fbx2Vmd.FBXImporter
                     Scene scene = SceneManager.GetActiveScene();
                     FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
                     string requestedScene = string.IsNullOrEmpty(request.scene_path)
-                        ? MainAutoScenePath : request.scene_path;
+                        ? MainRecordingScenePath : request.scene_path;
                     Animator animator = pipeline?.targetCharacter != null
                         ? pipeline.targetCharacter.GetComponentInChildren<Animator>(true) : null;
-                    if (targetPlay && ((requestedScene != MainAutoScenePath &&
-                            requestedScene != MainRecordingScenePath) ||
+                    if (targetPlay && (requestedScene != MainRecordingScenePath ||
                         scene.path != requestedScene || scene.isDirty ||
                         pipeline?.targetCharacter == null || animator?.avatar == null ||
                         !animator.avatar.isValid || !animator.avatar.isHuman ||
                         (string.IsNullOrEmpty(request.scene_path) &&
-                            pipeline.targetCharacter.name != E2eModelName)))
+                            !IsYybModelName(pipeline.targetCharacter.name))))
                         throw new InvalidOperationException("저장된 지원 씬과 유효한 Humanoid 모델을 준비해야 합니다.");
 
                     if (EditorApplication.isPlaying != targetPlay)
@@ -1145,16 +1126,6 @@ namespace Fbx2Vmd.FBXImporter
                         request, out _motionRecordingEvidence, out message);
                 case CaptureInvalidInputEvidenceCommand:
                     return TryStartInvalidInputEvidence(request.request_id, out message);
-                case CaptureSatisfactionQuickVmdSmokeCommand:
-                    return TryStartAutomationSingleSmoke(
-                        SatisfactionFbxFileName,
-                        QuickVmdSmokeDurationSeconds,
-                        false,
-                        null,
-                        "quick-vmd-smoke",
-                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
-                        out message,
-                        useInputBaseName: true);
                 case CaptureSatisfactionThumbEvidenceCommand:
                     return TryStartAutomationSingleSmoke(
                         "satisfaction_2.fbx",
@@ -1176,17 +1147,6 @@ namespace Fbx2Vmd.FBXImporter
                         FullRegressionEvidenceCaptureWidth,
                         FullRegressionEvidenceCaptureHeight,
                         FullRegressionEvidenceRecordingStartTimeOverrideSeconds);
-                case CaptureSatisfactionFullNamedVmdCommand:
-                    return TryStartAutomationSingleSmoke(
-                        SatisfactionFbxFileName,
-                        SatisfactionFullRegressionEvidenceDurationSeconds,
-                        false,
-                        null,
-                        "full-named-vmd",
-                        FBXVmdPipeline.EditorDiagnosticSmokeSegment.Head,
-                        out message,
-                        recordingStartTimeOverrideSeconds: FullRegressionEvidenceRecordingStartTimeOverrideSeconds,
-                        useInputBaseName: true);
                 case CaptureSatisfactionHead31Command:
                 case CaptureSatisfactionMiddle31Command:
                 case CaptureSatisfactionTail31Command:
@@ -1271,7 +1231,7 @@ namespace Fbx2Vmd.FBXImporter
             UnityHumanoidVMDRecorder recorder = pipeline != null && pipeline.targetCharacter != null
                 ? pipeline.targetCharacter.GetComponentInChildren<UnityHumanoidVMDRecorder>(true)
                 : null;
-            if (scene.name != MainAutoSceneName || pipeline == null || pipeline.IsProcessing ||
+            if (scene.name != MainRecordingSceneName || pipeline == null || pipeline.IsProcessing ||
                 pipeline.HasPreparedImportedMotion || pipeline.IsImportedMotionPlaying ||
                 pipeline.IsImportedMotionRecording || (recorder != null && recorder.IsRecording) ||
                 Time.captureFramerate != 0 ||
@@ -1284,7 +1244,7 @@ namespace Fbx2Vmd.FBXImporter
                 camera == null || !camera.isActiveAndEnabled || camera.targetTexture != null ||
                 Screen.width <= 0 || Screen.height <= 0)
             {
-                message = "Main_Auto의 선택 전 모델·Avatar·바닥·카메라·녹화 상태를 확인하세요.";
+                message = "Main_Recoding의 선택 전 모델·Avatar·바닥·카메라·녹화 상태를 확인하세요.";
                 return false;
             }
 
@@ -1309,7 +1269,7 @@ namespace Fbx2Vmd.FBXImporter
                 Directory.CreateDirectory(sessionPath);
                 string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
                 _preselectionCapturePath = Path.Combine(sessionPath,
-                    $"when-{capturedAt}_where-Main_Auto_who-auto_what-preselection-GameView_why-F01_how-ScreenCapture.png");
+                    $"when-{capturedAt}_where-Main_Recoding_who-auto_what-preselection-GameView_why-F01_how-ScreenCapture.png");
                 _preselectionStatePath = Path.Combine(sessionPath, "state.json");
                 _preselectionBonePositions = _preselectionBones.Select(bone => bone.position).ToArray();
                 _preselectionStartedUtc = DateTime.UtcNow;
@@ -1336,7 +1296,7 @@ namespace Fbx2Vmd.FBXImporter
             if (!screenshotReady && DateTime.UtcNow - _preselectionStartedUtc < TimeSpan.FromSeconds(15)) return;
 
             bool contextReady = EditorApplication.isPlaying &&
-                SceneManager.GetActiveScene().name == MainAutoSceneName &&
+                SceneManager.GetActiveScene().name == MainRecordingSceneName &&
                 _preselectionPipeline != null && !_preselectionPipeline.IsProcessing &&
                 !_preselectionPipeline.HasPreparedImportedMotion &&
                 !_preselectionPipeline.IsImportedMotionRecording && Time.captureFramerate == 0;
@@ -1590,11 +1550,11 @@ namespace Fbx2Vmd.FBXImporter
             _playbackSideFrames = requestedSideFrames ?? new[] { 0, 166, 544 };
             _playbackIkGoalAlpha = request.ik_goal_alpha;
 
-            if (SceneManager.GetActiveScene().name != MainAutoSceneName ||
+            if (SceneManager.GetActiveScene().name != MainRecordingSceneName ||
                 pipeline.IsProcessing || pipeline.IsImportedMotionRecording ||
                 Time.captureFramerate != 0)
             {
-                message = "Main_Auto의 비녹화 Play 상태가 필요합니다.";
+                message = "Main_Recoding의 비녹화 Play 상태가 필요합니다.";
                 return false;
             }
 
@@ -1617,7 +1577,7 @@ namespace Fbx2Vmd.FBXImporter
                 _playbackEvidencePath = Path.Combine(sessionPath, "state.json");
                 _playbackEvidence = new PlaybackEvidence
                 {
-                    scene = MainAutoSceneName,
+                    scene = MainRecordingSceneName,
                     input_path = inputPath,
                     pre_import_root_position = pipeline.targetCharacter.transform.position,
                     pre_import_hips_position = hips.position,
@@ -1773,10 +1733,10 @@ namespace Fbx2Vmd.FBXImporter
                 .FirstOrDefault(root => root.name == "testPrefab");
             Animator animator = model != null ? model.GetComponentInChildren<Animator>(true) : null;
             if (pipeline.targetCharacter == null ||
-                pipeline.targetCharacter.name != E2eModelName || model == null ||
+                !IsYybModelName(pipeline.targetCharacter.name) || model == null ||
                 animator == null || animator.avatar == null || !animator.avatar.isValid)
             {
-                message = "F14는 Main_Auto의 YYB 대상과 유효한 testPrefab Avatar가 필요합니다.";
+                message = "F14는 Main_Recoding의 YYB 대상과 유효한 testPrefab Avatar가 필요합니다.";
                 return false;
             }
 
@@ -1807,8 +1767,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             message = string.Empty;
             Scene scene = SceneManager.GetActiveScene();
-            if ((request.scene_path != MainAutoScenePath &&
-                    request.scene_path != MainRecordingScenePath) ||
+            if (request.scene_path != MainRecordingScenePath ||
                 scene.path != request.scene_path || scene.isDirty ||
                 string.IsNullOrWhiteSpace(request.fbx_file) ||
                 Path.GetFileName(request.fbx_file) != request.fbx_file ||
@@ -1916,9 +1875,9 @@ namespace Fbx2Vmd.FBXImporter
             if (!TryGetFBXVmdPipeline(SatisfactionFbxFileName,
                     out FBXVmdPipeline pipeline, interactive: false,
                     out message)) return false;
-            if (pipeline.targetCharacter == null || pipeline.targetCharacter.name != E2eModelName)
+            if (pipeline.targetCharacter == null || !IsYybModelName(pipeline.targetCharacter.name))
             {
-                message = "Main_Auto의 MMD4Mecanim 기준 모델이 필요합니다.";
+                message = "Main_Recoding의 MMD4Mecanim 기준 모델이 필요합니다.";
                 return false;
             }
 
@@ -2070,10 +2029,10 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 if (!EditorApplication.isPlaying ||
-                    SceneManager.GetActiveScene().name != MainAutoSceneName ||
+                    SceneManager.GetActiveScene().name != MainRecordingSceneName ||
                     _playbackEvidencePipeline == null)
                 {
-                    CompletePlaybackEvidence(false, "environment", "Play 상태 또는 Main_Auto 씬이 변경되었습니다.");
+                    CompletePlaybackEvidence(false, "environment", "Play 상태 또는 Main_Recoding 씬이 변경되었습니다.");
                     return;
                 }
 
@@ -2212,7 +2171,7 @@ namespace Fbx2Vmd.FBXImporter
 
             string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
             _playbackCapturePath = Path.Combine(Path.GetDirectoryName(_playbackEvidencePath),
-                $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}-{phase}_why-F03_how-GameView.png");
+                $"when-{capturedAt}_where-Main_Recoding_who-auto_what-frame-{frame}-{phase}_why-F03_how-GameView.png");
             if (phase == PlaybackEvidencePhase.FirstCapture)
             {
                 _playbackEvidence.first_seek = pose;
@@ -2294,13 +2253,13 @@ namespace Fbx2Vmd.FBXImporter
                 rightFoot == null || leftToe == null || rightToe == null || camera == null) return false;
 
             string capturedAt = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-            string prefix = $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}_why-F04-F05";
+            string prefix = $"when-{capturedAt}_where-Main_Recoding_who-auto_what-frame-{frame}_why-F04-F05";
             string directory = Path.GetDirectoryName(_playbackEvidencePath);
             bool captureF11Views = F11VisualEvidenceFrames.Contains(frame);
             Vector3 feetCenter = (leftFoot.position + rightFoot.position) * 0.5f;
             Vector3 viewCenter = Vector3.Lerp(hips.position, feetCenter, 0.55f);
             Vector3 viewRight = animator.transform.right;
-            string f11Prefix = $"when-{capturedAt}_where-Main_Auto_who-auto_what-frame-{frame}_why-F11";
+            string f11Prefix = $"when-{capturedAt}_where-Main_Recoding_who-auto_what-frame-{frame}_why-F11";
             string beforeFrontPath = captureF11Views
                 ? Path.Combine(directory, f11Prefix + "_how-before-foot-front-camera.png") : null;
             string beforeSidePath = captureF11Views
@@ -2371,7 +2330,7 @@ namespace Fbx2Vmd.FBXImporter
             };
             if (sample.actual_frame != frame) return false;
             sample.source_view_path = Path.Combine(directory,
-                prefix.Replace("where-Main_Auto_who-auto", "where-SourceFBX_who-original") +
+                prefix.Replace("where-Main_Recoding_who-auto", "where-SourceFBX_who-original") +
                 "_how-side-camera.png");
             if (!TryCaptureSourceView(controller, sample.time_seconds,
                     sample.source_view_path)) return false;
@@ -2665,13 +2624,13 @@ namespace Fbx2Vmd.FBXImporter
 
             Animator animator = pipeline.targetCharacter != null
                 ? pipeline.targetCharacter.GetComponent<Animator>() : null;
-            if (SceneManager.GetActiveScene().name != MainAutoSceneName ||
+            if (SceneManager.GetActiveScene().name != MainRecordingSceneName ||
                 pipeline.IsProcessing || pipeline.HasPreparedImportedMotion ||
                 pipeline.IsImportedMotionRecording || Time.captureFramerate != 0 ||
                 animator == null || animator.avatar == null ||
                 !animator.avatar.isValid || !animator.avatar.isHuman)
             {
-                message = "F07은 Main_Auto의 새 Play와 유효한 기본 Avatar가 필요합니다.";
+                message = "F07은 Main_Recoding의 새 Play와 유효한 기본 Avatar가 필요합니다.";
                 return false;
             }
 
@@ -2692,7 +2651,7 @@ namespace Fbx2Vmd.FBXImporter
                 _invalidInputEvidencePath = Path.Combine(sessionPath, "state.json");
                 _invalidInputEvidence = new InvalidInputEvidence
                 {
-                    scene = MainAutoSceneName,
+                    scene = MainRecordingSceneName,
                     missing_fbx = new InvalidInputCaseEvidence
                     {
                         case_id = "missing_fbx_path",
@@ -2733,7 +2692,7 @@ namespace Fbx2Vmd.FBXImporter
             try
             {
                 if (!EditorApplication.isPlaying ||
-                    SceneManager.GetActiveScene().name != MainAutoSceneName ||
+                    SceneManager.GetActiveScene().name != MainRecordingSceneName ||
                     _invalidInputPipeline == null || _invalidInputAnimator == null)
                 {
                     CompleteInvalidInputEvidence(false, "environment", "Play 상태 또는 대상 모델이 변경되었습니다.");
@@ -2919,8 +2878,7 @@ namespace Fbx2Vmd.FBXImporter
             out string message,
             int captureWidthOverride = 0,
             int captureHeightOverride = 0,
-            float recordingStartTimeOverrideSeconds = float.NaN,
-            bool useInputBaseName = false)
+            float recordingStartTimeOverrideSeconds = float.NaN)
         {
             message = string.Empty;
             if (!TryGetFBXVmdPipeline(fbxFileName, out FBXVmdPipeline fileManager, interactive: false, out message))
@@ -2930,7 +2888,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (!StartSmoke(fileManager, fbxFileName, mode, segment, durationSeconds,
                     enableFingerCloseups, sampleTimesOverride, captureWidthOverride,
-                    captureHeightOverride, recordingStartTimeOverrideSeconds, useInputBaseName))
+                    captureHeightOverride, recordingStartTimeOverrideSeconds))
             {
                 message = $"smoke start failed: {fbxFileName}";
                 return false;
@@ -3073,8 +3031,7 @@ namespace Fbx2Vmd.FBXImporter
             float[] sampleTimesOverride = null,
             int captureWidthOverride = 0,
             int captureHeightOverride = 0,
-            float recordingStartTimeOverrideSeconds = float.NaN,
-            bool useInputBaseName = false)
+            float recordingStartTimeOverrideSeconds = float.NaN)
         {
             if (fileManager == null)
             {
@@ -3090,6 +3047,13 @@ namespace Fbx2Vmd.FBXImporter
 
             float safeDuration = Mathf.Max(0.1f, durationSeconds);
             int targetFrameCount = Mathf.CeilToInt(safeDuration * SmokeFrameRate);
+            // 진단 smoke는 VMD 산출물이 필요하다 — 씬 기본값이 꺼져 있으면
+            // Play 세션 안에서만 켜고, 종료 시 직렬화 기본값으로 자동 복원된다.
+            if (!fileManager.ShouldRecordVmdAfterImport)
+            {
+                fileManager.ShouldRecordVmdAfterImport = true;
+                Debug.Log("[FbxPlaybackSmokeRunner] smoke 진단 동안 VMD 자동 변환을 임시로 켭니다(씬 기본값 유지).");
+            }
             bool started = fileManager.StartEditorDiagnosticSmoke(
                 fbxFileName,
                 safeDuration,
@@ -3102,8 +3066,7 @@ namespace Fbx2Vmd.FBXImporter
                 sampleTimesOverride: sampleTimesOverride,
                 captureWidthOverride: captureWidthOverride,
                 captureHeightOverride: captureHeightOverride,
-                recordingStartTimeOverrideSeconds: recordingStartTimeOverrideSeconds,
-                useInputBaseName: useInputBaseName);
+                recordingStartTimeOverrideSeconds: recordingStartTimeOverrideSeconds);
 
             if (started)
             {
@@ -3145,26 +3108,6 @@ namespace Fbx2Vmd.FBXImporter
         private static float[] GetFullRegressionEvidenceSampleTimesForTest()
         {
             return (float[])SatisfactionFullRegressionEvidenceSampleTimes.Clone();
-        }
-
-        private static string GetQuickVmdSmokeCommandForTest()
-        {
-            return CaptureSatisfactionQuickVmdSmokeCommand;
-        }
-
-        private static string GetQuickVmdSmokeFbxFileNameForTest()
-        {
-            return SatisfactionFbxFileName;
-        }
-
-        private static float GetQuickVmdSmokeDurationSecondsForTest()
-        {
-            return QuickVmdSmokeDurationSeconds;
-        }
-
-        private static int GetQuickVmdSmokeTargetFrameCountForTest()
-        {
-            return QuickVmdSmokeTargetFrameCount;
         }
 
         private static void TrackSingleSmoke(FBXVmdPipeline fileManager, string fbxFileName, string mode)
@@ -3495,7 +3438,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             errorMessage = "현재 Play Mode 씬에서 FBXVmdPipeline를 찾지 못했습니다.";
-            Debug.LogWarning($"[FbxPlaybackSmokeRunner] FBXVmdPipeline 조회 실패: {BuildMainAutoRuntimeSummary()}, thumbReference[{BuildRetargeterThumbReferenceSummary(null)}]");
+            Debug.LogWarning($"[FbxPlaybackSmokeRunner] FBXVmdPipeline 조회 실패: {BuildMainSceneRuntimeSummary()}, thumbReference[{BuildRetargeterThumbReferenceSummary(null)}]");
             if (interactive)
             {
                 EditorUtility.DisplayDialog("FBX Smoke", $"{errorMessage} 콘솔 로그를 확인하세요.", "확인");
@@ -3509,7 +3452,7 @@ namespace Fbx2Vmd.FBXImporter
             errorMessage = string.Empty;
             if (!EditorApplication.isPlaying || EditorApplication.isPaused)
             {
-                errorMessage = "Main_Auto 씬을 Play Mode로 실행한 뒤 smoke 메뉴를 사용하세요.";
+                errorMessage = "Main_Recoding 씬을 Play Mode로 실행한 뒤 smoke 메뉴를 사용하세요.";
                 if (interactive)
                 {
                     EditorUtility.DisplayDialog("FBX Smoke", errorMessage, "확인");
@@ -3531,7 +3474,7 @@ namespace Fbx2Vmd.FBXImporter
 
             if (!IsSupportedMainScene(EditorSceneManager.GetActiveScene().name))
             {
-                errorMessage = "활성 씬이 Main_Auto 또는 Main_recoding이 아닙니다.";
+                errorMessage = "활성 씬이 Main_Recoding이 아닙니다.";
                 if (interactive)
                 {
                     EditorUtility.DisplayDialog("FBX Smoke", errorMessage, "확인");
@@ -3562,8 +3505,15 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool IsSupportedMainScene(string sceneName)
         {
-            return string.Equals(sceneName, MainAutoSceneName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(sceneName, MainRecordingSceneName, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(sceneName, MainRecordingSceneName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // YYB 계열 타겟 판정 — Main_Recoding은 prefab이 아니라 FBX 인스턴스
+        // ("YYB Hatsune Miku_default_1.0ver")를 target으로 쓰므로 접두사 비교함.
+        private static bool IsYybModelName(string name)
+        {
+            return !string.IsNullOrEmpty(name) &&
+                name.StartsWith(E2eModelName, StringComparison.Ordinal);
         }
 
         private static string[] GetImportFbxFileNames()
@@ -3613,7 +3563,7 @@ namespace Fbx2Vmd.FBXImporter
                     string.Equals(candidate.gameObject.scene.name, runtimeScene.name, StringComparison.Ordinal));
         }
 
-        private static string BuildMainAutoRuntimeSummary()
+        private static string BuildMainSceneRuntimeSummary()
         {
             Scene editorScene = EditorSceneManager.GetActiveScene();
             Scene runtimeScene = SceneManager.GetActiveScene();

@@ -71,8 +71,6 @@ namespace Tests.Editor.Settings
                 tests.Given_BuiltInPipelineProfile_When_ApplyNow_Then_ConfiguresPostProcessLayerAntialiasing);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_HasGraphicSettingOnRootSettingObjectForYybQualityControl),
                 tests.MainRecordingScene_HasGraphicSettingOnRootSettingObjectForYybQualityControl);
-            RunTest(results, nameof(GraphicSettingTests.MainAutoScene_DoesNotCarryGraphicSettingQualityControls),
-                tests.MainAutoScene_DoesNotCarryGraphicSettingQualityControls);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_InstallerEnsuresActualGameViewQualityPath),
                 tests.MainRecordingScene_InstallerEnsuresActualGameViewQualityPath);
             RunTest(results, nameof(GraphicSettingTests.MainRecordingScene_ActualGameViewZoomIsReappliedFromSceneSetting),
@@ -105,7 +103,7 @@ namespace Tests.Editor.Settings
             EditorApplication.Exit(failed == 0 ? 0 : 1);
         }
 
-        public static void CaptureMainAutoGameViewEvidence()
+        public static void CaptureMainRecodingGameViewEvidence()
         {
             CaptureMainRecordingGameViewEvidence();
         }

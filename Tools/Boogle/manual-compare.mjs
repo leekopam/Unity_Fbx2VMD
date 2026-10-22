@@ -75,7 +75,8 @@ function bySample(rows) {
 
 export async function compareManualCapture(summary, projectRoot) {
   const manual = summary.results?.find((item) => item.jobMode === "SubManualYyb");
-  const automatic = summary.results?.find((item) => item.jobMode === "MainAuto");
+  const automatic = summary.results?.find((item) =>
+    item.jobMode === "Automatic" || item.jobMode === "MainAuto");
   if (!manual?.success || !automatic?.success ||
       !manual.comparisonMetricsCsvPath || !automatic.comparisonMetricsCsvPath ||
       !manual.comparisonFrameIndexPath || !automatic.comparisonFrameIndexPath)

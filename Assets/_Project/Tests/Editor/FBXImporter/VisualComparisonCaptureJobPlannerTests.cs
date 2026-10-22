@@ -84,7 +84,7 @@ namespace Tests.Editor.FBXImporter
                 "SubManualTestPrefab",
                 "SubManualYyb",
                 "MainRecording",
-                "MainAuto"
+                "Automatic"
             }));
         }
 
@@ -99,7 +99,7 @@ namespace Tests.Editor.FBXImporter
                 "SubManualYyb",
                 "MainRecording",
                 "MainRecordingVmdPlaybackProbe",
-                "MainAuto"
+                "Automatic"
             }));
         }
 

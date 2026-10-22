@@ -19,7 +19,6 @@ namespace Tests.Editor.Settings
     public class MainRecordingSettingsBuildReleaseTests
     {
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
         private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
         private const string FbxImportCaptureScenePath = "Assets/_Project/Scene/FbxImport_Capture.unity";
         private const string CompanionScenePath = "Assets/_Project/Scene/MainRecording_SettingsCompanion.unity";
@@ -154,7 +153,6 @@ namespace Tests.Editor.Settings
 
             Assert.That(mainScenes, Is.EqualTo(new[]
             {
-                MainAutoScenePath,
                 MainRecordingScenePath,
                 SubManualScenePath,
                 FbxImportCaptureScenePath,

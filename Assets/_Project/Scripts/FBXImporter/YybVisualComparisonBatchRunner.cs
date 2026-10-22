@@ -18,7 +18,7 @@ namespace Fbx2Vmd.FBXImporter
     public static class YybVisualComparisonBatchRunner
     {
         private const string MenuRoot = "Machine Spirit/YYB Compare/";
-        private const string MainAutoScenePath = "Assets/_Project/Scene/Main_Auto.unity";
+        private const string AutomaticScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string MainRecordingScenePath = "Assets/_Project/Scene/Main_Recoding.unity";
         private const string SubManualScenePath = "Assets/_Project/Scene/Sub_Manual.unity";
         private const string F13ManualScenePath = "Assets/_Project/Scene/Sub_Manual_F13.unity";
@@ -89,7 +89,7 @@ namespace Fbx2Vmd.FBXImporter
 
         private enum CaptureMode
         {
-            MainAuto,
+            Automatic,
             MainRecording,
             MainRecordingVmdPlaybackProbe,
             SubManualTestPrefab,
@@ -144,6 +144,8 @@ namespace Fbx2Vmd.FBXImporter
         private static bool _advanceAfterPlayStopPending;
         private static bool _playModeEntryPending;
         private static double _playModeEntryRequestedAt;
+        private static double _busyPipelineDeferDeadline = -1d;
+        private const double BusyPipelineDeferWindowSeconds = 90d;
         private static string _summarySessionId = string.Empty;
         private static string _summaryDirectory = string.Empty;
         private static string _projectRoot = string.Empty;
@@ -205,7 +207,7 @@ namespace Fbx2Vmd.FBXImporter
             EditorApplication.delayCall += TryResumeRunAfterDomainReload;
         }
 
-        [MenuItem(MenuRoot + "Run satisfaction_2 testPrefab vs Main_Auto", false, 2130)]
+        [MenuItem(MenuRoot + "Run satisfaction_2 testPrefab vs Main_Recoding", false, 2130)]
         private static void RunDefaultMenu()
         {
             RunWithOptions(
@@ -787,7 +789,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             string rawSummarySessionId =
-                $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-MainAuto_vs_SubManual_who-testprefab-vs-yyb_what-visual-compare_why-runtime-match_how-unity-batch";
+                $"when-{DateTime.Now:yyyyMMdd-HHmmss}_where-MainRecoding_vs_SubManual_who-testprefab-vs-yyb_what-visual-compare_why-runtime-match_how-unity-batch";
             _summarySessionId = VisualComparisonArtifactPathResolver.BuildSafeSessionId(
                 rawSummarySessionId,
                 "yyb_visual_compare",
@@ -868,7 +870,7 @@ namespace Fbx2Vmd.FBXImporter
                     f13PairOnly ? F13ManualScenePath : SubManualScenePath,
                     f13PairOnly ? "Sub_Manual_F13" : "Sub_Manual"),
                 recordingScene: new VisualComparisonScene(MainRecordingScenePath, "Main_Recoding"),
-                automaticScene: new VisualComparisonScene(MainAutoScenePath, "Main_Auto"));
+                automaticScene: new VisualComparisonScene(AutomaticScenePath, "Main_Recoding_Auto"));
 
             return VisualComparisonCaptureJobPlanner
                 .Build(profile, enableVmdPlaybackProbeRuntimeOverride)
@@ -904,7 +906,7 @@ namespace Fbx2Vmd.FBXImporter
                 case VisualComparisonCaptureRole.PlaybackProbe:
                     return CaptureMode.MainRecordingVmdPlaybackProbe;
                 case VisualComparisonCaptureRole.Automatic:
-                    return CaptureMode.MainAuto;
+                    return CaptureMode.Automatic;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(role), role, "지원하지 않는 캡처 역할입니다.");
             }
@@ -994,6 +996,7 @@ namespace Fbx2Vmd.FBXImporter
             _activeRecorder = null;
             _activeJobFinished = false;
             _activeJobStartedInPlayMode = false;
+            _busyPipelineDeferDeadline = -1d;
             _playModeEntryPending = false;
             _playModeEntryRequestedAt = 0d;
 
@@ -1043,7 +1046,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 switch (_activeJob.Mode)
                 {
-                    case CaptureMode.MainAuto:
+                    case CaptureMode.Automatic:
                     case CaptureMode.MainRecording:
                     case CaptureMode.MainRecordingVmdPlaybackProbe:
                         StartMainSceneJob();
@@ -1075,6 +1078,32 @@ namespace Fbx2Vmd.FBXImporter
             {
                 throw new InvalidOperationException($"{_activeJob.SceneName} 씬에서 FBXVmdPipeline를 찾지 못했습니다.");
             }
+
+            // 도메인 리로드 직후 재개 경로에서는 이전 세션의 임포트·녹화 마무리 처리가
+            // 남아 있을 수 있다. 처리가 끝날 때까지 잡 시작을 유예하고, 한도를 넘기면
+            // smoke 호출로 진행해 명시적 실패를 남긴다.
+            if (_activeFBXVmdPipeline.IsProcessing)
+            {
+                if (_busyPipelineDeferDeadline < 0d)
+                {
+                    _busyPipelineDeferDeadline =
+                        EditorApplication.timeSinceStartup + BusyPipelineDeferWindowSeconds;
+                    AppendRunnerTrace(
+                        $"job start deferred; pipeline busy active={_activeJob.DisplayName}");
+                }
+
+                if (EditorApplication.timeSinceStartup < _busyPipelineDeferDeadline)
+                {
+                    _activeJobStartedInPlayMode = false;
+                    EditorApplication.delayCall += StartCurrentJobInPlayMode;
+                    return;
+                }
+
+                AppendRunnerTrace(
+                    $"job start busy wait expired active={_activeJob.DisplayName}");
+            }
+
+            _busyPipelineDeferDeadline = -1d;
 
             ApplyMainSceneRuntimeOverrides(_activeFBXVmdPipeline);
 
@@ -1133,6 +1162,13 @@ namespace Fbx2Vmd.FBXImporter
                 referenceLocalSampleSeconds,
                 timingPlan.CandidateClipSecondsPerReferenceSecond,
                 DefaultFrameRate);
+            // 진단 비교는 VMD 산출물을 입력으로 쓴다 — Main_Recoding의 제품 기본값(끔)을
+            // Play 세션 안에서만 켠다. Play 종료 시 씬 직렬화 기본값으로 자동 복원된다.
+            if (!_activeFBXVmdPipeline.ShouldRecordVmdAfterImport)
+            {
+                _activeFBXVmdPipeline.ShouldRecordVmdAfterImport = true;
+                Debug.Log("[YybVisualComparisonBatchRunner] 진단 세션 동안 VMD 자동 변환을 임시로 켭니다(씬 기본값 유지).");
+            }
             bool started = _activeFBXVmdPipeline.StartEditorDiagnosticSmoke(
                 _currentRunOptions.fbxFileName,
                 _currentRunOptions.durationSeconds,
@@ -1290,7 +1326,7 @@ namespace Fbx2Vmd.FBXImporter
         private static void HandleMainSceneFinished(string fbxFileName, VmdSaveResult result)
         {
             if (_activeJob == null ||
-                (_activeJob.Mode != CaptureMode.MainAuto &&
+                (_activeJob.Mode != CaptureMode.Automatic &&
                     _activeJob.Mode != CaptureMode.MainRecording &&
                     _activeJob.Mode != CaptureMode.MainRecordingVmdPlaybackProbe) ||
                 _activeJobFinished)
@@ -1749,6 +1785,7 @@ namespace Fbx2Vmd.FBXImporter
             _playModeEntryPending = state.playModeEntryPending;
             _playModeEntryRequestedAt = 0d;
             _activeJobStartedInPlayMode = false;
+            _busyPipelineDeferDeadline = -1d;
             _activeJob = FromPersistedJob(state.activeJob);
 
             PendingJobs.Clear();
@@ -2058,7 +2095,7 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     ReferenceTargetFrameCount = ResolveSummaryTargetFrameCount(),
                     BaselineRecordedFrameCount = ResolveFrameCount(CaptureMode.SubManualTestPrefab),
-                    CandidateRecordedFrameCount = ResolveFrameCount(CaptureMode.MainAuto),
+                    CandidateRecordedFrameCount = ResolveFrameCount(CaptureMode.Automatic),
                     RequestedDurationSeconds = _currentRunOptions.durationSeconds,
                     ReferenceClipStartSeconds = ResolveReferenceMp4CurrentClipStartSeconds(),
                     ReferenceVideoProvenanceEvidencePath = ReferenceMp4ProvenanceEvidenceRelativePath,
@@ -2070,9 +2107,9 @@ namespace Fbx2Vmd.FBXImporter
                     CandidateFrameProjectRoot = _projectRoot,
                     TargetFrameCountRole = "ref_mmd_mp4 expected frame range for the full satisfaction_2 reference",
                     BaselineRecordedFrameCountRole = "Sub_Manual recorded comparison baseline; reported separately and not used as target_frame_count",
-                    CandidateRecordedFrameCountRole = "Main_Auto candidate capture under test",
-                    FrameQualityMetricBasis = "Unity pose metrics compare Sub_Manual and Main_Auto rows by recorderFrame; the ref_mmd_mp4 count is only the frame-count target",
-                    VmdExportMetricBasis = "VMD export spike and floor metrics are evaluated on the Main_Auto candidate VMD",
+                    CandidateRecordedFrameCountRole = "Main_Recoding automatic-path candidate capture under test",
+                    FrameQualityMetricBasis = "Unity pose metrics compare Sub_Manual and Main_Recoding rows by recorderFrame; the ref_mmd_mp4 count is only the frame-count target",
+                    VmdExportMetricBasis = "VMD export spike and floor metrics are evaluated on the automatic-path candidate VMD",
                     ReferenceVideoCanonicalContext = ReferenceMp4CanonicalContext,
                     ReferenceVideoAnalysisMetricBasis = ReferenceMp4AnalysisMetricBasis
                 });
@@ -2219,7 +2256,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             if (candidate == null ||
                 !VisualComparisonMainSceneDiagnosticPolicy.IsCandidateMode(candidate.jobMode) ||
-                string.Equals(candidate.jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal) ||
+                VisualComparisonMainSceneDiagnosticPolicy.IsAutomaticMode(candidate.jobMode) ||
                 string.IsNullOrWhiteSpace(_summaryDirectory))
             {
                 return;
@@ -2275,7 +2312,7 @@ namespace Fbx2Vmd.FBXImporter
                     DefaultFrameRate,
                     SatisfactionReferenceOutputBaseName,
                     SatisfactionReferenceMaxMmdFrame),
-                ResolveFrameCount(CaptureMode.MainAuto));
+                ResolveFrameCount(CaptureMode.Automatic));
         }
 
         private static float ResolveReferenceMp4CurrentClipStartSeconds()
@@ -2345,7 +2382,7 @@ namespace Fbx2Vmd.FBXImporter
         {
             CaptureResult mainAuto = Results.FirstOrDefault(result =>
                 result != null &&
-                string.Equals(result.jobMode, CaptureMode.MainAuto.ToString(), StringComparison.Ordinal) &&
+                VisualComparisonMainSceneDiagnosticPolicy.IsAutomaticMode(result.jobMode) &&
                 !string.IsNullOrWhiteSpace(result.comparisonFrameIndexPath));
             if (mainAuto != null)
             {

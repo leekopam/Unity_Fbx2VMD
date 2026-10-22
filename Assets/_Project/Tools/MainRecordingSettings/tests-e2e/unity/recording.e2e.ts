@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { test } from "e2e";
 
-import { prepareMainAuto, readStatusJson } from "./mainAuto.js";
+import { prepareMainScene, readStatusJson } from "./mainScene.js";
 import { UNITY_COMMANDS } from "./unityClient.js";
 import type { UnityFixture } from "./unityFixture.js";
 
@@ -48,7 +48,7 @@ test("R01 recording output and import block", {
   platforms: ["unity"], timeout: 900_000
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run(UNITY_COMMANDS.motionRecording, {
     run_id: randomUUID(),
@@ -71,7 +71,7 @@ test("R02 recording frame range", {
   platforms: ["unity"], timeout: 900_000
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const startFrame = 300;
   const endFrame = 420;
@@ -114,7 +114,7 @@ test("R03 recording skips leading still", {
   platforms: ["unity"], timeout: 900_000
 }, async (f) => {
   const unity = (f as unknown as Fixtures).unity;
-  await prepareMainAuto(unity);
+  await prepareMainScene(unity);
   await unity.enterPlay();
   const status = await unity.run(UNITY_COMMANDS.motionRecording, {
     run_id: randomUUID(),

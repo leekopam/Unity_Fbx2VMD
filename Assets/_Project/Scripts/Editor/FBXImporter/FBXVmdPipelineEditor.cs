@@ -567,7 +567,7 @@ namespace Fbx2Vmd.FBXImporter
             EditorDrawUtility.DrawProperty(serializedObject, "_shouldPreserveFbxRootRotation", "FBX Root 회전 보존", showWarningOnNull: true);
             if (EditorDrawUtility.GetBool(serializedObject, "_shouldPreserveFbxRootRotation"))
             {
-                EditorGUILayout.HelpBox("Main_Auto가 Sub_Manual 직접 Animator 재생처럼 FBX body/root yaw를 그대로 따릅니다.", MessageType.Info);
+                EditorGUILayout.HelpBox("자동 경로가 Sub_Manual 직접 Animator 재생처럼 FBX body/root yaw를 그대로 따릅니다.", MessageType.Info);
             }
 
             EditorDrawUtility.DrawProperty(serializedObject, "_shouldUseEditorHumanoidClipMuscleReference", "Editor Humanoid Muscle 기준 사용", showWarningOnNull: true);
@@ -585,7 +585,7 @@ namespace Fbx2Vmd.FBXImporter
                 if (EditorDrawUtility.GetBool(serializedObject, "_shouldUseManualAnimatorHipsLocalPositionReference"))
                 {
                     EditorGUILayout.HelpBox(
-                        "Sub_Manual/testPrefab Animator의 Hips localPosition 경로를 Main_Auto target Hips에 선택 적용합니다. visual_body_arc_jitter A/B 검증 전용으로 사용합니다.",
+                        "Sub_Manual/testPrefab Animator의 Hips localPosition 경로를 자동 경로 target Hips에 선택 적용합니다. visual_body_arc_jitter A/B 검증 전용으로 사용합니다.",
                         MessageType.Info);
                     EditorDrawUtility.DrawProperty(serializedObject, "_manualAnimatorHipsLocalPositionWeight", "Hips localPosition 보정 강도", showWarningOnNull: true);
                     EditorDrawUtility.DrawProperty(serializedObject, "_manualAnimatorHipsLocalPositionMaxOffset", "Hips localPosition 최대 보정", showWarningOnNull: true);
