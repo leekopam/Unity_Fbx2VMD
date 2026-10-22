@@ -349,12 +349,8 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(ReadProperty<bool>(sequential, "IsComplete"), Is.True);
                 object sequentialResult = ReadProperty<object>(sequential, "Result");
 
-                // 병렬 세션용 스냅샷(정점 + 본 변환)을 리플렉션으로 미리 표본화한다.
-                Type transformArrayType = RequireProductType(
-                        "NativeSkinningDualQuaternionTransform")
-                    .MakeArrayType();
-                object boneTransforms =
-                    SampleBoneTransforms(renderer, transformArrayType);
+                // 병렬 세션용 스냅샷(정점 + 스키닝 행렬)을 리플렉션으로 미리 표본화한다.
+                Matrix4x4[] skinningMatrices = SampleSkinningMatrices(renderer);
                 Type preparedType = RequireProductType(
                     "NativeSkinningPreparedFrame");
                 Type vertexDictionaryType = typeof(
@@ -362,11 +358,11 @@ namespace Tests.Editor.FBXImporter
                     .MakeGenericType(
                         typeof(SkinnedMeshRenderer),
                         typeof(Vector3[]));
-                Type transformDictionaryType = typeof(
+                Type matrixDictionaryType = typeof(
                         System.Collections.Generic.Dictionary<,>)
                     .MakeGenericType(
                         typeof(SkinnedMeshRenderer),
-                        transformArrayType);
+                        typeof(Matrix4x4[]));
                 IList preparedFrames = (IList)Activator.CreateInstance(
                     typeof(System.Collections.Generic.List<>)
                         .MakeGenericType(preparedType));
@@ -375,10 +371,10 @@ namespace Tests.Editor.FBXImporter
                     IDictionary vertexDictionary =
                         (IDictionary)Activator.CreateInstance(vertexDictionaryType);
                     vertexDictionary[renderer] = baselineVertices.ToArray();
-                    IDictionary transformDictionary =
+                    IDictionary matrixDictionary =
                         (IDictionary)Activator.CreateInstance(
-                            transformDictionaryType);
-                    transformDictionary[renderer] = boneTransforms;
+                            matrixDictionaryType);
+                    matrixDictionary[renderer] = skinningMatrices;
                     preparedFrames.Add(Activator.CreateInstance(
                         preparedType,
                         BindingFlags.Instance |
@@ -389,7 +385,7 @@ namespace Tests.Editor.FBXImporter
                         {
                             index,
                             vertexDictionary,
-                            transformDictionary
+                            matrixDictionary
                         },
                         null));
                 }
@@ -456,9 +452,187 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
-        private static object SampleBoneTransforms(
-            SkinnedMeshRenderer renderer,
-            Type transformArrayType)
+        [Test]
+        public void Given_PosedFrame_When_ComputingLbsBaseline_Then_MatchesBakeMesh()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+            var bakedMesh = new Mesh();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
+                    Is.True);
+                renderer.BakeMesh(bakedMesh, false);
+                Vector3[] bakedVertices = bakedMesh.vertices;
+                Matrix4x4[] skinningMatrices = SampleSkinningMatrices(renderer);
+
+                MethodInfo computeMethod = RequireProductType(
+                        "NativeSkinningLinearBlendCalculator")
+                    .GetMethod(
+                        "TryComputeBaseline",
+                        BindingFlags.Static | BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                Assert.That(computeMethod, Is.Not.Null);
+                object[] computeArguments =
+                {
+                    renderer.sharedMesh.vertices,
+                    renderer.sharedMesh.boneWeights,
+                    skinningMatrices,
+                    new Vector3[bakedVertices.Length]
+                };
+                Assert.That(
+                    (bool)computeMethod.Invoke(null, computeArguments),
+                    Is.True);
+                Vector3[] lbsVertices = (Vector3[])computeArguments[3];
+
+                MethodInfo deviationMethod = RequireProductType(
+                        "NativeSkinningLinearBlendCalculator")
+                    .GetMethod(
+                        "MaxDeviation",
+                        BindingFlags.Static | BindingFlags.Public |
+                        BindingFlags.NonPublic);
+                float deviation = (float)deviationMethod.Invoke(
+                    null,
+                    new object[] { lbsVertices, bakedVertices });
+                float tolerance = (float)RequireProductType(
+                        "NativeSkinningLinearBlendCalculator")
+                    .GetField(
+                        "BaselineMaxDeviationMeters",
+                        BindingFlags.Static | BindingFlags.Public |
+                        BindingFlags.NonPublic)
+                    .GetValue(null);
+                Assert.That(
+                    deviation,
+                    Is.LessThanOrEqualTo(tolerance),
+                    $"LBS-BakeMesh 편차 {deviation:F8}m이 허용치 {tolerance}m를 넘었습니다.");
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(bakedMesh);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
+        public void Given_MatricesOnlyPreparedFrame_When_Processing_Then_MatchesBakedResult()
+        {
+            GameObject target = InstantiateTarget();
+            object controller = CreateController();
+            var bakedMesh = new Mesh();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                AnimationClip clip = LoadHumanoidClip();
+                object selection = FindFixtureSelection(animator);
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    selection,
+                    "Renderer");
+                Invoke(
+                    controller,
+                    "PrepareWithArmDirectionReference",
+                    animator,
+                    clip,
+                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                Assert.That(
+                    (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
+                    Is.True);
+                renderer.BakeMesh(bakedMesh, false);
+                Vector3[] baselineVertices = bakedMesh.vertices;
+                Matrix4x4[] skinningMatrices = SampleSkinningMatrices(renderer);
+                Array contracts = CreateContractArray(contract);
+                Func<int, SkinnedMeshRenderer, Vector3[]> frameReader =
+                    (_, _) => baselineVertices.ToArray();
+
+                object sequential = CreateSession(1, contracts, frameReader);
+                Assert.That(
+                    (bool)Invoke(sequential, "TryProcessNextFrame"),
+                    Is.True);
+                object sequentialResult = ReadProperty<object>(sequential, "Result");
+
+                // 베이스라인 없이 스키닝 행렬만 싣고 처리 — 워커 LBS 경로를 검증한다.
+                Type preparedType = RequireProductType(
+                    "NativeSkinningPreparedFrame");
+                Type vertexDictionaryType = typeof(
+                        System.Collections.Generic.Dictionary<,>)
+                    .MakeGenericType(
+                        typeof(SkinnedMeshRenderer),
+                        typeof(Vector3[]));
+                Type matrixDictionaryType = typeof(
+                        System.Collections.Generic.Dictionary<,>)
+                    .MakeGenericType(
+                        typeof(SkinnedMeshRenderer),
+                        typeof(Matrix4x4[]));
+                IList preparedFrames = (IList)Activator.CreateInstance(
+                    typeof(System.Collections.Generic.List<>)
+                        .MakeGenericType(preparedType));
+                IDictionary emptyVertexDictionary =
+                    (IDictionary)Activator.CreateInstance(vertexDictionaryType);
+                IDictionary matrixDictionary =
+                    (IDictionary)Activator.CreateInstance(matrixDictionaryType);
+                matrixDictionary[renderer] = skinningMatrices;
+                preparedFrames.Add(Activator.CreateInstance(
+                    preparedType,
+                    BindingFlags.Instance | BindingFlags.Public |
+                    BindingFlags.NonPublic,
+                    null,
+                    new object[] { 0, emptyVertexDictionary, matrixDictionary },
+                    null));
+
+                object lbsOnly = CreateSession(1, contracts, frameReader);
+                Assert.That(
+                    (bool)Invoke(
+                        lbsOnly,
+                        "TryProcessPreparedFrames",
+                        preparedFrames),
+                    Is.True);
+                Assert.That(
+                    ReadProperty<bool>(lbsOnly, "IsComplete"),
+                    Is.True);
+                object lbsResult = ReadProperty<object>(lbsOnly, "Result");
+
+                foreach (string property in new[]
+                         {
+                             "FrameCount",
+                             "CorrectedFrameCount",
+                             "FallbackFrameCount",
+                             "CorrectionEntryCount",
+                             "CollectedFailureCount"
+                         })
+                {
+                    Assert.That(
+                        ReadProperty<int>(lbsResult, property),
+                        Is.EqualTo(
+                            ReadProperty<int>(sequentialResult, property)),
+                        property);
+                }
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(bakedMesh);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        private static Matrix4x4[] SampleSkinningMatrices(
+            SkinnedMeshRenderer renderer)
         {
             MethodInfo sampleMethod = RequireProductType(
                     "NativeSkinningBoneTransformSampler")
@@ -470,19 +644,7 @@ namespace Tests.Editor.FBXImporter
             Assert.That(
                 (bool)sampleMethod.Invoke(null, sampleArguments),
                 Is.True);
-            MethodInfo buildMethod = RequireProductType(
-                    "NativeSkinningDualQuaternionVertexCalculator")
-                .GetMethod(
-                    "TryBuildTransforms",
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(buildMethod, Is.Not.Null);
-            object[] buildArguments = { sampleArguments[1], null };
-            Assert.That(
-                (bool)buildMethod.Invoke(null, buildArguments),
-                Is.True);
-            object transforms = buildArguments[1];
-            Assert.That(transforms.GetType(), Is.EqualTo(transformArrayType));
-            return transforms;
+            return (Matrix4x4[])sampleArguments[1];
         }
 
         [Test, Explicit("제품 사전계산기의 전체 clip 정량 계약을 검증할 때 실행합니다.")]

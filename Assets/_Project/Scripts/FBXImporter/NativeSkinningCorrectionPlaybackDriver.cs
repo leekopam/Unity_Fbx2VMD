@@ -27,9 +27,11 @@ namespace Fbx2Vmd.FBXImporter
         private bool[] _rendererEnabledStates = Array.Empty<bool>();
         private bool _hasCapturedRendererStates;
         // 병렬 준비: 메인스레드가 스냅샷을 캡처해 큐에 넣으면 워커 Task가 배치로 계산한다.
-        private const int MaxPendingPreparedFrames = 48;
-        private const int MaxCapturesPerTick = 8;
+        private const int MaxPendingPreparedFrames = 96;
+        private const int MaxCapturesPerTick = 32;
         private const int SolveBatchFrameCount = 24;
+        // LBS 검증 후에도 이 간격으로 베이크와 재비교해 늦게 드리프트하면 되돌린다.
+        private const int LbsRevalidationFrameInterval = 512;
         private int _nextCaptureFrame;
         private readonly Queue<NativeSkinningPreparedFrame> _pendingPreparedFrames =
             new Queue<NativeSkinningPreparedFrame>();
@@ -429,9 +431,14 @@ namespace Fbx2Vmd.FBXImporter
 
             var baselineVertices =
                 new Dictionary<SkinnedMeshRenderer, Vector3[]>();
-            var boneTransforms = new Dictionary<
+            var skinningMatricesByRenderer = new Dictionary<
                 SkinnedMeshRenderer,
-                NativeSkinningDualQuaternionTransform[]>();
+                Matrix4x4[]>();
+            // LBS가 검증된 렌더러는 베이크를 건너뛰고 행렬만 넘긴다 —
+            // 워커가 베이스라인과 본 변환을 직접 계산한다. 주기적으로 한 번씩
+            // 베이크해 재비교하며 늦은 드리프트(블렌드셰이프 등)를 되돌린다.
+            bool revalidateLbs =
+                frameIndex % LbsRevalidationFrameInterval == 0;
             foreach (SkinnedMeshRenderer renderer in _contracts
                          .Select(contract => contract.Renderer)
                          .Distinct())
@@ -441,39 +448,38 @@ namespace Fbx2Vmd.FBXImporter
                     Fail("사전 계산 중 Renderer 토폴로지가 변경됐습니다.");
                     return false;
                 }
-                if (!_bakedMeshes.TryGetValue(renderer, out Mesh bakedMesh))
-                {
-                    Fail("Native 보정 대상 Renderer가 사라졌습니다.");
-                    return false;
-                }
                 stageWatch.Restart();
-                renderer.BakeMesh(bakedMesh, false);
-                baselineVertices[renderer] =
-                    (Vector3[])bakedMesh.vertices.Clone();
+                if (revalidateLbs ||
+                    _preprocessSession.RequiresBakedBaseline(renderer))
+                {
+                    if (!_bakedMeshes.TryGetValue(renderer, out Mesh bakedMesh))
+                    {
+                        Fail("Native 보정 대상 Renderer가 사라졌습니다.");
+                        return false;
+                    }
+                    renderer.BakeMesh(bakedMesh, false);
+                    baselineVertices[renderer] =
+                        (Vector3[])bakedMesh.vertices.Clone();
+                }
                 _bakeTicks += stageWatch.ElapsedTicks;
-                // 솔버가 워커에서 돌므로 본 변환도 미리 표본화해 둔다.
+                // LBS 베이스라인과 지연 본 변환의 공통 입력 — 매 프레임 표본화한다.
                 stageWatch.Restart();
                 if (!NativeSkinningBoneTransformSampler.TrySample(
                         renderer,
-                        out Matrix4x4[] skinningMatrices) ||
-                    !NativeSkinningDualQuaternionVertexCalculator
-                        .TryBuildTransforms(
-                            skinningMatrices,
-                            out NativeSkinningDualQuaternionTransform[]
-                                transforms))
+                        out Matrix4x4[] skinningMatrices))
                 {
                     Fail(
                         $"Native 보정 준비 중 frame {frameIndex}의 " +
-                        "스키닝 본 자세를 변환하지 못했습니다.");
+                        "스키닝 본 자세를 표본화하지 못했습니다.");
                     return false;
                 }
                 _boneSampleTicks += stageWatch.ElapsedTicks;
-                boneTransforms[renderer] = transforms;
+                skinningMatricesByRenderer[renderer] = skinningMatrices;
             }
             _pendingPreparedFrames.Enqueue(new NativeSkinningPreparedFrame(
                 frameIndex,
                 baselineVertices,
-                boneTransforms));
+                skinningMatricesByRenderer));
             return true;
         }
 

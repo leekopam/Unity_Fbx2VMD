@@ -59,8 +59,10 @@ namespace Fbx2Vmd.FBXImporter
     }
 
     /// <summary>
-    /// 병렬 사전 계산 입력. 메인스레드에서 미리 캡처한 정점 스냅샷과 본 변환을 담고,
+    /// 병렬 사전 계산 입력. 메인스레드에서 미리 캡처한 정점 스냅샷과 스키닝 행렬을 담고,
     /// 솔버가 워커 스레드에서 Unity API 없이 처리할 수 있게 한다.
+    /// 스키닝 행렬이 있으면 워커가 LBS로 베이스라인과 본 변환을 직접 계산하므로
+    /// 베이스라인 맵은 검증된 렌더러에서 생략할 수 있다.
     /// </summary>
     internal sealed class NativeSkinningPreparedFrame
     {
@@ -69,11 +71,11 @@ namespace Fbx2Vmd.FBXImporter
             IReadOnlyDictionary<SkinnedMeshRenderer, Vector3[]> baselineVertices,
             IReadOnlyDictionary<
                 SkinnedMeshRenderer,
-                NativeSkinningDualQuaternionTransform[]> boneTransforms)
+                Matrix4x4[]> skinningMatrices)
         {
             FrameIndex = frameIndex;
             BaselineVertices = baselineVertices;
-            BoneTransforms = boneTransforms;
+            SkinningMatrices = skinningMatrices;
         }
 
         internal int FrameIndex { get; }
@@ -83,7 +85,7 @@ namespace Fbx2Vmd.FBXImporter
 
         internal IReadOnlyDictionary<
             SkinnedMeshRenderer,
-            NativeSkinningDualQuaternionTransform[]> BoneTransforms { get; }
+            Matrix4x4[]> SkinningMatrices { get; }
     }
 
     /// <summary>
@@ -93,6 +95,8 @@ namespace Fbx2Vmd.FBXImporter
     {
         private const float MinimumCorrectionSquaredMagnitude =
             0.0000000000000001f;
+        // 이 횟수만큼 베이크-LBS 비교를 통과하면 이후 프레임은 베이크를 건너뛴다.
+        private const int LbsCalibrationFrameCount = 8;
         private readonly int _frameCount;
         private readonly RendererWork[] _rendererWorks;
         private readonly Func<int, SkinnedMeshRenderer, Vector3[]>
@@ -169,8 +173,22 @@ namespace Fbx2Vmd.FBXImporter
                 System.Diagnostics.Stopwatch.Frequency;
             double strong = _strongPathTicks * 1000.0 /
                 System.Diagnostics.Stopwatch.Frequency;
+            int usable = 0;
+            int rejected = 0;
+            foreach (RendererWork work in _rendererWorks)
+            {
+                if (work.LbsVerdict == RendererWork.LbsUsable)
+                {
+                    usable++;
+                }
+                else if (work.LbsVerdict == RendererWork.LbsRejected)
+                {
+                    rejected++;
+                }
+            }
             return $"fast={fast:F0}ms strong={strong:F0}ms " +
                 $"fallbackFrames={_fallbackFrameCount} | " +
+                $"lbsUsable={usable} lbsRejected={rejected} | " +
                 _solverTiming.Describe();
         }
 
@@ -759,19 +777,36 @@ namespace Fbx2Vmd.FBXImporter
             foreach (RendererWork work in _rendererWorks)
             {
                 Vector3[] baselineVertices = null;
-                NativeSkinningDualQuaternionTransform[] boneTransforms = null;
                 prepared.BaselineVertices?.TryGetValue(
                     work.Renderer,
                     out baselineVertices);
-                prepared.BoneTransforms?.TryGetValue(
+                Matrix4x4[] skinningMatrices = null;
+                prepared.SkinningMatrices?.TryGetValue(
                     work.Renderer,
-                    out boneTransforms);
-                NativeSkinningDualQuaternionTransform[] capturedTransforms =
-                    boneTransforms;
+                    out skinningMatrices);
+                // 베이크 베이스라인이 없으면 워커가 LBS로 직접 계산한다 —
+                // 스키닝 행렬이 캡처돼 있으면 Unity API 없이 복원 가능하다.
+                if (baselineVertices == null &&
+                    !TryComputeLbsBaseline(
+                        work,
+                        skinningMatrices,
+                        out baselineVertices))
+                {
+                    outcome.FatalMessage =
+                        $"frame {frameIndex}의 LBS 베이스라인을 계산하지 못했습니다.";
+                    return outcome;
+                }
+                // 베이크 베이스라인이 있으면 LBS와 비교해 사용 가능 여부를 표결한다.
+                else if (baselineVertices != null)
+                {
+                    VoteLbsCalibration(work, skinningMatrices, baselineVertices);
+                }
+                NativeSkinningDualQuaternionTransform[] capturedTransforms = null;
                 if (!TryCalculateRendererFrameCore(
                         frameIndex,
                         baselineVertices,
-                        () => capturedTransforms,
+                        () => capturedTransforms ??=
+                            ConvertSkinningMatrices(skinningMatrices),
                         work,
                         out NativeSkinningCorrectionFrame frame,
                         out bool usedFallback,
@@ -794,6 +829,94 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
             return outcome;
+        }
+
+        // 워커에서 LBS 베이스라인을 복원한다 — 베이크 없이도 솔버 입력을 채운다.
+        private static bool TryComputeLbsBaseline(
+            RendererWork work,
+            Matrix4x4[] skinningMatrices,
+            out Vector3[] baselineVertices)
+        {
+            baselineVertices = null;
+            if (work == null || skinningMatrices == null || work.BoneWeights == null)
+            {
+                return false;
+            }
+            var computed = new Vector3[work.VertexCount];
+            if (!NativeSkinningLinearBlendCalculator.TryComputeBaseline(
+                    work.RestVertices,
+                    work.BoneWeights,
+                    skinningMatrices,
+                    computed))
+            {
+                return false;
+            }
+            baselineVertices = computed;
+            return true;
+        }
+
+        // 스키닝 행렬 → 이중 쿼터니언 변환을 워커에서 지연 수행한다 (순수 수학).
+        private static NativeSkinningDualQuaternionTransform[]
+            ConvertSkinningMatrices(Matrix4x4[] skinningMatrices)
+        {
+            return skinningMatrices != null &&
+                NativeSkinningDualQuaternionVertexCalculator.TryBuildTransforms(
+                    skinningMatrices,
+                    out NativeSkinningDualQuaternionTransform[] transforms)
+                ? transforms
+                : null;
+        }
+
+        // 베이크 베이스라인과 LBS 결과를 전 정점 비교해 LBS 사용 가능 여부를 표결한다.
+        // 미검증 구간에서는 비교 횟수가 임계에 도달하면 사용으로 확정하고,
+        // 언제든 편차 초과가 나오면 거부로 전환해 베이크 경로로 되돌린다.
+        private static void VoteLbsCalibration(
+            RendererWork work,
+            Matrix4x4[] skinningMatrices,
+            Vector3[] bakedBaselineVertices)
+        {
+            if (work == null ||
+                skinningMatrices == null ||
+                work.LbsVerdict == RendererWork.LbsRejected)
+            {
+                return;
+            }
+            bool withinTolerance =
+                TryComputeLbsBaseline(
+                    work,
+                    skinningMatrices,
+                    out Vector3[] lbsBaseline) &&
+                NativeSkinningLinearBlendCalculator.MaxDeviation(
+                    lbsBaseline,
+                    bakedBaselineVertices) <=
+                    NativeSkinningLinearBlendCalculator
+                        .BaselineMaxDeviationMeters;
+            if (withinTolerance)
+            {
+                System.Threading.Interlocked.Increment(
+                    ref work.LbsComparedFrameCount);
+                if (work.LbsComparedFrameCount >= LbsCalibrationFrameCount)
+                {
+                    work.LbsVerdict = RendererWork.LbsUsable;
+                }
+            }
+            else
+            {
+                work.LbsVerdict = RendererWork.LbsRejected;
+            }
+        }
+
+        // 드라이버가 프레임 캡처 전에 묻는다 — true면 해당 렌더러를 베이크해야 함.
+        internal bool RequiresBakedBaseline(SkinnedMeshRenderer renderer)
+        {
+            foreach (RendererWork work in _rendererWorks)
+            {
+                if (work.Renderer == renderer)
+                {
+                    return work.LbsVerdict != RendererWork.LbsUsable;
+                }
+            }
+            return true;
         }
 
         // 병렬 프레임 하나의 계산 결과. 커밋은 호출 순서(프레임 순서)대로만 이뤄진다.
@@ -900,7 +1023,8 @@ namespace Fbx2Vmd.FBXImporter
                 SkinnedMeshRenderer renderer,
                 NativeSkinningSurfaceContract[] contracts,
                 NativeSkinningDualQuaternionBlendContract[] blendContracts,
-                Vector3[] restVertices)
+                Vector3[] restVertices,
+                BoneWeight[] boneWeights)
             {
                 Renderer = renderer;
                 // 워커 스레드의 오류 메시지용 — 생성 시점(메인스레드)에 이름을 캐시한다.
@@ -909,6 +1033,7 @@ namespace Fbx2Vmd.FBXImporter
                 BlendContracts = blendContracts;
                 VertexCount = restVertices.Length;
                 RestVertices = restVertices;
+                BoneWeights = boneWeights;
                 Frames = new List<NativeSkinningCorrectionFrame>();
             }
 
@@ -956,7 +1081,8 @@ namespace Fbx2Vmd.FBXImporter
                     renderer,
                     contracts,
                     blendContracts,
-                    restVertices);
+                    restVertices,
+                    boneWeights);
                 return true;
             }
 
@@ -972,7 +1098,17 @@ namespace Fbx2Vmd.FBXImporter
 
             internal Vector3[] RestVertices { get; }
 
+            internal BoneWeight[] BoneWeights { get; }
+
             internal List<NativeSkinningCorrectionFrame> Frames { get; }
+
+            // LBS 베이스라인 자가검증 상태 — 워커 표결과 드라이버 조회가 겹치므로
+            // verdict는 volatile 쓰기, 비교 횟수는 Interlocked로만 갱신한다.
+            internal const int LbsUndecided = 0;
+            internal const int LbsUsable = 1;
+            internal const int LbsRejected = 2;
+            internal volatile int LbsVerdict;
+            internal int LbsComparedFrameCount;
         }
 
         private readonly struct PendingRendererFrame
