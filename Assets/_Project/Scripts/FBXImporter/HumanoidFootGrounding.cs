@@ -340,6 +340,23 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
+        internal bool TryGetSoleLiftTarget(bool isLeft, Vector3 planePoint,
+            Vector3 planeNormal, out Vector3 target)
+        {
+            target = default;
+            if (!IsPrepared)
+                return false;
+
+            var leg = isLeft ? _left : _right;
+            // gate 롤백이나 goal 적용 이후의 실제 밑창으로 관통을 판단함.
+            if (!leg.Sampler.TrySample())
+                return false;
+
+            return HumanoidSoleGroundConstraint.TryLiftAbovePlane(
+                leg.Foot.position, leg.Foot.rotation, leg.Sampler.LocalSolePoints,
+                leg.Foot.lossyScale.x, planePoint, planeNormal, out target, out _);
+        }
+
         private void ResetEvaluationState()
         {
             HasGround = false;

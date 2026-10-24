@@ -547,7 +547,7 @@ namespace Fbx2Vmd.FBXImporter
                 if ((isApplied || gateApplied) && _isGroundResponseEnabled)
                     _groundResponse.Apply(
                         _footGoalDriver.LastUsedLeftBendNormal,
-                        _footGoalDriver.LastUsedRightBendNormal);
+                        _footGoalDriver.LastUsedRightBendNormal, _footGrounding);
                 // goal 경로는 gate 보정 대신 평가 전용 갱신으로 지면·지지 가중치·
                 // 밑창 측정을 현재 프레임 기준으로 채움 — 스냅샷이 마지막 gate 평가나
                 // 초기값을 재사용하지 않게 함. gate 판정 열은 계속 비움(measured=false).
@@ -571,7 +571,7 @@ namespace Fbx2Vmd.FBXImporter
             }
             else if (isApplied && _isGroundResponseEnabled)
             {
-                _groundResponse.Apply(leftBendNormal, rightBendNormal);
+                _groundResponse.Apply(leftBendNormal, rightBendNormal, _footGrounding);
             }
             return isApplied || gateApplied;
         }

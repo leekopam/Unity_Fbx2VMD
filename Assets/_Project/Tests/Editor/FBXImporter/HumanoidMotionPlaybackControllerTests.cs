@@ -14,6 +14,69 @@ namespace Tests.Editor.FBXImporter
         private const string ClipAssetPath = "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const float TimeTolerance = 0.0001f;
 
+        [Test]
+        public void Given_GateFallback_When_SeekingRotatedFoot_Then_KeepsSoleAboveGround()
+        {
+            GameObject target = InstantiateTarget();
+            var floor = new GameObject("Fallback 밑창 검증 바닥")
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            object controller = CreateController();
+            target.transform.position = new Vector3(100f, 0f, 100f);
+            floor.transform.position = new Vector3(100f, -0.05f, 100f);
+            floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator,
+                    LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Invoke(controller, "SetIkGoalFootDrive", true, 1f);
+                Invoke(controller, "SetFootStepDiffusion", true);
+                Transform[] bones = new[]
+                {
+                    HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg,
+                    HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes,
+                    HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg,
+                    HumanBodyBones.RightFoot, HumanBodyBones.RightToes,
+                }.Select(animator.GetBoneTransform).ToArray();
+                Vector3[] positions = bones.Select(b => b.localPosition).ToArray();
+                Vector3[] scales = bones.Select(b => b.localScale).ToArray();
+                Physics.SyncTransforms();
+                float minimum = float.PositiveInfinity;
+                int fallbackCount = 0;
+                for (int frame = 3520; frame <= 3550; frame++)
+                {
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
+                    if (ReadProperty(controller, "LastGroundingStatus").ToString() == "Fallback")
+                        fallbackCount++;
+                    object[] surface = { null, null };
+                    Assert.That((bool)Invoke(controller, "TryCaptureCurrentFootSurface", surface), Is.True);
+                    float clearance = (float)surface[1].GetType()
+                        .GetField("minimum_distance_mm").GetValue(surface[1]);
+                    Assert.That(float.IsNaN(clearance) || float.IsInfinity(clearance), Is.False);
+                    minimum = Mathf.Min(minimum, clearance);
+                    for (int index = 0; index < bones.Length; index++)
+                    {
+                        Assert.That(Vector3.Distance(bones[index].localPosition, positions[index]),
+                            Is.LessThan(0.00001f));
+                        Assert.That(bones[index].localScale, Is.EqualTo(scales[index]));
+                    }
+                }
+                Assert.That(fallbackCount, Is.GreaterThan(0), "gate 복원 경로 재현이 필요합니다.");
+                TestContext.WriteLine($"최저 밑창={minimum:F6}mm, Fallback={fallbackCount}프레임");
+                Assert.That(minimum, Is.GreaterThanOrEqualTo(-1f),
+                    "gate 복원 후 회전한 실제 밑창도 지면 아래로 내려가면 안 됩니다.");
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(floor);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
         [TestCase(10366, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot)]
         [TestCase(10220, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot)]
         public void Given_NearlyExtendedLeg_When_GroundIsApplied_Then_PreservesBendContinuity(

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Fbx2Vmd.FBXImporter
 {
     /// <summary>
-    /// 실제 지면 아래의 Avatar 발 하단 기준점을 본 길이 변화 없이 올림.
+    /// 실제 지면 아래의 현재 밑창을 본 길이 변화 없이 올림.
     /// </summary>
     internal sealed class HumanoidGroundResponse
     {
@@ -31,15 +31,16 @@ namespace Fbx2Vmd.FBXImporter
                 HumanBodyBones.RightToes, animator.rightFeetBottomHeight);
         }
 
-        internal void Apply(Vector3 leftBendNormal, Vector3 rightBendNormal)
+        internal void Apply(Vector3 leftBendNormal, Vector3 rightBendNormal,
+            HumanoidFootGrounding grounding)
         {
             if (_root == null)
                 return;
 
             // 편집 중 이동한 Collider도 같은 Seek의 지면 질의에 반영함.
             Physics.SyncTransforms();
-            Apply(_left, leftBendNormal);
-            Apply(_right, rightBendNormal);
+            Apply(_left, leftBendNormal, true, grounding);
+            Apply(_right, rightBendNormal, false, grounding);
         }
 
         internal void Clear()
@@ -50,18 +51,23 @@ namespace Fbx2Vmd.FBXImporter
             _probeDistance = 0f;
         }
 
-        private void Apply(Leg leg, Vector3 bendNormal)
+        private void Apply(Leg leg, Vector3 bendNormal, bool isLeft,
+            HumanoidFootGrounding grounding)
         {
             if (leg.Upper == null || leg.Lower == null || leg.Foot == null ||
-                !TryFindGroundHeight(leg.Foot.position, out float groundHeight))
+                !TryFindGround(leg.Foot.position, out RaycastHit ground))
                 return;
 
-            float targetHeight = groundHeight + leg.BottomHeight;
-            if (targetHeight <= leg.Foot.position.y + 0.00001f)
+            Vector3 target;
+            if (grounding == null || !grounding.TryGetSoleLiftTarget(
+                    isLeft, ground.point, ground.normal, out target))
+            {
+                target = leg.Foot.position;
+                target.y = Mathf.Max(target.y, ground.point.y + leg.BottomHeight);
+            }
+            if ((target - leg.Foot.position).sqrMagnitude <= 0.0000000001f)
                 return;
 
-            Vector3 target = leg.Foot.position;
-            target.y = targetHeight;
             // 상승은 무릎 측을 유지하는 보정 — 현재 자세의 굽힘면이 안정적이면
             // 그 방향이 정답이다. stale·부호반전된 전달 법선을 그대로 쓰면
             // 무릎이 반대편에 배치되므로 자세 cross를 우선하고, 무릎이 거의
@@ -88,13 +94,6 @@ namespace Fbx2Vmd.FBXImporter
             leg.Foot.rotation = footRotation;
             if (leg.Toes != null)
                 leg.Toes.rotation = toeRotation;
-        }
-
-        private bool TryFindGroundHeight(Vector3 footPosition, out float height)
-        {
-            bool found = TryFindGround(footPosition, out RaycastHit hit);
-            height = found ? hit.point.y : 0f;
-            return found;
         }
 
         internal bool TryFindGround(Vector3 footPosition, out RaycastHit ground)
