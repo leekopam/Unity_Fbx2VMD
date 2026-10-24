@@ -76,8 +76,9 @@ namespace Tests.Editor.FBXImporter
             Assert.DoesNotThrow(() => Invoke(store, "DeleteRequest"));
         }
 
-        [Test]
-        public void Given_GroundingCase_When_SavingAndReading_Then_PreservesSceneInputAndModel()
+        [TestCase(0f)]
+        [TestCase(1f)]
+        public void Given_GroundingCase_When_SavingAndReading_Then_PreservesSceneInputAndModel(float alpha)
         {
             object store = CreateStore();
             object request = CreateEnvelope(
@@ -87,6 +88,7 @@ namespace Tests.Editor.FBXImporter
                 ("scene_path", "Assets/_Project/Scene/Main_Recoding.unity"),
                 ("fbx_file", "tetoris_001.fbx"),
                 ("model_name", "testPrefab"),
+                ("ik_goal_alpha", alpha),
                 ("segment_starts", new[] { 216, 3858 }),
                 ("segment_ends", new[] { 238, 3870 }));
 
@@ -97,6 +99,7 @@ namespace Tests.Editor.FBXImporter
                 Is.EqualTo("Assets/_Project/Scene/Main_Recoding.unity"));
             Assert.That(ReadField<string>(loaded, "fbx_file"), Is.EqualTo("tetoris_001.fbx"));
             Assert.That(ReadField<string>(loaded, "model_name"), Is.EqualTo("testPrefab"));
+            Assert.That(ReadField<float>(loaded, "ik_goal_alpha"), Is.EqualTo(alpha));
             CollectionAssert.AreEqual(new[] { 216, 3858 }, ReadField<int[]>(loaded, "segment_starts"));
             CollectionAssert.AreEqual(new[] { 238, 3870 }, ReadField<int[]>(loaded, "segment_ends"));
         }

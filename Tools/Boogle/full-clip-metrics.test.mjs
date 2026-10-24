@@ -34,7 +34,7 @@ test("SDK 봉인 후 수동 검토 판정을 유지하고 진단 경로 비교�
     projectId: "11111111-1111-4111-8111-111111111111",
     adapter: { id: "fbx2vmd-smoke", version: "0.1.1" },
     testPack: { id: "fbx2vmd-product-smoke", version: "0.1.3" },
-    inputConditions: { captureMode: "full-clip", lowerBodyOnly: "false" },
+    inputConditions: { captureMode: "full-clip", lowerBodyOnly: "false", ikGoalAlpha: "0" },
     environmentConditions: { unityVersion: "2022.3.62f3" }
   };
   const outcome = { status: "MANUAL_REVIEW_REQUIRED", metrics: buildFullClipMetrics(state) };
@@ -51,7 +51,8 @@ test("SDK 봉인 후 수동 검토 판정을 유지하고 진단 경로 비교�
     assert.equal(comparison.status, "FAIL");
     for (const inputConditions of [
       { ...config.inputConditions, lowerBodyOnly: "true" },
-      { ...config.inputConditions, captureMode: "grounding-case" }
+      { ...config.inputConditions, captureMode: "grounding-case" },
+      { ...config.inputConditions, ikGoalAlpha: "1" }
     ]) {
       const diagnostic = await runWithAdapter(root, { ...config, inputConditions }, async () => outcome);
       assert.deepEqual(await compareRuns(root, config.projectId, first.runId, diagnostic.runId,

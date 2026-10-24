@@ -1843,7 +1843,8 @@ namespace Fbx2Vmd.FBXImporter
                     continuousPlayback: true);
             return FbxFullClipFootMetricsCapture.TryStart(pipeline, request.request_id,
                 request.run_id, out _fullClipMetrics, out message,
-                request.fbx_file, "F10", lowerBodyOnly: request.lower_body_only);
+                request.fbx_file, "F10", lowerBodyOnly: request.lower_body_only,
+                ikGoalAlpha: request.ik_goal_alpha < 0f ? 0f : request.ik_goal_alpha);
         }
 
         private static bool TryStartVrmLoadedCapture(
