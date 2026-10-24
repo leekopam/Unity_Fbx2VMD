@@ -22,6 +22,9 @@ namespace Fbx2Vmd.FBXImporter
         internal const float ContactSpeedLimitMetersPerSecond = 0.15f;
         internal const int MinimumContactFrameCount = 6;
         internal const float GateMeters = 0.01f;
+        // 측정 예외 경로 전용 next_actions — 콘솔·JSON이 같은 안내를 쓰게 상수화함.
+        private const string ExceptionNextAction =
+            "측정 예외 원인을 확인하고 동일 명령으로 재실행";
         internal const string DefaultClipPath =
             "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         internal const string DefaultTargetPath =
@@ -95,9 +98,12 @@ namespace Fbx2Vmd.FBXImporter
                             traceStart: traceStart, traceEnd: traceEnd);
                         WriteSummaryJson(entry.Report, clipDir, clipPath,
                             targetPath, firstFrame, lastFrame);
+                        string gateNote = NextActions(entry.Report);
                         Debug.Log(entry.Report.GatePassed
                             ? $"[FbxDiagnostics] 게이트 통과: {clipPath} {entry.Report.WorstAdditional:F4}m"
-                            : $"[FbxDiagnostics] 게이트 초과: {clipPath} {entry.Report.WorstAdditional:F4}m");
+                            : $"[FbxDiagnostics] 게이트 초과: {clipPath} " +
+                                $"{entry.Report.WorstAdditional:F4}m" +
+                                (gateNote.Length > 0 ? $" — {gateNote}" : ""));
                         allPassed &= entry.Report.GatePassed;
                     }
                     catch (Exception clipError)
@@ -105,7 +111,8 @@ namespace Fbx2Vmd.FBXImporter
                         entry.Error = clipError.Message;
                         allPassed = false;
                         Debug.LogError(
-                            $"[FbxDiagnostics] {clipPath} 측정 실패: {clipError.Message}");
+                            $"[FbxDiagnostics] {clipPath} 측정 실패: " +
+                            $"{clipError.Message} — {ExceptionNextAction}");
                     }
                     batch.Add(entry);
                 }
@@ -121,8 +128,11 @@ namespace Fbx2Vmd.FBXImporter
             {
                 Directory.CreateDirectory(outputDir);
                 File.WriteAllText(Path.Combine(outputDir, "summary.json"),
-                    "{\"error\":\"" + EscapeJson(error.Message) + "\"}");
-                Debug.LogError($"[FbxDiagnostics] 측정 실패: {error.Message}");
+                    "{\"error\":\"" + EscapeJson(error.Message) +
+                    "\",\"next_actions\":\"" +
+                    EscapeJson(ExceptionNextAction) + "\"}");
+                Debug.LogError($"[FbxDiagnostics] 측정 실패: {error.Message}" +
+                    $" — {ExceptionNextAction}");
                 EditorApplication.Exit(2);
             }
         }
@@ -157,17 +167,20 @@ namespace Fbx2Vmd.FBXImporter
                 {
                     clipsJson.Append(string.Format(CultureInfo.InvariantCulture,
                         "{{\"clip\":\"{0}\",\"worst_additional_m\":{1}," +
-                        "\"gate_passed\":{2},\"runs\":{3}}}",
+                        "\"gate_passed\":{2},\"runs\":{3}," +
+                        "\"next_actions\":\"{4}\"}}",
                         EscapeJson(entry.Clip), entry.Report.WorstAdditional,
                         entry.Report.GatePassed ? "true" : "false",
-                        entry.Report.Runs.Count));
+                        entry.Report.Runs.Count,
+                        EscapeJson(NextActions(entry.Report))));
                 }
                 else
                 {
                     clipsJson.Append(string.Format(CultureInfo.InvariantCulture,
                         "{{\"clip\":\"{0}\",\"gate_passed\":false," +
-                        "\"error\":\"{1}\"}}",
-                        EscapeJson(entry.Clip), EscapeJson(entry.Error)));
+                        "\"error\":\"{1}\",\"next_actions\":\"{2}\"}}",
+                        EscapeJson(entry.Clip), EscapeJson(entry.Error),
+                        EscapeJson(ExceptionNextAction)));
                 }
             }
             File.WriteAllText(Path.Combine(outputDir, "batch-summary.json"),
@@ -423,11 +436,31 @@ namespace Fbx2Vmd.FBXImporter
                 string.Format(CultureInfo.InvariantCulture,
                     "{{\"clip\":\"{0}\",\"target\":\"{1}\",\"first_frame\":{2}," +
                     "\"last_frame\":{3},\"gate_m\":{4},\"worst_additional_m\":{5}," +
-                    "\"gate_passed\":{6},\"csv\":\"{7}\",\"runs\":[{8}]}}",
+                    "\"gate_passed\":{6},\"csv\":\"{7}\"," +
+                    "\"next_actions\":\"{8}\",\"runs\":[{9}]}}",
                     EscapeJson(clipPath), EscapeJson(targetPath), firstFrame,
                     lastFrame, GateMeters, report.WorstAdditional,
                     report.GatePassed ? "true" : "false",
-                    EscapeJson(report.CsvPath), runsJson));
+                    EscapeJson(report.CsvPath),
+                    EscapeJson(NextActions(report)), runsJson));
+        }
+
+        // 게이트 실패 시 진단이 곧 수정 지시서가 되게 다음 조치 문구를 만듦.
+        // 최악 초과 런의 구간·초과량과 라벨 확인·런 덤프·앵커 정책 검토 경로를 담음.
+        private static string NextActions(DriftReport report)
+        {
+            if (report == null || report.GatePassed || !report.Completed)
+                return "";
+            var exceeded = report.Runs.Where(r => r.GateExceeded).ToList();
+            if (exceeded.Count == 0) return "";
+            RunResult worst = exceeded.OrderByDescending(r => r.Additional).First();
+            return string.Format(CultureInfo.InvariantCulture,
+                "{0}발 {1}~{2}프레임 등 {3}개 런 게이트 초과(최악 {4:F4}m). " +
+                "의심 구간 의도 라벨을 FootContactIntentLabelingWindow에서 확인하고 " +
+                "-dumpRuns 1 재실행으로 런 진단 CSV(정책·보정량)를 대조한 뒤 " +
+                "필요하면 HumanoidFootAnchorPlan.AnchorCatchUpFraction 검토",
+                worst.IsLeft ? "왼쪽" : "오른쪽", worst.Start, worst.End,
+                exceeded.Count, worst.Additional);
         }
 
         // 에러 메시지의 개행·탭 같은 제어문자까지 이스케이프해 항상 유효한 JSON을 씀.
