@@ -1,5 +1,6 @@
 ﻿using System;
 using Fbx2Vmd.Settings;
+using Fbx2Vmd.FBXImporter;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -24,6 +25,13 @@ namespace Fbx2Vmd.Settings.EditorTools
             EditorApplication.quitting -= OnEditorQuitting;
             EditorApplication.quitting += OnEditorQuitting;
             EditorApplication.delayCall += TryAutoOpenOnEditorStartup;
+            FbxProductSettingsE2eSession.EnvironmentChanging += CancelPendingStartup;
+        }
+
+        private static void CancelPendingStartup()
+        {
+            // 시험 경로 교체 뒤 늦은 초기화가 사용자 설정을 다시 쓰지 않도록 취소함.
+            EditorApplication.delayCall -= TryAutoOpenOnEditorStartup;
         }
 
         internal static void RegisterEditorPlayModeCallback()

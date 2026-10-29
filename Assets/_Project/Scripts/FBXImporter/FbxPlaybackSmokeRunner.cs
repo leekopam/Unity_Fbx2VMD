@@ -42,6 +42,8 @@ namespace Fbx2Vmd.FBXImporter
         private const string CaptureMotionRecordingEvidenceCommand = "capture_motion_recording_evidence";
         private const string CaptureInvalidInputEvidenceCommand = "capture_invalid_input_evidence";
         private const string CaptureE2eEnvironmentCommand = "capture_e2e_environment";
+        private const string PrepareProductSettingsE2eCommand = "prepare_product_settings_e2e";
+        private const string RestoreProductSettingsE2eCommand = "restore_product_settings_e2e";
         private const string CaptureE2eFrameCommand = "capture_e2e_frame";
         private const string StartE2eVideoCommand = "start_e2e_video";
         private const string StopE2eVideoCommand = "stop_e2e_video";
@@ -666,6 +668,12 @@ namespace Fbx2Vmd.FBXImporter
 
         private static bool TryHandleE2eControlRequest(FbxPlaybackSmokeAutomationRequest request)
         {
+            if (request.command == PrepareProductSettingsE2eCommand ||
+                request.command == RestoreProductSettingsE2eCommand)
+            {
+                CompleteProductSettingsE2eSession(request, request.command == RestoreProductSettingsE2eCommand);
+                return true;
+            }
             bool isCapture = request.command == CaptureE2eEnvironmentCommand;
             bool isFrame = request.command == CaptureE2eFrameCommand;
             bool isVideoStart = request.command == StartE2eVideoCommand;
@@ -986,6 +994,67 @@ namespace Fbx2Vmd.FBXImporter
 
             TryDeleteRequestFile();
             return true;
+        }
+
+        private static void CompleteProductSettingsE2eSession(FbxPlaybackSmokeAutomationRequest request, bool restore)
+        {
+            try
+            {
+                if (!restore) ValidateProductSettingsE2eBaseline();
+                string root = Directory.GetParent(Application.dataPath).FullName;
+                string manifest = restore
+                    ? FbxProductSettingsE2eSession.Restore(root, request.run_id)
+                    : FbxProductSettingsE2eSession.Prepare(root, request.run_id);
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = request.request_id, status = "completed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = request.requested_command, passed = true,
+                    manifest_path = manifest, failures = Array.Empty<string>()
+                });
+            }
+            catch (Exception exception)
+            {
+                WriteStatus(new FbxPlaybackSmokeAutomationStatus
+                {
+                    request_id = request.request_id, status = "failed",
+                    updated_at = DateTime.Now.ToString("o", CultureInfo.InvariantCulture),
+                    command = request.requested_command, failure_stage = "environment",
+                    message = exception.Message, failures = new[] { exception.Message }
+                });
+            }
+            finally
+            {
+                TryDeleteRequestFile();
+                if (_activeAutomationRequestId == request.request_id) _activeAutomationRequestId = null;
+            }
+        }
+
+        private static void ValidateProductSettingsE2eBaseline()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            if (SceneManager.sceneCount != 1 || scene.path != MainRecordingScenePath || scene.isDirty)
+                throw new InvalidOperationException("저장된 Main_Recoding 단일 씬에서 시험을 준비해야 합니다.");
+            FBXVmdPipeline pipeline = FindRuntimeFBXVmdPipeline();
+            if (pipeline == null || pipeline.IsProcessing || pipeline.HasPreparedImportedMotion ||
+                pipeline.IsImportedMotionRecording || IsBatchRunning() || _singleFBXVmdPipeline != null || _vrmLoadTask != null)
+                throw new InvalidOperationException("모션·다른 검증이 진행 중이거나 파이프라인이 없습니다.");
+            var manager = Fbx2Vmd.CharacterLibrary.CharacterLibraryManager.Current;
+            if (manager != null && (manager.IsLoading || !string.IsNullOrEmpty(manager.ActiveEntryId)))
+                throw new InvalidOperationException("기존 캐릭터 세션을 먼저 종료해야 합니다.");
+            foreach (var setting in UnityEngine.Object.FindObjectsByType<RecordingSetting>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                RequireEmptySettingsOverride(setting, "sharedSettingsFilePathOverride");
+            foreach (var controller in UnityEngine.Object.FindObjectsByType<Fbx2Vmd.Settings.MainRecordingSettingsCompanionController>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                RequireEmptySettingsOverride(controller, "settingsFilePathOverride");
+        }
+
+        private static void RequireEmptySettingsOverride(UnityEngine.Object target, string propertyName)
+        {
+            using (var serialized = new SerializedObject(target))
+            {
+                if (!string.IsNullOrWhiteSpace(serialized.FindProperty(propertyName).stringValue))
+                    throw new InvalidOperationException("명시 설정 경로가 있는 대상은 시험 경로로 격리할 수 없습니다: " + target.name);
+            }
         }
 
         // 진행 중인 e2e 영상 녹화를 멈추고 산출물 경로를 돌려준다.

@@ -8,6 +8,8 @@ import { randomUUID } from "node:crypto";
 // Tools/Boogle/run-product-smoke.mjs와 동일 프로토콜, e2e 엔진 전용 경량 구현.
 
 export const UNITY_COMMANDS = {
+  prepareSettingsSession: "prepare_product_settings_e2e",
+  restoreSettingsSession: "restore_product_settings_e2e",
   environment: "capture_e2e_environment",
   frame: "capture_e2e_frame",
   startVideo: "start_e2e_video",
