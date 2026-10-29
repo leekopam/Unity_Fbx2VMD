@@ -138,6 +138,9 @@ namespace Fbx2Vmd.FBXImporter
         // 좁은 영역에서 신장 한계에 정체한 입력만 이웃 영역을 넓혀 재계산함.
         private static readonly CorrectionConfiguration StrongWideConfiguration =
             new CorrectionConfiguration(640, 64, 32, 0.03f, 0.055f, 4);
+        // 기존 후보가 모두 실패할 때만 영역을 한 링 넓혀 경계에 집중된 변위를 분산함.
+        private static readonly CorrectionConfiguration StrongExtendedConfiguration =
+            new CorrectionConfiguration(640, 64, 32, 0.03f, 0.055f, 5);
         // 조기 수렴·웜스타트는 fast 경로에만 허용한다. strong은 정밀 fallback이라 기준 궤적을 유지한다.
         // Burst 경로는 계측에서 회귀(CG 호출당 네이티브 포장 비용이 커널 이득을 상쇄)가
         // 확인돼 비활성으로 둔다 — 코드는 fast 전용 게이트 뒤에 보존한다.
@@ -354,6 +357,20 @@ namespace Fbx2Vmd.FBXImporter
                     out NativeSkinningSurfaceCorrectionResult blended))
             {
                 result = blended;
+            }
+            if (!IsWithinQuality(result, contract, StrongConfiguration) &&
+                TryCalculateTimed(
+                    baselineVertices,
+                    baselineVertices,
+                    contract,
+                    StrongExtendedConfiguration,
+                    false,
+                    false,
+                    timing,
+                    out NativeSkinningSurfaceCorrectionResult extended) &&
+                IsWithinQuality(extended, contract, StrongConfiguration))
+            {
+                result = extended;
             }
             return true;
         }
