@@ -649,6 +649,11 @@ namespace Fbx2Vmd.FBXImporter
             public float time_scale;
             public float motion_time_seconds;
             public float motion_record_framerate;
+            public string motion_clip_name;
+            public float motion_clip_length_seconds;
+            public float motion_clip_framerate;
+            public int motion_current_frame;
+            public int motion_last_frame;
             public bool thumb_guard_present;
             public bool thumb_guard_enabled;
             public bool thumb_guard_animator_bound;
@@ -727,7 +732,17 @@ namespace Fbx2Vmd.FBXImporter
                         motion_time_seconds = pipeline != null
                             ? pipeline.ImportedMotionCurrentTimeSeconds : 0f,
                         motion_record_framerate = pipeline != null
-                            ? (float)pipeline.motionVideoFrameRate : 0f
+                            ? (float)pipeline.motionVideoFrameRate : 0f,
+                        motion_clip_name = pipeline != null
+                            ? pipeline.ImportedMotionClipName : string.Empty,
+                        motion_clip_length_seconds = pipeline != null
+                            ? pipeline.ImportedMotionClipLengthSeconds : 0f,
+                        motion_clip_framerate = pipeline != null
+                            ? pipeline.ImportedMotionFrameRate : 0f,
+                        motion_current_frame = pipeline != null
+                            ? pipeline.ImportedMotionCurrentFrameIndex : 0,
+                        motion_last_frame = pipeline != null
+                            ? pipeline.ImportedMotionLastFrameIndex : 0
                     };
                     // 엄지 보정 Guard의 바인딩/실행 상태를 E2E 증거에 함께 기록함.
                     HumanoidThumbDeformationGuard thumbGuard = model != null
