@@ -1,17 +1,82 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import vm from "node:vm";
 
 import {
+  getE2eImportVrmPath,
   getSmokeImportFbxPath,
   getSmokePanelTarget,
   getSmokeScreenshotPath,
   getSmokeSettingsPath,
   getRendererEntry,
+  initializeSmokeSettings,
   isDevelopmentMode,
   isSmokeTestMode
 } from "../electron/rendererEntry.js";
 import { createElectronRuntimeEnv } from "../scripts/electronEnv.js";
+
+test("preload는 첫 화면 실행 전에 소유 브리지 설정을 주입한다", async () => {
+  const source = await fs.readFile(new URL("../electron/preload.cjs", import.meta.url), "utf8");
+  const config = { apiBaseUrl: "http://127.0.0.1:12345", wsUrl: "ws://127.0.0.1:12345/settings", token: "fixture" };
+  const exposed = [];
+  vm.runInNewContext(source, { require: () => ({
+    contextBridge: { exposeInMainWorld: (name, value) => exposed.push([name, value]) },
+    ipcRenderer: { sendSync: channel => {
+      assert.equal(channel, "settings:get-bridge-config");
+      assert.equal(exposed.length, 0);
+      return config;
+    } }
+  }) });
+  assert.equal(exposed[0][0], "mainRecordingSettingsBridgeConfig");
+  assert.equal(exposed[0][1], config);
+  assert.equal(exposed[1][0], "settingsShell");
+});
+
+test("preload는 브리지 미준비 오류를 알리고 불완전 설정을 노출하지 않는다", async () => {
+  const source = await fs.readFile(new URL("../electron/preload.cjs", import.meta.url), "utf8");
+  const exposed = [];
+  assert.throws(() => vm.runInNewContext(source, { require: () => ({
+    contextBridge: { exposeInMainWorld: name => exposed.push(name) },
+    ipcRenderer: { sendSync: () => null }
+  }) }), /설정 브리지가 준비되지 않았습니다/);
+  assert.deepEqual(exposed, []);
+});
+
+test("VRM 시험 파일 지정은 E2E 실행에서만 허용한다", () => {
+  const argument = "--e2e-import-vrm=C:/Fixtures/model.vrm";
+  assert.equal(getE2eImportVrmPath({ argv: [argument] }), "");
+  assert.equal(getE2eImportVrmPath({ argv: ["--e2e-test", argument] }), "C:/Fixtures/model.vrm");
+  assert.equal(getE2eImportVrmPath({ argv: ["--e2e-test"] }), "");
+});
+
+test("시험 설정 초기화는 기존 실제 연결 문서를 그대로 보존한다", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mrs-settings-preserve-"));
+  const settingsPath = path.join(root, "settings.json");
+  const original = '{"captureWidth":3840,"runtimeState":{"playMode":"stopped"},"pendingCommand":{"commandId":"keep"}}\n';
+  try {
+    await fs.writeFile(settingsPath, original, "utf8");
+    await initializeSmokeSettings(settingsPath);
+    assert.equal(await fs.readFile(settingsPath, "utf8"), original);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("시험 설정이 없으면 mock Play 상태 문서를 생성한다", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mrs-settings-create-"));
+  const settingsPath = path.join(root, "nested", "settings.json");
+  try {
+    await initializeSmokeSettings(settingsPath);
+    assert.deepEqual(JSON.parse(await fs.readFile(settingsPath, "utf8")), {
+      runtimeState: { playMode: "playing" }
+    });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 test("isDevelopmentMode returns true when --dev is present", () => {
   assert.equal(

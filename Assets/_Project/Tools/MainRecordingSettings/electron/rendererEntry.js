@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 
 export const DEFAULT_DEV_SERVER_URL = "http://localhost:3000";
 const SMOKE_IMPORT_FBX_PREFIX = "--smoke-import-fbx=";
@@ -6,6 +7,17 @@ const SMOKE_SETTINGS_PATH_PREFIX = "--smoke-settings-path=";
 const SMOKE_SCREENSHOT_PATH_PREFIX = "--smoke-screenshot-path=";
 const SMOKE_PANEL_TARGET_PREFIX = "--smoke-panel-target=";
 const E2E_ENTRY_URL_PREFIX = "--e2e-entry-url=";
+
+export async function initializeSmokeSettings(settingsPath) {
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+  try {
+    // 실제 Unity와 공유할 문서가 준비되어 있으면 초기값으로 덮어쓰지 않음.
+    await fs.writeFile(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }),
+      { encoding: "utf8", flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+}
 
 export function isDevelopmentMode({ argv = process.argv, env = process.env } = {}) {
   return argv.includes("--dev") || env.NODE_ENV === "development";
@@ -31,6 +43,10 @@ export function getE2eEntryUrl({ argv = process.argv } = {}) {
 
 export function getSmokeImportFbxPath({ argv = process.argv } = {}) {
   return getArgumentValue(argv, SMOKE_IMPORT_FBX_PREFIX);
+}
+
+export function getE2eImportVrmPath({ argv = process.argv } = {}) {
+  return isE2eTestMode({ argv }) ? getArgumentValue(argv, "--e2e-import-vrm=") : "";
 }
 
 export function getSmokeSettingsPath({ argv = process.argv } = {}) {

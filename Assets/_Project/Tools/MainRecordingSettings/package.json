@@ -16,11 +16,16 @@
     "package:release": "node scripts/packageElectronRelease.mjs",
     "start:dev": "node scripts/runElectron.mjs --dev",
     "start:prod": "node scripts/runElectron.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "postinstall": "node scripts/disableE2eExternalServices.mjs",
+    "test:e2e": "node scripts/runE2e.mjs run",
+    "test:e2e:debug": "node scripts/runE2e.mjs run --debug"
   },
   "devDependencies": {
     "boogle-sdk": "file:../../../../Tools/Boogle/boogle-sdk-0.1.0-beta.0.tgz",
-    "electron": "^42.4.1"
+    "electron": "^42.4.1",
+    "@e2e-dev/web": "0.15.2",
+    "e2e": "0.21.2"
   },
   "dependencies": {
     "ws": "^8.21.0"

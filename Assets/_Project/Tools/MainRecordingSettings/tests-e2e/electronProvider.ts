@@ -55,7 +55,14 @@ interface ElectronLease extends BrowserLease {
   settingsPath: string;
 }
 
-export function electronProvider(): BrowserProvider {
+interface UnitySessionFiles {
+  settingsPath: string;
+  libraryPath: string;
+  fbxPath: string;
+  vrmPath: string;
+}
+
+export function electronProvider({ unitySession }: { unitySession?: UnitySessionFiles } = {}): BrowserProvider {
   let staticServer: http.Server | undefined;
 
   const ensureStaticServer = () => {
@@ -68,16 +75,28 @@ export function electronProvider(): BrowserProvider {
     scope: "attempt",
 
     async acquire(request: BrowserRequest): Promise<BrowserLease> {
-      ensureStaticServer();
       const cdpPort = await freePort();
       const tag = request.attemptId ?? `${Date.now()}`;
-      const settingsPath = path.join(os.tmpdir(), `mrs-e2e-${tag}.json`);
-      const fbxPath = path.join(os.tmpdir(), `mrs-e2e-${tag}.fbx`);
-      fs.writeFileSync(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }));
-      fs.writeFileSync(fbxPath, "e2e placeholder fbx\n", "utf8");
+      const settingsPath = unitySession?.settingsPath ?? path.join(os.tmpdir(), `mrs-e2e-${tag}.json`);
+      const fbxPath = unitySession?.fbxPath ?? path.join(os.tmpdir(), `mrs-e2e-${tag}.fbx`);
+      const libraryPath = unitySession?.libraryPath ?? path.join(os.tmpdir(), `mrs-e2e-${tag}-library.json`);
+      if (unitySession) {
+        // Unity 측 격리·초기화가 끝난 문서만 연결하며 여기서 상태를 위조하지 않음.
+        for (const filePath of Object.values(unitySession)) {
+          if (!path.isAbsolute(filePath) || !fs.statSync(filePath).isFile()) {
+            throw new Error("실제 Unity E2E에는 준비된 절대 파일 경로가 필요합니다.");
+          }
+        }
+      } else {
+        fs.writeFileSync(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }));
+        fs.writeFileSync(fbxPath, "e2e placeholder fbx\n", "utf8");
+        fs.writeFileSync(libraryPath, JSON.stringify({ entries: [] }));
+      }
+      ensureStaticServer();
 
       const env = { ...process.env };
       delete env.ELECTRON_RUN_AS_NODE;
+      env.UNITY_FBX2VMD_CHARACTER_LIBRARY_PATH = libraryPath;
 
       const child = spawn(
         electronBinary,
@@ -87,7 +106,8 @@ export function electronProvider(): BrowserProvider {
           "--e2e-test",
           `--e2e-entry-url=${E2E_ENTRY_URL}`,
           `--smoke-settings-path=${settingsPath}`,
-          `--smoke-import-fbx=${fbxPath}`
+          `--smoke-import-fbx=${fbxPath}`,
+          ...(unitySession ? [`--e2e-import-vrm=${unitySession.vrmPath}`] : [])
         ],
         { stdio: ["ignore", "ignore", "pipe"], env }
       );

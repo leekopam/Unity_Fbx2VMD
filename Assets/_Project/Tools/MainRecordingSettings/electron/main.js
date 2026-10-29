@@ -15,11 +15,15 @@ import {
   extractSelectedPath
 } from "./fileDialog.js";
 import {
+  getE2eEntryUrl,
+  getE2eImportVrmPath,
   getRendererEntry,
   getSmokeImportFbxPath,
   getSmokePanelTarget,
   getSmokeScreenshotPath,
   getSmokeSettingsPath,
+  initializeSmokeSettings,
+  isE2eTestMode,
   isSmokeTestMode
 } from "./rendererEntry.js";
 import { openAllowedExternalNavigation } from "./shellNavigationPolicy.js";
@@ -54,7 +58,9 @@ const preloadPath = path.join(__dirname, "preload.cjs");
 let bridgeServer = null;
 let boogleWorkbench = null;
 let editorLifetimeTimer = null;
-const gotSingleInstanceLock = app.requestSingleInstanceLock({
+// E2E 구동은 사용자가 열어둔 설정창과 별개로 돌아가는 검증이라
+// 싱글 인스턴스 락에서 제외한다. 브리지 포트는 0(임의)이라 충돌하지 않는다.
+const gotSingleInstanceLock = isE2eTestMode() ? true : app.requestSingleInstanceLock({
   unityEditorPid: process.env.UNITY_FBX2VMD_EDITOR_PID
 });
 
@@ -86,16 +92,23 @@ async function createMainWindow() {
   keepNavigationInsideShell(mainWindow);
 
   const entry = getRendererEntry({ appRoot });
+  const e2eEntryUrl = isE2eTestMode() ? getE2eEntryUrl() : "";
   // file:// 렌더러는 opaque 오리진이라 브리지가 세션 토큰을 요구한다 —
   // smoke 유무와 관계없이 로드 완료 때마다 config를 주입한다.
+  // e2e 모드는 브리지가 임의 포트로 뜨므로 http 오리진이라도 apiBaseUrl 주입이 필요하다.
   mainWindow.webContents.on("did-finish-load", () => {
-    if (entry.type === "file") {
+    if (entry.type === "file" || e2eEntryUrl) {
       applyRendererBridgeConfig(mainWindow, bridgeServer).catch((error) => {
         console.warn("브리지 config 주입 실패:", error?.message ?? error);
       });
     }
   });
   attachSmokeTestExit(mainWindow, entry, bridgeServer);
+  if (e2eEntryUrl) {
+    await mainWindow.loadURL(e2eEntryUrl);
+    return;
+  }
+
   if (entry.type === "url") {
     await mainWindow.loadURL(entry.target);
     return;
@@ -218,7 +231,7 @@ async function applyRendererBridgeConfig(mainWindow, bridge) {
   }
 
   await mainWindow.webContents.executeJavaScript(`
-    window.mainRecordingSettingsBridgeConfig = {
+    if (!window.mainRecordingSettingsBridgeConfig) window.mainRecordingSettingsBridgeConfig = {
       apiBaseUrl: ${JSON.stringify(bridge.baseUrl)},
       wsUrl: ${JSON.stringify(`${bridge.wsUrl}/settings`)},
       token: ${JSON.stringify(bridge.token)}
@@ -234,7 +247,7 @@ async function runRendererImportSmoke({ mainWindow, bridge, fbxPath, finish }) {
 
   const result = await mainWindow.webContents.executeJavaScript(`
     (async () => {
-      window.mainRecordingSettingsBridgeConfig = {
+      if (!window.mainRecordingSettingsBridgeConfig) window.mainRecordingSettingsBridgeConfig = {
         apiBaseUrl: ${JSON.stringify(bridge.baseUrl)},
         wsUrl: ${JSON.stringify(`${bridge.wsUrl}/settings`)},
         token: ${JSON.stringify(bridge.token)}
@@ -382,18 +395,17 @@ async function startApplication() {
       : undefined);
 
   if (smokeImportFbxPath) {
-    await fs.mkdir(path.dirname(smokeSettingsPath), { recursive: true });
-    await fs.writeFile(smokeSettingsPath, JSON.stringify({ runtimeState: { playMode: "playing" } }), "utf8");
+    await initializeSmokeSettings(smokeSettingsPath);
   }
 
   bridgeServer = createSettingsBridgeServer({
-    port: isSmokeTestMode() ? 0 : undefined,
+    port: isSmokeTestMode() || isE2eTestMode() ? 0 : undefined,
     settingsPath: smokeSettingsPath
   });
   await bridgeServer.listen();
   console.log(`SETTINGS_BRIDGE_READY ${bridgeServer.baseUrl}`);
 
-  if (!isSmokeTestMode()) {
+  if (!isSmokeTestMode() && !isE2eTestMode()) {
     launchWorkbench();
   }
 
@@ -460,7 +472,18 @@ function focusExistingSettingsWindow() {
 }
 
 function registerIpcHandlers() {
+  ipcMain.on("settings:get-bridge-config", (event) => {
+    event.returnValue = bridgeServer ? {
+      apiBaseUrl: bridgeServer.baseUrl,
+      wsUrl: `${bridgeServer.wsUrl}/settings`,
+      token: bridgeServer.token
+    } : null;
+  });
   ipcMain.handle("boogle:get-workbench-url", async () => {
+    // e2e 모드에서는 developer 패널 진입이 workbench를 spawn하지 않게 차단
+    if (isE2eTestMode()) {
+      return "";
+    }
     const workbench = boogleWorkbench ?? launchWorkbench();
     try {
       return await workbench.url;
@@ -490,6 +513,8 @@ function registerIpcHandlers() {
     return extractSelectedPath(result);
   });
   ipcMain.handle("settings:choose-vrm-file", async () => {
+    const e2ePath = getE2eImportVrmPath();
+    if (e2ePath) return e2ePath;
     const result = await dialog.showOpenDialog(createVrmFileDialogOptions());
     return extractSelectedPath(result);
   });
