@@ -642,6 +642,8 @@ namespace Fbx2Vmd.FBXImporter
             public bool avatar_valid;
             public bool is_processing;
             public bool has_prepared_motion;
+            public bool character_manager_present;
+            public string character_manager_active_id;
             public bool is_playing_motion;
             public bool is_recording;
             public bool recorder_recording;
@@ -727,6 +729,9 @@ namespace Fbx2Vmd.FBXImporter
                             animator.avatar.isValid && animator.avatar.isHuman,
                         is_processing = pipeline != null && pipeline.IsProcessing,
                         has_prepared_motion = pipeline != null && pipeline.HasPreparedImportedMotion,
+                        character_manager_present = Fbx2Vmd.CharacterLibrary.CharacterLibraryManager.Current != null,
+                        character_manager_active_id = Fbx2Vmd.CharacterLibrary.CharacterLibraryManager.Current != null
+                            ? Fbx2Vmd.CharacterLibrary.CharacterLibraryManager.Current.ActiveEntryId : string.Empty,
                         is_playing_motion = pipeline != null && pipeline.IsImportedMotionPlaying,
                         is_recording = pipeline != null && pipeline.IsImportedMotionRecording,
                         recorder_recording = recorder != null && recorder.IsRecording,

@@ -68,9 +68,9 @@ namespace Fbx2Vmd.CharacterLibrary
             }
 
             var host = new GameObject(nameof(CharacterLibraryManager));
-            // 편집 모드 헬퍼는 계층에 보이지 않게 하고 씬에 저장되지 않게 한다.
+            // Play 헬퍼는 씬 수명을 따라 종료 시 제거하고, 편집 헬퍼만 저장에서 제외함.
             host.hideFlags = Application.isPlaying
-                ? HideFlags.DontSave
+                ? HideFlags.None
                 : HideFlags.HideInHierarchy | HideFlags.DontSave;
             _current = host.AddComponent<CharacterLibraryManager>();
             _current._autoCreated = true;
