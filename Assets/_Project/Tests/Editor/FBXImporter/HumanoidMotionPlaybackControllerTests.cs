@@ -15,6 +15,104 @@ namespace Tests.Editor.FBXImporter
         private const float TimeTolerance = 0.0001f;
 
         [Test]
+        public void Given_FootDiffusion_When_SeekingContactTransition_Then_KeepsSoleAboveGround()
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
+            Assert.That(asset, Is.Not.Null, "관통 재현 모델이 필요합니다.");
+            var holder = new GameObject("발 이동 분산 재현")
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            holder.SetActive(false);
+            GameObject target = UnityEngine.Object.Instantiate(asset, holder.transform);
+            foreach (MonoBehaviour script in target.GetComponentsInChildren<MonoBehaviour>(true))
+                if (script != null) script.enabled = false;
+            var floor = new GameObject("발 이동 분산 밑창 검증 바닥")
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            object controller = CreateController();
+            target.transform.position = new Vector3(100f, 0f, 100f);
+            floor.transform.position = new Vector3(100f, -0.05f, 100f);
+            floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
+            target.SetActive(true);
+            holder.SetActive(true);
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator,
+                    LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Invoke(controller, "SetIkGoalFootDrive", true, 1f);
+                Invoke(controller, "SetFootStepDiffusion", true);
+                Transform[] bones = new[]
+                {
+                    HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg,
+                    HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes,
+                    HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg,
+                    HumanBodyBones.RightFoot, HumanBodyBones.RightToes,
+                }.Select(animator.GetBoneTransform).ToArray();
+                Vector3[] positions = bones.Select(b => b.localPosition).ToArray();
+                Vector3[] scales = bones.Select(b => b.localScale).ToArray();
+                Physics.SyncTransforms();
+                float minimum = float.PositiveInfinity;
+                int measuredFrames = 0;
+                for (int frame = 2385; frame <= 2396; frame++)
+                {
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
+                    measuredFrames++;
+                    object[] surface = { null, null };
+                    Assert.That((bool)Invoke(controller, "TryCaptureCurrentFootSurface", surface), Is.True);
+                    Assert.That((bool)surface[1].GetType().GetField("has_ground").GetValue(surface[1]), Is.True);
+                    float clearance = (float)surface[1].GetType()
+                        .GetField("minimum_distance_mm").GetValue(surface[1]);
+                    Assert.That(float.IsNaN(clearance) || float.IsInfinity(clearance), Is.False);
+                    minimum = Mathf.Min(minimum, clearance);
+                    for (int index = 0; index < bones.Length; index++)
+                    {
+                        Assert.That(Vector3.Distance(bones[index].localPosition, positions[index]),
+                            Is.LessThan(0.00001f));
+                        Assert.That(bones[index].localScale, Is.EqualTo(scales[index]));
+                    }
+                }
+                Assert.That(measuredFrames, Is.EqualTo(12));
+                TestContext.WriteLine($"최저 밑창={minimum:F6}mm, 계측={measuredFrames}프레임");
+                Assert.That(minimum, Is.GreaterThanOrEqualTo(-1f),
+                    "발 이동 분산 후 실제 밑창이 지면 아래로 내려가면 안 됩니다.");
+
+                // 순차 재생 검증의 이력을 보존한 뒤 별도로 동일 시각 재평가를 검사함.
+                for (int frame = 2385; frame <= 2389; frame++)
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
+                Vector3[] contactPositions = bones.Select(b => b.position).ToArray();
+                Quaternion[] contactRotations = bones.Select(b => b.rotation).ToArray();
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+                object diffuser = controller.GetType().GetField("_footStepDiffuser", flags).GetValue(controller);
+                object track = diffuser.GetType().GetField("_right", flags).GetValue(diffuser);
+                Vector3 debt = (Vector3)track.GetType().GetField("Debt", flags).GetValue(track);
+                for (int repeat = 0; repeat < 3; repeat++)
+                {
+                    Assert.That((bool)Invoke(controller, "SeekFrame", 2389), Is.True);
+                    track = diffuser.GetType().GetField("_right", flags).GetValue(diffuser);
+                    Vector3 repeatedDebt = (Vector3)track.GetType().GetField("Debt", flags).GetValue(track);
+                    Assert.That(Vector3.Distance(repeatedDebt, debt), Is.LessThan(0.00001f));
+                    for (int index = 0; index < bones.Length; index++)
+                    {
+                        Assert.That(Vector3.Distance(bones[index].position, contactPositions[index]),
+                            Is.LessThan(0.00001f));
+                        Assert.That(Quaternion.Angle(bones[index].rotation, contactRotations[index]),
+                            Is.LessThan(0.05f));
+                    }
+                }
+            }
+            finally
+            {
+                DisposeController(controller);
+                UnityEngine.Object.DestroyImmediate(floor);
+                UnityEngine.Object.DestroyImmediate(holder);
+            }
+        }
+
+        [Test]
         public void Given_GateFallback_When_SeekingRotatedFoot_Then_KeepsSoleAboveGround()
         {
             GameObject target = InstantiateTarget();

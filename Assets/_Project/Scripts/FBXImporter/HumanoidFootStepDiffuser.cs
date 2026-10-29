@@ -47,7 +47,8 @@ namespace Fbx2Vmd.FBXImporter
             _hasLastTime = false;
         }
 
-        internal bool TryApply(float timeSeconds, float frameRate)
+        internal bool TryApply(float timeSeconds, float frameRate,
+            HumanoidGroundResponse groundResponse = null, HumanoidFootGrounding grounding = null)
         {
             if (_left.Foot == null || _right.Foot == null)
                 return false;
@@ -65,11 +66,13 @@ namespace Fbx2Vmd.FBXImporter
                 _right.Reset();
             }
 
-            bool applied = Apply(ref _left, dt) | Apply(ref _right, dt);
+            bool applied = Apply(ref _left, dt, true, groundResponse, grounding) |
+                Apply(ref _right, dt, false, groundResponse, grounding);
             return applied;
         }
 
-        private static bool Apply(ref FootTrack track, float dt)
+        private static bool Apply(ref FootTrack track, float dt, bool isLeft,
+            HumanoidGroundResponse groundResponse, HumanoidFootGrounding grounding)
         {
             Vector3 raw = track.Foot.position;
             float rawDelta = track.HasState
@@ -103,6 +106,17 @@ namespace Fbx2Vmd.FBXImporter
             track.Debt = Vector3.MoveTowards(track.Debt, Vector3.zero,
                 DiffuseSpeedMetersPerSecond * dt);
             Vector3 target = raw + track.Debt;
+            // 앞선 접지 보정을 잔여 이동이 되돌리지 않도록 최종 후보의 밑창을 검사함.
+            if (groundResponse != null)
+            {
+                Physics.SyncTransforms();
+                if (groundResponse.TryConstrainFootTarget(isLeft, target, grounding,
+                        out Vector3 constrained) && (constrained - target).sqrMagnitude > 0f)
+                {
+                    target = constrained;
+                    track.Debt = target - raw;
+                }
+            }
             if ((target - raw).sqrMagnitude < 0.000000001f)
             {
                 track.PrevOut = raw;

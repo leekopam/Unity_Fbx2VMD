@@ -55,16 +55,9 @@ namespace Fbx2Vmd.FBXImporter
             HumanoidFootGrounding grounding)
         {
             if (leg.Upper == null || leg.Lower == null || leg.Foot == null ||
-                !TryFindGround(leg.Foot.position, out RaycastHit ground))
+                !TryConstrainFootTarget(isLeft, leg.Foot.position, grounding, out Vector3 target))
                 return;
 
-            Vector3 target;
-            if (grounding == null || !grounding.TryGetSoleLiftTarget(
-                    isLeft, ground.point, ground.normal, out target))
-            {
-                target = leg.Foot.position;
-                target.y = Mathf.Max(target.y, ground.point.y + leg.BottomHeight);
-            }
             if ((target - leg.Foot.position).sqrMagnitude <= 0.0000000001f)
                 return;
 
@@ -94,6 +87,23 @@ namespace Fbx2Vmd.FBXImporter
             leg.Foot.rotation = footRotation;
             if (leg.Toes != null)
                 leg.Toes.rotation = toeRotation;
+        }
+
+        internal bool TryConstrainFootTarget(bool isLeft, Vector3 candidateWorld,
+            HumanoidFootGrounding grounding, out Vector3 target)
+        {
+            target = candidateWorld;
+            Leg leg = isLeft ? _left : _right;
+            if (leg.Foot == null || !TryFindGround(candidateWorld, out RaycastHit ground))
+                return false;
+
+            if (grounding == null || !grounding.TryGetSoleLiftTarget(
+                    isLeft, candidateWorld, ground.point, ground.normal, out target))
+            {
+                target = candidateWorld;
+                target.y = Mathf.Max(target.y, ground.point.y + leg.BottomHeight);
+            }
+            return true;
         }
 
         internal bool TryFindGround(Vector3 footPosition, out RaycastHit ground)

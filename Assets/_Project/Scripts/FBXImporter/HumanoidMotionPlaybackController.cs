@@ -454,7 +454,8 @@ namespace Fbx2Vmd.FBXImporter
                 leftBendNormal, rightBendNormal);
             // 발 계층 최종 출력의 단발 순간이동을 확산 — 모든 경로 반환부를 감쌈.
             if (_useFootStepDiffusion)
-                _footStepDiffuser.TryApply(CurrentTimeSeconds, ClipFrameRate);
+                _footStepDiffuser.TryApply(CurrentTimeSeconds, ClipFrameRate,
+                    _isGroundResponseEnabled ? _groundResponse : null, _footGrounding);
             return isApplied;
         }
 

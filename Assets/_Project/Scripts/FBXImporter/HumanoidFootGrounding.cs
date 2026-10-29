@@ -340,7 +340,7 @@ namespace Fbx2Vmd.FBXImporter
             return true;
         }
 
-        internal bool TryGetSoleLiftTarget(bool isLeft, Vector3 planePoint,
+        internal bool TryGetSoleLiftTarget(bool isLeft, Vector3 candidateWorld, Vector3 planePoint,
             Vector3 planeNormal, out Vector3 target)
         {
             target = default;
@@ -353,7 +353,7 @@ namespace Fbx2Vmd.FBXImporter
                 return false;
 
             return HumanoidSoleGroundConstraint.TryLiftAbovePlane(
-                leg.Foot.position, leg.Foot.rotation, leg.Sampler.LocalSolePoints,
+                candidateWorld, leg.Foot.rotation, leg.Sampler.LocalSolePoints,
                 leg.Foot.lossyScale.x, planePoint, planeNormal, out target, out _);
         }
 

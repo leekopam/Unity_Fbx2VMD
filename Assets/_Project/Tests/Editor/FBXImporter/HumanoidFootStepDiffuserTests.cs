@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Reflection;
 using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using UnityEditor;
@@ -106,6 +108,84 @@ namespace Tests.Editor.FBXImporter
                     "탐색 직후 프레임은 확산 없이 원본 위치를 유지해야 함");
             }
             finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void Given_UnconstrainedAirborneStep_When_Applying_Then_PreservesNegativeDebt(
+            bool useGroundResponse, bool hasGround)
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null, "분산 회귀 모델이 필요합니다.");
+            GameObject floor = null;
+            try
+            {
+                Transform foot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform[] bones = animator.GetComponentsInChildren<Transform>(true);
+                Vector3[] positions = bones.Select(b => b.localPosition).ToArray();
+                Quaternion[] rotations = bones.Select(b => b.localRotation).ToArray();
+                Vector3 planted = foot.position;
+                Vector3 raw = planted + new Vector3(0f, 0.15f, 0.15f);
+                if (hasGround)
+                {
+                    floor = new GameObject("공중 분산 회귀 바닥");
+                    floor.transform.position = new Vector3(planted.x,
+                        planted.y - animator.leftFeetBottomHeight - 0.15f, planted.z);
+                    floor.AddComponent<BoxCollider>().size = new Vector3(2f, 0.1f, 2f);
+                }
+                var response = new HumanoidGroundResponse();
+                response.Initialize(animator);
+                Physics.SyncTransforms();
+                Assert.That(response.TryFindGround(raw, out _), Is.EqualTo(hasGround));
+                Vector3 baseline = default;
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    RestorePose();
+                    var diffuser = new HumanoidFootStepDiffuser();
+                    diffuser.Initialize(animator);
+                    diffuser.TryApply(0f, FrameRate);
+                    diffuser.TryApply(1f / FrameRate, FrameRate);
+                    foot.position = raw;
+                    Quaternion rotation = foot.rotation;
+                    HumanoidGroundResponse constraint = pass == 1 && useGroundResponse ? response : null;
+                    Assert.That(diffuser.TryApply(2f / FrameRate, FrameRate, constraint), Is.True);
+                    var flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+                    object track = typeof(HumanoidFootStepDiffuser).GetField("_left", flags).GetValue(diffuser);
+                    Vector3 debt = (Vector3)track.GetType().GetField("Debt", flags).GetValue(track);
+                    Assert.That(debt.y, Is.LessThan(0f),
+                        "공중에서 음수 수직 잔여를 임의로 제거하면 안 됩니다.");
+                    Assert.That(Quaternion.Angle(foot.rotation, rotation), Is.LessThan(0.01f));
+                    if (pass == 0) baseline = foot.position;
+                    else Assert.That(Vector3.Distance(foot.position, baseline), Is.LessThan(0.00001f));
+
+                    for (int repeat = 0; repeat < 3; repeat++)
+                    {
+                        RestorePose();
+                        foot.position = raw;
+                        diffuser.TryApply(2f / FrameRate, FrameRate, constraint);
+                        track = typeof(HumanoidFootStepDiffuser).GetField("_left", flags).GetValue(diffuser);
+                        Vector3 repeatedDebt = (Vector3)track.GetType().GetField("Debt", flags).GetValue(track);
+                        Assert.That(Vector3.Distance(repeatedDebt, debt), Is.LessThan(0.00001f));
+                        Assert.That(Vector3.Distance(foot.position, baseline), Is.LessThan(0.00001f),
+                            "같은 원본 자세와 시각의 재평가에서 잔여를 소진하면 안 됩니다.");
+                    }
+                }
+
+                void RestorePose()
+                {
+                    for (int index = 0; index < bones.Length; index++)
+                    {
+                        bones[index].localPosition = positions[index];
+                        bones[index].localRotation = rotations[index];
+                    }
+                }
+            }
+            finally
+            {
+                if (floor != null) Object.DestroyImmediate(floor);
+                Object.DestroyImmediate(animator.transform.root.gameObject);
+            }
         }
 
         private static Animator LoadTargetAnimator()
