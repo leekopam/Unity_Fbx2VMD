@@ -28,10 +28,14 @@ test("onboarding shell renders one page-owned settings region without the camera
   assert.doesNotMatch(html, /class="tree-item selected"/);
 });
 
-test("onboarding shell renders three color cards with a single FBX import button as the primary action", async () => {
+test("onboarding shell exposes FBX import and motion playback cards", async () => {
   const html = await fs.readFile(htmlUrl, "utf8");
 
-  assert.equal((html.match(/class="onboarding-card/g) ?? []).length, 3);
+  assert.equal((html.match(/class="onboarding-card/g) ?? []).length, 4);
+  assert.match(html, /data-card="motion-playback"/);
+  for (const id of ["playMotionButton", "pauseMotionButton", "stopMotionButton"]) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*type="button"[^>]*disabled`));
+  }
   assert.match(html, /<article class="onboarding-card card-primary" data-card="fbx-import">/);
   assert.match(html, /<article class="onboarding-card card-secondary" data-card="interaction">/);
   assert.match(html, /<article class="onboarding-card card-tertiary" data-card="community">/);

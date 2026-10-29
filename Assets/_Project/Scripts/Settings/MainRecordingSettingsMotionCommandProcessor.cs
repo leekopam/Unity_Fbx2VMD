@@ -46,7 +46,9 @@ namespace Fbx2Vmd.Settings
         {
             return action == MainRecordingSettingsCommandEnvelope.PlayImportedMotionAction ||
                    action == MainRecordingSettingsCommandEnvelope.PauseImportedMotionAction ||
-                   action == MainRecordingSettingsCommandEnvelope.StopImportedMotionAction;
+                   action == MainRecordingSettingsCommandEnvelope.StopImportedMotionAction ||
+                   action == MainRecordingSettingsCommandEnvelope.EnableNativeSkinningCorrectionAction ||
+                   action == MainRecordingSettingsCommandEnvelope.DisableNativeSkinningCorrectionAction;
         }
 
         private static MainRecordingSettingsCommandResult Execute(

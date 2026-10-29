@@ -263,16 +263,12 @@ namespace Fbx2Vmd.FBXImporter
 
         internal void Invalidate()
         {
-            if (IsPreparing)
+            bool hadSession = _preprocessSession != null;
+            ResetTransientState();
+            if (hadSession)
             {
-                CancelPreparation();
-                return;
+                _playbackController?.Stop();
             }
-            DisposePresenters();
-            IsReady = false;
-            IsFaulted = false;
-            FailureMessage = string.Empty;
-            Result = null;
         }
 
         internal void Release()

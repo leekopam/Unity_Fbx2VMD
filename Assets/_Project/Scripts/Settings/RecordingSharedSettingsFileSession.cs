@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using UnityEngine;
 
 namespace Fbx2Vmd.Settings
 {
@@ -41,6 +43,24 @@ namespace Fbx2Vmd.Settings
             MainRecordingSettingsDocument document = store.LoadOrCreateDefault();
             document.runtimeState = MainRecordingSettingsState.Create(playMode, DateTime.UtcNow);
             Save(document);
+        }
+
+        internal void WriteMotionState(MainRecordingSettingsState state)
+        {
+            state.updatedAtUtc = DateTime.UtcNow.ToString("O");
+            // 명령 문서와 작성자를 분리하여 주기 상태 게시가 새 명령을 덮지 않게 함.
+            string path = store.SettingsFilePath + ".runtime-state.json";
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            string temporaryPath = path + ".tmp";
+            File.WriteAllText(temporaryPath, JsonUtility.ToJson(state));
+            if (File.Exists(path))
+            {
+                File.Replace(temporaryPath, path, null);
+            }
+            else
+            {
+                File.Move(temporaryPath, path);
+            }
         }
 
         internal void Save(MainRecordingSettingsDocument document)

@@ -56,6 +56,18 @@ export function createRuntimeStateRequest({ apiBaseUrl = DEFAULT_API_BASE_URL } 
   };
 }
 
+export async function postMotionCommand({ apiBaseUrl = DEFAULT_API_BASE_URL, action, fetchImpl = globalThis.fetch }) {
+  const response = await fetchImpl(`${normalizeBaseUrl(apiBaseUrl)}/motion-command`, withBridgeToken({
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action })
+  }));
+  if (!response.ok) {
+    throw new Error(`모션 요청 실패 (${response.status}): ${await response.text()}`);
+  }
+  return await response.json();
+}
+
 export async function getRuntimeState({
   apiBaseUrl = DEFAULT_API_BASE_URL,
   fetchImpl = globalThis.fetch
@@ -89,6 +101,7 @@ export function createSettingsAutoConnectionController({
   clearTimeoutImpl = globalThis.clearTimeout,
   onStatusChange = () => {},
   onPlayModeChange = () => {},
+  onStateChange = () => {},
   onMessage = () => {},
   onError = () => {}
 } = {}) {
@@ -101,6 +114,7 @@ export function createSettingsAutoConnectionController({
     const stateDocument = await fetchRuntimeState();
     const playMode = normalizePlayMode(stateDocument?.runtimeState?.playMode ?? stateDocument?.playMode);
     onPlayModeChange(playMode);
+    onStateChange(stateDocument);
     connectIfNeeded();
   }
 

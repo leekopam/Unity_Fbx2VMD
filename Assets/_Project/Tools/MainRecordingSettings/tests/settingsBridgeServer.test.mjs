@@ -7,7 +7,7 @@ import WebSocket from "ws";
 
 import { createSettingsBridgeServer } from "../server/settingsBridgeServer.js";
 
-test("모션 명령은 허용된 세 동작만 접수하고 대기 명령을 보존한다", async (t) => {
+test("모션 명령은 허용된 동작만 접수하고 대기 명령을 보존한다", async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "motion-bridge-"));
   const settingsPath = path.join(root, "settings.json");
   const bridge = createSettingsBridgeServer({ settingsPath, port: 0 });
@@ -16,7 +16,7 @@ test("모션 명령은 허용된 세 동작만 접수하고 대기 명령을 보
   const post = action => fetch(`${bridge.baseUrl}/motion-command`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action })
   });
-  for (const action of ["PlayImportedMotion", "PauseImportedMotion", "StopImportedMotion"]) {
+  for (const action of ["PlayImportedMotion", "PauseImportedMotion", "StopImportedMotion", "EnableNativeSkinningCorrection", "DisableNativeSkinningCorrection"]) {
     await fs.writeFile(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" }, fbxPath: "fixture.fbx" }));
     const accepted = await post(action);
     assert.equal(accepted.status, 200);
@@ -134,7 +134,8 @@ test("settings bridge exposes normalized runtime state through GET /state", asyn
       runtimeState: {
         playMode: "playing",
         updatedAtUtc: "2026-06-18T04:00:00.000Z"
-      }
+      },
+      lastCommandResult: { commandId: "", action: "", state: "", message: "", finishedAtUtc: "", settingsPath }
     }),
     "utf8"
   );
@@ -152,7 +153,8 @@ test("settings bridge exposes normalized runtime state through GET /state", asyn
       runtimeState: {
         playMode: "playing",
         updatedAtUtc: "2026-06-18T04:00:00.000Z"
-      }
+      },
+      lastCommandResult: { commandId: "", action: "", state: "", message: "", finishedAtUtc: "", settingsPath }
     });
   } finally {
     await bridge.close();

@@ -163,6 +163,7 @@ public sealed class RecordingSetting : MonoBehaviour
 
         nextSharedSettingsPollTime = now + Mathf.Max(0.1f, sharedSettingsPollingIntervalSeconds);
         PollSharedSettingsIfChanged();
+        WriteMotionStateQuietly();
     }
 
     public void StartManualRecording()
@@ -283,6 +284,36 @@ public sealed class RecordingSetting : MonoBehaviour
         {
             Debug.LogWarning($"[RecordingSetting] {result.UserMessage}");
         }
+        WriteMotionStateQuietly(playMode == MainRecordingSettingsState.Playing);
+    }
+
+    private void WriteMotionStateQuietly(bool isPlaying = true)
+    {
+        try
+        {
+            EnsureSharedSettingsFileSession();
+            var state = new MainRecordingSettingsState
+            {
+                playMode = isPlaying ? MainRecordingSettingsState.Playing : MainRecordingSettingsState.Stopped
+            };
+            FBXVmdPipeline pipeline = recordingFBXVmdPipeline;
+            if (isPlaying && pipeline != null)
+            {
+                state.hasPreparedMotion = pipeline.HasPreparedImportedMotion;
+                state.isPlayingMotion = pipeline.IsImportedMotionPlaying;
+                state.isPreparingMotion = pipeline.IsPreparingImportedMotionCorrection;
+                state.isRecording = pipeline.IsImportedMotionRecording;
+                state.motionTimeSeconds = pipeline.ImportedMotionCurrentTimeSeconds;
+                state.motionError = pipeline.SessionState == FBXVmdPipeline.FBXSessionState.Failed ? pipeline.LastSessionMessage : string.Empty;
+                state.isSurfaceCorrectionEnabled = pipeline.IsNativeSkinningCorrectionEnabled;
+                state.surfaceCorrectionFailure = pipeline.LastNativeSkinningCorrectionFailure;
+            }
+            sharedSettingsFileSession.WriteMotionState(state);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"[RecordingSetting] 모션 상태 기록 실패: {exception.Message}");
+        }
     }
 
     private MainRecordingSettingsActionResult WriteRuntimePlayModeState(string playMode)
@@ -331,6 +362,8 @@ public sealed class RecordingSetting : MonoBehaviour
                 MainRecordingSettingsCommandEnvelope.PlayImportedMotionAction => resolvedFBXVmdPipeline.TryPlayImportedMotion(),
                 MainRecordingSettingsCommandEnvelope.PauseImportedMotionAction => resolvedFBXVmdPipeline.TryPauseImportedMotion(),
                 MainRecordingSettingsCommandEnvelope.StopImportedMotionAction => resolvedFBXVmdPipeline.TryStopImportedMotion(),
+                MainRecordingSettingsCommandEnvelope.EnableNativeSkinningCorrectionAction => resolvedFBXVmdPipeline.TrySetNativeSkinningCorrectionEnabled(true),
+                MainRecordingSettingsCommandEnvelope.DisableNativeSkinningCorrectionAction => resolvedFBXVmdPipeline.TrySetNativeSkinningCorrectionEnabled(false),
                 _ => false,
             };
         if (sharedSettingsMotionCommandProcessor.TryProcess(

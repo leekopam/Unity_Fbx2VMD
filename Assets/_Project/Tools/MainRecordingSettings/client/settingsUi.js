@@ -3,7 +3,8 @@ import {
   DEFAULT_WS_URL,
   createSettingsAutoConnectionController,
   getRuntimeState,
-  postImportFbx
+  postImportFbx,
+  postMotionCommand
 } from "./settingsApi.js";
 
 const statusLabels = {
@@ -91,6 +92,11 @@ export function bootstrapSettingsUi(root = document, {
   const elements = {
     shell: root.querySelector(".app-shell"),
     importButton: root.querySelector("#importButton"),
+    playMotionButton: root.querySelector("#playMotionButton"),
+    pauseMotionButton: root.querySelector("#pauseMotionButton"),
+    stopMotionButton: root.querySelector("#stopMotionButton"),
+    motionStatus: root.querySelector("#motionStatus"),
+    surfaceCorrectionButton: root.querySelector("#surfaceCorrectionButton"),
     statusBadge: root.querySelector("#statusBadge"),
     statusText: root.querySelector("#statusText"),
     feedback: root.querySelector("#feedback"),
@@ -142,6 +148,10 @@ export function bootstrapSettingsUi(root = document, {
 
   let isSubmitting = false;
   let isPlaying = false;
+  let motionState = {};
+  let isMotionSubmitting = false;
+  let pendingMotionCommandId = "";
+  let motionCommandDeadline = 0;
   const autoConnection = createSettingsAutoConnectionController({
     createWebSocketChannel,
     apiBaseUrl: () => getBridgeConfig().apiBaseUrl ?? DEFAULT_API_BASE_URL,
@@ -161,7 +171,24 @@ export function bootstrapSettingsUi(root = document, {
       }
     },
     onMessage: (message) => appendLog("수신", message),
-    onError: () => setFeedback("Unity 상태 확인 또는 WebSocket 연결에 실패했습니다.", "error")
+    onStateChange: (document) => {
+      motionState = document.runtimeState ?? {};
+      const result = document.lastCommandResult;
+      if (pendingMotionCommandId && result?.commandId === pendingMotionCommandId && result.state !== "running") {
+        pendingMotionCommandId = "";
+        setFeedback(result.message, result.state === "success" ? "success" : "error");
+      } else if (pendingMotionCommandId && Date.now() >= motionCommandDeadline) {
+        pendingMotionCommandId = "";
+        setFeedback("모션 명령 응답이 지연됩니다. 현재 상태를 확인한 뒤 다시 시도해 주세요.", "error");
+      }
+      refreshControls();
+    },
+    onError: () => {
+      isPlaying = false;
+      motionState = {};
+      refreshControls();
+      setFeedback("Unity 상태 확인 또는 WebSocket 연결에 실패했습니다.", "error");
+    }
   });
 
   setConnectionStatus("idle");
@@ -171,6 +198,34 @@ export function bootstrapSettingsUi(root = document, {
   refreshControls();
   autoConnection.start();
   globalThis.window?.addEventListener?.("beforeunload", () => autoConnection.stop());
+
+  for (const [button, action] of [
+    [elements.playMotionButton, "PlayImportedMotion"],
+    [elements.pauseMotionButton, "PauseImportedMotion"],
+    [elements.stopMotionButton, "StopImportedMotion"],
+    [elements.surfaceCorrectionButton, () => motionState.isSurfaceCorrectionEnabled === false
+      ? "EnableNativeSkinningCorrection" : "DisableNativeSkinningCorrection"]
+  ]) {
+    button?.addEventListener("click", async () => {
+      if (button.disabled) return;
+      isMotionSubmitting = true;
+      refreshControls();
+      try {
+        const result = await postMotionCommand({
+          apiBaseUrl: getBridgeConfig().apiBaseUrl ?? DEFAULT_API_BASE_URL,
+          action: typeof action === "function" ? action() : action
+        });
+        pendingMotionCommandId = result.commandId;
+        motionCommandDeadline = Date.now() + 15000;
+        setFeedback("모션 명령 응답을 기다리는 중입니다.", "loading");
+      } catch (error) {
+        setFeedback(error.message, "error");
+      } finally {
+        isMotionSubmitting = false;
+        refreshControls();
+      }
+    });
+  }
 
   elements.importButton.addEventListener("click", async () => {
     if (isSubmitting || !isPlaying) {
@@ -375,6 +430,15 @@ export function bootstrapSettingsUi(root = document, {
   function refreshControls() {
     elements.importButton.disabled = isSubmitting || !isPlaying;
     elements.importButton.textContent = isSubmitting ? "가져오는 중..." : "FBX 가져오기";
+    const controls = resolveMotionControls(motionState, isPlaying, isMotionSubmitting || !!pendingMotionCommandId);
+    if (elements.playMotionButton) elements.playMotionButton.disabled = !controls.canPlay;
+    if (elements.pauseMotionButton) elements.pauseMotionButton.disabled = !controls.canPause;
+    if (elements.stopMotionButton) elements.stopMotionButton.disabled = !controls.canStop;
+    if (elements.motionStatus) elements.motionStatus.textContent = controls.message;
+    if (elements.surfaceCorrectionButton) {
+      elements.surfaceCorrectionButton.disabled = !controls.canStop;
+      elements.surfaceCorrectionButton.textContent = motionState.isSurfaceCorrectionEnabled === false ? "표면 보정 켜기" : "표면 보정 끄기";
+    }
   }
 
   function setConnectionStatus(status) {
@@ -422,6 +486,24 @@ function formatPayload(payload) {
   }
 
   return JSON.stringify(payload);
+}
+
+export function resolveMotionControls(state, isUnityPlaying, isBusy = false) {
+  const ready = isUnityPlaying && state.hasPreparedMotion === true;
+  const available = ready && !state.isRecording && !isBusy;
+  const time = Number.isFinite(state.motionTimeSeconds) ? Math.max(0, state.motionTimeSeconds).toFixed(1) : "0.0";
+  const message = !isUnityPlaying ? "Unity Play 상태에서 사용할 수 있습니다."
+    : state.motionError ? `모션 준비 실패: ${state.motionError}`
+    : state.isRecording ? "녹화 중에는 재생 제어를 사용할 수 없습니다."
+    : state.isPreparingMotion ? "모션 보정을 준비하고 있습니다."
+    : !ready ? "FBX를 먼저 가져와 주세요."
+    : `${state.isPlayingMotion ? "재생 중" : "정지 / 일시정지"} · ${time}초${state.isSurfaceCorrectionEnabled === false ? " · 표면 보정 OFF 비교 · 품질 미검증" : ""}`;
+  return {
+    canPlay: available && !state.isPreparingMotion && !state.isPlayingMotion,
+    canPause: available && !state.isPreparingMotion && state.isPlayingMotion === true,
+    canStop: available,
+    message
+  };
 }
 
 function getBridgeConfig() {

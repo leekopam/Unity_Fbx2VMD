@@ -183,10 +183,8 @@ async function handleHttpRequest({
     sendJsonResponse(response, 200, {
       ok: true,
       settingsPath,
-      runtimeState: {
-        playMode: runtimeState.playMode,
-        updatedAtUtc: runtimeState.updatedAtUtc
-      }
+      runtimeState: Object.fromEntries(Object.entries(runtimeState).filter(([key]) => key !== "settingsPath")),
+      lastCommandResult: await readCommandResult({ settingsPath })
     });
     return;
   }

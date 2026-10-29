@@ -177,6 +177,40 @@ namespace Tests.Editor.Settings
             isReadyProperty.SetValue(driver, true);
         }
 
+        [Test]
+        public void SurfaceCorrectionFailure_ExplicitDisableAllowsPlayback_EnableRestoresGate()
+        {
+            var host = new GameObject("Surface Correction Toggle Test");
+            host.SetActive(false);
+            GameObject target = InstantiateTarget();
+            try
+            {
+                var pipeline = host.AddComponent<FBXVmdPipeline>();
+                pipeline.targetCharacter = target;
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                typeof(FBXVmdPipeline).GetMethod("PrepareEditorHumanoidPlayback", flags).Invoke(pipeline,
+                    new object[] { RequireHumanoidAnimator(target), LoadHumanoidClip(), "satisfaction_2", null });
+                typeof(FBXVmdPipeline).GetField("_nativeSkinningCorrectionSetupError", flags).SetValue(pipeline, "표면 보정 실패 재현");
+                Assert.That(pipeline.TryPlayImportedMotion(), Is.False);
+                MethodInfo toggle = typeof(FBXVmdPipeline).GetMethod("TrySetNativeSkinningCorrectionEnabled", flags);
+                Assert.That(toggle, Is.Not.Null);
+                Assert.That(toggle.Invoke(pipeline, new object[] { false }), Is.EqualTo(true));
+                Assert.That(pipeline.TryPlayImportedMotion(), Is.True);
+                Assert.That(pipeline.IsImportedMotionPlaying, Is.True);
+                Assert.That(pipeline.IsPreparingImportedMotionCorrection, Is.False);
+                Assert.That(pipeline.TryPauseImportedMotion(), Is.True);
+                Assert.That(pipeline.TryStopImportedMotion(), Is.True);
+                Assert.That(pipeline.ImportedMotionCurrentFrameIndex, Is.Zero);
+                Assert.That(toggle.Invoke(pipeline, new object[] { true }), Is.EqualTo(true));
+                Assert.That(pipeline.TryPlayImportedMotion(), Is.False, "보정 재활성 시 실패 기준을 다시 적용해야 함");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
         private static void TickNativeSkinningCorrectionPreparation(FBXVmdPipeline pipeline)
         {
             MethodInfo tickMethod = typeof(FBXVmdPipeline).GetMethod(

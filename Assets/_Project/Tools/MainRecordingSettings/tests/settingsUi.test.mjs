@@ -1,7 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { bootstrapSettingsUi } from "../client/settingsUi.js";
+import { bootstrapSettingsUi, resolveMotionControls } from "../client/settingsUi.js";
+
+test("모션 버튼은 실제 준비·재생·녹화 상태에 따라 전환한다", () => {
+  assert.equal(resolveMotionControls({}, true).canPlay, false);
+  const ready = { hasPreparedMotion: true, motionTimeSeconds: 2.5 };
+  assert.equal(resolveMotionControls(ready, true).canPlay, true);
+  assert.equal(resolveMotionControls(ready, true).canPause, false);
+  assert.equal(resolveMotionControls({ ...ready, isPlayingMotion: true }, true).canPause, true);
+  assert.equal(resolveMotionControls({ ...ready, isPlayingMotion: true }, true).canPlay, false);
+  assert.equal(resolveMotionControls({ ...ready, isPreparingMotion: true }, true).canPlay, false);
+  assert.equal(resolveMotionControls({ ...ready, isPreparingMotion: true }, true).canStop, true);
+  for (const controls of [resolveMotionControls(ready, false), resolveMotionControls(ready, true, true),
+    resolveMotionControls({ ...ready, isRecording: true }, true)]) {
+    assert.equal(controls.canPlay || controls.canPause || controls.canStop, false);
+  }
+  assert.match(resolveMotionControls(ready, true).message, /2.5초/);
+});
 
 const fakeChannel = () => ({ disconnect() {} });
 

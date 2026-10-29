@@ -9,6 +9,8 @@ namespace Fbx2Vmd.Settings
         public const string PlayImportedMotionAction = "PlayImportedMotion";
         public const string PauseImportedMotionAction = "PauseImportedMotion";
         public const string StopImportedMotionAction = "StopImportedMotion";
+        public const string EnableNativeSkinningCorrectionAction = "EnableNativeSkinningCorrection";
+        public const string DisableNativeSkinningCorrectionAction = "DisableNativeSkinningCorrection";
         public const string LoadCharacterAction = "LoadCharacter";
         public const string ApplyPresetAction = "ApplyPreset";
         public const string SavePresetAction = "SavePreset";

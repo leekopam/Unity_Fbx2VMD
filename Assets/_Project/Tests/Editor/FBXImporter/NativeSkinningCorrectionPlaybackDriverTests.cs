@@ -26,8 +26,9 @@ namespace Tests.Editor.FBXImporter
             method.Invoke(null, new object[] { ClipAssetPath });
         }
 
-        [Test]
-        public void Given_ConfiguredDriver_When_CancelingPreparation_Then_RestoresRendererStates()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Given_ConfiguredDriver_When_CancelingPreparation_Then_RestoresRendererStates(bool completedBeforeInvalidation)
         {
             GameObject target = InstantiateTarget();
             GameObject host = new GameObject("Native Skinning Driver Test Host")
@@ -73,7 +74,20 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(renderers.All(renderer => !renderer.enabled), Is.True,
                     "사전 계산 중 빠르게 탐색하는 자세가 화면에 노출되면 안 됩니다.");
 
-                Invoke(driver, "CancelPreparation");
+                if (completedBeforeInvalidation)
+                {
+                    FieldInfo sessionField = driverType.GetField("_preprocessSession", BindingFlags.Instance | BindingFlags.NonPublic);
+                    object session = sessionField.GetValue(driver);
+                    session.GetType().GetField("_isComplete", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(session, true);
+                    Assert.That(ReadProperty<bool>(driver, "IsPreparing"), Is.False);
+                    Invoke(driver, "Invalidate");
+                    Assert.That(sessionField.GetValue(driver), Is.Null);
+                    Invoke(driver, "LateUpdate");
+                }
+                else
+                {
+                    Invoke(driver, "CancelPreparation");
+                }
 
                 Assert.That(ReadProperty<bool>(driver, "IsPreparing"), Is.False);
                 Assert.That(ReadProperty<bool>(driver, "IsReady"), Is.False);

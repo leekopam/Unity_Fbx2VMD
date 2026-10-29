@@ -13,6 +13,19 @@ import {
   resolveSettingsFilePath
 } from "../server/settingsDocumentStore.js";
 
+test("별도 모션 상태는 명령을 보존하고 10초 지난 재생 상태를 폐기한다", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "motion-state-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const settingsPath = path.join(root, "settings.json");
+  const original = JSON.stringify({ pendingCommand: { commandId: "keep", action: "ImportFbx" }, runtimeState: { playMode: "playing" } });
+  await fs.writeFile(settingsPath, original);
+  const state = { playMode: "playing", updatedAtUtc: "2026-10-29T12:00:00Z", hasPreparedMotion: true, isPlayingMotion: true, motionTimeSeconds: 3.5 };
+  await fs.writeFile(`${settingsPath}.runtime-state.json`, JSON.stringify(state));
+  assert.equal((await readRuntimeState({ settingsPath, now: () => new Date("2026-10-29T12:00:01Z") })).motionTimeSeconds, 3.5);
+  assert.equal((await readRuntimeState({ settingsPath, now: () => new Date("2026-10-29T12:00:11Z") })).playMode, "stopped");
+  assert.equal(await fs.readFile(settingsPath, "utf8"), original);
+});
+
 test("resolveSettingsFilePath uses explicit path before environment and defaults", () => {
   assert.equal(
     resolveSettingsFilePath({

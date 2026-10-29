@@ -11,6 +11,14 @@ namespace Fbx2Vmd.Settings
 
         public string playMode = Stopped;
         public string updatedAtUtc = string.Empty;
+        public bool hasPreparedMotion;
+        public bool isPlayingMotion;
+        public bool isPreparingMotion;
+        public bool isRecording;
+        public float motionTimeSeconds;
+        public string motionError = string.Empty;
+        public bool isSurfaceCorrectionEnabled = true;
+        public string surfaceCorrectionFailure = string.Empty;
 
         public static MainRecordingSettingsState Create(string playMode, DateTime utcNow)
         {

@@ -11,7 +11,8 @@ export const IMPORT_FBX_ACTION = "ImportFbx";
 export const PLAY_MODE_PLAYING = "playing";
 export const PLAY_MODE_STOPPED = "stopped";
 export const MOTION_COMMAND_ACTIONS = Object.freeze([
-  "PlayImportedMotion", "PauseImportedMotion", "StopImportedMotion"
+  "PlayImportedMotion", "PauseImportedMotion", "StopImportedMotion",
+  "EnableNativeSkinningCorrection", "DisableNativeSkinningCorrection"
 ]);
 
 // Unity 측 MainRecordingSettingsCommandEnvelope의 캐릭터 액션 상수와 동일하게 유지한다.
@@ -68,8 +69,20 @@ export function createDefaultSettingsDocument() {
 }
 
 export async function readRuntimeState({
-  settingsPath = resolveSettingsFilePath()
+  settingsPath = resolveSettingsFilePath(), now = () => new Date()
 } = {}) {
+  try {
+    const state = normalizeRuntimeState(JSON.parse(await fs.readFile(`${settingsPath}.runtime-state.json`, "utf8")));
+    const ageMs = now().getTime() - Date.parse(state.updatedAtUtc);
+    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > 10000) {
+      return { ...createDefaultRuntimeState(), settingsPath };
+    }
+    return { ...state, settingsPath };
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
   const document = normalizeDocument(await loadSettingsDocument(settingsPath));
   return {
     ...document.runtimeState,
@@ -120,7 +133,8 @@ export async function queueMotionCommand({
     throw new Error("지원하지 않는 모션 명령입니다.");
   }
   const document = normalizeDocument(await loadSettingsDocument(settingsPath));
-  if (document.runtimeState.playMode !== PLAY_MODE_PLAYING || document.runtimeState.isRecording === true) {
+  const runtimeState = await readRuntimeState({ settingsPath, now });
+  if (runtimeState.playMode !== PLAY_MODE_PLAYING || runtimeState.isRecording === true) {
     throw new Error("녹화 중이 아닌 Unity Play 상태에서만 모션을 제어할 수 있습니다.");
   }
   rejectIfCommandPending(document);

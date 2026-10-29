@@ -23,6 +23,8 @@ namespace Tests.Editor.Settings
         [TestCase("PlayImportedMotion")]
         [TestCase("PauseImportedMotion")]
         [TestCase("StopImportedMotion")]
+        [TestCase("EnableNativeSkinningCorrection")]
+        [TestCase("DisableNativeSkinningCorrection")]
         public void AcceptedCommand_RepeatedEnvelope_ExecutesOnce(string action)
         {
             var document = CreateDocument(action);
@@ -39,6 +41,8 @@ namespace Tests.Editor.Settings
         [TestCase("PlayImportedMotion")]
         [TestCase("PauseImportedMotion")]
         [TestCase("StopImportedMotion")]
+        [TestCase("EnableNativeSkinningCorrection")]
+        [TestCase("DisableNativeSkinningCorrection")]
         public void Recording_RejectsEveryMotionCommand(string action)
         {
             var document = CreateDocument(action);
@@ -108,6 +112,37 @@ namespace Tests.Editor.Settings
             {
                 Directory.Delete(root, true);
             }
+        }
+
+        [Test]
+        public void MotionStateWrite_DoesNotModifyOrHidePendingCommand()
+        {
+            string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, "settings.json");
+            try
+            {
+                var store = new MainRecordingSettingsStore(path);
+                store.Save(CreateDocument("PlayImportedMotion"));
+                string original = File.ReadAllText(path);
+                Type sessionType = Type.GetType("Fbx2Vmd.Settings.RecordingSharedSettingsFileSession, Assembly-CSharp");
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                object session = Activator.CreateInstance(sessionType, flags, null, new object[] { path }, null);
+                var state = MainRecordingSettingsState.Create("playing", DateTime.UtcNow);
+                state.hasPreparedMotion = true;
+                state.motionTimeSeconds = 2.5f;
+                sessionType.GetMethod("WriteMotionState", flags).Invoke(session, new object[] { state });
+                Assert.That(File.ReadAllText(path), Is.EqualTo(original));
+                var saved = UnityEngine.JsonUtility.FromJson<MainRecordingSettingsState>(File.ReadAllText(path + ".runtime-state.json"));
+                Assert.That(saved.motionTimeSeconds, Is.EqualTo(2.5f));
+                sessionType.GetMethod("WriteMotionState", flags).Invoke(session,
+                    new object[] { MainRecordingSettingsState.Create("stopped", DateTime.UtcNow) });
+                saved = UnityEngine.JsonUtility.FromJson<MainRecordingSettingsState>(File.ReadAllText(path + ".runtime-state.json"));
+                Assert.That(saved.playMode, Is.EqualTo("stopped"));
+                Assert.That(saved.hasPreparedMotion, Is.False);
+                Assert.That(File.ReadAllText(path), Is.EqualTo(original));
+            }
+            finally { Directory.Delete(root, true); }
         }
 
         [Test]

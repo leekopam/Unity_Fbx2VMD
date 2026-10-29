@@ -1394,6 +1394,8 @@ namespace Fbx2Vmd.FBXImporter
         private NativeSkinningPendingPlaybackRequest
             _pendingNativeSkinningPlaybackRequest;
         private string _nativeSkinningCorrectionSetupError = string.Empty;
+        public bool IsNativeSkinningCorrectionEnabled { get; private set; } = true;
+        public string LastNativeSkinningCorrectionFailure { get; private set; } = string.Empty;
         private HumanoidPoseCorrectionDocument _poseCorrectionDocument;
         private string _preparedMotionName = string.Empty;
         private float _lastRecordingProgressUpdateTime = -999f;
@@ -1973,6 +1975,33 @@ namespace Fbx2Vmd.FBXImporter
             return _importController.TryImportFromSharedSettings(sourcePath);
         }
 
+        public bool TrySetNativeSkinningCorrectionEnabled(bool enabled)
+        {
+            if (IsImportedMotionRecording || IsProcessing || !HasPreparedImportedMotion)
+            {
+                return false;
+            }
+            if (IsNativeSkinningCorrectionEnabled == enabled)
+            {
+                return true;
+            }
+            if (!string.IsNullOrEmpty(_nativeSkinningCorrectionSetupError))
+            {
+                LastNativeSkinningCorrectionFailure = _nativeSkinningCorrectionSetupError;
+            }
+            else if (_nativeSkinningCorrectionPlaybackDriver?.IsFaulted ?? false)
+            {
+                LastNativeSkinningCorrectionFailure = _nativeSkinningCorrectionPlaybackDriver.FailureMessage;
+            }
+            _pendingNativeSkinningPlaybackRequest = NativeSkinningPendingPlaybackRequest.None;
+            _nativeSkinningCorrectionPlaybackDriver?.Invalidate();
+            _humanoidMotionPlaybackController.Stop();
+            IsNativeSkinningCorrectionEnabled = enabled;
+            SetSessionState(FBXSessionState.Ready,
+                enabled ? "표면 보정 사용 · 재생 대기" : "표면 보정 끔 · 비교 재생 대기", 1f);
+            return true;
+        }
+
         public bool TryPlayImportedMotion()
         {
             if (IsImportedMotionRecording ||
@@ -2498,6 +2527,8 @@ namespace Fbx2Vmd.FBXImporter
             string motionName,
             GameObject sourceModelAsset)
         {
+            IsNativeSkinningCorrectionEnabled = true;
+            LastNativeSkinningCorrectionFailure = string.Empty;
             CleanupActiveGhost();
             _nativeSkinningCorrectionPlaybackDriver?.Release();
             _pendingNativeSkinningPlaybackRequest =
@@ -2570,6 +2601,8 @@ namespace Fbx2Vmd.FBXImporter
             GameObject importedModel,
             string sourceFilePath)
         {
+            IsNativeSkinningCorrectionEnabled = true;
+            LastNativeSkinningCorrectionFailure = string.Empty;
             _nativeSkinningCorrectionPlaybackDriver?.Release();
             _pendingNativeSkinningPlaybackRequest =
                 NativeSkinningPendingPlaybackRequest.None;
@@ -3039,6 +3072,15 @@ namespace Fbx2Vmd.FBXImporter
             out bool shouldStartImmediately)
         {
             shouldStartImmediately = false;
+            if (!IsNativeSkinningCorrectionEnabled)
+            {
+                shouldStartImmediately = request == NativeSkinningPendingPlaybackRequest.Play;
+                if (!shouldStartImmediately)
+                {
+                    SetSessionState(FBXSessionState.Ready, "비교 재생 상태입니다. 녹화하려면 표면 보정을 켜 주세요.", 0f);
+                }
+                return shouldStartImmediately;
+            }
             if (!string.IsNullOrWhiteSpace(_nativeSkinningCorrectionSetupError))
             {
                 SetSessionState(
