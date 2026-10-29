@@ -9,6 +9,7 @@ import {
 import {
   queueCharacterCommand,
   queueImportFbxCommand,
+  queueMotionCommand,
   readCommandResult,
   readRuntimeState,
   resolveSettingsFilePath
@@ -224,6 +225,24 @@ async function handleHttpRequest({
         createCommandId
       }));
       broadcast({ type: "character-command", ...result });
+      sendJsonResponse(response, 200, result);
+    } catch (error) {
+      sendJsonResponse(response, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (request.method === "POST" && requestUrl.pathname === "/motion-command") {
+    try {
+      if ((await readRuntimeState({ settingsPath })).playMode !== "playing") {
+        sendJsonResponse(response, 409, { error: "Unity Play 상태에서만 사용할 수 있습니다." });
+        return;
+      }
+      const body = await readJsonBody(request);
+      const result = await withCommandQueueLock(() => queueMotionCommand({
+        settingsPath, action: body.action, now, createCommandId
+      }));
+      broadcast({ type: "motion-command", ...result });
       sendJsonResponse(response, 200, result);
     } catch (error) {
       sendJsonResponse(response, 400, { error: error.message });

@@ -92,6 +92,8 @@ public sealed class RecordingSetting : MonoBehaviour
     private float nextSharedSettingsPollTime;
     private readonly MainRecordingSettingsFbxImportCommandProcessor sharedSettingsFbxImportCommandProcessor =
         new MainRecordingSettingsFbxImportCommandProcessor();
+    private readonly MainRecordingSettingsMotionCommandProcessor sharedSettingsMotionCommandProcessor =
+        new MainRecordingSettingsMotionCommandProcessor();
     private static readonly Func<FBXVmdPipeline, string, bool> DefaultSharedSettingsFbxImportStarter =
         (fileManager, path) => fileManager.TryStartFbxImportFromSharedSettings(path);
     private Func<FBXVmdPipeline, string, bool> sharedSettingsFbxImportStarter =
@@ -322,6 +324,24 @@ public sealed class RecordingSetting : MonoBehaviour
             ApplyDiagnosticsToResolvedFBXVmdPipeline(resolvedFBXVmdPipeline);
         }
 
+        Func<string, bool> tryExecuteMotion = resolvedFBXVmdPipeline == null
+            ? null
+            : action => action switch
+            {
+                MainRecordingSettingsCommandEnvelope.PlayImportedMotionAction => resolvedFBXVmdPipeline.TryPlayImportedMotion(),
+                MainRecordingSettingsCommandEnvelope.PauseImportedMotionAction => resolvedFBXVmdPipeline.TryPauseImportedMotion(),
+                MainRecordingSettingsCommandEnvelope.StopImportedMotionAction => resolvedFBXVmdPipeline.TryStopImportedMotion(),
+                _ => false,
+            };
+        if (sharedSettingsMotionCommandProcessor.TryProcess(
+                document, startFbxImport, clearPendingCommandWhenSkipped,
+                resolvedFBXVmdPipeline != null && resolvedFBXVmdPipeline.IsImportedMotionRecording,
+                tryExecuteMotion, PersistConsumedSharedSettingsDocumentQuietly,
+                out MainRecordingSettingsActionResult motionResult))
+        {
+            return motionResult;
+        }
+
         Func<string, bool> tryStartFbxImport = resolvedFBXVmdPipeline == null
             ? null
             : path => sharedSettingsFbxImportStarter(resolvedFBXVmdPipeline, path);
@@ -353,7 +373,7 @@ public sealed class RecordingSetting : MonoBehaviour
         }
         catch (Exception exception)
         {
-            Debug.LogWarning($"[RecordingSetting] 처리한 FBX 명령을 지우지 못했습니다: {exception.Message}");
+            Debug.LogWarning($"[RecordingSetting] 처리한 공유 설정 명령을 지우지 못했습니다: {exception.Message}");
         }
     }
 

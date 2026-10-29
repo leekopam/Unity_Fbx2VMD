@@ -6,6 +6,9 @@ namespace Fbx2Vmd.Settings
     public sealed class MainRecordingSettingsCommandEnvelope
     {
         public const string ImportFbxAction = "ImportFbx";
+        public const string PlayImportedMotionAction = "PlayImportedMotion";
+        public const string PauseImportedMotionAction = "PauseImportedMotion";
+        public const string StopImportedMotionAction = "StopImportedMotion";
         public const string LoadCharacterAction = "LoadCharacter";
         public const string ApplyPresetAction = "ApplyPreset";
         public const string SavePresetAction = "SavePreset";

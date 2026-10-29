@@ -45,8 +45,17 @@ namespace Fbx2Vmd.Settings
 
         internal void Save(MainRecordingSettingsDocument document)
         {
-            store.Save(document);
-            lastWriteTimeUtc = store.ResolveLastWriteTimeUtc();
+            try
+            {
+                store.Save(document);
+                lastWriteTimeUtc = store.ResolveLastWriteTimeUtc();
+            }
+            catch
+            {
+                // 디스크에 남은 명령을 다시 읽어 캐시된 처리 결과 저장을 재시도함.
+                lastWriteTimeUtc = DateTime.MinValue;
+                throw;
+            }
         }
     }
 }

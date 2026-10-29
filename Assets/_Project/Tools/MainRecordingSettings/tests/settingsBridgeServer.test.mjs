@@ -7,6 +7,50 @@ import WebSocket from "ws";
 
 import { createSettingsBridgeServer } from "../server/settingsBridgeServer.js";
 
+test("모션 명령은 허용된 세 동작만 접수하고 대기 명령을 보존한다", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "motion-bridge-"));
+  const settingsPath = path.join(root, "settings.json");
+  const bridge = createSettingsBridgeServer({ settingsPath, port: 0 });
+  await bridge.listen();
+  t.after(async () => { await bridge.close(); await fs.rm(root, { recursive: true, force: true }); });
+  const post = action => fetch(`${bridge.baseUrl}/motion-command`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action })
+  });
+  for (const action of ["PlayImportedMotion", "PauseImportedMotion", "StopImportedMotion"]) {
+    await fs.writeFile(settingsPath, JSON.stringify({ runtimeState: { playMode: "playing" }, fbxPath: "fixture.fbx" }));
+    const accepted = await post(action);
+    assert.equal(accepted.status, 200);
+    const response = await accepted.json();
+    const saved = await fs.readFile(settingsPath, "utf8");
+    assert.equal(JSON.parse(saved).pendingCommand.action, action);
+    assert.equal(JSON.parse(saved).pendingCommand.commandId, response.commandId);
+    assert.equal(JSON.parse(saved).fbxPath, "fixture.fbx");
+    assert.equal((await post("StopImportedMotion")).status, 400);
+    assert.equal(await fs.readFile(settingsPath, "utf8"), saved);
+  }
+});
+
+test("모션 명령은 Edit·녹화·잘못된 동작에서 파일을 변경하지 않는다", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "motion-bridge-guard-"));
+  const settingsPath = path.join(root, "settings.json");
+  const bridge = createSettingsBridgeServer({ settingsPath, port: 0 });
+  await bridge.listen();
+  t.after(async () => { await bridge.close(); await fs.rm(root, { recursive: true, force: true }); });
+  for (const [runtimeState, action, status] of [
+    [{ playMode: "stopped" }, "PlayImportedMotion", 409],
+    [{ playMode: "playing", isRecording: true }, "StopImportedMotion", 400],
+    [{ playMode: "playing" }, "StartRecording", 400]
+  ]) {
+    const original = JSON.stringify({ runtimeState, captureWidth: 3840 });
+    await fs.writeFile(settingsPath, original);
+    const response = await fetch(`${bridge.baseUrl}/motion-command`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action })
+    });
+    assert.equal(response.status, status);
+    assert.equal(await fs.readFile(settingsPath, "utf8"), original);
+  }
+});
+
 test("settings bridge accepts POST /import-fbx and writes command document", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "settings-bridge-"));
   const settingsPath = path.join(tempRoot, "settings.json");

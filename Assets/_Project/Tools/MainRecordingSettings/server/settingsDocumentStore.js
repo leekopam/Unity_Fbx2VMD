@@ -10,6 +10,9 @@ export const SETTINGS_FILE_NAME = "main-recording-settings.json";
 export const IMPORT_FBX_ACTION = "ImportFbx";
 export const PLAY_MODE_PLAYING = "playing";
 export const PLAY_MODE_STOPPED = "stopped";
+export const MOTION_COMMAND_ACTIONS = Object.freeze([
+  "PlayImportedMotion", "PauseImportedMotion", "StopImportedMotion"
+]);
 
 // Unity 측 MainRecordingSettingsCommandEnvelope의 캐릭터 액션 상수와 동일하게 유지한다.
 export const CHARACTER_COMMAND_ACTIONS = Object.freeze([
@@ -107,6 +110,28 @@ export async function queueImportFbxCommand({
     fbxPath: normalizedFbxPath,
     settingsPath
   };
+}
+
+export async function queueMotionCommand({
+  settingsPath = resolveSettingsFilePath(), action,
+  now = () => new Date(), createCommandId = createDefaultCommandId
+} = {}) {
+  if (!MOTION_COMMAND_ACTIONS.includes(action)) {
+    throw new Error("지원하지 않는 모션 명령입니다.");
+  }
+  const document = normalizeDocument(await loadSettingsDocument(settingsPath));
+  if (document.runtimeState.playMode !== PLAY_MODE_PLAYING || document.runtimeState.isRecording === true) {
+    throw new Error("녹화 중이 아닌 Unity Play 상태에서만 모션을 제어할 수 있습니다.");
+  }
+  rejectIfCommandPending(document);
+  const commandId = createCommandId();
+  const timestamp = now().toISOString();
+  document.updatedAtUtc = timestamp;
+  document.pendingCommand = {
+    ...createEmptyCommandEnvelope(), commandId, action, requestedAtUtc: timestamp
+  };
+  await saveSettingsDocument(settingsPath, document);
+  return { accepted: true, commandId, action, settingsPath };
 }
 
 // 캐릭터 라이브러리 명령을 큐에 넣는다. Unity 프로세서가 폴링으로 소비하고
