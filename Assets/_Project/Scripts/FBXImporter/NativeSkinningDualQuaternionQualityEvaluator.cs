@@ -13,13 +13,19 @@ namespace Fbx2Vmd.FBXImporter
         private const float MinimumNormalSquaredMagnitude = 0.0000000000000001f;
         private readonly FaceReference[] _faces;
         private readonly EdgeReference[] _edges;
+        private readonly NativeSkinningSurfaceContract _surfaceContract;
+        private readonly int[] _preservedPairIndices;
 
         private NativeSkinningDualQuaternionQualityEvaluator(
             FaceReference[] faces,
-            EdgeReference[] edges)
+            EdgeReference[] edges,
+            NativeSkinningSurfaceContract surfaceContract,
+            int[] preservedPairIndices)
         {
             _faces = faces;
             _edges = edges;
+            _surfaceContract = surfaceContract;
+            _preservedPairIndices = preservedPairIndices;
         }
 
         internal static bool TryCreate(
@@ -78,7 +84,12 @@ namespace Fbx2Vmd.FBXImporter
                 .ToArray();
             evaluator = new NativeSkinningDualQuaternionQualityEvaluator(
                 faces.ToArray(),
-                edges);
+                edges,
+                contract,
+                Enumerable.Range(0, contract.FacePairs.Length)
+                    .Where(index => !NativeSkinningSurfaceCorrectionCalculator
+                        .IsRestShapeRecoveryPairUnresolved(baselineVertices, contract, index))
+                    .ToArray());
             return true;
         }
 
@@ -86,11 +97,16 @@ namespace Fbx2Vmd.FBXImporter
             IReadOnlyList<Vector3> candidateVertices,
             out float maximumRestEdgeStrainIncrease,
             out int newDegenerateFaceCount,
-            out int reversedFaceCount)
+            out int reversedFaceCount,
+            out int newCollapsedPairCount)
         {
             maximumRestEdgeStrainIncrease = 0f;
             newDegenerateFaceCount = 0;
             reversedFaceCount = 0;
+            // 체적 보정이 앞 단계에서 복원한 표면을 다시 붕괴시키지 않도록 제한함.
+            newCollapsedPairCount = _preservedPairIndices.Count(index =>
+                NativeSkinningSurfaceCorrectionCalculator.IsRestShapeRecoveryPairUnresolved(
+                    candidateVertices, _surfaceContract, index));
             foreach (FaceReference face in _faces)
             {
                 Vector3 candidateCross = Vector3.Cross(

@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -20,6 +22,269 @@ namespace Tests.Editor.FBXImporter
         private const string TestPrefabAssetPath =
             "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab";
         private const int MaximumPairsPerContract = 8;
+
+        [TestCase(2389,
+            "4345C16B38EEF8B3DC992AB88ED15EF84F60F30C21EAB4C3733BF4910A2F8B6E",
+            "CEFA75F2FC59F34E38CB0C07D01BE77E592FEF4FA180216A1B1640A956319641",
+            "32899FAF26B3B7F5E550605FE9788D5F0954866CD2C6AEFDFC95BD6ED4ED4423")]
+        [TestCase(3540,
+            "7B8A60B56FE3600BBD9278B91D8341488C84E32C5F382883952FDC14A30CF012",
+            "B973CADB10DDBC6FEF4F212CC13A35B46C0ED818D3336DCC970228FBA51F255F",
+            "0FF6C13902FBD19CE7178303AC97E1712B43E9F0500408E4F8C168DD83C3E796")]
+        public void Given_RecoveredYybSurface_When_ApplyingVolumeCorrection_Then_PreservesOriginalQuality(
+            int frame, string baselineHash, string surfaceHash, string matricesHash)
+        {
+            const string modelPath =
+                "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
+            string directory = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Docs/Workflow/Local/evidence/jev-batch2/20261024-resume/native-replay"));
+            string[] paths = { Path.Combine(directory, $"yyb-f{frame}-baseline.bin"),
+                Path.Combine(directory, $"yyb-f{frame}-surface.bin"),
+                Path.Combine(directory, $"yyb-f{frame}-matrices.bin") };
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+            if (asset == null || paths.Any(path => !File.Exists(path)))
+                Assert.Ignore("로컬 YYB 체적 보정 회귀 fixture 미제공");
+            string[] hashes = { baselineHash, surfaceHash, matricesHash };
+            for (int index = 0; index < paths.Length; index++)
+            {
+                using (SHA256 hash = SHA256.Create())
+                using (FileStream stream = File.OpenRead(paths[index]))
+                    Assert.That(BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", ""),
+                        Is.EqualTo(hashes[index]));
+            }
+
+            GameObject target = UnityEngine.Object.Instantiate(asset);
+            target.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                object contract = FindAll(RequireHumanoidAnimator(target))
+                    .Cast<object>()
+                    .Select(BuildSurfaceContract)
+                    .First(value => ReadProperty<SkinnedMeshRenderer>(value, "Renderer").name == "U_Char_2");
+                var renderer = ReadProperty<SkinnedMeshRenderer>(contract, "Renderer");
+                Assert.That(ReadProperty<object>(contract, "Side").ToString(), Is.EqualTo("Left"));
+                Vector3[] ReadVertices(string path)
+                {
+                    using (var reader = new BinaryReader(File.OpenRead(path)))
+                    {
+                        int count = reader.ReadInt32();
+                        Assert.That(count, Is.EqualTo(renderer.sharedMesh.vertexCount));
+                        Assert.That(reader.BaseStream.Length, Is.EqualTo(4L + count * 12L));
+                        var vertices = new Vector3[count];
+                        for (int index = 0; index < count; index++)
+                            vertices[index] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        return vertices;
+                    }
+                }
+                Vector3[] baseline = ReadVertices(paths[0]);
+                Vector3[] surface = ReadVertices(paths[1]);
+                Vector3[] original = (Vector3[])surface.Clone();
+                Matrix4x4[] matrices;
+                using (var reader = new BinaryReader(File.OpenRead(paths[2])))
+                {
+                    int count = reader.ReadInt32();
+                    Assert.That(count, Is.EqualTo(renderer.bones.Length));
+                    Assert.That(reader.BaseStream.Length, Is.EqualTo(4L + count * 64L));
+                    matrices = new Matrix4x4[count];
+                    for (int bone = 0; bone < count; bone++)
+                        for (int element = 0; element < 16; element++)
+                            matrices[bone][element] = reader.ReadSingle();
+                }
+                Type calculator = RequireProductType("NativeSkinningSurfaceCorrectionCalculator");
+                int pairCount = ReadProperty<Array>(contract, "FacePairs").Length;
+                var active = new HashSet<int>();
+                InvokeStatic(calculator, "UpdateActiveSharpFoldPairs",
+                    new object[] { baseline, contract, Enumerable.Range(0, pairCount), active });
+                int[] recovery = active.Where(index => (bool)InvokeStatic(calculator,
+                    "IsRestShapeRecoveryPair", new object[] { baseline, contract, index })).ToArray();
+                object edges = InvokeStatic(calculator, "BuildFrameEdges", new object[] { baseline, contract });
+                object Evaluate(IReadOnlyList<Vector3> candidate) => InvokeStatic(calculator,
+                    "EvaluateResult", new object[] { baseline, candidate, contract, edges, active.Count, recovery });
+                Assert.That((bool)InvokeStatic(calculator, "IsWithinStrongQuality",
+                    new[] { Evaluate(surface), contract }), Is.True, "표면 복원 입력은 먼저 품질을 통과해야 합니다.");
+                NativeSkinningSurfaceContract[] contracts = FindAll(RequireHumanoidAnimator(target))
+                    .Cast<object>().Select(BuildSurfaceContract).Cast<NativeSkinningSurfaceContract>()
+                    .Where(value => value.Renderer == renderer).ToArray();
+                Assert.That((bool)InvokeStatic(typeof(NativeSkinningCorrectionPreprocessSession),
+                    "AreCombinedCorrectionsWithinQuality", new object[]
+                    {
+                        baseline, new Dictionary<int, Vector3>(), contracts
+                    }), Is.False, "보정값이 비어도 결함이 남은 최종 정점을 통과시키면 안 됩니다.");
+                Assert.That(NativeSkinningCorrectionPreprocessor.TryCreateSession(1, contracts,
+                    (frameIndex, requestedRenderer) => baseline, null, out var session), Is.True);
+                var prepared = new NativeSkinningPreparedFrame(0,
+                    new Dictionary<SkinnedMeshRenderer, Vector3[]> { [renderer] = baseline },
+                    new Dictionary<SkinnedMeshRenderer, Matrix4x4[]> { [renderer] = matrices });
+                Assert.That(session.TryProcessPreparedFrames(new[] { prepared }), Is.True, session.FailureMessage);
+                Assert.That(session.IsComplete, Is.True);
+                Vector3[] finalVertices = (Vector3[])baseline.Clone();
+                Assert.That(session.Result.RendererCorrections.Single().Cache.TryApply(0, finalVertices, out _), Is.True);
+                object quality = Evaluate(finalVertices);
+                Assert.That((bool)InvokeStatic(calculator, "IsWithinStrongQuality", new[] { quality, contract }),
+                    Is.True, $"원본 기준 잔여접힘={ReadProperty<int>(quality, "ResidualSharpFoldCount")}, " +
+                        $"누적변형={ReadProperty<float>(quality, "MaximumRestEdgeStrainIncrease")}");
+                foreach (NativeSkinningSurfaceContract rendererContract in contracts)
+                    Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsCorrectedFrameWithinStrongQuality(
+                        baseline, finalVertices, rendererContract), Is.True, rendererContract.Side.ToString());
+                Assert.That((bool)InvokeStatic(typeof(NativeSkinningCorrectionPreprocessSession),
+                    "AreCombinedCorrectionsWithinQuality", new object[]
+                    {
+                        renderer.sharedMesh.vertices, new Dictionary<int, Vector3>(), contracts
+                    }), Is.True, "원본 모델의 정상 형상은 빈 보정값으로도 통과해야 합니다.");
+                CollectionAssert.AreEqual(original, surface);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(target); }
+        }
+
+        [Test]
+        public void Given_RecoveredSurfaceDump_When_ApplyingVolumeCorrection_Then_PreservesRecoveredShape()
+        {
+            string directory = Path.GetFullPath(Path.Combine(Application.dataPath,
+                "../Docs/Workflow/Local/evidence/jev-batch2/20261024-resume/native-replay"));
+            string surfacePath = Path.Combine(directory, "f12291-surface.bin");
+            string matricesPath = Path.Combine(directory, "f12291-matrices.bin");
+            if (!File.Exists(surfacePath) || !File.Exists(matricesPath) ||
+                AssetDatabase.LoadAssetAtPath<GameObject>(TestPrefabAssetPath) == null)
+                Assert.Ignore("로컬 체적 보정 회귀 fixture 미제공");
+
+            foreach (var fixture in new[]
+            {
+                new { Path = surfacePath, Hash = "5899BFB1D6E526D0941B11EF10FD89C5780910B2790856464AF102FE71624C80" },
+                new { Path = matricesPath, Hash = "2C4A76744389F513CAF722A21D94AC70745B14630DC5835225247114427A9BB0" }
+            })
+            {
+                using (SHA256 hash = SHA256.Create())
+                using (FileStream stream = File.OpenRead(fixture.Path))
+                    Assert.That(BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", ""),
+                        Is.EqualTo(fixture.Hash));
+            }
+
+            GameObject target = InstantiateTestPrefab();
+            try
+            {
+                object contract = BuildSurfaceContract(FindAll(RequireHumanoidAnimator(target))[4]);
+                var renderer = ReadProperty<SkinnedMeshRenderer>(contract, "Renderer");
+                Assert.That(renderer.name, Is.EqualTo("U_Char_0"));
+                Assert.That(ReadProperty<object>(contract, "Side").ToString(), Is.EqualTo("Right"));
+                Vector3[] surface;
+                using (var reader = new BinaryReader(File.OpenRead(surfacePath)))
+                {
+                    int count = reader.ReadInt32();
+                    Assert.That(count, Is.EqualTo(renderer.sharedMesh.vertexCount));
+                    Assert.That(reader.BaseStream.Length, Is.EqualTo(4L + count * 12L));
+                    surface = new Vector3[count];
+                    for (int index = 0; index < count; index++)
+                        surface[index] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                }
+                Matrix4x4[] matrices;
+                using (var reader = new BinaryReader(File.OpenRead(matricesPath)))
+                {
+                    int count = reader.ReadInt32();
+                    Assert.That(count, Is.EqualTo(renderer.bones.Length));
+                    Assert.That(reader.BaseStream.Length, Is.EqualTo(4L + count * 64L));
+                    matrices = new Matrix4x4[count];
+                    for (int bone = 0; bone < count; bone++)
+                        for (int element = 0; element < 16; element++)
+                            matrices[bone][element] = reader.ReadSingle();
+                }
+                Vector3[] original = (Vector3[])surface.Clone();
+                Type surfaceCalculator = RequireProductType("NativeSkinningSurfaceCorrectionCalculator");
+                int pairCount = ReadProperty<Array>(contract, "FacePairs").Length;
+                int[] preservedPairs = Enumerable.Range(0, pairCount).Where(index =>
+                    !(bool)InvokeStatic(surfaceCalculator, "IsRestShapeRecoveryPairUnresolved",
+                        new object[] { surface, contract, index })).ToArray();
+                Assert.That(preservedPairs.Length, Is.GreaterThan(0));
+                object[] arguments = { surface, renderer.sharedMesh.vertices,
+                    renderer.sharedMesh.boneWeights, matrices, contract, null };
+                Assert.That((bool)InvokeStatic(RequireProductType("NativeSkinningDualQuaternionBlendCalculator"),
+                    "TryCalculate", arguments), Is.True);
+                var corrected = ReadProperty<IReadOnlyList<Vector3>>(arguments[5], "BlendedVertices");
+                int[] collapsedPairs = preservedPairs.Where(index =>
+                    (bool)InvokeStatic(surfaceCalculator, "IsRestShapeRecoveryPairUnresolved",
+                        new object[] { corrected, contract, index })).ToArray();
+                Assert.That(collapsedPairs, Is.Empty, "체적 보정이 복원된 표면을 다시 붕괴시키면 안 됩니다.");
+                CollectionAssert.AreEqual(original, surface);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [TestCase(1499, 0)]
+        [TestCase(1499, 1)]
+        [TestCase(1499, -1)]
+        [TestCase(1977, 0)]
+        [TestCase(1977, 1)]
+        [TestCase(1977, -1)]
+        [TestCase(9675, 0)]
+        [TestCase(9675, 1)]
+        [TestCase(9675, -1)]
+        public void Given_LocalFailureDump_When_CalculatingValidatedCorrection_Then_PreservesInputAndPassesStrictQuality(
+            int frame, int perturbationSign)
+        {
+            string dumpPath = Path.GetFullPath(Path.Combine(Application.dataPath,
+                $"../Docs/Workflow/Local/evidence/jev-batch2/20261024-resume/native-replay/f{frame}-U_Char_0.bin"));
+            if (!File.Exists(dumpPath) ||
+                AssetDatabase.LoadAssetAtPath<GameObject>(TestPrefabAssetPath) == null)
+            {
+                Assert.Ignore($"로컬 fixture 미제공: testPrefab 또는 {dumpPath}");
+            }
+
+            string expectedHash = frame == 1499
+                ? "B8960B65E282205B9F7D3A1AAA9FCF17CD1192C7CCE41DAE210910691536DB0C"
+                : frame == 1977
+                    ? "A0F08599A7A83482831CC7116467A24C79FC3AB2B98B95793AFCEEBC3D9263C0"
+                    : "487E30D2A102FA4FA40ADB8A681BA2A5C6EA3F4D97463000F8D83CD08B13DCFD";
+            using (SHA256 hash = SHA256.Create())
+            using (FileStream stream = File.OpenRead(dumpPath))
+            {
+                Assert.That(BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", ""),
+                    Is.EqualTo(expectedHash), "다른 모션의 덤프를 회귀 기준으로 사용할 수 없습니다.");
+            }
+
+            GameObject target = InstantiateTestPrefab();
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                object contract = BuildSurfaceContract(FindAll(animator)[frame == 9675 ? 0 : 4]);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(contract, "Renderer");
+                Assert.That(renderer.name, Is.EqualTo("U_Char_0"));
+                Assert.That(ReadProperty<object>(contract, "Side").ToString(),
+                    Is.EqualTo(frame == 9675 ? "Left" : "Right"));
+                Vector3[] vertices;
+                using (var reader = new BinaryReader(File.OpenRead(dumpPath)))
+                {
+                    int count = reader.ReadInt32();
+                    Assert.That(count, Is.EqualTo(renderer.sharedMesh.vertexCount));
+                    Assert.That(reader.BaseStream.Length, Is.EqualTo(4L + count * 12L));
+                    vertices = new Vector3[count];
+                    float delta = perturbationSign * 0.0000001f;
+                    for (int index = 0; index < count; index++)
+                    {
+                        vertices[index] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()) +
+                            new Vector3(index % 2 == 0 ? delta : -delta,
+                                index % 3 == 0 ? delta : -delta, index % 5 == 0 ? delta : -delta);
+                    }
+                }
+                Vector3[] original = (Vector3[])vertices.Clone();
+                Type calculator = RequireProductType("NativeSkinningSurfaceCorrectionCalculator");
+                object[] arguments = { vertices, contract, null };
+                Assert.That((bool)InvokeStatic(calculator, "TryCalculateStrongValidatedFrame", arguments), Is.True);
+                object result = arguments[2];
+                Assert.That(result, Is.Not.Null);
+                Assert.That((bool)InvokeStatic(calculator, "IsWithinStrongQuality", new[] { result, contract }), Is.True);
+                Assert.That(ReadProperty<int>(result, "ResidualSharpFoldCount"), Is.Zero);
+                Assert.That(ReadProperty<int>(result, "NewSharpFoldCount"), Is.Zero);
+                Assert.That(ReadProperty<int>(result, "NewDegenerateFaceCount"), Is.Zero);
+                Assert.That(ReadProperty<int>(result, "ReversedFaceCount"), Is.Zero);
+                CollectionAssert.AreEqual(original, vertices, "계산 입력은 보존해야 합니다.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
 
         [TestCase("tetoris_001.fbx", 1)]
         [TestCase("tetoris_001.fbx", 117)]

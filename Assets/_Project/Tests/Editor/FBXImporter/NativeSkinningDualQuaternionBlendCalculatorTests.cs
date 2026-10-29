@@ -159,6 +159,7 @@ namespace Tests.Editor.FBXImporter
                     sourceMesh.vertices,
                     transformArguments[1],
                     blendContract,
+                    null,
                     null
                 };
                 Assert.That(

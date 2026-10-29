@@ -111,14 +111,16 @@ namespace Fbx2Vmd.FBXImporter
             IReadOnlyList<Vector3> restVertices,
             IReadOnlyList<NativeSkinningDualQuaternionTransform> boneTransforms,
             NativeSkinningDualQuaternionBlendContract blendContract,
-            out NativeSkinningDualQuaternionBlendResult result)
+            out NativeSkinningDualQuaternionBlendResult result,
+            IReadOnlyList<Vector3> originalVertices = null)
         {
             result = null;
             if (!HasValidPreparedInput(
                     baselineVertices,
                     restVertices,
                     boneTransforms,
-                    blendContract))
+                    blendContract) ||
+                (originalVertices != null && originalVertices.Count != baselineVertices.Count))
             {
                 return false;
             }
@@ -198,12 +200,17 @@ namespace Fbx2Vmd.FBXImporter
                     candidateVertices,
                     out float maximumRestEdgeStrainIncrease,
                     out int newDegenerateFaceCount,
-                    out int reversedFaceCount);
+                    out int reversedFaceCount,
+                    out int newCollapsedPairCount);
                 if (newDegenerateFaceCount == 0 &&
                     reversedFaceCount == 0 &&
+                    newCollapsedPairCount == 0 &&
                     maximumRestEdgeStrainIncrease <=
                         NativeSkinningRestShapeRecoveryCalculator
-                            .MaximumRestStrainIncrease)
+                            .MaximumRestStrainIncrease &&
+                    (originalVertices == null ||
+                     NativeSkinningSurfaceCorrectionCalculator.IsCorrectedFrameWithinStrongQuality(
+                         originalVertices, candidateVertices, blendContract.SurfaceContract)))
                 {
                     float maximumVertexDisplacement = changedVertexIndices.Count == 0
                         ? 0f

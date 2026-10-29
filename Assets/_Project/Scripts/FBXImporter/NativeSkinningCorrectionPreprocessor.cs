@@ -345,6 +345,7 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             var deltaByVertex = new Dictionary<int, Vector3>();
+            var surfaceDeltaByVertex = new Dictionary<int, Vector3>();
             NativeSkinningDualQuaternionTransform[] boneTransforms = null;
             if (!TryCalculateSurfaceCorrections(
                     frameIndex,
@@ -370,6 +371,8 @@ namespace Fbx2Vmd.FBXImporter
                     correction.CorrectedVertices;
                 IReadOnlyCollection<int> correctedVertexIndices =
                     correction.CorrectedVertexIndices;
+                AddSparseCorrections(baselineVertices, correctedVertices,
+                    correctedVertexIndices, surfaceDeltaByVertex);
 
                 if (correction.UsedRestShapeRecovery)
                 {
@@ -391,7 +394,8 @@ namespace Fbx2Vmd.FBXImporter
                                 boneTransforms,
                                 work.BlendContracts[contractIndex],
                                 out NativeSkinningDualQuaternionBlendResult
-                                    volumeCorrection))
+                                    volumeCorrection,
+                                baselineVertices))
                     {
                         errorMessage =
                             $"frame {frameIndex}의 Native 체적 보정을 계산하지 못했습니다.";
@@ -410,6 +414,18 @@ namespace Fbx2Vmd.FBXImporter
                     deltaByVertex);
             }
 
+            if (!AreCombinedCorrectionsWithinQuality(baselineVertices, deltaByVertex, work.Contracts))
+            {
+                // 계약별로 안전해도 공유 정점의 delta 합산으로 품질이 깨질 수 있음.
+                usedFallback = true;
+                deltaByVertex = surfaceDeltaByVertex;
+                if (!AreCombinedCorrectionsWithinQuality(baselineVertices, deltaByVertex, work.Contracts))
+                {
+                    errorMessage = $"frame {frameIndex}의 합산 Native 표면 보정이 품질 기준을 넘었습니다.";
+                    return false;
+                }
+            }
+
             NativeSkinningVertexCorrection[] corrections = deltaByVertex
                 .OrderBy(entry => entry.Key)
                 .Select(entry => new NativeSkinningVertexCorrection(
@@ -424,6 +440,21 @@ namespace Fbx2Vmd.FBXImporter
             }
             frame = new NativeSkinningCorrectionFrame(frameIndex, corrections);
             return true;
+        }
+
+        private static bool AreCombinedCorrectionsWithinQuality(
+            Vector3[] baselineVertices,
+            IReadOnlyDictionary<int, Vector3> deltaByVertex,
+            NativeSkinningSurfaceContract[] contracts)
+        {
+            var correctedVertices = (Vector3[])baselineVertices.Clone();
+            foreach (KeyValuePair<int, Vector3> correction in deltaByVertex)
+            {
+                if (correction.Value.sqrMagnitude > MinimumCorrectionSquaredMagnitude)
+                    correctedVertices[correction.Key] += correction.Value;
+            }
+            return contracts.All(contract => NativeSkinningSurfaceCorrectionCalculator
+                .IsCorrectedFrameWithinStrongQuality(baselineVertices, correctedVertices, contract));
         }
 
         // 순차 경로에서만 사용: 필요할 때만 본 자세를 표본화한다 (메인스레드 전용).

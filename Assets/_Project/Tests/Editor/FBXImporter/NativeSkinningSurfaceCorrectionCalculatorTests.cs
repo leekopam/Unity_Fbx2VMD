@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -578,6 +579,19 @@ namespace Tests.Editor.FBXImporter
                 Assert.That(
                     ReadProperty<int[]>(result, "CorrectedVertexIndices").Length,
                     Is.EqualTo(74));
+                MethodInfo validatedMethod = calculatorType.GetMethod(
+                    "TryCalculateStrongValidatedFrame",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                Assert.That(validatedMethod, Is.Not.Null);
+                object[] validatedArguments = { bakedMesh.vertices, contract, null };
+                Assert.That((bool)validatedMethod.Invoke(null, validatedArguments), Is.True);
+                object validatedResult = validatedArguments[2];
+                CollectionAssert.AreEqual(
+                    ReadProperty<IReadOnlyList<Vector3>>(result, "CorrectedVertices"),
+                    ReadProperty<IReadOnlyList<Vector3>>(validatedResult, "CorrectedVertices"));
+                CollectionAssert.AreEqual(
+                    ReadProperty<int[]>(result, "CorrectedVertexIndices"),
+                    ReadProperty<int[]>(validatedResult, "CorrectedVertexIndices"));
             }
             finally
             {

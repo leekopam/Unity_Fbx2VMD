@@ -135,6 +135,9 @@ namespace Fbx2Vmd.FBXImporter
         // 수용 결과는 엄격한 게이트로 다시 검증하므로 실질 품질 기준은 유지된다.
         private static readonly CorrectionConfiguration StrongHeadroomConfiguration =
             new CorrectionConfiguration(640, 64, 32, 0.05f, 0.055f, 3);
+        // 좁은 영역에서 신장 한계에 정체한 입력만 이웃 영역을 넓혀 재계산함.
+        private static readonly CorrectionConfiguration StrongWideConfiguration =
+            new CorrectionConfiguration(640, 64, 32, 0.03f, 0.055f, 4);
         // 조기 수렴·웜스타트는 fast 경로에만 허용한다. strong은 정밀 fallback이라 기준 궤적을 유지한다.
         // Burst 경로는 계측에서 회귀(CG 호출당 네이티브 포장 비용이 커널 이득을 상쇄)가
         // 확인돼 비활성으로 둔다 — 코드는 fast 전용 게이트 뒤에 보존한다.
@@ -290,6 +293,7 @@ namespace Fbx2Vmd.FBXImporter
             {
                 result = retry;
             }
+            NativeSkinningSurfaceCorrectionResult headroom = null;
             if (!IsWithinQuality(result, contract, StrongConfiguration) &&
                 TryCalculateTimed(
                     baselineVertices,
@@ -299,7 +303,7 @@ namespace Fbx2Vmd.FBXImporter
                     false,
                     false,
                     timing,
-                    out NativeSkinningSurfaceCorrectionResult headroom) &&
+                    out headroom) &&
                 IsWithinQuality(headroom, contract, StrongConfiguration))
             {
                 result = headroom;
@@ -320,6 +324,36 @@ namespace Fbx2Vmd.FBXImporter
                 IsWithinQuality(chained, contract, StrongConfiguration))
             {
                 result = chained;
+            }
+            if (!IsWithinQuality(result, contract, StrongConfiguration) &&
+                TryCalculateTimed(
+                    baselineVertices,
+                    baselineVertices,
+                    contract,
+                    StrongWideConfiguration,
+                    false,
+                    false,
+                    timing,
+                    out NativeSkinningSurfaceCorrectionResult wide) &&
+                IsWithinQuality(wide, contract, StrongConfiguration))
+            {
+                result = wide;
+            }
+            // 접힘이 해소된 후보를 원본 쪽으로 줄여 신장 한도 안의 결과만 재사용함.
+            if (!IsWithinQuality(result, contract, StrongConfiguration) &&
+                headroom != null && headroom.IsSafe && !headroom.UsedRestShapeRecovery &&
+                TryFindQualityPreservingCoupledBlend(
+                    baselineVertices,
+                    baselineVertices,
+                    headroom.CorrectedVertices,
+                    contract,
+                    StrongConfiguration,
+                    BuildFrameEdges(baselineVertices, contract),
+                    headroom.InitialSharpFoldCount,
+                    Array.Empty<int>(),
+                    out NativeSkinningSurfaceCorrectionResult blended))
+            {
+                result = blended;
             }
             return true;
         }
@@ -342,6 +376,22 @@ namespace Fbx2Vmd.FBXImporter
             NativeSkinningSurfaceContract contract)
         {
             return IsWithinQuality(result, contract, StrongConfiguration);
+        }
+
+        internal static bool IsCorrectedFrameWithinStrongQuality(
+            IReadOnlyList<Vector3> baselineVertices,
+            IReadOnlyList<Vector3> correctedVertices,
+            NativeSkinningSurfaceContract contract)
+        {
+            var activePairs = new HashSet<int>();
+            UpdateActiveSharpFoldPairs(baselineVertices, contract,
+                Enumerable.Range(0, contract.FacePairs.Length), activePairs);
+            int[] recoveryPairs = activePairs.Where(index =>
+                IsRestShapeRecoveryPair(baselineVertices, contract, index)).ToArray();
+            return IsWithinStrongQuality(EvaluateResult(baselineVertices,
+                correctedVertices as Vector3[] ?? correctedVertices.ToArray(),
+                contract, BuildFrameEdges(baselineVertices, contract), activePairs.Count,
+                recoveryPairs), contract);
         }
 
         private static bool IsWithinQuality(
@@ -946,7 +996,7 @@ namespace Fbx2Vmd.FBXImporter
                 unresolvedRestShapeRecoveryCount);
         }
 
-        private static bool IsRestShapeRecoveryPairUnresolved(
+        internal static bool IsRestShapeRecoveryPairUnresolved(
             IReadOnlyList<Vector3> vertices,
             NativeSkinningSurfaceContract contract,
             int pairIndex)

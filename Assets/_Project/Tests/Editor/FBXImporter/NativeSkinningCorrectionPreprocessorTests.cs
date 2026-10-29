@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Linq;
 using System.Reflection;
+using Fbx2Vmd.FBXImporter;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -15,7 +16,6 @@ namespace Tests.Editor.FBXImporter
         private const string ClipAssetPath =
             "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const int FixtureSleeveVertexIndex = 17178;
-        private const int VisibleCollapseFrame = 1327;
         private const int CounterexampleFrame = 4476;
 
         [OneTimeSetUp]
@@ -104,8 +104,10 @@ namespace Tests.Editor.FBXImporter
             }
         }
 
-        [Test]
-        public void Given_VisibleCollapseFrame_When_Preprocessing_Then_CachesAdaptiveVolumeCorrection()
+        [TestCase(1327, false)]
+        [TestCase(1400, true)]
+        public void Given_CollapseFrame_When_Preprocessing_Then_PreservesValidatedSurfaceAndVolume(
+            int frame, bool hasSafeVolume)
         {
             GameObject target = InstantiateTarget();
             object controller = CreateController();
@@ -127,11 +129,30 @@ namespace Tests.Editor.FBXImporter
                     clip,
                     AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
                 Assert.That(
-                    (bool)Invoke(controller, "Seek", VisibleCollapseFrame / clip.frameRate),
+                    (bool)Invoke(controller, "Seek", frame / clip.frameRate),
                     Is.True);
                 renderer.BakeMesh(bakedMesh, false);
                 Vector3[] baselineVertices = bakedMesh.vertices;
                 Array contracts = CreateContractArray(contract);
+                var surfaceContract = (NativeSkinningSurfaceContract)contract;
+                Assert.That(NativeSkinningSurfaceCorrectionCalculator.TryCalculateFastValidatedFrame(
+                    baselineVertices, surfaceContract, out var surface), Is.True);
+                if (!NativeSkinningSurfaceCorrectionCalculator.IsWithinFastQuality(surface, surfaceContract))
+                    Assert.That(NativeSkinningSurfaceCorrectionCalculator.TryCalculateStrongValidatedFrame(
+                        baselineVertices, surfaceContract, out surface), Is.True);
+                Assert.That(surface.UsedRestShapeRecovery, Is.True);
+                Assert.That(NativeSkinningBoneTransformSampler.TrySample(renderer, out var matrices), Is.True);
+                Assert.That(NativeSkinningDualQuaternionVertexCalculator.TryBuildTransforms(
+                    matrices, out var transforms), Is.True);
+                Assert.That(NativeSkinningDualQuaternionBlendContractBuilder.TryBuild(
+                    renderer.sharedMesh.boneWeights, surfaceContract, out var blendContract), Is.True);
+                Assert.That(NativeSkinningDualQuaternionBlendCalculator.TryCalculateWithPreparedTransforms(
+                    surface.CorrectedVertices, renderer.sharedMesh.vertices, transforms,
+                    blendContract, out var volume, baselineVertices), Is.True);
+                Assert.That(volume.Blend > 0f, Is.EqualTo(hasSafeVolume),
+                    "체적 보정은 원본 기준 품질을 통과하는 후보가 있을 때만 유지해야 합니다.");
+                Assert.That(NativeSkinningSurfaceCorrectionCalculator.IsCorrectedFrameWithinStrongQuality(
+                    baselineVertices, volume.BlendedVertices, surfaceContract), Is.True);
                 Func<int, SkinnedMeshRenderer, Vector3[]> frameReader =
                     (_, requestedRenderer) =>
                     {
@@ -158,14 +179,22 @@ namespace Tests.Editor.FBXImporter
 
                 Assert.That((bool)Invoke(cache, "TryApply", applyArguments), Is.True);
                 int appliedCorrectionCount = (int)applyArguments[2];
-                Assert.That(appliedCorrectionCount, Is.GreaterThan(100));
+                float maximumVolumeDifference = Enumerable.Range(0, baselineVertices.Length)
+                    .Max(index => Vector3.Distance(correctedVertices[index], volume.BlendedVertices[index]));
+                Assert.That(maximumVolumeDifference, Is.LessThan(0.0000001f),
+                    "원본 기준 품질을 통과한 체적 보정을 캐시에서 보존해야 합니다.");
+                float maximumSurfaceDifference = Enumerable.Range(0, baselineVertices.Length).Max(index =>
+                    Vector3.Distance(correctedVertices[index], surface.CorrectedVertices[index]));
+                Assert.That(maximumSurfaceDifference > 0.000001f, Is.EqualTo(hasSafeVolume),
+                    "안전한 체적 보정이 없을 때만 표면 결과를 유지해야 합니다.");
+                Assert.That(appliedCorrectionCount, Is.GreaterThan(hasSafeVolume ? 100 : 0));
                 float maximumDisplacement = Enumerable.Range(0, baselineVertices.Length)
                     .Max(index => Vector3.Distance(
                         baselineVertices[index],
                         correctedVertices[index]));
                 Assert.That(maximumDisplacement, Is.GreaterThan(0.0002f));
                 TestContext.WriteLine(
-                    $"frame={VisibleCollapseFrame}, entries={appliedCorrectionCount}, " +
+                    $"frame={frame}, entries={appliedCorrectionCount}, " +
                     $"maxDisplacementMm={maximumDisplacement * 1000f:F6}");
             }
             finally
