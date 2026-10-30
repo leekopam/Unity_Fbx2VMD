@@ -2246,9 +2246,10 @@ namespace Fbx2Vmd.FBXImporter
                 }
 
                 float baselineRatio = edge.BaselineLength / edge.RestLength;
+                // 계산용 스키닝과 재생 정점의 반올림 차이로 경계를 넘지 않도록 출력 여유를 남김.
                 float maximumAbsoluteStrain = Mathf.Abs(baselineRatio - 1f) +
                     NativeSkinningRestShapeRecoveryCalculator
-                        .MaximumRestStrainIncrease;
+                        .MaximumRestStrainIncrease - EdgeLengthProjectionMargin;
                 float minimumRatio = Mathf.Max(0f, 1f - maximumAbsoluteStrain);
                 float maximumRatio = 1f + maximumAbsoluteStrain;
                 float currentRatio = currentLength / edge.RestLength;

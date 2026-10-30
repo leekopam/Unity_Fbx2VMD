@@ -42,6 +42,62 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_RoundedPlaybackEdge_When_ProjectingRecovery_Then_ReusesDeltaWithinStrainLimit()
+        {
+            // YYB 6130의 동일 모서리에서 탐색 이력에 따른 반올림 차이를 재현함.
+            var baseline = new[]
+            {
+                new Vector3(0.2578931152820587f, 1.1593098640441895f, 0.05783587694168091f),
+                new Vector3(0.2606698274612427f, 1.1630269289016724f, 0.057139575481414795f)
+            };
+            var playback = new[]
+            {
+                new Vector3(0.2578931450843811f, 1.1593098640441895f, 0.05783587694168091f),
+                new Vector3(0.26066985726356506f, 1.1630268096923828f, 0.057139575481414795f)
+            };
+            var storedDelta = new[]
+            {
+                new Vector3(0.000120818615f, -0.0000929832458f, 0.000145033f),
+                new Vector3(0.000288486481f, 0.0000141859055f, 0.0000111162663f)
+            };
+            const float restLength = 0.004112801f;
+            const float qualityLimit = 0.0500001f;
+            Func<Vector3[], Vector3[], float> strain = (input, delta) =>
+                Mathf.Abs(Vector3.Distance(input[0] + delta[0], input[1] + delta[1]) / restLength - 1f) -
+                Mathf.Abs(Vector3.Distance(input[0], input[1]) / restLength - 1f);
+            Assert.That(strain(baseline, storedDelta), Is.LessThanOrEqualTo(qualityLimit));
+            Assert.That(strain(playback, storedDelta), Is.GreaterThan(qualityLimit));
+
+            Type calculator = RequireProductType("NativeSkinningSurfaceCorrectionCalculator");
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance;
+            Type edgeType = calculator.GetNestedType("LocalEdge", flags);
+            Type worksetType = calculator.GetNestedType("LocalWorkset", flags);
+            Assert.That(edgeType, Is.Not.Null);
+            Assert.That(worksetType, Is.Not.Null);
+            object edge = edgeType.GetConstructors(flags).Single().Invoke(new object[]
+            {
+                0, 1, 0, 1, Vector3.Distance(baseline[0], baseline[1]), restLength
+            });
+            Array edges = Array.CreateInstance(edgeType, 1);
+            edges.SetValue(edge, 0);
+            object workset = worksetType.GetConstructors(flags).Single().Invoke(new object[]
+            {
+                new[] { 0, 1 }, new[] { 0, 1 }, Array.Empty<int>(), Array.Empty<int>(), edges
+            });
+            Vector3[] proposed = baseline.Select((value, index) => value + storedDelta[index]).ToArray();
+            MethodInfo project = calculator.GetMethod("ProjectRestShapeStrainBounds", flags);
+            Assert.That(project, Is.Not.Null);
+            project.Invoke(null, new object[] { baseline, proposed, workset });
+            Vector3[] generatedDelta = proposed.Select((value, index) => value - baseline[index]).ToArray();
+
+            Assert.That(generatedDelta.Any(delta => delta.sqrMagnitude > 0f), Is.True);
+            Assert.That(strain(baseline, generatedDelta), Is.LessThanOrEqualTo(qualityLimit));
+            Assert.That(strain(playback, generatedDelta), Is.LessThanOrEqualTo(qualityLimit));
+        }
+
+
+        [Test]
         public void Given_UserReportedElbowFrame_When_CalculatingCorrection_Then_DetectsVisibleFold()
         {
             GameObject target = InstantiateTarget();
