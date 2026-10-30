@@ -473,6 +473,7 @@ namespace Fbx2Vmd.FBXImporter
             LastGroundingGate.pelvis_maximum_offset_m = 0f;
             LastGroundingGate.left = LastGroundingGate.right = null;
             bool goalDriverActive = IsIkGoalFootDriveActive;
+            if (goalDriverActive) _footGoalDriver.CaptureValidatedSupport(false, false);
             // 주장 여부는 weight 갱신 전 상태로 판정해 gate가 stabilizer 이전 자세를
             // 보는 alpha=0 순서를 유지함.
             bool driverClaims = goalDriverActive &&
@@ -504,6 +505,14 @@ namespace Fbx2Vmd.FBXImporter
                     _footGrounding.FullySupportedContactCount;
                 if (gateApplied)
                 {
+                    if (goalDriverActive && _footGrounding.RawGatePass)
+                    {
+                        _footGoalDriver.CaptureValidatedSupport(
+                            _footGrounding.LeftDiagnostic.has_ground &&
+                            _footGrounding.LeftDiagnostic.supported_contact_count > 0,
+                            _footGrounding.RightDiagnostic.has_ground &&
+                            _footGrounding.RightDiagnostic.supported_contact_count > 0);
+                    }
                     LastGroundingStatus = _footGrounding.HasGround
                         ? HumanoidFootGroundingStatus.Applied : HumanoidFootGroundingStatus.NoGround;
                     if (!driverClaims)

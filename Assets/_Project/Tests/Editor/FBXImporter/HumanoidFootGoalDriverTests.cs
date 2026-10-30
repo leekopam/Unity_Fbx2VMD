@@ -15,6 +15,174 @@ namespace Tests.Editor.FBXImporter
         private const int PinStart = 5;
         private const int PinEnd = 40;
 
+        [TestCase(0f, 1f, false, 0f)]
+        [TestCase(40f, 1f, false, 0f)]
+        [TestCase(40f, 0.25f, false, 0f)]
+        [TestCase(40f, 1f, true, 0f)]
+        [TestCase(40f, 1f, true, 25f)]
+        public void Given_UnpinnedSupportRelease_When_SourceFootDiffers_Then_DoesNotActivateSourceGoal(
+            float sourceYaw, float alpha, bool liftFoot, float upstreamBendAngle)
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null);
+            try
+            {
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                Vector3 supportedPosition = right.position;
+                Quaternion supportedRotation = right.rotation;
+                var samples = BuildSamples(animator, Vector3.zero);
+                for (int frame = 0; frame < samples.Length; frame++)
+                {
+                    HumanoidFootContactSample sample = samples[frame];
+                    samples[frame] = new HumanoidFootContactSample(
+                        sample.LeftFoot, sample.LeftToes,
+                        sample.RightFoot + Vector3.right * 0.15f,
+                        sample.RightToes + Vector3.right * 0.15f,
+                        sample.RelativeFootHeights, sample.LeftFootFrame,
+                        Quaternion.AngleAxis(sourceYaw, Vector3.up) * sample.RightFootFrame.Value);
+                }
+                var driver = new HumanoidFootGoalDriver();
+                var noPlant = new HumanoidFootContactIntentEstimate(
+                    new List<HumanoidFootContactIntent>(), new List<HumanoidFootContactIntent>(),
+                    new List<Vector2Int>(), new List<Vector2Int>());
+                Assert.That(driver.TryInitializeCore(animator, samples,
+                    BuildHipsPositions(animator), BuildHipsRotations(animator), noPlant,
+                    HumanoidFootContactIntentLabelSet.Empty, animator.humanScale, FrameRate), Is.True);
+                driver.CaptureValidatedSupport(false, true);
+                Assert.That(driver.TryApply(20f / FrameRate, alpha, Vector3.right, Vector3.right), Is.True);
+                Assert.That(driver.DebugRightWeight, Is.Zero);
+                if (liftFoot)
+                {
+                    Transform upper = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+                    Transform lower = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
+                    Assert.That(HumanoidLegPoseSolver.TrySolve(upper, lower, right,
+                        right.position + Vector3.up * 0.06f, Vector3.right, out float error), Is.True);
+                    Assert.That(error, Is.LessThan(0.001f));
+                    if (upstreamBendAngle > 0f)
+                    {
+                        Vector3 originalKnee = lower.position;
+                        Vector3 planeNormal = Vector3.Cross(lower.position - upper.position,
+                            right.position - lower.position).normalized;
+                        Vector3 rotatedNormal = Quaternion.AngleAxis(upstreamBendAngle,
+                            (right.position - upper.position).normalized) * planeNormal;
+                        Assert.That(HumanoidLegPoseSolver.TrySolve(upper, lower, right,
+                            right.position, rotatedNormal, out error), Is.True);
+                        Assert.That(error, Is.LessThan(0.001f));
+                        Assert.That(Vector3.Distance(lower.position, originalKnee), Is.GreaterThan(0.005f));
+                    }
+                    right.rotation = Quaternion.AngleAxis(20f, Vector3.up) * right.rotation;
+                    supportedPosition = right.position;
+                    supportedRotation = right.rotation;
+                }
+                Transform upperLeg = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+                Transform lowerLeg = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
+                Vector3 upstreamKnee = lowerLeg.position;
+                Quaternion upstreamUpperRotation = upperLeg.rotation;
+                Quaternion upstreamLowerRotation = lowerLeg.rotation;
+                driver.CaptureValidatedSupport(false, false);
+                Assert.That(driver.TryApply(21f / FrameRate, alpha, Vector3.right, Vector3.right), Is.True);
+                Assert.That(driver.DebugRightWeight, Is.Zero);
+                Assert.That(driver.DebugSeparationWeight, Is.Zero);
+                Assert.That(driver.LastAppliedPelvisOffset, Is.EqualTo(0f).Within(0.000001f));
+                Assert.That(driver.LastUsedRightBendNormal, Is.EqualTo(Vector3.right),
+                    "기권 뒤 지면 보정에는 이전 IK 법선 대신 이번 프레임의 입력 법선을 전달해야 합니다.");
+                Assert.That(Vector3.Distance(right.position, supportedPosition), Is.LessThan(0.001f),
+                    "지지 해제 감쇠가 기권 중인 원본 발 목표를 새로 활성화하면 안 됩니다.");
+                Assert.That(Quaternion.Angle(right.rotation, supportedRotation), Is.LessThan(0.05f));
+                Assert.That(Vector3.Distance(lowerLeg.position, upstreamKnee), Is.LessThan(0.001f),
+                    "기권 중인 지지 해제는 앞 단계에서 만든 무릎 자세를 바꾸면 안 됩니다.");
+                Assert.That(Quaternion.Angle(upperLeg.rotation, upstreamUpperRotation), Is.LessThan(0.05f));
+                Assert.That(Quaternion.Angle(lowerLeg.rotation, upstreamLowerRotation), Is.LessThan(0.05f));
+            }
+            finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
+        [Test]
+        public void Given_ValidatedSupport_When_SeparationBegins_Then_MovesTowardSourceGoal()
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null);
+            try
+            {
+                Transform left = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                Transform upper = animator.GetBoneTransform(HumanBodyBones.RightUpperLeg);
+                Transform lower = animator.GetBoneTransform(HumanBodyBones.RightLowerLeg);
+                Vector3 support = left.position;
+                Vector3 sourceGoal = support + LeftGoalOffset;
+                Vector3 lowerLocal = lower.localPosition;
+                Vector3 footLocal = right.localPosition;
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty, animator.humanScale, FrameRate), Is.True);
+                driver.CaptureValidatedSupport(true, false);
+                Assert.That(driver.TryApply(20f / FrameRate, 1f, Vector3.right, Vector3.right), Is.True);
+                Assert.That(driver.DebugSeparationWeight, Is.Zero);
+                Assert.That(driver.DebugLeftWeight, Is.EqualTo(1f));
+                Assert.That(Vector3.Distance(driver.DebugLeftSolveGoal, support), Is.LessThan(0.001f));
+                Assert.That(Vector3.Distance(sourceGoal, support), Is.GreaterThan(0.03f));
+
+                // 본 길이를 바꾸지 않고 오른다리 IK로 발 모임을 구성함.
+                Vector3 closeTarget = left.position + Vector3.right * 0.01f + Vector3.up * 0.03f;
+                Assert.That(HumanoidLegPoseSolver.TrySolve(upper, lower, right,
+                    closeTarget, Vector3.right, out float error), Is.True);
+                Assert.That(error, Is.LessThan(0.001f));
+                float before = Vector3.ProjectOnPlane(left.position - right.position, Vector3.up).magnitude;
+                Assert.That(before, Is.LessThan(HumanoidFootGoalDriver.MinimumFootSeparationMeters));
+                driver.CaptureValidatedSupport(true, false);
+                Assert.That(driver.TryApply(21f / FrameRate, 1f, Vector3.right, Vector3.right), Is.True);
+                Assert.That(driver.DebugSeparationWeight, Is.GreaterThan(0f).And.LessThan(0.2f));
+                Assert.That(Vector3.ProjectOnPlane(driver.DebugLeftSolveGoal - sourceGoal, Vector3.up).magnitude,
+                    Is.LessThan(Vector3.ProjectOnPlane(support - sourceGoal, Vector3.up).magnitude),
+                    "이전 지지 앵커에 멈추지 않고 원본 분리 목표로 이동해야 합니다.");
+                Assert.That(Vector3.Distance(driver.DebugLeftSolveGoal, support), Is.GreaterThan(0.001f));
+                Assert.That(Vector3.Distance(driver.DebugLeftSolveGoal, sourceGoal), Is.GreaterThan(0.001f),
+                    "복구 첫 프레임에 반대 목표로 단발 교체하면 안 됩니다.");
+                Assert.That(Vector3.ProjectOnPlane(left.position - right.position, Vector3.up).magnitude,
+                    Is.GreaterThan(before), "실제 발 간격도 회복되어야 합니다.");
+                Assert.That(lower.localPosition, Is.EqualTo(lowerLocal));
+                Assert.That(right.localPosition, Is.EqualTo(footLocal));
+            }
+            finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
+        [TestCase(1f)]
+        [TestCase(0.25f)]
+        public void Given_UnpinnedSupport_When_OtherLegLowersPelvis_Then_PreservesSupportedFoot(float alpha)
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null);
+            try
+            {
+                Transform left = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                Vector3 support = right.position;
+                Quaternion supportRotation = right.rotation;
+                Vector3 sourceGoal = left.position + Vector3.down * 0.03f;
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator, Vector3.down * 0.03f), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty, animator.humanScale, FrameRate), Is.True);
+                driver.CaptureValidatedSupport(false, true);
+                Assert.That(driver.TryApply(20f / FrameRate, alpha, Vector3.right, Vector3.right), Is.True);
+                Assert.That(driver.DebugLeftWeight, Is.EqualTo(alpha));
+                Assert.That(driver.DebugRightWeight, Is.Zero);
+                Assert.That(driver.DebugSeparationWeight, Is.Zero);
+                Assert.That(driver.LastAppliedPelvisOffset, Is.LessThan(0f));
+                if (alpha == 1f)
+                {
+                    Assert.That(driver.LastAppliedPelvisOffset, Is.LessThan(-0.02f));
+                    Assert.That(Vector3.Distance(left.position, sourceGoal), Is.LessThan(0.002f));
+                }
+                Assert.That(Vector3.Distance(right.position, support), Is.LessThan(0.001f));
+                Assert.That(Quaternion.Angle(right.rotation, supportRotation), Is.LessThan(0.05f));
+            }
+            finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
         [TestCase(0.25f)]
         [TestCase(0.5f)]
         [TestCase(0.75f)]
@@ -356,6 +524,71 @@ namespace Tests.Editor.FBXImporter
                     Is.LessThan(0.000001f), "slide 의도는 접지만 표시하고 pin은 열지 않아야 함");
             }
             finally { if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
+        [Test]
+        public void Given_ReleasingSupport_When_ReevaluatingAndSeeking_Then_ReproducesSameHistory()
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null);
+            try
+            {
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty,
+                    animator.humanScale, FrameRate), Is.True);
+                Transform[] bones = animator.GetComponentsInChildren<Transform>(true);
+                Vector3[] positions = System.Array.ConvertAll(bones, bone => bone.localPosition);
+                Quaternion[] rotations = System.Array.ConvertAll(bones, bone => bone.localRotation);
+                const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                object leg = typeof(HumanoidFootGoalDriver).GetField("_left", flags).GetValue(driver);
+                float ReadSupport() => (float)leg.GetType().GetProperty("SupportWeight", flags).GetValue(leg);
+                Vector3 ReadGoal() => (Vector3)leg.GetType().GetProperty("EffectiveGoal", flags).GetValue(leg);
+                void Apply(int frame, bool supported)
+                {
+                    for (int index = 0; index < bones.Length; index++)
+                    {
+                        bones[index].localPosition = positions[index];
+                        bones[index].localRotation = rotations[index];
+                    }
+                    driver.CaptureValidatedSupport(supported, false);
+                    Assert.That(driver.TryApply(frame / FrameRate, 1f, Vector3.right, Vector3.right), Is.True);
+                }
+                Apply(20, true);
+                Assert.That(ReadSupport(), Is.EqualTo(1f));
+                Apply(21, false);
+                float firstSupport = ReadSupport();
+                Vector3 firstGoal = ReadGoal();
+                Assert.That(firstSupport, Is.GreaterThan(0f).And.LessThan(1f));
+                Assert.That(driver.DebugLeftWeight, Is.GreaterThan(0f));
+                Assert.That(driver.DebugSeparationWeight, Is.Zero);
+                Vector3[] firstPositions = System.Array.ConvertAll(bones, bone => bone.position);
+                Quaternion[] firstRotations = System.Array.ConvertAll(bones, bone => bone.rotation);
+                void AssertSameHistory()
+                {
+                    Assert.That(ReadSupport(), Is.EqualTo(firstSupport));
+                    Assert.That(Vector3.Distance(ReadGoal(), firstGoal), Is.LessThan(0.000001f));
+                    for (int index = 0; index < bones.Length; index++)
+                    {
+                        Assert.That(Vector3.Distance(bones[index].position, firstPositions[index]),
+                            Is.LessThan(0.000001f), bones[index].name);
+                        Assert.That(Quaternion.Angle(bones[index].rotation, firstRotations[index]),
+                            Is.LessThan(0.05f), bones[index].name);
+                    }
+                }
+                Apply(21, false);
+                AssertSameHistory();
+                Apply(50, false);
+                Assert.That(ReadSupport(), Is.Zero);
+                Apply(20, true);
+                Assert.That(ReadSupport(), Is.EqualTo(1f));
+                Apply(21, false);
+                AssertSameHistory();
+            }
+            finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
         }
 
         [Test]

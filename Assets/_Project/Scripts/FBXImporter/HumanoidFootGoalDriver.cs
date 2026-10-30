@@ -43,6 +43,7 @@ namespace Fbx2Vmd.FBXImporter
         internal float DebugLeftTargetError => _left.DebugTargetError;
         // 캡처 경로에서 핀 가중치가 실제로 올라가는지 진단용.
         internal float DebugLeftWeight => _left.Weight;
+        internal float DebugRightWeight => _right.Weight;
         // reach 계산이 현재 프레임에 앵커를 쓰는지 진단용 — 해제 감쇠·weight 소실
         // 뒤에도 true면 다음 재진입의 골반 계산이 오래된 앵커로 오염됨.
         internal bool DebugLeftPinAnchorInReach => _left.TryGetPinAnchor(out _);
@@ -363,6 +364,12 @@ namespace Fbx2Vmd.FBXImporter
             return rootSpace;
         }
 
+        internal void CaptureValidatedSupport(bool leftSupported, bool rightSupported)
+        {
+            _left.CaptureValidatedSupport(IsInitialized && leftSupported);
+            _right.CaptureValidatedSupport(IsInitialized && rightSupported);
+        }
+
         // alpha=0이면 아무것도 하지 않음 — 기존 경로와 비트 동일한 출력의 근거임.
         internal bool TryApply(float timeSeconds, float alpha,
             Vector3 leftBendNormal, Vector3 rightBendNormal,
@@ -398,8 +405,12 @@ namespace Fbx2Vmd.FBXImporter
                 ? separationTarget
                 : Mathf.MoveTowards(_separationWeight, separationTarget,
                     PinWeightChangePerSecond * dt);
-            _left.SolveWeight = Mathf.Max(_left.Weight, _separationWeight);
-            _right.SolveWeight = Mathf.Max(_right.Weight, _separationWeight);
+            _left.UpdateSupportWeight(_separationWeight, jumped || firstEval, dt);
+            _right.UpdateSupportWeight(_separationWeight, jumped || firstEval, dt);
+            _left.SourceSolveWeight = Mathf.Max(_left.Weight, _separationWeight);
+            _right.SourceSolveWeight = Mathf.Max(_right.Weight, _separationWeight);
+            _left.SolveWeight = Mathf.Max(_left.SourceSolveWeight, _left.SupportWeight);
+            _right.SolveWeight = Mathf.Max(_right.SourceSolveWeight, _right.SupportWeight);
             if (_left.SolveWeight <= 0f && _right.SolveWeight <= 0f)
             {
                 return true;
@@ -411,20 +422,22 @@ namespace Fbx2Vmd.FBXImporter
             Vector3 goalHipsPosition = _sourceHipsPositions[frame];
             Quaternion goalHipsRotation = _sourceHipsRotations[frame];
             // 골반 드롭은 양다리 공유 — 한쪽이라도 목표가 신장 한계를 넘으면 함께 계산함.
+            _left.PrepareGoal(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
+                _leftFloorRootSpaceY[frame], _leftFloorWorldY[frame], dt, ground);
+            _right.PrepareGoal(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
+                _rightFloorRootSpaceY[frame], _rightFloorWorldY[frame], dt, ground);
             float pelvisOffset = CalculatePelvisOffset(frame);
             if (Mathf.Abs(pelvisOffset) > 0f)
             {
                 LastAppliedPelvisOffset =
-                    pelvisOffset * Mathf.Max(_left.Weight, _right.Weight);
+                    pelvisOffset * Mathf.Max(_left.Weight, _right.Weight, _left.SupportWeight, _right.SupportWeight);
                 _hips.position += Vector3.up * LastAppliedPelvisOffset;
             }
 
             // 원본 추정 지면은 접촉 스냅과 미검출 폴백에 사용함.
             // 대상 밑창 상승은 TrySolve에서 실제 지면을 우선 조회함.
-            _left.TrySolve(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
-                _leftFloorRootSpaceY[frame], _leftFloorWorldY[frame], leftBendNormal, dt, ground);
-            _right.TrySolve(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
-                _rightFloorRootSpaceY[frame], _rightFloorWorldY[frame], rightBendNormal, dt, ground);
+            _left.SolvePreparedGoal(leftBendNormal);
+            _right.SolvePreparedGoal(rightBendNormal);
             return true;
         }
 
@@ -455,6 +468,8 @@ namespace Fbx2Vmd.FBXImporter
 
         private float CalculatePelvisOffset(int frame)
         {
+            // 양발 원본 목표가 기권하면 지원 목표는 현재 발 위치이므로 새 골반 이동이 필요하지 않음.
+            if (_left.SourceSolveWeight <= 0f && _right.SourceSolveWeight <= 0f) return 0f;
             bool needsLeft = TryBuildReachLeg(_left, frame,
                 out HumanoidPelvisReachCalculator.Leg left);
             bool needsRight = TryBuildReachLeg(_right, frame,
@@ -483,17 +498,8 @@ namespace Fbx2Vmd.FBXImporter
             out HumanoidPelvisReachCalculator.Leg reachLeg)
         {
             reachLeg = default;
-            if (leg.Weight <= 0f ||
-                !TryGetGoalSample(frame, leg.IsLeft, out HumanoidFootGoalStream.GoalSample goal))
-            {
-                return false;
-            }
-
-            Vector3 goalWorld = _sourceHipsPositions[frame] +
-                _sourceHipsRotations[frame] * goal.RootSpaceFootPosition;
-            // reach 계산은 solve와 같은 유효 목표를 봐야 함 — 해제 감쇠·감쇠 중
-            // 재핀의 블렌드 목표와 어긋나면 골반 드롭이 실제 추종 대상과 달라짐.
-            goalWorld = leg.ApplyPinBlend(frame, goalWorld);
+            if (leg.Weight <= 0f && leg.SupportWeight <= 0f) return false;
+            Vector3 goalWorld = leg.EffectiveGoal;
             Vector3 toHip = leg.Upper.position - goalWorld;
             float distance = toHip.magnitude;
             // 감쇠 기준각은 현재 자세가 아니라 임계값으로 고정함 — 자세 이력이 섞이면
@@ -508,12 +514,13 @@ namespace Fbx2Vmd.FBXImporter
             {
                 dampedReach = leg.Reach;
             }
-            if (distance <= dampedReach)
+            dampedReach = Mathf.Lerp(dampedReach, leg.Reach, leg.SupportWeight);
+            if (distance <= dampedReach && leg.SupportWeight <= 0f)
             {
                 return false;
             }
             reachLeg = new HumanoidPelvisReachCalculator.Leg(toHip,
-                leg.UpperLength, leg.LowerLength, leg.Weight, 0f, dampedReach);
+                leg.UpperLength, leg.LowerLength, Mathf.Max(leg.Weight, leg.SupportWeight), 0f, dampedReach);
             return true;
         }
 
@@ -589,10 +596,35 @@ namespace Fbx2Vmd.FBXImporter
             // weight의 큰 쪽. 핀 앵커·감쇠 블렌드는 Weight 기준을 유지하고,
             // solve 발화·결과 블렌드만 이 값을 씀. TryApply가 매 프레임 계산함.
             internal float SolveWeight { get; set; }
+            internal float SourceSolveWeight { get; set; }
+            internal bool HasValidatedSupport { get; private set; }
+            internal Vector3 SupportedPosition { get; private set; }
+            private Quaternion _supportedFrame;
+            internal float SupportWeight { get; private set; }
+            internal Vector3 EffectiveGoal { get; private set; }
+            private Quaternion _effectiveFrame;
             internal bool[] Pin = Array.Empty<bool>();
             internal bool[] Grounded = Array.Empty<bool>();
 
             private HumanoidFootRotationBinding _binding;
+            internal void CaptureValidatedSupport(bool supported)
+            {
+                HasValidatedSupport = false;
+                if (supported && _binding != null &&
+                    _binding.TryCaptureWorldFrame(out Quaternion frame))
+                {
+                    HasValidatedSupport = true;
+                    SupportedPosition = Foot.position;
+                    _supportedFrame = frame;
+                }
+            }
+
+            internal void UpdateSupportWeight(float separationWeight, bool reset, float dt)
+            {
+                float target = HasValidatedSupport ? 1f - separationWeight : 0f;
+                SupportWeight = reset ? target : Mathf.MoveTowards(
+                    SupportWeight, target, PinWeightChangePerSecond * dt);
+            }
             private Vector3 _smoothedGoal;
             private bool _hasSmoothedGoal;
             // pin 재진입 프레임의 목표를 수평 앵커로 유지 — 핀 구간 내내 정박함.
@@ -738,11 +770,11 @@ namespace Fbx2Vmd.FBXImporter
                 }
             }
 
-            internal void TrySolve(int frame,
+            internal void PrepareGoal(int frame,
                 IReadOnlyList<HumanoidFootGoalStream.GoalSample> samples,
                 Vector3 hipsPosition, Quaternion hipsRotation,
                 float floorRootSpaceY, float floorWorldY,
-                Vector3 bendNormal, float dt, HumanoidGroundResponse ground)
+                float dt, HumanoidGroundResponse ground)
             {
                 if (SolveWeight <= 0f)
                 {
@@ -856,6 +888,37 @@ namespace Fbx2Vmd.FBXImporter
                         GoalPositionSmoothingSpeed, dt);
                 }
 
+                // 원본 핀 상태와 지지 상태를 분리하고 도달 계산과 IK가 같은 목표를 사용함.
+                float sourceFraction = SourceSolveWeight / SolveWeight;
+                Vector3 sourceGoal = Vector3.Lerp(Foot.position, _smoothedGoal, sourceFraction);
+                Vector3 rawSourceGoal = Vector3.Lerp(Foot.position, goalWorld, sourceFraction);
+                Quaternion currentFrame = goalFrame;
+                if (_binding != null && _binding.TryCaptureWorldFrame(out Quaternion capturedFrame))
+                    currentFrame = capturedFrame;
+                if (!HasValidatedSupport)
+                {
+                    // 지지 해제는 이번 프레임의 접지 결과로 넘기며 과거 위치에 발을 붙잡지 않음.
+                    SupportedPosition = Foot.position;
+                    _supportedFrame = currentFrame;
+                }
+                Quaternion sourceFrame = Quaternion.Slerp(currentFrame, goalFrame, sourceFraction);
+                LastSolveGoal = Vector3.Lerp(rawSourceGoal, SupportedPosition, SupportWeight);
+                EffectiveGoal = Vector3.Lerp(sourceGoal, SupportedPosition, SupportWeight);
+                _effectiveFrame = Quaternion.Slerp(sourceFrame, _supportedFrame, SupportWeight);
+            }
+
+            internal void SolvePreparedGoal(Vector3 bendNormal)
+            {
+                if (SolveWeight <= 0f) return;
+                // 지지 해제 중 목표 변화가 없으면 앞 단계의 무릎 자세까지 보존함.
+                // 골반이 이동하면 현재 발과 목표가 달라지므로 지지 보존 IK를 계속 적용함.
+                if (!HasValidatedSupport && SourceSolveWeight <= 0f &&
+                    EffectiveGoal.Equals(Foot.position))
+                {
+                    LastUsedBendNormal = bendNormal;
+                    return;
+                }
+                Quaternion goalFrame = _effectiveFrame;
                 Quaternion upperRotation = Upper.rotation;
                 Quaternion lowerRotation = Lower.rotation;
                 Quaternion footRotation = Foot.rotation;
@@ -867,7 +930,7 @@ namespace Fbx2Vmd.FBXImporter
                 bool bendAligned = HumanoidLegPoseSolver.TryCalculateBendNormal(
                     Lower.position - Upper.position,
                     Foot.position - Lower.position,
-                    _smoothedGoal - Upper.position,
+                    EffectiveGoal - Upper.position,
                     referenceNormal, out bendNormal, out float referenceWeight);
                 if (bendAligned)
                 {
@@ -897,9 +960,9 @@ namespace Fbx2Vmd.FBXImporter
                 }
                 LastUsedBendNormal = bendNormal;
                 bool solved = HumanoidLegPoseSolver.TrySolve(Upper, Lower, Foot,
-                    _smoothedGoal, bendNormal, out float targetError);
+                    EffectiveGoal, bendNormal, out float targetError);
                 {
-                    Vector3 direction = _smoothedGoal - Upper.position;
+                    Vector3 direction = EffectiveGoal - Upper.position;
                     float distance = direction.magnitude;
                     float along = (distance * distance + UpperLength * UpperLength -
                         LowerLength * LowerLength) / (2f * distance);
@@ -978,6 +1041,13 @@ namespace Fbx2Vmd.FBXImporter
                 _binding = null;
                 Weight = 0f;
                 SolveWeight = 0f;
+                SourceSolveWeight = 0f;
+                HasValidatedSupport = false;
+                SupportedPosition = Vector3.zero;
+                _supportedFrame = Quaternion.identity;
+                SupportWeight = 0f;
+                EffectiveGoal = Vector3.zero;
+                _effectiveFrame = Quaternion.identity;
                 Pin = Grounded = Array.Empty<bool>();
                 _hasSmoothedGoal = false;
                 _smoothedGoal = Vector3.zero;

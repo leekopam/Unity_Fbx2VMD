@@ -15,6 +15,205 @@ namespace Tests.Editor.FBXImporter
         private const float TimeTolerance = 0.0001f;
 
         [Test]
+        public void Given_BothGoalsAbstain_When_SupportReleaseHasReachRounding_Then_KeepsPelvisUnchanged()
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
+            Assert.That(asset, Is.Not.Null, "접지 핀 전환 재현 모델이 필요합니다.");
+            Collider[] existingGround = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsSortMode.None)
+                .Where(c => c.enabled && !c.isTrigger).ToArray();
+            var holder = new GameObject("접지 핀 전환 회귀") { hideFlags = HideFlags.HideAndDontSave };
+            holder.SetActive(false);
+            var floor = new GameObject("접지 핀 전환 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
+            object controller = CreateController();
+            try
+            {
+                // 소스 목표가 원점 기준이므로 대상을 옮기지 않고 기존 Collider를 잠시 분리함.
+                foreach (Collider collider in existingGround) collider.enabled = false;
+                floor.transform.position = new Vector3(0f, -0.05f, 0f);
+                floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
+                GameObject target = UnityEngine.Object.Instantiate(asset, holder.transform);
+                target.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                foreach (MonoBehaviour script in target.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (script != null) script.enabled = false;
+                target.SetActive(true);
+                holder.SetActive(true);
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator, LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Invoke(controller, "SetIkGoalFootDrive", true, 1f);
+                Invoke(controller, "SetFootStepDiffusion", true);
+                Physics.SyncTransforms();
+                for (int frame = 0; frame <= 3534; frame++)
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+                object driver = controller.GetType().GetField("_footGoalDriver", flags).GetValue(controller);
+                Assert.That((float)ReadProperty(driver, "DebugLeftWeight"), Is.Zero);
+                Assert.That((float)ReadProperty(driver, "DebugRightWeight"), Is.Zero);
+                Assert.That((float)ReadProperty(driver, "DebugSeparationWeight"), Is.Zero);
+                Assert.That((float)ReadProperty(driver, "LastAppliedPelvisOffset"), Is.Zero,
+                    "양발 모두 목표를 요청하지 않으면 도달 계산의 반올림으로 골반을 옮기면 안 됩니다.");
+            }
+            finally
+            {
+                try { DisposeController(controller); }
+                finally
+                {
+                    try
+                    {
+                        UnityEngine.Object.DestroyImmediate(floor);
+                        UnityEngine.Object.DestroyImmediate(holder);
+                    }
+                    finally
+                    {
+                        foreach (Collider collider in existingGround) if (collider != null) collider.enabled = true;
+                        Physics.SyncTransforms();
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void Given_SeparationRelease_When_ReturningToValidatedSupport_Then_AvoidsFootJump()
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
+            Assert.That(asset, Is.Not.Null, "접지 핀 전환 재현 모델이 필요합니다.");
+            Collider[] existingGround = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsSortMode.None)
+                .Where(c => c.enabled && !c.isTrigger).ToArray();
+            var holder = new GameObject("접지 핀 전환 회귀") { hideFlags = HideFlags.HideAndDontSave };
+            holder.SetActive(false);
+            var floor = new GameObject("접지 핀 전환 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
+            object controller = CreateController();
+            try
+            {
+                // 소스 목표가 원점 기준이므로 대상을 옮기지 않고 기존 Collider를 잠시 분리함.
+                foreach (Collider collider in existingGround) collider.enabled = false;
+                floor.transform.position = new Vector3(0f, -0.05f, 0f);
+                floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
+                GameObject target = UnityEngine.Object.Instantiate(asset, holder.transform);
+                target.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                foreach (MonoBehaviour script in target.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (script != null) script.enabled = false;
+                target.SetActive(true);
+                holder.SetActive(true);
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator, LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Invoke(controller, "SetIkGoalFootDrive", true, 1f);
+                Invoke(controller, "SetFootStepDiffusion", true);
+                Physics.SyncTransforms();
+                Vector3 previous = Vector3.zero;
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+                object driver = controller.GetType().GetField("_footGoalDriver", flags).GetValue(controller);
+                Transform foot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                for (int frame = 0; frame <= 6146; frame++)
+                {
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
+                    if (frame == 6145)
+                    {
+                        previous = foot.position;
+                        Assert.That((float)ReadProperty(driver, "DebugSeparationWeight"), Is.GreaterThan(0f));
+                    }
+                }
+                Assert.That((float)ReadProperty(driver, "DebugSeparationWeight"), Is.Zero);
+                object rightLeg = driver.GetType().GetField("_right", flags).GetValue(driver);
+                Assert.That((bool)ReadProperty(rightLeg, "HasValidatedSupport"), Is.True);
+                // 기존 순차 재생의 5.713mm 이동에 비해 발생한 58.670mm 전환 팝을 차단함.
+                Assert.That(Vector3.Distance(foot.position, previous), Is.LessThan(0.02f),
+                    "발 모임 복구 종료가 검증된 접지 목표로 단발 점프하면 안 됩니다.");
+            }
+            finally
+            {
+                try { DisposeController(controller); }
+                finally
+                {
+                    try
+                    {
+                        UnityEngine.Object.DestroyImmediate(floor);
+                        UnityEngine.Object.DestroyImmediate(holder);
+                    }
+                    finally
+                    {
+                        foreach (Collider collider in existingGround) if (collider != null) collider.enabled = true;
+                        Physics.SyncTransforms();
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void Given_PlantedFrontContact_When_GoalPinBegins_Then_PreservesContactAnchor()
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
+            Assert.That(asset, Is.Not.Null, "접지 핀 전환 재현 모델이 필요합니다.");
+            Collider[] existingGround = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsSortMode.None)
+                .Where(c => c.enabled && !c.isTrigger).ToArray();
+            var holder = new GameObject("접지 핀 전환 회귀") { hideFlags = HideFlags.HideAndDontSave };
+            holder.SetActive(false);
+            var floor = new GameObject("접지 핀 전환 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
+            object controller = CreateController();
+            try
+            {
+                // 소스 목표가 원점 기준이므로 대상을 옮기지 않고 기존 Collider를 잠시 분리함.
+                foreach (Collider collider in existingGround) collider.enabled = false;
+                floor.transform.position = new Vector3(0f, -0.05f, 0f);
+                floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
+                GameObject target = UnityEngine.Object.Instantiate(asset, holder.transform);
+                target.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                foreach (MonoBehaviour script in target.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (script != null) script.enabled = false;
+                target.SetActive(true);
+                holder.SetActive(true);
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator, LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Invoke(controller, "SetIkGoalFootDrive", true, 1f);
+                Invoke(controller, "SetFootStepDiffusion", true);
+                Physics.SyncTransforms();
+                for (int frame = 0; frame <= 9946; frame++)
+                {
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
+                    if (frame < 9941) continue;
+                    if (frame <= 9942)
+                    {
+                        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+                        object driver = controller.GetType().GetField("_footGoalDriver", flags).GetValue(controller);
+                        float pinWeight = (float)ReadProperty(driver, "DebugRightWeight");
+                        if (frame == 9941) Assert.That(pinWeight, Is.Zero);
+                        else Assert.That(pinWeight, Is.GreaterThan(0f));
+                    }
+                    object gate = ReadProperty(controller, "LastGroundingGate");
+                    object right = gate.GetType().GetField("right").GetValue(gate);
+                    Assert.That(right, Is.Not.Null);
+                    int contactCount = (int)right.GetType().GetField("supported_contact_count").GetValue(right);
+                    float contactError = (float)right.GetType().GetField("supported_contact_error_m").GetValue(right);
+                    Assert.That(contactCount, Is.GreaterThan(0), $"{frame}의 완전 지지가 필요합니다.");
+                    Assert.That(contactError, Is.LessThanOrEqualTo(0.001f),
+                        $"{frame}에서 IK 핀 진입이 이미 고정된 밑창 접점을 옮기면 안 됩니다.");
+                }
+            }
+            finally
+            {
+                try { DisposeController(controller); }
+                finally
+                {
+                    try
+                    {
+                        UnityEngine.Object.DestroyImmediate(floor);
+                        UnityEngine.Object.DestroyImmediate(holder);
+                    }
+                    finally
+                    {
+                        foreach (Collider collider in existingGround) if (collider != null) collider.enabled = true;
+                        Physics.SyncTransforms();
+                    }
+                }
+            }
+        }
+
+        [Test]
         public void Given_SeparationDriveAfterPassingGate_When_SeekingSequentially_Then_KeepsBothSolesAboveGround()
         {
             GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(
