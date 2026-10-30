@@ -79,6 +79,19 @@ namespace Fbx2Vmd.FBXImporter
                 shouldReimport = true;
             }
 
+            description = importer.humanDescription;
+            string completedChestBone = null;
+            if (description.human != null && !description.human.Any(bone => bone.humanName == "Chest") &&
+                TryCompleteTemplateChestMapping(model, description.human,
+                    FBXImportController.LoadBoneMappingRuntime(), out HumanBone[] completed))
+            {
+                // 프로젝트 템플릿과 계층이 일치하는 리그에서 소실된 Chest 역할만 보완함.
+                description.human = completed;
+                importer.humanDescription = description;
+                completedChestBone = completed[completed.Length - 1].boneName;
+                shouldReimport = true;
+            }
+
             ModelImporterClipAnimation[] clips = importer.clipAnimations;
             if (clips == null || clips.Length == 0)
             {
@@ -98,6 +111,15 @@ namespace Fbx2Vmd.FBXImporter
                 importer.SaveAndReimport();
             }
 
+            if (completedChestBone != null)
+            {
+                GameObject importedModel = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+                Animator animator = importedModel == null ? null : importedModel.GetComponentsInChildren<Animator>(true)
+                    .FirstOrDefault(candidate => candidate.avatar != null && candidate.avatar.isHuman);
+                if (animator == null || animator.GetBoneTransform(HumanBodyBones.Chest)?.name != completedChestBone)
+                    throw new InvalidOperationException($"프로젝트 템플릿의 Chest 매핑 임포트에 실패했습니다: {assetPath}");
+            }
+
             AnimationClip clip = EditorAnimationClipAssetLoader.LoadFirst(assetPath);
             if (clip == null || !clip.humanMotion)
             {
@@ -106,6 +128,63 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             return shouldReimport;
+        }
+
+        internal static bool TryCompleteTemplateChestMapping(GameObject model, HumanBone[] source,
+            IReadOnlyDictionary<string, string> template, out HumanBone[] completed)
+        {
+            completed = source;
+            if (model == null || source == null || source.Length == 0 || template == null)
+                return false;
+
+            var expected = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, string> entry in template)
+            {
+                string role = HumanoidAvatarBuilder.NormalizeHumanBoneName(entry.Key);
+                if (string.IsNullOrWhiteSpace(role) || string.IsNullOrWhiteSpace(entry.Value) ||
+                    Array.IndexOf(HumanTrait.BoneName, role) < 0 || expected.ContainsKey(role))
+                    return false;
+                expected.Add(role, entry.Value);
+            }
+            if (!expected.ContainsKey("Chest") || source.Length != expected.Count - 1)
+                return false;
+
+            Transform[] bones = model.GetComponentsInChildren<Transform>(true);
+            var roles = new HashSet<string>(StringComparer.Ordinal);
+            var used = new HashSet<Transform>();
+            foreach (HumanBone bone in source)
+            {
+                string role = HumanoidAvatarBuilder.NormalizeHumanBoneName(bone.humanName);
+                if (string.IsNullOrWhiteSpace(role) || role == "Chest" || !roles.Add(role) ||
+                    !expected.TryGetValue(role, out string name) || name != bone.boneName ||
+                    !HumanoidAvatarBuilder.TryFindUniqueMappedTransform(bones, name, out Transform match) ||
+                    match.name != name || !used.Add(match))
+                    return false;
+            }
+
+            Transform FindExact(string role)
+            {
+                if (!expected.TryGetValue(role, out string name) ||
+                    !HumanoidAvatarBuilder.TryFindUniqueMappedTransform(bones, name, out Transform match) ||
+                    match.name != name)
+                    return null;
+                return match;
+            }
+            Transform spine = FindExact("Spine");
+            Transform chest = FindExact("Chest");
+            Transform neck = FindExact("Neck");
+            Transform leftShoulder = FindExact("LeftShoulder");
+            Transform rightShoulder = FindExact("RightShoulder");
+            if (spine == null || chest == null || neck == null || leftShoulder == null || rightShoulder == null ||
+                used.Contains(chest) || chest.parent != spine || neck.parent != chest ||
+                leftShoulder.parent != chest || rightShoulder.parent != chest)
+                return false;
+
+            completed = source.Concat(new[] { new HumanBone
+            {
+                humanName = "Chest", boneName = chest.name, limit = new HumanLimit { useDefaultValues = true }
+            } }).ToArray();
+            return true;
         }
 
         internal static bool TryResolveHumanBoneNames(GameObject model, HumanBone[] source,
