@@ -915,9 +915,13 @@ namespace Fbx2Vmd.FBXImporter
                 DebugTargetError = targetError;
                 if (solved && SolveWeight < 1f)
                 {
-                    Upper.rotation = Quaternion.Slerp(upperRotation, Upper.rotation, SolveWeight);
-                    Lower.rotation = Quaternion.Slerp(lowerRotation, Lower.rotation, SolveWeight);
-                    Foot.rotation = Quaternion.Slerp(footRotation, Foot.rotation, SolveWeight);
+                    // 부모 회전 적용이 자식의 보간 목표에 다시 섞이지 않도록 IK 결과를 고정함.
+                    Quaternion solvedUpperRotation = Upper.rotation;
+                    Quaternion solvedLowerRotation = Lower.rotation;
+                    Quaternion solvedFootRotation = Foot.rotation;
+                    Upper.rotation = Quaternion.Slerp(upperRotation, solvedUpperRotation, SolveWeight);
+                    Lower.rotation = Quaternion.Slerp(lowerRotation, solvedLowerRotation, SolveWeight);
+                    Foot.rotation = Quaternion.Slerp(footRotation, solvedFootRotation, SolveWeight);
                 }
                 // 발 회전 — 목표 프레임(grounded 시 정렬+soft-cap 반영됨)을 가중 적용.
                 if (_binding == null || !_binding.TryCaptureWorldFrame(out Quaternion currentFrame))

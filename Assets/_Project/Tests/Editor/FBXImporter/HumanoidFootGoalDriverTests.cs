@@ -15,6 +15,64 @@ namespace Tests.Editor.FBXImporter
         private const int PinStart = 5;
         private const int PinEnd = 40;
 
+        [TestCase(0.25f)]
+        [TestCase(0.5f)]
+        [TestCase(0.75f)]
+        public void Given_PartialGoalWeight_When_BlendingLeg_Then_PreservesSolvedLowerRotationTarget(float alpha)
+        {
+            Animator fullAnimator = LoadTargetAnimator();
+            Animator partialAnimator = LoadTargetAnimator();
+            try
+            {
+                if (fullAnimator == null || partialAnimator == null)
+                    Assert.Ignore("로컬 검증 모델이 없는 환경에서는 생략함");
+
+                Transform lower = partialAnimator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
+                Transform foot = partialAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Quaternion initialLowerRotation = lower.rotation;
+                Vector3 lowerPosition = lower.localPosition;
+                Vector3 footPosition = foot.localPosition;
+                Vector3 offset = new Vector3(0.05f, 0.08f, 0.03f);
+                var fullDriver = new HumanoidFootGoalDriver();
+                var partialDriver = new HumanoidFootGoalDriver();
+                Assert.That(fullDriver.TryInitializeCore(fullAnimator,
+                    BuildSamples(fullAnimator, offset), BuildHipsPositions(fullAnimator),
+                    BuildHipsRotations(fullAnimator), BuildPlantEstimate(fullAnimator),
+                    HumanoidFootContactIntentLabelSet.Empty, fullAnimator.humanScale, FrameRate), Is.True);
+                Assert.That(partialDriver.TryInitializeCore(partialAnimator,
+                    BuildSamples(partialAnimator, offset), BuildHipsPositions(partialAnimator),
+                    BuildHipsRotations(partialAnimator), BuildPlantEstimate(partialAnimator),
+                    HumanoidFootContactIntentLabelSet.Empty, partialAnimator.humanScale, FrameRate), Is.True);
+
+                Assert.That(fullDriver.TryApply(20f / FrameRate, 1f,
+                    Vector3.right, Vector3.right), Is.True);
+                Assert.That(fullDriver.DebugLeftSolveSucceeded, Is.True);
+                Quaternion solvedLowerRotation = fullAnimator
+                    .GetBoneTransform(HumanBodyBones.LeftLowerLeg).rotation;
+                Assert.That(fullDriver.LastAppliedPelvisOffset, Is.EqualTo(0f).Within(0.000001f),
+                    "골반 이동이 없는 도달 가능한 목표로 회전 혼합만 분리함");
+                Assert.That(Quaternion.Angle(initialLowerRotation, solvedLowerRotation), Is.GreaterThan(5f));
+
+                Assert.That(partialDriver.TryApply(20f / FrameRate, alpha,
+                    Vector3.right, Vector3.right), Is.True);
+                Assert.That(partialDriver.DebugLeftWeight, Is.EqualTo(alpha).Within(0.000001f));
+                Assert.That(partialDriver.DebugLeftSolveSucceeded, Is.True);
+                Assert.That(partialDriver.LastAppliedPelvisOffset, Is.EqualTo(0f).Within(0.000001f));
+                Assert.That(Vector3.Distance(partialDriver.DebugLeftSolveGoal, fullDriver.DebugLeftSolveGoal),
+                    Is.LessThan(0.000001f), "두 경로의 IK 목표가 같아야 함");
+                Quaternion expected = Quaternion.Slerp(initialLowerRotation, solvedLowerRotation, alpha);
+                Assert.That(Quaternion.Angle(lower.rotation, expected), Is.LessThan(0.05f),
+                    "허벅지 혼합이 종아리의 완전 IK 목표 회전을 바꾸면 안 됨");
+                Assert.That(lower.localPosition, Is.EqualTo(lowerPosition));
+                Assert.That(foot.localPosition, Is.EqualTo(footPosition));
+            }
+            finally
+            {
+                if (fullAnimator != null) Object.DestroyImmediate(fullAnimator.transform.root.gameObject);
+                if (partialAnimator != null) Object.DestroyImmediate(partialAnimator.transform.root.gameObject);
+            }
+        }
+
         [Test]
         public void Given_UninitializedOrZeroAlpha_When_Applying_Then_PreservesPose()
         {
