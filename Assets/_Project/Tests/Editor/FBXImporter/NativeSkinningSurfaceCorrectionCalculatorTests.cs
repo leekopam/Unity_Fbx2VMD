@@ -41,6 +41,32 @@ namespace Tests.Editor.FBXImporter
             method.Invoke(null, new object[] { ClipAssetPath });
         }
 
+        [TestCase(0.0498f, false)]
+        [TestCase(0.04995f, true)]
+        [TestCase(0.06f, true)]
+        public void Given_RecoveryCandidate_When_CheckingStrain_Then_PreservesPlaybackMargin(
+            float strainIncrease, bool expectedDefect)
+        {
+            var baseline = new[] { Vector3.zero, Vector3.right };
+            var candidate = new[] { Vector3.zero, Vector3.right * (1f + strainIncrease) };
+            Type calculator = RequireProductType("NativeSkinningSurfaceCorrectionCalculator");
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance;
+            Type edgeType = calculator.GetNestedType("LocalEdge", flags);
+            Assert.That(edgeType, Is.Not.Null);
+            object edge = edgeType.GetConstructors(flags).Single().Invoke(new object[]
+            {
+                0, 1, 0, 1, 1f, 1f
+            });
+            Array edges = Array.CreateInstance(edgeType, 1);
+            edges.SetValue(edge, 0);
+            MethodInfo check = calculator.GetMethod("HasRestShapeRecoveryStrainDefect", flags);
+            Assert.That(check, Is.Not.Null);
+
+            Assert.That((bool)check.Invoke(null, new object[] { baseline, candidate, edges }),
+                Is.EqualTo(expectedDefect));
+        }
+
         [Test]
         public void Given_RoundedPlaybackEdge_When_ProjectingRecovery_Then_ReusesDeltaWithinStrainLimit()
         {

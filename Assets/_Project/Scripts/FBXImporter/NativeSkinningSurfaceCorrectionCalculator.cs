@@ -2564,7 +2564,7 @@ namespace Fbx2Vmd.FBXImporter
                         edge.RestLength);
                 if (!IsFinite(strainIncrease) ||
                     strainIncrease > NativeSkinningRestShapeRecoveryCalculator
-                        .MaximumRestStrainIncrease)
+                        .MaximumRestStrainIncrease - EdgeLengthProjectionMargin)
                 {
                     return true;
                 }
