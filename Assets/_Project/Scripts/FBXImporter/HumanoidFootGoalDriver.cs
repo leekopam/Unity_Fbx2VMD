@@ -365,7 +365,8 @@ namespace Fbx2Vmd.FBXImporter
 
         // alpha=0이면 아무것도 하지 않음 — 기존 경로와 비트 동일한 출력의 근거임.
         internal bool TryApply(float timeSeconds, float alpha,
-            Vector3 leftBendNormal, Vector3 rightBendNormal)
+            Vector3 leftBendNormal, Vector3 rightBendNormal,
+            HumanoidGroundResponse ground = null)
         {
             LastAppliedPelvisOffset = 0f;
             if (!IsInitialized || alpha <= 0f)
@@ -418,12 +419,12 @@ namespace Fbx2Vmd.FBXImporter
                 _hips.position += Vector3.up * LastAppliedPelvisOffset;
             }
 
-            // 밑창 프로브와 지면 모두 월드 좌표 — 소스·타겟은 같은 월드 공간을 공유하므로
-            // 소스 월드 지면 높이를 그대로 비교함(골반 상대 변환은 회전 틀어짐 오차가 생김).
+            // 원본 추정 지면은 접촉 스냅과 미검출 폴백에 사용함.
+            // 대상 밑창 상승은 TrySolve에서 실제 지면을 우선 조회함.
             _left.TrySolve(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
-                _leftFloorRootSpaceY[frame], _leftFloorWorldY[frame], leftBendNormal, dt);
+                _leftFloorRootSpaceY[frame], _leftFloorWorldY[frame], leftBendNormal, dt, ground);
             _right.TrySolve(frame, _goals.Samples, goalHipsPosition, goalHipsRotation,
-                _rightFloorRootSpaceY[frame], _rightFloorWorldY[frame], rightBendNormal, dt);
+                _rightFloorRootSpaceY[frame], _rightFloorWorldY[frame], rightBendNormal, dt, ground);
             return true;
         }
 
@@ -741,7 +742,7 @@ namespace Fbx2Vmd.FBXImporter
                 IReadOnlyList<HumanoidFootGoalStream.GoalSample> samples,
                 Vector3 hipsPosition, Quaternion hipsRotation,
                 float floorRootSpaceY, float floorWorldY,
-                Vector3 bendNormal, float dt)
+                Vector3 bendNormal, float dt, HumanoidGroundResponse ground)
             {
                 if (SolveWeight <= 0f)
                 {
@@ -796,7 +797,10 @@ namespace Fbx2Vmd.FBXImporter
                     // 바인딩이 뼈에 실제로 쓸 회전으로 밑창 정점을 평가함 —
                     // goalFrame은 canonical frame 규약이라 발목 뼈 로컬 좌표의
                     // 프로브에 그대로 곱하면 축이 어긋나 높이가 틀어짐.
-                    float soleLift = floorWorldY - LowestSoleProbeHeight(
+                    // 원본 발끝 기준은 의도 판정에 유지하고 실제 밑창 상승은 대상 지면을 기준으로 함.
+                    float soleFloorY = ground != null && ground.TryFindGround(goalWorld, out RaycastHit hit)
+                        ? hit.point.y : floorWorldY;
+                    float soleLift = soleFloorY - LowestSoleProbeHeight(
                         goalWorld, appliedFootRotation);
                     if (soleLift > 0f)
                     {

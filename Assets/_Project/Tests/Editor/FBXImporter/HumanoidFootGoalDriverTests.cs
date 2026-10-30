@@ -619,6 +619,55 @@ namespace Tests.Editor.FBXImporter
             finally { if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject); }
         }
 
+        [TestCase(true, true)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        public void Given_SourceToeFloorAboveCollider_When_ApplyingPinnedFrame_Then_UsesActualSoleFloor(
+            bool useGround, bool hasGround)
+        {
+            Animator animator = LoadTargetAnimator();
+            if (animator == null) Assert.Ignore("로컬 검증 모델이 없는 환경에서는 생략함");
+            GameObject floor = null;
+            try
+            {
+                Transform foot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform toes = animator.GetBoneTransform(HumanBodyBones.LeftToes);
+                float floorY = toes.position.y - 0.02f;
+                floor = new GameObject("실제 지면 높이 검증");
+                floor.transform.position = new Vector3(foot.position.x, floorY - 0.05f, foot.position.z);
+                BoxCollider collider = floor.AddComponent<BoxCollider>();
+                collider.size = new Vector3(4f, 0.1f, 4f);
+                Physics.SyncTransforms();
+                var ground = new HumanoidGroundResponse();
+                ground.Initialize(animator);
+                Assert.That(ground.TryFindGround(foot.position, out RaycastHit hit), Is.True);
+                Assert.That(hit.collider, Is.SameAs(collider), "검증용 실제 지면을 선택해야 함");
+                collider.enabled = hasGround;
+                Physics.SyncTransforms();
+                Assert.That(ground.TryFindGround(foot.position, out _), Is.EqualTo(hasGround));
+
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty,
+                    animator.humanScale, FrameRate), Is.True);
+                Vector3 probeLocal = foot.InverseTransformPoint(toes.position - Vector3.up * 0.05f);
+                driver.SetSoleProbes(true, new[] { probeLocal });
+                float expectedFloorY = useGround && hasGround ? floorY : toes.position.y;
+                Assert.That(driver.TryApply(20f / FrameRate, 1f,
+                    Vector3.right, Vector3.right, useGround ? ground : null), Is.True);
+                Assert.That(foot.TransformPoint(probeLocal).y,
+                    Is.EqualTo(expectedFloorY).Within(0.005f),
+                    "실제 지면을 선택하고 비활성·미검출은 기존 높이를 유지해야 함");
+            }
+            finally
+            {
+                if (floor != null) Object.DestroyImmediate(floor);
+                if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject);
+            }
+        }
+
         [Test]
         public void Given_PitchedGoalOnGroundedFrame_When_Applying_Then_AlignsSoleTowardGround()
         {

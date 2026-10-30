@@ -513,7 +513,8 @@ namespace Fbx2Vmd.FBXImporter
                             // gate 적용 프레임도 드라이버 시간·weight는 매 프레임 갱신해
                             // 다음 pin 진입의 램프와 점프 판정이 끊기지 않게 함.
                             _footGoalDriver.TryApply(CurrentTimeSeconds, _footGoalAlpha,
-                                leftBendNormal, rightBendNormal);
+                                leftBendNormal, rightBendNormal,
+                                _isGroundResponseEnabled ? _groundResponse : null);
                         }
                         return true;
                     }
@@ -532,7 +533,8 @@ namespace Fbx2Vmd.FBXImporter
             {
                 // pin 프레임만 IK가 목표를 주장하고 기권 구간은 gate/stabilizer 출력이 유지됨.
                 _footGoalDriver.TryApply(CurrentTimeSeconds, _footGoalAlpha,
-                    leftBendNormal, rightBendNormal);
+                    leftBendNormal, rightBendNormal,
+                    _isGroundResponseEnabled ? _groundResponse : null);
                 // 주장 프레임의 골반 오프셋은 gate+드라이버 누적값을 보고함.
                 if (driverClaims)
                 {
