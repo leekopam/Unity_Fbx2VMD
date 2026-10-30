@@ -19,7 +19,7 @@ namespace Fbx2Vmd.FBXImporter
     {
         // 보정 알고리즘·설정이 바뀌면 수동으로 올린다 — 설정은 코드 고정(static)이라
         // 이 상수 하나가 설정 변경 전부를 대표한다.
-        internal const int AlgorithmVersion = 18;
+        internal const int AlgorithmVersion = 19;
 
         internal readonly struct RendererIdentity
         {
@@ -312,8 +312,10 @@ namespace Fbx2Vmd.FBXImporter
                 // 비영속 자산은 이름+내용 해시(정점 해시)가 실체를 대표한다.
                 return "nonasset:" + asset.name;
             }
+            // 같은 FBX도 Avatar·클립 임포트 설정에 따라 평가 자세가 달라져 결과 해시를 함께 식별함.
             return "guid:" + AssetDatabase.AssetPathToGUID(path) +
-                ",path:" + path;
+                ",path:" + path +
+                ",dependency:" + AssetDatabase.GetAssetDependencyHash(path);
         }
 
         // 모션 FBX 같은 소스 파일은 내용 해시로 변경을 감지한다.
