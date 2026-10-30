@@ -15,6 +15,85 @@ namespace Tests.Editor.FBXImporter
         private const float TimeTolerance = 0.0001f;
 
         [Test]
+        public void Given_SeparationDriveAfterPassingGate_When_SeekingSequentially_Then_KeepsBothSolesAboveGround()
+        {
+            GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
+            Assert.That(asset, Is.Not.Null, "접지 후 발 모임 보정 재현 모델이 필요합니다.");
+            Collider[] existingGround = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsSortMode.None)
+                .Where(c => c.enabled && !c.isTrigger).ToArray();
+            var holder = new GameObject("발 모임 보정 접지 회귀") { hideFlags = HideFlags.HideAndDontSave };
+            holder.SetActive(false);
+            var floor = new GameObject("발 모임 보정 검증 바닥") { hideFlags = HideFlags.HideAndDontSave };
+            object controller = CreateController();
+            try
+            {
+                // 소스 목표가 원점 기준이므로 대상을 옮기지 않고 기존 Collider를 잠시 분리함.
+                foreach (Collider collider in existingGround) collider.enabled = false;
+                floor.transform.position = new Vector3(0f, -0.05f, 0f);
+                floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
+                GameObject target = UnityEngine.Object.Instantiate(asset, holder.transform);
+                target.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                foreach (MonoBehaviour script in target.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (script != null) script.enabled = false;
+                target.SetActive(true);
+                holder.SetActive(true);
+                Animator animator = RequireHumanoidAnimator(target);
+                Invoke(controller, "PrepareWithArmDirectionReference", animator, LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "SetGroundResponseEnabled", true);
+                Invoke(controller, "SetIkGoalFootDrive", true, 1f);
+                Invoke(controller, "SetFootStepDiffusion", true);
+                Physics.SyncTransforms();
+                for (int frame = 0; frame <= 6116; frame++)
+                    Assert.That((bool)Invoke(controller, "SeekFrame", frame), Is.True);
+
+                var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                object driver = controller.GetType().GetField("_footGoalDriver", flags).GetValue(controller);
+                float frameRate = (float)ReadProperty(controller, "ClipFrameRate");
+                Assert.That((bool)driver.GetType().GetMethod("WouldClaim", flags)
+                    .Invoke(driver, new object[] { 6117f / frameRate }), Is.False,
+                    "평가 전 양발 목표가 기권하여 gate 조기 반환 분기로 진입해야 함");
+                Assert.That((bool)Invoke(controller, "SeekFrame", 6117), Is.True);
+
+                object gate = ReadProperty(controller, "LastGroundingGate");
+                Assert.That((bool)gate.GetType().GetField("raw_pass").GetValue(gate), Is.True);
+                Assert.That((bool)gate.GetType().GetField("held_pass").GetValue(gate), Is.True);
+                Assert.That((float)driver.GetType().GetProperty("DebugLeftWeight", flags).GetValue(driver), Is.Zero);
+                Assert.That((float)driver.GetType().GetProperty("DebugSeparationWeight", flags).GetValue(driver),
+                    Is.GreaterThan(0f));
+                object leg = driver.GetType().GetField("_left", flags).GetValue(driver);
+                Assert.That(((bool[])leg.GetType().GetField("Pin", flags).GetValue(leg))[6117], Is.False);
+                object[] surfaces = { null, null };
+                Assert.That((bool)Invoke(controller, "TryCaptureCurrentFootSurface", surfaces), Is.True);
+                foreach (object surface in surfaces)
+                {
+                    Assert.That((bool)surface.GetType().GetField("has_ground").GetValue(surface), Is.True);
+                    float clearance = (float)surface.GetType().GetField("minimum_distance_mm").GetValue(surface);
+                    Assert.That(float.IsNaN(clearance) || float.IsInfinity(clearance), Is.False);
+                    Assert.That(clearance, Is.GreaterThanOrEqualTo(-1f),
+                        "gate 통과 뒤 발 모임 보정도 최종 밑창 지면 제약을 유지해야 합니다.");
+                }
+            }
+            finally
+            {
+                try { DisposeController(controller); }
+                finally
+                {
+                    try
+                    {
+                        UnityEngine.Object.DestroyImmediate(floor);
+                        UnityEngine.Object.DestroyImmediate(holder);
+                    }
+                    finally
+                    {
+                        foreach (Collider collider in existingGround) if (collider != null) collider.enabled = true;
+                        Physics.SyncTransforms();
+                    }
+                }
+            }
+        }
+
+        [Test]
         public void Given_FootDiffusion_When_SeekingContactTransition_Then_KeepsSoleAboveGround()
         {
             GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");

@@ -515,6 +515,10 @@ namespace Fbx2Vmd.FBXImporter
                             _footGoalDriver.TryApply(CurrentTimeSeconds, _footGoalAlpha,
                                 leftBendNormal, rightBendNormal,
                                 _isGroundResponseEnabled ? _groundResponse : null);
+                            // 핀 기권 중에도 발 모임 복구가 자세를 바꾸므로 최종 밑창 제약을 다시 적용함.
+                            _groundResponse.Apply(
+                                _footGoalDriver.LastUsedLeftBendNormal,
+                                _footGoalDriver.LastUsedRightBendNormal, _footGrounding);
                         }
                         return true;
                     }
