@@ -118,6 +118,7 @@ namespace Fbx2Vmd.FBXImporter
         private const int LineSearchIterations = 10;
         private const int CoupledBlendSearchStepCount = 32;
         private const int CoupledProjectionRoundCount = 8;
+        private const int HeadroomStrainProjectionRoundCount = 8;
         private const int OrientationSearchIterations = 24;
         private const float OrientationBarrierWeight = 4f;
         private const float OrientationActivationRatio = 0.25f;
@@ -372,7 +373,84 @@ namespace Fbx2Vmd.FBXImporter
             {
                 result = extended;
             }
+            if (!IsWithinQuality(result, contract, StrongConfiguration) &&
+                headroom != null && headroom.IsSafe && !headroom.UsedRestShapeRecovery &&
+                TryCalculateStrainRestoredHeadroom(
+                    baselineVertices, headroom, contract, timing,
+                    out NativeSkinningSurfaceCorrectionResult restored))
+            {
+                result = restored;
+            }
             return true;
+        }
+
+        private static bool TryCalculateStrainRestoredHeadroom(
+            IReadOnlyList<Vector3> baselineVertices,
+            NativeSkinningSurfaceCorrectionResult headroom,
+            NativeSkinningSurfaceContract contract,
+            NativeSkinningSolverTiming timing,
+            out NativeSkinningSurfaceCorrectionResult result)
+        {
+            result = null;
+            var activePairs = new HashSet<int>();
+            UpdateActiveSharpFoldPairs(
+                baselineVertices, contract,
+                Enumerable.Range(0, contract.FacePairs.Length), activePairs);
+            FrameEdge[] edges = BuildFrameEdges(baselineVertices, contract);
+            var buffers = new SolverBuffers();
+            LocalWorkset workset = BuildLocalWorkset(
+                baselineVertices, contract, activePairs,
+                StrongWideConfiguration.WorksetRingCount, edges, buffers);
+            Vector3[] vertices = headroom.CorrectedVertices.ToArray();
+            var localPositions = new Vector3[workset.ConstrainedVertices.Length];
+            for (int round = 0; round < HeadroomStrainProjectionRoundCount; round++)
+            {
+                for (int localIndex = 0; localIndex < localPositions.Length; localIndex++)
+                {
+                    localPositions[localIndex] =
+                        vertices[workset.ConstrainedVertices[localIndex]];
+                }
+                // 한 번의 투영은 0.05mm로 제한되므로 직전 후보에서 작은 단계를 이어감.
+                ProjectEdgeLengthBounds(
+                    vertices, localPositions, workset.ConstrainedVertices, workset.Edges,
+                    StrongConfiguration.MaximumEdgeLengthStrain - EdgeLengthProjectionMargin,
+                    StrongConfiguration.EdgeLengthProjectionIterations);
+                Vector3[] projected = vertices.ToArray();
+                bool hasMovement = false;
+                for (int localIndex = 0; localIndex < localPositions.Length; localIndex++)
+                {
+                    int vertexIndex = workset.ConstrainedVertices[localIndex];
+                    projected[vertexIndex] = localPositions[localIndex];
+                    hasMovement |= !projected[vertexIndex].Equals(vertices[vertexIndex]);
+                }
+                if (!AreVerticesFinite(projected))
+                {
+                    return false;
+                }
+                NativeSkinningSurfaceCorrectionResult seed = EvaluateResult(
+                    baselineVertices, projected, contract, edges,
+                    headroom.InitialSharpFoldCount, Array.Empty<int>());
+                if (seed.NewDegenerateFaceCount > 0 || seed.ReversedFaceCount > 0 ||
+                    seed.MaximumVertexDisplacement > contract.ArmChainLength *
+                        StrongConfiguration.MaximumTotalDisplacementToArmLengthRatio)
+                {
+                    return false;
+                }
+                if (seed.MaximumEdgeLengthStrain <= StrongConfiguration.MaximumEdgeLengthStrain)
+                {
+                    // 중간 접힘은 내부 초기값에만 허용하고 원본 기준 strict로 재검증함.
+                    return TryCalculateTimed(
+                        baselineVertices, projected, contract, StrongConfiguration,
+                        false, false, timing, out result) &&
+                        IsWithinQuality(result, contract, StrongConfiguration);
+                }
+                if (!hasMovement)
+                {
+                    return false;
+                }
+                vertices = projected;
+            }
+            return false;
         }
 
         internal static bool AreVerticesFinite(

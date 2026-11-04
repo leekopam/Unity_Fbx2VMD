@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -13,8 +14,13 @@ namespace Tests.Editor.FBXImporter
     {
         private const string TargetAssetPath =
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
-        private const string ClipAssetPath =
+        private const string SourceClipAssetPath =
             "Assets/Resources/Import_FBX/satisfaction_2.fbx";
+        private static string ClipAssetPath;
+        private string _fixtureFolder;
+        private bool _ownsFixtureFolder;
+        private byte[] _sourceClipBytes;
+        private byte[] _sourceMetaBytes;
         private const int FixtureSleeveVertexIndex = 17178;
         private const int UserReportedFoldFrame = 1327;
         private const int ConnectedRecoveryFrame = 584;
@@ -30,15 +36,86 @@ namespace Tests.Editor.FBXImporter
         private const int CounterexampleFrame = 4476;
 
         [OneTimeSetUp]
-        public void EnsureHumanoidClipImport()
+        public void CreateHistoricalHumanoidClipFixture()
         {
-            Type configuratorType = RequireProductType(
-                "EditorHumanoidClipImportConfigurator");
-            MethodInfo method = configuratorType.GetMethod(
-                "EnsureHumanoid",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(method, Is.Not.Null);
-            method.Invoke(null, new object[] { ClipAssetPath });
+            Assert.That(File.Exists(SourceClipAssetPath), Is.True);
+            _sourceClipBytes = File.ReadAllBytes(SourceClipAssetPath);
+            _sourceMetaBytes = File.ReadAllBytes(SourceClipAssetPath + ".meta");
+            _fixtureFolder = "Assets/NativeSurfaceRegression_" + Guid.NewGuid().ToString("N");
+            try
+            {
+                Assert.That(AssetDatabase.CreateFolder("Assets", Path.GetFileName(_fixtureFolder)),
+                    Is.Not.Empty);
+                _ownsFixtureFolder = true;
+                ClipAssetPath = _fixtureFolder + "/satisfaction_2.fbx";
+                Assert.That(AssetDatabase.CopyAsset(SourceClipAssetPath, ClipAssetPath), Is.True);
+                var importer = (ModelImporter)AssetImporter.GetAtPath(ClipAssetPath);
+                Assert.That(importer, Is.Not.Null);
+                // 기존 반례는 Chest 누락 입력에서 수집됐으므로 복제본에 그 조건을 고정함.
+                HumanDescription description = importer.humanDescription;
+                HumanDescription before = description;
+                string clipSettings = JsonUtility.ToJson(
+                    AnimationUtility.GetAnimationClipSettings(LoadHumanoidClip()));
+                description.human = description.human
+                    .Where(bone => bone.humanName != "Chest").ToArray();
+                importer.humanDescription = description;
+                importer.SaveAndReimport();
+                HumanDescription after = ((ModelImporter)AssetImporter.GetAtPath(ClipAssetPath))
+                    .humanDescription;
+                Assert.That(after.human, Is.EqualTo(
+                    before.human.Where(bone => bone.humanName != "Chest").ToArray()));
+                Assert.That(after.skeleton, Is.EqualTo(before.skeleton));
+                Assert.That(after.armStretch, Is.EqualTo(before.armStretch));
+                Assert.That(after.legStretch, Is.EqualTo(before.legStretch));
+                Assert.That(after.upperArmTwist, Is.EqualTo(before.upperArmTwist));
+                Assert.That(after.lowerArmTwist, Is.EqualTo(before.lowerArmTwist));
+                Assert.That(after.upperLegTwist, Is.EqualTo(before.upperLegTwist));
+                Assert.That(after.lowerLegTwist, Is.EqualTo(before.lowerLegTwist));
+                Assert.That(after.hasTranslationDoF, Is.EqualTo(before.hasTranslationDoF));
+                Assert.That(JsonUtility.ToJson(
+                    AnimationUtility.GetAnimationClipSettings(LoadHumanoidClip())),
+                    Is.EqualTo(clipSettings));
+                Animator animator = AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath)
+                    .GetComponentInChildren<Animator>(true);
+                Assert.That(animator.avatar.isValid && animator.avatar.isHuman, Is.True);
+                Assert.That(animator.GetBoneTransform(HumanBodyBones.Chest), Is.Null);
+            }
+            catch
+            {
+                DeleteHistoricalClipFixture();
+                throw;
+            }
+        }
+
+        [OneTimeTearDown]
+        public void DeleteHistoricalHumanoidClipFixture()
+        {
+            try
+            {
+                if (_sourceClipBytes != null)
+                {
+                    CollectionAssert.AreEqual(_sourceClipBytes, File.ReadAllBytes(SourceClipAssetPath));
+                }
+                if (_sourceMetaBytes != null)
+                {
+                    CollectionAssert.AreEqual(_sourceMetaBytes, File.ReadAllBytes(SourceClipAssetPath + ".meta"));
+                }
+            }
+            finally
+            {
+                DeleteHistoricalClipFixture();
+            }
+        }
+
+        private void DeleteHistoricalClipFixture()
+        {
+            if (_ownsFixtureFolder && AssetDatabase.IsValidFolder(_fixtureFolder))
+            {
+                Assert.That(AssetDatabase.DeleteAsset(_fixtureFolder), Is.True,
+                    "과거 반례용 임시 입력 정리 실패");
+                _ownsFixtureFolder = false;
+            }
+            ClipAssetPath = null;
         }
 
         [TestCase(0.0498f, false)]
@@ -681,6 +758,147 @@ namespace Tests.Editor.FBXImporter
                 UnityEngine.Object.DestroyImmediate(bakedMesh);
                 UnityEngine.Object.DestroyImmediate(target);
             }
+        }
+
+        [TestCase(0f)]
+        [TestCase(0.0000001f)]
+        [TestCase(-0.0000001f)]
+        public void Given_HeadroomFoldFrame_When_CalculatingStrongCorrection_Then_PreservesStrictQuality(
+            float coordinateOffset)
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance;
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
+            Assert.That(prefab, Is.Not.Null);
+            GameObject target = UnityEngine.Object.Instantiate(prefab);
+            target.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                MethodInfo select = RequireProductType("NativeSkinningArmSurfaceSelector")
+                    .GetMethod("FindAll", flags);
+                IList selections = (IList)select.Invoke(null, new object[] { animator });
+                object selection = selections.Cast<object>().First(candidate =>
+                    ReadProperty<SkinnedMeshRenderer>(candidate, "Renderer").name == "U_Char_0" &&
+                    ReadProperty<object>(candidate, "Side").ToString() == "Left");
+                object contract = BuildSurfaceContract(selection);
+                SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
+                    contract, "Renderer");
+                Dictionary<string, Matrix4x4> pose = CreateHeadroomFoldPose();
+                Matrix4x4[] matrices = renderer.bones.Select(bone =>
+                    pose.TryGetValue(bone.name, out Matrix4x4 matrix)
+                        ? matrix : Matrix4x4.identity).ToArray();
+                int[] triangles = ReadProperty<int[]>(contract, "Triangles");
+                int[] faces = ReadProperty<int[]>(contract, "AffectedFaceIndices");
+                Assert.That(faces.SelectMany(face => triangles.Skip(face * 3).Take(3))
+                    .Distinct().Count(), Is.EqualTo(149));
+                BoneWeight[] weights = renderer.sharedMesh.boneWeights;
+                IEnumerable<int> pairVertices = ReadProperty<IEnumerable>(contract, "FacePairs")
+                    .Cast<object>().SelectMany(pair => new[] {
+                        ReadProperty<int>(pair, "FirstEdge"),
+                        ReadProperty<int>(pair, "SecondEdge"),
+                        ReadProperty<int>(pair, "FirstOpposite"),
+                        ReadProperty<int>(pair, "SecondOpposite") });
+                foreach (int vertex in faces.SelectMany(face =>
+                    triangles.Skip(face * 3).Take(3)).Concat(pairVertices).Distinct())
+                {
+                    BoneWeight weight = weights[vertex];
+                    int[] indices = { weight.boneIndex0, weight.boneIndex1,
+                        weight.boneIndex2, weight.boneIndex3 };
+                    float[] values = { weight.weight0, weight.weight1,
+                        weight.weight2, weight.weight3 };
+                    for (int influence = 0; influence < values.Length; influence++)
+                    {
+                        if (values[influence] > 0f)
+                        {
+                            Assert.That(pose.ContainsKey(
+                                renderer.bones[indices[influence]].name), Is.True,
+                                "표면에 영향을 주는 모든 본의 실제 자세가 필요합니다.");
+                        }
+                    }
+                }
+
+                var baseline = new Vector3[renderer.sharedMesh.vertexCount];
+                MethodInfo sample = RequireProductType("NativeSkinningLinearBlendCalculator")
+                    .GetMethod("TryComputeBaseline", flags);
+                Assert.That((bool)sample.Invoke(null, new object[] {
+                    renderer.sharedMesh.vertices, weights, matrices, baseline }), Is.True);
+                for (int vertex = 0; vertex < baseline.Length; vertex++)
+                {
+                    baseline[vertex].x += coordinateOffset;
+                }
+                Vector3[] original = baseline.ToArray();
+                Type calculator = RequireProductType("NativeSkinningSurfaceCorrectionCalculator");
+                object[] arguments = { baseline, contract, null };
+                Assert.That((bool)calculator.GetMethod("TryCalculateStrongValidatedFrame", flags)
+                    .Invoke(null, arguments), Is.True);
+                object result = arguments[2];
+                Assert.That(ReadProperty<int>(result, "InitialSharpFoldCount"), Is.EqualTo(3));
+                Assert.That((bool)calculator.GetMethod("IsWithinStrongQuality", flags)
+                    .Invoke(null, new[] { result, contract }), Is.True);
+                Assert.That(ReadProperty<bool>(result, "UsedRestShapeRecovery"), Is.False);
+                CollectionAssert.AreEqual(original, baseline);
+
+                IReadOnlyList<Vector3> corrected = ReadProperty<IReadOnlyList<Vector3>>(
+                    result, "CorrectedVertices");
+                Vector3[] replayed = baseline.ToArray();
+                foreach (int vertex in ReadProperty<int[]>(result, "CorrectedVertexIndices"))
+                {
+                    replayed[vertex] += corrected[vertex] - baseline[vertex];
+                }
+                object edges = calculator.GetMethod("BuildFrameEdges", flags)
+                    .Invoke(null, new object[] { baseline, contract });
+                object replayedResult = calculator.GetMethod("EvaluateResult", flags)
+                    .Invoke(null, new object[] { baseline, replayed, contract, edges,
+                        3, Array.Empty<int>() });
+                Assert.That((bool)calculator.GetMethod("IsWithinStrongQuality", flags)
+                    .Invoke(null, new[] { replayedResult, contract }), Is.True,
+                    "저장된 희소 보정량의 재적용도 원본 기준 품질을 보존해야 합니다.");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        private static Dictionary<string, Matrix4x4> CreateHeadroomFoldPose()
+        {
+            // testPrefab 6423의 표면 149정점에 영향을 주는 여섯 본을 고정함.
+            // 다른 본은 이 계약 밖이므로 원본 FBX 재임포트 없이 실패 자세를 재현함.
+            return new Dictionary<string, Matrix4x4>
+            {
+                ["37.joint_Torso3"] = new Matrix4x4(
+                    new Vector4(0.961225748f, 0.0786845312f, -0.264298975f, 0f),
+                    new Vector4(-0.0642664805f, 0.995956242f, 0.0627764463f, 0f),
+                    new Vector4(0.26816982f, -0.0433567613f, 0.962395608f, 0f),
+                    new Vector4(0.0586901754f, -0.0812749714f, -0.104389913f, 1f)),
+                ["64.joint_LeftShoulder"] = new Matrix4x4(
+                    new Vector4(0.894796848f, -0.416743994f, -0.160197288f, 0f),
+                    new Vector4(0.412553489f, 0.908941746f, -0.0602038205f, 0f),
+                    new Vector4(0.170699611f, -0.0122197755f, 0.985247374f, 0f),
+                    new Vector4(-0.632031858f, 0.0323685184f, 0.0758851841f, 1f)),
+                ["65.joint_LeftArm"] = new Matrix4x4(
+                    new Vector4(0.405990303f, -0.912267089f, -0.0542254858f, 0f),
+                    new Vector4(0.663611054f, 0.335085452f, -0.668833315f, 0f),
+                    new Vector4(0.628324866f, 0.235555246f, 0.74143213f, 0f),
+                    new Vector4(-1.04631758f, 0.792116344f, 0.954974294f, 1f)),
+                ["89.joint_J_Sec_L_UpperArm"] = new Matrix4x4(
+                    new Vector4(0.405990303f, -0.912267089f, -0.0542254858f, 0f),
+                    new Vector4(0.663611054f, 0.335085452f, -0.668833315f, 0f),
+                    new Vector4(0.628324866f, 0.235555246f, 0.74143213f, 0f),
+                    new Vector4(-1.0463177f, 0.792116106f, 0.954974473f, 1f)),
+                ["66.joint_LeftElbow"] = new Matrix4x4(
+                    new Vector4(-0.824297607f, -0.565128744f, 0.034101516f, 0f),
+                    new Vector4(-0.242579877f, 0.298119575f, -0.923189938f, 0f),
+                    new Vector4(0.511554837f, -0.769255579f, -0.382828116f, 0f),
+                    new Vector4(-0.278523207f, 0.949202955f, 1.30775058f, 1f)),
+                ["88.joint_J_Sec_L_LowerArm"] = new Matrix4x4(
+                    new Vector4(-0.824297607f, -0.565128744f, 0.034101516f, 0f),
+                    new Vector4(-0.242579877f, 0.298119575f, -0.923189938f, 0f),
+                    new Vector4(0.511554837f, -0.769255579f, -0.382828116f, 0f),
+                    new Vector4(-0.278523237f, 0.949203074f, 1.30775058f, 1f)),
+            };
         }
 
         private static object FindFixtureSelection(Animator animator)
