@@ -901,17 +901,18 @@ namespace Fbx2Vmd.FBXImporter
                     SupportedPosition = Foot.position;
                     _supportedFrame = currentFrame;
                 }
-                if (HasValidatedSupport && Weight <= 0f)
+                if (HasValidatedSupport && Weight < SourceSolveWeight)
                 {
-                    // 발 모임 복구가 앞 단계에서 검증한 지지 높이·회전을 되돌리지 않게 함.
+                    // 분리가 핀보다 추가한 수직·회전 기여만 제거해 핀 진입·해제를 연속 유지함.
+                    float separationFraction = 1f - Weight / SourceSolveWeight;
                     Vector3 supportNormal = Vector3.up;
                     if (ground != null && ground.TryFindGround(SupportedPosition, out RaycastHit supportGround))
                         supportNormal = supportGround.normal;
-                    sourceGoal = SupportedPosition + Vector3.ProjectOnPlane(
-                        sourceGoal - SupportedPosition, supportNormal);
-                    rawSourceGoal = SupportedPosition + Vector3.ProjectOnPlane(
-                        rawSourceGoal - SupportedPosition, supportNormal);
-                    goalFrame = _supportedFrame;
+                    sourceGoal = Vector3.Lerp(sourceGoal, SupportedPosition + Vector3.ProjectOnPlane(
+                        sourceGoal - SupportedPosition, supportNormal), separationFraction);
+                    rawSourceGoal = Vector3.Lerp(rawSourceGoal, SupportedPosition + Vector3.ProjectOnPlane(
+                        rawSourceGoal - SupportedPosition, supportNormal), separationFraction);
+                    goalFrame = Quaternion.Slerp(goalFrame, _supportedFrame, separationFraction);
                 }
                 Quaternion sourceFrame = Quaternion.Slerp(currentFrame, goalFrame, sourceFraction);
                 LastSolveGoal = Vector3.Lerp(rawSourceGoal, SupportedPosition, SupportWeight);

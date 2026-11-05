@@ -445,6 +445,115 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_ValidatedSeparation_When_PinEntersAndReleases_Then_TransitionsContinuously()
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null);
+            try
+            {
+                Transform left = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator, Vector3.zero), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty,
+                    animator.humanScale, FrameRate), Is.True);
+
+                Vector3 leftSupport = left.position + Vector3.up * 0.04f;
+                Assert.That(HumanoidLegPoseSolver.TrySolve(
+                    animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg),
+                    animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg), left,
+                    leftSupport, Vector3.right, out float leftError), Is.True);
+                Assert.That(leftError, Is.LessThan(0.0001f));
+                Assert.That(HumanoidLegPoseSolver.TrySolve(
+                    animator.GetBoneTransform(HumanBodyBones.RightUpperLeg),
+                    animator.GetBoneTransform(HumanBodyBones.RightLowerLeg), right,
+                    leftSupport + Vector3.right * 0.01f, Vector3.right, out float rightError), Is.True);
+                Assert.That(rightError, Is.LessThan(0.0001f));
+                left.rotation = Quaternion.AngleAxis(15f, left.right) * left.rotation;
+                right.rotation = Quaternion.AngleAxis(15f, right.right) * right.rotation;
+                float supportHeight = left.position.y;
+                Quaternion supportRotation = left.rotation;
+                Transform[] transforms = animator.transform.root.GetComponentsInChildren<Transform>(true);
+                var positions = new Vector3[transforms.Length];
+                var rotations = new Quaternion[transforms.Length];
+                for (int index = 0; index < transforms.Length; index++)
+                {
+                    positions[index] = transforms[index].localPosition;
+                    rotations[index] = transforms[index].localRotation;
+                }
+                int lastPin = -1;
+                for (int frame = 0; frame < FrameCount; frame++)
+                    if (driver.DebugLeftPinArray[frame]) lastPin = frame;
+                Assert.That(lastPin, Is.GreaterThan(0));
+
+                var weights = new List<float>();
+                var goalHeights = new List<float>();
+                var effectiveHeights = new List<float>();
+                var footHeights = new List<float>();
+                var footRotations = new List<Quaternion>();
+                const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                object leftDrive = typeof(HumanoidFootGoalDriver).GetField("_left", flags).GetValue(driver);
+                System.Reflection.PropertyInfo effectiveGoalProperty = leftDrive.GetType().GetProperty(
+                    "EffectiveGoal", flags);
+                float fullHeightRange = 0f, fullRotationRange = 0f;
+                bool hasPartial = false, hasFull = false, hasReleasedZero = false;
+                for (int frame = 0; frame < FrameCount; frame++)
+                {
+                    // 매 프레임 같은 상위 지지 자세를 입력해 출력 누적으로 분리가 사라지지 않게 함.
+                    for (int index = 0; index < transforms.Length; index++)
+                    {
+                        transforms[index].localPosition = positions[index];
+                        transforms[index].localRotation = rotations[index];
+                    }
+                    driver.CaptureValidatedSupport(true, true);
+                    Assert.That(driver.TryApply(frame / FrameRate, 1f,
+                        Vector3.right, Vector3.right), Is.True);
+                    Assert.That(driver.DebugSeparationWeight, Is.EqualTo(1f));
+                    float weight = driver.DebugLeftWeight;
+                    hasPartial |= weight > 0f && weight < 1f;
+                    hasFull |= weight == 1f;
+                    hasReleasedZero |= frame > lastPin && weight == 0f;
+                    if (weight == 1f)
+                    {
+                        fullHeightRange = Mathf.Max(fullHeightRange,
+                            Mathf.Abs(driver.DebugLeftSolveGoal.y - supportHeight));
+                        fullRotationRange = Mathf.Max(fullRotationRange,
+                            Quaternion.Angle(left.rotation, supportRotation));
+                    }
+                    weights.Add(weight);
+                    goalHeights.Add(driver.DebugLeftSolveGoal.y);
+                    effectiveHeights.Add(((Vector3)effectiveGoalProperty.GetValue(leftDrive)).y);
+                    footHeights.Add(left.position.y);
+                    footRotations.Add(left.rotation);
+                }
+                Assert.That(hasPartial && hasFull && hasReleasedZero, Is.True,
+                    "실제 핀 진입·완전 적용·해제 경계가 모두 있어야 합니다.");
+                Assert.That(fullHeightRange, Is.GreaterThan(0.03f));
+                Assert.That(fullRotationRange, Is.GreaterThan(1f));
+                for (int frame = 1; frame < FrameCount; frame++)
+                {
+                    float weightStep = Mathf.Abs(weights[frame] - weights[frame - 1]);
+                    Assert.That(Mathf.Abs(goalHeights[frame] - goalHeights[frame - 1]),
+                        Is.LessThanOrEqualTo(fullHeightRange * weightStep + 0.00001f),
+                        $"프레임{frame}: 작은 핀 가중치가 전체 수직 영향을 활성화하면 안 됩니다.");
+                    Assert.That(Mathf.Abs(effectiveHeights[frame] - effectiveHeights[frame - 1]),
+                        Is.LessThanOrEqualTo(fullHeightRange * weightStep + 0.00001f));
+                    // 실제 발 한도는 이 고정 입력의 회귀 기준이며 일반 IK의 선형성을 가정하지 않음.
+                    Assert.That(Mathf.Abs(footHeights[frame] - footHeights[frame - 1]),
+                        Is.LessThanOrEqualTo(fullHeightRange * weightStep + 0.0001f));
+                    Assert.That(Quaternion.Angle(footRotations[frame], footRotations[frame - 1]),
+                        Is.LessThanOrEqualTo(fullRotationRange * weightStep + 0.05f),
+                        $"프레임{frame}: 고정 입력의 발 회전이 핀 전환에서 급변하면 안 됩니다.");
+                }
+            }
+            finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
+
+        [Test]
         public void Given_SeparatedFeetOnUnpinnedFrame_When_Applying_Then_NoSeparationClaim()
         {
             Animator animator = LoadTargetAnimator();
