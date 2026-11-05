@@ -901,6 +901,18 @@ namespace Fbx2Vmd.FBXImporter
                     SupportedPosition = Foot.position;
                     _supportedFrame = currentFrame;
                 }
+                if (HasValidatedSupport && Weight <= 0f)
+                {
+                    // 발 모임 복구가 앞 단계에서 검증한 지지 높이·회전을 되돌리지 않게 함.
+                    Vector3 supportNormal = Vector3.up;
+                    if (ground != null && ground.TryFindGround(SupportedPosition, out RaycastHit supportGround))
+                        supportNormal = supportGround.normal;
+                    sourceGoal = SupportedPosition + Vector3.ProjectOnPlane(
+                        sourceGoal - SupportedPosition, supportNormal);
+                    rawSourceGoal = SupportedPosition + Vector3.ProjectOnPlane(
+                        rawSourceGoal - SupportedPosition, supportNormal);
+                    goalFrame = _supportedFrame;
+                }
                 Quaternion sourceFrame = Quaternion.Slerp(currentFrame, goalFrame, sourceFraction);
                 LastSolveGoal = Vector3.Lerp(rawSourceGoal, SupportedPosition, SupportWeight);
                 EffectiveGoal = Vector3.Lerp(sourceGoal, SupportedPosition, SupportWeight);
@@ -922,6 +934,8 @@ namespace Fbx2Vmd.FBXImporter
                 Quaternion upperRotation = Upper.rotation;
                 Quaternion lowerRotation = Lower.rotation;
                 Quaternion footRotation = Foot.rotation;
+                Quaternion inputFrame = Quaternion.identity;
+                bool hasInputFrame = _binding != null && _binding.TryCaptureWorldFrame(out inputFrame);
                 // gate와 같은 해부학 기준 정합 — 무릎이 거의 펴진 구간의 자세 cross는
                 // 잡음성이고 부호가 뒤집혀 무릎을 반대쪽으로 붕괴시키므로 기준 법선과
                 // 가중 정합해 굽힘면을 고정함. 기준이 없거나 정합이 퇴화하면
@@ -987,11 +1001,12 @@ namespace Fbx2Vmd.FBXImporter
                     Foot.rotation = Quaternion.Slerp(footRotation, solvedFootRotation, SolveWeight);
                 }
                 // 발 회전 — 목표 프레임(grounded 시 정렬+soft-cap 반영됨)을 가중 적용.
-                if (_binding == null || !_binding.TryCaptureWorldFrame(out Quaternion currentFrame))
+                if (!hasInputFrame)
                 {
                     return;
                 }
-                Quaternion blended = Quaternion.Slerp(currentFrame, goalFrame, SolveWeight);
+                // 부모 IK가 만든 회전을 보간 시작값에 섞지 않도록 입력 발 회전을 유지함.
+                Quaternion blended = Quaternion.Slerp(inputFrame, goalFrame, SolveWeight);
                 _binding.TryApplyWorldFrame(blended);
             }
 

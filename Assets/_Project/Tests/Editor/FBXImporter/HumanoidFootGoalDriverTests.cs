@@ -385,6 +385,65 @@ namespace Tests.Editor.FBXImporter
             finally { if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject); }
         }
 
+        [TestCase(1f)]
+        [TestCase(0.5f)]
+        [TestCase(0.25f)]
+        public void Given_ValidatedSupportWithMergedFeet_When_Separating_Then_PreservesSupportTargetAndRotation(
+            float alpha)
+        {
+            Animator animator = LoadTargetAnimator();
+            Assert.That(animator, Is.Not.Null);
+            try
+            {
+                Transform left = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                var driver = new HumanoidFootGoalDriver();
+                Assert.That(driver.TryInitializeCore(animator,
+                    BuildSamples(animator, Vector3.zero), BuildHipsPositions(animator),
+                    BuildHipsRotations(animator), BuildPlantEstimate(animator),
+                    HumanoidFootContactIntentLabelSet.Empty,
+                    animator.humanScale, FrameRate), Is.True);
+
+                // 상위 접지 단계가 원본 목표와 다른 높이·회전으로 발을 지지한 상태를 재현함.
+                animator.GetBoneTransform(HumanBodyBones.Hips).position += Vector3.up * 0.04f;
+                right.position = left.position;
+                left.rotation = Quaternion.AngleAxis(15f, left.right) * left.rotation;
+                right.rotation = Quaternion.AngleAxis(15f, right.right) * right.rotation;
+                float leftHeight = left.position.y;
+                float rightHeight = right.position.y;
+                Quaternion leftRotation = left.rotation;
+                Quaternion rightRotation = right.rotation;
+                driver.CaptureValidatedSupport(true, true);
+
+                Assert.That(driver.TryApply(0f, alpha, Vector3.right, Vector3.right), Is.True);
+                Assert.That(driver.DebugLeftWeight, Is.Zero);
+                Assert.That(driver.DebugRightWeight, Is.Zero);
+                Assert.That(driver.DebugSeparationWeight, Is.EqualTo(alpha).Within(0.000001f));
+                Assert.That(driver.DebugLeftSolveGoal.y, Is.EqualTo(leftHeight).Within(0.00001f),
+                    "핀 없는 발 모임 복구가 검증된 지지 높이를 원본 높이로 바꾸면 안 됩니다.");
+                const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+                object rightDrive = typeof(HumanoidFootGoalDriver).GetField("_right", flags).GetValue(driver);
+                Vector3 rightSolveGoal = (Vector3)rightDrive.GetType().GetProperty(
+                    "LastSolveGoal", flags).GetValue(rightDrive);
+                Assert.That(rightSolveGoal.y, Is.EqualTo(rightHeight).Within(0.00001f));
+                float supportedHeightTolerance = alpha == 1f ? 0.0001f : animator.humanScale *
+                    HumanoidFootGrounding.SupportedContactErrorPerHumanScale;
+                Assert.That(left.position.y, Is.EqualTo(leftHeight).Within(supportedHeightTolerance));
+                Assert.That(right.position.y, Is.EqualTo(rightHeight).Within(supportedHeightTolerance),
+                    "부분 IK의 발목 오차도 기존 접지 계수로 환산한 국소 한도를 넘어서는 안 됩니다.");
+                Assert.That(Quaternion.Angle(left.rotation, leftRotation), Is.LessThan(0.05f));
+                Assert.That(Quaternion.Angle(right.rotation, rightRotation), Is.LessThan(0.05f),
+                    "부분 가중치에서도 IK 부모 회전이 검증된 발 회전에 남으면 안 됩니다.");
+                float separation = Vector2.Distance(new Vector2(left.position.x, left.position.z),
+                    new Vector2(right.position.x, right.position.z));
+                Assert.That(separation, Is.GreaterThan(alpha == 1f
+                    ? HumanoidFootGoalDriver.MinimumFootSeparationMeters : 0.001f),
+                    "높이·회전 보존 중에도 기존 수평 분리를 유지해야 합니다.");
+            }
+            finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
+        }
+
         [Test]
         public void Given_SeparatedFeetOnUnpinnedFrame_When_Applying_Then_NoSeparationClaim()
         {
