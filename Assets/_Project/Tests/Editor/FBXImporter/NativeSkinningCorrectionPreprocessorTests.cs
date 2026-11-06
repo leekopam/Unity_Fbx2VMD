@@ -17,17 +17,18 @@ namespace Tests.Editor.FBXImporter
             "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const int FixtureSleeveVertexIndex = 17178;
         private const int CounterexampleFrame = 4476;
+        private HistoricalHumanoidClipFixture _historicalClip;
 
         [OneTimeSetUp]
-        public void EnsureHumanoidClipImport()
+        public void CreateHistoricalHumanoidClipFixture()
         {
-            MethodInfo method = RequireProductType(
-                    "EditorHumanoidClipImportConfigurator")
-                .GetMethod(
-                    "EnsureHumanoid",
-                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(method, Is.Not.Null);
-            method.Invoke(null, new object[] { ClipAssetPath });
+            _historicalClip = new HistoricalHumanoidClipFixture();
+        }
+
+        [OneTimeTearDown]
+        public void DeleteHistoricalHumanoidClipFixture()
+        {
+            _historicalClip?.Dispose();
         }
 
         [Test]
@@ -40,7 +41,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 Animator animator = RequireHumanoidAnimator(target);
-                AnimationClip clip = LoadHumanoidClip();
+                AnimationClip clip = _historicalClip.LoadHumanoidClip();
                 object selection = FindFixtureSelection(animator);
                 object contract = BuildSurfaceContract(selection);
                 SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
@@ -51,7 +52,7 @@ namespace Tests.Editor.FBXImporter
                     "PrepareWithArmDirectionReference",
                     animator,
                     clip,
-                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                    AssetDatabase.LoadAssetAtPath<GameObject>(_historicalClip.ClipAssetPath));
                 Assert.That(
                     (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
                     Is.True);
@@ -116,7 +117,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 Animator animator = RequireHumanoidAnimator(target);
-                AnimationClip clip = LoadHumanoidClip();
+                AnimationClip clip = _historicalClip.LoadHumanoidClip();
                 object selection = FindFixtureSelection(animator);
                 object contract = BuildSurfaceContract(selection);
                 SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
@@ -127,7 +128,7 @@ namespace Tests.Editor.FBXImporter
                     "PrepareWithArmDirectionReference",
                     animator,
                     clip,
-                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                    AssetDatabase.LoadAssetAtPath<GameObject>(_historicalClip.ClipAssetPath));
                 Assert.That(
                     (bool)Invoke(controller, "Seek", frame / clip.frameRate),
                     Is.True);
@@ -215,7 +216,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 Animator animator = RequireHumanoidAnimator(target);
-                AnimationClip clip = LoadHumanoidClip();
+                AnimationClip clip = _historicalClip.LoadHumanoidClip();
                 object selection = FindFixtureSelection(animator);
                 object contract = BuildSurfaceContract(selection);
                 SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
@@ -226,7 +227,7 @@ namespace Tests.Editor.FBXImporter
                     "PrepareWithArmDirectionReference",
                     animator,
                     clip,
-                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                    AssetDatabase.LoadAssetAtPath<GameObject>(_historicalClip.ClipAssetPath));
                 Assert.That(
                     (bool)Invoke(controller, "Seek", CounterexampleFrame / clip.frameRate),
                     Is.True);
@@ -994,7 +995,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 Animator animator = RequireHumanoidAnimator(target);
-                AnimationClip clip = LoadHumanoidClip();
+                AnimationClip clip = _historicalClip.LoadHumanoidClip();
                 object selection = FindFixtureSelection(animator);
                 object contract = BuildSurfaceContract(selection);
                 Type contractType = contract.GetType();
@@ -1005,7 +1006,7 @@ namespace Tests.Editor.FBXImporter
                     "PrepareWithArmDirectionReference",
                     animator,
                     clip,
-                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                    AssetDatabase.LoadAssetAtPath<GameObject>(_historicalClip.ClipAssetPath));
                 MethodInfo buildMethod = RequireProductType(
                         "NativeSkinningCorrectionPreprocessor")
                     .GetMethod(

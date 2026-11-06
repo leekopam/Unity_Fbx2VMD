@@ -12,21 +12,20 @@ namespace Tests.Editor.FBXImporter
     {
         private const string TargetAssetPath =
             "Assets/_Project/Model/YYB Hatsune Miku_default/YYB Hatsune Miku_default_1.0ver.fbx";
-        private const string ClipAssetPath =
-            "Assets/Resources/Import_FBX/satisfaction_2.fbx";
         private const int FixtureSleeveVertexIndex = 17178;
         private const int UserReportedFoldFrame = 1327;
+        private HistoricalHumanoidClipFixture _historicalClip;
 
         [OneTimeSetUp]
-        public void EnsureHumanoidClipImport()
+        public void CreateHistoricalHumanoidClipFixture()
         {
-            Type configuratorType = RequireProductType(
-                "EditorHumanoidClipImportConfigurator");
-            MethodInfo method = configuratorType.GetMethod(
-                "EnsureHumanoid",
-                BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.That(method, Is.Not.Null);
-            method.Invoke(null, new object[] { ClipAssetPath });
+            _historicalClip = new HistoricalHumanoidClipFixture();
+        }
+
+        [OneTimeTearDown]
+        public void DeleteHistoricalHumanoidClipFixture()
+        {
+            _historicalClip?.Dispose();
         }
 
         [Test]
@@ -39,7 +38,7 @@ namespace Tests.Editor.FBXImporter
             try
             {
                 Animator animator = RequireHumanoidAnimator(target);
-                AnimationClip clip = LoadHumanoidClip();
+                AnimationClip clip = _historicalClip.LoadHumanoidClip();
                 object selection = FindFixtureSelection(animator);
                 object contract = BuildSurfaceContract(selection);
                 SkinnedMeshRenderer renderer = ReadProperty<SkinnedMeshRenderer>(
@@ -50,7 +49,7 @@ namespace Tests.Editor.FBXImporter
                     "PrepareWithArmDirectionReference",
                     animator,
                     clip,
-                    AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath));
+                    AssetDatabase.LoadAssetAtPath<GameObject>(_historicalClip.ClipAssetPath));
                 Assert.That(
                     (bool)Invoke(
                         controller,
@@ -245,16 +244,6 @@ namespace Tests.Editor.FBXImporter
             return animator;
         }
 
-        private static AnimationClip LoadHumanoidClip()
-        {
-            AnimationClip clip = AssetDatabase.LoadAllAssetsAtPath(ClipAssetPath)
-                .OfType<AnimationClip>()
-                .FirstOrDefault(candidate =>
-                    !candidate.name.StartsWith("__", StringComparison.Ordinal) &&
-                    candidate.humanMotion);
-            Assert.That(clip, Is.Not.Null);
-            return clip;
-        }
 
         private static object CreateController()
         {
