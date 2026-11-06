@@ -16,6 +16,7 @@ namespace Fbx2Vmd.FBXImporter
         private AnimationCurve _rootTranslationZ;
         private Vector3 _clipSpaceOrigin;
         private float _clipLengthSeconds;
+        private float _sourceHumanScale = 1f;
 
         internal bool IsAvailable =>
             _rootTranslationX != null &&
@@ -55,6 +56,7 @@ namespace Fbx2Vmd.FBXImporter
 
             _clipLengthSeconds = Mathf.Max(0f, clip.length);
             _clipSpaceOrigin = SampleClipSpacePosition(0f);
+            _sourceHumanScale = ResolveSourceHumanScale(clip);
         }
 
         internal bool TryEvaluateClipSpaceOffset(
@@ -68,7 +70,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             float evaluationTime = Mathf.Clamp(timeSeconds, 0f, _clipLengthSeconds);
-            clipSpaceOffset = SampleClipSpacePosition(evaluationTime) - _clipSpaceOrigin;
+            // RootT는 Humanoid 정규화 좌표이므로 대상 체형과 무관한 원본 미터 이동량으로 복원함.
+            clipSpaceOffset = (SampleClipSpacePosition(evaluationTime) - _clipSpaceOrigin) * _sourceHumanScale;
             clipSpaceOffset.y = 0f;
             return IsFinite(clipSpaceOffset);
         }
@@ -79,6 +82,35 @@ namespace Fbx2Vmd.FBXImporter
             _rootTranslationZ = null;
             _clipSpaceOrigin = Vector3.zero;
             _clipLengthSeconds = 0f;
+            _sourceHumanScale = 1f;
+        }
+
+        private static float ResolveSourceHumanScale(AnimationClip clip)
+        {
+            string sourcePath = AssetDatabase.GetAssetPath(clip);
+            if (string.IsNullOrEmpty(sourcePath))
+            {
+                return 1f;
+            }
+
+            GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePath);
+            if (source == null)
+            {
+                return 1f;
+            }
+
+            Animator animator = source.GetComponentInChildren<Animator>(true);
+            if (animator != null && animator.avatar != null && animator.avatar.isValid && animator.avatar.isHuman)
+            {
+                float humanScale = animator.humanScale;
+                if (IsFinite(humanScale) && humanScale > 0f)
+                {
+                    return humanScale;
+                }
+            }
+
+            Debug.LogWarning($"원본 Avatar 스케일을 확인할 수 없어 기존 RootT 배율을 유지합니다: {sourcePath}");
+            return 1f;
         }
 
         private Vector3 SampleClipSpacePosition(float timeSeconds)

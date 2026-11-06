@@ -177,6 +177,79 @@ namespace Tests.Editor.FBXImporter
         }
 
         [Test]
+        public void Given_SourceAvatar_When_EvaluatingRootMotion_Then_PreservesOriginalFbxDisplacement()
+        {
+            var sourceAsset = AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath);
+            Assert.That(sourceAsset, Is.Not.Null);
+            GameObject source = UnityEngine.Object.Instantiate(sourceAsset);
+            object player = CreatePlayer();
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(source);
+                Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+                Invoke(player, "Initialize", animator, LoadHumanoidClip());
+                Invoke(player, "EvaluateAt", 0f);
+                Vector3 origin = hips.position;
+
+                Invoke(player, "EvaluateAt", 10176 / 60f);
+                // 원본 FBX의 독립 Legacy·Blender 대조 좌표를 사용해 같은 단위 오류의 재사용을 막음.
+                Vector3 originalDisplacement = new Vector3(-1.58926948f, -0.043458165f, -0.083905412f);
+                Assert.That(Vector3.Distance(hips.position - origin, originalDisplacement),
+                    Is.LessThanOrEqualTo(TransformTolerance),
+                    "Humanoid 정규화 좌표를 월드 미터로 오인해 원본 이동량이 늘어나면 안 됩니다.");
+            }
+            finally
+            {
+                DisposePlayer(player);
+                UnityEngine.Object.DestroyImmediate(source);
+            }
+        }
+
+        [Test]
+        public void Given_ImportedThenDetachedClip_When_Reinitializing_Then_ResetsRootTranslationScale()
+        {
+            GameObject target = InstantiateTarget();
+            object player = CreatePlayer();
+            AnimationClip sourceClip = LoadHumanoidClip();
+            AnimationClip detachedClip = UnityEngine.Object.Instantiate(sourceClip);
+
+            try
+            {
+                Animator animator = RequireHumanoidAnimator(target);
+                Vector3 anchor = animator.transform.position;
+                const float sampleTime = 31.1675f;
+                EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings(sourceClip);
+                AnimationCurve rootX = AnimationUtility.GetEditorCurve(sourceClip,
+                    bindings.Single(b => b.type == typeof(Animator) && b.path == "" && b.propertyName == "RootT.x"));
+                AnimationCurve rootZ = AnimationUtility.GetEditorCurve(sourceClip,
+                    bindings.Single(b => b.type == typeof(Animator) && b.path == "" && b.propertyName == "RootT.z"));
+                Vector3 normalizedOffset = new Vector3(rootX.Evaluate(sampleTime) - rootX.Evaluate(0f),
+                    0f, rootZ.Evaluate(sampleTime) - rootZ.Evaluate(0f));
+                var sourceAsset = AssetDatabase.LoadAssetAtPath<GameObject>(ClipAssetPath);
+                float sourceScale = RequireHumanoidAnimator(sourceAsset).humanScale;
+
+                Invoke(player, "Initialize", animator, sourceClip);
+                Invoke(player, "EvaluateAt", sampleTime);
+                Assert.That(Vector3.Distance(animator.transform.position, anchor + normalizedOffset * sourceScale),
+                    Is.LessThanOrEqualTo(TransformTolerance));
+
+                Assert.That(AssetDatabase.GetAssetPath(detachedClip), Is.Empty);
+                Invoke(player, "Initialize", animator, detachedClip);
+                Invoke(player, "EvaluateAt", sampleTime);
+                Assert.That(Vector3.Distance(animator.transform.position, anchor + normalizedOffset),
+                    Is.LessThanOrEqualTo(TransformTolerance),
+                    "원본 에셋 연결이 없는 클립에 이전 FBX의 배율이 남으면 안 됩니다.");
+            }
+            finally
+            {
+                DisposePlayer(player);
+                UnityEngine.Object.DestroyImmediate(detachedClip);
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        [Test]
         public void Given_InitializedPlayer_When_Disposing_Then_RestoresAnimatorSettings()
         {
             GameObject target = InstantiateTarget();

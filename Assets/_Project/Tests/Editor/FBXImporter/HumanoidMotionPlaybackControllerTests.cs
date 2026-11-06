@@ -76,6 +76,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_SeparationRelease_When_ReturningToValidatedSupport_Then_AvoidsFootJump()
         {
+            using var fixture = new HistoricalHumanoidClipFixture();
             GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
             Assert.That(asset, Is.Not.Null, "접지 핀 전환 재현 모델이 필요합니다.");
@@ -98,7 +99,8 @@ namespace Tests.Editor.FBXImporter
                 target.SetActive(true);
                 holder.SetActive(true);
                 Animator animator = RequireHumanoidAnimator(target);
-                Invoke(controller, "PrepareWithArmDirectionReference", animator, LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "PrepareWithArmDirectionReference", animator,
+                    fixture.LoadDetachedHumanoidClip(), AssetDatabase.LoadAssetAtPath<GameObject>(fixture.ClipAssetPath));
                 Invoke(controller, "SetGroundResponseEnabled", true);
                 Invoke(controller, "SetIkGoalFootDrive", true, 1f);
                 Invoke(controller, "SetFootStepDiffusion", true);
@@ -216,6 +218,7 @@ namespace Tests.Editor.FBXImporter
         [Test]
         public void Given_SeparationDriveAfterPassingGate_When_SeekingSequentially_Then_KeepsBothSolesAboveGround()
         {
+            using var fixture = new HistoricalHumanoidClipFixture();
             GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(
                 "Assets/Plugins/VMDRecorderSample/Models/TestModel/testPrefab.prefab");
             Assert.That(asset, Is.Not.Null, "접지 후 발 모임 보정 재현 모델이 필요합니다.");
@@ -238,7 +241,8 @@ namespace Tests.Editor.FBXImporter
                 target.SetActive(true);
                 holder.SetActive(true);
                 Animator animator = RequireHumanoidAnimator(target);
-                Invoke(controller, "PrepareWithArmDirectionReference", animator, LoadHumanoidClip(), LoadSourceModel());
+                Invoke(controller, "PrepareWithArmDirectionReference", animator,
+                    fixture.LoadDetachedHumanoidClip(), AssetDatabase.LoadAssetAtPath<GameObject>(fixture.ClipAssetPath));
                 Invoke(controller, "SetGroundResponseEnabled", true);
                 Invoke(controller, "SetIkGoalFootDrive", true, 1f);
                 Invoke(controller, "SetFootStepDiffusion", true);
@@ -399,14 +403,18 @@ namespace Tests.Editor.FBXImporter
                 hideFlags = HideFlags.HideAndDontSave,
             };
             object controller = CreateController();
+            AnimationClip historicalClip = null;
             target.transform.position = new Vector3(100f, 0f, 100f);
             floor.transform.position = new Vector3(100f, -0.05f, 100f);
             floor.AddComponent<BoxCollider>().size = new Vector3(20f, 0.1f, 20f);
             try
             {
                 Animator animator = RequireHumanoidAnimator(target);
+                // 과거 gate 반례의 정규화 이동 단위를 임시 클립에 고정하고 원본 미터 궤적과 분리함.
+                historicalClip = UnityEngine.Object.Instantiate(LoadHumanoidClip());
+                Assert.That(AssetDatabase.GetAssetPath(historicalClip), Is.Empty);
                 Invoke(controller, "PrepareWithArmDirectionReference", animator,
-                    LoadHumanoidClip(), LoadSourceModel());
+                    historicalClip, LoadSourceModel());
                 Invoke(controller, "SetGroundResponseEnabled", true);
                 Invoke(controller, "SetIkGoalFootDrive", true, 1f);
                 Invoke(controller, "SetFootStepDiffusion", true);
@@ -450,6 +458,8 @@ namespace Tests.Editor.FBXImporter
                 DisposeController(controller);
                 UnityEngine.Object.DestroyImmediate(floor);
                 UnityEngine.Object.DestroyImmediate(target);
+                if (historicalClip != null)
+                    UnityEngine.Object.DestroyImmediate(historicalClip);
             }
         }
 
@@ -953,7 +963,10 @@ namespace Tests.Editor.FBXImporter
                 rootX.Evaluate(timeSeconds) - rootX.Evaluate(0f),
                 0f,
                 rootZ.Evaluate(timeSeconds) - rootZ.Evaluate(0f));
-            return anchorPosition + anchorRotation * clipSpaceOffset;
+            var sourceAsset = AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GetAssetPath(clip));
+            Assert.That(sourceAsset, Is.Not.Null);
+            Animator sourceAnimator = RequireHumanoidAnimator(sourceAsset);
+            return anchorPosition + anchorRotation * (clipSpaceOffset * sourceAnimator.humanScale);
         }
 
         private static AnimationCurve LoadRootTranslationCurve(
