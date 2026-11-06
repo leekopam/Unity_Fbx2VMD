@@ -492,21 +492,24 @@ namespace Tests.Editor.FBXImporter
                 Assert.That((bool)Invoke(grounding, "TryApply", time, Field(controller, "_groundResponse")), Is.False);
                 AssertPose(bones, original, rotations);
 
-                FieldInfo owner = controller.GetType().GetField("_footGrounding", Flags);
-                owner.SetValue(controller, null);
+                // 밑창 폴백은 유지하고 정밀 접지 게이트만 풀이 전에 중단함.
+                FieldInfo hipsField = grounding.GetType().GetField("_hips", Flags);
+                object hips = hipsField.GetValue(grounding);
+                hipsField.SetValue(grounding, null);
                 try
                 {
                     Invoke(controller, "Seek", time);
-                    Vector3[] legacy = bones.Select(t => t.position).ToArray();
-                    Quaternion[] legacyRotations = bones.Select(t => t.rotation).ToArray();
-                    owner.SetValue(controller, grounding);
+                    AssertStatus(controller, "Fallback");
+                    Vector3[] fallback = bones.Select(t => t.position).ToArray();
+                    Quaternion[] fallbackRotations = bones.Select(t => t.rotation).ToArray();
+                    hipsField.SetValue(grounding, hips);
                     Invoke(controller, "Seek", time);
                     AssertStatus(controller, "Fallback");
-                    AssertPose(bones, legacy, legacyRotations);
+                    AssertPose(bones, fallback, fallbackRotations);
                 }
                 finally
                 {
-                    owner.SetValue(controller, grounding);
+                    hipsField.SetValue(grounding, hips);
                 }
             }
             finally
