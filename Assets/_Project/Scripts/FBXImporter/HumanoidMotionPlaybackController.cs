@@ -292,6 +292,8 @@ namespace Fbx2Vmd.FBXImporter
             }
 
             _poseCorrectionDocument = document;
+            if (_footGrounding != null)
+                _footGrounding.SuppressReleaseCorrection = document.FrameCount > 0;
             return EvaluateCurrentPoseWithCorrection();
         }
 
@@ -639,9 +641,10 @@ namespace Fbx2Vmd.FBXImporter
                 targetAnimator, _footContactStabilizer, clip.frameRate);
             if (_footGrounding != null)
             {
-                _footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
+                if (_footGrounding.TryPrepare(_footContactStabilizer.SourceSamples,
                     _footContactStabilizer.SourceHumanScale, clip, EvaluateEditorContactReference,
-                    _footContactStabilizer.IntentEstimate);
+                    _footContactStabilizer.IntentEstimate))
+                    _footGrounding.PrepareReleaseReferences(clip, EvaluateEditorContactReference, _groundResponse);
                 // goal 드라이버에 밑창 정점을 공유 — 발끝 본 스냅만으로는 회전된 발의
                 // 밑창 정점이 지면 아래로 파고드는 침투를 막지 못함. 프로브가 없으면
                 // 기존 발끝 스냅 폴백이 그대로 적용됨.

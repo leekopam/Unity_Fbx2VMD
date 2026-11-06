@@ -244,43 +244,50 @@ namespace Fbx2Vmd.FBXImporter
             // 고정 신장 비율로 도달 가능한 지지를 포기하지 않도록 실제 다리 크기 안에서 최소 이동을 찾음.
             float maximumOffset = Mathf.Max(_left.TotalBoneLength, _right.TotalBoneLength);
             PelvisMaximumOffset = maximumOffset;
-            // 무지면에는 원래 발 목표와 골반 높이를 유지하되 무릎 방향 정책은 계속 적용함.
-            float offset = 0f;
-            Vector2 footOffsets = Vector2.zero;
-            EvaluationStage = "reach";
-            if (HasGround && !HumanoidPelvisReachCalculator.TryCalculateOffset(
-                    _left.BuildReach(true), _right.BuildReach(true), Vector3.up,
-                    maximumOffset, out offset, out footOffsets))
-            {
-                // 감쇠와 양발 지지가 충돌하면 본을 늘리지 않고 물리 길이 한도로 다시 판단함.
-                UsedPhysicalReach = true;
-                if (!HumanoidPelvisReachCalculator.TryCalculateOffset(
-                        _left.BuildReach(false), _right.BuildReach(false), Vector3.up,
-                        maximumOffset, out offset, out footOffsets))
-                    return false;
-            }
-            PelvisOffset = offset;
+            if (!TryResolveReach(out float offset, out Vector2 footOffsets)) return false;
 
             bool isApplied = false;
-            _hasAppliedPose = true;
             try
             {
-                _hips.position += Vector3.up * offset;
-                EvaluationStage = "solve";
-                if (!_left.TrySolve(footOffsets.x, out float leftError) ||
-                    !_right.TrySolve(footOffsets.y, out float rightError))
+                Leg.TargetState leftTarget = _left.CaptureTarget();
+                Leg.TargetState rightTarget = _right.CaptureTarget();
+                if (!TrySolveGroundPose(offset, footOffsets, out Vector2 clearance))
                     return false;
-                MaximumTargetError = Mathf.Max(leftError, rightError);
-                EvaluationStage = "measure";
-                if (!_left.TryMeasure(out float leftClearance, out float leftContact, out int leftCount) ||
-                    !_right.TryMeasure(out float rightClearance, out float rightContact, out int rightCount))
-                    return false;
-                MinimumSoleClearance = Mathf.Min(leftClearance, rightClearance);
-                MaximumSupportedContactError = Mathf.Max(leftContact, rightContact);
-                FullySupportedContactCount = leftCount + rightCount;
-                EvaluationStage = "gate";
-                RawGatePass = ResolveApplied(MaximumTargetError, MinimumSoleClearance,
-                    MaximumSupportedContactError, _humanScale);
+
+                if (RawGatePass && !SuppressReleaseCorrection)
+                {
+                    float contactLimit = _humanScale * SoleClearancePerHumanScale;
+                    bool shiftLeft = _left.TryGetReleaseTarget(frame, ground, leftTarget.Position,
+                        clearance.x, contactLimit, out Vector3 leftRelease);
+                    bool shiftRight = _right.TryGetReleaseTarget(frame, ground, rightTarget.Position,
+                        clearance.y, contactLimit, out Vector3 rightRelease);
+                    if (shiftLeft || shiftRight)
+                    {
+                        // 기존 접촉 상태가 달라지면 원래 목표를 다시 풀어 게이트 결과를 보존함.
+                        bool baselineUsedPhysicalReach = UsedPhysicalReach;
+                        RestoreAppliedPose();
+                        _left.RestoreTarget(leftTarget);
+                        _right.RestoreTarget(rightTarget);
+                        if ((!shiftLeft || _left.TrySetReleaseTarget(leftRelease)) &&
+                            (!shiftRight || _right.TrySetReleaseTarget(rightRelease)) &&
+                            TryResolveReach(out float releaseOffset, out Vector2 releaseFootOffsets) &&
+                            TrySolveGroundPose(releaseOffset, releaseFootOffsets, out Vector2 releaseClearance) &&
+                            RawGatePass &&
+                            (releaseClearance.x <= contactLimit) == (clearance.x <= contactLimit) &&
+                            (releaseClearance.y <= contactLimit) == (clearance.y <= contactLimit))
+                        {
+                            isApplied = ApplyGateHold(true, timeSeconds);
+                            return isApplied;
+                        }
+
+                        RestoreAppliedPose();
+                        _left.RestoreTarget(leftTarget);
+                        _right.RestoreTarget(rightTarget);
+                        UsedPhysicalReach = baselineUsedPhysicalReach;
+                        if (!TrySolveGroundPose(offset, footOffsets, out _)) return false;
+                    }
+                }
+
                 isApplied = ApplyGateHold(RawGatePass, timeSeconds);
                 return isApplied;
             }
@@ -289,6 +296,66 @@ namespace Fbx2Vmd.FBXImporter
                 if (!isApplied)
                     RestoreAppliedPose();
             }
+        }
+
+        internal bool SuppressReleaseCorrection { get; set; }
+
+        internal void PrepareReleaseReferences(AnimationClip clip, Action<float> evaluateReference,
+            HumanoidGroundResponse ground)
+        {
+            Physics.SyncTransforms();
+            try
+            {
+                _left.PrepareReleaseReferences(_frameRate, clip.length, evaluateReference, ground, _humanScale);
+                _right.PrepareReleaseReferences(_frameRate, clip.length, evaluateReference, ground, _humanScale);
+            }
+            finally
+            {
+                evaluateReference(0f);
+            }
+        }
+
+        private bool TryResolveReach(out float offset, out Vector2 footOffsets)
+        {
+            offset = 0f;
+            footOffsets = Vector2.zero;
+            UsedPhysicalReach = false;
+            EvaluationStage = "reach";
+            if (!HasGround || HumanoidPelvisReachCalculator.TryCalculateOffset(
+                    _left.BuildReach(true), _right.BuildReach(true), Vector3.up,
+                    PelvisMaximumOffset, out offset, out footOffsets))
+                return true;
+
+            // 감쇠와 양발 지지가 충돌하면 본을 늘리지 않고 실제 길이 한도로 판단함.
+            UsedPhysicalReach = true;
+            return HumanoidPelvisReachCalculator.TryCalculateOffset(
+                _left.BuildReach(false), _right.BuildReach(false), Vector3.up,
+                PelvisMaximumOffset, out offset, out footOffsets);
+        }
+
+        private bool TrySolveGroundPose(float offset, Vector2 footOffsets, out Vector2 clearance)
+        {
+            clearance = Vector2.zero;
+            RawGatePass = false;
+            PelvisOffset = offset;
+            _hasAppliedPose = true;
+            _hips.position += Vector3.up * offset;
+            EvaluationStage = "solve";
+            if (!_left.TrySolve(footOffsets.x, out float leftError) ||
+                !_right.TrySolve(footOffsets.y, out float rightError))
+                return false;
+            MaximumTargetError = Mathf.Max(leftError, rightError);
+            EvaluationStage = "measure";
+            if (!_left.TryMeasure(out clearance.x, out float leftContact, out int leftCount) ||
+                !_right.TryMeasure(out clearance.y, out float rightContact, out int rightCount))
+                return false;
+            MinimumSoleClearance = Mathf.Min(clearance.x, clearance.y);
+            MaximumSupportedContactError = Mathf.Max(leftContact, rightContact);
+            FullySupportedContactCount = leftCount + rightCount;
+            EvaluationStage = "gate";
+            RawGatePass = ResolveApplied(MaximumTargetError, MinimumSoleClearance,
+                MaximumSupportedContactError, _humanScale);
+            return true;
         }
 
         // 본을 움직이지 않고 현재 프레임의 지면·지지 가중치·밑창 측정값만 갱신함.
@@ -457,6 +524,7 @@ namespace Fbx2Vmd.FBXImporter
             private readonly HumanoidFootAnchorPlan.Sample[] _activeContacts = new HumanoidFootAnchorPlan.Sample[2];
             private readonly Vector3[] _localContactPoints = new Vector3[2];
             private readonly Vector3[] _anchors = new Vector3[2];
+            private readonly Dictionary<int, ReleaseReference> _releaseReferences = new();
             private Vector2[] _weights;
             private float[] _relativeHeights;
             private float _nearLevelHeight;
@@ -471,6 +539,43 @@ namespace Fbx2Vmd.FBXImporter
             private Quaternion _prevTargetFootRotation;
             private float _prevSupport;
             private bool _hasPrevTargetRot;
+
+            internal readonly struct TargetState
+            {
+                internal readonly Vector3 Position;
+                internal readonly float Clearance;
+                internal readonly float MaximumReach;
+
+                internal TargetState(Vector3 position, float clearance, float maximumReach)
+                {
+                    Position = position;
+                    Clearance = clearance;
+                    MaximumReach = maximumReach;
+                }
+            }
+
+            private sealed class ReleaseReference
+            {
+                internal readonly int Frame;
+                internal readonly int Channel;
+                internal readonly int Point;
+                internal readonly Vector3 Anchor;
+                internal readonly Vector3 Correction;
+                internal readonly RaycastHit Ground;
+                internal readonly Matrix4x4 GroundMatrix;
+
+                internal ReleaseReference(int frame, int channel, int point, Vector3 anchor,
+                    Vector3 correction, RaycastHit ground)
+                {
+                    Frame = frame;
+                    Channel = channel;
+                    Point = point;
+                    Anchor = anchor;
+                    Correction = correction;
+                    Ground = ground;
+                    GroundMatrix = ground.collider.transform.localToWorldMatrix;
+                }
+            }
 
             internal bool HasGround { get; private set; }
             internal readonly HumanoidFootGroundingLegDiagnostic Diagnostic = new HumanoidFootGroundingLegDiagnostic();
@@ -619,6 +724,109 @@ namespace Fbx2Vmd.FBXImporter
                     policies, pinRelease, trackStep);
             }
 
+            internal void PrepareReleaseReferences(float frameRate, float clipLength,
+                Action<float> evaluate, HumanoidGroundResponse ground, float humanScale)
+            {
+                _releaseReferences.Clear();
+                try
+                {
+                    for (int frame = 0; frame + 1 < _weights.Length; frame++)
+                    {
+                        int channel = GetSingleSupportChannel(_weights[frame]);
+                        if (channel < 0 || _weights[frame][channel] < 0.999f ||
+                            GetSingleSupportChannel(_weights[frame + 1]) != channel ||
+                            _weights[frame + 1][channel] >= 0.999f)
+                            continue;
+
+                        var contact = _plan.GetSample(channel, frame);
+                        int end = frame + 1;
+                        while (end < _weights.Length &&
+                            GetSingleSupportChannel(_weights[end]) == channel &&
+                            _weights[end][channel] < _weights[end - 1][channel] &&
+                            _plan.GetSample(channel, end).FirstPoint == contact.FirstPoint)
+                            end++;
+                        // 재획득과 접점 교체는 기존 지지 계획을 따름.
+                        if (!contact.HasValue || end == frame + 1 || end == _weights.Length ||
+                            _weights[end].x > 0f || _weights[end].y > 0f)
+                            continue;
+
+                        evaluate(Mathf.Min(frame / frameRate, clipLength));
+                        CapturePose();
+                        if (!TryCalculateTarget(frame, ground, humanScale) || !HasGround ||
+                            _support < 0.999f || Diagnostic.mixed_ground_collider)
+                            continue;
+
+                        var reference = new ReleaseReference(frame, channel, contact.FirstPoint,
+                            contact.Anchor, _target - _originalFootPosition, _ground);
+                        for (int index = frame; index < end; index++)
+                            _releaseReferences.Add(index, reference);
+                    }
+                }
+                finally
+                {
+                    _hasPrevTargetRot = false;
+                    _prevSupport = 0f;
+                    Diagnostic.Reset();
+                }
+            }
+
+            private static int GetSingleSupportChannel(Vector2 weights)
+            {
+                if (weights.x > 0f && weights.y <= 0f) return 0;
+                if (weights.y > 0f && weights.x <= 0f) return 1;
+                return -1;
+            }
+
+            internal TargetState CaptureTarget() => new TargetState(_target, _clearance, _maximumReach);
+
+            internal void RestoreTarget(TargetState target)
+            {
+                _target = target.Position;
+                _clearance = target.Clearance;
+                _maximumReach = target.MaximumReach;
+                Diagnostic.damped_reach_m = HasGround ? _maximumReach : 0f;
+            }
+
+            internal bool TryGetReleaseTarget(float frame, HumanoidGroundResponse ground,
+                Vector3 target, float clearance, float contactLimit, out Vector3 releaseTarget)
+            {
+                releaseTarget = target;
+                if (_support <= 0f || _support >= 0.999f ||
+                    !_releaseReferences.TryGetValue(Mathf.FloorToInt(frame), out ReleaseReference reference) ||
+                    GetSingleSupportChannel(_activeWeights) != reference.Channel ||
+                    _activeContacts[reference.Channel].FirstPoint != reference.Point ||
+                    Diagnostic.mixed_ground_collider || !MatchesReleaseGround(_ground, reference, contactLimit) ||
+                    _ground.collider.transform.localToWorldMatrix != reference.GroundMatrix ||
+                    !ground.TryFindGround(reference.Anchor, out RaycastHit anchorHit) ||
+                    !MatchesReleaseGround(anchorHit, reference, contactLimit))
+                    return false;
+
+                Vector3 shift = _originalFootPosition + reference.Correction * _support - target;
+                float blend = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(frame - reference.Frame));
+                // 현재 밑창 여유로 수직 보정을 제한해 해제 시점이 앞당겨지지 않게 함.
+                float headroom = Mathf.Max(0f, clearance - contactLimit) * _ground.normal.y;
+                Vector3 limitedShift = Vector3.ProjectOnPlane(shift, _ground.normal) +
+                    _ground.normal * Mathf.Clamp(Vector3.Dot(shift, _ground.normal), -headroom, headroom);
+                Vector3 candidate = target + blend * limitedShift;
+                return candidate != target &&
+                    ground.TryFindGround(candidate, out RaycastHit candidateHit) &&
+                    MatchesReleaseGround(candidateHit, reference, contactLimit) &&
+                    HumanoidSoleGroundConstraint.TryLiftAbovePlane(candidate, _targetFootRotation,
+                        Sampler.LocalSolePoints, Foot.lossyScale.x, _ground.point, _ground.normal,
+                        out releaseTarget, out _);
+            }
+
+            private static bool MatchesReleaseGround(RaycastHit hit, ReleaseReference reference, float tolerance) =>
+                hit.collider != null && hit.collider == reference.Ground.collider &&
+                (hit.normal - reference.Ground.normal).sqrMagnitude <= 0.00000001f &&
+                Mathf.Abs(Vector3.Dot(hit.point - reference.Ground.point, reference.Ground.normal)) <= tolerance;
+
+            internal bool TrySetReleaseTarget(Vector3 target)
+            {
+                _target = target;
+                return TryUpdateReach();
+            }
+
             internal void CapturePose()
             {
                 _upperRotation = Upper.localRotation;
@@ -751,6 +959,11 @@ namespace Fbx2Vmd.FBXImporter
                     return false;
                 Diagnostic.lift_m = lift;
                 Diagnostic.lifted_contact_error_m = CalculatePlannedContactError(_target);
+                return TryUpdateReach();
+            }
+
+            private bool TryUpdateReach()
+            {
                 _clearance = Mathf.Max(0f, CalculateSoleClearance(_target, _targetFootRotation));
                 float originalAngle = Vector3.Angle(-_upperToKnee, _kneeToFoot) * Mathf.Deg2Rad;
                 Diagnostic.hip_to_target_m = Vector3.Distance(Upper.position, _target);
