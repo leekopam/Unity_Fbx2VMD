@@ -912,7 +912,6 @@ namespace Fbx2Vmd.FBXImporter
                             sourceGoal - SupportedPosition, supportNormal);
                         // 같은 지지면에서는 핀이 접지 자세를 덮지 않도록 발 모임 가중치만큼 보호함.
                         if (ground.TryFindGround(projectedGoal, out RaycastHit goalGround) &&
-                            goalGround.collider == supportGround.collider &&
                             (goalGround.normal - supportNormal).sqrMagnitude <= 0.00000001f &&
                             Mathf.Abs(Vector3.Dot(goalGround.point - supportGround.point, supportNormal)) <=
                             Reach * HumanoidFootGrounding.SoleClearancePerHumanScale)

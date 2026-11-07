@@ -444,17 +444,22 @@ namespace Tests.Editor.FBXImporter
             finally { Object.DestroyImmediate(animator.transform.root.gameObject); }
         }
 
-        [TestCase(0f)]
-        [TestCase(12f)]
-        public void Given_MergedFeetOnValidatedGround_When_PinTakesOver_Then_PreservesSupportPlane(float slope)
+        [TestCase(0f, false, 0f)]
+        [TestCase(12f, false, 0f)]
+        [TestCase(0f, true, 0f)]
+        [TestCase(0f, true, 0.02f)]
+        public void Given_MergedFeetOnValidatedGround_When_PinTakesOver_Then_PreservesSupportPlane(
+            float slope, bool splitGround, float stepHeight)
         {
             Animator animator = LoadTargetAnimator();
             Assert.That(animator, Is.Not.Null);
             GameObject floor = null;
+            GameObject adjacentFloor = null;
             try
             {
                 Transform left = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
                 Transform right = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                Vector3 sourceGoal = left.position + LeftGoalOffset;
                 var driver = new HumanoidFootGoalDriver();
                 Assert.That(driver.TryInitializeCore(animator,
                     BuildSamples(animator), BuildHipsPositions(animator),
@@ -482,23 +487,53 @@ namespace Tests.Editor.FBXImporter
                 floor.transform.position = supported - Vector3.up * 0.1f - floor.transform.up * 0.05f;
                 var collider = floor.AddComponent<BoxCollider>();
                 collider.size = new Vector3(4f, 0.1f, 4f);
+                BoxCollider adjacentCollider = null;
+                if (splitGround)
+                {
+                    Vector3 tangent = Vector3.ProjectOnPlane(sourceGoal - supported, floor.transform.up);
+                    Vector3 direction = tangent.normalized;
+                    floor.transform.rotation = Quaternion.LookRotation(direction, floor.transform.up);
+                    // 발 위치와 핀 목표 사이의 평면을 두 콜라이더의 경계로 사용함.
+                    floor.transform.position += tangent * 0.5f - direction;
+                    collider.size = new Vector3(4f, 0.1f, 2f);
+                    adjacentFloor = new GameObject("이어지는 지면");
+                    adjacentFloor.transform.SetPositionAndRotation(floor.transform.position +
+                        2f * direction + Vector3.up * stepHeight, floor.transform.rotation);
+                    adjacentCollider = adjacentFloor.AddComponent<BoxCollider>();
+                    adjacentCollider.size = collider.size;
+                }
                 Physics.SyncTransforms();
                 var ground = new HumanoidGroundResponse();
                 ground.Initialize(animator);
                 Assert.That(ground.TryFindGround(supported, out RaycastHit hit), Is.True);
                 Assert.That(hit.collider, Is.SameAs(collider));
+                if (splitGround)
+                {
+                    Assert.That(ground.TryFindGround(sourceGoal, out RaycastHit goalGround), Is.True);
+                    Assert.That(goalGround.collider, Is.SameAs(adjacentCollider));
+                }
                 driver.CaptureValidatedSupport(true, true);
 
                 Assert.That(driver.TryApply(20f / FrameRate, 1f, Vector3.right, Vector3.right, ground), Is.True);
                 Assert.That(driver.DebugLeftWeight, Is.EqualTo(1f));
                 Assert.That(driver.DebugSeparationWeight, Is.EqualTo(1f));
                 Vector3 goalDelta = driver.DebugLeftSolveGoal - supported;
-                Assert.That(Vector3.Dot(goalDelta, hit.normal), Is.EqualTo(0f).Within(0.0001f));
-                Assert.That(Quaternion.Angle(left.rotation, supportedRotation), Is.LessThan(0.05f));
+                float normalDelta = Vector3.Dot(goalDelta, hit.normal);
+                if (stepHeight > 0f)
+                {
+                    Assert.That(normalDelta, Is.EqualTo(-0.04f).Within(0.0001f));
+                    Assert.That(Quaternion.Angle(left.rotation, supportedRotation), Is.GreaterThan(1f));
+                }
+                else
+                {
+                    Assert.That(normalDelta, Is.EqualTo(0f).Within(0.0001f));
+                    Assert.That(Quaternion.Angle(left.rotation, supportedRotation), Is.LessThan(0.05f));
+                }
                 Assert.That(Vector3.ProjectOnPlane(goalDelta, hit.normal).magnitude, Is.GreaterThan(0.01f));
             }
             finally
             {
+                if (adjacentFloor != null) Object.DestroyImmediate(adjacentFloor);
                 if (floor != null) Object.DestroyImmediate(floor);
                 if (animator != null) Object.DestroyImmediate(animator.transform.root.gameObject);
             }
